@@ -47,7 +47,7 @@ function getOrCreate(terminalId: string): CachedTerminal {
     window.mainframe.terminal.write(terminalId, data);
   });
 
-  const handleData = (id: string, data: string): void => {
+  const handleData = (id: string, data: Uint8Array): void => {
     if (id === terminalId) term.write(data);
   };
   const removeDataListener = window.mainframe.terminal.onData(handleData);

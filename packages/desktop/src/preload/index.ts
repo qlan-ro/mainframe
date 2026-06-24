@@ -11,12 +11,12 @@ export interface UpdateAPI {
 }
 
 export interface TerminalAPI {
-  create: (options: { cwd: string; cols?: number; rows?: number }) => Promise<{ id: string }>;
+  create: (options: { id: string; cwd: string; cols: number; rows: number }) => Promise<{ id: string }>;
   write: (id: string, data: string) => Promise<void>;
   resize: (id: string, cols: number, rows: number) => Promise<void>;
   kill: (id: string) => Promise<void>;
-  onData: (callback: (id: string, data: string) => void) => () => void;
-  onExit: (callback: (id: string, exitCode: number) => void) => () => void;
+  onData: (callback: (id: string, data: Uint8Array) => void) => () => void;
+  onExit: (callback: (id: string, exitCode: number | null) => void) => () => void;
 }
 
 export interface DaemonAPI {
@@ -68,19 +68,21 @@ const api: MainframeAPI = {
   log: (level: string, module: string, message: string, data?: unknown) =>
     ipcRenderer.send('log', level, module, message, data),
   terminal: {
-    create: (options: { cwd: string; cols?: number; rows?: number }) => ipcRenderer.invoke('terminal:create', options),
-    write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
-    resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
-    kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
-    onData: (callback: (id: string, data: string) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, id: string, data: string): void => callback(id, data);
+    create: (options: { id: string; cwd: string; cols: number; rows: number }) =>
+      ipcRenderer.invoke('terminal:create', options),
+    write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', { id, data }),
+    resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', { id, cols, rows }),
+    kill: (id: string) => ipcRenderer.invoke('terminal:kill', { id }),
+    onData: (callback: (id: string, data: Uint8Array) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, id: string, data: Uint8Array): void => callback(id, data);
       ipcRenderer.on('terminal:data', handler);
       return () => {
         ipcRenderer.removeListener('terminal:data', handler);
       };
     },
-    onExit: (callback: (id: string, exitCode: number) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, id: string, exitCode: number): void => callback(id, exitCode);
+    onExit: (callback: (id: string, exitCode: number | null) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, id: string, exitCode: number | null): void =>
+        callback(id, exitCode);
       ipcRenderer.on('terminal:exit', handler);
       return () => {
         ipcRenderer.removeListener('terminal:exit', handler);

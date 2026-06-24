@@ -1,9 +1,15 @@
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { randomUUID } from 'crypto';
 import { statSync } from 'fs';
 import pty from 'node-pty';
 import type { IPty } from 'node-pty';
+import {
+  TerminalCreateOptsSchema,
+  TerminalWriteSchema,
+  TerminalResizeSchema,
+  TerminalIdSchema,
+} from '@qlan-ro/mainframe-types';
+import { parseIpcArg } from './ipc-validate.js';
 import { createMainLogger } from './logger.js';
 
 const log = createMainLogger('terminal');
@@ -22,76 +28,69 @@ export function setupTerminalIPC(shellEnv: Record<string, string>): void {
   const defaultShell =
     process.platform === 'win32' ? 'powershell.exe' : shellEnv['SHELL'] || process.env.SHELL || '/bin/zsh';
 
-  ipcMain.handle(
-    'terminal:create',
-    (event: IpcMainInvokeEvent, options: { cwd: string; cols?: number; rows?: number }) => {
+  ipcMain.handle('terminal:create', (event: IpcMainInvokeEvent, options: unknown) => {
+    const opts = parseIpcArg(TerminalCreateOptsSchema, options, 'terminal:create');
+    try {
+      const st = statSync(opts.cwd);
+      if (!st.isDirectory()) throw new Error(`Not a directory: ${opts.cwd}`);
+    } catch (err) {
+      log.warn({ cwd: opts.cwd, err }, 'terminal:create invalid cwd');
+      throw new Error(`Invalid terminal cwd: ${opts.cwd}`);
+    }
+
+    const id = opts.id;
+    const term = pty.spawn(defaultShell, [], {
+      name: 'xterm-256color',
+      cols: opts.cols,
+      rows: opts.rows,
+      cwd: opts.cwd,
+      env: { ...process.env, ...shellEnv, TERM_PROGRAM: 'Mainframe', ZSH_DOTENV_PROMPT: 'false' },
+    });
+
+    const webContentsId = event.sender.id;
+    terminals.set(id, { pty: term, webContentsId });
+
+    term.onData((data: string) => {
       try {
-        const st = statSync(options.cwd);
-        if (!st.isDirectory()) {
-          throw new Error(`Not a directory: ${options.cwd}`);
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('terminal:data', id, Buffer.from(data, 'utf-8'));
         }
-      } catch (err) {
-        log.warn({ cwd: options.cwd, err }, 'terminal:create invalid cwd');
-        throw new Error(`Invalid terminal cwd: ${options.cwd}`);
+      } catch {
+        /* expected: webContents destroyed — cleaned up on quit */
       }
+    });
 
-      const id = randomUUID();
-      const cols = options.cols ?? 80;
-      const rows = options.rows ?? 24;
+    term.onExit(({ exitCode }) => {
+      try {
+        if (!event.sender.isDestroyed()) event.sender.send('terminal:exit', id, exitCode);
+      } catch {
+        /* expected: webContents destroyed */
+      }
+      terminals.delete(id);
+    });
 
-      const term = pty.spawn(defaultShell, [], {
-        name: 'xterm-256color',
-        cols,
-        rows,
-        cwd: options.cwd,
-        env: { ...process.env, ...shellEnv, TERM_PROGRAM: 'Mainframe', ZSH_DOTENV_PROMPT: 'false' },
-      });
-
-      const webContentsId = event.sender.id;
-      terminals.set(id, { pty: term, webContentsId });
-
-      term.onData((data: string) => {
-        try {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('terminal:data', id, data);
-          }
-        } catch {
-          /* webContents destroyed — terminal will be cleaned up on quit */
-        }
-      });
-
-      term.onExit(({ exitCode }) => {
-        try {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('terminal:exit', id, exitCode);
-          }
-        } catch {
-          /* webContents destroyed */
-        }
-        terminals.delete(id);
-      });
-
-      log.info({ id, cwd: options.cwd, shell: defaultShell }, 'terminal created');
-      return { id };
-    },
-  );
-
-  ipcMain.handle('terminal:write', (_event: IpcMainInvokeEvent, id: string, data: string) => {
-    const entry = terminals.get(id);
-    if (!entry) return;
-    entry.pty.write(data);
+    log.info({ id, cwd: opts.cwd, shell: defaultShell }, 'terminal created');
+    return { id };
   });
 
-  ipcMain.handle('terminal:resize', (_event: IpcMainInvokeEvent, id: string, cols: number, rows: number) => {
-    const entry = terminals.get(id);
+  ipcMain.handle('terminal:write', (_event: IpcMainInvokeEvent, options: unknown) => {
+    const opts = parseIpcArg(TerminalWriteSchema, options, 'terminal:write');
+    const entry = terminals.get(opts.id);
     if (!entry) return;
-    clearTimeout(resizeTimers.get(id));
+    entry.pty.write(opts.data);
+  });
+
+  ipcMain.handle('terminal:resize', (_event: IpcMainInvokeEvent, options: unknown) => {
+    const opts = parseIpcArg(TerminalResizeSchema, options, 'terminal:resize');
+    const entry = terminals.get(opts.id);
+    if (!entry) return;
+    clearTimeout(resizeTimers.get(opts.id));
     resizeTimers.set(
-      id,
+      opts.id,
       setTimeout(() => {
-        resizeTimers.delete(id);
+        resizeTimers.delete(opts.id);
         try {
-          entry.pty.resize(cols, rows);
+          entry.pty.resize(opts.cols, opts.rows);
         } catch {
           /* resize can throw if process already exited */
         }
@@ -99,18 +98,19 @@ export function setupTerminalIPC(shellEnv: Record<string, string>): void {
     );
   });
 
-  ipcMain.handle('terminal:kill', (_event: IpcMainInvokeEvent, id: string) => {
-    const entry = terminals.get(id);
+  ipcMain.handle('terminal:kill', (_event: IpcMainInvokeEvent, options: unknown) => {
+    const opts = parseIpcArg(TerminalIdSchema, options, 'terminal:kill');
+    const entry = terminals.get(opts.id);
     if (!entry) return;
-    clearTimeout(resizeTimers.get(id));
-    resizeTimers.delete(id);
+    clearTimeout(resizeTimers.get(opts.id));
+    resizeTimers.delete(opts.id);
     try {
       entry.pty.kill();
     } catch {
       /* already dead */
     }
-    terminals.delete(id);
-    log.info({ id }, 'terminal killed');
+    terminals.delete(opts.id);
+    log.info({ id: opts.id }, 'terminal killed');
   });
 }
 

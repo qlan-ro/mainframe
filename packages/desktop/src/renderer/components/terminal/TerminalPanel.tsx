@@ -83,9 +83,10 @@ export function TerminalPanel(): React.ReactElement {
     }
     try {
       const rect = containerRef.current?.getBoundingClientRect();
-      const initCols = rect ? Math.max(2, Math.floor(rect.width / 7.8)) : undefined;
-      const initRows = rect ? Math.max(1, Math.floor(rect.height / 17)) : undefined;
-      const { id } = await window.mainframe.terminal.create({ cwd, cols: initCols, rows: initRows });
+      const initCols = rect ? Math.max(2, Math.floor(rect.width / 7.8)) : 80;
+      const initRows = rect ? Math.max(1, Math.floor(rect.height / 17)) : 24;
+      const id = crypto.randomUUID();
+      await window.mainframe.terminal.create({ id, cwd, cols: initCols, rows: initRows });
       const scope = scopeId ?? '__no_scope__';
       const next = (counterByScopeRef.current.get(scope) ?? 0) + 1;
       counterByScopeRef.current.set(scope, next);
