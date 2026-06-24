@@ -73,7 +73,9 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
     projectId: cfg.projectId,
     adapterId: cfg.adapterId,
     ...(cfg.model !== undefined ? { model: cfg.model } : {}),
-    permissionMode: cfg.permissionMode,
+    // Omit when unset so the daemon's createChatWithDefaults applies the user's
+    // provider defaultMode (matching desktop) instead of forcing 'default'.
+    ...(cfg.permissionMode !== undefined ? { permissionMode: cfg.permissionMode } : {}),
     ...(cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
     ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
   })

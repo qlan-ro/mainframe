@@ -28,7 +28,9 @@ export function useNewThreadAutoConfig(): void {
     if (localId == null || filterProjectId == null) return;
     const isNewLocal = localId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
     if (!isNewLocal || isReady || getDraftConfig(localId)) return;
-    setDraftConfig(localId, { projectId: filterProjectId, adapterId: DEFAULT_ADAPTER_ID, permissionMode: 'default' });
+    // No permissionMode: chat creation omits it so the daemon applies the user's
+    // provider defaultMode (matching desktop). A deliberate pick sets it later.
+    setDraftConfig(localId, { projectId: filterProjectId, adapterId: DEFAULT_ADAPTER_ID });
     useNewThreadReady.getState().markReady(localId);
   }, [localId, itemStatus, messageCount, filterProjectId, isReady]);
 }

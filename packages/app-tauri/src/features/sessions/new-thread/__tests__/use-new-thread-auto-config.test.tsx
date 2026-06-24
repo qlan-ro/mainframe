@@ -98,7 +98,7 @@ function setLocalThreadWithProject(localId = '__LOCALID_x', projectId = 'proj-42
 // ---------------------------------------------------------------------------
 
 describe('useNewThreadAutoConfig — project filter active on new local thread', () => {
-  it('calls setDraftConfig with {projectId, adapterId:"claude", permissionMode:"default"}', async () => {
+  it('calls setDraftConfig with {projectId, adapterId:"claude"} and no permissionMode (daemon applies defaultMode)', async () => {
     setLocalThreadWithProject('__LOCALID_x', 'proj-42');
 
     await act(async () => {
@@ -108,7 +108,6 @@ describe('useNewThreadAutoConfig — project filter active on new local thread',
     expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
       projectId: 'proj-42',
       adapterId: 'claude',
-      permissionMode: 'default',
     });
   });
 

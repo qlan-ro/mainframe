@@ -34,6 +34,8 @@ const mockSetChatConfig = setChatConfig as MockedFunction<typeof setChatConfig>;
 
 afterEach(() => {
   clearDraftConfig('__LOCALID_a');
+  clearDraftConfig('__LOCALID_b');
+  clearDraftConfig('__LOCALID_c');
   vi.clearAllMocks();
 });
 
@@ -226,5 +228,45 @@ describe('new-thread-coordinator — setChatTuning rejection does NOT reject cre
     const result = await createForLocal('__LOCALID_a', 31415);
 
     expect(result).toEqual({ remoteId: 'chat-44' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// permissionMode omission fix — the key behaviour this covers
+// ---------------------------------------------------------------------------
+
+describe('new-thread-coordinator — permissionMode omission fix', () => {
+  it('omits permissionMode from the createChat body when the draft has none', async () => {
+    setDraftConfig('__LOCALID_b', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+
+    await createForLocal('__LOCALID_b', 31415);
+
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect('permissionMode' in body).toBe(false);
+    expect(body).toMatchObject({ projectId: 'p1', adapterId: 'claude' });
+  });
+
+  it('includes permissionMode in the createChat body when the draft set one', async () => {
+    setDraftConfig('__LOCALID_c', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'yolo',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+
+    await createForLocal('__LOCALID_c', 31415);
+
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect(body.permissionMode).toBe('yolo');
+  });
+
+  it('returns { remoteId } equal to the id of the created chat', async () => {
+    setDraftConfig('__LOCALID_b', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+
+    const result = await createForLocal('__LOCALID_b', 31415);
+
+    expect(result).toEqual({ remoteId: 'chat-1' });
   });
 });

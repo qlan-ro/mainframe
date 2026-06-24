@@ -17,7 +17,12 @@ export interface DraftCfg {
   projectId: string;
   adapterId: string;
   model?: string;
-  permissionMode: PermissionMode;
+  /**
+   * Optional. When unset, chat creation omits it so the daemon applies the
+   * user's provider `defaultMode` (e.g. yolo) — matching desktop. Only a
+   * deliberate per-chat pick sets it.
+   */
+  permissionMode?: PermissionMode;
   planMode?: boolean;
   effort?: EffortLevel | null;
   fast?: boolean | null;

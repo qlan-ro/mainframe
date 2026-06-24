@@ -145,7 +145,7 @@ describe('NewThreadConfigPicker — selecting a project sets ready and writes th
     expect(gate.getAttribute('data-ready')).toBe('true');
   });
 
-  it('calls setDraftConfig with exactly {projectId, adapterId:"claude", permissionMode:"default"}', async () => {
+  it('calls setDraftConfig with {projectId, adapterId:"claude"} and no permissionMode (daemon applies defaultMode)', async () => {
     render(<NewThreadConfigPicker />);
 
     await act(async () => {
@@ -155,7 +155,6 @@ describe('NewThreadConfigPicker — selecting a project sets ready and writes th
     expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_test123', {
       projectId: 'p1',
       adapterId: 'claude',
-      permissionMode: 'default',
     });
   });
 });
