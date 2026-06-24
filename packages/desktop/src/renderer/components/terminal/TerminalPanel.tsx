@@ -113,7 +113,7 @@ export function TerminalPanel(): React.ReactElement {
 
   // Handle terminal exit events
   useEffect(() => {
-    const handleExit = (id: string, _exitCode: number): void => {
+    const handleExit = (id: string, _exitCode: number | null): void => {
       console.warn('[terminal] process exited', { id, _exitCode });
     };
     const removeExitListener = window.mainframe.terminal.onExit(handleExit);
