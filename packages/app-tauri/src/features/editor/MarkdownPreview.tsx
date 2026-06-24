@@ -12,7 +12,7 @@ import type { ComponentPropsWithoutRef, JSX } from 'react';
 import Markdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import { openExternal } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { urlTransform } from '@/features/chat/parts/markdown-url-transform';
 import { ShikiCode } from '@/lib/shiki-tokens';
 
@@ -21,6 +21,7 @@ type ElProps<T extends keyof JSX.IntrinsicElements> = ComponentPropsWithoutRef<T
 // ── Anchor ────────────────────────────────────────────────────────────────────
 
 function Anchor({ href, children, ...props }: ElProps<'a'>) {
+  const host = useHost();
   return (
     <a
       {...props}
@@ -29,7 +30,7 @@ function Anchor({ href, children, ...props }: ElProps<'a'>) {
       onClick={(e) => {
         if (!href) return;
         e.preventDefault();
-        void openExternal(href);
+        void host.shell.openExternal(href);
       }}
     >
       {children}
@@ -94,7 +95,10 @@ const components = {
     </div>
   ),
   th: (p: ElProps<'th'>) => (
-    <th {...p} className="border border-border bg-mf-content2 px-[12px] py-[7px] text-left font-semibold text-muted-foreground" />
+    <th
+      {...p}
+      className="border border-border bg-mf-content2 px-[12px] py-[7px] text-left font-semibold text-muted-foreground"
+    />
   ),
   td: (p: ElProps<'td'>) => (
     <td {...p} className="border border-border px-[12px] py-[7px] even:bg-mf-content2 odd:bg-background" />

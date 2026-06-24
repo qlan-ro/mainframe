@@ -24,7 +24,7 @@
  *   viewer-unsupported-reveal  — "Reveal in tree" button
  */
 import { File } from 'lucide-react';
-import { openExternal } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ViewerShell } from './ViewerShell';
@@ -35,6 +35,7 @@ interface UnsupportedViewerProps {
 }
 
 export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
+  const host = useHost();
   const basename = path.split('/').pop() ?? path;
   const ext = basename.includes('.') ? (basename.split('.').pop() ?? '') : '';
   const status = ext ? `${ext.toUpperCase()} · No preview` : 'No preview';
@@ -45,7 +46,7 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
   async function handleOpenExternal() {
     if (!fileUrl) return;
     try {
-      await openExternal(fileUrl);
+      await host.shell.openExternal(fileUrl);
     } catch (err) {
       console.warn('[UnsupportedViewer] openExternal failed', err);
     }
@@ -57,7 +58,10 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
 
   return (
     <ViewerShell path={path} status={status}>
-      <div data-testid="viewer-unsupported" className="flex h-full flex-col items-center justify-center gap-4 bg-mf-content2">
+      <div
+        data-testid="viewer-unsupported"
+        className="flex h-full flex-col items-center justify-center gap-4 bg-mf-content2"
+      >
         <div
           data-testid="viewer-unsupported-card"
           className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background px-[24px] py-[26px] text-center shadow-sm"
@@ -72,8 +76,8 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
           <div className="flex flex-col gap-1">
             <h2 className="text-body font-semibold text-foreground">No preview available</h2>
             <p className="text-label text-mf-text-3">
-              Mainframe can&apos;t render{' '}
-              <code className="font-mono text-caption text-foreground">{basename}</code> inline.
+              Mainframe can&apos;t render <code className="font-mono text-caption text-foreground">{basename}</code>{' '}
+              inline.
             </p>
           </div>
 

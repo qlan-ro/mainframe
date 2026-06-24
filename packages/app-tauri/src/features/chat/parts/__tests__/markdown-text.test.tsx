@@ -11,36 +11,35 @@
  *   under jsdom. This assertion is intentionally omitted; the context-menu open
  *   path is covered manually.
  *
- * Mock strategy: `@/lib/tauri/bridge` is mocked at module level (vi.mock is
- * hoisted by vitest) to prevent the Tauri API from being invoked in jsdom.
+ * Mock strategy: render under HostProvider with a FakeHostBridge; spy on
+ * fake.shell.openExternal to verify behavioral calls without invoking Tauri APIs.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { HostProvider } from '@/lib/host';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
-// ---------------------------------------------------------------------------
-// Mocks — must be declared before the import under test (vitest hoists vi.mock).
-// ---------------------------------------------------------------------------
-
-vi.mock('@/lib/tauri/bridge', () => ({
-  openExternal: vi.fn().mockResolvedValue(undefined),
-}));
-
-// Import after mock declaration so the component picks up the mock.
-import { openExternal } from '@/lib/tauri/bridge';
+// Import the component under test (no bridge mock needed — HostProvider provides the host).
 import { markdownComponents } from '../markdown-text';
 import { CodeHeader } from '../CodeHeader';
 import { SyntaxHighlighter } from '../syntax-highlight';
-
-const mockOpenExternal = vi.mocked(openExternal);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+let fake: FakeHostBridge;
+
 function wrap(ui: React.ReactElement) {
-  return render(<TooltipProvider>{ui}</TooltipProvider>);
+  fake = new FakeHostBridge();
+  vi.spyOn(fake.shell, 'openExternal').mockResolvedValue(undefined);
+  return render(
+    <HostProvider host={fake}>
+      <TooltipProvider>{ui}</TooltipProvider>
+    </HostProvider>,
+  );
 }
 
 // markdownComponents.a is a memo-wrapped component (from
@@ -79,8 +78,8 @@ describe('markdownComponents.a (LinkWithPreview)', () => {
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
     anchor.dispatchEvent(clickEvent);
 
-    expect(mockOpenExternal).toHaveBeenCalledTimes(1);
-    expect(mockOpenExternal).toHaveBeenCalledWith('https://example.com');
+    expect(fake.shell.openExternal).toHaveBeenCalledTimes(1);
+    expect(fake.shell.openExternal).toHaveBeenCalledWith('https://example.com');
     expect(clickEvent.defaultPrevented).toBe(true);
   });
 });
@@ -97,33 +96,73 @@ const Table = markdownComponents.table as React.ComponentType<React.TableHTMLAtt
 
 describe('markdownComponents table cells', () => {
   it('MarkdownTh does NOT use font-mono class', () => {
-    const { container } = render(<table><thead><tr><Th>Header</Th></tr></thead></table>);
+    const { container } = render(
+      <table>
+        <thead>
+          <tr>
+            <Th>Header</Th>
+          </tr>
+        </thead>
+      </table>,
+    );
     const th = container.querySelector('th');
     expect(th).not.toBeNull();
     expect(th!.className).not.toContain('font-mono');
   });
 
   it('MarkdownTh does NOT use uppercase class', () => {
-    const { container } = render(<table><thead><tr><Th>Header</Th></tr></thead></table>);
+    const { container } = render(
+      <table>
+        <thead>
+          <tr>
+            <Th>Header</Th>
+          </tr>
+        </thead>
+      </table>,
+    );
     const th = container.querySelector('th');
     expect(th!.className).not.toContain('uppercase');
   });
 
   it('MarkdownTh uses font-sans class', () => {
-    const { container } = render(<table><thead><tr><Th>Header</Th></tr></thead></table>);
+    const { container } = render(
+      <table>
+        <thead>
+          <tr>
+            <Th>Header</Th>
+          </tr>
+        </thead>
+      </table>,
+    );
     const th = container.querySelector('th');
     expect(th!.className).toContain('font-sans');
   });
 
   it('MarkdownTd does NOT use font-mono class', () => {
-    const { container } = render(<table><tbody><tr><Td>Cell</Td></tr></tbody></table>);
+    const { container } = render(
+      <table>
+        <tbody>
+          <tr>
+            <Td>Cell</Td>
+          </tr>
+        </tbody>
+      </table>,
+    );
     const td = container.querySelector('td');
     expect(td).not.toBeNull();
     expect(td!.className).not.toContain('font-mono');
   });
 
   it('MarkdownTd uses font-sans class', () => {
-    const { container } = render(<table><tbody><tr><Td>Cell</Td></tr></tbody></table>);
+    const { container } = render(
+      <table>
+        <tbody>
+          <tr>
+            <Td>Cell</Td>
+          </tr>
+        </tbody>
+      </table>,
+    );
     const td = container.querySelector('td');
     expect(td!.className).toContain('font-sans');
   });
@@ -131,21 +170,43 @@ describe('markdownComponents table cells', () => {
 
 describe('markdownComponents table structure', () => {
   it('MarkdownTable wrapper uses rounded-md (not rounded-lg)', () => {
-    const { container } = render(<Table><tbody><tr><td>x</td></tr></tbody></Table>);
+    const { container } = render(
+      <Table>
+        <tbody>
+          <tr>
+            <td>x</td>
+          </tr>
+        </tbody>
+      </Table>,
+    );
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper.className).toContain('rounded-md');
     expect(wrapper.className).not.toContain('rounded-lg');
   });
 
   it('MarkdownTr even rows use bg-mf-content2 (not bg-accent)', () => {
-    const { container } = render(<table><tbody><Tr>x</Tr></tbody></table>);
+    const { container } = render(
+      <table>
+        <tbody>
+          <Tr>x</Tr>
+        </tbody>
+      </table>,
+    );
     const tr = container.querySelector('tr');
     expect(tr!.className).toContain('even:bg-mf-content2');
     expect(tr!.className).not.toContain('even:bg-accent');
   });
 
   it('MarkdownThead uses bg-mf-content2', () => {
-    const { container } = render(<table><Thead><tr><th>h</th></tr></Thead></table>);
+    const { container } = render(
+      <table>
+        <Thead>
+          <tr>
+            <th>h</th>
+          </tr>
+        </Thead>
+      </table>,
+    );
     const thead = container.querySelector('thead');
     expect(thead!.className).toContain('bg-mf-content2');
   });

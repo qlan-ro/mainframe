@@ -18,7 +18,7 @@
  * data-testid="viewer-pdf-fallback" on the open-externally button.
  */
 import { useEffect, useState } from 'react';
-import { openExternal } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ViewerShell } from './ViewerShell';
 import { formatBytes } from './viewer-status';
@@ -46,6 +46,7 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
 }
 
 export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
+  const host = useHost();
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const { projectPath } = useActiveIdentity();
   const fileUrl = toFileUrl(path, projectPath);
@@ -69,7 +70,7 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
   async function handleOpenExternal() {
     if (!fileUrl) return;
     try {
-      await openExternal(fileUrl);
+      await host.shell.openExternal(fileUrl);
     } catch (err) {
       console.warn('[PdfViewer] openExternal failed', err);
     }

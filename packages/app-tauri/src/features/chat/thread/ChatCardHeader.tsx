@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { openExternal } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 // 24×24 header buttons (hdrBtn in artboard), distinct from the 22×22 SurfaceTabStrip actions.
@@ -24,6 +24,7 @@ const HDR_BTN =
  * traffic-light inset — the shell `MainToolbar` above owns the collapsed clearance.
  */
 export function ChatCardHeader() {
+  const host = useHost();
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
   const custom = useAuiState((s) => sessionCustomOf(s.threadListItem?.custom));
   const prs = custom?.detectedPrs ?? [];
@@ -48,7 +49,7 @@ export function ChatCardHeader() {
           data-testid={`chat-header-pr-${pr.number}`}
           type="button"
           title={`${pr.owner}/${pr.repo} #${pr.number}`}
-          onClick={() => void openExternal(pr.url)}
+          onClick={() => void host.shell.openExternal(pr.url)}
           className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
         >
           <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}

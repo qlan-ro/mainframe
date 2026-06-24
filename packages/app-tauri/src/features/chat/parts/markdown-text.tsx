@@ -28,7 +28,7 @@ import type { Pluggable } from 'unified';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
-import { openExternal } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
@@ -89,10 +89,7 @@ function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
 
 function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
   return (
-    <th
-      className="font-sans text-label font-bold text-muted-foreground px-3 py-2 text-left"
-      {...props}
-    >
+    <th className="font-sans text-label font-bold text-muted-foreground px-3 py-2 text-left" {...props}>
       {children}
     </th>
   );
@@ -144,17 +141,18 @@ function LinkWithPreview({
   href,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
+  const host = useHost();
   const { copied, copy } = useCopyHref(href);
 
   const handleOpen = useCallback(
     (e?: React.MouseEvent) => {
       if (!href) return;
       e?.preventDefault();
-      openExternal(href).catch(() => {
+      host.shell.openExternal(href).catch(() => {
         console.warn('[markdown-text] openExternal failed', href);
       });
     },
-    [href],
+    [href, host],
   );
 
   if (!href) {

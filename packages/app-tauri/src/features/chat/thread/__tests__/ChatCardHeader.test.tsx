@@ -1,34 +1,44 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { HostProvider } from '@/lib/host';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
 let fakeState: any = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: any) => unknown) => sel(fakeState),
 }));
 
-vi.mock('@/lib/tauri/bridge', () => ({ openExternal: vi.fn() }));
-
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
 
 import { ChatCardHeader } from '../ChatCardHeader';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
-import { openExternal } from '@/lib/tauri/bridge';
+
+let fakeHost: FakeHostBridge;
+
+function renderHeader() {
+  return render(
+    <HostProvider host={fakeHost}>
+      <ChatCardHeader />
+    </HostProvider>,
+  );
+}
 
 // Reset the layout store to a fresh chat-only state before each test so
 // mutation from one test does not bleed into the next.
 beforeEach(() => {
+  fakeHost = new FakeHostBridge();
+  vi.spyOn(fakeHost.shell, 'openExternal').mockResolvedValue(undefined);
   useLayoutStore.setState({
     layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
   });
   fakeState = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
-  vi.mocked(openExternal).mockClear();
   mockEmit.mockReset();
 });
 
 describe('ChatCardHeader — structure', () => {
   it('renders the chat-header root with the session title', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
 
     const root = screen.getByTestId('chat-header');
     expect(root).toBeDefined();
@@ -36,19 +46,19 @@ describe('ChatCardHeader — structure', () => {
   });
 
   it('carries the Tauri drag-region attribute on the root element', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
 
     expect(screen.getByTestId('chat-header').hasAttribute('data-tauri-drag-region')).toBe(true);
   });
 
   it('has the fixed h-[38px] height class', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
 
     expect(screen.getByTestId('chat-header')).toHaveClass('h-[38px]');
   });
 
   it('renders grip and message-square icons as SVGs inside the header', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
 
     const root = screen.getByTestId('chat-header');
     const svgs = root.querySelectorAll('svg');
@@ -62,14 +72,14 @@ describe('ChatCardHeader — split buttons', () => {
     // The initial layout (chat-only) satisfies layoutCanSplit.
     expect(layoutCanSplit(useLayoutStore.getState().layout)).toBe(true);
 
-    render(<ChatCardHeader />);
+    renderHeader();
 
     expect(screen.getByTestId('chat-header-split-right')).toBeDefined();
     expect(screen.getByTestId('chat-header-split-down')).toBeDefined();
   });
 
   it('clicking split-right adds a non-chat surface to the top row', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
 
     fireEvent.click(screen.getByTestId('chat-header-split-right'));
 
@@ -79,7 +89,7 @@ describe('ChatCardHeader — split buttons', () => {
   });
 
   it('clicking split-down places a non-chat surface in the bottom strip', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
 
     fireEvent.click(screen.getByTestId('chat-header-split-down'));
 
@@ -93,7 +103,7 @@ describe('ChatCardHeader — fallback title', () => {
   it('shows "Untitled" when threadListItem title is null', () => {
     fakeState = { threadListItem: { title: null, custom: { detectedPrs: [] } } };
 
-    render(<ChatCardHeader />);
+    renderHeader();
 
     expect(screen.getByText('Untitled')).toBeDefined();
   });
@@ -106,7 +116,7 @@ describe('ChatCardHeader — PRs + review', () => {
       { url: 'https://github.com/o/r/pull/250', owner: 'o', repo: 'r', number: 250, source: 'mentioned' },
     ];
 
-    render(<ChatCardHeader />);
+    renderHeader();
 
     const pr249 = screen.getByTestId('chat-header-pr-249');
     const pr250 = screen.getByTestId('chat-header-pr-250');
@@ -121,16 +131,16 @@ describe('ChatCardHeader — PRs + review', () => {
       { url: 'https://github.com/o/r/pull/249', owner: 'o', repo: 'r', number: 249, source: 'created' },
     ];
 
-    render(<ChatCardHeader />);
+    renderHeader();
     fireEvent.click(screen.getByTestId('chat-header-pr-249'));
 
-    expect(openExternal).toHaveBeenCalledOnce();
-    expect(openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/249');
+    expect(fakeHost.shell.openExternal).toHaveBeenCalledOnce();
+    expect(fakeHost.shell.openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/249');
   });
 
   it('no PR links when detectedPrs is empty', () => {
     // fakeState already has detectedPrs: [] from beforeEach reset
-    render(<ChatCardHeader />);
+    renderHeader();
 
     expect(screen.queryByTestId('chat-header-pr-249')).toBeNull();
     expect(document.querySelector('[data-testid^="chat-header-pr-"]')).toBeNull();
@@ -138,7 +148,7 @@ describe('ChatCardHeader — PRs + review', () => {
 
   it('renders a disabled Review button when worktreePath is absent', () => {
     // fakeState has no worktreePath in custom
-    render(<ChatCardHeader />);
+    renderHeader();
 
     expect(screen.getByTestId('chat-header-review')).toBeDisabled();
   });
@@ -147,7 +157,7 @@ describe('ChatCardHeader — PRs + review', () => {
 describe('ChatCardHeader — review button gating', () => {
   it('review button is disabled when worktreePath is undefined', () => {
     fakeState = { threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: undefined } } };
-    render(<ChatCardHeader />);
+    renderHeader();
     expect(screen.getByTestId('chat-header-review')).toBeDisabled();
   });
 
@@ -155,7 +165,7 @@ describe('ChatCardHeader — review button gating', () => {
     fakeState = {
       threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: '/Users/me/proj' } },
     };
-    render(<ChatCardHeader />);
+    renderHeader();
     expect(screen.getByTestId('chat-header-review')).not.toBeDisabled();
   });
 
@@ -163,7 +173,7 @@ describe('ChatCardHeader — review button gating', () => {
     fakeState = {
       threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: '/Users/me/proj' } },
     };
-    render(<ChatCardHeader />);
+    renderHeader();
     fireEvent.click(screen.getByTestId('chat-header-review'));
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-review' });
   });
@@ -171,13 +181,13 @@ describe('ChatCardHeader — review button gating', () => {
 
 describe('ChatCardHeader — Hide Chat (dynamic floor)', () => {
   it('disables the Hide-Chat button when chat is the only lit surface (the floor)', () => {
-    render(<ChatCardHeader />);
+    renderHeader();
     expect(screen.getByTestId('chat-header-hide')).toBeDisabled();
   });
 
   it('enables Hide-Chat once another surface is lit, and hiding removes chat', () => {
     useLayoutStore.getState().toggleSurface('files'); // chat + files lit
-    render(<ChatCardHeader />);
+    renderHeader();
     const hide = screen.getByTestId('chat-header-hide');
     expect(hide).not.toBeDisabled();
     fireEvent.click(hide);
