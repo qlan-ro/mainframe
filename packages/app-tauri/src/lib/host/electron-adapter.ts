@@ -43,6 +43,8 @@ interface MainframeBridge {
     onData(cb: (id: string, data: Uint8Array) => void): () => void;
     onExit(cb: (id: string, code: number | null) => void): () => void;
   };
+  clearSandboxSession(projectId: string): Promise<void>;
+  destroyWebview(id: number): Promise<void>;
   daemon: {
     port(): Promise<number>;
     status(): Promise<string>;

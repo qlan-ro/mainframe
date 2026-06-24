@@ -13,8 +13,12 @@ export const PlatformSchema = z.enum(['macos', 'windows', 'linux', 'browser']);
 export type Platform = z.infer<typeof PlatformSchema>;
 
 /**
- * Daemon lifecycle vocabulary. Both hosts emit ONLY these values so the renderer
- * (useConnectionState) sees identical statuses on Tauri and Electron.
+ * Daemon lifecycle vocabulary.
+ * - Electron emits exactly these values so the renderer sees a typed enum.
+ * - Tauri adapter currently passes the Rust backend's legacy status strings through
+ *   unmapped (running:N / started:... / exited / not_started / error:...). This is a
+ *   Plan 3 task. UNTIL that mapping lands, renderer code MUST NOT branch on
+ *   daemon.status()/onStatus() values on Tauri — only daemon.port() is host-agnostic today.
  * - initializing: shell starting, daemon not yet forked
  * - starting:     daemon process forked, not yet answering /health
  * - ready:        daemon answered /health (or utilityProcess 'spawn')

@@ -56,7 +56,8 @@ export class TauriAdapter implements HostBridge {
 
   daemon = {
     port: (): Promise<number> => bridge.getDaemonPort(),
-    // Tauri Rust emits legacy status strings; enum-conformant mapping is Plan 3 parity. Cast preserves current behavior.
+    // Tauri Rust emits legacy status strings (running:N/exited/not_started/...);
+    // enum-conformant mapping is a Plan 3 task. No renderer may branch on these values until then.
     status: (): Promise<DaemonStatus> => bridge.getDaemonStatus() as Promise<DaemonStatus>,
     onStatus: (cb: (s: DaemonStatus) => void): Promise<Unsubscribe> =>
       bridge.onDaemonStatus((s) => cb(s as DaemonStatus)),
