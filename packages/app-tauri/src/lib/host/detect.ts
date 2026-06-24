@@ -5,3 +5,11 @@
 export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
+
+/**
+ * Electron exposes `window.mainframe` (the preload bridge). Absent under Tauri
+ * (which uses __TAURI_INTERNALS__) and in a plain browser / vitest jsdom.
+ */
+export function isElectronRuntime(): boolean {
+  return typeof window !== 'undefined' && 'mainframe' in window;
+}
