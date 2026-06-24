@@ -22,13 +22,11 @@
  *  - Assert dirty buffer + file-change event → "File changed on disk" banner appears (D4).
  *  - Assert Reload button applies disk content; Keep mine dismisses the banner (D4).
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 
 // ── Mock external deps ────────────────────────────────────────────────────────
-
-vi.mock('@/lib/tauri/bridge', () => ({ readFile: vi.fn().mockResolvedValue('content') }));
 
 vi.mock('@/lib/api/files', () => ({
   getProjectFile: vi.fn().mockResolvedValue('content'),
@@ -208,8 +206,11 @@ vi.mock('@/features/viewers/ViewerShell', () => ({
 
 import { EditorTab } from '../EditorTab';
 import { saveProjectFile, getProjectFile } from '@/lib/api/files';
+import { setHostForTesting, resetHostForTesting } from '@/lib/host';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
 beforeEach(async () => {
+  setHostForTesting(new FakeHostBridge({ fs: { readFile: 'content' } }));
   capturedCmEditorProps.length = 0;
   vi.mocked(saveProjectFile).mockClear();
   // Reset identity to no-project default so existing tests are unaffected.
@@ -231,6 +232,10 @@ beforeEach(async () => {
   const { lspClientManager, initLspPort } = await import('@/lib/lsp');
   vi.mocked(initLspPort).mockClear();
   vi.mocked(lspClientManager.ensureClient).mockClear();
+});
+
+afterEach(() => {
+  resetHostForTesting();
 });
 
 describe('EditorTab — read-only state (B4)', () => {

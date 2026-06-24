@@ -15,7 +15,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { showItemInFolder } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 
 interface FileTreeRowMenuProps {
@@ -26,6 +26,7 @@ interface FileTreeRowMenuProps {
 }
 
 export function FileTreeRowMenu({ entry, fullPath, children }: FileTreeRowMenuProps) {
+  const host = useHost();
   const isDir = entry.type === 'directory';
   return (
     <ContextMenu>
@@ -44,7 +45,7 @@ export function FileTreeRowMenu({ entry, fullPath, children }: FileTreeRowMenuPr
           {isDir ? 'Find in folder' : 'Find in file'}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem data-testid="file-tree-reveal" onSelect={() => void showItemInFolder(fullPath)}>
+        <ContextMenuItem data-testid="file-tree-reveal" onSelect={() => void host.fs.showItemInFolder(fullPath)}>
           Reveal in Finder
         </ContextMenuItem>
         <ContextMenuItem data-testid="file-tree-copy-path" onSelect={() => void writeToClipboard(fullPath)}>

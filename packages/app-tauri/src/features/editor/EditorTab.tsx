@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewerShell } from '@/features/viewers/ViewerShell';
 import type { EditorView } from '@codemirror/view';
-import { readFile } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { getProjectFile, saveProjectFile } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -63,6 +63,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ ln: number; col: number }>({ ln: 1, col: 1 });
+  const host = useHost();
   const setBuffer = useEditorStore((s) => s.setBuffer);
   const promoteTab = useTabsStore((s) => s.promoteTab);
   const port = useDaemonPort();
@@ -118,7 +119,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     let cancelled = false;
     setLoadState({ status: 'loading' });
 
-    const load = projectId ? getProjectFile(port, projectId, path, chatId) : readFile(path);
+    const load = projectId ? getProjectFile(port, projectId, path, chatId) : host.fs.readFile(path);
     load
       .then((content) => {
         if (cancelled) return;
@@ -139,7 +140,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, setBuffer, port, projectId, chatId]);
+  }, [path, setBuffer, port, projectId, chatId, host]);
 
   // On unmount: clear the buffer unless it is dirty (preserves unsaved edits
   // across an accidental tab reopen; clean tabs re-read from disk).

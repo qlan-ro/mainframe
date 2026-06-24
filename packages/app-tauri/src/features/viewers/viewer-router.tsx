@@ -15,7 +15,7 @@
  * active project context (absolute path, no worktree).
  */
 import { type ReactNode, useEffect, useState } from 'react';
-import { readFile, readFileBase64 } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { getProjectFile, getProjectFileBase64 } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -88,6 +88,7 @@ type LoadState =
 
 export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   const [state, setState] = useState<LoadState>({ status: 'idle' });
+  const host = useHost();
   const port = useDaemonPort();
   const { projectId, chatId } = useActiveIdentity();
 
@@ -112,9 +113,11 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
 
         let raw: string | null;
         if (isBinary) {
-          raw = projectId ? await getProjectFileBase64(port, projectId, path, chatId) : await readFileBase64(path);
+          raw = projectId
+            ? await getProjectFileBase64(port, projectId, path, chatId)
+            : await host.fs.readFileBase64(path);
         } else {
-          raw = projectId ? await getProjectFile(port, projectId, path, chatId) : await readFile(path);
+          raw = projectId ? await getProjectFile(port, projectId, path, chatId) : await host.fs.readFile(path);
         }
 
         if (cancelled) return;
@@ -145,7 +148,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, port, projectId, chatId]);
+  }, [path, host, port, projectId, chatId]);
 
   if (state.status === 'idle' || state.status === 'loading') {
     return <div className="flex h-full items-center justify-center text-body text-muted-foreground">Loading…</div>;
