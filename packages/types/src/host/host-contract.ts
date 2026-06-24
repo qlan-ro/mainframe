@@ -81,3 +81,19 @@ export const LogRecordSchema = z.object({
   message: z.string(),
   data: z.unknown().optional(),
 });
+
+/**
+ * Auto-update lifecycle. Mirrors the Electron auto-updater.ts UpdateStatus union
+ * exactly (6 variants) so the contract is host-agnostic. The Tauri shell maps its
+ * tauri-plugin-updater events into this shape; the Electron adapter forwards the
+ * existing update-status IPC payloads (already this shape).
+ */
+export const UpdateStatusSchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('checking') }),
+  z.object({ state: z.literal('available'), version: z.string() }),
+  z.object({ state: z.literal('not-available') }),
+  z.object({ state: z.literal('downloading'), percent: z.number() }),
+  z.object({ state: z.literal('downloaded'), version: z.string() }),
+  z.object({ state: z.literal('error'), message: z.string() }),
+]);
+export type UpdateStatus = z.infer<typeof UpdateStatusSchema>;

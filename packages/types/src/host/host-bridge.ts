@@ -13,10 +13,10 @@
 
 export type Unsubscribe = () => void;
 
-import type { Platform, DaemonStatus, LogLevel } from './host-contract.js';
+import type { Platform, DaemonStatus, LogLevel, UpdateStatus } from './host-contract.js';
 import type { AppInfoSchema, RegionSchema } from './host-contract.js';
 import type { z } from 'zod';
-export type { Platform, DaemonStatus, LogLevel } from './host-contract.js';
+export type { Platform, DaemonStatus, LogLevel, UpdateStatus } from './host-contract.js';
 
 export type AppInfo = z.infer<typeof AppInfoSchema>;
 
@@ -113,6 +113,12 @@ export interface HostBridge {
     port(): Promise<number>;
     status(): Promise<DaemonStatus>;
     onStatus(cb: (status: DaemonStatus) => void): Promise<Unsubscribe>;
+  };
+  updates: {
+    check(): Promise<UpdateStatus>;
+    download(): Promise<void>;
+    install(): void;
+    onStatus(cb: (s: UpdateStatus) => void): Promise<Unsubscribe>;
   };
   log(level: LogLevel, module: string, message: string, data?: unknown): void;
   /** Tauri installs the window-drag listener here; Electron is a CSS no-op. */
