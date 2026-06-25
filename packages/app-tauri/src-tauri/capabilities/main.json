@@ -7,10 +7,9 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "opener:default",
-    "notification:default",
+    "opener:allow-open-url",
     "notification:allow-notify",
-    "mcp-bridge:default",
+    "notification:allow-is-permission-granted",
     "updater:default"
   ]
 }

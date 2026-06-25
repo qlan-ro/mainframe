@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use tauri::{Emitter, Manager};
+#[cfg(debug_assertions)]
+use tauri::ipc::CapabilityBuilder;
 
 // Re-export commands at crate root so generate_handler! can find them.
 use commands::{get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64, show_item_in_folder};
@@ -109,6 +111,18 @@ pub fn run() {
                 Err(e) => {
                     tracing::warn!(err = %e, "failed to build application menu");
                 }
+            }
+
+            // Dev-only: grant the mcp-bridge capability at runtime so it is absent
+            // from the static capability set that ships in release builds.
+            // Mirrors the #[cfg(debug_assertions)] plugin registration above.
+            #[cfg(debug_assertions)]
+            if let Err(e) = app.add_capability(
+                CapabilityBuilder::new("dev-mcp-bridge")
+                    .window("main")
+                    .permission("mcp-bridge:default"),
+            ) {
+                tracing::warn!(err = %e, "failed to add dev-mcp-bridge capability");
             }
 
             // Register the terminal manager (uses the same login-shell env as the
