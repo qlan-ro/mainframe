@@ -4,6 +4,7 @@ import { deriveSessionItems } from './derive-session-items';
 import { ContextSection } from './ContextSection';
 import { ContextFileItem } from './ContextFileItem';
 import { SessionAttachmentsGrid } from './SessionAttachmentsGrid';
+import { TasksSection } from './TasksSection';
 
 function Muted({ text }: { text: string }) {
   return <div className="py-4 text-center text-caption text-mf-text-3">{text}</div>;
@@ -17,9 +18,11 @@ export function ContextInspector() {
 
   const sessionItems = deriveSessionItems(context);
   const sessionCount = sessionItems.length + context.attachments.length;
+  const todos = context.todos ?? [];
 
   return (
     <div className="space-y-1 py-1">
+      {todos.length > 0 && <TasksSection todos={todos} />}
       <ContextSection icon={Globe} title="Global" count={context.globalFiles.length} defaultOpen>
         {context.globalFiles.map((f) => (
           <ContextFileItem key={f.path} path={f.path} />

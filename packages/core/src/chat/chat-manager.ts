@@ -717,6 +717,7 @@ export class ChatManager {
       session,
       this.attachmentStore,
       chat?.adapterId,
+      chat?.todos,
     );
   }
 

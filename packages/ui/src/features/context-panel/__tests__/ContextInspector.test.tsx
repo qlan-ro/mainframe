@@ -44,4 +44,31 @@ describe('ContextInspector', () => {
     expect(screen.getByTestId('sidebar-context-item-CLAUDE.md')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar-context-section-session')).toHaveTextContent('1');
   });
+
+  it('renders the Tasks section first when the chat has todos', () => {
+    useSessionContext.mockReturnValue({
+      chatId: 'c1',
+      context: ctx({
+        todos: [
+          { content: 'A', status: 'completed', activeForm: 'Aing' },
+          { content: 'B', status: 'pending', activeForm: 'Bing' },
+        ],
+      }),
+    });
+    renderInspector(<ContextInspector />);
+    const tasks = screen.getByTestId('context-tasks-section');
+    const global = screen.getByTestId('sidebar-context-section-global');
+    expect(tasks).toBeInTheDocument();
+    // Tasks appears before Global in DOM order.
+    expect(tasks.compareDocumentPosition(global) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('omits the Tasks section when there are no todos', () => {
+    useSessionContext.mockReturnValue({
+      chatId: 'c1',
+      context: ctx({ todos: [] }),
+    });
+    renderInspector(<ContextInspector />);
+    expect(screen.queryByTestId('context-tasks-section')).not.toBeInTheDocument();
+  });
 });
