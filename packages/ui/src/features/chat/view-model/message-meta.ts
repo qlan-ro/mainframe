@@ -21,6 +21,9 @@ export interface MainframeMessageMeta {
   readonly partGroups?: Readonly<Record<string, string>>;
   readonly groupSummaries?: Readonly<Record<string, string>>;
   readonly cost?: number;
+  /** Set on an assistant `error` turn → AssistantMessage renders a styled error
+   *  block instead of the plain text part (which is kept for a11y/fallback). */
+  readonly errorText?: string;
   // user turn
   readonly queued?: boolean;
   readonly cleanText?: string;

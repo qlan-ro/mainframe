@@ -440,6 +440,48 @@ describe('convertMessage — groupSummaries: tool_group records derived summary'
 });
 
 // ---------------------------------------------------------------------------
+// error message type — errorText metadata + text-part invariant
+// ---------------------------------------------------------------------------
+
+/** A DisplayMessage whose top-level type is 'error' (not an assistant turn). */
+function errorMsg(content: DisplayContent[]): DisplayMessage {
+  return { id: 'e1', chatId: 'c1', type: 'error', timestamp: '2026-06-05T00:00:00.000Z', content };
+}
+
+/** Pull metadata.custom.mainframe off a converted message. */
+function msgMainframe(msg: DisplayMessage): { errorText?: string; [key: string]: unknown } | undefined {
+  return (convertMessage(msg) as { metadata?: { custom?: { mainframe?: Record<string, unknown> } } }).metadata?.custom
+    ?.mainframe as { errorText?: string } | undefined;
+}
+
+describe('convertMessage — error message: errorText metadata', () => {
+  it('sets errorText to the error message string', () => {
+    const msg = errorMsg([{ type: 'error', message: 'boom' }]);
+    expect(msgMainframe(msg)?.errorText).toBe('boom');
+  });
+
+  it('falls back to "An error occurred" when message is empty', () => {
+    const msg = errorMsg([{ type: 'error', message: '' }]);
+    expect(msgMainframe(msg)?.errorText).toBe('An error occurred');
+  });
+
+  it('falls back to "An error occurred" when message is whitespace-only', () => {
+    const msg = errorMsg([{ type: 'error', message: '   ' }]);
+    expect(msgMainframe(msg)?.errorText).toBe('An error occurred');
+  });
+
+  it('still emits the error text as a text part (≥1-part invariant + a11y)', () => {
+    const msg = errorMsg([{ type: 'error', message: 'boom' }]);
+    expect(parts(msg).some((p) => p.type === 'text' && p.text === 'boom')).toBe(true);
+  });
+
+  it('falls back text part also uses "An error occurred" when message is empty', () => {
+    const msg = errorMsg([{ type: 'error', message: '' }]);
+    expect(parts(msg).some((p) => p.type === 'text' && p.text === 'An error occurred')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // coerceUserMeta — type-safe metadata extraction for user messages
 // (driven through convertMessage since coerceUserMeta is not exported)
 // ---------------------------------------------------------------------------

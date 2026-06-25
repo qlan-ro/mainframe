@@ -250,7 +250,14 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
     case 'error': {
       const errorBlock = message.content.find((c): c is DisplayContent & { type: 'error' } => c.type === 'error');
       const errorText = errorBlock?.message?.trim() ? errorBlock.message : 'An error occurred';
-      return { role: 'assistant', content: [{ type: 'text', text: errorText }], ...base };
+      // Keep the text part (≥1-content-part invariant + a11y/fallback); the
+      // `errorText` meta drives AssistantMessage's styled error block.
+      return {
+        role: 'assistant',
+        content: [{ type: 'text', text: errorText }],
+        ...base,
+        ...withMainframe({}, { errorText }),
+      };
     }
 
     case 'permission':

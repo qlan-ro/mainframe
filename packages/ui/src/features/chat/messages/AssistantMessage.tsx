@@ -27,6 +27,7 @@ import { ZoomableImage } from '../parts/ZoomableImage';
 import { MessageActionBar } from './MessageActionBar';
 import { MessageTiming } from './MessageTiming';
 import { MessageTimestamp } from './MessageTimestamp';
+import { AssistantErrorBlock } from './AssistantErrorBlock';
 
 function RunningIndicator() {
   return (
@@ -43,6 +44,19 @@ export function AssistantMessage() {
   const groupBy = useMemo(() => makeChatGroupBy(meta.partGroups ?? {}), [meta.partGroups]);
   const summaries = meta.groupSummaries;
   const messageId = useAuiState((s) => s.message.id);
+
+  // Error turn → a styled destructive block instead of plain assistant prose.
+  if (meta.errorText) {
+    return (
+      <MessagePrimitive.Root
+        data-testid="chat-assistant-message"
+        data-message-id={messageId}
+        className="group/message flex flex-col gap-2 py-3"
+      >
+        <AssistantErrorBlock text={meta.errorText} />
+      </MessagePrimitive.Root>
+    );
+  }
 
   return (
     <MessagePrimitive.Root
