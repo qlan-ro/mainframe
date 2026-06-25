@@ -1,4 +1,5 @@
-import type { SessionWorkspace } from './layout';
+import { createJSONStorage, type PersistOptions } from 'zustand/middleware';
+import type { LayoutStore, SessionWorkspace } from './layout';
 import type { RunState, RunTab } from './run-pane';
 
 /** File-backed tab kinds that are safe to persist (no live PTY/webview ref). */
@@ -40,3 +41,26 @@ export function serializeSessions(sessions: Map<string, SessionWorkspace>): Reco
 export function reviveSessions(obj: Record<string, SessionWorkspace> | undefined): Map<string, SessionWorkspace> {
   return new Map(Object.entries(obj ?? {}));
 }
+
+/** Drop persisted entries whose id is no longer a live chat; identity-stable when nothing changed. */
+export function prunePersistedSessions(
+  sessions: Map<string, SessionWorkspace>,
+  validIds: Set<string>,
+): Map<string, SessionWorkspace> {
+  const next = new Map([...sessions].filter(([id]) => validIds.has(id)));
+  return next.size === sessions.size ? sessions : next;
+}
+
+type PersistedLayout = { sessions: Record<string, SessionWorkspace> };
+
+/** zustand persist config for the per-session layout store (`mf:session-layout`). */
+export const layoutPersistOptions: PersistOptions<LayoutStore, PersistedLayout> = {
+  name: 'mf:session-layout',
+  version: 1,
+  storage: createJSONStorage(() => localStorage),
+  partialize: (s) => ({ sessions: serializeSessions(s.sessions) }),
+  merge: (persisted, current) => ({
+    ...current,
+    sessions: reviveSessions((persisted as PersistedLayout | undefined)?.sessions),
+  }),
+};
