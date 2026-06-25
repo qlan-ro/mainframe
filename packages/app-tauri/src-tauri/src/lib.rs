@@ -1,5 +1,6 @@
 mod commands;
 mod log_sink;
+mod presence;
 mod preview;
 mod shell_env;
 mod sidecar;
@@ -12,6 +13,7 @@ use tauri::{Emitter, Manager};
 
 // Re-export commands at crate root so generate_handler! can find them.
 use commands::{get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64, show_item_in_folder};
+use presence::{report_activity, DaemonPort};
 use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
 use preview::{
     preview_capture, preview_create, preview_destroy, preview_eval, preview_inspect_result,
@@ -66,6 +68,8 @@ pub fn run() {
             terminal_kill,
             // renderer→host log sink (Plan 3, decision 3)
             log_sink::host_log,
+            // presence reporter command (Plan 3, decision 4)
+            report_activity,
             // preview child-webview commands
             preview_create,
             preview_navigate,
@@ -81,6 +85,9 @@ pub fn run() {
             // Register the terminal manager (uses the same login-shell env as the
             // daemon so shells inherit the correct PATH/SHELL).
             app.manage(TerminalManager::new(shell_env.clone()));
+
+            // Manage daemon port so the report_activity command can read it.
+            app.manage(DaemonPort(DAEMON_PORT));
 
             // Register the preview child-webview manager.
             app.manage(PreviewManager::new());
@@ -109,6 +116,10 @@ pub fn run() {
                 let _ = DAEMON.set(handle);
             }
 
+            // Start the OS-idle presence reporter (Plan 3, decision 4).
+            // Spawns a background thread; mirrors idle-reporter.ts cadence.
+            presence::start_presence_reporter(DAEMON_PORT);
+
             Ok(())
         })
         .on_page_load(|webview, payload| {
@@ -128,6 +139,13 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
+                // POST idle on quit — mirrors idle-reporter.ts "before-quit" handler.
+                let _ = ureq::post(&format!(
+                    "http://127.0.0.1:{DAEMON_PORT}/api/device/activity"
+                ))
+                .set("Content-Type", "application/json")
+                .send_string("{\"state\":\"idle\"}");
+
                 // Kill the daemon when the last window closes.
                 if let Some(h) = DAEMON.get() {
                     h.kill();

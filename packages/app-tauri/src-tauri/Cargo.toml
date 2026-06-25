@@ -31,6 +31,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 dirs = "5"
 which = "6"
 portable-pty = "0.9"
+ureq = { version = "2", default-features = false, features = ["json"] }
 
 # Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
 # DOM inspection, IPC). Only registered under debug_assertions in lib.rs.
@@ -45,7 +46,7 @@ objc2-foundation = { version = "0.3", features = ["std", "NSError"] }
 objc2-app-kit = { version = "0.3", features = ["std", "NSImage", "NSBitmapImageRep", "NSGraphicsContext"] }
 objc2-web-kit = { version = "0.3", features = ["std", "WKWebView", "WKSnapshotConfiguration", "block2"] }
 block2 = "0.6"
-objc2-core-graphics = { version = "0.3", features = ["std", "CGGeometry"] }
+objc2-core-graphics = { version = "0.3", features = ["std", "CGGeometry", "CGEventTypes"] }
 png = "0.17"
 
 [dev-dependencies]
