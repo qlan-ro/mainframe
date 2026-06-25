@@ -46,9 +46,11 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     refit: (): void => {
       void preview.previewSetBounds(tabId, readBounds()).catch((e) => console.warn('[preview] tauri refit', e));
     },
-    setDevice: (): void => {
-      // Tauri preview frame sizing is driven by the container rect; device toggle
-      // changes the container size, picked up by refit(). No native call needed.
+    setDevice: (_device: 'desktop' | 'mobile'): void => {
+      // The device toggle resizes the DOM container; immediately re-read its rect
+      // into the native layer so the preview webview tracks the new frame without
+      // waiting for the next refit() (decision 5).
+      void preview.previewSetBounds(tabId, readBounds()).catch((e) => console.warn('[preview] tauri setDevice', e));
     },
     destroy: (): void => {
       void preview.previewDestroy(tabId).catch((e) => console.warn('[preview] tauri destroy', e));

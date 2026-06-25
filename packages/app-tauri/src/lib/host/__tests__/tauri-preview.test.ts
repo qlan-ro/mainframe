@@ -1,18 +1,34 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const invoke = vi.fn();
-const listen = vi.fn();
+const previewCreate = vi.fn().mockResolvedValue(undefined);
+const previewNavigate = vi.fn().mockResolvedValue(undefined);
+const previewSetBounds = vi.fn().mockResolvedValue(undefined);
+const previewSetVisible = vi.fn().mockResolvedValue(undefined);
+const previewCapture = vi.fn().mockResolvedValue(new Uint8Array([137, 80, 78, 71]));
+const previewDestroy = vi.fn().mockResolvedValue(undefined);
+const previewEval = vi.fn().mockResolvedValue(undefined);
+const onInspectResult = vi.fn().mockResolvedValue(() => {});
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: (...a: unknown[]) => listen(...a) }));
+vi.mock('@/lib/tauri/preview', () => ({
+  previewCreate: (...a: unknown[]) => previewCreate(...a),
+  previewNavigate: (...a: unknown[]) => previewNavigate(...a),
+  previewSetBounds: (...a: unknown[]) => previewSetBounds(...a),
+  previewSetVisible: (...a: unknown[]) => previewSetVisible(...a),
+  previewCapture: (...a: unknown[]) => previewCapture(...a),
+  previewDestroy: (...a: unknown[]) => previewDestroy(...a),
+  previewEval: (...a: unknown[]) => previewEval(...a),
+  onInspectResult: (...a: unknown[]) => onInspectResult(...a),
+}));
 
 beforeEach(() => {
-  (globalThis as Record<string, unknown>).window = Object.assign(globalThis.window ?? {}, { __TAURI_INTERNALS__: {} });
-  invoke.mockReset().mockResolvedValue(undefined);
-  listen.mockReset().mockResolvedValue(() => {});
-});
-afterEach(() => {
-  delete (globalThis.window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  previewCreate.mockReset().mockResolvedValue(undefined);
+  previewNavigate.mockReset().mockResolvedValue(undefined);
+  previewSetBounds.mockReset().mockResolvedValue(undefined);
+  previewSetVisible.mockReset().mockResolvedValue(undefined);
+  previewCapture.mockReset().mockResolvedValue(new Uint8Array([137, 80, 78, 71]));
+  previewDestroy.mockReset().mockResolvedValue(undefined);
+  previewEval.mockReset().mockResolvedValue(undefined);
+  onInspectResult.mockReset().mockResolvedValue(() => {});
 });
 
 function fakeContainer(): HTMLElement {
@@ -22,43 +38,52 @@ function fakeContainer(): HTMLElement {
 }
 
 describe('mountTauriPreview', () => {
-  it('mount() calls preview_create with the container rect bounds', async () => {
+  it('mount() calls previewCreate with the container rect bounds', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     mountTauriPreview(fakeContainer(), 'http://localhost:3000', { projectId: 'p1' });
     // mount is sync, create fires async — flush microtasks
     await Promise.resolve();
-    expect(invoke).toHaveBeenCalledWith(
-      'preview_create',
-      expect.objectContaining({ url: 'http://localhost:3000', bounds: { x: 10, y: 20, w: 300, h: 400 } }),
-    );
+    expect(previewCreate).toHaveBeenCalledWith(expect.any(String), 'http://localhost:3000', {
+      x: 10,
+      y: 20,
+      w: 300,
+      h: 400,
+    });
   });
 
-  it('navigate() delegates to preview_navigate', async () => {
+  it('navigate() delegates to previewNavigate', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     const handle = mountTauriPreview(fakeContainer(), 'http://localhost:3000');
     await Promise.resolve();
-    invoke.mockClear();
     await handle.navigate('http://localhost:4000');
-    expect(invoke).toHaveBeenCalledWith('preview_navigate', expect.objectContaining({ url: 'http://localhost:4000' }));
+    expect(previewNavigate).toHaveBeenCalledWith(expect.any(String), 'http://localhost:4000');
   });
 
-  it('capture() wraps the invoke number[] as a Uint8Array', async () => {
+  it('capture() returns a Uint8Array', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     const handle = mountTauriPreview(fakeContainer(), 'http://x');
     await Promise.resolve();
-    invoke.mockResolvedValueOnce([137, 80, 78, 71]);
     const bytes = await handle.capture();
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(Array.from(bytes)).toEqual([137, 80, 78, 71]);
   });
 
-  it('destroy() calls preview_destroy', async () => {
+  it('destroy() calls previewDestroy', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     const handle = mountTauriPreview(fakeContainer(), 'http://x');
     await Promise.resolve();
-    invoke.mockClear();
     handle.destroy();
     await Promise.resolve();
-    expect(invoke).toHaveBeenCalledWith('preview_destroy', expect.objectContaining({ tabId: expect.any(String) }));
+    expect(previewDestroy).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('setDevice re-issues previewSetBounds with the current container rect', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    const container = document.createElement('div');
+    container.getBoundingClientRect = () => ({ left: 5, top: 6, width: 320, height: 480 }) as DOMRect;
+    const handle = mountTauriPreview(container, 'http://x');
+    previewSetBounds.mockClear();
+    handle.setDevice('mobile');
+    expect(previewSetBounds).toHaveBeenCalledWith(expect.any(String), { x: 5, y: 6, w: 320, h: 480 });
   });
 });
