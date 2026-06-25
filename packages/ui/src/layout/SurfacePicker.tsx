@@ -1,10 +1,11 @@
-import { ChevronRight, Code2, Eye, GitCompare, Terminal } from 'lucide-react';
+import { ChevronRight, Code2, Eye, FileText, GitCompare, Terminal } from 'lucide-react';
 import type { SurfaceId } from '@/store/layout';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { MenuDivider, MenuLabel } from '@/components/ui/menu';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
+import { useRecentFiles } from '@/features/files/use-recent-files';
 
 interface RowProps {
   testid: string;
@@ -32,6 +33,46 @@ function PickerRow({ testid, icon, label, hint, chevron, onClick, disabled, titl
       {hint && <span className="flex-shrink-0 font-mono text-micro text-mf-text-4">{hint}</span>}
       {chevron && <ChevronRight size={10} className="flex-shrink-0 text-mf-text-4" />}
     </button>
+  );
+}
+
+/** Files-surface picker content: open-file / view-changes + a Recent (changed files) section. */
+function FilesPickerContent() {
+  const { projectId, chatId } = useActiveIdentity();
+  const port = useDaemonPort();
+  const recent = useRecentFiles(port, projectId ?? undefined, chatId ?? undefined, 3);
+  return (
+    <>
+      <PickerRow
+        testid="files-picker-open-file"
+        icon={<Code2 size={14} className="flex-shrink-0 text-[#5b269a]" />}
+        label="Open file…"
+        chevron
+        onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
+      />
+      <PickerRow
+        testid="files-picker-view-changes"
+        icon={<GitCompare size={14} className="flex-shrink-0 text-[#ff9500]" />}
+        label="View changes…"
+        chevron
+        onClick={() => emitSurfaceIntent({ type: 'inspector-tab', tab: 'changes' })}
+      />
+      {recent.length > 0 && (
+        <>
+          <MenuDivider />
+          <MenuLabel>Recent</MenuLabel>
+          {recent.map((f) => (
+            <PickerRow
+              key={f.path}
+              testid={`files-picker-recent-${f.path}`}
+              icon={<FileText size={14} className="flex-shrink-0 text-mf-text-3" />}
+              label={f.path}
+              onClick={() => emitSurfaceIntent({ type: 'open-file', path: f.path })}
+            />
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
@@ -83,26 +124,7 @@ export function SurfacePicker({ surface }: Props) {
     >
       <div className="w-[300px] overflow-hidden rounded-[13px] border-[0.5px] border-border bg-background shadow-[var(--mf-shadow-picker)]">
         <div className="max-h-[300px] overflow-y-auto p-[4px]">
-          {surface === 'files' ? (
-            <>
-              <PickerRow
-                testid="files-picker-open-file"
-                icon={<Code2 size={14} className="flex-shrink-0 text-[#5b269a]" />}
-                label="Open file…"
-                chevron
-                onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
-              />
-              <PickerRow
-                testid="files-picker-view-changes"
-                icon={<GitCompare size={14} className="flex-shrink-0 text-[#ff9500]" />}
-                label="View changes…"
-                chevron
-                onClick={() => emitSurfaceIntent({ type: 'inspector-tab', tab: 'changes' })}
-              />
-            </>
-          ) : (
-            <RunPickerContent />
-          )}
+          {surface === 'files' ? <FilesPickerContent /> : <RunPickerContent />}
         </div>
         <div className="[border-top:0.5px_solid_var(--border)] px-3.5 py-[7px] font-mono text-micro text-mf-text-4">
           {surface === 'files' ? 'opens route here automatically' : 'spawns a running surface'}

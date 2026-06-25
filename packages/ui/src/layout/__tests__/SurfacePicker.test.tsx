@@ -27,11 +27,15 @@ vi.mock('@/features/run/use-launch-actions', () => ({
   }),
 }));
 
+const recentFiles = vi.fn<() => { path: string; status: string }[]>(() => []);
+vi.mock('@/features/files/use-recent-files', () => ({ useRecentFiles: () => recentFiles() }));
+
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 describe('SurfacePicker (files surface)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    recentFiles.mockReturnValue([]);
   });
 
   it('renders the files picker when surface="files"', () => {
@@ -51,6 +55,24 @@ describe('SurfacePicker (files surface)', () => {
     render(<SurfacePicker surface="files" />);
     await user.click(screen.getByTestId('files-picker-view-changes'));
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'inspector-tab', tab: 'changes' });
+  });
+
+  it('omits the Recent section when there are no recently-changed files', () => {
+    recentFiles.mockReturnValue([]);
+    render(<SurfacePicker surface="files" />);
+    expect(screen.queryByText('Recent')).not.toBeInTheDocument();
+  });
+
+  it('renders a Recent row per changed file and opens it on click', async () => {
+    recentFiles.mockReturnValue([
+      { path: 'src/a.ts', status: 'M' },
+      { path: 'src/b.ts', status: 'A' },
+    ]);
+    const user = userEvent.setup();
+    render(<SurfacePicker surface="files" />);
+    expect(screen.getByText('Recent')).toBeInTheDocument();
+    await user.click(screen.getByTestId('files-picker-recent-src/a.ts'));
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts' });
   });
 });
 
