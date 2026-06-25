@@ -28,13 +28,27 @@ Tauri's `externalBin` requires a pre-built binary at
 `src-tauri/binaries/node-<target-triple>` (e.g. `node-aarch64-apple-darwin`,
 `node-x86_64-apple-darwin`, `node-x86_64-pc-windows-msvc`).
 
-Steps:
+**SCAFFOLDED (2026-06-25):** Zero-byte placeholder files are now committed for
+all common target triples so `cargo check` passes on any dev/CI platform without
+requiring the real binaries:
+- `node-aarch64-apple-darwin` (macOS Apple Silicon)
+- `node-x86_64-apple-darwin` (macOS Intel)
+- `node-x86_64-unknown-linux-gnu` (Linux x86_64)
+- `node-aarch64-unknown-linux-gnu` (Linux ARM64)
+- `node-x86_64-pc-windows-msvc.exe` (Windows x64 — `.exe` suffix required)
+
+`binaries/.gitignore` uses `!node-<triple>` negations to allow these placeholders
+to be force-tracked while still ignoring any real (large) binaries downloaded locally.
+See `src-tauri/binaries/README.md` for details.
+
+The CI packaging pipeline **replaces** these zero-byte placeholders with the real
+binaries before running `cargo tauri build`. Steps:
 1. Fetch the official Node.js binary for each target from `https://nodejs.org/dist/`.
    Pin to a specific LTS version (e.g. Node 20 LTS). Use the same major version the
    monorepo's `.nvmrc` / `package.json engines` field pins.
 2. Strip the download to just the `node` binary (not the full tarball).
 3. Rename to the Tauri triple convention: `node-aarch64-apple-darwin`, etc.
-4. Place under `packages/app-tauri/src-tauri/binaries/`.
+4. Place under `packages/app-tauri/src-tauri/binaries/` (replacing the placeholder).
 5. In `sidecar.rs` `find_node`, add a packaged-build branch: when
    `app.path().resource_dir()` resolves, prefer the sidecar binary that Tauri
    copies to `<Contents/MacOS/node-*>` (use `std::env::current_exe().parent()`).

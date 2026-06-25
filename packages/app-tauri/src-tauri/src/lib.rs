@@ -248,31 +248,44 @@ fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod resolver_tests {
     use super::pick_daemon_entry;
-    use std::path::PathBuf;
+
+    /// Returns a temp-dir path unique to this process + a per-call counter so
+    /// parallel test threads never collide on the same filename.
+    fn unique_tmp(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "daemon-test-{}-{}-{}.cjs",
+            std::process::id(),
+            n,
+            tag
+        ))
+    }
 
     #[test]
     fn prefers_bundled_resource_when_present() {
-        let bundled = PathBuf::from("/tmp/does-exist-bundled.cjs");
+        let bundled = unique_tmp("bundled");
         std::fs::write(&bundled, b"// daemon").unwrap();
         let got = pick_daemon_entry(Some(bundled.clone()), None);
-        assert_eq!(got, Some(bundled.clone()));
         std::fs::remove_file(&bundled).ok();
+        assert_eq!(got, Some(bundled));
     }
 
     #[test]
     fn falls_back_to_env_override_when_no_bundle() {
-        let env_path = PathBuf::from("/tmp/does-exist-env.cjs");
+        let env_path = unique_tmp("env");
         std::fs::write(&env_path, b"// daemon").unwrap();
         let got = pick_daemon_entry(None, Some(env_path.clone()));
-        assert_eq!(got, Some(env_path.clone()));
         std::fs::remove_file(&env_path).ok();
+        assert_eq!(got, Some(env_path));
     }
 
     #[test]
     fn returns_none_when_neither_exists() {
         let got = pick_daemon_entry(
-            Some(PathBuf::from("/tmp/nope-bundle.cjs")),
-            Some(PathBuf::from("/tmp/nope-env.cjs")),
+            Some(unique_tmp("nope-bundle")),
+            Some(unique_tmp("nope-env")),
         );
         assert_eq!(got, None);
     }

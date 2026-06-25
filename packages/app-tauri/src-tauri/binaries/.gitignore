@@ -1,12 +1,15 @@
-# TODO(plan3-infra): These are PLACEHOLDER files for cargo check / scaffold.
-# The real node binaries are NOT committed — they are downloaded by the CI
-# packaging pipeline per target triple (see docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md).
+# Real Node binaries are NOT committed — the CI packaging pipeline downloads them
+# per target triple from https://nodejs.org/dist/<version>/ and places them here.
+# (see docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md TODO #1)
 #
-# Format: node-<target-triple>  (Tauri externalBin convention)
-# e.g.:  node-aarch64-apple-darwin
-#         node-x86_64-apple-darwin
-#         node-x86_64-pc-windows-msvc
-#         node-x86_64-unknown-linux-gnu
-#
-# The pipeline fetches each from https://nodejs.org/dist/<version>/ and renames it.
+# The files below ARE committed as zero-byte placeholders so that `cargo check`
+# passes on every dev/CI platform without requiring the real binaries.
+# The packaging pipeline replaces them with the real binaries before `tauri build`.
 node-*
+
+# Placeholder exceptions — force-tracked zero-byte stand-ins for cargo check.
+!node-aarch64-apple-darwin
+!node-x86_64-apple-darwin
+!node-x86_64-unknown-linux-gnu
+!node-aarch64-unknown-linux-gnu
+!node-x86_64-pc-windows-msvc.exe
