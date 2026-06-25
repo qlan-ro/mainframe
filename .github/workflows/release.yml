@@ -171,8 +171,21 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signature (verified by the in-app updater against the pubkey).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS Developer ID code-signing + notarization. Reuses the Electron job's
+          # Apple secrets remapped to Tauri's env var names (CSC_LINK must be the
+          # base64 .p12). APPLE_SIGNING_IDENTITY is Tauri-specific (the full identity
+          # name, e.g. "Developer ID Application: Name (TEAMID)") — electron-builder
+          # derives it from the cert, Tauri needs it explicitly. Empty on non-macOS
+          # runners → tauri-action skips signing there.
+          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         with:
           projectPath: packages/app-tauri
           tagName: ${{ github.ref_name }}
