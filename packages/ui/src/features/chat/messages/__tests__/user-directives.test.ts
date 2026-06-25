@@ -85,4 +85,18 @@ describe('mainframeUserFormatter.parse — /command', () => {
     const segments = mainframeUserFormatter.parse('use /word here');
     expect(segments).toEqual([{ kind: 'text', text: 'use /word here' }]);
   });
+
+  it('captures a namespaced /plugin:skill command (full token, not just /plugin)', () => {
+    const segments = mainframeUserFormatter.parse('/plugin:skill do x');
+    const cmd = segments.find((s) => s.kind === 'mention' && (s as { type?: string }).type === 'command');
+    expect(cmd).toEqual({ kind: 'mention', type: 'command', label: '/plugin:skill', id: 'plugin:skill' });
+    const text = segments.find((s) => s.kind === 'text');
+    expect(text).toEqual({ kind: 'text', text: ' do x' });
+  });
+
+  it('captures a path/dotted /command token', () => {
+    const segments = mainframeUserFormatter.parse('/foo/bar.baz rest');
+    const cmd = segments.find((s) => s.kind === 'mention' && (s as { type?: string }).type === 'command');
+    expect(cmd).toEqual({ kind: 'mention', type: 'command', label: '/foo/bar.baz', id: 'foo/bar.baz' });
+  });
 });

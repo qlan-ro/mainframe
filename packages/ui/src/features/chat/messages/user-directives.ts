@@ -20,8 +20,13 @@ import type { Unstable_DirectiveFormatter, Unstable_DirectiveSegment } from '@as
 /** @word/path mentions, only when preceded by whitespace or string start. */
 const MENTION_RE = /(?:^|(?<=\s))(@[\w./\-]+)/g;
 
-/** Leading /command token (first token only, at string start after optional ws). */
-const COMMAND_RE = /^(\s*)(\/[\w-]+)/;
+/**
+ * Leading /command token (first token only, at string start after optional ws).
+ * Token chars match desktop parity — word chars plus `:` `.` `/` `-` so
+ * namespaced (`/plugin:skill`), path (`/foo/bar`), and dotted commands highlight
+ * as a single token, not just the leading `/word`.
+ */
+const COMMAND_RE = /^(\s*)(\/[\w:./-]+)/;
 
 // ── Formatter ─────────────────────────────────────────────────────────────────
 
