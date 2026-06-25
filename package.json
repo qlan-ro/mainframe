@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "pnpm --filter @qlan-ro/mainframe-core run dev & sleep 2 && pnpm --filter @qlan-ro/mainframe-desktop run dev",
     "dev:core": "pnpm --filter @qlan-ro/mainframe-core run dev",
-    "dev:desktop": "pnpm --filter @qlan-ro/mainframe-desktop run dev",
+    "dev:desktop": "concurrently -k -n core,vite,electron -c blue,green,magenta \"pnpm --filter @qlan-ro/mainframe-core run dev\" \"pnpm --filter @qlan-ro/mainframe-app-tauri run dev\" \"sleep 3 && pnpm --filter @qlan-ro/mainframe-desktop run dev\"",
     "build": "pnpm -r run build",
     "build:types": "pnpm --filter @qlan-ro/mainframe-types run build",
     "build:core": "pnpm --filter @qlan-ro/mainframe-core run build",
@@ -36,6 +36,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.30.0",
+    "concurrently": "^9.1.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
