@@ -19,6 +19,7 @@ import { PermissionSelect } from './PermissionSelect';
 import { PlanModeToggle } from './PlanModeToggle';
 import { EffortPicker } from './EffortPicker';
 import { FeaturesPopover } from './FeaturesPopover';
+import { WorktreePopover } from './WorktreePopover';
 
 export function ComposerToolbar() {
   const adapters = useAdapters();
@@ -74,6 +75,7 @@ export function ComposerToolbar() {
           providerDefaults={providerDefaults}
         />
       )}
+      <WorktreePopover chat={chat} hasMessages={hasMessages} />
     </>
   );
 }
