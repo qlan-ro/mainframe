@@ -1,6 +1,6 @@
 /// Node daemon sidecar supervision.
 ///
-/// Mirrors `packages/desktop/src/main/index.ts:startDaemon()`.
+/// Mirrors `packages/app-electron/src/main/index.ts:startDaemon()`.
 /// Spawns the daemon as a child process with `detached: false` semantics
 /// (the child dies when this process dies — Rust's default).
 /// The login-shell env is merged over the process env before spawn,

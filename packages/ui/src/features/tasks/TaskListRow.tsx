@@ -4,7 +4,7 @@
  * Collapsed: priority stripe · status dot (cycle button) · #number · title · priority pill.
  * Expanded: body · milestone · dependencies · timestamps · Start/Resume/Edit buttons.
  *
- * Port of packages/desktop/src/renderer/components/todos/TodoCard.tsx (list
+ * Port of packages/app-electron/src/renderer/components/todos/TodoCard.tsx (list
  * variant), rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
 import React from 'react';

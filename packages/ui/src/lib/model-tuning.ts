@@ -6,7 +6,7 @@
  * provider. Mirrors the daemon resolver's clamp + ultracode→xhigh coercion so
  * the chip can never disagree with what actually spawns.
  *
- * Ported verbatim from `packages/desktop/.../lib/model-tuning.ts` (only depends
+ * Ported verbatim from `packages/app-electron/.../lib/model-tuning.ts` (only depends
  * on `@qlan-ro/mainframe-types`). TODO(dedup): lift to a shared bundleable
  * package alongside `convert-message` — tracked in MIGRATION-TRACKER.
  */

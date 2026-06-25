@@ -6,7 +6,7 @@
  * Edit flow: builds UpdateTodoInput → useTodosStore.update, attachments handled
  * directly in TaskAttachments (existing-todo mode).
  *
- * Port of packages/desktop/…/todos/TodoModal.tsx.
+ * Port of packages/app-electron/…/todos/TodoModal.tsx.
  * Rebuilt on shadcn/ui + warm-chrome tokens; mf-* phantom classes removed.
  */
 import React, { useState, useCallback } from 'react';

@@ -46,13 +46,13 @@ Every subagent MUST use:
 
 | # | Skill to Invoke | Target Paths | Analysis Focus |
 |---|----------------|--------------|----------------|
-| 1 | `typescript-expert` | `packages/types/src/`, `packages/core/src/`, `packages/desktop/src/`, `packages/mobile/` | Type safety, strict mode compliance, generic patterns, type architecture, `any` usage, missing return types |
+| 1 | `typescript-expert` | `packages/types/src/`, `packages/core/src/`, `packages/app-electron/src/`, `packages/mobile/` | Type safety, strict mode compliance, generic patterns, type architecture, `any` usage, missing return types |
 | 2 | `nodejs-best-practices` | `packages/core/src/` | Async patterns, error handling, event loop blocking, security, process management, stream handling |
-| 3 | `vercel-react-best-practices` | `packages/desktop/src/renderer/`, `packages/mobile/components/`, `packages/mobile/hooks/`, `packages/mobile/app/` | Component patterns, unnecessary re-renders, data fetching, memo/callback usage, key props, effect dependencies |
-| 4 | `ui-ux-pro-max` | `packages/desktop/src/renderer/`, `packages/mobile/components/`, `packages/mobile/app/` | Accessibility (a11y), interaction patterns, visual hierarchy, responsive design, loading/error states, UX consistency |
-| 5 | `tailwind-design-system` | `packages/desktop/src/renderer/` | Design token consistency, utility class patterns, responsive breakpoints, dark mode, custom CSS avoidance, class duplication |
+| 3 | `vercel-react-best-practices` | `packages/app-electron/src/renderer/`, `packages/mobile/components/`, `packages/mobile/hooks/`, `packages/mobile/app/` | Component patterns, unnecessary re-renders, data fetching, memo/callback usage, key props, effect dependencies |
+| 4 | `ui-ux-pro-max` | `packages/app-electron/src/renderer/`, `packages/mobile/components/`, `packages/mobile/app/` | Accessibility (a11y), interaction patterns, visual hierarchy, responsive design, loading/error states, UX consistency |
+| 5 | `tailwind-design-system` | `packages/app-electron/src/renderer/` | Design token consistency, utility class patterns, responsive breakpoints, dark mode, custom CSS avoidance, class duplication |
 | 6 | `senior-architect` | entire monorepo (all `packages/*/src/`) | Cross-package boundaries, dependency flow, circular deps, separation of concerns, API surface, integration patterns |
-| 7 | `code-refactoring-refactor-clean` | `packages/core/src/`, `packages/desktop/src/`, `packages/mobile/` | SOLID violations, function/file size, naming quality, code duplication, abstraction levels, single responsibility |
+| 7 | `code-refactoring-refactor-clean` | `packages/core/src/`, `packages/app-electron/src/`, `packages/mobile/` | SOLID violations, function/file size, naming quality, code duplication, abstraction levels, single responsibility |
 | 8 | `code-refactoring-tech-debt` | entire monorepo | Tech debt inventory, deprecated patterns, TODO/FIXME/HACK audit, dependency freshness, dead code, migration needs |
 
 ### Subagent Prompt Template

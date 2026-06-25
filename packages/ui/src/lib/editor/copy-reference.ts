@@ -1,7 +1,7 @@
 /**
  * copy-reference — pure `path:line` (or `path::SymbolChain`) clipboard-string builder.
  *
- * Port of packages/desktop/src/renderer/components/editor/copy-reference.ts
+ * Port of packages/app-electron/src/renderer/components/editor/copy-reference.ts
  * Changes:
  *   - Removed Monaco editor + TS worker coupling (copyReference function)
  *   - buildReference and findSymbolChain are the stable pure exports

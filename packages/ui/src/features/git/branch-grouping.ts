@@ -1,6 +1,6 @@
 /**
  * Pure helpers for grouping and filtering branch lists.
- * Ported from packages/desktop BranchList.tsx — no React or UI deps.
+ * Ported from packages/app-electron BranchList.tsx — no React or UI deps.
  */
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 

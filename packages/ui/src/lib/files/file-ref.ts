@@ -7,7 +7,7 @@
  * on the raw mixed-flavor string, causing the same file to become two tabs and
  * two editor buffers (dirty-buffer desync — review finding F1).
  *
- * Port of the ROLE from packages/desktop/src/renderer/lib/file-location.ts.
+ * Port of the ROLE from packages/app-electron/src/renderer/lib/file-location.ts.
  * NOT a verbatim copy: this module is pure, no React/aui coupling, and uses
  * the FileRef shape that the intent subscriber and the tab model need.
  */

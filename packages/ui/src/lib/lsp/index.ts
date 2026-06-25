@@ -1,7 +1,7 @@
 /**
  * LSP client singleton for app-tauri.
  *
- * Port of packages/desktop/src/renderer/lib/lsp/index.ts
+ * Port of packages/app-electron/src/renderer/lib/lsp/index.ts
  * Changes:
  *   - Port comes from getHost().daemon.port() (host port), not env-var build-time
  *   - auto-connect import deferred to Phase 7 (initAutoConnect export)

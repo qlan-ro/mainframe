@@ -2,7 +2,7 @@
  * DependencyPicker — searchable picker over allTodos (excludes self + already
  * selected). Selected deps shown as removable number-pills.
  *
- * Port of packages/desktop/…/todos/DependencyPicker.tsx.
+ * Port of packages/app-electron/…/todos/DependencyPicker.tsx.
  * Rebuilt on warm-chrome tokens; click-outside and Escape handled locally.
  */
 import React, { useState, useRef, useEffect, useMemo } from 'react';

@@ -1,4 +1,4 @@
-//! Periodic process-RSS sampler (parity with packages/desktop/src/main/memory-logger.ts).
+//! Periodic process-RSS sampler (parity with packages/app-electron/src/main/memory-logger.ts).
 //!
 //! Electron samples the *renderer* process via `app.getAppMetrics()` and logs
 //! `workingSetSizeKb` / `peakWorkingSetSizeKb` / `privateBytesKb`. Tauri's

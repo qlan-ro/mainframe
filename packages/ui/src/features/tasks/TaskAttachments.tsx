@@ -9,7 +9,7 @@
  *
  * Image previews open a shared multi-image ImageLightbox (prev/next gallery
  * nav across all image attachments).
- * Port of packages/desktop/…/todos/TodoAttachments.tsx.
+ * Port of packages/app-electron/…/todos/TodoAttachments.tsx.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, X, FileIcon } from 'lucide-react';

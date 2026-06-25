@@ -1,4 +1,4 @@
-//! Port of packages/desktop/src/main/auto-updater-error-classifier.ts.
+//! Port of packages/app-electron/src/main/auto-updater-error-classifier.ts.
 //! Transient errors (network/5xx/429/rate-limit) are suppressed from the UI;
 //! persistent errors surface. Plan 3, decision 1.
 

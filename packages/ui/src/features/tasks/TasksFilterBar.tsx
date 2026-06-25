@@ -4,7 +4,7 @@
  * Composed from: search Input, FilterMenu (type/priority/labels), a Clear button,
  * and SortMenu. Props-driven; the store owns state via useTodosStore.
  *
- * Port of packages/desktop/src/renderer/components/todos/TodoFilterBar.tsx,
+ * Port of packages/app-electron/src/renderer/components/todos/TodoFilterBar.tsx,
  * rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
 import React from 'react';

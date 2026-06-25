@@ -2,7 +2,7 @@
  * LabelAutocomplete — tag input with ghost suggestion, comma-batch entry,
  * Tab-complete, and Backspace-remove. No external deps beyond React.
  *
- * Port of packages/desktop/…/todos/LabelAutocomplete.tsx.
+ * Port of packages/app-electron/…/todos/LabelAutocomplete.tsx.
  * Rebuilt on warm-chrome tokens (no mf-* phantoms).
  */
 import React, { useState, useRef, useCallback, useMemo } from 'react';

@@ -12,12 +12,12 @@ export { DAEMON_PORT } from './daemon.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Path to the built Electron main entry point
-const APP_MAIN = path.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
+const APP_MAIN = path.resolve(__dirname, '../../../packages/app-electron/out/main/index.js');
 
 // Electron's setuid sandbox can't initialize on CI runners (sandboxed/non-root or missing
 // chrome-sandbox perms) → `Process failed to launch`. Disable it under CI; harmless locally.
 export const E2E_ELECTRON_EXTRA_ARGS = process.env['CI'] ? ['--no-sandbox'] : [];
-const RENDERER_INDEX_HTML = path.resolve(__dirname, '../../../packages/desktop/out/renderer/index.html');
+const RENDERER_INDEX_HTML = path.resolve(__dirname, '../../../packages/app-electron/out/renderer/index.html');
 
 /**
  * Fail fast if the built renderer targets the prod daemon port instead of the e2e port.

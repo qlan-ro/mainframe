@@ -2,7 +2,7 @@
  * Shared type guards and interfaces for tool-card results.
  *
  * Pure logic — no React, no DOM, no side effects.
- * Ported from packages/desktop/.../tools/shared.tsx; no desktop tokens here.
+ * Ported from packages/app-electron/.../tools/shared.tsx; no desktop tokens here.
  */
 import type { ToolCallResult } from '@qlan-ro/mainframe-types';
 

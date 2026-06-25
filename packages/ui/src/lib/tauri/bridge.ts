@@ -3,7 +3,7 @@
  *
  * The ONLY module that imports from @tauri-apps/*. All other modules
  * in the renderer import from here, never directly from Tauri packages.
- * This is the Tauri equivalent of packages/desktop/src/preload/index.ts.
+ * This is the Tauri equivalent of packages/app-electron/src/preload/index.ts.
  *
  * Dev/browser mode (Path A empirical render): when NOT running inside the
  * Tauri webview, every Tauri command falls back to a browser-safe value so the

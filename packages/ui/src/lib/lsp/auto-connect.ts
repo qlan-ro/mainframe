@@ -7,7 +7,7 @@
  * calls it once on startup (guarded by the HMR flag) but it is a no-op until
  * the stores exist.
  *
- * Port of packages/desktop/src/renderer/lib/lsp/auto-connect.ts
+ * Port of packages/app-electron/src/renderer/lib/lsp/auto-connect.ts
  * Changes: desktop store imports removed; store wiring deferred to Phase 7.
  */
 import { lspClientManager } from './index';

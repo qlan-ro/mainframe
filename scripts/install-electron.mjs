@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
-const desktopPkg = resolve(process.cwd(), 'packages/desktop/package.json');
+const desktopPkg = resolve(process.cwd(), 'packages/app-electron/package.json');
 
 let electronDir;
 try {

@@ -1,7 +1,7 @@
 /**
  * Minimal daemon WebSocket client for app-tauri.
  *
- * Mirrors packages/desktop/src/renderer/lib/client.ts but:
+ * Mirrors packages/app-electron/src/renderer/lib/client.ts but:
  * - Reads the port dynamically from the Tauri bridge (getDaemonPort)
  * - Skips Zustand / global stores entirely
  * - Exposes only what Phase 1 needs: connect, subscribe, send, onEvent, disconnect

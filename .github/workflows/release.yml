@@ -42,7 +42,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Package
-        run: pnpm --filter @qlan-ro/mainframe-desktop exec electron-builder --publish never
+        run: pnpm --filter @qlan-ro/mainframe-app-electron exec electron-builder --publish never
         env:
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
@@ -55,14 +55,14 @@ jobs:
         with:
           name: desktop-${{ matrix.os }}
           path: |
-            packages/desktop/dist/*.dmg
-            packages/desktop/dist/*.exe
-            packages/desktop/dist/*.AppImage
-            packages/desktop/dist/*.deb
-            packages/desktop/dist/*.rpm
-            packages/desktop/dist/*.zip
-            packages/desktop/dist/*.yml
-            packages/desktop/dist/*.yaml
+            packages/app-electron/dist/*.dmg
+            packages/app-electron/dist/*.exe
+            packages/app-electron/dist/*.AppImage
+            packages/app-electron/dist/*.deb
+            packages/app-electron/dist/*.rpm
+            packages/app-electron/dist/*.zip
+            packages/app-electron/dist/*.yml
+            packages/app-electron/dist/*.yaml
 
   build-daemon:
     strategy:

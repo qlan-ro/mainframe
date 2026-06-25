@@ -1,4 +1,4 @@
-//! Native OS-idle presence reporter. Mirrors packages/desktop/src/main/idle-reporter.ts
+//! Native OS-idle presence reporter. Mirrors packages/app-electron/src/main/idle-reporter.ts
 //! (30s poll, 5-min idle threshold, 4-min keepalive, POST /api/device/activity).
 //! Plan 3, decision 4.
 

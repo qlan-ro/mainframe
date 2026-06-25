@@ -33,7 +33,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 - **Monorepo Structure**: Uses pnpm workspaces with three main packages:
     - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
     - `@qlan-ro/mainframe-core`: The background Daemon (Node.js). Responsible for process management, session lifecycle, and metadata storage.
-    - `@qlan-ro/mainframe-desktop`: The Frontend (Electron/React). Provides the user interface for chatting and workspace orchestration.
+    - `@qlan-ro/mainframe-app-electron`: The Frontend (Electron/React). Provides the user interface for chatting and workspace orchestration.
 - **Facilitator Model**: The app manages CLI agent processes (like Claude CLI) via a structured JSON-RPC-like interface over stdio. It respects existing `~/.agents/` configurations and `CLAUDE.md` files in target projects.
 - **Data Flow**: User Input (Desktop) → ChatManager (Daemon) → CLI Adapter (Process Stdin) → Agent Logic → NDJSON Events (Process Stdout) → Daemon Event Stream → UI Update (WebSocket).
 - **Metadata Storage**: Uses SQLite (`better-sqlite3`) for project tracking and chat metadata (costs, tokens, session IDs). Message history is NOT duplicated; it is replayed by the CLI agents using `--resume` flags.
@@ -99,7 +99,7 @@ Git workflow and commit practices.
 - **Comments**: Omit notes about removed or missing features. Focus on *why*, not *what*.
 - **Strict TypeScript**: Uses strict mode with `NodeNext` module resolution and `noUncheckedIndexedAccess`.
 - **Adapter-Provider Decoupling**: New agents must implement the `AgentAdapter` interface in `packages/types/src/adapter.ts`.
-- **Stateless UI**: The desktop app is a "thin" client; business logic and pure functions belong in `@qlan-ro/mainframe-core`, not `@qlan-ro/mainframe-desktop`.
+- **Stateless UI**: The desktop app is a "thin" client; business logic and pure functions belong in `@qlan-ro/mainframe-core`, not `@qlan-ro/mainframe-app-electron`.
 
 ## Code Rules
 

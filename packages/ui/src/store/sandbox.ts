@@ -1,7 +1,7 @@
 /**
  * Sandbox Zustand store — launch process statuses, log output, and capture queue.
  *
- * Ported from packages/desktop/src/renderer/store/sandbox.ts with two changes:
+ * Ported from packages/app-electron/src/renderer/store/sandbox.ts with two changes:
  *   1. addCapture enforces a 500-entry cap (desktop is unbounded).
  *   2. The window.__sandboxStore E2E hook is dropped (use data-testid instead).
  *

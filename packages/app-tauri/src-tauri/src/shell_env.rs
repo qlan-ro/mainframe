@@ -1,6 +1,6 @@
 /// Login-shell environment capture (C1 requirement).
 ///
-/// Mirrors `packages/desktop/src/main/index.ts:resolveShellEnv()`.
+/// Mirrors `packages/app-electron/src/main/index.ts:resolveShellEnv()`.
 /// Runs `$SHELL -lic env` (default `/bin/zsh`) with a 5-second timeout,
 /// parses KEY=VALUE lines, and returns the full env map.
 /// On failure, returns a fallback that prepends common user-level PATH

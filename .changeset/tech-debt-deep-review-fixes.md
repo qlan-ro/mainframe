@@ -1,7 +1,7 @@
 ---
 "@qlan-ro/mainframe-core": patch
 "@qlan-ro/mainframe-types": patch
-"@qlan-ro/mainframe-desktop": patch
+"@qlan-ro/mainframe-app-electron": patch
 ---
 
 Deep-review follow-up fixes for the tech-debt PR:

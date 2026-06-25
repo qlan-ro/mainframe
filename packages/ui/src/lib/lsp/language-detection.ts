@@ -1,6 +1,6 @@
 /**
  * Maps file extensions to LSP language server IDs.
- * Port of packages/desktop/src/renderer/lib/lsp/language-detection.ts — unchanged.
+ * Port of packages/app-electron/src/renderer/lib/lsp/language-detection.ts — unchanged.
  */
 
 const EXTENSION_TO_LSP: Record<string, string> = {

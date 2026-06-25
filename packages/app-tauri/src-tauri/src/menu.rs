@@ -1,4 +1,4 @@
-//! Native application menu (parity with packages/desktop/src/main/menu.ts).
+//! Native application menu (parity with packages/app-electron/src/main/menu.ts).
 //!
 //! Adds a macOS app-menu "Check for Updates…" item wired to the Task-11
 //! updater. On macOS the convention is to put "Check for Updates" in the

@@ -1,7 +1,7 @@
 /**
  * Pure filter/sort helpers for the Tasks surface.
  *
- * Ported from packages/desktop/src/renderer/components/todos/TodoFilterBar.tsx
+ * Ported from packages/app-electron/src/renderer/components/todos/TodoFilterBar.tsx
  * (lines 29–81). No side-effects; safe to test in isolation.
  *
  * Search scope is todo.title ONLY — matches desktop behavior exactly.

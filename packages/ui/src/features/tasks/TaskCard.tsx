@@ -5,7 +5,7 @@
  * Hover actions: Start session (open/in_progress only), Edit, Delete.
  * Memoized with React.memo.
  *
- * Port of packages/desktop/src/renderer/components/todos/TodoCard.tsx,
+ * Port of packages/app-electron/src/renderer/components/todos/TodoCard.tsx,
  * rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
 import React from 'react';

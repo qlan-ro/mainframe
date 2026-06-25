@@ -2,7 +2,7 @@
 //! desktop pino format exactly: top-level `level` (UPPERCASE), `time` (ISO),
 //! `pid`, `module`, `msg`; optional top-level `data` only when present.
 //!
-//! Reference: packages/desktop/src/main/logger.ts (Plan 3, decision 3).
+//! Reference: packages/app-electron/src/main/logger.ts (Plan 3, decision 3).
 //!
 //! A custom `PinoFormat` impl (rather than `.json()`) is required to emit the
 //! exact key names and placement pino uses, since tracing-subscriber's built-in

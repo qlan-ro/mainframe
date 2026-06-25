@@ -1,6 +1,6 @@
 # `@qlan-ro/mainframe-app-tauri`
 
-The new **Tauri 2 + React** desktop UI — a *parallel* rebuild of `packages/desktop` (Electron), not a modification of it. Treat `desktop/` as **reference only** (behavior + the visual target); never edit it from here.
+The new **Tauri 2 + React** desktop UI — a *parallel* rebuild of `packages/app-electron` (Electron), not a modification of it. Treat `desktop/` as **reference only** (behavior + the visual target); never edit it from here.
 
 > **New here? Read `docs/architecture/MIGRATION-INDEX.md` first** — it catalogs every doc, the vendored design spec (`docs/design-reference/`), and the flow. Then the root `CLAUDE.md` (monorepo code rules), the runtime ADR (`2026-06-05-chat-runtime-decision.md`), the tracker (`MIGRATION-TRACKER.md`), and the architecture/critique docs.
 

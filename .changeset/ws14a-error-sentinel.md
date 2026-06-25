@@ -1,5 +1,5 @@
 ---
-"@qlan-ro/mainframe-desktop": patch
+"@qlan-ro/mainframe-app-electron": patch
 ---
 
 refactor(desktop): carry error message directly instead of sentinel round-trip (WS14a)

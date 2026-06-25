@@ -10,7 +10,7 @@
 import type { PreviewOpts, PreviewHandle, Region, InspectResult, Unsubscribe } from '@qlan-ro/mainframe-types';
 
 // Minimal interface for the Electron <webview> DOM element.
-// We do NOT import from packages/desktop to keep the dependency unidirectional.
+// We do NOT import from packages/app-electron to keep the dependency unidirectional.
 interface WebviewElement extends HTMLElement {
   loadURL(url: string): Promise<void>;
   capturePage(rect?: CropRect): Promise<{ toDataURL(): string }>;
@@ -60,7 +60,7 @@ function getSelector(el) {
 }
 `;
 
-// Ported verbatim from packages/desktop/src/renderer/components/sandbox/PreviewTab.tsx lines 49-99.
+// Ported verbatim from packages/app-electron/src/renderer/components/sandbox/PreviewTab.tsx lines 49-99.
 // Installs a highlight overlay and returns a Promise that resolves when the user clicks an element.
 const INSPECT_SCRIPT = `
 (function() {

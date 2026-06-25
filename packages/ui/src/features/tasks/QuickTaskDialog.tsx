@@ -6,7 +6,7 @@
  * Props: { port, projectId, open, onClose }
  * Calls useTodosStore.create on submit; uploads any pending attachments after.
  *
- * Port of packages/desktop/…/todos/QuickTodoDialog.tsx.
+ * Port of packages/app-electron/…/todos/QuickTodoDialog.tsx.
  * Rebuilt on shadcn/ui Dialog + warm-chrome tokens; no mf-* phantom classes.
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';

@@ -4,7 +4,7 @@
  * in `features/chat/view-model/parse-captures.ts` — do NOT alter the sentinel,
  * the header line, or the row format without updating that file too.
  *
- * Ported verbatim from `packages/desktop/src/renderer/lib/format-captures.ts`.
+ * Ported verbatim from `packages/app-electron/src/renderer/lib/format-captures.ts`.
  */
 import { SANDBOX_CAPTURE_SENTINEL } from '@/features/chat/view-model/parse-captures';
 import type { UploadAttachmentItem } from '@/lib/api/attachments';

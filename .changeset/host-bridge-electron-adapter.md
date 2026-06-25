@@ -1,6 +1,6 @@
 ---
 "@qlan-ro/mainframe-types": minor
-"@qlan-ro/mainframe-desktop": minor
+"@qlan-ro/mainframe-app-electron": minor
 "@qlan-ro/mainframe-app-tauri": minor
 ---
 

@@ -7,7 +7,7 @@
  * This module has ZERO Monaco / editor imports. Phase 2/3 wire the CM6 adapters
  * on top of the `LspProviders` interface exposed here.
  *
- * Port of packages/desktop/src/renderer/lib/lsp/lsp-client.ts
+ * Port of packages/app-electron/src/renderer/lib/lsp/lsp-client.ts
  * Changes:
  *   - Deleted: monaco.languages.register{Definition,Reference,Hover}Provider
  *   - Deleted: toMonacoLocations (Monaco Range/Uri mapper)

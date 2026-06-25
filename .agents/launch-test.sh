@@ -38,7 +38,7 @@ VITE_DAEMON_HTTP_PORT="$DAEMON_PORT" \
 VITE_DAEMON_WS_PORT="$DAEMON_PORT" \
 VITE_PORT="$VITE_PORT" \
 MAINFRAME_DATA_DIR="$MAINFRAME_DATA_DIR" \
-  pnpm --filter @qlan-ro/mainframe-desktop run dev > "$DESKTOP_LOG" 2>&1 &
+  pnpm --filter @qlan-ro/mainframe-app-electron run dev > "$DESKTOP_LOG" 2>&1 &
 
 # 5. Surface the facts the readiness report / engines need.
 echo "LAUNCHED"
