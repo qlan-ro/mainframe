@@ -4,10 +4,10 @@
   "identifier": "ro.qlan.mainframe",
   "version": "0.1.0",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm --filter @qlan-ro/mainframe-ui dev",
     "devUrl": "http://localhost:5174",
-    "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../dist"
+    "beforeBuildCommand": "pnpm --filter @qlan-ro/mainframe-ui build",
+    "frontendDist": "../../ui/dist"
   },
   "app": {
     "withGlobalTauri": false,

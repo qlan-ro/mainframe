@@ -99,7 +99,7 @@
         "to": "daemon.cjs"
       },
       {
-        "from": "../app-tauri/dist",
+        "from": "../ui/dist",
         "to": "app-tauri-renderer",
         "filter": [
           "**/*"
