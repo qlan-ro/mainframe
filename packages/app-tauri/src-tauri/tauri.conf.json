@@ -45,6 +45,10 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "endpoints": ["https://github.com/qlan-ro/mainframe/releases/latest/download/latest.json"],
+      "pubkey": "TODO_PLAN3_INFRA_REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY"
     }
   }
 }

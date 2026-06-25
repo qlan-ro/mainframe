@@ -6,6 +6,7 @@ mod preview;
 mod shell_env;
 mod sidecar;
 mod terminal;
+mod updater;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -50,7 +51,8 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
 
     // Dev-only: MCP Bridge plugin (webview automation for the Tauri MCP server).
     // Shadowed under debug_assertions so it's compiled out of release builds.
@@ -86,6 +88,10 @@ pub fn run() {
             preview_open_external,
             preview_inspect_result,
             preview_eval,
+            // auto-updater commands (Plan 3, decision 1)
+            updater::updater_check,
+            updater::updater_download,
+            updater::updater_install,
         ])
         .setup(move |app| {
             // Register the terminal manager (uses the same login-shell env as the
@@ -125,6 +131,11 @@ pub fn run() {
             // Start the OS-idle presence reporter (Plan 3, decision 4).
             // Spawns a background thread; mirrors idle-reporter.ts cadence.
             presence::start_presence_reporter(DAEMON_PORT);
+
+            // Start the auto-updater periodic check scheduler (Plan 3, decision 1).
+            // 10s initial check then every 4h — only in release builds.
+            #[cfg(not(debug_assertions))]
+            updater::schedule_update_checks(app.handle().clone());
 
             Ok(())
         })

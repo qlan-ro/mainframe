@@ -133,3 +133,75 @@ cd packages/app-tauri/src-tauri && cargo tauri build
 
 The scaffold is verified only by `cargo check` (resolver compiles) and
 `node -e "JSON.parse(...)"` (tauri.conf.json is valid JSON).
+
+---
+
+## Updater signing + CI (DEFERRED) — TODO(plan3-infra)
+
+**Status:** SCAFFOLDED (plugin + commands + scheduler + error classifier) — signing keypair +
+CI release workflow DEFERRED.
+
+The three custom commands (`updater_check`, `updater_download`, `updater_install`) and the
+10s-then-4h background scheduler compile and the error classifier passes 5 unit tests.
+The endpoint `https://github.com/qlan-ro/mainframe/releases/latest/download/latest.json`
+and a placeholder pubkey are in `tauri.conf.json`. `cargo tauri build` will fail until:
+
+### TODO(plan3-infra): 7 — Generate and store the signing keypair
+
+```bash
+# Run locally; the private key MUST NOT be committed.
+cargo tauri signer generate -w ~/.tauri/mainframe.key
+```
+
+- The **private key** (`~/.tauri/mainframe.key`) goes into GitHub Actions as the CI secret
+  `TAURI_SIGNING_PRIVATE_KEY` (+ optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`).
+- The **public key** (printed by the command) replaces the placeholder in
+  `packages/app-tauri/src-tauri/tauri.conf.json`:
+  ```json
+  "plugins": {
+    "updater": {
+      "pubkey": "<PASTE_REAL_PUBLIC_KEY_HERE>"
+    }
+  }
+  ```
+
+### TODO(plan3-infra): 8 — Add the tauri-action release workflow
+
+Add `.github/workflows/release.yml`:
+
+```yaml
+name: Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    strategy:
+      matrix:
+        os: [macos-14, macos-13, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: packages/app-tauri
+          tagName: v__VERSION__
+          releaseName: Mainframe v__VERSION__
+          releaseBody: See the changelog.
+          releaseDraft: true
+          prerelease: false
+```
+
+This publishes `latest.json` + signed update artifacts to GitHub Releases, which the
+updater endpoint resolves at runtime.
+
+### TODO(plan3-infra): 9 — Confirm owner/repo and cut the first signed release
+
+- Confirm `qlan-ro/mainframe` is the correct GitHub owner/repo for releases.
+- Ensure the release tag matches `v<semver>` so `latest.json` is generated correctly.
+- The first `cargo tauri build` with the real pubkey in place will also require completing
+  the daemon bundling pipeline (TODOs 1–6 above).
