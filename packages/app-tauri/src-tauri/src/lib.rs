@@ -1,6 +1,7 @@
 mod commands;
 mod log_sink;
 mod memory_logger;
+mod menu;
 mod presence;
 mod preview;
 mod shell_env;
@@ -60,6 +61,9 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
     builder
+        .on_menu_event(|app, event| {
+            menu::handle_menu_event(app, event.id().as_ref());
+        })
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_auth_token,
@@ -94,6 +98,19 @@ pub fn run() {
             updater::updater_install,
         ])
         .setup(move |app| {
+            // Build + set the native application menu. Errors are logged and the
+            // app continues without a menu rather than panicking (degrade gracefully).
+            match menu::build_menu(app.handle()) {
+                Ok(m) => {
+                    if let Err(e) = app.set_menu(m) {
+                        tracing::warn!(err = %e, "failed to set application menu");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(err = %e, "failed to build application menu");
+                }
+            }
+
             // Register the terminal manager (uses the same login-shell env as the
             // daemon so shells inherit the correct PATH/SHELL).
             app.manage(TerminalManager::new(shell_env.clone()));
