@@ -2,9 +2,8 @@
  * host/external-schemes.ts
  *
  * The single canonical allowlist of URL schemes safe to forward to the OS opener.
- * Source of truth = the Electron main-process list in
- * packages/desktop/src/main/index.ts (ALLOWED_SCHEMES). The Tauri Rust shell's
- * is_allowed_external_scheme mirrors this exact set so both hosts behave 1:1.
+ * THIS constant is the source of truth. All hosts (Electron main process, Tauri
+ * Rust shell) must derive or mirror this set so both behave 1:1.
  */
 export const ALLOWED_EXTERNAL_SCHEMES = [
   'http',

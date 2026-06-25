@@ -23,6 +23,12 @@ describe('isAllowedExternalScheme', () => {
       expect(isAllowedExternalScheme(`${s}://open/x`)).toBe(true);
     }
   });
+  it('allows real-world no-slash forms and explicit IDE variants', () => {
+    expect(isAllowedExternalScheme('mailto:user@example.com')).toBe(true);
+    expect(isAllowedExternalScheme('tel:+15551234567')).toBe(true);
+    expect(isAllowedExternalScheme('idea://open?file=x')).toBe(true);
+    expect(isAllowedExternalScheme('vscode-insiders://open')).toBe(true);
+  });
   it('rejects dangerous schemes', () => {
     for (const u of ['file:///etc/passwd', 'javascript:alert(1)', 'ssh://host', 'data:text/html,x', 'ftp://x', '']) {
       expect(isAllowedExternalScheme(u)).toBe(false);

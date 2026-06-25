@@ -49,8 +49,8 @@ pub struct InspectResult {
 
 // ── URL scheme allowlist ───────────────────────────────────────────────────────
 
-/// Canonical allowlist — mirrors mainframe-types ALLOWED_EXTERNAL_SCHEMES
-/// (source of truth: packages/desktop/src/main/index.ts). Both hosts behave 1:1.
+/// Canonical allowlist — mirrors @qlan-ro/mainframe-types ALLOWED_EXTERNAL_SCHEMES
+/// (source of truth: packages/types/src/host/external-schemes.ts). Both hosts behave 1:1.
 const ALLOWED_EXTERNAL_SCHEMES: &[&str] = &[
     "http", "https", "mailto", "slack", "vscode", "vscode-insiders", "cursor",
     "jetbrains", "idea", "zed", "figma", "linear", "notion", "discord", "tel",

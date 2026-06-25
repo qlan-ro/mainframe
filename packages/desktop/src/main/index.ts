@@ -3,6 +3,7 @@ import type { UtilityProcess } from 'electron';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
 import { homedir } from 'os';
+import { ALLOWED_EXTERNAL_SCHEMES } from '@qlan-ro/mainframe-types';
 import { createMainLogger } from './logger.js';
 import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
 import { initAutoUpdater } from './auto-updater.js';
@@ -29,23 +30,9 @@ let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
 let daemonStatus: DaemonStatusTracker | null = null;
 
-const ALLOWED_SCHEMES = new Set([
-  'http:',
-  'https:',
-  'mailto:',
-  'slack:',
-  'vscode:',
-  'vscode-insiders:',
-  'cursor:',
-  'jetbrains:',
-  'idea:',
-  'zed:',
-  'figma:',
-  'linear:',
-  'notion:',
-  'discord:',
-  'tel:',
-]);
+// Derived from the canonical ALLOWED_EXTERNAL_SCHEMES in @qlan-ro/mainframe-types.
+// url.protocol returns scheme with a trailing colon (e.g. "https:"), so we append one.
+const ALLOWED_SCHEMES = new Set(ALLOWED_EXTERNAL_SCHEMES.map((s) => `${s}:`));
 
 function openExternalSafe(url: string): void {
   try {
