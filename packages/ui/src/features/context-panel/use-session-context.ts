@@ -32,7 +32,7 @@ export function useSessionContext(): { context: SessionContext | null; chatId: s
 
   useEffect(() => {
     const off = daemonWs.onEvent((event) => {
-      if (event.type !== 'context.updated' || event.chatId !== chatId) return;
+      if ((event.type !== 'context.updated' && event.type !== 'todos.updated') || event.chatId !== chatId) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(fetchContext, 500);
     });
