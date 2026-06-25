@@ -37,5 +37,4 @@ export interface SessionContext {
   attachments: SessionAttachment[];
   modifiedFiles: string[];
   skillFiles: SkillFileEntry[];
-  todos?: import('./chat.js').TodoItem[];
 }

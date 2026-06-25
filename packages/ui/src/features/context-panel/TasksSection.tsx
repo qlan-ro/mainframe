@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { ContextSection } from './ContextSection';
 
 /** Context-tab Tasks group: completion bar above the per-chat TodoWrite rows. */
-export function TasksSection({ todos }: { todos: TodoItem[] }): React.ReactElement {
+export function TasksSection({ todos }: { todos: readonly TodoItem[] }): React.ReactElement {
   const total = todos.length;
   const completed = todos.filter((t) => t.status === 'completed').length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;

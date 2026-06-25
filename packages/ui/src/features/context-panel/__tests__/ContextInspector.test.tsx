@@ -1,15 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import type { SessionContext } from '@qlan-ro/mainframe-types';
+import type { SessionContext, TodoItem } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const useSessionContext = vi.fn();
+const useSessionTodos = vi.fn<(chatId: string | undefined) => readonly TodoItem[]>(() => []);
 vi.mock('../use-session-context', () => ({ useSessionContext: () => useSessionContext() }));
 vi.mock('../SessionAttachmentsGrid', () => ({ SessionAttachmentsGrid: () => <div data-testid="attach-grid" /> }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
+vi.mock('@/store/session-todos', () => ({ useSessionTodos: (id: string | undefined) => useSessionTodos(id) }));
 
 import { ContextInspector } from '../ContextInspector';
+
+beforeEach(() => useSessionTodos.mockReturnValue([]));
 
 const renderInspector = (ui: ReactElement) => render(<TooltipProvider>{ui}</TooltipProvider>);
 
@@ -46,15 +50,11 @@ describe('ContextInspector', () => {
   });
 
   it('renders the Tasks section first when the chat has todos', () => {
-    useSessionContext.mockReturnValue({
-      chatId: 'c1',
-      context: ctx({
-        todos: [
-          { content: 'A', status: 'completed', activeForm: 'Aing' },
-          { content: 'B', status: 'pending', activeForm: 'Bing' },
-        ],
-      }),
-    });
+    useSessionContext.mockReturnValue({ chatId: 'c1', context: ctx({}) });
+    useSessionTodos.mockReturnValue([
+      { content: 'A', status: 'completed', activeForm: 'Aing' },
+      { content: 'B', status: 'pending', activeForm: 'Bing' },
+    ]);
     renderInspector(<ContextInspector />);
     const tasks = screen.getByTestId('context-tasks-section');
     const global = screen.getByTestId('sidebar-context-section-global');
@@ -64,10 +64,8 @@ describe('ContextInspector', () => {
   });
 
   it('omits the Tasks section when there are no todos', () => {
-    useSessionContext.mockReturnValue({
-      chatId: 'c1',
-      context: ctx({ todos: [] }),
-    });
+    useSessionContext.mockReturnValue({ chatId: 'c1', context: ctx({}) });
+    useSessionTodos.mockReturnValue([]);
     renderInspector(<ContextInspector />);
     expect(screen.queryByTestId('context-tasks-section')).not.toBeInTheDocument();
   });

@@ -5,6 +5,7 @@ import { ContextSection } from './ContextSection';
 import { ContextFileItem } from './ContextFileItem';
 import { SessionAttachmentsGrid } from './SessionAttachmentsGrid';
 import { TasksSection } from './TasksSection';
+import { useSessionTodos } from '@/store/session-todos';
 
 function Muted({ text }: { text: string }) {
   return <div className="py-4 text-center text-caption text-mf-text-3">{text}</div>;
@@ -13,12 +14,14 @@ function Muted({ text }: { text: string }) {
 /** Context tab body: Global / Project / Session file groups (Tasks live elsewhere). */
 export function ContextInspector() {
   const { context, chatId } = useSessionContext();
+  // Session todos arrive via the daemon's `todos.updated` event (global store),
+  // not the SessionContext REST payload. Hook must precede the early returns.
+  const todos = useSessionTodos(chatId);
   if (!chatId) return <Muted text="No active chat" />;
   if (!context) return <Muted text="Loading context…" />;
 
   const sessionItems = deriveSessionItems(context);
   const sessionCount = sessionItems.length + context.attachments.length;
-  const todos = context.todos ?? [];
 
   return (
     <div className="space-y-1 py-1">

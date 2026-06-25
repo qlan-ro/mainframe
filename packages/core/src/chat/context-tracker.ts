@@ -35,7 +35,6 @@ export async function getSessionContext(
   session: AdapterSession | undefined,
   attachmentStore: AttachmentStore | undefined,
   adapterId: string | undefined,
-  todos?: import('@qlan-ro/mainframe-types').TodoItem[],
 ): Promise<SessionContext> {
   let globalFiles: SessionContext['globalFiles'] = [];
   let projectFiles: SessionContext['projectFiles'] = [];
@@ -63,7 +62,7 @@ export async function getSessionContext(
   const modifiedFiles = db.chats.getPlanFiles(chatId).map(toRelative);
   const skillFiles = db.chats.getSkillFiles(chatId);
 
-  return { globalFiles, projectFiles, mentions, attachments, modifiedFiles, skillFiles, todos };
+  return { globalFiles, projectFiles, mentions, attachments, modifiedFiles, skillFiles };
 }
 
 export function extractLatestPlanFileFromMessages(messages: ChatMessage[]): string | null {

@@ -60,20 +60,4 @@ describe('useSessionContext', () => {
     act(() => vi.advanceTimersByTime(600));
     expect(getSessionContext).toHaveBeenCalledTimes(2);
   });
-
-  it('refetches (debounced) on a todos.updated for the active chat', () => {
-    useActiveIdentity.mockReturnValue({ projectName: 'X', chatId: 'chat-1' });
-    renderHook(() => useSessionContext());
-    expect(getSessionContext).toHaveBeenCalledTimes(1);
-
-    // todos.updated for a different chat should be ignored
-    act(() => emit({ type: 'todos.updated', chatId: 'other', todos: [] } as DaemonEvent));
-    act(() => vi.advanceTimersByTime(600));
-    expect(getSessionContext).toHaveBeenCalledTimes(1);
-
-    // todos.updated for the active chat should trigger a debounced refetch
-    act(() => emit({ type: 'todos.updated', chatId: 'chat-1', todos: [] } as DaemonEvent));
-    act(() => vi.advanceTimersByTime(600));
-    expect(getSessionContext).toHaveBeenCalledTimes(2);
-  });
 });

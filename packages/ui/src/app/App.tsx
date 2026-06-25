@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import { useConnectionState } from './useConnectionState';
 import { daemonWs } from '../lib/daemon/ws-client';
+import { installSessionTodosSubscriber } from '@/store/session-todos';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { AppShell } from './AppShell';
@@ -30,6 +31,10 @@ export function App() {
     // without this every ensureClient targets ws://127.0.0.1:0 and fails.
     void initLspPort();
   }, [port]);
+
+  // Always-on session-todos subscriber (per-chat TodoWrite list → Context tab).
+  // Mounted once so the daemon's resumeChat `todos.updated` seed is never missed.
+  useEffect(() => installSessionTodosSubscriber(), []);
 
   return (
     <MfErrorBoundary>
