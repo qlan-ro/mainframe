@@ -127,7 +127,7 @@ A 5-area parallel sweep (messages · composer · tools · gates · runtime/parts
 ## Chat Phase-2 build order (refined by the assistant-ui adoption research, 2026-06-05)
 Do the chat leaves in this order; ☑ = done.
 1. ☑ **shadcn foundation** — `components.json` + 18 `ui/` primitives + `globals.css` mapping shadcn vars → `--mf-*` (warm chrome, computed-CSS-verified); testid passthrough (`8e18e634`).
-2. ◐ **assistant-ui shadcn group** — `ToolFallback` + `ToolGroup` restyled (`8e18e634`); `quote` + markdown + other shadcn components pending the inventory sweep.
+2. ☑ **assistant-ui shadcn group** — DONE (line closed 2026-06-25 — was stale). `ToolFallback` + `ToolGroup` restyled (`8e18e634`); `quote` landed (`8129d976`); `MarkdownText`/`Reasoning`/`Attachment`/`directive-text` all vendored + warm-chrome themed. No un-restyled registry components remain.
 2b. ☑ **bumped `@assistant-ui` → `react@0.14.14` / `core@0.2.10` / `store@0.2.13`** — set aligned (skew fixed), `groupPartByType`/`display:'standalone'` available (`48cfefd5`). Drift re-verify **PASSED** on 0.14.14 (no regression).
 3. ☑ **runtime spine** — controller/reducer + `extras` (Phase 2A, `98f43f5a`).
 4. ☑ **projection (go native)** — `convert-message` + `map-assistant-blocks` emit NATIVE parts: flat tool-calls (no `_ToolGroup`) + a `Task` tool-call carrying native `messages` (subagent transcript via `ExportedMessageRepository.fromArray`); `image` parts no longer skipped; `\0` sentinel/uniqueId/≥1-part preserved (the shared recursive mapper IS the WS14c invariant). **Verified:** payload sufficient, no daemon change. 13 unit tests green.
