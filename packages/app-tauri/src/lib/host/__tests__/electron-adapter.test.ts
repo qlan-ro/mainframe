@@ -26,6 +26,12 @@ interface FakeMainframe {
     status: ReturnType<typeof vi.fn>;
     onStatus: ReturnType<typeof vi.fn>;
   };
+  updates: {
+    check: ReturnType<typeof vi.fn>;
+    download: ReturnType<typeof vi.fn>;
+    install: ReturnType<typeof vi.fn>;
+    onStatus: ReturnType<typeof vi.fn>;
+  };
 }
 
 let mf: FakeMainframe;
@@ -66,6 +72,15 @@ beforeEach(() => {
       status: vi.fn().mockResolvedValue('ready'),
       onStatus: vi.fn((cb: (s: string) => void) => {
         cb('ready');
+        return () => {};
+      }),
+    },
+    updates: {
+      check: vi.fn().mockResolvedValue({ state: 'not-available' }),
+      download: vi.fn().mockResolvedValue(undefined),
+      install: vi.fn(),
+      onStatus: vi.fn((cb: (s: unknown) => void) => {
+        cb({ state: 'checking' });
         return () => {};
       }),
     },
@@ -161,5 +176,27 @@ describe('ElectronAdapter — preview', () => {
   it('clearSession delegates to clearSandboxSession', async () => {
     await new ElectronAdapter().preview.clearSession('p1');
     expect(mf.clearSandboxSession).toHaveBeenCalledWith('p1');
+  });
+});
+
+describe('ElectronAdapter — updates + presence', () => {
+  it('updates.check delegates to window.mainframe.updates.check', async () => {
+    await expect(new ElectronAdapter().updates.check()).resolves.toEqual({ state: 'not-available' });
+    expect(mf.updates.check).toHaveBeenCalled();
+  });
+  it('updates.onStatus subscribes and replays', async () => {
+    const cb = vi.fn();
+    await new ElectronAdapter().updates.onStatus(cb);
+    expect(cb).toHaveBeenCalledWith({ state: 'checking' });
+  });
+  it('presence.reportActivity POSTs to the daemon device/activity endpoint', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+    mf.daemon.port.mockResolvedValueOnce(31415);
+    await new ElectronAdapter().presence.reportActivity('idle');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:31415/api/device/activity',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    fetchSpy.mockRestore();
   });
 });

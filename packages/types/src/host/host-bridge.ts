@@ -8,15 +8,15 @@
  *
  * Plan 1 scope: app / fs / shell / notify / terminal / preview / daemon / log.
  * Preview is the `mount()` seam (Plan 2).
- * `updates` and `presence` are deferred to Plan 3 (no Tauri impl exists yet).
+ * Plan 3 scope: updates + presence — all three adapters now implement both.
  */
 
 export type Unsubscribe = () => void;
 
-import type { Platform, DaemonStatus, LogLevel, UpdateStatus } from './host-contract.js';
+import type { Platform, DaemonStatus, LogLevel, UpdateStatus, PresenceState } from './host-contract.js';
 import type { AppInfoSchema, RegionSchema } from './host-contract.js';
 import type { z } from 'zod';
-export type { Platform, DaemonStatus, LogLevel, UpdateStatus } from './host-contract.js';
+export type { Platform, DaemonStatus, LogLevel, UpdateStatus, PresenceState } from './host-contract.js';
 
 export type AppInfo = z.infer<typeof AppInfoSchema>;
 
@@ -119,6 +119,9 @@ export interface HostBridge {
     download(): Promise<void>;
     install(): void;
     onStatus(cb: (s: UpdateStatus) => void): Promise<Unsubscribe>;
+  };
+  presence: {
+    reportActivity(state: PresenceState): Promise<void>;
   };
   log(level: LogLevel, module: string, message: string, data?: unknown): void;
   /** Tauri installs the window-drag listener here; Electron is a CSS no-op. */

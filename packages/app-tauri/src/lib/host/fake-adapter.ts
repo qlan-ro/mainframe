@@ -14,6 +14,8 @@ import type {
   DaemonStatus,
   TerminalHandle,
   Unsubscribe,
+  UpdateStatus,
+  PresenceState,
 } from '@qlan-ro/mainframe-types';
 
 const DEV_DAEMON_PORT = Number((import.meta.env as Record<string, string | undefined>).VITE_DAEMON_PORT) || undefined;
@@ -100,6 +102,20 @@ export class FakeHostBridge implements HostBridge {
       cb(this.overrides.daemon?.status ?? 'ready');
       return Promise.resolve(() => {});
     },
+  };
+
+  updates = {
+    check: (): Promise<UpdateStatus> => Promise.resolve({ state: 'not-available' as const }),
+    download: (): Promise<void> => Promise.resolve(),
+    install: (): void => {},
+    onStatus: (cb: (s: UpdateStatus) => void): Promise<Unsubscribe> => {
+      cb({ state: 'not-available' });
+      return Promise.resolve(() => {});
+    },
+  };
+
+  presence = {
+    reportActivity: (_state: PresenceState): Promise<void> => Promise.resolve(),
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {

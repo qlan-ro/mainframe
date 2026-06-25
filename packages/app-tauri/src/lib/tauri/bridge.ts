@@ -121,6 +121,41 @@ export async function showNotification(title: string, body?: string): Promise<vo
   sendNotification({ title, body });
 }
 
+import type { UpdateStatus } from '@qlan-ro/mainframe-types';
+
+/** Reports user activity state to the daemon sidecar. No-op in browser dev mode. */
+export async function reportActivity(state: 'active' | 'idle'): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke('report_activity', { state });
+}
+
+/** Triggers an update check. Returns the current update status. No-op in browser dev mode. */
+export async function checkForUpdate(): Promise<UpdateStatus> {
+  if (!IS_TAURI) return { state: 'not-available' };
+  return invoke<UpdateStatus>('updater_check');
+}
+
+/** Downloads the available update. No-op in browser dev mode. */
+export async function downloadUpdate(): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke('updater_download');
+}
+
+/** Installs the downloaded update. No-op in browser dev mode. */
+export async function installUpdate(): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke('updater_install');
+}
+
+/** Subscribes to update status events. Fires `not-available` immediately in browser dev mode. */
+export function onUpdateStatus(callback: (s: UpdateStatus) => void): Promise<UnlistenFn> {
+  if (!IS_TAURI) {
+    callback({ state: 'not-available' });
+    return Promise.resolve(() => {});
+  }
+  return listen<UpdateStatus>('update:status', (event) => callback(event.payload));
+}
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**

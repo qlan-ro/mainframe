@@ -91,6 +91,20 @@ describe('TauriAdapter — init installs the drag listener', () => {
   });
 });
 
+describe('TauriAdapter — updates + presence', () => {
+  it('updates.check invokes updater_check', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    invoke.mockResolvedValueOnce({ state: 'available', version: '2.0.0' });
+    await expect(new TauriAdapter().updates.check()).resolves.toEqual({ state: 'available', version: '2.0.0' });
+    expect(invoke).toHaveBeenCalledWith('updater_check');
+  });
+  it('presence.reportActivity invokes report_activity', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    await new TauriAdapter().presence.reportActivity('idle');
+    expect(invoke).toHaveBeenCalledWith('report_activity', { state: 'idle' });
+  });
+});
+
 describe('TauriAdapter — terminal ArrayBuffer wrapping', () => {
   it('delivers an ArrayBuffer from the data Channel as a Uint8Array to onData', async () => {
     const { TauriAdapter } = await import('../tauri-adapter');

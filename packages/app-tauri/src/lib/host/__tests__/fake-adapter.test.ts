@@ -59,6 +59,26 @@ describe('FakeHostBridge — browser-mode stub parity', () => {
   });
 });
 
+describe('FakeHostBridge — updates + presence', () => {
+  it('updates.check resolves not-available by default', async () => {
+    await expect(new FakeHostBridge().updates.check()).resolves.toEqual({ state: 'not-available' });
+  });
+  it('updates.download/install do not throw', async () => {
+    const host = new FakeHostBridge();
+    await expect(host.updates.download()).resolves.toBeUndefined();
+    expect(() => host.updates.install()).not.toThrow();
+  });
+  it('updates.onStatus fires not-available and returns a no-op unsubscribe', async () => {
+    const cb = vi.fn();
+    const unsub = await new FakeHostBridge().updates.onStatus(cb);
+    expect(cb).toHaveBeenCalledWith({ state: 'not-available' });
+    expect(() => unsub()).not.toThrow();
+  });
+  it('presence.reportActivity resolves undefined', async () => {
+    await expect(new FakeHostBridge().presence.reportActivity('idle')).resolves.toBeUndefined();
+  });
+});
+
 describe('FakeHostBridge — overrides', () => {
   it('app.getInfo honors an override', async () => {
     const host = new FakeHostBridge({ app: { getInfo: { version: '9.9.9', author: 'q', homedir: '/h' } } });

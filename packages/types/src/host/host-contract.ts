@@ -97,3 +97,7 @@ export const UpdateStatusSchema = z.discriminatedUnion('state', [
   z.object({ state: z.literal('error'), message: z.string() }),
 ]);
 export type UpdateStatus = z.infer<typeof UpdateStatusSchema>;
+
+export const PresenceStateSchema = z.enum(['active', 'idle']);
+export type PresenceState = z.infer<typeof PresenceStateSchema>;
+export const PresenceSchema = z.object({ state: PresenceStateSchema });

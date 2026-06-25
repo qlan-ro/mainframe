@@ -20,6 +20,8 @@ import type {
   PreviewOpts,
   PreviewHandle,
   Unsubscribe,
+  UpdateStatus,
+  PresenceState,
 } from '@qlan-ro/mainframe-types';
 import { mountElectronPreview } from './electron-preview';
 
@@ -49,6 +51,12 @@ interface MainframeBridge {
     port(): Promise<number>;
     status(): Promise<string>;
     onStatus(cb: (status: string) => void): () => void;
+  };
+  updates: {
+    check(): Promise<UpdateStatus>;
+    download(): Promise<void>;
+    install(): void;
+    onStatus(cb: (s: UpdateStatus) => void): () => void;
   };
 }
 
@@ -138,6 +146,24 @@ export class ElectronAdapter implements HostBridge {
     onStatus: (cb: (status: DaemonStatus) => void): Promise<Unsubscribe> => {
       const off = bridge().daemon.onStatus((s) => cb(s as DaemonStatus));
       return Promise.resolve(off);
+    },
+  };
+
+  updates = {
+    check: (): Promise<UpdateStatus> => bridge().updates.check(),
+    download: (): Promise<void> => bridge().updates.download(),
+    install: (): void => bridge().updates.install(),
+    onStatus: (cb: (s: UpdateStatus) => void): Promise<Unsubscribe> => Promise.resolve(bridge().updates.onStatus(cb)),
+  };
+
+  presence = {
+    reportActivity: async (state: PresenceState): Promise<void> => {
+      const port = await bridge().daemon.port();
+      await fetch(`http://127.0.0.1:${port}/api/device/activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state }),
+      });
     },
   };
 

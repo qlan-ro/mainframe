@@ -16,6 +16,8 @@ import type {
   Unsubscribe,
   PreviewOpts,
   PreviewHandle,
+  UpdateStatus,
+  PresenceState,
 } from '@qlan-ro/mainframe-types';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import * as bridge from '@/lib/tauri/bridge';
@@ -73,6 +75,19 @@ export class TauriAdapter implements HostBridge {
     status: async (): Promise<DaemonStatus> => mapDaemonStatus(await bridge.getDaemonStatus()),
     onStatus: (cb: (s: DaemonStatus) => void): Promise<Unsubscribe> =>
       bridge.onDaemonStatus((s) => cb(mapDaemonStatus(s))),
+  };
+
+  updates = {
+    check: (): Promise<UpdateStatus> => bridge.checkForUpdate(),
+    download: (): Promise<void> => bridge.downloadUpdate(),
+    install: (): void => {
+      void bridge.installUpdate().catch((err) => console.warn('[host] updater install failed', err));
+    },
+    onStatus: (cb: (s: UpdateStatus) => void): Promise<Unsubscribe> => bridge.onUpdateStatus(cb),
+  };
+
+  presence = {
+    reportActivity: (state: PresenceState): Promise<void> => bridge.reportActivity(state),
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {
