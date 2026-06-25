@@ -24,15 +24,15 @@ export function TasksSection({ todos }: { todos: TodoItem[] }): React.ReactEleme
             {completed}/{total}
           </span>
         </div>
-        <div className="space-y-0.5">
-          {todos.map((todo, i) => {
+        <div>
+          {todos.map((todo) => {
             const done = todo.status === 'completed';
             const label = todo.status === 'in_progress' ? todo.activeForm : todo.content;
             return (
               <div
-                key={`${i}-${todo.content}`}
-                data-testid={`context-task-row-${i}`}
-                className="flex items-center gap-[7px] px-[14px] py-[3px] text-[12px] tracking-[-0.05px]"
+                key={todo.content}
+                data-testid={`context-task-row-${todo.content}`}
+                className="flex items-center gap-[7px] px-[14px] py-[4px] text-[12px] tracking-[-0.05px]"
               >
                 <span
                   className={cn(
