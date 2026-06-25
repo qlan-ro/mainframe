@@ -42,9 +42,6 @@ pub fn run() {
     // renderer asks for connection status.
     let shell_env = shell_env::resolve_shell_env_with_timeout();
 
-    // Locate the daemon entry point and node binary using the shell env PATH.
-    let daemon_result = boot_daemon(&shell_env);
-
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init());
@@ -87,6 +84,10 @@ pub fn run() {
 
             // Register the preview child-webview manager.
             app.manage(PreviewManager::new());
+
+            // Boot the daemon from inside setup so we have an AppHandle available
+            // for the bundled-resource resolver (packaged-build branch).
+            let daemon_result = boot_daemon(app.handle(), &shell_env);
 
             // Propagate any daemon-boot error to the renderer via the window title
             // (best-effort — the renderer polls get_daemon_status).
@@ -149,12 +150,13 @@ pub fn run() {
 }
 
 fn boot_daemon(
+    app: &tauri::AppHandle,
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
     let shell_path = shell_env.get("PATH").map(|s| s.as_str());
     let node_bin = sidecar::find_node(shell_path)?;
 
-    let daemon_entry = resolve_daemon_entry()?;
+    let daemon_entry = resolve_daemon_entry(app)?;
 
     tracing::info!(
         node = %node_bin.display(),
@@ -172,26 +174,53 @@ fn boot_daemon(
     })
 }
 
+/// Pure path-precedence selector (unit-testable, no AppHandle).
+/// Precedence: bundled resource (packaged build) > env override > caller falls
+/// back to the monorepo-root walk. Returns the first candidate that exists on disk.
+fn pick_daemon_entry(bundled: Option<PathBuf>, env_override: Option<PathBuf>) -> Option<PathBuf> {
+    if let Some(p) = bundled {
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    if let Some(p) = env_override {
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 /// Locate the compiled daemon entry point.
 ///
-/// For the spike we look for it relative to the monorepo root (dev mode).
-/// In a packaged build this would be a bundled resource.
-fn resolve_daemon_entry() -> Result<PathBuf, String> {
-    // MAINFRAME_DAEMON_PATH lets tests/CI override the path (mirrors Electron).
-    if let Ok(p) = std::env::var("MAINFRAME_DAEMON_PATH") {
-        let path = PathBuf::from(&p);
-        if path.exists() {
-            return Ok(path);
-        }
-        return Err(format!("MAINFRAME_DAEMON_PATH={p} does not exist"));
+/// Precedence:
+///   1. Bundled resource (`<resource_dir>/daemon/daemon.cjs`) — packaged build.
+///   2. `MAINFRAME_DAEMON_PATH` env override — CI / manual test.
+///   3. Monorepo-root walk (`packages/core/dist/index.js`) — dev mode.
+fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let bundled = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|d| d.join("daemon").join("daemon.cjs"));
+    let env_override = std::env::var("MAINFRAME_DAEMON_PATH").ok().map(PathBuf::from);
+
+    if let Some(found) = pick_daemon_entry(bundled, env_override.clone()) {
+        tracing::info!(path = %found.display(), "daemon entry resolved (bundled/env)");
+        return Ok(found);
+    }
+    // If the caller explicitly set MAINFRAME_DAEMON_PATH but the file is absent,
+    // return an actionable error rather than silently falling through to dev mode.
+    if let Some(p) = env_override {
+        return Err(format!(
+            "MAINFRAME_DAEMON_PATH={} does not exist",
+            p.display()
+        ));
     }
 
-    // Dev mode: locate relative to this binary's location by walking up to the
-    // monorepo root and finding packages/core/dist/index.js.
+    // Dev fallback: walk up to the monorepo root (unchanged from the spike).
     let exe = std::env::current_exe()
         .map_err(|e| format!("cannot determine exe path: {e}"))?;
-
-    // Walk up to find the pnpm-workspace.yaml (monorepo root).
     let mut dir = exe.as_path();
     loop {
         if dir.join("pnpm-workspace.yaml").exists() {
@@ -212,6 +241,41 @@ fn resolve_daemon_entry() -> Result<PathBuf, String> {
     }
 
     Err("could not locate monorepo root (pnpm-workspace.yaml) — set MAINFRAME_DAEMON_PATH".to_string())
+}
+
+// ── Resolver unit tests ───────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod resolver_tests {
+    use super::pick_daemon_entry;
+    use std::path::PathBuf;
+
+    #[test]
+    fn prefers_bundled_resource_when_present() {
+        let bundled = PathBuf::from("/tmp/does-exist-bundled.cjs");
+        std::fs::write(&bundled, b"// daemon").unwrap();
+        let got = pick_daemon_entry(Some(bundled.clone()), None);
+        assert_eq!(got, Some(bundled.clone()));
+        std::fs::remove_file(&bundled).ok();
+    }
+
+    #[test]
+    fn falls_back_to_env_override_when_no_bundle() {
+        let env_path = PathBuf::from("/tmp/does-exist-env.cjs");
+        std::fs::write(&env_path, b"// daemon").unwrap();
+        let got = pick_daemon_entry(None, Some(env_path.clone()));
+        assert_eq!(got, Some(env_path.clone()));
+        std::fs::remove_file(&env_path).ok();
+    }
+
+    #[test]
+    fn returns_none_when_neither_exists() {
+        let got = pick_daemon_entry(
+            Some(PathBuf::from("/tmp/nope-bundle.cjs")),
+            Some(PathBuf::from("/tmp/nope-env.cjs")),
+        );
+        assert_eq!(got, None);
+    }
 }
 
 // ── Commands exposed to the renderer ─────────────────────────────────────────

@@ -33,7 +33,14 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "externalBin": ["binaries/node"],
+    "resources": {
+      "resources/daemon/daemon.cjs": "daemon/daemon.cjs",
+      "resources/ripgrep/rg": "ripgrep/rg",
+      "resources/lsp/typescript-language-server": "lsp/typescript-language-server",
+      "resources/lsp/pyright": "lsp/pyright"
+    }
   },
   "plugins": {
     "shell": {

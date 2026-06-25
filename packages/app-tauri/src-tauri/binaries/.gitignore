@@ -1,0 +1,12 @@
+# TODO(plan3-infra): These are PLACEHOLDER files for cargo check / scaffold.
+# The real node binaries are NOT committed — they are downloaded by the CI
+# packaging pipeline per target triple (see docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md).
+#
+# Format: node-<target-triple>  (Tauri externalBin convention)
+# e.g.:  node-aarch64-apple-darwin
+#         node-x86_64-apple-darwin
+#         node-x86_64-pc-windows-msvc
+#         node-x86_64-unknown-linux-gnu
+#
+# The pipeline fetches each from https://nodejs.org/dist/<version>/ and renames it.
+node-*
