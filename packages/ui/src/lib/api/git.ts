@@ -180,6 +180,20 @@ export const deleteWorktree = (
     ...(branchName ? { branchName } : {}),
   });
 
+/** Isolate the active session into a new worktree on `branchName` forked from `baseBranch`. */
+export const enableWorktree = (port: number, chatId: string, baseBranch: string, branchName: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/enable-worktree`, {
+    baseBranch,
+    branchName,
+  });
+
+/** Attach the active session to an existing worktree at `worktreePath` on `branchName`. */
+export const attachWorktree = (port: number, chatId: string, worktreePath: string, branchName: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/attach-worktree`, {
+    worktreePath,
+    branchName,
+  });
+
 // ---------------------------------------------------------------------------
 // Branch diffs (Changes tab — "Branch" mode)
 // ---------------------------------------------------------------------------

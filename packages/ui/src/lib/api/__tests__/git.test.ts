@@ -46,6 +46,8 @@ import {
   gitUpdateAll,
   getProjectWorktrees,
   deleteWorktree,
+  enableWorktree,
+  attachWorktree,
 } from '../git';
 
 // ---------------------------------------------------------------------------
@@ -577,5 +579,61 @@ describe('projectId URL-encoding', () => {
 
     const { url } = lastCall();
     expect(url).toContain('/api/projects/my%20project%2F1/git/branch');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 27. enableWorktree — POST /api/chats/:id/enable-worktree
+// ---------------------------------------------------------------------------
+
+describe('enableWorktree', () => {
+  const CHAT_BASE = `http://127.0.0.1:${PORT}/api/chats/c1`;
+
+  it('POSTs baseBranch+branchName to enable-worktree', async () => {
+    mockFetchEmpty();
+
+    await enableWorktree(PORT, 'c1', 'main', 'feat/x');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${CHAT_BASE}/enable-worktree`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ baseBranch: 'main', branchName: 'feat/x' });
+  });
+
+  it('URL-encodes the chatId in the path', async () => {
+    mockFetchEmpty();
+
+    await enableWorktree(PORT, 'chat/has spaces', 'main', 'feat/x');
+
+    const { url } = lastCall();
+    expect(url).toContain('/api/chats/chat%2Fhas%20spaces/enable-worktree');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 28. attachWorktree — POST /api/chats/:id/attach-worktree
+// ---------------------------------------------------------------------------
+
+describe('attachWorktree', () => {
+  const CHAT_BASE = `http://127.0.0.1:${PORT}/api/chats/c1`;
+
+  it('POSTs worktreePath+branchName to attach-worktree', async () => {
+    mockFetchEmpty();
+
+    await attachWorktree(PORT, 'c1', '/wt/x', 'feat/x');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${CHAT_BASE}/attach-worktree`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ worktreePath: '/wt/x', branchName: 'feat/x' });
+  });
+
+  it('URL-encodes the chatId in the path', async () => {
+    mockFetchEmpty();
+
+    await attachWorktree(PORT, 'chat/has spaces', '/wt/x', 'feat/x');
+
+    const { url } = lastCall();
+    expect(url).toContain('/api/chats/chat%2Fhas%20spaces/attach-worktree');
   });
 });
