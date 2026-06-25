@@ -64,6 +64,7 @@ function BranchSelect({ value, options, currentBranch, onChange }: BranchSelectP
         </button>
       </PopoverTrigger>
       <PopoverContent
+        data-testid="composer-worktree-base-branch-list"
         align="start"
         side="top"
         sideOffset={4}

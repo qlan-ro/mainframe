@@ -169,7 +169,13 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
         </TooltipContent>
       </Tooltip>
 
-      <PopoverContent align="start" side="top" sideOffset={6} className="w-[280px] p-[6px]">
+      <PopoverContent
+        data-testid="composer-worktree-popover"
+        align="start"
+        side="top"
+        sideOffset={6}
+        className="w-[280px] p-[5px]"
+      >
         {isIsolated ? (
           <ActiveInfo chat={chat} />
         ) : loading ? (
@@ -181,7 +187,7 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
             {hasMessages && (
               <div
                 data-testid="composer-worktree-mid-session-warning"
-                className="mb-[6px] flex items-start gap-[6px] rounded-md bg-primary/10 px-[8px] py-[6px] text-caption text-foreground"
+                className="mb-[6px] flex items-start gap-[6px] rounded-[6px] bg-mf-selection px-[8px] py-[6px] text-caption text-foreground"
               >
                 <AlertTriangle size={12} className="mt-[1px] shrink-0 text-mf-warning" />
                 <span>Session will pause and resume in the worktree.</span>
