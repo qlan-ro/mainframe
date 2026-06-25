@@ -286,7 +286,7 @@ A line-by-line code audit (5 parallel agents over `packages/app-tauri/src` + `sr
 - **Shell foundation** (legacy checklist): `main.tsx`/`App.tsx`/global keybinds/ConnectionOverlay/ErrorBoundary/Toaster, `store/tabs.ts`, EditorTab/DiffTab, chats-store→per-chat-controller, LSP client — all built. TitleBar = native overlay (by design); StatusBar → `SidebarFooter`.
 
 **Was ☐, is actually ◐ PARTIAL:**
-- **Sidecar packaging** — daemon supervision/env-capture (`src-tauri/src/sidecar.rs`) done; the Tauri `externalBin` bundle of Node + native deps is NOT configured.
+- **Sidecar packaging** — ☑ **DONE 2026-06-25** (this prose was the 2026-06-21 snapshot): daemon supervision/env-capture + the Tauri `externalBin` Node-24 sidecar + daemon bundle + per-platform CI + updater signing are all done (`d188d586`/`418ab372`). Only **macOS code-sign/notarization of the `.app`** remains.
 - **Capabilities / CSP** — `src-tauri/capabilities/main.json` + a CSP exist; no per-command least-privilege granularity yet.
 - **data-testid saturation + stress matrix** — testids are saturated (400+); the ADR stress matrix remains (two-window untestable).
 - **Toast "Open session →" CTA** — nav seam DONE (2026-06-21, `lib/session-nav.ts` → `switchToThread`, wired into `WsToastCard`/`mfToast`); still no call site passes a `chatId` (background-notification toast producer doesn't exist yet), so it doesn't render in practice.
@@ -299,7 +299,7 @@ A line-by-line code audit (5 parallel agents over `packages/app-tauri/src` + `sr
 
 **Dropped-by-design (⊘, not gaps):** `zone/` system, `store/ui.ts`, `composer-drafts.ts` module (draft state lives in the sessions runtime), `SkillEditorTab` (skills = plain files), the desktop `input.tsx`/`tabs.tsx`/zone-plugin-bridge.
 
-**Genuinely NOT-STARTED (the real remaining V1 work):** the Tauri `externalBin` sidecar bundle + signing/notarization · capabilities/CSP least-privilege tighten · shared pure-logic package extraction (still app-tauri-local). *(DROPPED: Multi-window infra 2026-06-22. PUSHED OUT to Post-V1: Restored-permission "stream closed" + Plugins UI re-platform, 2026-06-23 — so **all V1 surfaces are complete**; the V1 remainder is packaging/GA hardening + the shared-package decision.)*
+**Real remaining V1 work (updated 2026-06-25):** ~~the Tauri `externalBin` sidecar bundle + updater signing~~ ✅ done (`d188d586`/`418ab372`) → now only **macOS code-sign/notarization of the `.app`** · **capabilities/CSP least-privilege tighten** (incl. the dev-port `connect-src` pin + `mcp-bridge` in the shipped capability) · the first `v*` tag release · the shared pure-logic package decision (still app-tauri-local). *(DROPPED: Multi-window infra 2026-06-22. PUSHED OUT to Post-V1: Restored-permission "stream closed" + Plugins UI re-platform, 2026-06-23 — so **all V1 surfaces are complete**; the V1 remainder is packaging/GA hardening + the shared-package decision.)*
 
 **Still open DECISIONS (not code):** shared-package home · permission-card placement (inline-at-tail default) · Phase-2 Rust-daemon go/no-go · Electron retire-vs-coexist · mobile-contract governance.
 
