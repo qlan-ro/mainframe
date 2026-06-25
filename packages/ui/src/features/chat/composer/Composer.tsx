@@ -22,6 +22,7 @@ import { ComposerAttachments, ComposerAddAttachment } from '@/components/ui/assi
 import { ComposerQuotePreview } from '@/components/ui/assistant-ui/quote';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
+import { ComposerHighlight } from './highlight/ComposerHighlight';
 
 /** Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) — swapped on thread.isRunning. */
 function SendOrCancelButton({ sendDisabled }: { sendDisabled?: boolean }) {
@@ -129,17 +130,21 @@ export function Composer() {
             <ComposerAttachments />
           </div>
 
-          <ComposerPrimitive.Input
-            data-testid="chat-composer-input"
-            data-mf-composer-input
-            data-noring
-            disabled={worktreeMissing}
-            onKeyDown={handleInputKeyDown}
-            placeholder="Type @ to search files, / for skills…"
-            rows={1}
-            autoFocus
-            className="max-h-48 w-full resize-none bg-transparent px-[14px] pt-[10px] pb-[4px] text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
-          />
+          {/* Scroll-wrapper owns max-h + overflow so overlay and textarea wrap/scroll together. */}
+          <div className="relative max-h-48 overflow-y-auto">
+            <ComposerHighlight />
+            <ComposerPrimitive.Input
+              data-testid="chat-composer-input"
+              data-mf-composer-input
+              data-noring
+              disabled={worktreeMissing}
+              onKeyDown={handleInputKeyDown}
+              placeholder="Type @ to search files, / for skills…"
+              rows={1}
+              autoFocus
+              className="relative w-full resize-none bg-transparent px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-transparent caret-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
 
           <div className="flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
             {/* Left slot: paperclip + separator + config toolbar */}

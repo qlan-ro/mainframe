@@ -111,6 +111,13 @@ vi.mock('../triggers/ComposerTriggers', () => ({
   ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// ComposerHighlight uses useAuiState(s => s.composer.text) and renderHighlights —
+// stub it to a sentinel div so Composer.test asserts structural wiring without
+// re-testing the overlay's own logic (covered in ComposerHighlight.test.tsx).
+vi.mock('../highlight/ComposerHighlight', () => ({
+  ComposerHighlight: () => <div data-testid="composer-prompt-highlight" aria-hidden="true" />,
+}));
+
 // ---------------------------------------------------------------------------
 // Subject under test — imported AFTER mocks are registered.
 // ---------------------------------------------------------------------------
@@ -271,5 +278,40 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(__sendSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Highlight overlay wiring + scroll-wrapper restructure (Task 3)
+// ---------------------------------------------------------------------------
+//
+// Verifies that:
+//  1. The ComposerHighlight overlay is mounted (data-testid="composer-prompt-highlight")
+//  2. The textarea input carries `text-transparent` (transparent text) and `caret-foreground`
+//     so the colored overlay shows through, while the real text caret remains visible.
+
+describe('Composer — highlight overlay wired + input is text-transparent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __isRunning = false;
+    __sendSpy = vi.fn();
+    __extrasReturn = { worktreeMissing: false };
+  });
+
+  it('mounts the composer-prompt-highlight overlay', () => {
+    renderComposer();
+    expect(screen.getByTestId('composer-prompt-highlight')).toBeInTheDocument();
+  });
+
+  it('input (chat-composer-input) has text-transparent class', () => {
+    renderComposer();
+    const input = screen.getByTestId('chat-composer-input');
+    expect(input.className).toContain('text-transparent');
+  });
+
+  it('input (chat-composer-input) has caret-foreground class', () => {
+    renderComposer();
+    const input = screen.getByTestId('chat-composer-input');
+    expect(input.className).toContain('caret-foreground');
   });
 });
