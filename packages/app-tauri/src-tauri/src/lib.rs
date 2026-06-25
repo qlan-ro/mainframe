@@ -1,5 +1,6 @@
 mod commands;
 mod log_sink;
+mod memory_logger;
 mod presence;
 mod preview;
 mod shell_env;
@@ -36,6 +37,11 @@ pub fn run() {
     // WorkerGuard MUST outlive the tauri::Builder::run() call; binding it here
     // in run()'s top scope ensures it is dropped only after .run() returns.
     let _log_guard = log_sink::init_logging();
+
+    // Start the 5-min RSS memory sampler (Task 10). Runs in a background thread;
+    // logs via the tracing sink initialised above so output goes to the rotating
+    // JSON log file (same sink as all other host logs).
+    memory_logger::start_memory_logger();
 
     // ── C1: Capture the login-shell environment before doing anything else ──
     // This must happen before window creation so PATH is available when the

@@ -36,6 +36,7 @@ ureq = { version = "2", default-features = false, features = ["json"] }
 # Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
 # DOM inspection, IPC). Only registered under debug_assertions in lib.rs.
 tauri-plugin-mcp-bridge = "0.11"
+sysinfo = { version = "0.31", default-features = false, features = ["system"] }
 
 # macOS-only deps for the preview child-webview native snapshot (Task 5).
 # Pin to the same major versions as tauri 2.11.2 itself to avoid duplicate
