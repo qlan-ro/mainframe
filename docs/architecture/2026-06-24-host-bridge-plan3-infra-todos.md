@@ -205,3 +205,55 @@ updater endpoint resolves at runtime.
 - Ensure the release tag matches `v<semver>` so `latest.json` is generated correctly.
 - The first `cargo tauri build` with the real pubkey in place will also require completing
   the daemon bundling pipeline (TODOs 1–6 above).
+
+---
+
+## Webview permission policy: deny camera/mic, allow clipboard/notify
+
+**Status:** DONE (Task 12, 2026-06-25)
+
+Tauri's capabilities model grants an explicit allowlist — anything not listed is denied. The
+`capabilities/main.json` grants only:
+
+- `core:default` — standard window/FS/etc primitives (no media device access)
+- `core:window:allow-start-dragging` — window drag handle
+- `opener:default` — shell open for external URLs
+- `notification:default` + `notification:allow-notify` — OS notifications (parity: allowed)
+- `mcp-bridge:default` — internal MCP bridge
+- `updater:default` — auto-update checks
+
+There is **no** `camera`, `microphone`, `geolocation`, or any other media permission in this
+list. Camera and microphone are denied by the capability allowlist (deny-by-default posture),
+matching Electron's `setPermissionRequestHandler` allowlist of clipboard + notifications only.
+
+On macOS, WKWebView media access is additionally gated by the app bundle's
+`NSCameraUsageDescription` / `NSMicrophoneUsageDescription` Info.plist keys. If those keys
+are **absent**, the OS denies access without prompting — the desired UX. The `bundle.macOS`
+block in `tauri.conf.json` intentionally omits these keys (no `customProtocol` or Info.plist
+additions); `entitlements: null` means no entitlements file is injected that could add them.
+This mirrors Electron's `denyUnneededPermissions` approach (nulling those mac.extendInfo keys).
+
+---
+
+## WKWebView crash signal (DEFERRED / best-effort)
+
+// TODO(plan3-infra): WKWebView crash signal
+
+Electron's `render-process-gone` event surfaces webview process termination (OOM kill,
+renderer crash, GPU process crash) as a structured event with `reason` and `exitCode`.
+Tauri 2 has no equivalent event on the public API surface.
+
+The closest WKWebView hook is `WKNavigationDelegate.webViewWebContentProcessDidTerminate(_:)`,
+which fires when the WebContent process is killed by the OS (typically memory pressure). To
+wire this into Tauri would require:
+
+1. A custom `objc2` (or `objc` crate) hook that installs a `WKNavigationDelegate` on the
+   underlying `WKWebView` instance obtained via the Tauri `WebviewWindow` handle.
+2. Emitting a Tauri event (e.g. `webview://crash`) to the frontend when the delegate fires.
+3. The frontend `HostBridgeTauri` listening for the event and calling any registered
+   `onCrash` handler in the `HostBridge` contract.
+
+This is lower fidelity than Electron's version (no structured `reason`/`exitCode`) and
+requires unsafe Objective-C interop. The RSS sampler (Task 10) covers memory diagnostics
+without this hook. Deferred to post-V1.
+
