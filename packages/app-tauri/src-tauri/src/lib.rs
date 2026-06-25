@@ -140,11 +140,11 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 // POST idle on quit — mirrors idle-reporter.ts "before-quit" handler.
-                let _ = ureq::post(&format!(
-                    "http://127.0.0.1:{DAEMON_PORT}/api/device/activity"
-                ))
-                .set("Content-Type", "application/json")
-                .send_string("{\"state\":\"idle\"}");
+                // Routed through post_state_sync so the 500 ms connect/read timeout
+                // applies and a wedged daemon cannot block window teardown.
+                if let Err(e) = presence::post_state_sync(DAEMON_PORT, presence::Presence::Idle) {
+                    tracing::warn!(err = %e, "quit-path idle presence report failed");
+                }
 
                 // Kill the daemon when the last window closes.
                 if let Some(h) = DAEMON.get() {

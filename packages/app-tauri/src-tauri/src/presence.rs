@@ -60,10 +60,15 @@ pub fn system_idle_seconds() -> f64 {
 
 // ── Reporter thread ───────────────────────────────────────────────────────────
 
-fn post_state_sync(daemon_port: u16, state: Presence) -> Result<(), String> {
+pub fn post_state_sync(daemon_port: u16, state: Presence) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{daemon_port}/api/device/activity");
     let body = serde_json::json!({ "state": state.as_str() }).to_string();
-    ureq::post(&url)
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_millis(500))
+        .timeout_read(std::time::Duration::from_millis(500))
+        .build();
+    agent
+        .post(&url)
         .set("Content-Type", "application/json")
         .send_string(&body)
         .map(|_| ())
