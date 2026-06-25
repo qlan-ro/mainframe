@@ -1,14 +1,7 @@
-# TODO(plan3-infra): These are PLACEHOLDER files for cargo check / scaffold.
-# The real resource files are NOT committed — they are produced by the CI
-# packaging pipeline (see docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md).
-#
-# daemon/daemon.cjs         — esbuild CJS bundle of packages/core/src/index.ts
-# ripgrep/rg                — @vscode/ripgrep platform binary
-# lsp/typescript-language-server — npm bin script
-# lsp/pyright               — npm bin script
-#
-# These are populated by the bundle script before `cargo tauri build`.
-daemon/daemon.cjs
-ripgrep/rg
-lsp/typescript-language-server
-lsp/pyright
+# Daemon bundle — build artifacts produced by scripts/bundle-daemon.mjs.
+# `daemon/daemon.cjs` (esbuild bundle of packages/core) + `daemon/node_modules`
+# (de-symlinked prod deps: better-sqlite3, node-pty, @vscode/ripgrep, the LSP
+# servers, + transitive). Large + platform-specific — never committed; each build
+# (and each CI runner) regenerates them. Only this .gitignore is tracked.
+*
+!.gitignore

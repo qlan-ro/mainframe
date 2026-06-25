@@ -5,12 +5,16 @@
   "type": "module",
   "scripts": {
     "tauri:dev": "cargo tauri dev --config src-tauri/tauri.dev.conf.json",
-    "tauri:build": "cargo tauri build"
+    "tauri:build": "cargo tauri build",
+    "provision:node": "node scripts/provision-node.mjs",
+    "bundle:daemon": "node scripts/bundle-daemon.mjs",
+    "bundle": "pnpm run provision:node && pnpm run bundle:daemon"
   },
   "dependencies": {
     "@qlan-ro/mainframe-ui": "workspace:*"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "esbuild": "^0.28.0"
   }
 }

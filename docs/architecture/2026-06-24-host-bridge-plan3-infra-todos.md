@@ -1,9 +1,47 @@
-# Plan 3 Infrastructure TODOs: Daemon Bundling Pipeline (DEFERRED)
+# Plan 3 Infrastructure TODOs: Daemon Bundling Pipeline
 
-**Status:** SCAFFOLDED (config + resolver wired) — build pipeline DEFERRED  
+**Status:** ✅ **DONE (2026-06-25)** — local pipeline implemented + verified end-to-end.
+Only the per-platform CI matrix (TODO 6) + updater signing/release (TODOs 7–9) remain.
 **Related:** `2026-06-24-host-bridge-tauri-parity-plan.md`, Task 6
 
 ---
+
+## ✅ Implemented (2026-06-25)
+
+- **`packages/app-tauri/scripts/bundle-daemon.mjs`** — builds core, esbuilds
+  `resources/daemon/daemon.cjs` (externals = native + LSP + ripgrep), then a
+  **dependency collector** walks each external's `package.json` deps and
+  deref-copies the real (pnpm-symlinked) packages into a flat
+  `resources/daemon/node_modules` SIBLING of `daemon.cjs`. Node's standard
+  resolution finds them — no NODE_PATH/cwd. Pulls `better-sqlite3` (+`bindings`,
+  `file-uri-to-path`, the `.node`), `node-pty`, both LSP servers, and
+  `@vscode/ripgrep` **plus its platform sub-package** (`@vscode/ripgrep-darwin-arm64/bin/rg`).
+- **`packages/app-tauri/scripts/provision-node.mjs`** — places the Node 24 sidecar
+  at `binaries/node-<triple>`. Local = copy the running node (ABI-matched); CI =
+  `--fetch --version=`. Pinned to `.nvmrc` (Node 24, ABI 137) so native modules
+  match with **no rebuild step** on a host whose node is 24.
+- **`sidecar.rs::find_bundled_node`** — packaged builds run under the bundled
+  sidecar next to the exe (size-guarded against the zero-byte dev placeholders);
+  dev falls back to system node. Wired into `lib.rs::boot_daemon`; unit-tested.
+- **`tauri.conf.json`** — `resources` ships the whole `resources/daemon` dir;
+  `beforeBuildCommand` runs the ui build + `app-tauri bundle` (provision + daemon).
+- **`packages/core/tsconfig.build.json`** — exclude widened to `src/**/__tests__/**`
+  (was `src/__tests__/**`, which missed nested test dirs and broke the build).
+- **gitignore** — real binaries + bundle output are ignored (the old force-track
+  placeholder negations were a footgun: they'd commit a 119MB node binary).
+
+**Verified locally (macOS arm64):** `bundle:daemon` produces the bundle in ~26s
+(no network); the daemon **boots under the bundled Node 24 sidecar** and answers
+`/health` 200 (proves `better-sqlite3` ABI match + sibling-`node_modules`
+resolution); the bundled `rg` runs (ripgrep 15.0.0); `cargo test sidecar` green.
+
+**Remaining:** the per-platform CI matrix (TODO 6 below) that provisions + bundles
++ `cargo tauri build` on each runner, and the updater signing/release (TODOs 7–9,
+needs the user's signing key). A full signed `tauri build` is gated on those.
+
+---
+
+## Original scaffold notes (historical)
 
 ## What is scaffolded (Task 6)
 

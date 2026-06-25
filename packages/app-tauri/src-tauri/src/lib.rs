@@ -206,7 +206,12 @@ fn boot_daemon(
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
     let shell_path = shell_env.get("PATH").map(|s| s.as_str());
-    let node_bin = sidecar::find_node(shell_path)?;
+    // Packaged build: run under the bundled, ABI-matched Node sidecar. Dev: fall
+    // back to the system Node found on the login-shell PATH.
+    let node_bin = match sidecar::find_bundled_node() {
+        Some(bundled) => bundled,
+        None => sidecar::find_node(shell_path)?,
+    };
 
     let daemon_entry = resolve_daemon_entry(app)?;
 

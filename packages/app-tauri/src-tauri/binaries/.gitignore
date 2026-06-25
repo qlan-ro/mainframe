@@ -1,15 +1,8 @@
-# Real Node binaries are NOT committed — the CI packaging pipeline downloads them
-# per target triple from https://nodejs.org/dist/<version>/ and places them here.
-# (see docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md TODO #1)
-#
-# The files below ARE committed as zero-byte placeholders so that `cargo check`
-# passes on every dev/CI platform without requiring the real binaries.
-# The packaging pipeline replaces them with the real binaries before `tauri build`.
+# Node sidecar binaries for Tauri's externalBin, provisioned per target triple by
+# scripts/provision-node.mjs (local: copy the running Node 24; CI: --fetch from
+# nodejs.org). Real binaries are ~tens of MB and platform-specific — never
+# committed. cargo check does not need them; `tauri build` does, so provision
+# first. Only this .gitignore + README.md are tracked.
 node-*
-
-# Placeholder exceptions — force-tracked zero-byte stand-ins for cargo check.
-!node-aarch64-apple-darwin
-!node-x86_64-apple-darwin
-!node-x86_64-unknown-linux-gnu
-!node-aarch64-unknown-linux-gnu
-!node-x86_64-pc-windows-msvc.exe
+!.gitignore
+!README.md

@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm --filter @qlan-ro/mainframe-ui dev",
     "devUrl": "http://localhost:5174",
-    "beforeBuildCommand": "pnpm --filter @qlan-ro/mainframe-ui build",
+    "beforeBuildCommand": "pnpm --filter @qlan-ro/mainframe-ui build && pnpm --filter @qlan-ro/mainframe-app-tauri bundle",
     "frontendDist": "../../ui/dist"
   },
   "app": {
@@ -42,10 +42,7 @@
     },
     "externalBin": ["binaries/node"],
     "resources": {
-      "resources/daemon/daemon.cjs": "daemon/daemon.cjs",
-      "resources/ripgrep/rg": "ripgrep/rg",
-      "resources/lsp/typescript-language-server": "lsp/typescript-language-server",
-      "resources/lsp/pyright": "lsp/pyright"
+      "resources/daemon": "daemon"
     }
   },
   "plugins": {

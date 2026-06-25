@@ -6,9 +6,14 @@
 /// The login-shell env is merged over the process env before spawn,
 /// replicating `{ ...process.env, NODE_ENV: 'production', ...shellEnv }`.
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
+
+/// A real Node binary is tens of MB; this floor rejects the zero-byte
+/// `binaries/node-<triple>` scaffold placeholders that may sit next to the exe
+/// in a dev build (spawning a zero-byte file would fail at runtime).
+const MIN_NODE_BIN_BYTES: u64 = 1024;
 
 pub struct DaemonHandle {
     child: Arc<Mutex<Option<Child>>>,
@@ -86,6 +91,45 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     Ok(DaemonHandle {
         child: Arc::new(Mutex::new(Some(child))),
     })
+}
+
+/// Prefer the bundled Node sidecar in a packaged build.
+///
+/// Tauri's `externalBin` ("binaries/node") places the matching-triple Node binary
+/// next to the app executable (`node` once the bundle strips the triple, or
+/// `node-<triple>` in some layouts). Using it guarantees the daemon runs under the
+/// pinned, ABI-matched Node we shipped — never the user's (possibly absent or
+/// mismatched) system Node. Returns `None` in dev, where no sidecar sits next to
+/// the exe, so the caller falls back to `find_node` (system Node).
+pub fn find_bundled_node() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    find_bundled_node_in(exe.parent()?)
+}
+
+/// Pure directory scan behind [`find_bundled_node`] (unit-testable).
+fn find_bundled_node_in(dir: &Path) -> Option<PathBuf> {
+    let runnable = |p: &Path| -> bool {
+        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() >= MIN_NODE_BIN_BYTES)
+    };
+    // Exact base name first (Tauri strips the triple in the assembled bundle).
+    for name in ["node", "node.exe"] {
+        let candidate = dir.join(name);
+        if runnable(&candidate) {
+            tracing::info!(node = %candidate.display(), "using bundled node sidecar");
+            return Some(candidate);
+        }
+    }
+    // Triple-suffixed sibling fallback (e.g. node-aarch64-apple-darwin[.exe]).
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("node-") && runnable(&entry.path()) {
+            tracing::info!(node = %entry.path().display(), "using bundled node sidecar (triple)");
+            return Some(entry.path());
+        }
+    }
+    None
 }
 
 /// Resolve the `node` binary path from the login-shell env PATH.
@@ -197,5 +241,37 @@ mod tests {
         );
         // Confirm v10 beats v9 under numeric sort.
         assert!(parse("v10.0.0") > parse("v9.11.2"));
+    }
+
+    /// find_bundled_node_in prefers a runnable `node`, ignores zero-byte
+    /// placeholders, and falls back to a triple-suffixed sibling.
+    #[test]
+    fn bundled_node_scan() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("mf-bundled-node-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Nothing runnable yet → None.
+        assert!(find_bundled_node_in(&dir).is_none());
+
+        // A zero-byte placeholder must be ignored.
+        std::fs::File::create(dir.join("node-aarch64-apple-darwin")).unwrap();
+        assert!(find_bundled_node_in(&dir).is_none());
+
+        // A real-sized triple binary is found via the fallback.
+        let mut f = std::fs::File::create(dir.join("node-x86_64-unknown-linux-gnu")).unwrap();
+        f.write_all(&vec![0u8; (MIN_NODE_BIN_BYTES + 1) as usize]).unwrap();
+        assert_eq!(
+            find_bundled_node_in(&dir),
+            Some(dir.join("node-x86_64-unknown-linux-gnu"))
+        );
+
+        // The exact base name `node` wins over the triple sibling.
+        let mut f = std::fs::File::create(dir.join("node")).unwrap();
+        f.write_all(&vec![0u8; (MIN_NODE_BIN_BYTES + 1) as usize]).unwrap();
+        assert_eq!(find_bundled_node_in(&dir), Some(dir.join("node")));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
