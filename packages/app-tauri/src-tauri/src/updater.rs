@@ -91,11 +91,13 @@ pub async fn updater_download(app: AppHandle) -> Result<(), String> {
     };
     let version = update.version.clone();
     let app2 = app.clone();
+    let mut received: u64 = 0;
     let bytes = update
         .download(
             move |chunk_len, total| {
+                received += chunk_len as u64;
                 if let Some(total) = total {
-                    let percent = (chunk_len as f64 / total as f64) * 100.0;
+                    let percent = (received as f64 / total as f64) * 100.0;
                     emit_status(&app2, UpdateStatus::Downloading { percent });
                 }
             },
