@@ -223,7 +223,11 @@ pub fn host_log(
 
 fn default_filter() -> tracing_subscriber::EnvFilter {
     tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "app_tauri_lib=info,warn".parse().unwrap())
+        .unwrap_or_else(|_| {
+            "app_tauri_lib=info,warn"
+                .parse()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+        })
 }
 
 /// Install the global tracing subscriber. Returns the `WorkerGuard` which MUST

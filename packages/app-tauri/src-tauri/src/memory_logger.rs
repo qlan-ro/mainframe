@@ -45,7 +45,7 @@ pub fn bytes_to_kb(bytes: u64) -> u64 {
 /// and logs it via `tracing`. If a sample fails, logs a warning and continues.
 /// The thread is non-panicking: all fallible paths are handled.
 pub fn start_memory_logger() {
-    std::thread::Builder::new()
+    if let Err(e) = std::thread::Builder::new()
         .name("memory-logger".to_string())
         .spawn(|| loop {
             std::thread::sleep(std::time::Duration::from_millis(MEMORY_LOG_INTERVAL_MS));
@@ -59,7 +59,9 @@ pub fn start_memory_logger() {
                 None => tracing::warn!(module = "host:perf", "RSS sample unavailable"),
             }
         })
-        .expect("failed to spawn memory-logger thread");
+    {
+        tracing::warn!(error = %e, "failed to spawn memory-logger thread; RSS sampling disabled");
+    }
 }
 
 #[cfg(test)]
