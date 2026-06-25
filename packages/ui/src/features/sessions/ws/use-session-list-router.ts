@@ -26,6 +26,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 import { useUnreadStore } from '../../../store/unread-store';
 import { useSessionFilters } from '../../../store/session-filters';
+import { useLayoutStore } from '../../../store/layout';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { pickInitialSession } from '../view-model/initial-session';
 import { createSessionListRouter } from './session-list-router';
@@ -137,4 +138,13 @@ export function useSessionListRouter(): void {
       runtime.threads.switchToThread(target);
     }
   }, [items, mainThreadId, runtime]);
+
+  // GC: prune persisted layout entries for sessions no longer in the thread list.
+  // Guard: only when the list is non-empty to avoid wiping everything before first load.
+  // Uses remoteId (the daemon's chat.id) — the key used by setActiveSession.
+  useEffect(() => {
+    if (items.length === 0) return;
+    const validIds = new Set(items.map((t) => t.remoteId).filter((id): id is string => id != null));
+    useLayoutStore.getState().pruneSessions(validIds);
+  }, [items]);
 }
