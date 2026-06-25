@@ -35,9 +35,16 @@ portable-pty = "0.9"
 ureq = { version = "2", default-features = false, features = ["json"] }
 
 # Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
-# DOM inspection, IPC). Only registered under debug_assertions in lib.rs.
-tauri-plugin-mcp-bridge = "0.11"
+# DOM inspection, IPC). Optional + behind the non-default `mcp-bridge` feature
+# (enabled by `tauri:dev`), so it is excluded from the release binary entirely.
+tauri-plugin-mcp-bridge = { version = "0.11", optional = true }
 sysinfo = { version = "0.31", default-features = false, features = ["system"] }
+
+[features]
+# Dev-only webview automation (Tauri MCP server). NOT a default feature — enabled
+# by `tauri:dev` (--features mcp-bridge) and omitted by `tauri build`, so the
+# plugin's code is absent from release builds, not merely left unregistered.
+mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
 
 # macOS-only deps for the preview child-webview native snapshot (Task 5).
 # Pin to the same major versions as tauri 2.11.2 itself to avoid duplicate

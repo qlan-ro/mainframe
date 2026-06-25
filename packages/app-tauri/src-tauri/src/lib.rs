@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use tauri::{Emitter, Manager};
-#[cfg(debug_assertions)]
+#[cfg(feature = "mcp-bridge")]
 use tauri::ipc::CapabilityBuilder;
 
 // Re-export commands at crate root so generate_handler! can find them.
@@ -58,8 +58,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build());
 
     // Dev-only: MCP Bridge plugin (webview automation for the Tauri MCP server).
-    // Shadowed under debug_assertions so it's compiled out of release builds.
-    #[cfg(debug_assertions)]
+    // Behind the non-default `mcp-bridge` feature (enabled by `tauri:dev`) so the
+    // crate is compiled out of release builds entirely.
+    #[cfg(feature = "mcp-bridge")]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
     builder
@@ -113,10 +114,10 @@ pub fn run() {
                 }
             }
 
-            // Dev-only: grant the mcp-bridge capability at runtime so it is absent
-            // from the static capability set that ships in release builds.
-            // Mirrors the #[cfg(debug_assertions)] plugin registration above.
-            #[cfg(debug_assertions)]
+            // Grant the mcp-bridge capability at runtime so it is absent from the
+            // static capability set that ships in release builds. Mirrors the
+            // `mcp-bridge`-feature plugin registration above.
+            #[cfg(feature = "mcp-bridge")]
             if let Err(e) = app.add_capability(
                 CapabilityBuilder::new("dev-mcp-bridge")
                     .window("main")
