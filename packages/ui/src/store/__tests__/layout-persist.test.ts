@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { sanitizeRun, serializeSessions, reviveSessions } from '../layout-persist';
+import { useLayoutStore } from '../layout';
 import type { RunState } from '../run-pane';
 import type { SessionWorkspace } from '../layout';
 
@@ -53,5 +54,50 @@ describe('layout-persist', () => {
     const m = reviveSessions({ 'chat-1': { layout, run: null } });
     expect(m).toBeInstanceOf(Map);
     expect(m.get('chat-1')?.layout.top).toEqual(['chat', 'run']);
+  });
+});
+
+describe('layout store persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
+  });
+
+  it('pruneSessions removes entries not in the valid set', () => {
+    const s = useLayoutStore.getState();
+    s.setActiveSession('chat-a');
+    s.setActiveSession('chat-b');
+    expect(useLayoutStore.getState().sessions.has('chat-a')).toBe(true);
+    useLayoutStore.getState().pruneSessions(new Set(['chat-b']));
+    expect(useLayoutStore.getState().sessions.has('chat-a')).toBe(false);
+    expect(useLayoutStore.getState().sessions.has('chat-b')).toBe(true);
+  });
+
+  it('persists sessions to mf:session-layout and sanitizes on write', () => {
+    useLayoutStore.getState().setActiveSession('chat-x');
+    // mutates active session layout → triggers persist
+    useLayoutStore.getState().setTopFrac(0.7);
+    const raw = JSON.parse(localStorage.getItem('mf:session-layout')!);
+    expect(raw.state.sessions['chat-x']).toBeTruthy();
+  });
+
+  it('store actions still work after a simulated reload (rehydrate)', () => {
+    // Prime the store with a session
+    useLayoutStore.getState().setActiveSession('chat-r');
+    useLayoutStore.getState().setTopFrac(0.65);
+
+    // Simulate rehydrate: push a serialized state into localStorage
+    const persisted = {
+      state: { sessions: { 'chat-r': { layout, run: null } } },
+      version: 1,
+    };
+    localStorage.setItem('mf:session-layout', JSON.stringify(persisted));
+
+    // Reset store (as if the app restarted) — merge will revive from localStorage
+    useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
+
+    // After reset, calling setActiveSession should work (Map methods usable)
+    useLayoutStore.getState().setActiveSession('chat-r');
+    expect(useLayoutStore.getState().activeSessionId).toBe('chat-r');
   });
 });

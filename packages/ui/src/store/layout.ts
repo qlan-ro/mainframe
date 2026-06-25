@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   addRunTab as addRunTabReducer,
   activateRunTab as activateRunTabReducer,
@@ -13,6 +14,7 @@ import {
 } from './run-pane';
 import { useTabsStore } from './tabs';
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
+import { serializeSessions, reviveSessions } from './layout-persist';
 
 export type SurfaceId = 'chat' | 'files' | 'run';
 
@@ -164,126 +166,148 @@ interface LayoutStore {
   activateRunTab: (paneId: string, tabId: string) => void;
   closeRunTab: (paneId: string, tabId: string) => void;
   closePane: (paneId: string) => void;
+  /** GC: remove persisted entries for sessions no longer in the thread list. */
+  pruneSessions: (validIds: Set<string>) => void;
 }
 
-export const useLayoutStore = create<LayoutStore>((set, get) => {
-  /** Write the active workspace to top-level state + persist it per-session. */
-  function writeWorkspace(next: SessionWorkspace): void {
-    const { activeSessionId, sessions } = get();
-    if (!activeSessionId) {
-      set({ layout: next.layout, run: next.run });
-      return;
-    }
-    const nextSessions = new Map(sessions);
-    nextSessions.set(activeSessionId, next);
-    set({ layout: next.layout, run: next.run, sessions: nextSessions });
-  }
-
-  return {
-    layout: INITIAL_LAYOUT,
-    run: null,
-    sessions: new Map(),
-    activeSessionId: null,
-
-    setActiveSession(sessionId) {
-      const { sessions } = get();
-      const existing = sessions.get(sessionId);
-      // structuredClone so per-session seeds don't share nested topFlex/vFlex refs.
-      const ws: SessionWorkspace = existing ?? { layout: structuredClone(INITIAL_LAYOUT), run: null };
-      const nextSessions = existing ? sessions : new Map(sessions).set(sessionId, ws);
-      set({ activeSessionId: sessionId, layout: ws.layout, run: ws.run, sessions: nextSessions });
-    },
-
-    toggleSurface(surface) {
-      const { layout, run } = get();
-      // Dynamic floor: the last lit surface (any of chat/files/run) can't be hidden.
-      if (isSurfaceFloor(layout, surface)) return;
-      const isActive = layout.top.includes(surface) || layout.bottom === surface;
-      const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
-      // Toggling Run off kills any live PTYs before discarding the panes.
-      if (surface === 'run' && isActive) {
-        killAndDisposeCachedTerminals(terminalIdsInRun(run));
+export const useLayoutStore = create<LayoutStore>()(
+  persist(
+    (set, get) => {
+      /** Write the active workspace to top-level state + persist it per-session. */
+      function writeWorkspace(next: SessionWorkspace): void {
+        const { activeSessionId, sessions } = get();
+        if (!activeSessionId) {
+          set({ layout: next.layout, run: next.run });
+          return;
+        }
+        const nextSessions = new Map(sessions);
+        nextSessions.set(activeSessionId, next);
+        set({ layout: next.layout, run: next.run, sessions: nextSessions });
       }
-      writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
-    },
 
-    setTopFrac(frac) {
-      const { layout, run } = get();
-      if (layout.top.length < 2) return;
-      const [a, b] = layout.top as [SurfaceId, SurfaceId];
-      const c = Math.max(0.18, Math.min(0.82, frac));
-      writeWorkspace({ layout: { ...layout, topFlex: { ...layout.topFlex, [a]: c, [b]: 1 - c } }, run });
-    },
+      return {
+        layout: INITIAL_LAYOUT,
+        run: null,
+        sessions: new Map(),
+        activeSessionId: null,
 
-    setVFrac(frac) {
-      const { layout, run } = get();
-      const c = Math.max(0.18, Math.min(0.82, frac));
-      writeWorkspace({ layout: { ...layout, vFlex: { top: c, bottom: 1 - c } }, run });
-    },
+        setActiveSession(sessionId) {
+          const { sessions } = get();
+          const existing = sessions.get(sessionId);
+          // structuredClone so per-session seeds don't share nested topFlex/vFlex refs.
+          const ws: SessionWorkspace = existing ?? { layout: structuredClone(INITIAL_LAYOUT), run: null };
+          const nextSessions = existing ? sessions : new Map(sessions).set(sessionId, ws);
+          set({ activeSessionId: sessionId, layout: ws.layout, run: ws.run, sessions: nextSessions });
+        },
 
-    splitSurface(orientation) {
-      const { layout, run } = get();
-      const next = (['files', 'run'] as SurfaceId[]).find((s) => !layout.top.includes(s) && layout.bottom !== s);
-      if (!next) return;
-      if (orientation === 'v') {
-        writeWorkspace({ layout: placeInLayout(layout, next), run });
-      } else {
-        if (layout.bottom) return;
-        writeWorkspace({ layout: { ...layout, bottom: next }, run });
-      }
-    },
+        toggleSurface(surface) {
+          const { layout, run } = get();
+          // Dynamic floor: the last lit surface (any of chat/files/run) can't be hidden.
+          if (isSurfaceFloor(layout, surface)) return;
+          const isActive = layout.top.includes(surface) || layout.bottom === surface;
+          const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
+          // Toggling Run off kills any live PTYs before discarding the panes.
+          if (surface === 'run' && isActive) {
+            killAndDisposeCachedTerminals(terminalIdsInRun(run));
+          }
+          writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
+        },
 
-    repositionSurface(surface, target) {
-      const { layout, run } = get();
-      writeWorkspace({ layout: repositionInLayout(layout, surface, target), run });
-    },
+        setTopFrac(frac) {
+          const { layout, run } = get();
+          if (layout.top.length < 2) return;
+          const [a, b] = layout.top as [SurfaceId, SurfaceId];
+          const c = Math.max(0.18, Math.min(0.82, frac));
+          writeWorkspace({ layout: { ...layout, topFlex: { ...layout.topFlex, [a]: c, [b]: 1 - c } }, run });
+        },
 
-    moveFilesTabToRun(tabId, edge) {
-      const guest = guestFromFilesTab(tabId);
-      if (!guest) return;
-      const { layout, run } = get();
-      const nextRun = moveTabToRunReducer(run, guest, edge);
-      // Remove the tab from Files and ensure Run is placed in the layout.
-      useTabsStore.getState().closeTab(tabId);
-      writeWorkspace({ layout: placeInLayout(layout, 'run'), run: nextRun });
-    },
+        setVFrac(frac) {
+          const { layout, run } = get();
+          const c = Math.max(0.18, Math.min(0.82, frac));
+          writeWorkspace({ layout: { ...layout, vFlex: { top: c, bottom: 1 - c } }, run });
+        },
 
-    addRunTab(tab, paneId) {
-      const { layout, run } = get();
-      const nextRun = addRunTabReducer(run, tab, paneId);
-      // The reducer returns null to signal a no-op (explicit paneId gone). Report
-      // false so the subscriber disposes the orphaned terminal (Task 10). On
-      // success it returns a real RunState; commit it and place Run in the layout.
-      if (nextRun === null) return false;
-      writeWorkspace({ layout: placeInLayout(layout, 'run'), run: nextRun });
-      return true;
-    },
+        splitSurface(orientation) {
+          const { layout, run } = get();
+          const next = (['files', 'run'] as SurfaceId[]).find((s) => !layout.top.includes(s) && layout.bottom !== s);
+          if (!next) return;
+          if (orientation === 'v') {
+            writeWorkspace({ layout: placeInLayout(layout, next), run });
+          } else {
+            if (layout.bottom) return;
+            writeWorkspace({ layout: { ...layout, bottom: next }, run });
+          }
+        },
 
-    activateRunTab(paneId, tabId) {
-      const { layout, run } = get();
-      if (!run) return;
-      writeWorkspace({ layout, run: activateRunTabReducer(run, paneId, tabId) });
-    },
+        repositionSurface(surface, target) {
+          const { layout, run } = get();
+          writeWorkspace({ layout: repositionInLayout(layout, surface, target), run });
+        },
 
-    closeRunTab(paneId, tabId) {
-      const { layout, run } = get();
-      if (!run) return;
-      const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
-      if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
-      // Preview destruction is handled by the PreviewInstance lifecycle hook's
-      // cleanup effect when the component unmounts after the tab is removed.
-      const nextRun = closeRunTabReducer(run, paneId, tabId);
-      writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
-    },
+        moveFilesTabToRun(tabId, edge) {
+          const guest = guestFromFilesTab(tabId);
+          if (!guest) return;
+          const { layout, run } = get();
+          const nextRun = moveTabToRunReducer(run, guest, edge);
+          // Remove the tab from Files and ensure Run is placed in the layout.
+          useTabsStore.getState().closeTab(tabId);
+          writeWorkspace({ layout: placeInLayout(layout, 'run'), run: nextRun });
+        },
 
-    closePane(paneId) {
-      const { layout, run } = get();
-      if (!run) return;
-      killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
-      // Preview destruction is handled by the PreviewInstance lifecycle hook's
-      // cleanup effect when components unmount after the pane is removed.
-      const nextRun = closePaneReducer(run, paneId);
-      writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
+        addRunTab(tab, paneId) {
+          const { layout, run } = get();
+          const nextRun = addRunTabReducer(run, tab, paneId);
+          // The reducer returns null to signal a no-op (explicit paneId gone). Report
+          // false so the subscriber disposes the orphaned terminal (Task 10). On
+          // success it returns a real RunState; commit it and place Run in the layout.
+          if (nextRun === null) return false;
+          writeWorkspace({ layout: placeInLayout(layout, 'run'), run: nextRun });
+          return true;
+        },
+
+        activateRunTab(paneId, tabId) {
+          const { layout, run } = get();
+          if (!run) return;
+          writeWorkspace({ layout, run: activateRunTabReducer(run, paneId, tabId) });
+        },
+
+        closeRunTab(paneId, tabId) {
+          const { layout, run } = get();
+          if (!run) return;
+          const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
+          if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
+          // Preview destruction is handled by the PreviewInstance lifecycle hook's
+          // cleanup effect when the component unmounts after the tab is removed.
+          const nextRun = closeRunTabReducer(run, paneId, tabId);
+          writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
+        },
+
+        closePane(paneId) {
+          const { layout, run } = get();
+          if (!run) return;
+          killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
+          // Preview destruction is handled by the PreviewInstance lifecycle hook's
+          // cleanup effect when components unmount after the pane is removed.
+          const nextRun = closePaneReducer(run, paneId);
+          writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
+        },
+
+        pruneSessions(validIds) {
+          const { sessions } = get();
+          const next = new Map([...sessions].filter(([id]) => validIds.has(id)));
+          if (next.size !== sessions.size) set({ sessions: next });
+        },
+      };
     },
-  };
-});
+    {
+      name: 'mf:session-layout',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ sessions: serializeSessions(s.sessions) }),
+      merge: (persisted, current) => ({
+        ...current,
+        sessions: reviveSessions((persisted as { sessions?: Record<string, SessionWorkspace> })?.sessions),
+      }),
+    },
+  ),
+);
