@@ -25,7 +25,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "chrono"] }
+tracing-appender = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 dirs = "5"
 which = "6"
 portable-pty = "0.9"
@@ -45,6 +47,9 @@ objc2-web-kit = { version = "0.3", features = ["std", "WKWebView", "WKSnapshotCo
 block2 = "0.6"
 objc2-core-graphics = { version = "0.3", features = ["std", "CGGeometry"] }
 png = "0.17"
+
+[dev-dependencies]
+filetime = "0.2"
 
 [profile.dev]
 incremental = true

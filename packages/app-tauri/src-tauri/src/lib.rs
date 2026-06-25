@@ -1,4 +1,5 @@
 mod commands;
+mod log_sink;
 mod preview;
 mod shell_env;
 mod sidecar;
@@ -29,13 +30,10 @@ const DAEMON_PORT: u16 = 31500;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Set up structured logging early.
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "app_tauri_lib=info,warn".parse().unwrap()),
-        )
-        .init();
+    // Daily-rotating JSON log sink (renderer + host logs) — held for app lifetime.
+    // WorkerGuard MUST outlive the tauri::Builder::run() call; binding it here
+    // in run()'s top scope ensures it is dropped only after .run() returns.
+    let _log_guard = log_sink::init_logging();
 
     // ── C1: Capture the login-shell environment before doing anything else ──
     // This must happen before window creation so PATH is available when the
@@ -66,6 +64,8 @@ pub fn run() {
             terminal_write,
             terminal_resize,
             terminal_kill,
+            // renderer→host log sink (Plan 3, decision 3)
+            log_sink::host_log,
             // preview child-webview commands
             preview_create,
             preview_navigate,

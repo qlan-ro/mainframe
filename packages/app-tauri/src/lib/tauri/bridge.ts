@@ -159,15 +159,25 @@ export function onUpdateStatus(callback: (s: UpdateStatus) => void): Promise<Unl
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
- * Structured log shim. Delegates to console.* in both Tauri and browser modes
- * — no Rust roundtrip needed for renderer logs.
+ * Structured log shim. Under Tauri, forwards the record to the Rust
+ * `host_log` command so it lands in the daily-rotating JSON log file
+ * (Plan 3, decision 3). In browser dev mode falls back to console.*.
+ *
+ * The invoke is fire-and-forget (void); errors are caught and relegated to
+ * a console.warn so a failing log write never surfaces as an app error.
  */
-export function log(level: LogLevel, _module: string, msg: string, data?: unknown): void {
+export function log(level: LogLevel, module: string, msg: string, data?: unknown): void {
+  if (IS_TAURI) {
+    void invoke('host_log', { level, module, message: msg, data: data ?? null }).catch((err) => {
+      console.warn('[host] host_log invoke failed', err);
+    });
+    return;
+  }
   const fn = console[level] ?? console.log;
   if (data !== undefined) {
-    fn(`[${_module}] ${msg}`, data);
+    fn(`[${module}] ${msg}`, data);
   } else {
-    fn(`[${_module}] ${msg}`);
+    fn(`[${module}] ${msg}`);
   }
 }
 

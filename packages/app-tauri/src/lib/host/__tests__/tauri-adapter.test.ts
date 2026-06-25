@@ -105,6 +105,35 @@ describe('TauriAdapter — updates + presence', () => {
   });
 });
 
+describe('TauriAdapter — log forwarding (host_log)', () => {
+  it('log forwards to host_log invoke in Tauri mode', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    invoke.mockResolvedValue(undefined);
+    new TauriAdapter().log('info', 'test-module', 'hello world');
+    // invoke is fire-and-forget; allow the micro-task to flush.
+    await Promise.resolve();
+    expect(invoke).toHaveBeenCalledWith('host_log', {
+      level: 'info',
+      module: 'test-module',
+      message: 'hello world',
+      data: null,
+    });
+  });
+
+  it('log passes data payload to host_log', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    invoke.mockResolvedValue(undefined);
+    new TauriAdapter().log('warn', 'auth', 'token expired', { code: 401 });
+    await Promise.resolve();
+    expect(invoke).toHaveBeenCalledWith('host_log', {
+      level: 'warn',
+      module: 'auth',
+      message: 'token expired',
+      data: { code: 401 },
+    });
+  });
+});
+
 describe('TauriAdapter — terminal ArrayBuffer wrapping', () => {
   it('delivers an ArrayBuffer from the data Channel as a Uint8Array to onData', async () => {
     const { TauriAdapter } = await import('../tauri-adapter');
