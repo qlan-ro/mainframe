@@ -18,6 +18,7 @@ export * from './background-task.js';
 export * from './api.js';
 export * from './host/host-contract.js';
 export * from './host/host-bridge.js';
+export * from './host/external-schemes.js';
 export type {
   PluginCapability,
   PluginManifest,

@@ -49,13 +49,20 @@ pub struct InspectResult {
 
 // ── URL scheme allowlist ───────────────────────────────────────────────────────
 
+/// Canonical allowlist — mirrors mainframe-types ALLOWED_EXTERNAL_SCHEMES
+/// (source of truth: packages/desktop/src/main/index.ts). Both hosts behave 1:1.
+const ALLOWED_EXTERNAL_SCHEMES: &[&str] = &[
+    "http", "https", "mailto", "slack", "vscode", "vscode-insiders", "cursor",
+    "jetbrains", "idea", "zed", "figma", "linear", "notion", "discord", "tel",
+];
+
 /// Returns `true` only for schemes safe to forward to the OS opener.
-///
-/// Rejects `file://`, `javascript:`, `ssh://`, `app:` and any unknown scheme
-/// (Finding 2).
+/// Rejects `file://`, `javascript:`, `ssh://`, `data:` and any unknown scheme.
 fn is_allowed_external_scheme(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
-    lower.starts_with("https://") || lower.starts_with("http://")
+    ALLOWED_EXTERNAL_SCHEMES
+        .iter()
+        .any(|s| lower.starts_with(&format!("{s}://")) || lower.starts_with(&format!("{s}:")))
 }
 
 // ── PreviewManager ─────────────────────────────────────────────────────────────
@@ -379,6 +386,17 @@ mod tests {
         assert!(is_allowed_external_scheme("http://localhost:3000"));
         assert!(is_allowed_external_scheme("HTTPS://EXAMPLE.COM")); // case-insensitive
         assert!(is_allowed_external_scheme("HTTP://example.com"));
+    }
+
+    #[test]
+    fn ide_and_app_schemes_pass() {
+        for s in [
+            "vscode://open", "vscode-insiders://open", "cursor://x", "jetbrains://x",
+            "idea://x", "zed://x", "slack://chan", "linear://x", "notion://x",
+            "figma://x", "discord://x", "mailto:a@b.com", "tel:+15551234",
+        ] {
+            assert!(is_allowed_external_scheme(s), "expected allowed: {s}");
+        }
     }
 
     #[test]
