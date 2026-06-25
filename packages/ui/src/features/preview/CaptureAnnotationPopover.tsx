@@ -1,4 +1,6 @@
 import type { Capture } from '@/store/sandbox';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 interface CaptureAnnotationPopoverProps {
   captures: Capture[];
@@ -7,6 +9,13 @@ interface CaptureAnnotationPopoverProps {
   onCancel: () => void;
 }
 
+/**
+ * Floating popover for annotating sandbox captures before sending.
+ *
+ * No artboard exists yet — this is a token/primitive cleanup pass: warm-chrome
+ * popover shadow (`--mf-shadow-pop`) + the shared `Button`/`Textarea` primitives
+ * (which carry the focus/hover/disabled states) rather than bare elements.
+ */
 export function CaptureAnnotationPopover({
   captures,
   onAnnotationChange,
@@ -16,7 +25,7 @@ export function CaptureAnnotationPopover({
   return (
     <div
       data-testid="preview-annotation-popover"
-      className="fixed bottom-4 right-4 z-50 w-80 flex flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-lg"
+      className="fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-[var(--mf-shadow-pop)]"
     >
       <h3 className="text-heading font-medium text-foreground">Add annotations</h3>
       <ul data-testid="preview-annotation-list" className="flex flex-col gap-2">
@@ -25,13 +34,13 @@ export function CaptureAnnotationPopover({
             <img
               src={capture.imageDataUrl}
               alt={capture.selector ?? 'screenshot'}
-              className="w-full rounded border border-border object-contain"
+              className="w-full rounded-md border border-border object-contain"
               style={{ maxHeight: 80 }}
             />
             {capture.selector && <span className="text-caption text-muted-foreground">{capture.selector}</span>}
-            <textarea
+            <Textarea
               data-testid={`preview-annotation-input-${capture.id}`}
-              className="w-full rounded border border-border bg-card p-1 text-caption text-foreground resize-none"
+              className="min-h-[44px] px-2 py-1.5 text-caption"
               rows={2}
               placeholder="Add a note..."
               defaultValue={capture.annotation ?? ''}
@@ -40,25 +49,20 @@ export function CaptureAnnotationPopover({
           </li>
         ))}
       </ul>
-      <div className="flex gap-2 justify-end">
-        <button
-          data-testid="preview-annotation-cancel"
-          className="rounded px-3 py-1 text-caption text-foreground border border-border"
-          type="button"
-          onClick={onCancel}
-        >
+      <div className="flex justify-end gap-2">
+        <Button data-testid="preview-annotation-cancel" type="button" variant="outline" size="sm" onClick={onCancel}>
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           data-testid="preview-annotation-submit"
-          className="rounded bg-primary px-3 py-1 text-caption text-primary-foreground"
           type="button"
+          size="sm"
           onClick={() => {
             void onSubmit();
           }}
         >
           Send
-        </button>
+        </Button>
       </div>
     </div>
   );
