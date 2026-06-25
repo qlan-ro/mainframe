@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "macOS": {
       "entitlements": null,
@@ -51,7 +52,7 @@
     },
     "updater": {
       "endpoints": ["https://github.com/qlan-ro/mainframe/releases/latest/download/latest.json"],
-      "pubkey": "TODO_PLAN3_INFRA_REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENDRThEN0Y5QzE2MTBGOTAKUldTUUQySEIrZGZvek0wdEhQNm5ZWTgrL0tYYnE0N2hzUzAreEtOVmpSWGZ1VXpydms3WVFBZ2IK"
     }
   }
 }

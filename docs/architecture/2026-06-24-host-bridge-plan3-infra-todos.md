@@ -174,15 +174,26 @@ The scaffold is verified only by `cargo check` (resolver compiles) and
 
 ---
 
-## Updater signing + CI (DEFERRED) — TODO(plan3-infra)
+## Updater signing + CI
 
-**Status:** SCAFFOLDED (plugin + commands + scheduler + error classifier) — signing keypair +
-CI release workflow DEFERRED.
+**Status:** ✅ **DONE (2026-06-25)** — signing keypair generated (by the maintainer; private
+key stored as the `qlan-ro/mainframe` Actions secret `TAURI_SIGNING_PRIVATE_KEY`), the real
+public key is in `tauri.conf.json` `plugins.updater.pubkey`, `bundle.createUpdaterArtifacts`
+is enabled, and the `build-app-tauri` `tauri-action` job is wired into `.github/workflows/release.yml`
+(per-platform matrix: macOS arm64 + Intel, Linux x64 + arm64, Windows; runs the app-tauri
+`beforeBuildCommand` = ui build + provision-node + bundle-daemon, then `cargo tauri build`,
+signs, and uploads installers + a merged `latest.json` to the tag's draft release, coexisting
+with the existing Electron/daemon `release` job). Owner/repo confirmed = `qlan-ro/mainframe`
+(the `archive`/doruchiulan remote was removed).
+
+**Remaining (maintainer action, not code):** push a `v*` tag to trigger the first release and
+confirm the draft contains the signed Tauri installers + `latest.json`. The workflow is
+validated structurally (parses, jobs/needs/matrix correct) but only runs live on a tag.
 
 The three custom commands (`updater_check`, `updater_download`, `updater_install`) and the
 10s-then-4h background scheduler compile and the error classifier passes 5 unit tests.
-The endpoint `https://github.com/qlan-ro/mainframe/releases/latest/download/latest.json`
-and a placeholder pubkey are in `tauri.conf.json`. `cargo tauri build` will fail until:
+
+<details><summary>Original deferred steps (now done — historical)</summary>
 
 ### TODO(plan3-infra): 7 — Generate and store the signing keypair
 
@@ -243,6 +254,8 @@ updater endpoint resolves at runtime.
 - Ensure the release tag matches `v<semver>` so `latest.json` is generated correctly.
 - The first `cargo tauri build` with the real pubkey in place will also require completing
   the daemon bundling pipeline (TODOs 1–6 above).
+
+</details>
 
 ---
 
