@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { InspectResult, Region, PreviewHandle } from '@qlan-ro/mainframe-types';
+import type { InspectResult, Region, PreviewHandle, RegionSelectResult } from '@qlan-ro/mainframe-types';
 import { useSandboxStore } from '@/store/sandbox';
 import { useSendCaptures } from './use-send-captures';
 import type { CaptureLike } from '@/features/run/format-captures';
@@ -13,7 +13,7 @@ function bytesToDataUrl(bytes: Uint8Array): string {
 const PAD = 20;
 
 export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounted: (v: boolean) => void) {
-  const [regionOverlayOpen, setRegionOverlayOpen] = useState(false);
+  const [regionSelectActive, setRegionSelectActive] = useState(false);
   const [annotationPopoverOpen, setAnnotationPopoverOpen] = useState(false);
   const [inspectActive, setInspectActive] = useState(false);
   const [annotations, setAnnotations] = useState<Map<string, string>>(new Map());
@@ -46,13 +46,28 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     };
-    const unsub = handle.onInspect(handleInspectResult);
-    return () => unsub();
+    const handleRegionResult = (result: RegionSelectResult) => {
+      setRegionSelectActive(false);
+      if (!result.region) return;
+      handle
+        .capture(result.region)
+        .then((bytes) => {
+          useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
+          setAnnotationPopoverOpen(true);
+        })
+        .catch((e: unknown) => console.warn('[preview] capture failed', e));
+    };
+    const unsubInspect = handle.onInspect(handleInspectResult);
+    const unsubRegion = handle.onRegionSelect(handleRegionResult);
+    return () => {
+      unsubInspect();
+      unsubRegion();
+    };
   }, [handle]);
 
   useEffect(() => {
-    setOverlayMounted(regionOverlayOpen || annotationPopoverOpen);
-  }, [regionOverlayOpen, annotationPopoverOpen, setOverlayMounted]);
+    setOverlayMounted(annotationPopoverOpen);
+  }, [annotationPopoverOpen, setOverlayMounted]);
 
   const onCaptureClick = useCallback(() => {
     handle
@@ -64,7 +79,13 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
       .catch((e: unknown) => console.warn('[preview] capture failed', e));
   }, [handle]);
 
-  const onRegionClick = useCallback(() => setRegionOverlayOpen((prev) => !prev), []);
+  const onRegionClick = useCallback(() => {
+    setRegionSelectActive(true);
+    handle?.startRegionSelect().catch((e: unknown) => {
+      setRegionSelectActive(false);
+      console.warn('[preview] region select failed', e);
+    });
+  }, [handle]);
 
   const onInspectClick = useCallback(() => {
     setInspectActive((prev) => {
@@ -73,20 +94,6 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
       return next;
     });
   }, [handle]);
-
-  const onRegionSelect = useCallback(
-    (region: Region) => {
-      setRegionOverlayOpen(false);
-      handle
-        ?.capture(region)
-        .then((bytes) => {
-          useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
-          setAnnotationPopoverOpen(true);
-        })
-        .catch((e: unknown) => console.warn('[preview] capture failed', e));
-    },
-    [handle],
-  );
 
   const onAnnotationChange = useCallback((id: string, annotation: string) => {
     setAnnotations((prev) => new Map(prev).set(id, annotation));
@@ -113,13 +120,12 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
 
   return {
     pendingCaptures,
-    regionOverlayOpen,
+    regionSelectActive,
     annotationPopoverOpen,
     inspectActive,
     onCaptureClick,
     onRegionClick,
     onInspectClick,
-    onRegionSelect,
     onAnnotationChange,
     onAnnotationSubmit,
     onAnnotationCancel,

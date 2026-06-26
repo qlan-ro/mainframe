@@ -1,8 +1,9 @@
 import { it, expect, vi, beforeEach, describe } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { PreviewHandle, InspectResult } from '@qlan-ro/mainframe-types';
+import type { PreviewHandle, InspectResult, RegionSelectResult } from '@qlan-ro/mainframe-types';
 
 let inspectResultCallback: ((result: InspectResult) => void) | null = null;
+let regionResultCallback: ((result: RegionSelectResult) => void) | null = null;
 
 const mockAddCapture = vi.fn();
 const mockClearCaptures = vi.fn();
@@ -43,7 +44,10 @@ function makeFakeHandle(): PreviewHandle {
       return () => {};
     }),
     startRegionSelect: vi.fn().mockResolvedValue(undefined),
-    onRegionSelect: vi.fn().mockReturnValue(() => {}),
+    onRegionSelect: vi.fn().mockImplementation((cb: (result: RegionSelectResult) => void) => {
+      regionResultCallback = cb;
+      return () => {};
+    }),
     refit: vi.fn(),
     setDevice: vi.fn(),
     destroy: vi.fn(),
@@ -56,6 +60,7 @@ describe('usePreviewCapture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     inspectResultCallback = null;
+    regionResultCallback = null;
     mockSandboxGetState.captures = [];
   });
 
@@ -83,26 +88,45 @@ describe('usePreviewCapture', () => {
     expect(result.current.annotationPopoverOpen).toBe(true);
   });
 
-  it('region overlay: toggles open on onRegionClick', () => {
+  it('region select: onRegionClick starts the in-webview picker and sets active', () => {
     const fakeHandle = makeFakeHandle();
     const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
-    expect(result.current.regionOverlayOpen).toBe(false);
     act(() => {
       result.current.onRegionClick();
     });
-    expect(result.current.regionOverlayOpen).toBe(true);
+    expect(fakeHandle.startRegionSelect).toHaveBeenCalled();
+    expect(result.current.regionSelectActive).toBe(true);
   });
 
-  it('region overlay: toggles closed when called again', () => {
+  it('region select: a selected region captures it and opens the annotation popover', async () => {
     const fakeHandle = makeFakeHandle();
     const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    await act(async () => {}); // let the onRegionSelect subscription register
     act(() => {
       result.current.onRegionClick();
     });
+    await act(async () => {
+      regionResultCallback?.({ tabId: 'tab-1', region: { x: 10, y: 20, w: 30, h: 40 } });
+    });
+    await act(async () => {});
+    expect(fakeHandle.capture).toHaveBeenCalledWith({ x: 10, y: 20, w: 30, h: 40 });
+    expect(mockAddCapture).toHaveBeenCalledWith(expect.objectContaining({ type: 'screenshot' }));
+    expect(result.current.annotationPopoverOpen).toBe(true);
+    expect(result.current.regionSelectActive).toBe(false);
+  });
+
+  it('region select: a cancelled (null) region clears active and does not capture', async () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    await act(async () => {});
     act(() => {
       result.current.onRegionClick();
     });
-    expect(result.current.regionOverlayOpen).toBe(false);
+    await act(async () => {
+      regionResultCallback?.({ tabId: 'tab-1', region: null });
+    });
+    expect(fakeHandle.capture).not.toHaveBeenCalled();
+    expect(result.current.regionSelectActive).toBe(false);
   });
 
   it('inspect: calls startInspect on first toggle', () => {
