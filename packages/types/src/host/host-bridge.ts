@@ -36,6 +36,12 @@ export interface InspectResult {
   viewport: Bounds | null;
 }
 
+export interface RegionSelectResult {
+  tabId: string;
+  /** Selected region in webview-viewport CSS px, or null when cancelled (Escape / zero-size). */
+  region: Region | null;
+}
+
 export interface TerminalOpts {
   id: string;
   cwd: string;
@@ -80,6 +86,8 @@ export interface PreviewHandle {
   capture(region?: Region): Promise<Uint8Array>;
   startInspect(): Promise<void>;
   onInspect(cb: (result: InspectResult) => void): Unsubscribe;
+  startRegionSelect(): Promise<void>;
+  onRegionSelect(cb: (result: RegionSelectResult) => void): Unsubscribe;
   /** Tauri: re-read container.getBoundingClientRect() into the native layer. Electron: no-op. */
   refit(): void;
   setDevice(device: 'desktop' | 'mobile'): void;
