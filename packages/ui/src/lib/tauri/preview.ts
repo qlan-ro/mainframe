@@ -10,9 +10,9 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { Bounds, Region, InspectResult } from '@qlan-ro/mainframe-types';
+import type { Bounds, Region, InspectResult, RegionSelectResult } from '@qlan-ro/mainframe-types';
 
-export type { Bounds, Region, InspectResult };
+export type { Bounds, Region, InspectResult, RegionSelectResult };
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -90,6 +90,18 @@ export function previewEval(tabId: string, js: string): Promise<void> {
  */
 export function onInspectResult(callback: (result: InspectResult) => void): Promise<UnlistenFn> {
   return listen<InspectResult>('preview:inspect-result', (event) => {
+    callback(event.payload);
+  });
+}
+
+/**
+ * Subscribe to the `preview:region-select` event emitted by the Rust
+ * `preview_region_result` command (called back from BRIDGE_JS).
+ *
+ * Returns an `UnlistenFn` — call it to remove the listener.
+ */
+export function onRegionSelectResult(callback: (result: RegionSelectResult) => void): Promise<UnlistenFn> {
+  return listen<RegionSelectResult>('preview:region-select', (event) => {
     callback(event.payload);
   });
 }

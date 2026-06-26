@@ -50,11 +50,20 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
         .catch((e) => console.warn('[preview] tauri onInspect', e));
       return () => unlisten?.();
     },
-    // Region select is not yet wired in the Tauri native backend — stub satisfies the interface.
-    startRegionSelect: (): Promise<void> => Promise.resolve(),
-    onRegionSelect:
-      (_cb: (result: RegionSelectResult) => void): Unsubscribe =>
-      () => {},
+    startRegionSelect: (): Promise<void> =>
+      preview.previewEval(tabId, `window.__mfRegionSelectInstall && window.__mfRegionSelectInstall('${tabId}')`),
+    onRegionSelect: (cb: (result: RegionSelectResult) => void): Unsubscribe => {
+      let unlisten: (() => void) | null = null;
+      void preview
+        .onRegionSelectResult((result) => {
+          if (result.tabId === tabId) cb(result);
+        })
+        .then((fn) => {
+          unlisten = fn;
+        })
+        .catch((e) => console.warn('[preview] tauri onRegionSelect', e));
+      return () => unlisten?.();
+    },
     refit: (): void => {
       void preview.previewSetBounds(tabId, readBounds()).catch((e) => console.warn('[preview] tauri refit', e));
     },
