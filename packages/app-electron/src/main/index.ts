@@ -222,7 +222,10 @@ app.whenReady().then(() => {
   ].join(' ');
   const csp = [
     "default-src 'self'",
-    "script-src 'self'",
+    // Dev only: Vite injects an inline React-refresh/HMR preamble (and uses eval
+    // for HMR), which `script-src 'self'` blocks → "@vitejs/plugin-react can't
+    // detect preamble". Prod loads a static bundle, so it stays strict 'self'.
+    process.env.NODE_ENV === 'development' ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     `connect-src 'self' ${connectSources}`,
