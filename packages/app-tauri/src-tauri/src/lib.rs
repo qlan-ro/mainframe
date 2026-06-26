@@ -31,9 +31,24 @@ use preview::{
 /// so we also kill on the `app::exit` event.
 static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
 
-/// Daemon port used for this session. Non-default to avoid collisions with
-/// any existing dev daemon on 31415.
-const DAEMON_PORT: u16 = 31500;
+/// Daemon HTTP/WS port for this session. Configurable via the `daemon_port()` env
+/// (the dev launch configs set it, alongside `VITE_DAEMON_HTTP_PORT`); falls back
+/// to 31500 — non-default to avoid colliding with a system daemon on 31415.
+fn daemon_port() -> u16 {
+    std::env::var("daemon_port()")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(31500)
+}
+
+/// True when `MAINFRAME_EXTERNAL_DAEMON` opts out of spawning — the renderer then
+/// connects to a daemon the user started themselves (matches the Electron flag).
+fn external_daemon() -> bool {
+    matches!(
+        std::env::var("MAINFRAME_EXTERNAL_DAEMON").as_deref(),
+        Ok("1") | Ok("true")
+    )
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -131,7 +146,7 @@ pub fn run() {
             app.manage(TerminalManager::new(shell_env.clone()));
 
             // Manage daemon port so the report_activity command can read it.
-            app.manage(DaemonPort(DAEMON_PORT));
+            app.manage(DaemonPort(daemon_port()));
 
             // Register the preview child-webview manager.
             app.manage(PreviewManager::new());
@@ -162,7 +177,7 @@ pub fn run() {
 
             // Start the OS-idle presence reporter (Plan 3, decision 4).
             // Spawns a background thread; mirrors idle-reporter.ts cadence.
-            presence::start_presence_reporter(DAEMON_PORT);
+            presence::start_presence_reporter(daemon_port());
 
             // Start the auto-updater periodic check scheduler (Plan 3, decision 1).
             // 10s initial check then every 4h — only in release builds.
@@ -191,7 +206,7 @@ pub fn run() {
                 // POST idle on quit — mirrors idle-reporter.ts "before-quit" handler.
                 // Routed through post_state_sync so the 500 ms connect/read timeout
                 // applies and a wedged daemon cannot block window teardown.
-                if let Err(e) = presence::post_state_sync(DAEMON_PORT, presence::Presence::Idle) {
+                if let Err(e) = presence::post_state_sync(daemon_port(), presence::Presence::Idle) {
                     tracing::warn!(err = %e, "quit-path idle presence report failed");
                 }
 
@@ -220,6 +235,17 @@ fn boot_daemon(
     app: &tauri::AppHandle,
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
+    // External daemon: the user (or a separate process) runs the daemon themselves
+    // (MAINFRAME_EXTERNAL_DAEMON) — don't spawn; the renderer connects to it on
+    // daemon_port(). Mirrors the Electron `MAINFRAME_EXTERNAL_DAEMON` flag.
+    if external_daemon() {
+        tracing::info!(
+            port = daemon_port(),
+            "MAINFRAME_EXTERNAL_DAEMON set — not spawning; assuming an external daemon"
+        );
+        return Ok(sidecar::DaemonHandle::external());
+    }
+
     let shell_path = shell_env.get("PATH").map(|s| s.as_str());
     // Release: prefer the bundled, ABI-matched Node sidecar. Debug/dev: ALWAYS use
     // the system Node so live `packages/core` edits take effect — even if leftover
@@ -241,7 +267,7 @@ fn boot_daemon(
     tracing::info!(
         node = %node_bin.display(),
         daemon = %daemon_entry.display(),
-        port = DAEMON_PORT,
+        port = daemon_port(),
         "booting daemon sidecar"
     );
 
@@ -249,7 +275,7 @@ fn boot_daemon(
         node_bin,
         daemon_entry,
         shell_env: shell_env.clone(),
-        daemon_port: DAEMON_PORT,
+        daemon_port: daemon_port(),
         data_dir: None,
     })
 }
@@ -382,7 +408,7 @@ mod resolver_tests {
 
 #[tauri::command]
 fn get_daemon_port() -> u16 {
-    DAEMON_PORT
+    daemon_port()
 }
 
 #[tauri::command]

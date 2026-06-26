@@ -76,6 +76,16 @@ function resolveShellEnv(): Record<string, string> {
 }
 
 function startDaemon(shellEnv: Record<string, string>): void {
+  // External daemon: the user runs it themselves (MAINFRAME_EXTERNAL_DAEMON) — same
+  // flag the Tauri shell honors. Don't fork; the renderer connects on DAEMON_PORT.
+  if (process.env.MAINFRAME_EXTERNAL_DAEMON === '1' || process.env.MAINFRAME_EXTERNAL_DAEMON === 'true') {
+    log.info('MAINFRAME_EXTERNAL_DAEMON set: daemon assumed external');
+    daemonStatus?.set('ready');
+    return;
+  }
+  // Dev still assumes an external daemon by necessity: utilityProcess.fork runs
+  // under Electron's Node ABI, which mismatches the system-Node-built native
+  // modules (better-sqlite3/node-pty), so the monorepo daemon can't be forked here.
   if (process.env.NODE_ENV === 'development') {
     log.info('development mode: daemon assumed external');
     daemonStatus?.set('ready');

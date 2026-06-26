@@ -20,6 +20,15 @@ pub struct DaemonHandle {
 }
 
 impl DaemonHandle {
+    /// A no-op handle for when the daemon is EXTERNAL (started by the user / a
+    /// separate process, not spawned by us — `MAINFRAME_EXTERNAL_DAEMON`). Holds
+    /// no child, so `kill()` is a no-op and `pid()` is `None`.
+    pub fn external() -> Self {
+        DaemonHandle {
+            child: Arc::new(Mutex::new(None)),
+        }
+    }
+
     pub fn kill(&self) {
         if let Ok(mut guard) = self.child.lock() {
             if let Some(ref mut child) = *guard {

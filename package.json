@@ -16,6 +16,7 @@
     "dev": "pnpm --filter @qlan-ro/mainframe-core run dev & sleep 2 && pnpm --filter @qlan-ro/mainframe-app-electron run dev",
     "dev:core": "pnpm --filter @qlan-ro/mainframe-core run dev",
     "dev:desktop": "concurrently -k -n core,vite,electron -c blue,green,magenta \"pnpm --filter @qlan-ro/mainframe-core run dev\" \"pnpm --filter @qlan-ro/mainframe-ui run dev\" \"sleep 3 && pnpm --filter @qlan-ro/mainframe-app-electron run dev\"",
+    "dev:electron": "concurrently -k -n vite,electron -c green,magenta \"pnpm --filter @qlan-ro/mainframe-ui run dev\" \"sleep 3 && pnpm --filter @qlan-ro/mainframe-app-electron run dev\"",
     "build": "pnpm -r run build",
     "build:types": "pnpm --filter @qlan-ro/mainframe-types run build",
     "build:core": "pnpm --filter @qlan-ro/mainframe-core run build",
