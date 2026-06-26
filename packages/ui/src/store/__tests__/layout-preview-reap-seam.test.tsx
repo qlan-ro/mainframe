@@ -32,13 +32,12 @@ vi.mock('@/features/preview/use-preview-visibility', () => ({
 vi.mock('@/features/preview/use-preview-capture', () => ({
   usePreviewCapture: () => ({
     pendingCaptures: [],
-    regionOverlayOpen: false,
+    regionSelectActive: false,
     annotationPopoverOpen: false,
     inspectActive: false,
     onCaptureClick: vi.fn(),
     onRegionClick: vi.fn(),
     onInspectClick: vi.fn(),
-    onRegionSelect: vi.fn(),
     onAnnotationChange: vi.fn(),
     onAnnotationSubmit: vi.fn(),
     onAnnotationCancel: vi.fn(),

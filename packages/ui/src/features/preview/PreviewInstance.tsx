@@ -7,7 +7,6 @@ import { usePreviewCapture } from './use-preview-capture';
 import { PreviewToolbar } from './PreviewToolbar';
 import { PreviewBodyState } from './PreviewBodyState';
 import { ConsolePane } from '@/features/run/ConsolePane';
-import { RegionCaptureOverlay } from './RegionCaptureOverlay';
 import { CaptureAnnotationPopover } from './CaptureAnnotationPopover';
 import { mfToast } from '@/lib/toast';
 import { useSandboxStore } from '@/store/sandbox';
@@ -71,13 +70,12 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
 
   const {
     pendingCaptures,
-    regionOverlayOpen,
+    regionSelectActive,
     annotationPopoverOpen,
     inspectActive,
     onCaptureClick,
     onRegionClick,
     onInspectClick,
-    onRegionSelect,
     onAnnotationChange,
     onAnnotationSubmit,
     onAnnotationCancel,
@@ -142,7 +140,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
         onRegionClick={onRegionClick}
         onInspectClick={onInspectClick}
         inspectActive={inspectActive}
-        regionActive={regionOverlayOpen}
+        regionActive={regionSelectActive}
         handle={handle}
       />
       <div ref={containerRef} className="relative min-h-0 flex-1">
@@ -157,7 +155,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
         />
       </div>
       {config && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
-      {regionOverlayOpen && <RegionCaptureOverlay onRegionSelect={onRegionSelect} onClose={onRegionClick} />}
+
       {annotationPopoverOpen && (
         <CaptureAnnotationPopover
           captures={pendingCaptures}
