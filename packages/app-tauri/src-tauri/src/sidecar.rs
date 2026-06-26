@@ -99,8 +99,12 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
 /// next to the app executable (`node` once the bundle strips the triple, or
 /// `node-<triple>` in some layouts). Using it guarantees the daemon runs under the
 /// pinned, ABI-matched Node we shipped — never the user's (possibly absent or
-/// mismatched) system Node. Returns `None` in dev, where no sidecar sits next to
-/// the exe, so the caller falls back to `find_node` (system Node).
+/// mismatched) system Node. Returns `None` when no sidecar sits next to the exe,
+/// so the caller falls back to `find_node` (system Node).
+///
+/// NOTE: `boot_daemon` only CONSULTS this in release builds (`cfg!(debug_assertions)`
+/// gate) — dev always uses system Node so live `packages/core` edits take effect,
+/// even if leftover bundle artifacts sit in `target/debug`.
 pub fn find_bundled_node() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     find_bundled_node_in(exe.parent()?)

@@ -221,9 +221,17 @@ fn boot_daemon(
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
     let shell_path = shell_env.get("PATH").map(|s| s.as_str());
-    // Packaged build: run under the bundled, ABI-matched Node sidecar. Dev: fall
-    // back to the system Node found on the login-shell PATH.
-    let node_bin = match sidecar::find_bundled_node() {
+    // Release: prefer the bundled, ABI-matched Node sidecar. Debug/dev: ALWAYS use
+    // the system Node so live `packages/core` edits take effect — even if leftover
+    // bundle artifacts (`target/debug/node`) sit next to the dev binary from a prior
+    // `bundle-daemon`/`provision-node` run. (`if cfg!` keeps `find_bundled_node`
+    // referenced in both profiles — no dead-code warning.)
+    let bundled_node = if cfg!(debug_assertions) {
+        None
+    } else {
+        sidecar::find_bundled_node()
+    };
+    let node_bin = match bundled_node {
         Some(bundled) => bundled,
         None => sidecar::find_node(shell_path)?,
     };
@@ -266,15 +274,22 @@ fn pick_daemon_entry(bundled: Option<PathBuf>, env_override: Option<PathBuf>) ->
 /// Locate the compiled daemon entry point.
 ///
 /// Precedence:
-///   1. Bundled resource (`<resource_dir>/daemon/daemon.cjs`) — packaged build.
-///   2. `MAINFRAME_DAEMON_PATH` env override — CI / manual test.
+///   1. Bundled resource (`<resource_dir>/daemon/daemon.cjs`) — **release only**.
+///   2. `MAINFRAME_DAEMON_PATH` env override — CI / manual test (both profiles).
 ///   3. Monorepo-root walk (`packages/core/dist/index.js`) — dev mode.
+///
+/// In debug/dev the bundled resource is skipped entirely, so `tauri dev` always
+/// runs live `packages/core` even if a `target/debug/daemon/daemon.cjs` was left
+/// behind by a prior bundle run. The explicit env override is still honored.
 fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let bundled = app
-        .path()
-        .resource_dir()
-        .ok()
-        .map(|d| d.join("daemon").join("daemon.cjs"));
+    let bundled = if cfg!(debug_assertions) {
+        None
+    } else {
+        app.path()
+            .resource_dir()
+            .ok()
+            .map(|d| d.join("daemon").join("daemon.cjs"))
+    };
     let env_override = std::env::var("MAINFRAME_DAEMON_PATH").ok().map(PathBuf::from);
 
     if let Some(found) = pick_daemon_entry(bundled, env_override.clone()) {
