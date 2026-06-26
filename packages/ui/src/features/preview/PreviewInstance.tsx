@@ -64,8 +64,9 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
   usePreviewGeometry({ handle, anchorRef, containerRef, active: visible, status });
   // Hide the native webview only while a DOM overlay actually overlaps it (it
   // composites above the DOM, so popovers/dialogs/CMD-F would be clipped behind
-  // it otherwise). Precise overlap → no gratuitous blanking.
-  const occluded = usePreviewOcclusion(anchorRef, status === 'running');
+  // it otherwise). Electron's <webview> stacks in the DOM so no hiding is needed
+  // there; skip the MutationObserver entirely when compositesAboveDom is false.
+  const occluded = usePreviewOcclusion(anchorRef, status === 'running' && (handle?.compositesAboveDom ?? false));
   const [, setOverlayMounted] = usePreviewVisibility(handle, visible, occluded);
 
   const {

@@ -8,6 +8,8 @@ interface ComputeVisibleInput {
   overlayMounted: boolean;
   /** A DOM overlay (popover/menu/dialog) is overlapping the preview region. */
   occluded: boolean;
+  /** Whether the webview composites above the DOM (only then do DOM overlays hide it). */
+  compositesAboveDom: boolean;
 }
 
 export function computePreviewVisible({
@@ -15,8 +17,10 @@ export function computePreviewVisible({
   surfaceVisible,
   overlayMounted,
   occluded,
+  compositesAboveDom,
 }: ComputeVisibleInput): boolean {
-  return isActiveTab && surfaceVisible && !overlayMounted && !occluded;
+  const hiddenByOverlay = compositesAboveDom && (overlayMounted || occluded);
+  return isActiveTab && surfaceVisible && !hiddenByOverlay;
 }
 
 /**
@@ -37,12 +41,20 @@ export function usePreviewVisibility(
   });
   const prevVisibleRef = useRef<boolean | null>(null);
 
+  const compositesAboveDom = handle?.compositesAboveDom ?? false;
+
   useEffect(() => {
-    const visible = computePreviewVisible({ isActiveTab, surfaceVisible, overlayMounted, occluded });
+    const visible = computePreviewVisible({
+      isActiveTab,
+      surfaceVisible,
+      overlayMounted,
+      occluded,
+      compositesAboveDom,
+    });
     if (visible === prevVisibleRef.current) return;
     prevVisibleRef.current = visible;
     handle?.setVisible(visible);
-  }, [handle, isActiveTab, surfaceVisible, overlayMounted, occluded]);
+  }, [handle, isActiveTab, surfaceVisible, overlayMounted, occluded, compositesAboveDom]);
 
   return [overlayMounted, setOverlayMounted];
 }
