@@ -52,6 +52,7 @@ export type DaemonEvent =
   | { type: 'launch.tunnel'; projectId: string; effectivePath: string; name: string; url: string }
   | { type: 'launch.tunnel.failed'; projectId: string; effectivePath: string; name: string; error: string }
   | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
+  | { type: 'launch.scopeReleased'; projectId: string; effectivePath: string }
   | { type: 'sessions.external.count'; projectId: string; count: number }
   | { type: 'message.queued'; chatId: string; ref: QueuedMessageRef }
   | { type: 'message.queued.processed'; chatId: string; uuid: string }

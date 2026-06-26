@@ -27,7 +27,7 @@ describe('ChatLifecycleManager.archiveChat', () => {
 
     const lifecycle = new ChatLifecycleManager({
       db: {
-        chats: { update: vi.fn(), get: vi.fn(() => chat) } as any,
+        chats: { update: vi.fn(), get: vi.fn(() => chat), list: vi.fn(() => [chat]) } as any,
         projects: { get: vi.fn(() => ({ path: '/proj/x' })) } as any,
       } as any,
       adapters: {} as any,
