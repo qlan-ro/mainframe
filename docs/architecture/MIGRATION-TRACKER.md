@@ -262,7 +262,7 @@ Do the chat leaves in this order; ☑ = done.
 - ☑ **Queued banner = keep daemon-backed** `QueuedMessageBanner` (native `Queue` is a different local model). **Message errors = keep text-part routing. Quote = native UI + unavoidable CLI serialization glue.**
 - ⊘ **Phase-2 Rust daemon go/no-go + sizing** — **NOT V1 / Post-V1 (2026-06-23).** V1 ships the Node daemon sidecar.
 - ☑ **Electron app lifecycle** — **DECIDED: COEXIST for V1 (2026-06-23)** (port 31415 / data-dir / prefs-origin caveat managed; no retirement in V1).
-- ☐ **Mobile-contract governance** — the WS/REST contract is co-owned; changes stay additive.
+- ☑ **Mobile-contract governance** — **DECIDED 2026-06-25: keep the documented additive-only convention** (`ui/CLAUDE.md` "Daemon contract" + honored throughout — "additive, mobile-safe"). Sufficient for V1; no formal CI guard / schema-version needed now (revisit post-V1 only if contract drift bites).
 
 ---
 
@@ -301,7 +301,7 @@ A line-by-line code audit (5 parallel agents over `packages/app-tauri/src` + `sr
 
 **Real remaining V1 work (updated 2026-06-25):** ~~the Tauri `externalBin` sidecar bundle + updater signing~~ ✅ done (`d188d586`/`418ab372`) → now only **macOS code-sign/notarization of the `.app`** · **capabilities/CSP least-privilege tighten** (incl. the dev-port `connect-src` pin + `mcp-bridge` in the shipped capability) · the first `v*` tag release · the shared pure-logic package decision (still app-tauri-local). *(DROPPED: Multi-window infra 2026-06-22. PUSHED OUT to Post-V1: Restored-permission "stream closed" + Plugins UI re-platform, 2026-06-23 — so **all V1 surfaces are complete**; the V1 remainder is packaging/GA hardening + the shared-package decision.)*
 
-**Still open DECISIONS (not code):** mobile-contract governance (formalize the additive-only rule for the mobile-co-owned WS/REST contract — currently a documented convention). *(Closed/pushed-out: shared-package home → Post-V1 (2026-06-25); permission-card = inline-at-tail (2026-06-25); Electron = COEXIST for V1 (2026-06-23); Phase-2 Rust-daemon = Post-V1, will do (2026-06-25).)*
+**Still open DECISIONS (not code): NONE — all resolved (2026-06-25).** *(mobile-contract governance = keep the documented additive-only convention; shared-package home → Post-V1; permission-card = inline-at-tail; Electron = COEXIST for V1; Phase-2 Rust-daemon = Post-V1, will do.)*
 
 ### ⭐ Wrap-up punch-list (2026-06-21) — user notes, grounded + decided
 
@@ -340,7 +340,7 @@ User UX/polish notes from a walkthrough, each investigated against the code + ar
 5. ✅ **DONE (2026-06-11) — typed-surface layout engine + surface-intent bus + the interactive drag layer.** Per-session layout, Run multi-pane, surface drag-reposition, Files-tab→Run edge-split. Built alongside the editor (real tabs to drag). Surface rail (Chat/Files/Run) still gated on the Run-surface *content* (terminal/preview).
 6. ✅ **DONE (2026-06-11) — editor surface on CodeMirror 6** (ADR-001 overridden), with diff/viewers/LSP/inline-comments/markdown-preview, and `chat-tool-context` `openFile`/`revealFile` are now LIVE (the intent subscriber opens a Files tab). *Remaining follow-up: thread `projectId` into `EditorTab` so the LSP adapters mount in the open editor.*
 7. ◐ **De-risk packaging** — ✅ **sidecar bundling + per-platform CI + updater signing + macOS code-sign/notarize wiring + CSP & capabilities hardening DONE** (2026-06-25, `d188d586` / `418ab372` / `31e8af74` / `7dc75378`). **Remaining for GA:** all signing secrets are now in place (`APPLE_SIGNING_IDENTITY` added 2026-06-25). Only **cut the first `v*` tag**, then verify the first signed build (notarization of the embedded `.node`; CSP enforcement, which `tauri:dev` skips).
-8. **Resolve the one remaining open decision** — mobile-contract governance (formalize the additive-only rule, or keep it as the documented convention). *(shared-package home → Post-V1; Electron = coexist; Phase-2 Rust-daemon = Post-V1; permission-card = inline-at-tail — all decided/pushed out.)*
+8. ☑ **Standing open decisions — ALL RESOLVED (2026-06-25).** mobile-contract governance = keep the documented additive-only convention; shared-package home → Post-V1; Electron = coexist; Phase-2 Rust-daemon = Post-V1; permission-card = inline-at-tail.
 9. ◐ **IN PROGRESS — Build the remaining standalone surfaces in parity order** — ~~Run/terminal (Rust PTY + xterm)~~ ✅ (2026-06-13) → ~~Settings (modal shell + panes + RemoteAccess decompose)~~ ✅ (2026-06-15) → ~~overlays (SearchPalette→Command, FindInPath/DirectoryPicker/Review)~~ ✅ (2026-06-15) → ~~Tasks/Git~~ ✅ (2026-06-15) → ~~Sandbox preview (embedded webview + capture/inspect + launch plumbing)~~ ✅ (2026-06-16) → ~~Plugins UI~~ **PUSHED OUT to Post-V1 (2026-06-23)**. **All V1 surfaces complete.** *Independent leaves once bridge + layout + intent bus exist.*
 10. **Complete the cross-cutting foundation last** — theming refactor (Tailwind v4 `@theme` + 4 themes + CSS split once Monaco lands), domain-store/pure-helper port, remaining shadcn primitive swaps, and grow the **e2e harness** (built 2026-06-09 — browser-mode Playwright; 3 specs ported) to cover new surfaces as they land. *Pervasive but lower-risk; the theme CSS split is partly blocked on Monaco.*
 
@@ -446,7 +446,7 @@ User UX/polish notes from a walkthrough, each investigated against the code + ar
 - ☑ **S — Permission-card mount placement decision** (`features/chat/gates`) — **DECIDED 2026-06-25: keep inline-at-tail** (`ChatGateMount` at the thread tail, `ChatThread.tsx:85`). It reads well in practice; inline-under-tool would need the daemon `control_request` to carry the originating `tool_use` id and isn't worth the contract change.
 - ⊘ **XL — Phase-2 Rust daemon go/no-go + sizing** — **NOT V1 / PUSHED OUT to Post-V1 (2026-06-23)** — see the *Pushed out — Post-V1* section. V1 ships the Node daemon sidecar.
 - ☑ **M — Electron app lifecycle — retire vs coexist** — **DECIDED: COEXIST for V1 (2026-06-23).** The Electron desktop app stays alongside app-tauri for V1 (no retirement); accept the parallel-maintenance tax. Known caveat to manage: dual-instance contention over one data dir + fixed port if both run at once. Retire-vs-keep is a post-V1 revisit.
-- ☐ **S — Mobile-contract governance rule** — the WS/REST contract is co-owned by the mobile submodule; establish an explicit additive-only governance rule.
+- ☑ **S — Mobile-contract governance rule** — **DECIDED 2026-06-25: the documented additive-only convention stands** (`ui/CLAUDE.md` "Daemon contract"). No formal rule/CI guard for V1; revisit post-V1 if needed.
 
 ---
 
