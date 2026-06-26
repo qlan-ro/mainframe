@@ -25,6 +25,9 @@ if (process.env.NODE_ENV === 'development' && process.env.MF_E2E !== '1') {
 const log = createMainLogger('electron');
 
 const DAEMON_PORT = Number(process.env['DAEMON_PORT'] ?? process.env['VITE_DAEMON_HTTP_PORT'] ?? '31415');
+// The ui Vite dev server port — VITE_PORT lets the launch system assign a per-worktree
+// port (it's not always 5174). The window URL + dev CSP must follow it.
+const DEV_VITE_PORT = process.env['VITE_PORT'] ?? '5174';
 
 let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
@@ -175,11 +178,12 @@ function createWindow(): void {
     });
   }
 
-  // Point the window at the app-tauri renderer.
-  // Dev: load from the app-tauri Vite dev server (port 5174, strictPort).
-  // Prod: load from the bundled app-tauri dist (copied to extraResources by electron-builder).
+  // Point the window at the ui renderer.
+  // Dev: load from the ui Vite dev server (VITE_PORT, strictPort — the launch
+  // system may assign a non-5174 port).
+  // Prod: load from the bundled ui dist (copied to extraResources by electron-builder).
   // Note: APP_TAURI_RENDERER_URL overrides the default for non-standard setups.
-  const APP_TAURI_DEV_URL = process.env['APP_TAURI_RENDERER_URL'] ?? 'http://localhost:5174';
+  const APP_TAURI_DEV_URL = process.env['APP_TAURI_RENDERER_URL'] ?? `http://localhost:${DEV_VITE_PORT}`;
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL(APP_TAURI_DEV_URL);
   } else {
@@ -212,7 +216,9 @@ app.whenReady().then(() => {
   const connectSources = [
     `http://127.0.0.1:${DAEMON_PORT}`,
     `ws://127.0.0.1:${DAEMON_PORT}`,
-    ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5174', 'ws://localhost:5174'] : []),
+    ...(process.env.NODE_ENV === 'development'
+      ? [`http://localhost:${DEV_VITE_PORT}`, `ws://localhost:${DEV_VITE_PORT}`]
+      : []),
   ].join(' ');
   const csp = [
     "default-src 'self'",
