@@ -109,8 +109,13 @@ describe('mountTauriPreview', () => {
   it('startRegionSelect evals the region installer for this tab', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     const handle = mountTauriPreview(document.createElement('div'), 'http://x');
+    await Promise.resolve();
+    const tabId = (previewCreate.mock.calls[0] as unknown[])?.[0] as string;
     await handle.startRegionSelect();
-    expect(previewEval).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('__mfRegionSelectInstall'));
+    expect(previewEval).toHaveBeenCalledWith(
+      expect.stringContaining(tabId),
+      expect.stringContaining('__mfRegionSelectInstall'),
+    );
   });
 
   it("onRegionSelect delivers only this tab's region events", async () => {
@@ -126,14 +131,12 @@ describe('mountTauriPreview', () => {
     // Emit an event for a different tab — must be filtered out
     capturedRegionCallback?.({ tabId: 'preview-OTHER', region: { x: 0, y: 0, w: 1, h: 1 } });
     // Emit an event for this tab — must be delivered
-    const tabIdArg = previewEval.mock.calls[0]?.[0] ?? (onRegionSelectResult.mock.calls[0] as unknown[])?.[0];
     // The tabId is passed to previewCreate as the first arg
     const tabId = (previewCreate.mock.calls[0] as unknown[])?.[0] as string;
     capturedRegionCallback?.({ tabId, region: { x: 1, y: 2, w: 3, h: 4 } });
 
     expect(received).toHaveLength(1);
     expect(received[0]).toEqual({ tabId, region: { x: 1, y: 2, w: 3, h: 4 } });
-    void tabIdArg; // suppress unused warning
   });
 
   it('onRegionSelect returns an unsubscribe that stops delivery', async () => {

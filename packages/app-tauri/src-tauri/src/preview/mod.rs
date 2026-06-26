@@ -496,7 +496,9 @@ mod tests {
         assert_eq!(result.tab_id, "tab-r");
         let r = result.region.expect("region should be Some");
         assert_eq!(r.x, 5.0);
+        assert_eq!(r.y, 6.0);
         assert_eq!(r.w, 100.0);
+        assert_eq!(r.h, 50.0);
     }
 
     /// Cancel payload: region is null.

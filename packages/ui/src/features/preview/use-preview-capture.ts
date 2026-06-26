@@ -80,8 +80,9 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   }, [handle]);
 
   const onRegionClick = useCallback(() => {
+    if (!handle) return;
     setRegionSelectActive(true);
-    handle?.startRegionSelect().catch((e: unknown) => {
+    handle.startRegionSelect().catch((e: unknown) => {
       setRegionSelectActive(false);
       console.warn('[preview] region select failed', e);
     });

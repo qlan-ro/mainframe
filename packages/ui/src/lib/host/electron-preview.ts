@@ -252,6 +252,8 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
       const payload: RegionSelectResult = { tabId, region: raw?.region ?? null };
       for (const cb of regionCbs) cb(payload);
     } catch (e) {
+      // Intentionally fans subscribers on error (unlike startInspect's log-only path):
+      // the consumer needs a completion signal on failure so regionSelectActive resets.
       console.warn('[preview] electron region select failed', e);
       for (const cb of regionCbs) cb({ tabId, region: null });
     }
