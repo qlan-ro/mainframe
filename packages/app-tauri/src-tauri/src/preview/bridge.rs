@@ -7,6 +7,10 @@
 ///       that the `PreviewInstance` React component calls (via `preview_eval`)
 ///       to toggle the element-picker. The picker posts its result back via
 ///       `window.__TAURI_INTERNALS__.invoke('preview_inspect_result', {...})`.
+///   (c) Expose `window.__mfRegionSelectInstall(tabId)` and
+///       `window.__mfRegionSelectCancel()` for drag-rectangle region capture.
+///       Posts `{ tabId, region: {x,y,w,h} }` (or `region: null` on cancel/Escape)
+///       via `window.__TAURI_INTERNALS__.invoke('preview_region_result', {...})`.
 ///
 /// Kept minimal and self-removing — the ONLY code injected into the user page.
 pub const BRIDGE_JS: &str = r#"
@@ -105,5 +109,69 @@ pub const BRIDGE_JS: &str = r#"
   window.__mfInspectCancel = function () {
     removeInspect();
   };
+
+  // (c) Region-select picker — drag a rectangle; posts {tabId, region} back.
+  var _regionOverlay = null;
+  var _regionCleanup = null;
+  function removeRegion() {
+    if (_regionCleanup) { _regionCleanup(); _regionCleanup = null; }
+    if (_regionOverlay) { _regionOverlay.remove(); _regionOverlay = null; }
+  }
+  window.__mfRegionSelectInstall = function (tabId) {
+    window.__mfPreviewTabId = tabId;
+    removeRegion();
+    var overlay = document.createElement('div');
+    Object.assign(overlay.style, {
+      position: 'fixed', inset: '0', zIndex: '2147483646',
+      cursor: 'crosshair', background: 'rgba(0,0,0,0.05)',
+    });
+    var sel = document.createElement('div');
+    Object.assign(sel.style, {
+      position: 'fixed', border: '2px solid #3b82f6',
+      background: 'rgba(59,130,246,0.2)', pointerEvents: 'none', display: 'none',
+    });
+    overlay.appendChild(sel);
+    document.body.appendChild(overlay);
+    _regionOverlay = overlay;
+    var start = null;
+    function geom(e) {
+      var x = Math.min(start.x, e.clientX), y = Math.min(start.y, e.clientY);
+      return { x: x, y: y, w: Math.abs(e.clientX - start.x), h: Math.abs(e.clientY - start.y) };
+    }
+    function finish(region) {
+      removeRegion();
+      window.__TAURI_INTERNALS__.invoke('preview_region_result', {
+        result: { tabId: window.__mfPreviewTabId || '', region: region },
+      });
+    }
+    function onDown(e) {
+      start = { x: e.clientX, y: e.clientY };
+      sel.style.left = start.x + 'px'; sel.style.top = start.y + 'px';
+      sel.style.width = '0px'; sel.style.height = '0px'; sel.style.display = 'block';
+    }
+    function onMove(e) {
+      if (!start) return;
+      var g = geom(e);
+      sel.style.left = g.x + 'px'; sel.style.top = g.y + 'px';
+      sel.style.width = g.w + 'px'; sel.style.height = g.h + 'px';
+    }
+    function onUp(e) {
+      if (!start) { finish(null); return; }
+      var g = geom(e);
+      finish(g.w > 0 && g.h > 0 ? g : null);
+    }
+    function onKey(e) { if (e.key === 'Escape') finish(null); }
+    overlay.addEventListener('mousedown', onDown);
+    overlay.addEventListener('mousemove', onMove);
+    overlay.addEventListener('mouseup', onUp);
+    document.addEventListener('keydown', onKey, true);
+    _regionCleanup = function () {
+      overlay.removeEventListener('mousedown', onDown);
+      overlay.removeEventListener('mousemove', onMove);
+      overlay.removeEventListener('mouseup', onUp);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  };
+  window.__mfRegionSelectCancel = function () { removeRegion(); };
 })();
 "#;

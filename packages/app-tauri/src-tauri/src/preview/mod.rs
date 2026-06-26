@@ -47,6 +47,15 @@ pub struct InspectResult {
     pub viewport: Option<Viewport>,
 }
 
+/// Result posted back by the BRIDGE_JS region-select picker.
+/// camelCase maps `tab_id` ↔ `tabId`; `region` is null on cancel.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RegionSelectResult {
+    pub tab_id: String,
+    pub region: Option<Region>,
+}
+
 // ── URL scheme allowlist ───────────────────────────────────────────────────────
 
 /// Canonical allowlist — mirrors @qlan-ro/mainframe-types ALLOWED_EXTERNAL_SCHEMES
@@ -325,6 +334,17 @@ pub async fn preview_inspect_result(
     app.emit("preview:inspect-result", &result).map_err(|e| e.to_string())
 }
 
+/// Receive the region-select result from the injected BRIDGE_JS and re-emit it
+/// as a Tauri event that `PreviewInstance` can listen to.
+#[tauri::command]
+pub async fn preview_region_result(
+    result: RegionSelectResult,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    app.emit("preview:region-select", &result).map_err(|e| e.to_string())
+}
+
 /// Evaluate JavaScript in the child webview (fire-and-forget).
 /// Used by `PreviewInstance` to install/cancel the inspect picker.
 #[tauri::command]
@@ -464,5 +484,36 @@ mod tests {
         let json = serde_json::to_string(&result).expect("serialization failed");
         assert!(json.contains("\"tabId\""), "expected camelCase tabId, got: {json}");
         assert!(!json.contains("\"tab_id\""), "snake_case leaked into JSON: {json}");
+    }
+
+    // ── Finding 3: RegionSelectResult deserialization ─────────────────────────
+
+    /// The BRIDGE_JS region picker posts: { tabId, region: {x,y,w,h} }.
+    #[test]
+    fn region_result_deserializes_bridge_json() {
+        let json = r#"{ "tabId": "tab-r", "region": { "x": 5.0, "y": 6.0, "w": 100.0, "h": 50.0 } }"#;
+        let result: RegionSelectResult = serde_json::from_str(json).expect("deserialization failed");
+        assert_eq!(result.tab_id, "tab-r");
+        let r = result.region.expect("region should be Some");
+        assert_eq!(r.x, 5.0);
+        assert_eq!(r.w, 100.0);
+    }
+
+    /// Cancel payload: region is null.
+    #[test]
+    fn region_result_deserializes_cancel_payload() {
+        let json = r#"{ "tabId": "tab-r", "region": null }"#;
+        let result: RegionSelectResult = serde_json::from_str(json).expect("cancel payload failed");
+        assert_eq!(result.tab_id, "tab-r");
+        assert!(result.region.is_none());
+    }
+
+    /// Re-emit serializes back to camelCase tabId.
+    #[test]
+    fn region_result_serializes_to_camel_case() {
+        let result = RegionSelectResult { tab_id: "tab-1".to_string(), region: None };
+        let json = serde_json::to_string(&result).expect("serialization failed");
+        assert!(json.contains("\"tabId\""), "expected camelCase tabId, got: {json}");
+        assert!(!json.contains("\"tab_id\""), "snake_case leaked: {json}");
     }
 }
