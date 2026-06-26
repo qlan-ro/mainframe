@@ -1,4 +1,4 @@
-import { it, expect, vi, beforeEach, describe } from 'vitest';
+import { it, expect, vi, beforeEach, describe, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { PreviewHandle, InspectResult, RegionSelectResult } from '@qlan-ro/mainframe-types';
 
@@ -215,5 +215,40 @@ describe('usePreviewCapture', () => {
     const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
     void result.current;
     expect(mockSetOverlayMounted).toHaveBeenCalledWith(false);
+  });
+
+  it('captures a full-preview backdrop before opening annotation when compositesAboveDom (Tauri)', async () => {
+    const fakeHandle = makeFakeHandle(); // compositesAboveDom: true
+    (fakeHandle.capture as Mock).mockResolvedValue(new Uint8Array([1, 2, 3]));
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    await act(async () => {
+      result.current.onCaptureClick();
+    });
+    await act(async () => {});
+    expect(result.current.annotationPopoverOpen).toBe(true);
+    expect(result.current.annotationBackdrop).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('does NOT capture a backdrop when compositesAboveDom is false (Electron)', async () => {
+    const fakeHandle = { ...makeFakeHandle(), compositesAboveDom: false };
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    await act(async () => {
+      result.current.onCaptureClick();
+    });
+    await act(async () => {});
+    expect(result.current.annotationBackdrop).toBeNull();
+  });
+
+  it('clears the backdrop when annotation is cancelled', async () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    await act(async () => {
+      result.current.onCaptureClick();
+    });
+    await act(async () => {});
+    act(() => {
+      result.current.onAnnotationCancel();
+    });
+    expect(result.current.annotationBackdrop).toBeNull();
   });
 });

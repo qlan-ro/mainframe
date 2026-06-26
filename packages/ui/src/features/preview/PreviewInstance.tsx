@@ -73,6 +73,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
     pendingCaptures,
     regionSelectActive,
     annotationPopoverOpen,
+    annotationBackdrop,
     inspectActive,
     onCaptureClick,
     onRegionClick,
@@ -154,6 +155,14 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
           anchorRef={anchorRef}
           onStart={handleStart}
         />
+        {annotationBackdrop && (
+          <img
+            data-testid="preview-annotation-backdrop"
+            src={annotationBackdrop}
+            alt=""
+            className="pointer-events-none absolute inset-0 z-40 h-full w-full object-contain"
+          />
+        )}
       </div>
       {config && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
 

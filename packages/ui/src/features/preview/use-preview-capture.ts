@@ -15,10 +15,24 @@ const PAD = 20;
 export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounted: (v: boolean) => void) {
   const [regionSelectActive, setRegionSelectActive] = useState(false);
   const [annotationPopoverOpen, setAnnotationPopoverOpen] = useState(false);
+  const [annotationBackdrop, setAnnotationBackdrop] = useState<string | null>(null);
   const [inspectActive, setInspectActive] = useState(false);
   const [annotations, setAnnotations] = useState<Map<string, string>>(new Map());
   const pendingCaptures = useSandboxStore((s) => s.captures);
   const sendCapturesFn = useSendCaptures();
+
+  const openAnnotation = useCallback(async () => {
+    if (handle?.compositesAboveDom) {
+      try {
+        const bytes = await handle.capture();
+        setAnnotationBackdrop(bytesToDataUrl(bytes));
+      } catch (e: unknown) {
+        console.warn('[preview] backdrop capture failed', e);
+        setAnnotationBackdrop(null);
+      }
+    }
+    setAnnotationPopoverOpen(true);
+  }, [handle]);
 
   useEffect(() => {
     if (!handle) return;
@@ -42,7 +56,7 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
             imageDataUrl: bytesToDataUrl(bytes),
             selector: result.selector ?? undefined,
           });
-          setAnnotationPopoverOpen(true);
+          void openAnnotation();
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     };
@@ -53,7 +67,7 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
         .capture(result.region)
         .then((bytes) => {
           useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
-          setAnnotationPopoverOpen(true);
+          void openAnnotation();
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     };
@@ -63,7 +77,7 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
       unsubInspect();
       unsubRegion();
     };
-  }, [handle]);
+  }, [handle, openAnnotation]);
 
   useEffect(() => {
     setOverlayMounted(annotationPopoverOpen);
@@ -74,10 +88,10 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
       ?.capture()
       .then((bytes) => {
         useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
-        setAnnotationPopoverOpen(true);
+        void openAnnotation();
       })
       .catch((e: unknown) => console.warn('[preview] capture failed', e));
-  }, [handle]);
+  }, [handle, openAnnotation]);
 
   const onRegionClick = useCallback(() => {
     if (!handle) return;
@@ -110,12 +124,14 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
     );
     useSandboxStore.getState().clearCaptures();
     setAnnotationPopoverOpen(false);
+    setAnnotationBackdrop(null);
     setAnnotations(new Map());
   }, [pendingCaptures, annotations, sendCapturesFn]);
 
   const onAnnotationCancel = useCallback(() => {
     useSandboxStore.getState().clearCaptures();
     setAnnotationPopoverOpen(false);
+    setAnnotationBackdrop(null);
     setAnnotations(new Map());
   }, []);
 
@@ -123,6 +139,7 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
     pendingCaptures,
     regionSelectActive,
     annotationPopoverOpen,
+    annotationBackdrop,
     inspectActive,
     onCaptureClick,
     onRegionClick,
