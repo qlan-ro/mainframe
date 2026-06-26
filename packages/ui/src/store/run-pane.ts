@@ -154,6 +154,32 @@ export function terminalIdsInPane(run: RunState | null, paneId: string): string[
   return pane.tabs.filter((t) => t.kind === 'terminal').map((t) => t.id);
 }
 
+/** Terminal tab ids belonging to a launch scope (across all panes). */
+export function terminalIdsForScope(run: RunState | null, scopeKey: string): string[] {
+  if (!run) return [];
+  return run.panes.flatMap((p) =>
+    p.tabs.filter((t) => t.kind === 'terminal' && t.scopeKey === scopeKey).map((t) => t.id),
+  );
+}
+
+/**
+ * Remove every tab of a launch scope (across all panes); drop any pane left
+ * empty. A pane whose active tab was removed re-points to its last survivor.
+ * Returns `null` when the whole Run surface is now empty. Mirrors closeRunTab's
+ * flex reset on collapse to a single pane.
+ */
+export function releaseRunScope(run: RunState, scopeKey: string): RunState | null {
+  const panes = run.panes
+    .map((p) => {
+      const tabs = p.tabs.filter((t) => t.scopeKey !== scopeKey);
+      const active = tabs.some((t) => t.id === p.active) ? p.active : (tabs[tabs.length - 1]?.id ?? null);
+      return { ...p, tabs, active };
+    })
+    .filter((p) => p.tabs.length > 0);
+  if (panes.length === 0) return null;
+  return { ...run, panes, flex: panes.length === 1 ? [1, 1] : run.flex };
+}
+
 /**
  * Drop a guest tab onto the Run region. `center` joins the first pane as a tab;
  * an edge splits Run into a second pane with the guest beside what's running.

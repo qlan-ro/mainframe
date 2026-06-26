@@ -6,6 +6,8 @@ import {
   closePane as closePaneReducer,
   closeRunTab as closeRunTabReducer,
   moveTabToRun as moveTabToRunReducer,
+  releaseRunScope as releaseRunScopeReducer,
+  terminalIdsForScope,
   terminalIdsInPane,
   terminalIdsInRun,
   type RunDropEdge,
@@ -168,6 +170,8 @@ export interface LayoutStore {
   activateRunTab: (paneId: string, tabId: string) => void;
   closeRunTab: (paneId: string, tabId: string) => void;
   closePane: (paneId: string) => void;
+  /** Release a launch scope: dispose its terminals and drop its Run tabs. */
+  releaseRunScope: (scopeKey: string) => void;
   /** GC: remove persisted entries for sessions no longer in the thread list. */
   pruneSessions: (validIds: Set<string>) => void;
 }
@@ -290,6 +294,16 @@ export const useLayoutStore = create<LayoutStore>()(
         // Preview destruction is handled by the PreviewInstance lifecycle hook's
         // cleanup effect when components unmount after the pane is removed.
         const nextRun = closePaneReducer(run, paneId);
+        writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
+      },
+
+      releaseRunScope(scopeKey) {
+        const { layout, run } = get();
+        if (!run) return;
+        killAndDisposeCachedTerminals(terminalIdsForScope(run, scopeKey));
+        // Preview/console bodies tear down via their unmount cleanup once the
+        // tabs are removed (PreviewInstance destroys its webview).
+        const nextRun = releaseRunScopeReducer(run, scopeKey);
         writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
       },
 
