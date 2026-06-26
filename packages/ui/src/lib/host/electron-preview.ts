@@ -263,6 +263,7 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
     setVisible: (visible: boolean): void => {
       wv.style.display = visible ? '' : 'none';
     },
+    compositesAboveDom: false,
     navigate,
     capture,
     startInspect,

@@ -13,6 +13,7 @@ let fakeHandle: PreviewHandle;
 beforeEach(() => {
   fakeHandle = {
     setVisible: vi.fn(),
+    compositesAboveDom: true,
     navigate: vi.fn().mockResolvedValue(undefined),
     capture: vi.fn().mockResolvedValue(new Uint8Array()),
     startInspect: vi.fn().mockResolvedValue(undefined),

@@ -78,6 +78,7 @@ export class FakeHostBridge implements HostBridge {
   preview = {
     mount: (): import('@qlan-ro/mainframe-types').PreviewHandle => ({
       setVisible: () => {},
+      compositesAboveDom: true,
       navigate: () => Promise.resolve(),
       capture: () => Promise.reject(new Error('preview.capture is not available in browser/dev mode')),
       startInspect: () => Promise.resolve(),

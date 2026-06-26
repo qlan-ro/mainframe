@@ -34,6 +34,7 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     setVisible: (visible: boolean): void => {
       void preview.previewSetVisible(tabId, visible).catch((e) => console.warn('[preview] tauri setVisible', e));
     },
+    compositesAboveDom: true,
     navigate: (next: string): Promise<void> => preview.previewNavigate(tabId, next),
     capture: (region?: Region): Promise<Uint8Array> => preview.previewCapture(tabId, region),
     startInspect: (): Promise<void> =>

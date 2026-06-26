@@ -72,6 +72,7 @@ beforeEach(() => {
   destroySpy = spy;
   const fakeHandle: PreviewHandle = {
     setVisible: vi.fn(),
+    compositesAboveDom: true,
     navigate: vi.fn().mockResolvedValue(undefined),
     capture: vi.fn().mockRejectedValue(new Error('no')),
     startInspect: vi.fn().mockResolvedValue(undefined),

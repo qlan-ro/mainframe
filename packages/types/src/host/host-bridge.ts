@@ -82,6 +82,13 @@ export interface PreviewOpts {
  */
 export interface PreviewHandle {
   setVisible(visible: boolean): void;
+  /**
+   * True when the backing webview composites ABOVE the DOM (Tauri native child
+   * WKWebView) — a DOM overlay over the preview region must hide it. False when
+   * the webview is an in-DOM element that respects z-index (Electron <webview>
+   * tag) — DOM overlays stack over it and it must NOT be hidden for them.
+   */
+  readonly compositesAboveDom: boolean;
   navigate(url: string): Promise<void>;
   capture(region?: Region): Promise<Uint8Array>;
   startInspect(): Promise<void>;

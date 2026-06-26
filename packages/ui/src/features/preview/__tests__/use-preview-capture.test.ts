@@ -36,6 +36,7 @@ import { usePreviewCapture } from '../use-preview-capture';
 function makeFakeHandle(): PreviewHandle {
   return {
     setVisible: vi.fn(),
+    compositesAboveDom: true,
     navigate: vi.fn().mockResolvedValue(undefined),
     capture: vi.fn().mockResolvedValue(new Uint8Array([137, 80, 78, 71])),
     startInspect: vi.fn().mockResolvedValue(undefined),
