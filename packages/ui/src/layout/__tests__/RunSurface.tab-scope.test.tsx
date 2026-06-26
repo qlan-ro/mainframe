@@ -90,7 +90,7 @@ function seedRunTabs(tabs: { id: string; kind: 'preview' | 'console'; config: st
   useSandboxStore.setState({
     captures: [],
     logsOutput: [],
-    selectedConfigName: null,
+    selectedConfigByScope: {},
     lastStartedProcess: null,
     processStatuses: { [TAB_SCOPE]: { dev: 'running' } },
   });

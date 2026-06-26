@@ -37,7 +37,13 @@ interface SandboxState {
   /** Keyed by scopeKey (= projectId:effectivePath), then by process name. */
   processStatuses: Record<string, Record<string, LaunchProcessStatus>>;
   logsOutput: LogEntry[];
-  selectedConfigName: string | null;
+  /**
+   * Selected launch config name, keyed by scopeKey (= projectId:effectivePath)
+   * so a selection never bleeds across projects / worktrees — mirrors
+   * processStatuses. The toolbar picker derives its effective selection from the
+   * active scope's entry, falling back to the first config.
+   */
+  selectedConfigByScope: Record<string, string>;
   /** Tracks which process was most recently started — used to auto-switch tabs. */
   lastStartedProcess: string | null;
 
@@ -48,7 +54,7 @@ interface SandboxState {
   appendLog: (scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
   clearLogs: () => void;
   clearLogsForProcess: (scopeKey: string, name: string) => void;
-  setSelectedConfigName: (name: string | null) => void;
+  setSelectedConfig: (scopeKey: string, name: string) => void;
   setLastStartedProcess: (name: string | null) => void;
 }
 
@@ -56,7 +62,7 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
   captures: [],
   processStatuses: {},
   logsOutput: [],
-  selectedConfigName: null,
+  selectedConfigByScope: {},
   lastStartedProcess: null,
 
   addCapture: (capture) =>
@@ -88,7 +94,10 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
       logsOutput: state.logsOutput.filter((l) => !(l.scopeKey === scopeKey && l.name === name)),
     })),
 
-  setSelectedConfigName: (name) => set({ selectedConfigName: name }),
+  setSelectedConfig: (scopeKey, name) =>
+    set((state) => ({
+      selectedConfigByScope: { ...state.selectedConfigByScope, [scopeKey]: name },
+    })),
 
   setLastStartedProcess: (name) => set({ lastStartedProcess: name }),
 }));

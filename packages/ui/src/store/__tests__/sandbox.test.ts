@@ -9,7 +9,8 @@
  *  - setProcessStatus keys by scope and never bleeds across scopes
  *  - clearLogs empties logsOutput
  *  - clearLogsForProcess removes only matching scope+name entries
- *  - setSelectedConfigName and setLastStartedProcess update the named fields
+ *  - setSelectedConfig keys by scopeKey and never bleeds across scopes
+ *  - setLastStartedProcess updates the named field
  */
 import { it, expect, beforeEach, describe } from 'vitest';
 import { useSandboxStore } from '../sandbox';
@@ -18,7 +19,7 @@ const INITIAL_STATE = {
   captures: [],
   processStatuses: {},
   logsOutput: [],
-  selectedConfigName: null,
+  selectedConfigByScope: {},
   lastStartedProcess: null,
 };
 
@@ -177,15 +178,30 @@ describe('clearLogsForProcess', () => {
 });
 
 // ---------------------------------------------------------------------------
-// setSelectedConfigName / setLastStartedProcess
+// setSelectedConfig / setLastStartedProcess
 // ---------------------------------------------------------------------------
 
-describe('setSelectedConfigName', () => {
-  it('sets and clears the selected config name', () => {
-    useSandboxStore.getState().setSelectedConfigName('dev');
-    expect(useSandboxStore.getState().selectedConfigName).toBe('dev');
-    useSandboxStore.getState().setSelectedConfigName(null);
-    expect(useSandboxStore.getState().selectedConfigName).toBeNull();
+describe('setSelectedConfig', () => {
+  it('sets a config name for a given scopeKey', () => {
+    useSandboxStore.getState().setSelectedConfig('proj:/a', 'dev');
+    expect(useSandboxStore.getState().selectedConfigByScope['proj:/a']).toBe('dev');
+  });
+
+  it('keys by scope and never bleeds across scopes', () => {
+    useSandboxStore.getState().setSelectedConfig('proj:/a', 'dev');
+    useSandboxStore.getState().setSelectedConfig('proj:/b', 'api');
+    const byScope = useSandboxStore.getState().selectedConfigByScope;
+    expect(byScope['proj:/a']).toBe('dev');
+    expect(byScope['proj:/b']).toBe('api');
+  });
+
+  it('overwriting the same scope updates it without touching the other scope', () => {
+    useSandboxStore.getState().setSelectedConfig('proj:/a', 'dev');
+    useSandboxStore.getState().setSelectedConfig('proj:/b', 'api');
+    useSandboxStore.getState().setSelectedConfig('proj:/a', 'worker');
+    const byScope = useSandboxStore.getState().selectedConfigByScope;
+    expect(byScope['proj:/a']).toBe('worker');
+    expect(byScope['proj:/b']).toBe('api');
   });
 });
 

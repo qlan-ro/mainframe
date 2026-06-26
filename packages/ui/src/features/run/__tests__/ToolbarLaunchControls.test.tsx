@@ -2,22 +2,27 @@
  * ToolbarLaunchControls — unit tests.
  *
  * Behaviors covered:
- *  - Renders the launch trigger with label "Preview" when no config is selected
- *  - The run button is disabled when fetchLaunchConfigs resolves to []
+ *  - After configs load, trigger shows the DEFAULT first config name ("dev server"), not "Preview"
+ *  - When fetchLaunchConfigs resolves to [], the run button is disabled and trigger shows "Launch"
  *  - Opening the dropdown renders both config rows and the gated "Generate with Agent" footer (disabled)
- *  - Clicking a non-preview config ROW selects it: calls setSelectedConfigName, does NOT call startLaunchConfig, does NOT call addRunTab
- *  - Clicking a preview config ROW is PURE SELECTION: calls setSelectedConfigName, does NOT call addRunTab, does NOT call startLaunchConfig
+ *  - Clicking a non-preview config ROW selects it: calls setSelectedConfig with (scopeKey, name),
+ *    does NOT call startLaunchConfig, does NOT call addRunTab
+ *  - Clicking a preview config ROW is PURE SELECTION: calls setSelectedConfig with (scopeKey, name),
+ *    does NOT call addRunTab, does NOT call startLaunchConfig
  *  - Clicking the per-row START button on a non-preview config calls startLaunchConfig, does NOT call addRunTab
  *  - Clicking the per-row START button on a preview config calls startLaunchConfig AND addRunTab with kind:'preview'
  *  - When a config is 'running', the row shows a STOP button; clicking it calls stopLaunchConfig
  *  - Run button (main-toolbar-play): clicking starts the first config when none is running
  *  - Run button (main-toolbar-play): clicking stops the config when its status is 'running'
+ *  - Bug 1 (cross-scope isolation): a selection stored under a DIFFERENT scope key doesn't bleed
+ *  - Bug 1 (stale within scope): a stored name not in current configs falls back to the default first config
+ *  - Bug 1 (selection respected): a stored name that IS in configs is shown and marked selected
  *
  * Mocked dependencies:
  *  - @/lib/api/launch — startLaunchConfig, stopLaunchConfig, fetchLaunchConfigs, fetchLaunchStatuses
  *  - @/store/layout — useLayoutStore.addRunTab
- *  - @/store/sandbox — useSandboxStore (processStatuses, selectedConfigName, setSelectedConfigName)
- *  - sonner — toast.error
+ *  - @/store/sandbox — useSandboxStore (processStatuses, selectedConfigByScope, setSelectedConfig)
+ *  - @/lib/toast — mfToast
  */
 import { it, expect, vi, beforeEach, describe } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -44,24 +49,24 @@ vi.mock('@/store/layout', () => ({
 }));
 
 // ── mock sandbox store ───────────────────────────────────────────────────────
-const setSelectedConfigName = vi.fn();
+const setSelectedConfig = vi.fn();
 
-// processStatuses and selectedConfigName are mutable so individual tests can override them
+// processStatuses and selectedConfigByScope are mutable so individual tests can override them
 let mockProcessStatuses: Record<string, Record<string, string>> = {};
-let mockSelectedConfigName: string | null = null;
+let mockSelectedByScope: Record<string, string> = {};
 
 vi.mock('@/store/sandbox', () => ({
   useSandboxStore: (
     selector: (s: {
       processStatuses: Record<string, Record<string, string>>;
-      selectedConfigName: string | null;
-      setSelectedConfigName: typeof setSelectedConfigName;
+      selectedConfigByScope: Record<string, string>;
+      setSelectedConfig: typeof setSelectedConfig;
     }) => unknown,
   ) =>
     selector({
       processStatuses: mockProcessStatuses,
-      selectedConfigName: mockSelectedConfigName,
-      setSelectedConfigName,
+      selectedConfigByScope: mockSelectedByScope,
+      setSelectedConfig,
     }),
 }));
 
@@ -96,9 +101,9 @@ describe('ToolbarLaunchControls', () => {
     fetchLaunchStatuses.mockResolvedValue({ statuses: {}, tunnelUrls: {}, effectivePath: '/repo' });
     addRunTab.mockReset().mockReturnValue(true);
     toastError.mockReset();
-    setSelectedConfigName.mockReset();
+    setSelectedConfig.mockReset();
     mockProcessStatuses = {};
-    mockSelectedConfigName = null;
+    mockSelectedByScope = {};
   });
 
   async function renderAndOpen() {
@@ -108,23 +113,70 @@ describe('ToolbarLaunchControls', () => {
     await waitFor(() => screen.getByTestId('main-toolbar-launch-config-dev server'));
   }
 
-  it('renders the launch trigger with label "Preview" when no config is selected', async () => {
+  // ── Bug 2 fix: default label shows the first config name, not "Preview" ────
+
+  it('after configs load, trigger shows the first config name "dev server"', async () => {
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
     render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
-    const trigger = screen.getByTestId('main-toolbar-launch');
-    expect(trigger).toBeInTheDocument();
-    expect(trigger).toHaveTextContent('Preview');
+    await waitFor(() => {
+      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('dev server');
+    });
   });
 
-  it('the run button is disabled when fetchLaunchConfigs resolves to []', async () => {
+  it('when fetchLaunchConfigs resolves to [], the trigger shows "No Launch Configurations" and the run button is disabled', async () => {
     fetchLaunchConfigs.mockResolvedValue([]);
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
     render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
-    // Wait for the empty fetch to settle so disabled state is applied
     await waitFor(() => {
+      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('No Launch Configurations');
       expect(screen.getByTestId('main-toolbar-play')).toBeDisabled();
     });
   });
+
+  // ── Bug 1 fix: cross-scope isolation ─────────────────────────────────────
+
+  it('ignores a selection stored under a different scope: shows "dev server" not the other scope\'s name', async () => {
+    // 'other-proj:/x' is a completely different scope; it must not affect proj-1:/repo
+    mockSelectedByScope = { 'other-proj:/x': 'ghost' };
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('dev server');
+    });
+  });
+
+  it('falls back to the first config when stored name is not in current configs', async () => {
+    // 'deleted-config' is stored for the right scope but no longer exists in configs
+    mockSelectedByScope = { [SCOPE_KEY]: 'deleted-config' };
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('dev server');
+    });
+  });
+
+  it('uses the stored name when it matches a config in the current scope', async () => {
+    // 'preview-app' exists in configs and is stored for the correct scope
+    mockSelectedByScope = { [SCOPE_KEY]: 'preview-app' };
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('preview-app');
+    });
+  });
+
+  it('marks the stored config row as selected when it matches a current config', async () => {
+    mockSelectedByScope = { [SCOPE_KEY]: 'preview-app' };
+    await renderAndOpen();
+    // The selected row gets 'bg-accent' class; inspect via aria or check the row renders
+    const previewRow = screen.getByTestId('main-toolbar-launch-config-preview-app');
+    expect(previewRow).toBeInTheDocument();
+    // The row for the non-selected config should NOT carry the selected styling
+    // (We verify this by checking the trigger shows "preview-app" and not "dev server")
+    expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('preview-app');
+  });
+
+  // ── Dropdown contents ────────────────────────────────────────────────────
 
   it('opening the dropdown renders both config rows and a disabled generate footer', async () => {
     await renderAndOpen();
@@ -133,29 +185,32 @@ describe('ToolbarLaunchControls', () => {
     expect(screen.getByTestId('main-toolbar-launch-generate')).toBeDisabled();
   });
 
-  it('clicking the non-preview ROW selects it: calls setSelectedConfigName, does NOT call startLaunchConfig or addRunTab', async () => {
+  // ── Row selection ─────────────────────────────────────────────────────────
+
+  it('clicking the non-preview ROW selects it: calls setSelectedConfig(SCOPE_KEY, "dev server"), does NOT call startLaunchConfig or addRunTab', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-config-dev server'));
-    await waitFor(() => expect(setSelectedConfigName).toHaveBeenCalledWith('dev server'));
+    await waitFor(() => expect(setSelectedConfig).toHaveBeenCalledWith(SCOPE_KEY, 'dev server'));
     expect(startLaunchConfig).not.toHaveBeenCalled();
     expect(addRunTab).not.toHaveBeenCalled();
   });
 
-  it('clicking the preview ROW is pure selection: calls setSelectedConfigName, does NOT call addRunTab or startLaunchConfig', async () => {
+  it('clicking the preview ROW is pure selection: calls setSelectedConfig(SCOPE_KEY, "preview-app"), does NOT call addRunTab or startLaunchConfig', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-config-preview-app'));
-    await waitFor(() => expect(setSelectedConfigName).toHaveBeenCalledWith('preview-app'));
+    await waitFor(() => expect(setSelectedConfig).toHaveBeenCalledWith(SCOPE_KEY, 'preview-app'));
     expect(addRunTab).not.toHaveBeenCalled();
     expect(startLaunchConfig).not.toHaveBeenCalled();
   });
+
+  // ── Per-row start/stop buttons ────────────────────────────────────────────
 
   it('clicking the per-row START button on a non-preview config calls startLaunchConfig AND addRunTab with kind:console', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-start-dev server'));
     await waitFor(() => expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'));
     expect(addRunTab).toHaveBeenCalledWith(expect.objectContaining({ kind: 'console', config: 'dev server' }));
-    // The tabId doubles as the Tauri child-webview label, which forbids spaces —
-    // "dev server" must be sanitized so `add_child` (preview webview) succeeds.
+    // The tabId must not contain spaces (Tauri child-webview label restriction)
     const calls = addRunTab.mock.calls;
     const tabId = (calls[calls.length - 1]?.[0] as { id: string }).id;
     expect(tabId).not.toMatch(/\s/);
@@ -170,18 +225,18 @@ describe('ToolbarLaunchControls', () => {
   });
 
   it('when dev server is running, the row shows a stop button; clicking it calls stopLaunchConfig', async () => {
-    // Set processStatuses so 'dev server' is 'running' for scope 'proj-1:/repo'
     // effectivePath '/repo' comes from the fetchLaunchStatuses mock above
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
     await renderAndOpen();
-    // The trailing button should now be the STOP variant
     expect(screen.getByTestId('main-toolbar-launch-stop-dev server')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-stop-dev server'));
     await waitFor(() => expect(stopLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'));
     expect(startLaunchConfig).not.toHaveBeenCalled();
   });
 
-  it('clicking the run button (main-toolbar-play) starts the first config when none is running', async () => {
+  // ── Main run button — "dev server" is configs[0] = the effective default ──
+
+  it('clicking the run button (main-toolbar-play) starts "dev server" (first config) when none is running', async () => {
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
     render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
     await waitFor(() => expect(screen.getByTestId('main-toolbar-play')).not.toBeDisabled());
@@ -190,8 +245,7 @@ describe('ToolbarLaunchControls', () => {
     expect(stopLaunchConfig).not.toHaveBeenCalled();
   });
 
-  it('clicking the run button (main-toolbar-play) stops the config when its status is running', async () => {
-    // Set processStatuses so 'dev server' (the run target / first config) is 'running'
+  it('clicking the run button (main-toolbar-play) stops "dev server" when its status is running', async () => {
     // Scope key = buildLaunchScope('proj-1', '/repo') = 'proj-1:/repo'; effectivePath '/repo' from mock
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');

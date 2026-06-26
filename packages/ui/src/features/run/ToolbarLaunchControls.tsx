@@ -39,7 +39,9 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
     (selectedConfigName ? configs.find((c) => c.name === selectedConfigName) : undefined) ?? configs[0];
   const runStatus = runTarget ? (scopeStatuses[runTarget.name] ?? 'stopped') : 'stopped';
   const running = runStatus === 'running' || runStatus === 'starting';
-  const label = selectedConfigName ?? 'Preview';
+  // With no configs the picker shows an explicit empty label and the run button
+  // (disabled via !runTarget below) sits inert next to it.
+  const label = selectedConfigName ?? 'No Launch Configurations';
 
   const handleOpen = useCallback(
     (next: boolean) => {

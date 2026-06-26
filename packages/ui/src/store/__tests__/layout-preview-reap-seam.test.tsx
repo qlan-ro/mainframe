@@ -90,7 +90,7 @@ beforeEach(() => {
   useSandboxStore.setState({
     captures: [],
     logsOutput: [],
-    selectedConfigName: 'dev',
+    selectedConfigByScope: { 'proj-1:/ws': 'dev' },
     lastStartedProcess: null,
     processStatuses: { 'proj-1:/ws': { dev: 'running' } },
   });

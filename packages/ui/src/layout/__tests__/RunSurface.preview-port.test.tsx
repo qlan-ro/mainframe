@@ -84,7 +84,7 @@ describe('RunSurface — PreviewInstance prop threading', () => {
     useSandboxStore.setState({
       captures: [],
       logsOutput: [],
-      selectedConfigName: 'dev',
+      selectedConfigByScope: { [mockScopeKey]: 'dev' },
       lastStartedProcess: null,
       processStatuses: {
         [mockScopeKey]: { dev: 'running' },

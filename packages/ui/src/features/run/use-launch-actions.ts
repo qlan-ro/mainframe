@@ -37,28 +37,37 @@ export function useLaunchActions(
 ): UseLaunchActionsResult {
   const { configs, statusData, refetch } = useLaunchConfigs(port, projectId, chatId);
   const processStatuses = useSandboxStore((s) => s.processStatuses);
-  const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
-  const setSelectedConfigName = useSandboxStore((s) => s.setSelectedConfigName);
+  const selectedConfigByScope = useSandboxStore((s) => s.selectedConfigByScope);
+  const setSelectedConfig = useSandboxStore((s) => s.setSelectedConfig);
   const addRunTab = useLayoutStore((s) => s.addRunTab);
 
   const scopeKey =
     projectId && statusData?.effectivePath ? buildLaunchScope(projectId, statusData.effectivePath) : null;
   const scopeStatuses: Record<string, LaunchProcessStatus> = scopeKey ? (processStatuses[scopeKey] ?? {}) : {};
 
+  // Effective selection: the active scope's stored config IF it still exists in
+  // the current project's configs, else the first config. This guarantees the
+  // picker always reflects the active project — a stale name from a previously
+  // active project (or one that's since been removed) never sticks — and that a
+  // real config is selected by default rather than a hard-coded placeholder.
+  const storedName = scopeKey ? selectedConfigByScope[scopeKey] : undefined;
+  const selectedConfig = configs.find((c) => c.name === storedName) ?? configs[0];
+  const selectedConfigName = selectedConfig?.name ?? null;
+
   // Pure selection — only updates the selected config. Does NOT open a preview
   // tab or start anything; that happens on start (handleLaunch).
   const handleSelect = useCallback(
     (config: LaunchConfiguration) => {
-      if (!projectId) return;
-      setSelectedConfigName(config.name);
+      if (!scopeKey) return;
+      setSelectedConfig(scopeKey, config.name);
     },
-    [projectId, setSelectedConfigName],
+    [scopeKey, setSelectedConfig],
   );
 
   const handleLaunch = useCallback(
     async (config: LaunchConfiguration) => {
       if (!projectId) return;
-      setSelectedConfigName(config.name);
+      if (scopeKey) setSelectedConfig(scopeKey, config.name);
       // Every launch config opens (or focuses, via addRunTab's dedup) its own Run
       // tab: a `preview` config gets a webview tab, a process config gets a
       // full-space `console` tab. Distinct configs never share a tab. The tab
@@ -72,7 +81,7 @@ export function useLaunchActions(
         console.warn('[launch] start failed', err);
       }
     },
-    [port, projectId, chatId, scopeKey, addRunTab, setSelectedConfigName],
+    [port, projectId, chatId, scopeKey, addRunTab, setSelectedConfig],
   );
 
   const handleStop = useCallback(
