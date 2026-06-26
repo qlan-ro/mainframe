@@ -251,4 +251,17 @@ describe('usePreviewCapture', () => {
     });
     expect(result.current.annotationBackdrop).toBeNull();
   });
+
+  it('clears the backdrop when annotation is submitted', async () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    await act(async () => {
+      result.current.onCaptureClick();
+    });
+    await act(async () => {});
+    await act(async () => {
+      await result.current.onAnnotationSubmit();
+    });
+    expect(result.current.annotationBackdrop).toBeNull();
+  });
 });

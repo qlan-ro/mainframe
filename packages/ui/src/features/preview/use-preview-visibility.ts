@@ -27,7 +27,9 @@ export function computePreviewVisible({
  * Drives the native webview's visibility from the React state, and returns
  * [overlayMounted, setOverlayMounted] — the seam the capture flow uses to hide
  * the webview behind its own overlays. `occluded` (from `usePreviewOcclusion`)
- * hides it when any DOM overlay overlaps it (the webview composites above DOM).
+ * hides it when a DOM overlay overlaps it ONLY when `compositesAboveDom` is
+ * true (Tauri: the webview paints above the DOM). On Electron the `<webview>`
+ * is an in-DOM element that stacks under DOM overlays, so hiding is not needed.
  */
 export function usePreviewVisibility(
   handle: PreviewHandle | null,
