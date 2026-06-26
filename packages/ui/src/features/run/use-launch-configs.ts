@@ -49,10 +49,17 @@ export function useLaunchConfigs(
         // running before this client subscribed would otherwise never appear.
         const setProcessStatus = useSandboxStore.getState().setProcessStatus;
         const scope = buildLaunchScope(projectId, statuses.effectivePath);
-        // Run tabs already open, keyed by their config name (don't re-add/re-focus).
+        // Run tabs already open FOR THIS SCOPE, keyed by config name (don't
+        // re-add/re-focus). Scope-scoped so a same-named config running in
+        // another project/worktree still gets reconciled into its own tab.
         const layout = useLayoutStore.getState();
         const tabbed = new Set(
-          (layout.run?.panes ?? []).flatMap((p) => p.tabs.map((t) => t.config).filter((c): c is string => Boolean(c))),
+          (layout.run?.panes ?? []).flatMap((p) =>
+            p.tabs
+              .filter((t) => t.scopeKey === scope)
+              .map((t) => t.config)
+              .filter((c): c is string => Boolean(c)),
+          ),
         );
         for (const [name, status] of Object.entries(statuses.statuses)) {
           setProcessStatus(scope, name, status as LaunchProcessStatus);

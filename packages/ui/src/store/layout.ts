@@ -13,6 +13,7 @@ import {
   type RunTab,
 } from './run-pane';
 import { useTabsStore } from './tabs';
+import { useActiveBasesStore } from './active-bases-store';
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
 import { layoutPersistOptions, prunePersistedSessions } from './layout-persist';
 
@@ -119,11 +120,12 @@ export function isSurfaceFloor(layout: WorkspaceLayout, id: SurfaceId): boolean 
   return lit && litSurfaceCount(layout) === 1;
 }
 
-/** Build a RunTab guest from a Files editor tab. */
+/** Build a RunTab guest from a Files editor tab, stamped with the active scope. */
 function guestFromFilesTab(tabId: string): RunTab | null {
   const tab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
   if (!tab) return null;
-  return { id: `run-${tab.id}`, kind: tab.kind, title: tab.title, path: tab.path };
+  const scopeKey = useActiveBasesStore.getState().scopeKey ?? undefined;
+  return { id: `run-${tab.id}`, kind: tab.kind, title: tab.title, path: tab.path, scopeKey };
 }
 
 // ── store ─────────────────────────────────────────────────────────────────

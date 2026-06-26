@@ -25,7 +25,7 @@ describe('subscribeToTerminalIntents', () => {
     vi.clearAllMocks();
     createSessionSpy.mockResolvedValue({ id: 'term-1', title: 'Terminal' });
     setHostForTesting(new FakeHostBridge({ app: { getHomedir: '/Users/me' } }));
-    useActiveBasesStore.setState({ bases: {} });
+    useActiveBasesStore.setState({ bases: {}, scopeKey: null });
     useLayoutStore.setState({
       layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
       run: null,
@@ -50,13 +50,16 @@ describe('subscribeToTerminalIntents', () => {
     expect(disposeSpy).not.toHaveBeenCalled();
   });
 
-  it('uses worktreePath as cwd when active and passes paneId through', async () => {
-    useActiveBasesStore.setState({ bases: { worktreePath: '/wt', projectPath: '/proj' } });
+  it('uses worktreePath as cwd when active, stamps scopeKey, and passes paneId through', async () => {
+    useActiveBasesStore.setState({ bases: { worktreePath: '/wt', projectPath: '/proj' }, scopeKey: 'proj-1:/wt' });
     const addSpy = vi.spyOn(useLayoutStore.getState(), 'addRunTab').mockReturnValue(true);
     emitSurfaceIntent({ type: 'new-terminal', paneId: 'pane-x' });
     await vi.waitFor(() => expect(createSessionSpy).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/wt' })));
     await vi.waitFor(() =>
-      expect(addSpy).toHaveBeenCalledWith(expect.objectContaining({ kind: 'terminal' }), 'pane-x'),
+      expect(addSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'terminal', scopeKey: 'proj-1:/wt' }),
+        'pane-x',
+      ),
     );
   });
 

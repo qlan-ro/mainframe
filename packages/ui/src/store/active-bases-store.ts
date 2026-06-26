@@ -8,18 +8,25 @@
  *
  * Only one set of bases is live at a time — the currently active thread.
  * An empty `{}` means "no active session" (new/draft thread).
+ *
+ * `scopeKey` is the active session's launch scope (`buildLaunchScope`), stamped
+ * onto every Run tab created outside React (terminals, Files guests) so they
+ * scope-filter alongside launch-config tabs. `null` for a draft/unresolved
+ * session.
  */
 import { create } from 'zustand';
 import type { FileBases } from '@/lib/files/file-ref';
 
 interface ActiveBasesStore {
   bases: FileBases;
-  setActiveBases: (bases: FileBases) => void;
+  scopeKey: string | null;
+  setActiveBases: (bases: FileBases, scopeKey: string | null) => void;
 }
 
 export const useActiveBasesStore = create<ActiveBasesStore>()((set) => ({
   bases: {},
-  setActiveBases(bases) {
-    set({ bases });
+  scopeKey: null,
+  setActiveBases(bases, scopeKey) {
+    set({ bases, scopeKey });
   },
 }));

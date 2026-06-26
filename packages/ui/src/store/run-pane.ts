@@ -22,13 +22,14 @@ export interface RunTab {
   /** Resolved dev-server port for a preview tab (the webview loads localhost:port). */
   port?: number;
   /**
-   * Launch scope this tab's process runs under (`buildLaunchScope(projectId,
-   * effectivePath)`), captured at launch from the SAME effectivePath the daemon
-   * emits on `launch.output`. Run tabs are global (not bound to the active
-   * chat), so a tab must carry its own scope — otherwise its console filters by
-   * whatever scope the currently-active chat resolves to (null when that chat is
-   * a draft / different project), hiding the output. Absent for terminals and
-   * Files guests.
+   * Launch scope this tab belongs to (`buildLaunchScope(projectId,
+   * effectivePath)`), captured at creation from the active session. Run tabs are
+   * global (not bound to the active chat), so each carries its own scope: launch
+   * tabs filter their console/status by it, and the Run surface shows only the
+   * tabs matching the active session's scope (so they don't leak across
+   * projects/worktrees). Stamped on EVERY tab — launch configs, terminals, and
+   * Files guests — from the active session; only absent on a draft/unresolved
+   * session (no scope yet).
    */
   scopeKey?: string;
 }
@@ -78,13 +79,16 @@ export function emptyRun(): RunState {
 export function addRunTab(run: RunState | null, tab: RunTab, paneId?: string): RunState | null {
   const base = run ?? emptyRun();
   // Launch-config tabs (preview webview OR console process) are singletons per
-  // config: if one already exists (in any pane), focus it instead of stacking a
-  // duplicate — the run button re-launches the same config repeatedly. This is
-  // the "or activates" half of addRunTab.
+  // config WITHIN a launch scope: if one already exists for the same config AND
+  // scope (in any pane), focus it instead of stacking a duplicate — the run
+  // button re-launches the same config repeatedly. Different scopes (a same-named
+  // config in another project/worktree) get their own tab. This is the "or
+  // activates" half of addRunTab.
   if (isLaunchTab(tab) && tab.config) {
-    const pane = base.panes.find((p) => p.tabs.some((t) => isLaunchTab(t) && t.config === tab.config));
+    const matches = (t: RunTab): boolean => isLaunchTab(t) && t.config === tab.config && t.scopeKey === tab.scopeKey;
+    const pane = base.panes.find((p) => p.tabs.some(matches));
     if (pane) {
-      const existing = pane.tabs.find((t) => isLaunchTab(t) && t.config === tab.config)!;
+      const existing = pane.tabs.find(matches)!;
       return activateRunTab(base, pane.id, existing.id);
     }
   }

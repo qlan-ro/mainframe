@@ -1,24 +1,27 @@
 /**
- * RunSurface — a run tab's OWN scope wins over the active-chat-derived scope.
+ * RunSurface — scope-coupled tab visibility (the leak fix).
  *
- * Regression: run tabs are GLOBAL (layout store), decoupled from the active
- * chat, but the console filter used to derive ONE scopeKey from the active chat
- * (`Object.keys(processStatuses).find(startsWith projectId)`) and apply it to
- * every tab. When the active chat didn't resolve to the tab's launch scope
- * (unresolved/draft chat → projectId undefined, or a different project), that
- * derivation yielded null/'' → ConsolePane filtered by '' → "No console output
- * yet" even though logs existed under the tab's real scope (the preview still
- * showed running via PreviewInstance's projectId-agnostic status fallback).
+ * Run tabs are global (layout store), but they must only be RENDERED for the
+ * session whose launch scope matches the tab's own `scopeKey`. Tabs from other
+ * projects/worktrees must be hidden — not just pass through a wrong scope — so
+ * they cannot leak into a different session's Run surface.
  *
- * Fix: each launch tab carries its own `scopeKey` (captured at launch from the
- * same effectivePath the daemon/logs use); RunSurface passes `tab.scopeKey`
- * (falling back to the active-chat scope only when the tab has none).
+ * NEW behavior (replaces the old "decoupled from the active chat" premise):
+ *   - RunSurface computes an `activeScopeKey` from `useActiveIdentity()` via
+ *     `buildLaunchScope(projectId, worktreePath ?? projectPath)`.
+ *   - `filterRunByScope(run, activeScopeKey)` is applied before rendering; only
+ *     tabs whose `scopeKey` matches (or tabs with no scopeKey at all) reach the DOM.
+ *   - A tab with a non-matching scopeKey produces NO rendered element.
  */
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Active scope the mock identity will resolve to.
 const TAB_SCOPE = 'proj-A:/Users/me/.worktrees/feat-x';
 
+// ---------------------------------------------------------------------------
+// Stubs — capture props so assertions can read what was rendered
+// ---------------------------------------------------------------------------
 const previewProps: Record<string, unknown>[] = [];
 vi.mock('@/features/preview/PreviewInstance', () => ({
   PreviewInstance: (props: Record<string, unknown>) => {
@@ -41,10 +44,13 @@ vi.mock('@/features/terminal/TerminalInstance', () => ({
 
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
 
-// The active chat is UNRESOLVED (draft / not yet projected) → no projectId, so
-// the old active-chat scope derivation produces null. The tab must still work.
+// Active identity resolves to proj-A + the worktree path → activeScopeKey = TAB_SCOPE.
 vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({ projectId: undefined, chatId: undefined }),
+  useActiveIdentity: () => ({
+    projectId: 'proj-A',
+    worktreePath: '/Users/me/.worktrees/feat-x',
+    chatId: 'chat-1',
+  }),
 }));
 
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
@@ -74,19 +80,27 @@ const FRESH_LAYOUT = {
   vFlex: { top: 1, bottom: 0.4 },
 };
 
+/**
+ * Seed the layout store with a single-pane run whose tabs are provided by the
+ * caller. The first tab in `tabs` becomes the active tab for the pane.
+ */
 function seedRunTabs(tabs: { id: string; kind: 'preview' | 'console'; config: string; scopeKey?: string }[]) {
   useLayoutStore.setState({
     layout: { ...FRESH_LAYOUT },
     run: {
       dir: 'v',
-      flex: [1],
-      panes: [{ id: 'pane-1', active: tabs[0]!.id, tabs: tabs.map((t) => ({ title: t.config, ...t })) }],
+      flex: [1, 1],
+      panes: [
+        {
+          id: 'pane-1',
+          active: tabs[0]!.id,
+          tabs: tabs.map((t) => ({ title: t.config, ...t })),
+        },
+      ],
     },
     sessions: new Map(),
     activeSessionId: null,
   });
-  // Logs/status live under the tab's real scope — NOT discoverable from the
-  // (unresolved) active chat.
   useSandboxStore.setState({
     captures: [],
     logsOutput: [],
@@ -96,24 +110,59 @@ function seedRunTabs(tabs: { id: string; kind: 'preview' | 'console'; config: st
   });
 }
 
-describe('RunSurface — per-tab scope (decoupled from the active chat)', () => {
+describe('RunSurface — scope-coupled tab visibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     previewProps.length = 0;
     consoleProps.length = 0;
   });
 
-  it('passes the preview tab’s own scopeKey even when the active chat is unresolved', () => {
-    seedRunTabs([{ id: 'tab-1', kind: 'preview', config: 'dev', scopeKey: TAB_SCOPE }]);
+  // Test 1 — matching preview tab is rendered and receives its scopeKey
+  it('renders a preview tab whose scopeKey matches the active scope', () => {
+    seedRunTabs([{ id: 'tab-match', kind: 'preview', config: 'dev', scopeKey: TAB_SCOPE }]);
     render(<RunSurface />);
     expect(previewProps[0]).toBeDefined();
     expect(previewProps[0]!['scopeKey']).toBe(TAB_SCOPE);
   });
 
-  it('passes the console tab’s own scopeKey to ConsolePane', () => {
+  // Test 2 — matching console tab is rendered and receives its scopeKey
+  it('renders a console tab whose scopeKey matches the active scope', () => {
     seedRunTabs([{ id: 'tab-c', kind: 'console', config: 'dev', scopeKey: TAB_SCOPE }]);
     render(<RunSurface />);
     expect(consoleProps[0]).toBeDefined();
     expect(consoleProps[0]!['scopeKey']).toBe(TAB_SCOPE);
+  });
+
+  // Test 3 — THE LEAK FIX: a tab from a different scope must NOT be rendered
+  it('does not render a preview tab whose scopeKey belongs to a different project/worktree', () => {
+    const { queryByTestId } = render(
+      (() => {
+        seedRunTabs([{ id: 'leak-tab', kind: 'preview', config: 'dev', scopeKey: 'proj-B:/other/worktree' }]);
+        return <RunSurface />;
+      })(),
+    );
+    // No preview body was mounted — prop-capture array is empty.
+    expect(previewProps).toHaveLength(0);
+    // The stub element for the leaking tab is absent from the DOM.
+    expect(queryByTestId('stub-preview-leak-tab')).toBeNull();
+  });
+
+  // Test 4 — mixed pane: only the matching tab renders; the other is hidden
+  it('in a mixed pane, renders only the tab matching the active scope and hides the other', () => {
+    seedRunTabs([
+      { id: 'keep-1', kind: 'preview', config: 'dev', scopeKey: TAB_SCOPE },
+      { id: 'leak-1', kind: 'preview', config: 'dev', scopeKey: 'proj-B:/other' },
+    ]);
+    const { queryByTestId, getByTestId } = render(<RunSurface />);
+
+    // Exactly one preview rendered, and it is the matching tab.
+    expect(previewProps).toHaveLength(1);
+    expect(previewProps[0]!['scopeKey']).toBe(TAB_SCOPE);
+
+    // The matching tab's stub is present.
+    expect(getByTestId('stub-preview-keep-1')).toBeTruthy();
+
+    // The leaking tab's stub is absent.
+    expect(queryByTestId('stub-preview-leak-1')).toBeNull();
   });
 });

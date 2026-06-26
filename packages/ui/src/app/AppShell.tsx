@@ -25,6 +25,7 @@ import { useSessionListRouter } from '../features/sessions/ws/use-session-list-r
 import { useNewChatHotkey } from '../features/sessions/use-new-chat-hotkey';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
+import { activeLaunchScope } from '../lib/launch-scope';
 import { useUiPrefs } from '../store/ui-prefs';
 import { useTheme } from '../store/theme';
 import { windowStyleGeometry } from '../lib/appearance/window-style';
@@ -77,8 +78,8 @@ function RuntimeBody({ port }: { port: number }) {
   // can normalize open-file path flavors to a canonical relative key (F1 fix).
   const setActiveBases = useActiveBasesStore((s) => s.setActiveBases);
   useEffect(() => {
-    setActiveBases({ worktreePath, projectPath });
-  }, [worktreePath, projectPath, setActiveBases]);
+    setActiveBases({ worktreePath, projectPath }, activeLaunchScope(projectId, worktreePath, projectPath));
+  }, [projectId, worktreePath, projectPath, setActiveBases]);
 
   // ⌘, / Ctrl+, opens settings.
   useEffect(() => {

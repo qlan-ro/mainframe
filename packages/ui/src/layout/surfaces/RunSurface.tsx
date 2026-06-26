@@ -13,6 +13,8 @@ import { RunTabStrip } from '../RunTabStrip';
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { activeLaunchScope } from '@/lib/launch-scope';
+import { filterRunByScope } from '@/store/run-scope-filter';
 import type { RunPane, RunTab } from '@/store/run-pane';
 import { SurfacePicker } from '../SurfacePicker';
 
@@ -85,16 +87,22 @@ function RunPaneView({ pane, primary, scopeKey, projectId }: RunPaneViewProps) {
 }
 
 export function RunSurface() {
-  const run = useLayoutStore((s) => s.run);
-  const hasContent = run && run.panes.some((p) => p.tabs.length > 0);
+  const storeRun = useLayoutStore((s) => s.run);
 
-  const { projectId } = useActiveIdentity();
+  const { projectId, worktreePath, projectPath } = useActiveIdentity();
   const processStatuses = useSandboxStore((s) => s.processStatuses);
 
-  // Derive the scope key from the first scope that has statuses for the active
-  // project (the effectivePath comes from the launch status fetch) so we can pass
-  // it to ConsolePane / PreviewInstance.
-  const scopeKey = projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null;
+  // Show only the tabs belonging to the active session's launch scope — a tab
+  // opened under another project/worktree must not leak into this session.
+  const activeScopeKey = activeLaunchScope(projectId, worktreePath, projectPath);
+  const run = filterRunByScope(storeRun, activeScopeKey);
+  const hasContent = run && run.panes.some((p) => p.tabs.length > 0);
+
+  // Fallback scope for any legacy tab that predates per-tab scopeKeys: the first
+  // scope with statuses for the active project. Filtered tabs carry their own.
+  const scopeKey =
+    activeScopeKey ??
+    (projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null);
 
   return (
     <div data-testid="run-surface" className="flex h-full flex-col">

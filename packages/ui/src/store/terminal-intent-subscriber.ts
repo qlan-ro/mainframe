@@ -33,7 +33,8 @@ export function subscribeToTerminalIntents(): () => void {
 
 async function spawnTerminal(paneId: string | undefined): Promise<void> {
   try {
-    const { worktreePath, projectPath } = useActiveBasesStore.getState().bases;
+    const { bases, scopeKey } = useActiveBasesStore.getState();
+    const { worktreePath, projectPath } = bases;
     const homedir = await cachedHomedir();
     const cwd = resolveCwd({ worktreePath, projectPath, homedir });
 
@@ -48,7 +49,9 @@ async function spawnTerminal(paneId: string | undefined): Promise<void> {
     // addRunTab returns false when an explicit paneId was given but that pane
     // was closed during the async create above (M6). The terminal is already
     // live — dispose it (kills the PTY via the disposer) so it doesn't orphan.
-    const added = useLayoutStore.getState().addRunTab({ id, kind: 'terminal', title }, paneId);
+    const added = useLayoutStore
+      .getState()
+      .addRunTab({ id, kind: 'terminal', title, scopeKey: scopeKey ?? undefined }, paneId);
     if (!added) {
       disposeCachedTerminal(id);
     }
