@@ -77,6 +77,8 @@ beforeEach(() => {
     capture: vi.fn().mockRejectedValue(new Error('no')),
     startInspect: vi.fn().mockResolvedValue(undefined),
     onInspect: vi.fn().mockReturnValue(() => {}),
+    startRegionSelect: vi.fn().mockResolvedValue(undefined),
+    onRegionSelect: vi.fn().mockReturnValue(() => {}),
     refit: vi.fn(),
     setDevice: vi.fn(),
     destroy: spy,

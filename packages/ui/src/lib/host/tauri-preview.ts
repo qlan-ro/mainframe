@@ -8,7 +8,14 @@
  * rect and re-issues preview_set_bounds (the renderer no longer threads bounds
  * through every call).
  */
-import type { PreviewOpts, PreviewHandle, Region, InspectResult, Unsubscribe } from '@qlan-ro/mainframe-types';
+import type {
+  PreviewOpts,
+  PreviewHandle,
+  Region,
+  RegionSelectResult,
+  InspectResult,
+  Unsubscribe,
+} from '@qlan-ro/mainframe-types';
 import * as preview from '@/lib/tauri/preview';
 
 let tabSeq = 0;
@@ -43,6 +50,11 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
         .catch((e) => console.warn('[preview] tauri onInspect', e));
       return () => unlisten?.();
     },
+    // Region select is not yet wired in the Tauri native backend — stub satisfies the interface.
+    startRegionSelect: (): Promise<void> => Promise.resolve(),
+    onRegionSelect:
+      (_cb: (result: RegionSelectResult) => void): Unsubscribe =>
+      () => {},
     refit: (): void => {
       void preview.previewSetBounds(tabId, readBounds()).catch((e) => console.warn('[preview] tauri refit', e));
     },

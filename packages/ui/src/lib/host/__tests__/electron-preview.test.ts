@@ -268,4 +268,45 @@ describe('mountElectronPreview', () => {
     expect(result.rect).toBeNull();
     expect(result.viewport).toBeNull();
   });
+
+  it('startRegionSelect fans out the selected region to onRegionSelect subscribers', async () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const received: unknown[] = [];
+    handle.onRegionSelect((r) => received.push(r));
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    wv.executeJavaScript = () => Promise.resolve({ region: { x: 10, y: 20, w: 30, h: 40 } });
+    await handle.startRegionSelect();
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual({ tabId: expect.any(String), region: { x: 10, y: 20, w: 30, h: 40 } });
+  });
+
+  it('startRegionSelect with a null/cancelled result delivers region: null', async () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const received: unknown[] = [];
+    handle.onRegionSelect((r) => received.push(r));
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    wv.executeJavaScript = () => Promise.resolve({ region: null });
+    await handle.startRegionSelect();
+    expect(received).toEqual([{ tabId: expect.any(String), region: null }]);
+  });
+
+  it('onRegionSelect unsubscribe stops delivery', async () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const cb = vi.fn();
+    const unsub = handle.onRegionSelect(cb);
+    unsub();
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    wv.executeJavaScript = () => Promise.resolve({ region: { x: 0, y: 0, w: 5, h: 5 } });
+    await handle.startRegionSelect();
+    expect(cb).not.toHaveBeenCalled();
+  });
 });

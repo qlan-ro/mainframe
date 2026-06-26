@@ -7,7 +7,14 @@
  * runs INSPECT_SCRIPT via executeJavaScript and resolves inline, fanned out to
  * onInspect subscribers. Ported from the retired desktop renderer PreviewTab.
  */
-import type { PreviewOpts, PreviewHandle, Region, InspectResult, Unsubscribe } from '@qlan-ro/mainframe-types';
+import type {
+  PreviewOpts,
+  PreviewHandle,
+  Region,
+  RegionSelectResult,
+  InspectResult,
+  Unsubscribe,
+} from '@qlan-ro/mainframe-types';
 
 // Minimal interface for the Electron <webview> DOM element.
 // We do NOT import from packages/app-electron to keep the dependency unidirectional.
@@ -114,6 +121,61 @@ const INSPECT_SCRIPT = `
 })()
 `;
 
+// Drag-select region picker — injected into the webview page. Unlike INSPECT_SCRIPT,
+// the overlay captures pointer events directly so it can draw the selection rectangle.
+// Resolves { region: {x,y,w,h} } on mouseup, or { region: null } on Escape / zero-size.
+const REGION_SELECT_SCRIPT = `
+(function() {
+  var old = document.getElementById('__mf_region_overlay');
+  if (old) old.remove();
+  if (window.__mf_region_cleanup) { window.__mf_region_cleanup(); delete window.__mf_region_cleanup; }
+  var overlay = document.createElement('div');
+  overlay.id = '__mf_region_overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;cursor:crosshair;z-index:2147483646;background:rgba(0,0,0,0.05);';
+  var sel = document.createElement('div');
+  sel.style.cssText = 'position:fixed;border:2px solid #3b82f6;background:rgba(59,130,246,0.2);pointer-events:none;display:none;';
+  overlay.appendChild(sel);
+  document.body.appendChild(overlay);
+  return new Promise(function(resolve) {
+    var start = null;
+    function cleanup() {
+      overlay.removeEventListener('mousedown', onDown);
+      overlay.removeEventListener('mousemove', onMove);
+      overlay.removeEventListener('mouseup', onUp);
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      delete window.__mf_region_cleanup;
+    }
+    function geom(e) {
+      var x = Math.min(start.x, e.clientX), y = Math.min(start.y, e.clientY);
+      return { x: x, y: y, w: Math.abs(e.clientX - start.x), h: Math.abs(e.clientY - start.y) };
+    }
+    function onDown(e) {
+      start = { x: e.clientX, y: e.clientY };
+      sel.style.left = start.x + 'px'; sel.style.top = start.y + 'px';
+      sel.style.width = '0px'; sel.style.height = '0px'; sel.style.display = 'block';
+    }
+    function onMove(e) {
+      if (!start) return;
+      var g = geom(e);
+      sel.style.left = g.x + 'px'; sel.style.top = g.y + 'px';
+      sel.style.width = g.w + 'px'; sel.style.height = g.h + 'px';
+    }
+    function onUp(e) {
+      if (!start) { cleanup(); resolve({ region: null }); return; }
+      var g = geom(e); cleanup();
+      resolve(g.w > 0 && g.h > 0 ? { region: g } : { region: null });
+    }
+    function onKey(e) { if (e.key === 'Escape') { cleanup(); resolve({ region: null }); } }
+    overlay.addEventListener('mousedown', onDown);
+    overlay.addEventListener('mousemove', onMove);
+    overlay.addEventListener('mouseup', onUp);
+    document.addEventListener('keydown', onKey, true);
+    window.__mf_region_cleanup = function() { cleanup(); resolve({ region: null }); };
+  });
+})()
+`;
+
 interface InspectPickResult {
   selector: string;
   rect: { x: number; y: number; width: number; height: number };
@@ -134,6 +196,7 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
   const tabId = `preview-${++tabSeq}`;
   const partition = `persist:sandbox-${opts?.projectId ?? 'default'}`;
   const inspectCbs = new Set<(r: InspectResult) => void>();
+  const regionCbs = new Set<(r: RegionSelectResult) => void>();
 
   // Create the <webview> element and position it to fill the container.
   const wv = document.createElement('webview') as unknown as WebviewElement;
@@ -182,6 +245,18 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
     }
   };
 
+  const startRegionSelect = async (): Promise<void> => {
+    if (typeof (wv as unknown as { executeJavaScript?: unknown }).executeJavaScript !== 'function') return;
+    try {
+      const raw = (await wv.executeJavaScript(REGION_SELECT_SCRIPT)) as { region: Region | null } | null;
+      const payload: RegionSelectResult = { tabId, region: raw?.region ?? null };
+      for (const cb of regionCbs) cb(payload);
+    } catch (e) {
+      console.warn('[preview] electron region select failed', e);
+      for (const cb of regionCbs) cb({ tabId, region: null });
+    }
+  };
+
   return {
     setVisible: (visible: boolean): void => {
       wv.style.display = visible ? '' : 'none';
@@ -193,6 +268,13 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
       inspectCbs.add(cb);
       return () => {
         inspectCbs.delete(cb);
+      };
+    },
+    startRegionSelect,
+    onRegionSelect: (cb: (r: RegionSelectResult) => void): Unsubscribe => {
+      regionCbs.add(cb);
+      return () => {
+        regionCbs.delete(cb);
       };
     },
     refit: (): void => {

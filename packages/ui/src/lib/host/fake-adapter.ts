@@ -82,6 +82,8 @@ export class FakeHostBridge implements HostBridge {
       capture: () => Promise.reject(new Error('preview.capture is not available in browser/dev mode')),
       startInspect: () => Promise.resolve(),
       onInspect: () => () => {},
+      startRegionSelect: () => Promise.resolve(),
+      onRegionSelect: () => () => {},
       refit: () => {},
       setDevice: () => {},
       destroy: () => {},
