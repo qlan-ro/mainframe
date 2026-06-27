@@ -15,7 +15,7 @@ import { CodeIcon, QuoteIcon } from 'lucide-react';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import type { ReviewComment, ReviewCommentItem } from '../view-model/parse-review-comment';
-import { rangeLabel, SnippetLines } from './CodeRefCard';
+import { rangeLabel, SnippetLines } from './code-snippet';
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 

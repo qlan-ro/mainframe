@@ -17,7 +17,6 @@
  *   - Inline images → thumbnail row (regular image parts)
  *   - Attachments   → UserAttachments: file pills + clickable capture-image
  *     tiles with their selector context (native message.attachments)
- *   - Code review   → CodeRefCard (render-only; producer lands with the editor)
  *
  * @mention inline rendering uses the native `createDirectiveText` pattern from
  * @assistant-ui/react via our `mainframeUserFormatter` (see user-directives.ts).
@@ -47,7 +46,6 @@ import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text
 import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
-import { CodeRefCard } from './CodeRefCard';
 import { ReviewCommentCard } from './ReviewCommentCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,7 +224,6 @@ function UserMessageImpl() {
 
   // TODO(leaf): PLAN_PREFIX card ("Implementing plan") — deferred to plan-card leaf
 
-  const codeRefCard = meta.codeRef ? <CodeRefCard codeRef={meta.codeRef} /> : null;
   // Diff-review sends: the file card IS the message (the projection dropped the
   // raw text), so it takes the bubble's place rather than stacking beside one.
   const reviewCard = meta.reviewComment ? <ReviewCommentCard review={meta.reviewComment} /> : null;
@@ -270,7 +267,6 @@ function UserMessageImpl() {
       data-message-id={messageId}
       className="flex flex-col items-end gap-2 pt-2"
     >
-      {codeRefCard}
       {reviewCard}
 
       {isQueued ? (

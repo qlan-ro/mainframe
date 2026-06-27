@@ -1,7 +1,7 @@
 /**
  * UserMessage — behavior tests for H5 (send-failure visibility), H6
  * (message id + content), T10 (skill chip), and the metadata-dispatch
- * tests for captures / codeRef / attachments.
+ * tests for captures / attachments.
  *
  * Strategy:
  *  - Mock `@assistant-ui/react` so `useAuiState` receives a synthetic
@@ -10,9 +10,9 @@
  *  - `MessagePrimitive.Root` is stubbed to a plain `<div>` so the component
  *    tree renders without a full AssistantRuntime.
  *  - `ReadMoreBubble` and `QueuedUserTurn` render their children unchanged.
- *  - Child components `UserAttachments`, `CaptureContextRow`, and
- *    `CodeRefCard` are mocked to simple marker divs so these tests verify
- *    dispatch (conditional rendering) only — not the children's internals.
+ *  - Child component `UserAttachments` is mocked to a simple marker div so
+ *    these tests verify dispatch (conditional rendering) only — not the
+ *    child's internals.
  *  - All assertions are against hardcoded values; no component logic is
  *    recomputed here.
  *
@@ -21,11 +21,9 @@
  *        `[data-testid="chat-user-message-send-failed"]` with "Failed to send".
  *  H5 — a normal message (no error) does NOT render that element.
  *  H6 — message id and content are read correctly (renders expected text).
- *  MD — captures array (length > 0) → CaptureContextRow rendered below bubble.
- *  MD — captures with no cleanText → CaptureContextRow renders; no crash.
- *  MD — codeRef object → CodeRefCard rendered above bubble.
- *  MD — plain message (no captures, no codeRef) → neither conditional child
- *       rendered; UserAttachments always present.
+ *  MD — captures array (length > 0) → capture context renders; no crash.
+ *  MD — plain message (no captures) → no capture row; UserAttachments always
+ *       present.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -67,11 +65,6 @@ interface SyntheticMainframeMeta {
     selector?: string;
     annotation?: string;
   }>;
-  codeRef?: {
-    file: string;
-    range: { start: number; end?: number };
-    code: string;
-  };
   attachmentPreviews?: Array<{
     name: string;
     kind: 'image' | 'file';
@@ -110,10 +103,6 @@ vi.mock('@assistant-ui/react', () => ({
 
 vi.mock('../UserAttachments', () => ({
   UserAttachments: () => <div data-testid="chat-user-attachments" />,
-}));
-
-vi.mock('../CodeRefCard', () => ({
-  CodeRefCard: () => <div data-testid="chat-user-code-ref" />,
 }));
 
 // QueuedUserTurn renders for real children + the extrasSlot, so a no-body
@@ -345,24 +334,13 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
   });
 
-  it('renders CodeRefCard when codeRef is present in metadata', () => {
-    __messageFixture = makeFixture({
-      mainframe: {
-        codeRef: { file: 'Layout.tsx', range: { start: 42, end: 46 }, code: 'a\nb' },
-      },
-    });
-    renderUserMessage();
-    expect(screen.getByTestId('chat-user-code-ref')).toBeInTheDocument();
-  });
-
-  it('renders neither CaptureContextRow nor CodeRefCard for a plain message, but always renders UserAttachments', () => {
+  it('renders neither CaptureContextRow nor capture-row for a plain message, but always renders UserAttachments', () => {
     __messageFixture = makeFixture({
       content: [{ type: 'text', text: 'hello' }],
       mainframe: undefined,
     });
     renderUserMessage();
     expect(screen.queryByTestId('chat-user-capture-row')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('chat-user-code-ref')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
   });
 

@@ -29,7 +29,6 @@ function result(msg: DisplayMessage) {
         mainframe?: {
           captures?: unknown;
           attachmentPreviews?: unknown;
-          codeRef?: unknown;
           [key: string]: unknown;
         };
       };
@@ -329,59 +328,5 @@ describe('convertMessage USER — reviewComment projection', () => {
   it('does NOT set reviewComment for a plain text message', () => {
     const msg = user([{ type: 'text', text: 'hello' }]);
     expect(mainframe(msg)?.reviewComment).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. codeRef — valid shape is forwarded intact
-// ---------------------------------------------------------------------------
-
-describe('convertMessage USER — codeRef metadata', () => {
-  it('passes a well-formed codeRef through to mainframe.codeRef', () => {
-    const msg = user([{ type: 'text', text: 'review' }], {
-      codeRef: { file: 'Layout.tsx', range: { start: 42, end: 46 }, code: 'const a = 1;' },
-    });
-
-    expect(mainframe(msg)?.codeRef).toEqual({
-      file: 'Layout.tsx',
-      range: { start: 42, end: 46 },
-      code: 'const a = 1;',
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // 8a. Bad codeRef — missing file
-  // ---------------------------------------------------------------------------
-
-  it('omits codeRef when file is missing', () => {
-    const msg = user([{ type: 'text', text: 'review' }], {
-      codeRef: { range: { start: 42, end: 46 }, code: 'const a = 1;' },
-    });
-
-    expect(mainframe(msg)?.codeRef).toBeUndefined();
-  });
-
-  // ---------------------------------------------------------------------------
-  // 8b. Bad codeRef — range.start is a string
-  // ---------------------------------------------------------------------------
-
-  it('omits codeRef when range.start is a string, not a number', () => {
-    const msg = user([{ type: 'text', text: 'review' }], {
-      codeRef: { file: 'Layout.tsx', range: { start: '42', end: 46 }, code: 'const a = 1;' },
-    });
-
-    expect(mainframe(msg)?.codeRef).toBeUndefined();
-  });
-
-  // ---------------------------------------------------------------------------
-  // 8c. Bad codeRef — codeRef is null
-  // ---------------------------------------------------------------------------
-
-  it('omits codeRef when codeRef is null', () => {
-    const msg = user([{ type: 'text', text: 'review' }], {
-      codeRef: null,
-    });
-
-    expect(mainframe(msg)?.codeRef).toBeUndefined();
   });
 });

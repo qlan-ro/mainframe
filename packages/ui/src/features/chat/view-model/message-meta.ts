@@ -43,12 +43,6 @@ export interface MainframeMessageMeta {
   }>;
   /** Sandbox-capture rows parsed from the \0__MF_SANDBOX_CAPTURE__ block. */
   readonly captures?: ReadonlyArray<CaptureRow>;
-  /** Code-reference (review-from-editor) — render-only contract; no producer yet. */
-  readonly codeRef?: {
-    readonly file: string;
-    readonly range: { readonly start: number; readonly end?: number };
-    readonly code: string;
-  };
   /** Diff-review comments parsed from the desktop "Diff of `file`" text shape. */
   readonly reviewComment?: ReviewComment;
   // optimistic pending (written by projectPendingMessage in project-messages.ts)

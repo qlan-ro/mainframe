@@ -68,24 +68,6 @@ function coerceUserMeta(metadata: unknown): MainframeMessageMeta {
     });
     if (previews.length > 0) out.attachmentPreviews = previews;
   }
-  // codeRef: structural validation — bad shape is silently ignored (render-only contract).
-  if (typeof m.codeRef === 'object' && m.codeRef !== null) {
-    const c = m.codeRef as Record<string, unknown>;
-    const range = c.range as Record<string, unknown> | undefined;
-    if (
-      typeof c.file === 'string' &&
-      typeof c.code === 'string' &&
-      typeof range === 'object' &&
-      range !== null &&
-      typeof range.start === 'number'
-    ) {
-      out.codeRef = {
-        file: c.file,
-        code: c.code,
-        range: { start: range.start, ...(typeof range.end === 'number' && { end: range.end }) },
-      };
-    }
-  }
   return out as MainframeMessageMeta;
 }
 
