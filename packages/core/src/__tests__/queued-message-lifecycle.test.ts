@@ -84,7 +84,6 @@ describe('Queued message cleanup — onQueuedProcessed via isReplay', () => {
       pid: 123,
       activeTasks: new Map(),
       interruptTimer: null,
-      pendingCancelCallbacks: new Map(),
       pendingStopTaskCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),

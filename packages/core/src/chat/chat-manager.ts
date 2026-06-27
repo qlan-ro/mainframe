@@ -50,7 +50,6 @@ interface QueuedItem {
 
 export class ChatManager {
   private activeChats = new Map<string, ActiveChat>();
-  private queuedRefs = new Map<string, QueuedMessageRef>();
   private chatQueues = new Map<string, QueuedItem[]>();
   private messages = new MessageCache();
   private permissions: PermissionManager;
@@ -317,8 +316,8 @@ export class ChatManager {
     // per-message replay ack (Claude CLI stream-json). Adapters that consume
     // sendMessage synchronously (Codex turn/start, Claude SDK streamFollowUp)
     // never call `sink.onQueuedProcessed`, so leaving them on the queued path
-    // would strand `queuedRefs` and pin `processState='working'` forever via
-    // the new `getQueuedCount` gate in onResult.
+    // would strand chatQueues and pin `processState='working'` forever via
+    // the `getQueuedCount` gate in onResult.
     const adapterAcksReplay = postStart.session.supportsReplayAck === true;
     const isQueued = adapterAcksReplay && postStart.chat.processState === 'working';
     const transientMetadata: Record<string, unknown> = {};
@@ -415,10 +414,10 @@ export class ChatManager {
   }
 
   handleQueuedProcessed(chatId: string, uuid: string): void {
-    const ref = this.queuedRefs.get(uuid);
-    if (!ref) return;
-    this.queuedRefs.delete(uuid);
-    logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
+    // Acknowledgement from the CLI that it dequeued this message via isReplay.
+    // Stripping the queued flag from the message cache is handled by EventHandler.
+    // The flushNextQueued path removes items from chatQueues on its own.
+    logger.debug({ chatId, uuid }, 'CLI acknowledged queued message replay');
   }
 
   /**
@@ -468,18 +467,13 @@ export class ChatManager {
     }));
   }
 
-  /** Drop every queuedRef belonging to a chat. Called when the CLI process exits. */
+  /** Drop every daemon-queued item for a chat. Called when the CLI process exits. */
   clearAllQueuedForChat(chatId: string): void {
-    let removed = 0;
-    for (const [uuid, ref] of this.queuedRefs) {
-      if (ref.chatId === chatId) {
-        this.queuedRefs.delete(uuid);
-        removed++;
-      }
-    }
-    if (removed > 0) {
-      logger.info({ chatId, removed }, 'cleared queued refs for exited chat');
-    }
+    const list = this.chatQueues.get(chatId);
+    if (!list || list.length === 0) return;
+    this.chatQueues.delete(chatId);
+    logger.info({ chatId, removed: list.length }, 'cleared daemon queue for exited chat');
+    this.emitEvent({ type: 'message.queued.cleared', chatId });
   }
 
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {

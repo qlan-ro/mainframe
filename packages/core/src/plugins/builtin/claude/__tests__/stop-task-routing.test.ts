@@ -4,7 +4,7 @@ import { handleControlResponseEvent } from '../events.js';
 function makeSession(): any {
   return {
     id: 's1',
-    state: { pendingStopTaskCallbacks: new Map(), pendingCancelCallbacks: new Map() },
+    state: { pendingStopTaskCallbacks: new Map() },
   };
 }
 

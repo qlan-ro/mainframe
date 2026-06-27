@@ -73,8 +73,6 @@ export interface ClaudeSessionState {
   pid: number;
   activeTasks: Map<string, { type: string; command?: string }>;
   interruptTimer: ReturnType<typeof setTimeout> | null;
-  /** Pending cancel_async_message callbacks keyed by request_id */
-  pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
   /** Pending stop_task callbacks keyed by request_id */
   pendingStopTaskCallbacks: Map<string, (result: { ok: boolean; error?: string }) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
@@ -149,7 +147,6 @@ export class ClaudeSession implements AdapterSession {
       pid: 0,
       activeTasks: new Map(),
       interruptTimer: null,
-      pendingCancelCallbacks: new Map(),
       pendingStopTaskCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
@@ -475,27 +472,10 @@ export class ClaudeSession implements AdapterSession {
     stdin.write(json + '\n');
   }
 
-  async cancelQueuedMessage(uuid: string): Promise<boolean> {
-    const stdin = this.state.child?.stdin;
-    if (!stdin || stdin.destroyed) {
-      log.warn({ sessionId: this.id, uuid }, 'cancelQueuedMessage: stdin unavailable');
-      return false;
-    }
-    const requestId = this.sendControlRequest(stdin, { subtype: 'cancel_async_message', message_uuid: uuid });
-    log.info({ sessionId: this.id, uuid, requestId }, 'sent cancel_async_message');
-
-    // Wait for the CLI's control_response with the actual cancelled boolean
-    return new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.state.pendingCancelCallbacks.delete(requestId);
-        log.warn({ sessionId: this.id, uuid, requestId }, 'cancel_async_message timed out');
-        resolve(false);
-      }, 5000);
-      this.state.pendingCancelCallbacks.set(requestId, (cancelled) => {
-        clearTimeout(timeout);
-        resolve(cancelled);
-      });
-    });
+  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
+    // Cancel operates at the daemon queue level (ChatManager.cancelQueuedMessage).
+    // The CLI's cancel_async_message control request was never implemented by the CLI.
+    return false;
   }
 
   async stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
