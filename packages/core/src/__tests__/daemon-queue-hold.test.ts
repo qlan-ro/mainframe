@@ -25,6 +25,7 @@ describe('daemon holds the queue (A1)', () => {
         'c1',
         {
           chat: { id: 'c1', processState: 'working', title: 't' },
+          // isSpawned: true bypasses the !active?.session?.isSpawned guard in sendMessage
           session: { id: 's1', adapterId: 'claude', supportsReplayAck: true, sendMessage, isSpawned: true },
         },
       ],
@@ -38,5 +39,9 @@ describe('daemon holds the queue (A1)', () => {
     expect(queued).toHaveLength(1);
     expect(queued[0].content).toBe('queued text');
     expect(emit.mock.calls.some((c: any[]) => c[0].type === 'message.queued')).toBe(true);
+    const queuedCall = emit.mock.calls.find((c: any[]) => c[0].type === 'message.queued');
+    expect(queuedCall?.[0].ref.chatId).toBe('c1');
+    expect(queuedCall?.[0].ref.content).toBe('queued text');
+    expect(typeof queuedCall?.[0].ref.uuid).toBe('string');
   });
 });

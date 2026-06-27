@@ -358,12 +358,13 @@ export class ChatManager {
     this.db.chats.update(chatId, { processState: 'working', updatedAt: now });
     this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
-    if (isQueued && messageUuid) {
+    if (isQueued) {
+      if (!messageUuid) throw new Error('invariant: a queued message must carry a uuid');
       const item: QueuedItem = {
         messageId: message.id,
         uuid: messageUuid,
         content,
-        outgoingContent: outgoingContent ?? '',
+        outgoingContent,
         images: images.length > 0 ? images : undefined,
         attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
         timestamp: message.timestamp,
