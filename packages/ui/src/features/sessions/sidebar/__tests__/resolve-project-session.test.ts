@@ -19,4 +19,9 @@ describe('resolveProjectSession', () => {
   it('returns null when the project has no sessions', () => {
     expect(resolveProjectSession(items, 'pX', {})).toBeNull();
   });
+  it('falls back to most-recent live when the remembered session is archived', () => {
+    const withArchived = [item('a', 'p1', 500, 'archived'), item('b', 'p1', 300), item('c', 'p2', 200)];
+    // remembered 'a' is archived → excluded from live set → falls back to 'b' (highest updatedAt among live p1 sessions)
+    expect(resolveProjectSession(withArchived, 'p1', { p1: 'a' })).toBe('b');
+  });
 });
