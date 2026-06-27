@@ -388,46 +388,29 @@ export class ChatManager {
   }
 
   async editQueuedMessage(chatId: string, messageId: string, content: string): Promise<void> {
-    const ref = [...this.queuedRefs.values()].find((r) => r.chatId === chatId && r.messageId === messageId);
-    if (!ref) return;
-
-    const active = this.activeChats.get(chatId);
-    if (!active?.session) return;
-
-    const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
-    if (!cancelled) {
-      logger.info({ chatId, uuid: ref.uuid }, 'edit failed: message already dequeued by CLI');
-      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
-      return;
-    }
-
-    this.queuedRefs.delete(ref.uuid);
-    this.emitEvent({ type: 'message.queued.cancelled', chatId, uuid: ref.uuid });
-    this.messages.removeById(chatId, ref.messageId);
+    const list = this.chatQueues.get(chatId);
+    const item = list?.find((i) => i.messageId === messageId);
+    if (!item) return;
+    item.content = content;
+    item.outgoingContent = content;
+    const cached = this.messages.get(chatId)?.find((m) => m.id === messageId);
+    if (cached) (cached as { content: unknown }).content = [{ type: 'text', text: content }];
+    this.emitEvent({ type: 'message.queued.snapshot', chatId, refs: this.getQueuedForChat(chatId) });
     this.eventHandler.emitDisplay(chatId);
-
-    await this.sendMessage(chatId, content, ref.attachmentIds);
+    logger.info({ chatId, messageId }, 'queued message edited (daemon queue)');
   }
 
   async cancelQueuedMessage(chatId: string, messageId: string): Promise<void> {
-    const ref = [...this.queuedRefs.values()].find((r) => r.chatId === chatId && r.messageId === messageId);
-    if (!ref) return;
-
-    const active = this.activeChats.get(chatId);
-    if (!active?.session) return;
-
-    const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
-    if (!cancelled) {
-      logger.info({ chatId, uuid: ref.uuid }, 'cancel failed: message already dequeued by CLI');
-      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
-      return;
-    }
-
-    this.queuedRefs.delete(ref.uuid);
-    this.messages.removeById(chatId, ref.messageId);
-    this.emitEvent({ type: 'message.queued.cancelled', chatId, uuid: ref.uuid });
+    const list = this.chatQueues.get(chatId);
+    const idx = list?.findIndex((i) => i.messageId === messageId) ?? -1;
+    if (!list || idx < 0) return;
+    const [item] = list.splice(idx, 1);
+    if (list.length === 0) this.chatQueues.delete(chatId);
+    else this.chatQueues.set(chatId, list);
+    this.messages.removeById(chatId, item!.messageId);
+    this.emitEvent({ type: 'message.queued.cancelled', chatId, uuid: item!.uuid });
     this.eventHandler.emitDisplay(chatId);
-    logger.info({ chatId, uuid: ref.uuid }, 'queued message cancelled in CLI');
+    logger.info({ chatId, uuid: item!.uuid }, 'queued message cancelled (daemon queue)');
   }
 
   handleQueuedProcessed(chatId: string, uuid: string): void {
