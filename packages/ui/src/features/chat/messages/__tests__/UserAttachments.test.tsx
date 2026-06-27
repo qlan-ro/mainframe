@@ -275,7 +275,7 @@ describe('UserAttachments — B8: capture selector uses text-mf-code-fn class', 
     __src = 'data:img';
   });
 
-  it('the selector <code> element has text-mf-code-fn class and not text-mf-success', () => {
+  it('the selector element has text-mf-code-fn class and not text-mf-success', () => {
     __attachmentName = 'element1.png';
     __meta = {
       captures: [{ label: 'element1', imageName: 'element1.png', selector: 'nav > .active' }],
@@ -283,11 +283,11 @@ describe('UserAttachments — B8: capture selector uses text-mf-code-fn class', 
 
     renderAttachments();
 
-    // Find the code element containing the selector text
-    const codeEl = screen.getByText('nav > .active');
-    expect(codeEl.tagName.toLowerCase()).toBe('code');
-    expect(codeEl.className).toContain('text-mf-code-fn');
-    expect(codeEl.className).not.toContain('text-mf-success');
+    // TruncatedWithTooltip renders a <span> (not <code>); the testid is the stable hook.
+    const selectorEl = screen.getByTestId('chat-capture-selector');
+    expect(selectorEl).toHaveTextContent('nav > .active');
+    expect(selectorEl.className).toContain('text-mf-code-fn');
+    expect(selectorEl.className).not.toContain('text-mf-success');
   });
 });
 
@@ -316,5 +316,35 @@ describe('UserAttachments — B7: image attachment with no matching capture rend
     expect(img).toHaveAttribute('src', 'data:img');
 
     expect(screen.queryByRole('code')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — B9: capture selector chip carries data-testid and full selector text
+// ---------------------------------------------------------------------------
+
+describe('UserAttachments — B9: capture selector has chat-capture-selector testid', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __attachmentType = 'image';
+    __src = 'data:img';
+  });
+
+  it('renders the capture selector in a tooltip-bearing chip with a testid', () => {
+    __attachmentName = 'el.png';
+    __meta = {
+      captures: [
+        {
+          label: 'el',
+          imageName: 'el.png',
+          selector: 'div > div.min-h-screen.bg-background',
+        },
+      ],
+    };
+
+    renderAttachments();
+
+    const el = screen.getByTestId('chat-capture-selector');
+    expect(el).toHaveTextContent('div > div.min-h-screen.bg-background');
   });
 });

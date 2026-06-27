@@ -16,6 +16,7 @@ import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { extTint, fileExtMeta } from './file-ext-colors';
 import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assistant-ui/attachment';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -84,7 +85,12 @@ function ImageAttachment({ name }: { name: string }) {
       {thumb}
       <span className="flex min-w-0 flex-col">
         {capture?.selector && (
-          <code className="truncate font-mono text-caption text-mf-code-fn">{capture.selector}</code>
+          <TruncatedWithTooltip
+            data-testid="chat-capture-selector"
+            text={capture.selector}
+            className="font-mono text-caption text-mf-code-fn"
+            contentClassName="font-mono break-all"
+          />
         )}
         {capture?.annotation && <span className="truncate text-micro text-mf-text-3">{capture.annotation}</span>}
       </span>
