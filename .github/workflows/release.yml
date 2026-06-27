@@ -10,8 +10,13 @@ jobs:
     permissions:
       contents: write
     strategy:
+      # Don't cancel the other platforms when one fails — we still want their artifacts.
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # Pin Windows to 2022: the windows-latest (2025) image breaks pnpm's bundled
+        # node-gyp VS finder (ERR_CHILD_PROCESS_STDIO_MAXBUFFER), failing native builds
+        # (better-sqlite3 / node-pty).
+        os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
