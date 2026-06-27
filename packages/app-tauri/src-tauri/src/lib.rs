@@ -22,8 +22,8 @@ use presence::{report_activity, DaemonPort};
 use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
 use preview::{
     preview_capture, preview_create, preview_destroy, preview_eval, preview_inspect_result,
-    preview_navigate, preview_open_external, preview_region_result, preview_set_bounds,
-    preview_set_visible, PreviewManager,
+    preview_navigate, preview_navigate_event, preview_open_external, preview_region_result,
+    preview_set_bounds, preview_set_visible, PreviewManager,
 };
 
 /// The daemon handle lives for the entire app lifetime.
@@ -110,6 +110,7 @@ pub fn run() {
             preview_open_external,
             preview_inspect_result,
             preview_region_result,
+            preview_navigate_event,
             preview_eval,
             // auto-updater commands (Plan 3, decision 1)
             updater::updater_check,

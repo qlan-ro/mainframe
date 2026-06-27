@@ -56,6 +56,15 @@ pub struct RegionSelectResult {
     pub region: Option<Region>,
 }
 
+/// Result posted back by the BRIDGE_JS navigation tracker.
+/// camelCase maps `tab_id` ↔ `tabId`.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NavigateResult {
+    pub tab_id: String,
+    pub url: String,
+}
+
 // ── URL scheme allowlist ───────────────────────────────────────────────────────
 
 /// Canonical allowlist — mirrors @qlan-ro/mainframe-types ALLOWED_EXTERNAL_SCHEMES
@@ -188,9 +197,15 @@ pub async fn preview_create(
     }
 
     let parsed: tauri::Url = url.parse().map_err(|e| format!("bad url: {e}"))?;
-    let builder =
-        tauri::webview::WebviewBuilder::new(&tab_id, WebviewUrl::External(parsed))
-            .initialization_script(crate::preview::bridge::BRIDGE_JS);
+    // Bake this tab's id into the page so BRIDGE_JS can stamp navigation/inspect
+    // events with it on first load (before any picker install sets it).
+    let tab_id_json = serde_json::to_string(&tab_id).unwrap_or_else(|_| "\"\"".to_string());
+    let init_script = format!(
+        "window.__mfPreviewTabId={tab_id_json};\n{}",
+        crate::preview::bridge::BRIDGE_JS
+    );
+    let builder = tauri::webview::WebviewBuilder::new(&tab_id, WebviewUrl::External(parsed))
+        .initialization_script(&init_script);
 
     let pos = tauri::LogicalPosition::new(bounds.x, bounds.y);
     let size = tauri::LogicalSize::new(bounds.w, bounds.h);
@@ -343,6 +358,17 @@ pub async fn preview_region_result(
 ) -> Result<(), String> {
     use tauri::Emitter;
     app.emit("preview:region-select", &result).map_err(|e| e.to_string())
+}
+
+/// Receive a navigation event from the injected BRIDGE_JS tracker and re-emit it
+/// as a Tauri event that `PreviewInstance`'s `onNavigate` subscription listens to.
+#[tauri::command]
+pub async fn preview_navigate_event(
+    result: NavigateResult,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    app.emit("preview:navigate", &result).map_err(|e| e.to_string())
 }
 
 /// Evaluate JavaScript in the child webview (fire-and-forget).
@@ -514,6 +540,24 @@ mod tests {
     #[test]
     fn region_result_serializes_to_camel_case() {
         let result = RegionSelectResult { tab_id: "tab-1".to_string(), region: None };
+        let json = serde_json::to_string(&result).expect("serialization failed");
+        assert!(json.contains("\"tabId\""), "expected camelCase tabId, got: {json}");
+        assert!(!json.contains("\"tab_id\""), "snake_case leaked: {json}");
+    }
+
+    // ── NavigateResult (re)serialization ──────────────────────────────────────
+
+    #[test]
+    fn navigate_result_deserializes_bridge_json() {
+        let json = r#"{ "tabId": "preview-1", "url": "http://localhost:3000/x" }"#;
+        let result: NavigateResult = serde_json::from_str(json).expect("deserialization failed");
+        assert_eq!(result.tab_id, "preview-1");
+        assert_eq!(result.url, "http://localhost:3000/x");
+    }
+
+    #[test]
+    fn navigate_result_serializes_to_camel_case() {
+        let result = NavigateResult { tab_id: "preview-1".to_string(), url: "http://x/".to_string() };
         let json = serde_json::to_string(&result).expect("serialization failed");
         assert!(json.contains("\"tabId\""), "expected camelCase tabId, got: {json}");
         assert!(!json.contains("\"tab_id\""), "snake_case leaked: {json}");

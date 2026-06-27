@@ -11,6 +11,11 @@
 ///       `window.__mfRegionSelectCancel()` for drag-rectangle region capture.
 ///       Posts `{ tabId, region: {x,y,w,h} }` (or `region: null` on cancel/Escape)
 ///       via `window.__TAURI_INTERNALS__.invoke('preview_region_result', {...})`.
+///   (d) Navigation tracking — reports `location.href` once on full-page load and
+///       patches `history.pushState`/`replaceState` + listens to `popstate`/
+///       `hashchange` for SPA in-page navigation. De-duped against the last
+///       reported URL. Posts `{ tabId, url }` via
+///       `window.__TAURI_INTERNALS__.invoke('preview_navigate_event', {...})`.
 ///
 /// Kept minimal and self-removing — the ONLY code injected into the user page.
 pub const BRIDGE_JS: &str = r#"
@@ -173,5 +178,25 @@ pub const BRIDGE_JS: &str = r#"
     };
   };
   window.__mfRegionSelectCancel = function () { removeRegion(); };
+
+  // (d) Navigation tracking — report URL changes so the address bar reflects
+  // them (two-way). Full-document loads: this script re-runs on every load, so
+  // report location.href once at injection. SPA in-page nav: patch history +
+  // listen to popstate/hashchange. De-dupe against the last reported URL.
+  var _mfLastUrl = null;
+  function _mfReportNav() {
+    if (location.href === _mfLastUrl) return;
+    _mfLastUrl = location.href;
+    window.__TAURI_INTERNALS__.invoke('preview_navigate_event', {
+      result: { tabId: window.__mfPreviewTabId || '', url: location.href },
+    });
+  }
+  _mfReportNav(); // initial full-page load
+  var _mfPush = history.pushState;
+  history.pushState = function () { _mfPush.apply(this, arguments); _mfReportNav(); };
+  var _mfReplace = history.replaceState;
+  history.replaceState = function () { _mfReplace.apply(this, arguments); _mfReportNav(); };
+  window.addEventListener('popstate', _mfReportNav);
+  window.addEventListener('hashchange', _mfReportNav);
 })();
 "#;
