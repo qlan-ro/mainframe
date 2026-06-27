@@ -31,16 +31,11 @@ import type { Extension } from '@codemirror/state';
 import { MessageSquare } from 'lucide-react';
 import type { CmEditorProps } from '../CmEditor';
 import { CmEditor } from '../CmEditor';
-import {
-  addCommentEffect,
-  deleteCommentEffect,
-  buildCommentGutter,
-  commentField,
-  type CommentBlockWidget,
-} from './comment-gutter';
+import { addCommentEffect, buildCommentGutter, commentField, type CommentBlockWidget } from './comment-gutter';
 import { useInlineComments } from './use-inline-comments';
 import { InlineCommentWidget } from './InlineCommentWidget';
 import { resolveCommentRange } from './resolve-comment-range';
+import { useReviewActions } from './use-review-actions';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +45,11 @@ type CmEditorWithCommentsProps = Omit<CmEditorProps, 'extraExtensions' | 'onView
   extraExtensions?: Extension[];
   /** Called with the live EditorView once mounted; forwarded to parent for context-menu use. */
   onViewReady?: (view: EditorView) => void;
+  /**
+   * Absolute or repo-relative path to the file being edited.
+   * Required for review send; if absent, submit is a no-op with a console warning.
+   */
+  filePath?: string;
 };
 
 /** Portal descriptor: the comment id + the host element from the block widget. */
@@ -96,6 +96,7 @@ export function CmEditorWithComments({
   enableComments = true,
   extraExtensions,
   onViewReady,
+  filePath,
   ...editorProps
 }: CmEditorWithCommentsProps) {
   const viewRef = useRef<EditorView | null>(null);
@@ -107,6 +108,17 @@ export function CmEditorWithComments({
 
   // Per-portal draft text state.
   const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
+
+  const { handleSubmitReview, handleSendOne, removeComment } = useReviewActions({
+    filePath,
+    comments,
+    draftTexts,
+    deleteComment,
+    setPortals,
+    portalsRef,
+    setDraftTexts,
+    viewRef,
+  });
 
   // ── Portal management helpers ────────────────────────────────────────────
 
@@ -201,38 +213,9 @@ export function CmEditorWithComments({
     [editComment, closePortal],
   );
 
-  const handleDelete = useCallback(
-    (commentId: string) => {
-      const view = viewRef.current;
-      deleteComment(commentId);
-      closePortal(commentId);
-      if (view) {
-        view.dispatch({ effects: [deleteCommentEffect.of(commentId)] });
-      }
-    },
-    [deleteComment, closePortal],
-  );
-
   const handleTextChange = useCallback((commentId: string, text: string) => {
     setDraftTexts((prev) => ({ ...prev, [commentId]: text }));
   }, []);
-
-  // ── Submit review ────────────────────────────────────────────────────────
-
-  // Submit all comments that have non-empty text (marks them as "saved").
-  const handleSubmitReview = useCallback(() => {
-    for (const comment of comments) {
-      const draft = draftTexts[comment.id];
-      const effectiveText = draft !== undefined ? draft : comment.text;
-      if (effectiveText.trim()) {
-        editComment(comment.id, effectiveText);
-      }
-    }
-    // Close all open portals.
-    setPortals([]);
-    portalsRef.current = [];
-    setDraftTexts({});
-  }, [comments, draftTexts, editComment]);
 
   // Count of comments that have any text (draft or saved).
   const filledCount = comments.filter((c) => {
@@ -282,11 +265,13 @@ export function CmEditorWithComments({
             key={portal.commentId}
             text={text}
             lineNumber={lineNumber}
+            endLine={comment?.endLine}
             lineContent={comment?.lineContent}
             onTextChange={(t) => handleTextChange(portal.commentId, t)}
             onSave={() => handleSave(portal.commentId, text)}
             onClose={() => closePortal(portal.commentId)}
-            onDelete={() => handleDelete(portal.commentId)}
+            onDelete={() => removeComment(portal.commentId)}
+            onSend={() => handleSendOne(portal.commentId)}
           />,
           portal.hostElement,
         );

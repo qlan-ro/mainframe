@@ -286,6 +286,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
                   onSave={handleSave}
                   onCursorChange={handleCursorChange}
                   path={path}
+                  filePath={path}
                   extraExtensions={extraExtensions}
                   onViewReady={(v) => {
                     viewRef.current = v;
