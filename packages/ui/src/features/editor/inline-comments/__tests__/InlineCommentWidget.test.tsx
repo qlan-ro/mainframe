@@ -11,7 +11,9 @@
  *   - "Add context" button is disabled when text is empty; enabled when non-empty
  *   - "Add context" button click calls onSave
  *   - data-testid attributes are present
- *   - optional lineNumber renders "line N" in the header
+ *   - optional lineNumber renders range label in the header
+ *   - lineContent renders a code snippet preview block
+ *   - Send button fires onSend when text is non-empty
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -51,21 +53,65 @@ describe('InlineCommentWidget', () => {
     expect(screen.getByTestId('editor-comment-widget-close')).toBeTruthy();
   });
 
-  it('renders "Agent context" header label', () => {
+  it('renders "Review comment" header label', () => {
     render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.getByText('Agent context')).toBeTruthy();
+    expect(screen.getByText('Review comment')).toBeTruthy();
   });
 
-  it('renders "line N" when lineNumber is provided', () => {
-    render(<InlineCommentWidget {...defaultProps} lineNumber={7} />);
-    expect(screen.getByText('line 7')).toBeTruthy();
+  it('renders range label "L4–5" when lineNumber=4 and endLine=5', () => {
+    render(<InlineCommentWidget {...defaultProps} lineNumber={4} endLine={5} />);
+    expect(screen.getByText('L4–5')).toBeTruthy();
+  });
+
+  it('renders range label "L4" when lineNumber=4 with no endLine', () => {
+    render(<InlineCommentWidget {...defaultProps} lineNumber={4} />);
+    expect(screen.getByText('L4')).toBeTruthy();
   });
 
   it('does not render a line label when lineNumber is not provided', () => {
     render(<InlineCommentWidget {...defaultProps} />);
-    // Should not find "line N" text
     const text = document.body.textContent ?? '';
-    expect(/line \d+/.test(text)).toBe(false);
+    expect(/L\d/.test(text)).toBe(false);
+  });
+
+  it('renders snippet block when lineContent is set', () => {
+    render(<InlineCommentWidget {...defaultProps} lineContent={'const a = 1\nconst b = 2'} lineNumber={4} />);
+    expect(screen.getByTestId('editor-comment-widget-snippet')).toBeTruthy();
+  });
+
+  it('renders both lines in the snippet block', () => {
+    render(<InlineCommentWidget {...defaultProps} lineContent={'const a = 1\nconst b = 2'} lineNumber={4} />);
+    expect(screen.getByText('const a = 1')).toBeTruthy();
+    expect(screen.getByText('const b = 2')).toBeTruthy();
+  });
+
+  it('does NOT render snippet block when lineContent is empty/undefined', () => {
+    render(<InlineCommentWidget {...defaultProps} />);
+    expect(screen.queryByTestId('editor-comment-widget-snippet')).toBeNull();
+  });
+
+  it('does NOT render snippet block when lineContent is empty string', () => {
+    render(<InlineCommentWidget {...defaultProps} lineContent="" />);
+    expect(screen.queryByTestId('editor-comment-widget-snippet')).toBeNull();
+  });
+
+  it('renders Send button with editor-comment-widget-send testid', () => {
+    render(<InlineCommentWidget {...defaultProps} onSend={() => undefined} />);
+    expect(screen.getByTestId('editor-comment-widget-send')).toBeTruthy();
+  });
+
+  it('clicking Send button fires onSend when text is non-empty', async () => {
+    const onSend = vi.fn();
+    render(<InlineCommentWidget {...defaultProps} text="my review note" onSend={onSend} />);
+    await userEvent.click(screen.getByTestId('editor-comment-widget-send'));
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT fire onSend when text is empty', async () => {
+    const onSend = vi.fn();
+    render(<InlineCommentWidget {...defaultProps} text="" onSend={onSend} />);
+    await userEvent.click(screen.getByTestId('editor-comment-widget-send'));
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it('calls onTextChange when user types', async () => {
@@ -133,7 +179,7 @@ describe('InlineCommentWidget', () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('save button label is "Add context" (not "Save")', () => {
+  it('save button label is "Add context"', () => {
     render(<InlineCommentWidget {...defaultProps} />);
     const saveBtn = screen.getByTestId('editor-comment-widget-save');
     expect(saveBtn.textContent).toBe('Add context');
