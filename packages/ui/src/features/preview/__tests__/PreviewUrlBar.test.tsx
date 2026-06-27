@@ -55,6 +55,14 @@ describe('PreviewUrlBar', () => {
     expect(handle.navigate).not.toHaveBeenCalled();
   });
 
+  it('applies the invalid (ring-destructive) state on invalid Enter', () => {
+    render(<PreviewUrlBar handle={handle} port={3000} isRunning />);
+    const input = screen.getByTestId('preview-url-input');
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input).toHaveClass('ring-destructive');
+  });
+
   it('disables the input when not running', () => {
     render(<PreviewUrlBar handle={null} port={null} isRunning={false} />);
     expect(screen.getByTestId('preview-url-input')).toBeDisabled();

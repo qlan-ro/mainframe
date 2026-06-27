@@ -30,6 +30,9 @@ export function usePreviewAddress(
     (input: string): boolean => {
       const normalized = normalizePreviewUrl(input);
       if (!normalized || !handle) return false;
+      // V1: optimistic — currentUrl is set immediately and NOT reverted if
+      // handle.navigate rejects (failed load). A two-way onNavigate event or a
+      // reload self-heals the bar. Revert-on-failure is a deliberate post-V1 gap.
       setCurrentUrl(normalized);
       handle.navigate(normalized).catch((e: unknown) => console.warn('[preview] address navigate', e));
       return true;

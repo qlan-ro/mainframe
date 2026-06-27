@@ -561,5 +561,6 @@ mod tests {
         let json = serde_json::to_string(&result).expect("serialization failed");
         assert!(json.contains("\"tabId\""), "expected camelCase tabId, got: {json}");
         assert!(!json.contains("\"tab_id\""), "snake_case leaked: {json}");
+        assert!(json.contains("\"url\":\"http://x/\""), "url value missing/wrong: {json}");
     }
 }
