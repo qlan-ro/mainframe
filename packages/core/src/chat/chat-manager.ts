@@ -84,6 +84,7 @@ export class ChatManager {
       (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
       (chatId) => this.clearAllQueuedForChat(chatId),
       (chatId) => this.getQueuedForChat(chatId),
+      (chatId) => this.flushNextQueued(chatId),
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
@@ -418,6 +419,41 @@ export class ChatManager {
     if (!ref) return;
     this.queuedRefs.delete(uuid);
     logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
+  }
+
+  /**
+   * Pop the head item from the daemon queue for `chatId` and send it to the
+   * running CLI session. Called by EventHandler.onResult on run-end so queued
+   * messages drain one-per-run (FIFO) instead of all at once.
+   *
+   * Returns `true` when a message was popped (the caller should keep
+   * processState as 'working' because a new run is starting); `false` when the
+   * queue is empty or no session is running.
+   */
+  flushNextQueued(chatId: string): boolean {
+    const list = this.chatQueues.get(chatId);
+    if (!list || list.length === 0) return false;
+    const active = this.activeChats.get(chatId);
+    if (!active?.session) return false;
+    const item = list.shift()!;
+    if (list.length === 0) {
+      this.chatQueues.delete(chatId);
+    } else {
+      this.chatQueues.set(chatId, list);
+    }
+    // Strip the queued flag from the message cache and ack the renderer.
+    const msgs = this.messages.get(chatId);
+    const msg = msgs?.find((m) => m.metadata?.uuid === item.uuid);
+    if (msg?.metadata) {
+      delete (msg.metadata as Record<string, unknown>).queued;
+      delete (msg.metadata as Record<string, unknown>).uuid;
+    }
+    this.emitEvent({ type: 'message.queued.processed', chatId, uuid: item.uuid });
+    void active.session
+      .sendMessage(item.outgoingContent, item.images, undefined)
+      .catch((e: unknown) => logger.warn({ chatId, uuid: item.uuid, err: e }, 'flushNextQueued: sendMessage failed'));
+    logger.info({ chatId, uuid: item.uuid, messageId: item.messageId }, 'flushed next queued message on run-end');
+    return true;
   }
 
   /** Return all queued refs for a chat, oldest-first. */

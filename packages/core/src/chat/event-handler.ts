@@ -63,6 +63,7 @@ export class EventHandler {
     private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
     private onQueuedCleared: (chatId: string) => void = () => {},
     private getQueuedRefs: (chatId: string) => QueuedMessageRef[] = () => [],
+    private flushNextQueued: (chatId: string) => boolean = () => false,
   ) {}
 
   setPushService(service: PushService): void {
@@ -94,6 +95,7 @@ export class EventHandler {
       this.onQueuedProcessed,
       this.onQueuedCleared,
       this.getQueuedRefs,
+      this.flushNextQueued,
       this.pushService,
     );
   }
@@ -124,6 +126,7 @@ function buildSessionSink(
   onQueuedProcessedCb: (chatId: string, uuid: string) => void,
   onQueuedClearedCb: (chatId: string) => void,
   getQueuedRefs: (chatId: string) => QueuedMessageRef[],
+  flushNextQueued: (chatId: string) => boolean,
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -322,19 +325,17 @@ function buildSessionSink(
 
       if (displayChanged) emitDisplay();
 
-      // Force renderer composer to converge on the daemon's refs. Defends
-      // against any out-of-order delivery / dedupe gap that could leave the
-      // renderer's queuedMessages map with stale entries.
+      // Flush the next held queued message to the CLI now that this run has
+      // ended. Each flushed message starts a new run whose own onResult will
+      // flush the next one (FIFO drain across run-ends). Returns true when a
+      // message was popped, false when the queue is empty.
+      const flushed = flushNextQueued(chatId);
+      const nextProcessState: 'idle' | 'working' = flushed ? 'working' : 'idle';
+
+      // Force renderer composer to converge on the daemon's refs. Emit the
+      // snapshot AFTER the flush so it reflects the remaining queue.
       const refsAfter = getQueuedRefs(chatId);
       emitEvent({ type: 'message.queued.snapshot', chatId, refs: refsAfter });
-
-      // Result events fire per-turn. While queued messages are still pending
-      // we must NOT flip to idle here, or the thinking indicator drops while
-      // the assistant is still streaming the next queued turn. Use the count
-      // AFTER reconciliation so orphan refs don't pin the state to 'working'
-      // when the CLI is genuinely done.
-      const queueRemaining = refsAfter.length;
-      const nextProcessState: 'idle' | 'working' = queueRemaining > 0 ? 'working' : 'idle';
 
       db.chats.update(chatId, {
         totalCost: newCost,
