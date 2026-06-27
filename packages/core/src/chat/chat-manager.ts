@@ -435,11 +435,7 @@ export class ChatManager {
     const active = this.activeChats.get(chatId);
     if (!active?.session) return false;
     const item = list.shift()!;
-    if (list.length === 0) {
-      this.chatQueues.delete(chatId);
-    } else {
-      this.chatQueues.set(chatId, list);
-    }
+    if (list.length === 0) this.chatQueues.delete(chatId);
     // Strip the queued flag from the message cache and ack the renderer.
     const msgs = this.messages.get(chatId);
     const msg = msgs?.find((m) => m.metadata?.uuid === item.uuid);

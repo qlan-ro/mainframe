@@ -77,18 +77,19 @@ describe('run-end flush — EventHandler (A3)', () => {
   it('snapshot emitted after the flush call', () => {
     const emitCalls: DaemonEvent[] = [];
     const emit = (e: DaemonEvent) => emitCalls.push(e);
-    let flushCalled = false;
-    const flush = (id: string) => {
-      flushCalled = true;
+    let emitCallCountAtFlush = -1;
+    const flush = (_id: string) => {
+      emitCallCountAtFlush = emitCalls.length;
       return false;
     };
     const { sink } = makeSinkWithFlush('c2', emit, flush);
 
     sink.onResult({ total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } });
 
-    expect(flushCalled).toBe(true);
+    expect(emitCallCountAtFlush).toBeGreaterThanOrEqual(0);
     const snapshotIdx = emitCalls.findIndex((e) => e.type === 'message.queued.snapshot');
     expect(snapshotIdx).toBeGreaterThanOrEqual(0);
+    expect(snapshotIdx).toBeGreaterThanOrEqual(emitCallCountAtFlush);
   });
 });
 

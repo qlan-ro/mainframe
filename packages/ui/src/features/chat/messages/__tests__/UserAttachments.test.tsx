@@ -260,7 +260,7 @@ describe('UserAttachments — B6: image attachment without selector renders thum
     expect(img).toHaveAttribute('src', 'data:img');
 
     // No selector/annotation context rendered.
-    expect(screen.queryByRole('code')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-capture-selector')).toBeNull();
   });
 });
 
@@ -315,7 +315,7 @@ describe('UserAttachments — B7: image attachment with no matching capture rend
     expect(img).not.toBeNull();
     expect(img).toHaveAttribute('src', 'data:img');
 
-    expect(screen.queryByRole('code')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-capture-selector')).toBeNull();
   });
 });
 
