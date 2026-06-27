@@ -181,3 +181,22 @@ describe('parseReviewComment — mixed valid+invalid parts', () => {
     expect(parseReviewComment(text)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// P10 — File: header (editor producer)
+// ---------------------------------------------------------------------------
+
+describe('parseReviewComment — File: header (editor producer)', () => {
+  it('parses a File: header (single comment)', () => {
+    const out = parseReviewComment('File: `src/a.ts`\n\nAt line 5:\n```\nconst x = 1;\n```\nwhy?');
+    expect(out).toEqual({ file: 'src/a.ts', comments: [{ start: 5, code: 'const x = 1;', body: 'why?' }] });
+  });
+
+  it('parses a File: header (multi-comment, joined by ---)', () => {
+    const out = parseReviewComment(
+      'File: `a.ts`\n\nAt line 1:\n```\nx\n```\none\n\n---\n\nAt lines 4-5:\n```\ny\nz\n```\ntwo',
+    );
+    expect(out?.comments).toHaveLength(2);
+    expect(out?.comments[1]).toEqual({ start: 4, end: 5, code: 'y\nz', body: 'two' });
+  });
+});

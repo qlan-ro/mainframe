@@ -28,7 +28,7 @@ export interface ReviewComment {
   comments: ReviewCommentItem[];
 }
 
-const HEADER_RE = /^Diff of `([^`\n]+)`\n\n([\s\S]*)$/;
+const HEADER_RE = /^(?:Diff of|File:) `([^`\n]+)`\n\n([\s\S]*)$/;
 const PART_RE = /^At line(s)? (\d+)(?:-(\d+))?:\n([\s\S]*)$/;
 
 function parsePart(part: string): ReviewCommentItem | null {
