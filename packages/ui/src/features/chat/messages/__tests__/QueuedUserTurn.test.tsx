@@ -18,22 +18,32 @@
  *  A1 — QueuedAction has ghost border classes (border + border-transparent + hover:border-border)
  *  A2 — actions container has translate-x slide-in classes
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
+
+// ---------------------------------------------------------------------------
+// Stable spy refs shared across tests
+// ---------------------------------------------------------------------------
+
+const cancelQueued = vi.fn().mockResolvedValue(undefined);
+const startEdit = vi.fn();
+
+beforeEach(() => {
+  cancelQueued.mockClear();
+  startEdit.mockClear();
+});
 
 // ---------------------------------------------------------------------------
 // Mock runtime hooks
 // ---------------------------------------------------------------------------
 
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
-  useChatExtras: () => ({
-    cancelQueued: vi.fn().mockResolvedValue(undefined),
-  }),
+  useChatExtras: () => ({ cancelQueued }),
 }));
 
 vi.mock('../../composer/edit/composer-edit-context', () => ({
-  useComposerEdit: () => ({ startEdit: vi.fn() }),
+  useComposerEdit: () => ({ startEdit }),
 }));
 
 import { QueuedUserTurn } from '../QueuedUserTurn';
@@ -193,5 +203,59 @@ describe('QueuedUserTurn — A2: actions container slide-in animation', () => {
     expect(actionsDiv).not.toBeNull();
     expect(actionsDiv!.className).toContain('translate-x-[6px]');
     expect(actionsDiv!.className).toContain('group-hover/queued:translate-x-0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C1 — Edit and Cancel visible on capture-only (no text body) queued messages
+// ---------------------------------------------------------------------------
+
+describe('QueuedUserTurn — C1: capture-only queued message (no text body)', () => {
+  it('renders both chat-queued-edit and chat-queued-cancel when content is empty', () => {
+    render(
+      <QueuedUserTurn messageId="m1" content="" extrasSlot={<div data-testid="cap" />}>
+        {null}
+      </QueuedUserTurn>,
+    );
+    expect(screen.getByTestId('chat-queued-edit')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-queued-cancel')).toBeInTheDocument();
+  });
+
+  it('clicking Edit fires startEdit with messageId and empty content', () => {
+    render(
+      <QueuedUserTurn messageId="m1" content="" extrasSlot={<div data-testid="cap" />}>
+        {null}
+      </QueuedUserTurn>,
+    );
+    fireEvent.click(screen.getByTestId('chat-queued-edit'));
+    expect(startEdit).toHaveBeenCalledWith({ messageId: 'm1', content: '' });
+  });
+
+  it('clicking Cancel fires cancelQueued with the messageId', () => {
+    render(
+      <QueuedUserTurn messageId="m1" content="" extrasSlot={<div data-testid="cap" />}>
+        {null}
+      </QueuedUserTurn>,
+    );
+    fireEvent.click(screen.getByTestId('chat-queued-cancel'));
+    expect(cancelQueued).toHaveBeenCalledWith('m1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C2 — Edit and Cancel still appear for a text queued message
+// ---------------------------------------------------------------------------
+
+describe('QueuedUserTurn — C2: text queued message still shows both actions', () => {
+  it('renders both chat-queued-edit and chat-queued-cancel when content is non-empty', () => {
+    renderQueued({ content: 'hello world' });
+    expect(screen.getByTestId('chat-queued-edit')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-queued-cancel')).toBeInTheDocument();
+  });
+
+  it('clicking Edit fires startEdit with the text content', () => {
+    renderQueued({ content: 'hello world' });
+    fireEvent.click(screen.getByTestId('chat-queued-edit'));
+    expect(startEdit).toHaveBeenCalledWith({ messageId: 'm1', content: 'hello world' });
   });
 });

@@ -157,8 +157,9 @@ export function QueuedUserTurn({
             'group-hover/queued:opacity-100 group-focus-within/queued:opacity-100',
           )}
         >
-          {/* Edit loads the text into the composer — only meaningful when there is text. */}
-          {content && <QueuedAction icon={PencilIcon} label="Edit" onClick={handleEdit} testid="chat-queued-edit" />}
+          {/* Edit loads the content into the composer; for capture-only messages
+              it opens the composer so the user can add text while keeping the capture. */}
+          <QueuedAction icon={PencilIcon} label="Edit" onClick={handleEdit} testid="chat-queued-edit" />
           <QueuedAction icon={XIcon} label="Cancel" onClick={handleCancel} danger testid="chat-queued-cancel" />
         </div>
         {/* Skip the dashed bubble entirely for an attachment/image/capture-only
