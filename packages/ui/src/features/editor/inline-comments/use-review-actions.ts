@@ -17,9 +17,9 @@ interface UseReviewActionsParams {
   draftTexts: Record<string, string>;
   deleteComment: (id: string) => void;
   setPortals: React.Dispatch<React.SetStateAction<{ commentId: string; hostElement: HTMLDivElement }[]>>;
-  portalsRef: React.MutableRefObject<{ commentId: string; hostElement: HTMLDivElement }[]>;
+  portalsRef: React.RefObject<{ commentId: string; hostElement: HTMLDivElement }[]>;
   setDraftTexts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  viewRef: React.MutableRefObject<EditorView | null>;
+  viewRef: React.RefObject<EditorView | null>;
 }
 
 export interface ReviewActions {
@@ -69,7 +69,8 @@ export function useReviewActions({
       return;
     }
     const items = comments.map(buildItem).filter((x): x is LineCommentInput => x !== null);
-    void sendReview(filePath, items);
+    if (items.length === 0) return;
+    sendReview(filePath, items).catch((err) => console.warn('[editor] review send failed', err));
     for (const c of comments) {
       removeComment(c.id);
     }
@@ -86,7 +87,7 @@ export function useReviewActions({
       if (!c) return;
       const item = buildItem(c);
       if (!item) return;
-      void sendReview(filePath, [item]);
+      sendReview(filePath, [item]).catch((err) => console.warn('[editor] review send failed', err));
       removeComment(commentId);
       setDraftTexts((prev) => {
         const next = { ...prev };
