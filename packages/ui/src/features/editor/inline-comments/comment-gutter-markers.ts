@@ -166,7 +166,15 @@ export function buildCommentGutter(callbacks: CommentGutterCallbacks): Extension
     // Track hovered line number via domEventHandlers on the scroller.
     EditorView.domEventHandlers({
       mousemove(event, view) {
-        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        // `posAtCoords` returns null when the pointer is over the gutter margin
+        // or between rendered lines. Retry with x clamped into the content area
+        // (+1px past the left edge) so the hovered row still resolves when the
+        // user mouses over the add-button itself (which sits in the gutter).
+        let pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (pos == null) {
+          const contentLeft = view.contentDOM.getBoundingClientRect().left;
+          pos = view.posAtCoords({ x: contentLeft + 1, y: event.clientY });
+        }
         if (pos == null) return false;
         const lineNum = view.state.doc.lineAt(pos).number;
         const current = view.state.field(hoveredLineField);

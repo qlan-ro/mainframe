@@ -40,6 +40,7 @@ import {
 } from './comment-gutter';
 import { useInlineComments } from './use-inline-comments';
 import { InlineCommentWidget } from './InlineCommentWidget';
+import { resolveCommentRange } from './resolve-comment-range';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -137,15 +138,15 @@ export function CmEditorWithComments({
       const view = viewRef.current;
       if (!view) return;
 
-      const totalLines = view.state.doc.lines;
-      const safeLine = Math.max(1, Math.min(line, totalLines));
-      const docLine = view.state.doc.line(safeLine);
-      const lineContent = docLine.text;
+      // When there is an active selection the comment captures the full range;
+      // otherwise only the clicked line is used.
+      const { startLine, endLine, lineContent } = resolveCommentRange(view.state, line);
 
-      const id = addComment({ startLine: line, endLine: line, lineContent });
+      const id = addComment({ startLine, endLine, lineContent });
 
-      // Dispatch the CM6 effect so commentField creates the block widget decoration.
-      view.dispatch({ effects: [addCommentEffect.of({ id, line, text: '' })] });
+      // Anchor the block widget BELOW endLine so it appears after the last
+      // selected line (not after the first).
+      view.dispatch({ effects: [addCommentEffect.of({ id, line: endLine, text: '' })] });
 
       // Open the portal using the widget that was just created.
       const widget = view.state.field(commentField).widgets.get(id);
