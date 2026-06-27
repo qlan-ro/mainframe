@@ -27,6 +27,7 @@ import { daemonWs } from '../../../lib/daemon/ws-client';
 import { useUnreadStore } from '../../../store/unread-store';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
+import { useLastSessionStore } from '../../../store/last-session';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { pickInitialSession } from '../view-model/initial-session';
 import { createSessionListRouter } from './session-list-router';
@@ -113,6 +114,15 @@ export function useSessionListRouter(): void {
 
     useUnreadStore.getState().clearUnread(mainThreadId);
 
+    // Remember the open session (by stable daemon chat id) so the next boot can
+    // restore it. Skip the new-thread draft, which has no backing chat yet.
+    if (active?.remoteId != null) {
+      useLastSessionStore.getState().setLastSessionId(active.remoteId);
+      if (active.custom?.projectId != null) {
+        useLastSessionStore.getState().setLastForProject(active.custom.projectId, active.remoteId);
+      }
+    }
+
     const { filterProjectId, setFilterProjectId } = useSessionFilters.getState();
     const projectId = active?.custom?.projectId;
     if (filterProjectId != null && projectId != null && projectId !== filterProjectId) {
@@ -120,11 +130,13 @@ export function useSessionListRouter(): void {
     }
   }, [mainThreadId, items, runtime]);
 
-  // Boot auto-select: open the most-recent session once the list first loads, so
-  // the app doesn't land on the empty new-thread picker. One-shot — consumed on
-  // the first non-empty list — and only while the user is still on the boot draft
-  // (mainThreadId null or a __LOCALID_* new thread), so it never overrides a
-  // thread the user has already opened or a new chat they deliberately started.
+  // Boot auto-select: open a session once the list first loads, so the app doesn't
+  // land on the empty new-thread picker. Prefers the last session open before the
+  // app closed (persisted by daemon chat id), falling back to the most-recent one
+  // when it's gone or archived. One-shot — consumed on the first non-empty list —
+  // and only while the user is still on the boot draft (mainThreadId null or a
+  // __LOCALID_* new thread), so it never overrides a thread the user has already
+  // opened or a new chat they deliberately started.
   const didAutoSelectRef = useRef(false);
   useEffect(() => {
     if (didAutoSelectRef.current || items.length === 0) return;
@@ -133,7 +145,7 @@ export function useSessionListRouter(): void {
     const onBootDraft = mainThreadId == null || mainThreadId.startsWith('__LOCALID_');
     if (!onBootDraft) return;
 
-    const target = pickInitialSession(items);
+    const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     if (target != null && target !== mainThreadId) {
       runtime.threads.switchToThread(target);
     }
