@@ -177,8 +177,6 @@ export interface AdapterSession {
   setPermissionMode(mode: ExecutionMode): Promise<void>;
   setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
-  cancelQueuedMessage(uuid: string): Promise<boolean>;
-
   getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles(): Promise<string[]>;
@@ -247,7 +245,13 @@ export const TUNABLE_FEATURES = [
 export type FeatureKey = (typeof TUNABLE_FEATURES)[number]['key'];
 
 const EFFORT_RANK: Record<EffortLevel, number> = {
-  none: 0, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6,
+  none: 0,
+  minimal: 1,
+  low: 2,
+  medium: 3,
+  high: 4,
+  xhigh: 5,
+  max: 6,
 };
 
 /**
@@ -268,7 +272,9 @@ export function clampEffortToSupported(
   if (supported.length === 0) return null;
   if (supported.includes(requested)) return requested;
   if (defaultEffort && supported.includes(defaultEffort)) return defaultEffort;
-  const below = supported.filter((e) => EFFORT_RANK[e] <= EFFORT_RANK[requested]).sort((a, b) => EFFORT_RANK[b] - EFFORT_RANK[a]);
+  const below = supported
+    .filter((e) => EFFORT_RANK[e] <= EFFORT_RANK[requested])
+    .sort((a, b) => EFFORT_RANK[b] - EFFORT_RANK[a]);
   return below[0] ?? [...supported].sort((a, b) => EFFORT_RANK[a] - EFFORT_RANK[b])[0] ?? null;
 }
 

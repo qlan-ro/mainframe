@@ -472,12 +472,6 @@ export class ClaudeSession implements AdapterSession {
     stdin.write(json + '\n');
   }
 
-  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
-    // Cancel operates at the daemon queue level (ChatManager.cancelQueuedMessage).
-    // The CLI's cancel_async_message control request was never implemented by the CLI.
-    return false;
-  }
-
   async stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
     const stdin = this.state.child?.stdin;
     if (!stdin || stdin.destroyed) {
