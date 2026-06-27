@@ -95,7 +95,7 @@ describe('ReviewCommentCard — two comments', () => {
 
   it('shows the "L51–53" range label (en-dash U+2013, not a hyphen)', () => {
     render(<ReviewCommentCard review={twoReview} />);
-    // U+2013 is the en-dash — the same character used by CodeRefCard.rangeLabel
+    // U+2013 is the en-dash — the same character used by code-snippet.rangeLabel
     expect(screen.getByText('L51–53')).toBeTruthy();
   });
 

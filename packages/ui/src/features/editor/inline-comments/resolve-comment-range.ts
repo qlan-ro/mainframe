@@ -31,12 +31,14 @@ export function resolveCommentRange(state: EditorState, clickedLine: number): Co
   if (!main.empty) {
     // Non-empty selection: use the covered lines.
     startLine = state.doc.lineAt(main.from).number;
-    // When `head` (to) lands exactly at the start of a line the user didn't
-    // visually include that line — e.g. triple-click selects "a\n" but the
-    // cursor sits at the first char of the next line.  Use `main.to` as-is;
-    // the brief specifies doc.lineAt(to).number which is correct for partial
-    // line coverage.
     endLine = state.doc.lineAt(main.to).number;
+    // When `to` lands exactly at the START of a line and the selection spans
+    // more than one line, that last line isn't actually selected — e.g.
+    // triple-click selects "a\n" placing the cursor at the very start of the
+    // next line.  Decrement so we don't over-count that dangling line.
+    if (endLine > startLine && state.doc.lineAt(main.to).from === main.to) {
+      endLine -= 1;
+    }
   } else {
     // Empty selection: single clicked line.
     const totalLines = state.doc.lines;

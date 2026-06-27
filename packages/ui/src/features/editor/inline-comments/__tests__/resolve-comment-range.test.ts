@@ -100,4 +100,23 @@ describe('resolveCommentRange', () => {
       lineContent: 'beta\ngamma',
     });
   });
+
+  it('triple-click off-by-one: selection from line 1 start to line 3 start yields endLine 2', () => {
+    // doc: "a\nb\nc" — line 1 starts at 0, line 2 at 2, line 3 at 4
+    // Triple-clicking line 1 selects "a\n", placing `to` at offset 2 (= line 2
+    // start). Triple-clicking lines 1-2 selects "a\nb\n", placing `to` at
+    // offset 4 (= line 3 start). The third line is NOT selected — endLine
+    // should be 2, not 3.
+    const doc = 'a\nb\nc';
+    const state = EditorState.create({
+      doc,
+      // anchor = 0 (line 1 start), head = 4 (line 3 start)
+      selection: { anchor: 0, head: 4 },
+    });
+    expect(resolveCommentRange(state, 1)).toEqual({
+      startLine: 1,
+      endLine: 2,
+      lineContent: 'a\nb',
+    });
+  });
 });

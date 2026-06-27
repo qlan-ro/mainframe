@@ -9,12 +9,15 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: () => mockPort,
 }));
 
+// Mutable return so individual tests can override chatId.
+const mockActiveIdentity = {
+  chatId: mockChatId as string | undefined,
+  projectId: 'proj-1',
+  projectName: 'Test Project',
+};
+
 vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({
-    chatId: mockChatId,
-    projectId: 'proj-1',
-    projectName: 'Test Project',
-  }),
+  useActiveIdentity: () => mockActiveIdentity,
 }));
 
 const mockSendMessage = vi.fn().mockResolvedValue(undefined);
@@ -39,6 +42,7 @@ const mockItems: LineCommentInput[] = [
 describe('useSendReview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveIdentity.chatId = mockChatId;
     mockGetOrCreate.mockReturnValue({ sendMessage: mockSendMessage });
   });
 
@@ -69,13 +73,14 @@ describe('useSendReview', () => {
 describe('useSendReview — no chatId', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveIdentity.chatId = undefined;
     mockGetOrCreate.mockReturnValue({ sendMessage: mockSendMessage });
   });
 
   it('does not call registry or sendMessage when chatId is absent', async () => {
-    // Use empty items to exercise the early-return guard without needing vi.doMock re-hoisting
+    // chatId is undefined; pass NON-empty items to hit the !chatId guard, not the empty-items guard.
     const { result } = renderHook(() => useSendReview());
-    await result.current('src/foo.ts', []);
+    await result.current('src/foo.ts', mockItems);
     expect(mockGetOrCreate).not.toHaveBeenCalled();
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
@@ -84,6 +89,7 @@ describe('useSendReview — no chatId', () => {
 describe('useSendReview — empty items', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveIdentity.chatId = mockChatId;
     mockGetOrCreate.mockReturnValue({ sendMessage: mockSendMessage });
   });
 

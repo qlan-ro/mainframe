@@ -13,7 +13,7 @@
  *     that deleteComment is called per-comment.
  *   - resolveCommentRange / comment-gutter effects: lightweight stubs.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 
@@ -85,6 +85,9 @@ const testComments = [
   { id: 'c3', startLine: 7, endLine: 7, lineContent: 'line seven', text: 'saved text three' },
 ];
 
+// Frozen baseline so afterEach can always restore testComments after a mutation.
+const testCommentsBaseline = testComments.map((c) => ({ ...c }));
+
 vi.mock('../use-inline-comments', () => ({
   useInlineComments: () => ({
     comments: testComments,
@@ -129,6 +132,13 @@ beforeEach(() => {
   for (const c of testComments) {
     fakeWidgets.set(c.id, makeFakeWidget());
   }
+});
+
+afterEach(() => {
+  // Restore the shared testComments array to the baseline so a mid-test throw
+  // (e.g. in the empty-review mutation test) cannot poison later tests.
+  testComments.length = 0;
+  testComments.push(...testCommentsBaseline.map((c) => ({ ...c })));
 });
 
 // ── Tests: Submit review ─────────────────────────────────────────────────────
@@ -206,7 +216,7 @@ describe('CmEditorWithComments — submit review', () => {
 
   it('does not send an empty review when no comment has text', async () => {
     // Override comments to all-empty for this case via the existing mock array.
-    const original = [...testComments];
+    // afterEach restores the baseline so a mid-test throw cannot poison later tests.
     testComments.length = 0;
     testComments.push({ id: 'e1', startLine: 1, endLine: 1, lineContent: 'x', text: '' });
     fakeWidgets.clear();
@@ -219,10 +229,6 @@ describe('CmEditorWithComments — submit review', () => {
     });
 
     expect(mockSendReview).not.toHaveBeenCalled();
-
-    // Restore shared array for other tests.
-    testComments.length = 0;
-    testComments.push(...original);
   });
 });
 

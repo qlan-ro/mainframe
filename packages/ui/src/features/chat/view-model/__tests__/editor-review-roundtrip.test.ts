@@ -83,3 +83,45 @@ describe('editor review round-trip — two comments', () => {
     expect(parseReviewComment(text)?.comments).toHaveLength(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// RT3 — empty content round-trip
+// ---------------------------------------------------------------------------
+
+describe('editor review round-trip — empty content', () => {
+  it('parses back with code="" when lineContent is empty', () => {
+    const text = formatReview('src/b.ts', [
+      { startLine: 7, endLine: 7, lineContent: '', comment: 'note for this line' },
+    ]);
+
+    expect(parseReviewComment(text)).toEqual({
+      file: 'src/b.ts',
+      comments: [
+        {
+          start: 7,
+          code: '',
+          body: 'note for this line',
+        },
+      ],
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RT4 — fence-grown round-trip (lineContent contains a 4-backtick run)
+// ---------------------------------------------------------------------------
+
+describe('editor review round-trip — fence-grown content', () => {
+  it('parses back the exact lineContent when it contains a 4-backtick run', () => {
+    // The content contains "```` which forces a 5-backtick fence.
+    const fenceContent = 'x = ````y````';
+    const text = formatReview('src/c.ts', [
+      { startLine: 3, endLine: 3, lineContent: fenceContent, comment: 'backtick check' },
+    ]);
+
+    const result = parseReviewComment(text);
+    expect(result?.comments[0]?.code).toBe(fenceContent);
+    expect(result?.comments[0]?.body).toBe('backtick check');
+    expect(result?.comments[0]?.start).toBe(3);
+  });
+});
