@@ -143,7 +143,8 @@ export class ChatThreadController {
       getHeldPermissionIds: () => new Set(Object.keys(this.state.interactions.permissions)),
       dispatchPermission: (request) =>
         this.dispatch({ type: 'permission.requested', requestId: request.requestId, request }),
-      onReconnectRefresh: () => this.refreshInBackground(),
+      onSubscribeRefresh: () => this.refreshInBackground(),
+      hasUnreconciledPendings: () => Object.keys(this.state.pendingUserMessages).length > 0,
       isDisposed: () => this.disposed,
     };
   }

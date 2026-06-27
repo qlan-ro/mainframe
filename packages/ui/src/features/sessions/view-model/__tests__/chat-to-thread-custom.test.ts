@@ -99,6 +99,28 @@ describe('chatToThreadCustom — custom.adapterId', () => {
 });
 
 // ---------------------------------------------------------------------------
+// custom.claudeSessionId — the agent CLI's own session id (copied via the
+// row context menu), NOT the mainframe chat id.
+// ---------------------------------------------------------------------------
+
+describe('chatToThreadCustom — custom.claudeSessionId', () => {
+  it('forwards chat.claudeSessionId when present', () => {
+    expect(chatToThreadCustom(makeChat({ claudeSessionId: 'cli-sess-abc' })).custom.claudeSessionId).toBe(
+      'cli-sess-abc',
+    );
+  });
+
+  it('is undefined when chat.claudeSessionId is absent', () => {
+    expect(chatToThreadCustom(makeChat()).custom.claudeSessionId).toBeUndefined();
+  });
+
+  it('does not equal the mainframe chat id', () => {
+    const result = chatToThreadCustom(makeChat({ id: 'chat-1', claudeSessionId: 'cli-sess-abc' }));
+    expect(result.custom.claudeSessionId).not.toBe(result.remoteId);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // custom.tags
 // ---------------------------------------------------------------------------
 

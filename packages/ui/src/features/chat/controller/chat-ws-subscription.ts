@@ -27,8 +27,21 @@ export interface ChatWsHost {
   getHeldPermissionIds: () => ReadonlySet<string>;
   /** Seed the gate from a REST-read pending permission. */
   dispatchPermission: (request: ControlRequest) => void;
-  /** Background refetch-on-gap after a reconnect resume. */
-  onReconnectRefresh: () => void;
+  /**
+   * Background history re-seed after a subscribe:ack. Always fires on a reconnect
+   * (the daemon kept emitting while the socket was down — catch up). On the INITIAL
+   * attach it fires ONLY when `hasUnreconciledPendings()` is true: a clean open is
+   * already seeded by the mount/setRemoteId `load()`, and re-seeding there would
+   * wholesale-replace messageOrder from a possibly-stale REST snapshot, clobbering
+   * messages an actively-streaming chat just delivered. The one initial-attach gap
+   * worth healing is the first-message handoff: the first send happens during the
+   * __LOCALID_* → remoteId window before the sub attaches, so the daemon's
+   * `display.messages.set [user]` lands with no subscriber and the optimistic
+   * pending lingers — a pending at ack time is exactly that signal.
+   */
+  onSubscribeRefresh: () => void;
+  /** True when an optimistic send has not yet been reconciled (handoff-gap signal). */
+  hasUnreconciledPendings: () => boolean;
   /** True once the controller is disposed — gates all async tails. */
   isDisposed: () => boolean;
 }
@@ -104,7 +117,13 @@ export class ChatWsSubscription {
       console.warn('[chat-ws] resumeChat failed', err),
     );
     this.restorePendingPermission();
-    if (reconnect) this.host.onReconnectRefresh();
+    // Reconnect always re-seeds (catch up on events missed while disconnected).
+    // Initial attach re-seeds only to heal the first-message handoff gap — i.e.
+    // when an optimistic pending is still unreconciled — so a clean open of a
+    // streaming chat is not clobbered by a stale REST snapshot.
+    if (reconnect || this.host.hasUnreconciledPendings()) {
+      this.host.onSubscribeRefresh();
+    }
   }
 
   private restorePendingPermission(): void {

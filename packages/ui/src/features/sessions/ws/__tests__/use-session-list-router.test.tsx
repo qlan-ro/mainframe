@@ -33,6 +33,8 @@ let reloadSpy: ReturnType<typeof vi.fn>;
 // Values that tests can mutate before re-render to control hook behaviour
 let filterProjectIdValue: string | null;
 let mainThreadIdValue: string | null;
+let lastSessionIdValue: string | null;
+let setLastSessionIdSpy: ReturnType<typeof vi.fn>;
 let fakeThreadItems: Array<{
   id: string;
   remoteId: string;
@@ -84,6 +86,12 @@ vi.mock('../../../../store/session-filters', () => ({
   }),
 }));
 
+vi.mock('../../../../store/last-session', () => ({
+  useLastSessionStore: Object.assign(vi.fn(), {
+    getState: () => ({ lastSessionId: lastSessionIdValue, setLastSessionId: setLastSessionIdSpy }),
+  }),
+}));
+
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
   return {
@@ -121,6 +129,8 @@ beforeEach(() => {
 
   filterProjectIdValue = null;
   mainThreadIdValue = null;
+  lastSessionIdValue = null;
+  setLastSessionIdSpy = vi.fn();
   fakeThreadItems = [];
   factoryCallCount = 0;
 });
@@ -445,6 +455,49 @@ describe('useSessionListRouter — boot auto-select does nothing on empty list',
     renderHook(() => useSessionListRouter());
 
     expect(switchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 18. Boot restore: persisted last session wins over the most-recent one
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — boot restores the last open session', () => {
+  it('switches to the persisted session (by remoteId) even when an other session is more recent', () => {
+    mainThreadIdValue = '__LOCALID_boot';
+    lastSessionIdValue = 'chat-old';
+    fakeThreadItems = [bootItem('chat-old', 1000), bootItem('chat-new', 3000)];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-old');
+  });
+
+  it('falls back to the most-recent session when the persisted id is gone', () => {
+    mainThreadIdValue = '__LOCALID_boot';
+    lastSessionIdValue = 'chat-deleted';
+    fakeThreadItems = [bootItem('chat-a', 1000), bootItem('chat-b', 2000)];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-b');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. Active-thread change persists the open session (by remoteId)
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — active thread change persists the last session', () => {
+  it('calls setLastSessionId with the active session remoteId', () => {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1', updatedAt: 1000 } }];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(setLastSessionIdSpy).toHaveBeenCalledWith('chat-A');
   });
 });
 

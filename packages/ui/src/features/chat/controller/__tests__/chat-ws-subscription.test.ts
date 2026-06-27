@@ -9,7 +9,7 @@
  *   - Ack-fallback: no ack + ws.connected===true → resumeChat after 2000ms;
  *     ws.connected===false → does NOT resume.
  *   - Reconnect: connection-listener fires while connected → re-sends subscribe,
- *     and after the ack calls onReconnectRefresh() once.
+ *     and after the ack calls onSubscribeRefresh() once.
  *   - restorePendingPermission: toolUseId in getRecentlyReplied() → dispatchPermission
  *     NOT called; otherwise called once.
  *   - detach() calls ws.unsubscribe, tears down both unsub handles, clears the
@@ -143,11 +143,11 @@ function makeHost(
   host: ChatWsHost;
   onEventSpy: ReturnType<typeof vi.fn>;
   dispatchSpy: ReturnType<typeof vi.fn>;
-  reconnectRefreshSpy: ReturnType<typeof vi.fn>;
+  subscribeRefreshSpy: ReturnType<typeof vi.fn>;
 } {
   const onEventSpy = vi.fn();
   const dispatchSpy = vi.fn();
-  const reconnectRefreshSpy = vi.fn();
+  const subscribeRefreshSpy = vi.fn();
   const host: ChatWsHost = {
     chatId: CHAT_ID,
     port: PORT,
@@ -156,11 +156,12 @@ function makeHost(
     getRecentlyReplied: () => new Set<string>(),
     getHeldPermissionIds: () => new Set<string>(),
     dispatchPermission: dispatchSpy,
-    onReconnectRefresh: reconnectRefreshSpy,
+    onSubscribeRefresh: subscribeRefreshSpy,
+    hasUnreconciledPendings: () => false,
     isDisposed: () => false,
     ...overrides,
   };
-  return { host, onEventSpy, dispatchSpy, reconnectRefreshSpy };
+  return { host, onEventSpy, dispatchSpy, subscribeRefreshSpy };
 }
 
 // ---------------------------------------------------------------------------
@@ -335,7 +336,7 @@ describe('chat-ws-subscription ack-fallback timer — disconnected', () => {
 
 // ---------------------------------------------------------------------------
 // 4. Reconnect: connection listener fires while connected →
-//    re-sends ws.subscribe and, after ack, calls onReconnectRefresh once
+//    re-sends ws.subscribe and, after ack, calls onSubscribeRefresh once
 // ---------------------------------------------------------------------------
 
 describe('chat-ws-subscription reconnect', () => {
@@ -357,9 +358,9 @@ describe('chat-ws-subscription reconnect', () => {
     expect(fakeWs.subscribeCalls).toEqual(['chat-abc', 'chat-abc']);
   });
 
-  it('calls onReconnectRefresh exactly once after ack following a reconnect', async () => {
+  it('calls onSubscribeRefresh exactly once after ack following a reconnect', async () => {
     const fakeWs = makeFakeWs(true);
-    const { host, reconnectRefreshSpy } = makeHost(fakeWs);
+    const { host, subscribeRefreshSpy } = makeHost(fakeWs);
     const sub = new ChatWsSubscription(host);
     activeSub = sub;
 
@@ -367,7 +368,7 @@ describe('chat-ws-subscription reconnect', () => {
     // Clear initial subscribe state.
     fakeWs.pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
     await flushMicrotasks();
-    reconnectRefreshSpy.mockClear();
+    subscribeRefreshSpy.mockClear();
 
     // Simulate reconnect.
     fakeWs.fireConnectionListener();
@@ -375,12 +376,15 @@ describe('chat-ws-subscription reconnect', () => {
     fakeWs.pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
     await flushMicrotasks();
 
-    expect(reconnectRefreshSpy).toHaveBeenCalledOnce();
+    expect(subscribeRefreshSpy).toHaveBeenCalledOnce();
   });
 
-  it('does NOT call onReconnectRefresh after the initial (non-reconnect) ack', async () => {
+  it('does NOT call onSubscribeRefresh after the initial ack when there are no pendings', async () => {
+    // Deliberate: a clean open is already seeded by the mount/setRemoteId load().
+    // Re-seeding here would clobber an actively-streaming chat with a stale REST
+    // snapshot, so the initial attach refreshes ONLY to heal the handoff gap.
     const fakeWs = makeFakeWs(true);
-    const { host, reconnectRefreshSpy } = makeHost(fakeWs);
+    const { host, subscribeRefreshSpy } = makeHost(fakeWs, { hasUnreconciledPendings: () => false });
     const sub = new ChatWsSubscription(host);
     activeSub = sub;
 
@@ -388,7 +392,24 @@ describe('chat-ws-subscription reconnect', () => {
     fakeWs.pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
     await flushMicrotasks();
 
-    expect(reconnectRefreshSpy).not.toHaveBeenCalled();
+    expect(subscribeRefreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('calls onSubscribeRefresh after the initial ack when an optimistic pending is unreconciled', async () => {
+    // The first-message handoff: the first send happened during the __LOCALID_* →
+    // remoteId window before the sub attached, so the daemon's `display.messages.set
+    // [user]` was lost and the pending lingers. A pending at ack time is that signal,
+    // and re-seeding reconciles it.
+    const fakeWs = makeFakeWs(true);
+    const { host, subscribeRefreshSpy } = makeHost(fakeWs, { hasUnreconciledPendings: () => true });
+    const sub = new ChatWsSubscription(host);
+    activeSub = sub;
+
+    sub.attach();
+    fakeWs.pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
+    await flushMicrotasks();
+
+    expect(subscribeRefreshSpy).toHaveBeenCalledOnce();
   });
 });
 

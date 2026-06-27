@@ -1,22 +1,31 @@
 /**
  * pickInitialSession — which session the app opens on boot.
  *
- * Mirrors the desktop boot rule (renderer `useAppInit.ts`: fall back to the most
- * recently updated non-archived chat) so the app never starts on the empty
- * new-thread picker when real sessions exist. assistant-ui's
- * useRemoteThreadListRuntime boots on a fresh `__LOCALID_*` draft and does NOT
- * auto-open a listed thread; this picks the thread the boot effect switches to.
+ * Two-tier rule:
+ *   1. Restore the last session the user had open before the app closed, when a
+ *      `preferredRemoteId` (the persisted daemon chat id) still maps to a live,
+ *      non-archived session. Matched on `remoteId` — the stable daemon chat id —
+ *      NOT the aui thread id, which can be a per-run `__LOCALID_*` value that
+ *      doesn't survive a reboot.
+ *   2. Otherwise fall back to the most-recently-updated non-archived session
+ *      (desktop parity, renderer `useAppInit.ts`), so the app never starts on the
+ *      empty new-thread picker when real sessions exist.
  *
- * Pure: most-recently-updated non-archived item by `custom.updatedAt`. Returns
- * null when there is nothing to open (no sessions, or all archived) — the caller
- * then leaves the new-thread picker up, which is the correct empty state.
+ * Returns the aui thread id to switch to (the caller passes it to
+ * `switchToThread`), or null when there is nothing to open (no sessions, or all
+ * archived) — the caller then leaves the new-thread picker up.
  *
- * Pinned state intentionally does NOT influence the default selection (matching
- * desktop) — pinning affects list ordering/grouping, not which chat auto-opens.
+ * Pure. Pinned state intentionally does NOT influence the default selection
+ * (matching desktop) — pinning affects list ordering/grouping, not auto-open.
  */
 import type { SessionItem } from './chat-to-thread-custom';
 
-export function pickInitialSession(items: readonly SessionItem[]): string | null {
+export function pickInitialSession(items: readonly SessionItem[], preferredRemoteId?: string | null): string | null {
+  if (preferredRemoteId != null) {
+    const restored = items.find((item) => item.status !== 'archived' && item.remoteId === preferredRemoteId);
+    if (restored != null) return restored.id;
+  }
+
   let best: SessionItem | null = null;
   for (const item of items) {
     if (item.status === 'archived') continue;

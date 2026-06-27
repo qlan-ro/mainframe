@@ -232,7 +232,7 @@ function SessionRowInner({
       }}
       onTags={handleTags}
       onArchive={() => void itemRuntime.archive()}
-      claudeSessionId={item.remoteId}
+      claudeSessionId={custom.claudeSessionId}
     >
       <ThreadListItemPrimitive.Root
         data-testid="sessions-row"
