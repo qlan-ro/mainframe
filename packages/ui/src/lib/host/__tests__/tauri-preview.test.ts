@@ -20,6 +20,14 @@ const onRegionSelectResult = vi.fn().mockImplementation((cb: (result: RegionSele
   });
 });
 
+let capturedNavigateCallback: ((result: { tabId: string; url: string }) => void) | null = null;
+const onNavigateResult = vi.fn().mockImplementation((cb: (result: { tabId: string; url: string }) => void) => {
+  capturedNavigateCallback = cb;
+  return Promise.resolve(() => {
+    capturedNavigateCallback = null;
+  });
+});
+
 vi.mock('@/lib/tauri/preview', () => ({
   previewCreate: (...a: unknown[]) => previewCreate(...a),
   previewNavigate: (...a: unknown[]) => previewNavigate(...a),
@@ -30,6 +38,7 @@ vi.mock('@/lib/tauri/preview', () => ({
   previewEval: (...a: unknown[]) => previewEval(...a),
   onInspectResult: (...a: unknown[]) => onInspectResult(...a),
   onRegionSelectResult: (...a: unknown[]) => onRegionSelectResult(...a),
+  onNavigateResult: (...a: unknown[]) => onNavigateResult(...a),
 }));
 
 beforeEach(() => {
@@ -46,6 +55,13 @@ beforeEach(() => {
     capturedRegionCallback = cb;
     return Promise.resolve(() => {
       capturedRegionCallback = null;
+    });
+  });
+  capturedNavigateCallback = null;
+  onNavigateResult.mockReset().mockImplementation((cb: (result: { tabId: string; url: string }) => void) => {
+    capturedNavigateCallback = cb;
+    return Promise.resolve(() => {
+      capturedNavigateCallback = null;
     });
   });
 });
@@ -153,5 +169,19 @@ describe('mountTauriPreview', () => {
 
     capturedRegionCallback?.({ tabId, region: { x: 5, y: 6, w: 7, h: 8 } });
     expect(received).toHaveLength(0);
+  });
+
+  it('onNavigate forwards only events whose tabId matches this tab', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    const handle = mountTauriPreview(fakeContainer(), 'http://localhost:3000', { projectId: 'p1' });
+    await Promise.resolve();
+    const calls = previewCreate.mock.calls;
+    const tabId = (calls[calls.length - 1] as unknown[])[0] as string;
+    const received: string[] = [];
+    handle.onNavigate((url) => received.push(url));
+    await Promise.resolve();
+    capturedNavigateCallback!({ tabId: `${tabId}-WRONG`, url: 'http://other/' });
+    capturedNavigateCallback!({ tabId, url: 'http://localhost:3000/x' });
+    expect(received).toEqual(['http://localhost:3000/x']);
   });
 });

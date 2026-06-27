@@ -49,6 +49,7 @@ function makeFakeHandle(): PreviewHandle {
       regionResultCallback = cb;
       return () => {};
     }),
+    onNavigate: vi.fn().mockReturnValue(() => {}),
     refit: vi.fn(),
     setDevice: vi.fn(),
     destroy: vi.fn(),

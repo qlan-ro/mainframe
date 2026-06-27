@@ -65,6 +65,18 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
         .catch((e) => console.warn('[preview] tauri onRegionSelect', e));
       return () => unlisten?.();
     },
+    onNavigate: (cb: (url: string) => void): Unsubscribe => {
+      let unlisten: (() => void) | null = null;
+      void preview
+        .onNavigateResult((result) => {
+          if (result.tabId === tabId) cb(result.url);
+        })
+        .then((fn) => {
+          unlisten = fn;
+        })
+        .catch((e) => console.warn('[preview] tauri onNavigate', e));
+      return () => unlisten?.();
+    },
     refit: (): void => {
       void preview.previewSetBounds(tabId, readBounds()).catch((e) => console.warn('[preview] tauri refit', e));
     },

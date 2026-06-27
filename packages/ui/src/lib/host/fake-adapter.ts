@@ -85,6 +85,7 @@ export class FakeHostBridge implements HostBridge {
       onInspect: () => () => {},
       startRegionSelect: () => Promise.resolve(),
       onRegionSelect: () => () => {},
+      onNavigate: () => () => {},
       refit: () => {},
       setDevice: () => {},
       destroy: () => {},

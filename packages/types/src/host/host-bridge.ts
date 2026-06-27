@@ -95,6 +95,12 @@ export interface PreviewHandle {
   onInspect(cb: (result: InspectResult) => void): Unsubscribe;
   startRegionSelect(): Promise<void>;
   onRegionSelect(cb: (result: RegionSelectResult) => void): Unsubscribe;
+  /**
+   * Subscribe to navigations that occur inside the preview webview — link
+   * clicks, redirects, and SPA route changes. Mirrors the address-bar in a real
+   * browser. Returns an Unsubscribe.
+   */
+  onNavigate(cb: (url: string) => void): Unsubscribe;
   /** Tauri: re-read container.getBoundingClientRect() into the native layer. Electron: no-op. */
   refit(): void;
   setDevice(device: 'desktop' | 'mobile'): void;

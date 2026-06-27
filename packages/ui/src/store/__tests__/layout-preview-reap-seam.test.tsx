@@ -79,6 +79,7 @@ beforeEach(() => {
     onInspect: vi.fn().mockReturnValue(() => {}),
     startRegionSelect: vi.fn().mockResolvedValue(undefined),
     onRegionSelect: vi.fn().mockReturnValue(() => {}),
+    onNavigate: vi.fn().mockReturnValue(() => {}),
     refit: vi.fn(),
     setDevice: vi.fn(),
     destroy: spy,

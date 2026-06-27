@@ -197,6 +197,7 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
   const partition = `persist:sandbox-${opts?.projectId ?? 'default'}`;
   const inspectCbs = new Set<(r: InspectResult) => void>();
   const regionCbs = new Set<(r: RegionSelectResult) => void>();
+  const navigateCbs = new Set<(url: string) => void>();
 
   // Create the <webview> element and position it to fill the container.
   const wv = document.createElement('webview') as unknown as WebviewElement;
@@ -214,6 +215,15 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
     });
 
   wv.addEventListener('dom-ready', () => void navigate(url), { once: true });
+
+  // Reflect in-webview navigation back to the address bar (two-way). did-navigate
+  // fires for full-document loads; did-navigate-in-page for SPA / hash routing.
+  const onDidNavigate = (e: Event): void => {
+    const url = (e as unknown as { url?: string }).url;
+    if (typeof url === 'string') for (const cb of navigateCbs) cb(url);
+  };
+  wv.addEventListener('did-navigate', onDidNavigate);
+  wv.addEventListener('did-navigate-in-page', onDidNavigate);
 
   const capture = async (region?: Region): Promise<Uint8Array> => {
     if (typeof (wv as unknown as { capturePage?: unknown }).capturePage !== 'function') {
@@ -280,6 +290,12 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
         regionCbs.delete(cb);
       };
     },
+    onNavigate: (cb: (url: string) => void): Unsubscribe => {
+      navigateCbs.add(cb);
+      return () => {
+        navigateCbs.delete(cb);
+      };
+    },
     refit: (): void => {
       // The <webview> is CSS-sized inside the container; no native repositioning needed.
     },
@@ -287,6 +303,8 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
       wv.style.width = device === 'mobile' ? '390px' : '100%';
     },
     destroy: (): void => {
+      wv.removeEventListener('did-navigate', onDidNavigate);
+      wv.removeEventListener('did-navigate-in-page', onDidNavigate);
       try {
         const id = wv.getWebContentsId();
         const mf = (window as unknown as { mainframe?: { destroyWebview(id: number): Promise<void> } }).mainframe;

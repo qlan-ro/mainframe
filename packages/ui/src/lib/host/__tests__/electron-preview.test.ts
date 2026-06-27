@@ -309,4 +309,35 @@ describe('mountElectronPreview', () => {
     await handle.startRegionSelect();
     expect(cb).not.toHaveBeenCalled();
   });
+
+  it('onNavigate fires when the webview emits did-navigate-in-page', () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const received: string[] = [];
+    handle.onNavigate((url) => received.push(url));
+    const wv = container.querySelector('webview') as HTMLElement;
+    wv.dispatchEvent(Object.assign(new Event('did-navigate-in-page'), { url: 'http://x/dashboard' }));
+    expect(received).toEqual(['http://x/dashboard']);
+  });
+
+  it('onNavigate fires on full-page did-navigate', () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const received: string[] = [];
+    handle.onNavigate((url) => received.push(url));
+    const wv = container.querySelector('webview') as HTMLElement;
+    wv.dispatchEvent(Object.assign(new Event('did-navigate'), { url: 'http://x/other' }));
+    expect(received).toEqual(['http://x/other']);
+  });
+
+  it('onNavigate unsubscribe stops delivery', () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const cb = vi.fn();
+    const unsub = handle.onNavigate(cb);
+    unsub();
+    const wv = container.querySelector('webview') as HTMLElement;
+    wv.dispatchEvent(Object.assign(new Event('did-navigate'), { url: 'http://x/y' }));
+    expect(cb).not.toHaveBeenCalled();
+  });
 });

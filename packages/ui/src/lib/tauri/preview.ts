@@ -105,3 +105,20 @@ export function onRegionSelectResult(callback: (result: RegionSelectResult) => v
     callback(event.payload);
   });
 }
+
+/** Wire payload for the `preview:navigate` event (internal to the Tauri host). */
+export interface NavigateResult {
+  tabId: string;
+  url: string;
+}
+
+/**
+ * Subscribe to the `preview:navigate` event emitted by the Rust
+ * `preview_navigate_event` command (called back from BRIDGE_JS navigation
+ * tracking). Returns an `UnlistenFn`.
+ */
+export function onNavigateResult(callback: (result: NavigateResult) => void): Promise<UnlistenFn> {
+  return listen<NavigateResult>('preview:navigate', (event) => {
+    callback(event.payload);
+  });
+}
