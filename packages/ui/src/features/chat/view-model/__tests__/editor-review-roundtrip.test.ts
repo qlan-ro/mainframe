@@ -10,6 +10,10 @@
  * Behaviors covered:
  *  RT1 — single comment, single line, with content.
  *  RT2 — two comments: first single-line, second a multi-line range.
+ *  RT3 — empty content.
+ *  RT4 — fence-grown content (4-backtick run).
+ *  RT5 — a comment body containing a "---" divider survives the round-trip
+ *        (the divider is not mistaken for a part boundary).
  */
 import { describe, it, expect } from 'vitest';
 import { formatReview } from '@/lib/editor/format-line-comment';
@@ -123,5 +127,26 @@ describe('editor review round-trip — fence-grown content', () => {
     expect(result?.comments[0]?.code).toBe(fenceContent);
     expect(result?.comments[0]?.body).toBe('backtick check');
     expect(result?.comments[0]?.start).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RT5 — a "---" divider inside a comment body survives the round-trip
+// ---------------------------------------------------------------------------
+
+describe('editor review round-trip — divider inside a comment body', () => {
+  it('keeps the in-body divider and still splits the two real comments', () => {
+    const text = formatReview('src/d.ts', [
+      { startLine: 1, endLine: 1, lineContent: 'x', comment: 'before\n\n---\n\nafter' },
+      { startLine: 5, endLine: 5, lineContent: 'y', comment: 'second' },
+    ]);
+
+    expect(parseReviewComment(text)).toEqual({
+      file: 'src/d.ts',
+      comments: [
+        { start: 1, code: 'x', body: 'before\n\n---\n\nafter' },
+        { start: 5, code: 'y', body: 'second' },
+      ],
+    });
   });
 });

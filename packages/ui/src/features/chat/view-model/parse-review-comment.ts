@@ -56,7 +56,11 @@ export function parseReviewComment(text: string): ReviewComment | null {
   const header = text.match(HEADER_RE);
   if (!header) return null;
   const file = header[1]!;
-  const parts = header[2]!.split('\n\n---\n\n');
+  // Split only at a divider that introduces the next part (immediately followed
+  // by an "At line N" header). A bare "\n\n---\n\n" inside a comment body (e.g.
+  // a markdown horizontal rule the user typed) is NOT a part boundary, so it
+  // stays in the body instead of over-splitting the review into a failed parse.
+  const parts = header[2]!.split(/\n\n---\n\n(?=At lines? \d)/);
   const comments: ReviewCommentItem[] = [];
   for (const part of parts) {
     const item = parsePart(part.trim());

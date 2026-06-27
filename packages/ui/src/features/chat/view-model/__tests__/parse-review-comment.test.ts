@@ -175,10 +175,40 @@ describe('parseReviewComment — strict fallbacks return null', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseReviewComment — mixed valid+invalid parts', () => {
-  it('returns null when a second part is not a valid "At line …" block', () => {
+  it('returns null when a second "At line …" part is malformed (fence but no body)', () => {
+    // The divider must be followed by an "At line" header to count as a part
+    // boundary; this second part starts with one but has no body after its
+    // fence, so the strict parse poisons the whole message.
     const text =
-      'Diff of `x.ts`\n\n' + 'At line 5:\n```\ncode\n```\nvalid body' + '\n\n---\n\n' + 'garbage that does not match';
+      'Diff of `x.ts`\n\n' +
+      'At line 5:\n```\ncode\n```\nvalid body' +
+      '\n\n---\n\n' +
+      'At line 9:\n```\nmore code\n```';
     expect(parseReviewComment(text)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P11 — a "---" divider inside a comment body must NOT over-split the review
+// (only a divider followed by an "At line N" header is a part boundary)
+// ---------------------------------------------------------------------------
+
+describe('parseReviewComment — divider inside a comment body', () => {
+  it('keeps an in-body horizontal rule in the first comment instead of splitting', () => {
+    const text =
+      'File: `a.ts`\n\n' +
+      'At line 1:\n```\nx\n```\nbefore\n\n---\n\nafter' +
+      '\n\n---\n\n' +
+      'At line 5:\n```\ny\n```\nsecond';
+    const out = parseReviewComment(text);
+    expect(out?.comments).toHaveLength(2);
+    expect(out?.comments[0]).toEqual({ start: 1, code: 'x', body: 'before\n\n---\n\nafter' });
+    expect(out?.comments[1]).toEqual({ start: 5, code: 'y', body: 'second' });
+  });
+
+  it('keeps a trailing in-body --- in a single-comment review', () => {
+    const out = parseReviewComment('File: `a.ts`\n\nAt line 1:\n```\nx\n```\nnote\n\n---\n\nmore');
+    expect(out).toEqual({ file: 'a.ts', comments: [{ start: 1, code: 'x', body: 'note\n\n---\n\nmore' }] });
   });
 });
 
