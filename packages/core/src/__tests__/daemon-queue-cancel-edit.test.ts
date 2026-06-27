@@ -61,5 +61,10 @@ describe('daemon queue cancel/edit (A2)', () => {
     expect(sendMessage).not.toHaveBeenCalled();
     expect(mgr.getQueuedForChat('c1')[0].content).toBe('new');
     expect(emit.mock.calls.some((c: any[]) => c[0].type === 'message.queued.snapshot')).toBe(true);
+    // outgoingContent is a separate held field the flush path (A3) sends to the CLI — lock it in.
+    expect(mgr.chatQueues.get('c1')![0].outgoingContent).toBe('new');
+    // the cached transient message text is rewritten so the display reflects the edit.
+    const cached = mgr.messages.get('c1')?.find((m: any) => m.id === 'm1');
+    expect(cached?.content[0].text).toBe('new');
   });
 });
