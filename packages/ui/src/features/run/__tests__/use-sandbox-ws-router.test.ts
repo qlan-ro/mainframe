@@ -22,6 +22,7 @@ function makeStore(): SandboxRouterStore {
   return {
     appendLog: vi.fn<(scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void>(),
     setProcessStatus: vi.fn<(scopeKey: string, name: string, status: LaunchProcessStatus) => void>(),
+    releaseRunScope: vi.fn<(scopeKey: string) => void>(),
   };
 }
 
@@ -114,6 +115,19 @@ describe('launch.port.timeout', () => {
     );
     expect(store.appendLog).toHaveBeenCalledOnce();
     expect(store.setProcessStatus).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// launch.scopeReleased
+// ---------------------------------------------------------------------------
+
+describe('launch.scopeReleased', () => {
+  it('routes to releaseRunScope with the built scope key', () => {
+    const store = makeStore();
+    routeLaunchEvent({ type: 'launch.scopeReleased', projectId: 'p', effectivePath: '/r' }, store);
+    expect(store.releaseRunScope).toHaveBeenCalledWith('p:/r');
+    expect(store.appendLog).not.toHaveBeenCalled();
   });
 });
 

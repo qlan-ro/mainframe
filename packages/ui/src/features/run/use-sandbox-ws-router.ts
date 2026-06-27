@@ -15,6 +15,7 @@
  *   launch.tunnel         → appendLog (log-only; no URL navigation — parity)
  *   launch.tunnel.failed  → appendLog (log-only)
  *   launch.port.timeout   → appendLog (log-only)
+ *   launch.scopeReleased  → releaseRunScope(scopeKey) — prune Run tabs/PTYs
  *   everything else       → no-op
  */
 import { useEffect } from 'react';
@@ -23,11 +24,13 @@ import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../lib/daemon/ws-client';
 import { useSandboxStore } from '../../store/sandbox';
 import { buildLaunchScope } from '../../lib/launch-scope';
+import { useLayoutStore } from '../../store/layout';
 
 /** Minimal store interface required by the router (testable without Zustand). */
 export interface SandboxRouterStore {
   appendLog: (scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
   setProcessStatus: (scopeKey: string, name: string, status: LaunchProcessStatus) => void;
+  releaseRunScope: (scopeKey: string) => void;
 }
 
 /** Pure event dispatcher — dependency-injected so it is testable without React. */
@@ -58,6 +61,10 @@ export function routeLaunchEvent(event: DaemonEvent, store: SandboxRouterStore):
       store.appendLog(scope, event.name, `[port.timeout] port ${event.port}`, 'stderr');
       return;
     }
+    case 'launch.scopeReleased': {
+      store.releaseRunScope(buildLaunchScope(event.projectId, event.effectivePath));
+      return;
+    }
     default:
       return;
   }
@@ -69,6 +76,7 @@ export function useSandboxWsRouter(): void {
     const store: SandboxRouterStore = {
       appendLog: (...args) => useSandboxStore.getState().appendLog(...args),
       setProcessStatus: (...args) => useSandboxStore.getState().setProcessStatus(...args),
+      releaseRunScope: (scopeKey) => useLayoutStore.getState().releaseRunScope(scopeKey),
     };
 
     const unsubscribe = daemonWs.onEvent((event) => {
