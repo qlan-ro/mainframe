@@ -31,6 +31,7 @@ import { sortProjectsByRecentActivity } from '../view-model/project-activity';
 import { applySessionFilters } from '../filter/apply-session-filters';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
+import { useLastSessionStore } from '@/store/last-session';
 import { useProjects } from '../use-projects';
 import { useAddProject } from '../use-add-project';
 import { SessionGroup } from './SessionGroup';
@@ -42,6 +43,7 @@ import { TagFilterBar } from '../filter/TagFilterBar';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
+import { resolveProjectSession } from './resolve-project-session';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
@@ -97,7 +99,8 @@ function buildAttentionMap(
 }
 
 export function SessionSidebar() {
-  const threadListRuntime = useAssistantRuntime().threads;
+  const runtime = useAssistantRuntime();
+  const threadListRuntime = runtime.threads;
   const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
@@ -123,6 +126,21 @@ export function SessionSidebar() {
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
+
+  // Selecting a project pill sets the filter AND activates that project's
+  // most-recent (or remembered) session. Toggling OFF only clears the filter.
+  const onSelectProject = useCallback(
+    (projectId: string | null) => {
+      setFilterProjectId(projectId);
+      if (projectId != null) {
+        const target = resolveProjectSession(allItems, projectId, useLastSessionStore.getState().lastByProject);
+        if (target != null) {
+          runtime.threads.switchToThread(target);
+        }
+      }
+    },
+    [allItems, runtime, setFilterProjectId],
+  );
 
   const handleRemoveProject = useCallback(
     async (project: { id: string; name: string }) => {
@@ -161,7 +179,7 @@ export function SessionSidebar() {
         projects={sortedProjects}
         filterProjectId={filterProjectId}
         attentionCounts={attentionCounts}
-        onSelect={setFilterProjectId}
+        onSelect={onSelectProject}
         onRemoveProject={(project) => void handleRemoveProject(project)}
         onAddProject={() => void handleAddProject()}
       />
