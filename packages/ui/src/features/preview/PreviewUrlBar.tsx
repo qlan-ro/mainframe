@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { RotateCw, ExternalLink, Eraser } from 'lucide-react';
 import { PreviewIconButton } from './PreviewIconButton';
+import { usePreviewAddress } from './use-preview-address';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 
 interface PreviewUrlBarProps {
@@ -9,13 +11,33 @@ interface PreviewUrlBarProps {
 }
 
 export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
+  const { currentUrl, navigateTo } = usePreviewAddress(handle, port);
+  const [draft, setDraft] = useState(currentUrl);
+  const [invalid, setInvalid] = useState(false);
+
+  // Keep the editable draft in sync when the current URL changes (port re-seed
+  // or an in-webview navigation). Overwrites an in-progress edit by design —
+  // the bar always shows the live URL, matching a browser address bar.
+  useEffect(() => {
+    setDraft(currentUrl);
+    setInvalid(false);
+  }, [currentUrl]);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      if (!navigateTo(draft)) setInvalid(true);
+    } else if (e.key === 'Escape') {
+      setDraft(currentUrl);
+      setInvalid(false);
+    }
+  }
+
   function handleReload() {
     if (!port) return;
     handle?.navigate(`http://localhost:${port}`).catch((e: unknown) => console.warn('[preview] url-bar reload', e));
   }
 
   function handleOpenBrowser() {
-    // No previewOpenExternal — use navigate as fallback
     console.warn('[preview] open-in-browser: no external open API, using navigate fallback');
     if (!port) return;
     handle
@@ -47,13 +69,26 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
         }`}
       />
 
-      <span
-        className={`flex-1 min-w-0 font-mono text-caption overflow-hidden text-ellipsis whitespace-nowrap px-[4px] ${
-          isRunning ? 'text-muted-foreground' : 'text-mf-text-4'
+      <input
+        data-testid="preview-url-input"
+        value={draft}
+        disabled={!isRunning}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder="localhost:…"
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setInvalid(false);
+        }}
+        onKeyDown={handleKeyDown}
+        className={`flex-1 min-w-0 bg-transparent outline-none font-mono text-caption px-[4px] ${
+          invalid
+            ? 'text-destructive ring-1 ring-destructive rounded-sm'
+            : isRunning
+              ? 'text-foreground'
+              : 'text-mf-text-4'
         }`}
-      >
-        {port !== null ? `localhost:${port}` : 'localhost:…'}
-      </span>
+      />
 
       <PreviewIconButton
         testId="preview-url-open-browser"
