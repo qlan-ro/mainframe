@@ -38,9 +38,20 @@ import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
 
 const logger = createChildLogger('chat:manager');
 
+interface QueuedItem {
+  messageId: string;
+  uuid: string;
+  content: string;
+  outgoingContent: string;
+  images?: { mediaType: string; data: string }[];
+  attachmentIds?: string[];
+  timestamp: string;
+}
+
 export class ChatManager {
   private activeChats = new Map<string, ActiveChat>();
   private queuedRefs = new Map<string, QueuedMessageRef>();
+  private chatQueues = new Map<string, QueuedItem[]>();
   private messages = new MessageCache();
   private permissions: PermissionManager;
   private planMode: PlanModeHandler;
@@ -347,21 +358,31 @@ export class ChatManager {
     this.db.chats.update(chatId, { processState: 'working', updatedAt: now });
     this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
-    await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined, messageUuid);
-
-    // Track queued message ref for cancel/edit
-    if (messageUuid) {
-      const ref: QueuedMessageRef = {
+    if (isQueued && messageUuid) {
+      const item: QueuedItem = {
         messageId: message.id,
-        chatId,
         uuid: messageUuid,
         content,
+        outgoingContent: outgoingContent ?? '',
+        images: images.length > 0 ? images : undefined,
         attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
         timestamp: message.timestamp,
       };
-      this.queuedRefs.set(messageUuid, ref);
+      const list = this.chatQueues.get(chatId) ?? [];
+      list.push(item);
+      this.chatQueues.set(chatId, list);
+      const ref: QueuedMessageRef = {
+        messageId: item.messageId,
+        chatId,
+        uuid: item.uuid,
+        content: item.content,
+        attachmentIds: item.attachmentIds,
+        timestamp: item.timestamp,
+      };
       this.emitEvent({ type: 'message.queued', chatId, ref });
-      logger.info({ chatId, uuid: messageUuid, messageId: message.id }, 'message sent to CLI while busy (queued)');
+      logger.info({ chatId, uuid: messageUuid, messageId: message.id }, 'message held in daemon queue');
+    } else {
+      await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined, undefined);
     }
   }
 
@@ -417,7 +438,14 @@ export class ChatManager {
 
   /** Return all queued refs for a chat, oldest-first. */
   getQueuedForChat(chatId: string): QueuedMessageRef[] {
-    return [...this.queuedRefs.values()].filter((r) => r.chatId === chatId);
+    return (this.chatQueues.get(chatId) ?? []).map((i) => ({
+      messageId: i.messageId,
+      chatId,
+      uuid: i.uuid,
+      content: i.content,
+      attachmentIds: i.attachmentIds,
+      timestamp: i.timestamp,
+    }));
   }
 
   /** Drop every queuedRef belonging to a chat. Called when the CLI process exits. */

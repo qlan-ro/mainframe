@@ -231,10 +231,12 @@ describe('ChatManager — queued refs access', () => {
     };
     const adapters: any = { get: vi.fn(), list: vi.fn().mockReturnValue([]) };
     const manager = new ChatManager(db, adapters, new BackgroundTaskTracker());
-    const internal = manager as unknown as { queuedRefs: Map<string, any> };
-    internal.queuedRefs.set('u1', { uuid: 'u1', chatId: 'A', messageId: 'mA', content: '', timestamp: '' });
-    internal.queuedRefs.set('u2', { uuid: 'u2', chatId: 'A', messageId: 'mA2', content: '', timestamp: '' });
-    internal.queuedRefs.set('u3', { uuid: 'u3', chatId: 'B', messageId: 'mB', content: '', timestamp: '' });
+    const internal = manager as unknown as { chatQueues: Map<string, any[]> };
+    internal.chatQueues.set('A', [
+      { uuid: 'u1', messageId: 'mA', content: '', outgoingContent: '', timestamp: '' },
+      { uuid: 'u2', messageId: 'mA2', content: '', outgoingContent: '', timestamp: '' },
+    ]);
+    internal.chatQueues.set('B', [{ uuid: 'u3', messageId: 'mB', content: '', outgoingContent: '', timestamp: '' }]);
 
     const api = manager as unknown as { getQueuedForChat(id: string): unknown[] };
     expect(api.getQueuedForChat('A')).toHaveLength(2);
