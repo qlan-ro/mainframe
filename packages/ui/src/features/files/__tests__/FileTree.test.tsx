@@ -8,10 +8,13 @@ const getFileTree = vi.fn();
 const mockEmit = vi.fn();
 const mockReveal = vi.fn();
 const mockClipboard = vi.fn();
+// Controls the useDaemonIsLocal() gate; reset to true (local) before each test.
+let daemonIsLocal = true;
 
 vi.mock('@/lib/api/files', () => ({ getFileTree: (...a: unknown[]) => getFileTree(...a) }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
 vi.mock('@/lib/editor/copy-reference', () => ({ writeToClipboard: (...a: unknown[]) => mockClipboard(...a) }));
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => daemonIsLocal }));
 
 // alias for backward compat within this file
 const emitSurfaceIntent = mockEmit;
@@ -96,6 +99,7 @@ describe('FileTree — context menu copy/reveal actions', () => {
     mockEmit.mockReset();
     mockReveal.mockReset();
     mockClipboard.mockReset();
+    daemonIsLocal = true;
     // Active workspace base → absolute paths are base + '/' + relative.
     useActiveBasesStore.setState({ bases: { worktreePath: '/wt' } });
     // Wire showItemInFolder to mockReveal via the host singleton.
@@ -120,11 +124,22 @@ describe('FileTree — context menu copy/reveal actions', () => {
     expect(mockClipboard).toHaveBeenCalledWith('src/a.ts');
   });
 
-  it('Reveal in Finder reveals the absolute path', async () => {
+  it('Reveal in Finder reveals the absolute path when the daemon is local', async () => {
     getFileTree.mockResolvedValueOnce([dir('src', 'src')]);
     render(<FileTree port={1} projectId="p1" />);
     fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src'));
     fireEvent.click(await screen.findByTestId('file-tree-reveal'));
     expect(mockReveal).toHaveBeenCalledWith('/wt/src');
+  });
+
+  it('disables Reveal in Finder when connected to a remote daemon', async () => {
+    daemonIsLocal = false;
+    getFileTree.mockResolvedValueOnce([dir('src', 'src')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src'));
+    const reveal = await screen.findByTestId('file-tree-reveal');
+    expect(reveal).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(reveal);
+    expect(mockReveal).not.toHaveBeenCalled();
   });
 });

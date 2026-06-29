@@ -4,6 +4,10 @@
  * FilesTab menu: Find in file/folder · Reveal in Finder · Copy Path · Copy
  * Relative Path. `fullPath` is the absolute on-disk path (worktree/project base
  * + relative); the Copy/Reveal actions need it, Find scopes by the relative path.
+ *
+ * Reveal in Finder is local-only — it opens the OS file manager on the *app's*
+ * machine, which only makes sense when the daemon shares that filesystem. It is
+ * disabled when connected to a remote daemon, via the `useDaemonIsLocal()` gate.
  */
 import type { ReactNode } from 'react';
 import type { FileTreeEntry } from '@/lib/api/files';
@@ -16,6 +20,7 @@ import {
 } from '@/components/ui/context-menu';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useHost } from '@/lib/host';
+import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 
 interface FileTreeRowMenuProps {
@@ -27,6 +32,7 @@ interface FileTreeRowMenuProps {
 
 export function FileTreeRowMenu({ entry, fullPath, children }: FileTreeRowMenuProps) {
   const host = useHost();
+  const isLocalDaemon = useDaemonIsLocal();
   const isDir = entry.type === 'directory';
   return (
     <ContextMenu>
@@ -45,7 +51,11 @@ export function FileTreeRowMenu({ entry, fullPath, children }: FileTreeRowMenuPr
           {isDir ? 'Find in folder' : 'Find in file'}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem data-testid="file-tree-reveal" onSelect={() => void host.fs.showItemInFolder(fullPath)}>
+        <ContextMenuItem
+          data-testid="file-tree-reveal"
+          disabled={!isLocalDaemon}
+          onSelect={() => void host.fs.showItemInFolder(fullPath)}
+        >
           Reveal in Finder
         </ContextMenuItem>
         <ContextMenuItem data-testid="file-tree-copy-path" onSelect={() => void writeToClipboard(fullPath)}>

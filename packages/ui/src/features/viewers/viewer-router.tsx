@@ -10,12 +10,12 @@
  *   pdf    → PdfViewer     (.pdf)
  *   code   → CmEditor      (everything else; caller must wire Phase 7)
  *
- * File loading is daemon-first (worktree-aware): project files are fetched via
- * the daemon REST API. The Tauri bridge is the fallback only when there is no
- * active project context (absolute path, no worktree).
+ * File loading is daemon-only (worktree-aware): project files are fetched via
+ * the daemon REST API, which owns the filesystem. There is no local-disk
+ * fallback — a path with no active project context resolves to an error, so the
+ * viewer works unchanged against a remote daemon.
  */
 import { type ReactNode, useEffect, useState } from 'react';
-import { useHost } from '@/lib/host';
 import { getProjectFile, getProjectFileBase64 } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -88,7 +88,6 @@ type LoadState =
 
 export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   const [state, setState] = useState<LoadState>({ status: 'idle' });
-  const host = useHost();
   const port = useDaemonPort();
   const { projectId, chatId } = useActiveIdentity();
 
@@ -108,17 +107,20 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
           return;
         }
 
+        // File reads are daemon-only (worktree-aware): there is no local-disk
+        // fallback. Under a remote daemon the file lives on the server, so a
+        // path with no active project context cannot be read here.
+        if (!projectId) {
+          setState({ status: 'error', message: 'No project context for this file' });
+          return;
+        }
+
         // Binary kinds (image, pdf) need base64; text kinds need UTF-8.
         const isBinary = kind === 'image' || kind === 'pdf';
 
-        let raw: string | null;
-        if (isBinary) {
-          raw = projectId
-            ? await getProjectFileBase64(port, projectId, path, chatId)
-            : await host.fs.readFileBase64(path);
-        } else {
-          raw = projectId ? await getProjectFile(port, projectId, path, chatId) : await host.fs.readFile(path);
-        }
+        const raw = isBinary
+          ? await getProjectFileBase64(port, projectId, path, chatId)
+          : await getProjectFile(port, projectId, path, chatId);
 
         if (cancelled) return;
 
@@ -148,7 +150,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, host, port, projectId, chatId]);
+  }, [path, port, projectId, chatId]);
 
   if (state.status === 'idle' || state.status === 'loading') {
     return <div className="flex h-full items-center justify-center text-body text-muted-foreground">Loading…</div>;
