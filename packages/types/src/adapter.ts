@@ -292,6 +292,17 @@ export interface ExternalSession {
   model?: string;
 }
 
+/**
+ * A page of importable external sessions.
+ * `total` is the candidate (stat-only) count; `nextOffset` is the offset to
+ * request next, or null when the candidate list is exhausted.
+ */
+export interface ExternalSessionPage {
+  sessions: ExternalSession[];
+  total: number;
+  nextOffset: number | null;
+}
+
 export interface Adapter {
   id: string;
   name: string;
@@ -325,7 +336,11 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
-  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+  listExternalSessions?(
+    projectPath: string,
+    excludeSessionIds: string[],
+    opts?: { offset?: number; limit?: number },
+  ): Promise<ExternalSessionPage>;
 
   /**
    * Factory for an adapter-specific plan-mode action handler.
