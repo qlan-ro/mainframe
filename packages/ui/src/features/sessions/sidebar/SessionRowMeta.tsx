@@ -15,6 +15,7 @@ import type { SessionBadge } from '../view-model/session-status';
 import { AnswerPill } from './SessionRow';
 import { projectColor } from './project-color';
 import { Hint } from '@/components/ui/hint';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 
 interface SessionRowMetaProps {
   worktreePath?: string;
@@ -50,23 +51,21 @@ export function SessionRowMeta({
   return (
     <div className="flex min-w-0 items-center gap-[8px] text-micro tracking-normal text-mf-text-3">
       {projectName != null && chipColor != null && (
-        <Hint label={projectName}>
+        <span
+          data-testid="sessions-row-meta-project"
+          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] px-1.5 py-px text-micro font-semibold"
+          style={{
+            backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
+            color: chipColor,
+          }}
+        >
           <span
-            data-testid="sessions-row-meta-project"
-            className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] px-1.5 py-px text-micro font-semibold"
-            style={{
-              backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
-              color: chipColor,
-            }}
-          >
-            <span
-              className="size-[5px] flex-shrink-0 rounded-full"
-              style={{ backgroundColor: chipColor }}
-              aria-hidden="true"
-            />
-            <span className="truncate">{projectName}</span>
-          </span>
-        </Hint>
+            className="size-[5px] flex-shrink-0 rounded-full"
+            style={{ backgroundColor: chipColor }}
+            aria-hidden="true"
+          />
+          <TruncatedWithTooltip text={projectName} className="min-w-0" />
+        </span>
       )}
       {worktreePath != null && (
         <Hint label={worktreePath}>

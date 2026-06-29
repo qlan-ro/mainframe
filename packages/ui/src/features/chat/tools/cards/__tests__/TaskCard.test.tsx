@@ -12,7 +12,6 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { userEvent } from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -156,8 +155,7 @@ describe('TaskCard — done state', () => {
     expect(screen.getByTestId('chat-task-description')).toHaveTextContent('Run the linter');
   });
 
-  it('renders the model label as a tooltip when model arg is present', async () => {
-    const user = userEvent.setup();
+  it('renders the model label when model arg is present', () => {
     render(
       <Wrap>
         <TaskCard
@@ -168,10 +166,9 @@ describe('TaskCard — done state', () => {
         />
       </Wrap>,
     );
-    // The model is displayed as text inside a Hint-wrapped span; hovering reveals the tooltip.
-    await user.hover(screen.getByText('claude-opus-4'));
-    const tooltip = screen.getByRole('tooltip');
-    expect(tooltip).toHaveTextContent('claude-opus-4');
+    // TruncatedWithTooltip always renders the text as a visible span; the tooltip
+    // only opens on hover when the text is actually clipped (jsdom reports no clipping).
+    expect(screen.getByText('claude-opus-4')).toBeInTheDocument();
   });
 
   it('does NOT show the running pulse dot when result is present', () => {

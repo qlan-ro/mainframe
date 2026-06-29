@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import type { AppInfo } from '@qlan-ro/mainframe-types';
 import { useHost } from '@/lib/host';
-import { Hint } from '@/components/ui/hint';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 
 interface AboutRow {
   label: string;
@@ -50,14 +50,11 @@ export function AboutPane() {
             )}
           >
             <span className="w-20 shrink-0 text-label text-mf-text-3">{row.label}</span>
-            <Hint label={row.value}>
-              <span
-                data-testid={row.testId}
-                className={cn('min-w-0 truncate text-label text-foreground', row.mono && 'font-mono')}
-              >
-                {row.value}
-              </span>
-            </Hint>
+            <TruncatedWithTooltip
+              text={row.value}
+              data-testid={row.testId}
+              className={cn('min-w-0 text-label text-foreground', row.mono && 'font-mono')}
+            />
           </div>
         ))}
       </div>
