@@ -18,35 +18,51 @@ export class ExternalSessionService {
     private emitEvent: (event: DaemonEvent) => void,
   ) {}
 
-  /**
-   * Page of importable external sessions across all adapters for a project.
-   *
-   * Aggregation: sessions concatenated, total summed, nextOffset = first non-null
-   * among adapters. Exact for the single-adapter (claude) case today; documented
-   * caveat for multi-adapter future.
-   */
+  /** Page of importable external sessions merged and sorted across all adapters for a project. */
   async scanPage(projectId: string, offset: number, limit: number): Promise<ExternalSessionPage> {
     const project = this.db.projects.get(projectId);
     if (!project) return { sessions: [], total: 0, nextOffset: null };
 
-    const sessions: ExternalSession[] = [];
-    let total = 0;
-    let nextOffset: number | null = null;
+    const adapters = this.adapters.getAll().filter((a) => a.listExternalSessions);
+    const excludeIds = this.db.chats.getImportedSessionIds(projectId);
 
-    for (const adapter of this.adapters.getAll()) {
-      if (!adapter.listExternalSessions) continue;
-      const excludeIds = this.db.chats.getImportedSessionIds(projectId);
+    // Count-only: each adapter returns its total without enriching.
+    if (limit <= 0) {
+      let total = 0;
+      for (const adapter of adapters) {
+        try {
+          const page = await adapter.listExternalSessions!(project.path, excludeIds, { offset: 0, limit: 0 });
+          total += page.total;
+        } catch (err) {
+          logger.warn({ err, adapterId: adapter.id, projectId }, 'Failed to count external sessions');
+        }
+      }
+      return { sessions: [], total, nextOffset: null };
+    }
+
+    // Over-fetch each adapter's prefix [0, offset+limit), then merge-sort across
+    // adapters by modifiedAt desc and slice the requested page. This is correct
+    // for any number of session-listing adapters (claude + codex today).
+    const prefixLimit = offset + limit;
+    const collected: ExternalSession[] = [];
+    let total = 0;
+    for (const adapter of adapters) {
       try {
-        const page = await adapter.listExternalSessions(project.path, excludeIds, { offset, limit });
+        const page = await adapter.listExternalSessions!(project.path, excludeIds, { offset: 0, limit: prefixLimit });
         for (const s of page.sessions) s.adapterId = adapter.id;
-        sessions.push(...page.sessions);
+        collected.push(...page.sessions);
         total += page.total;
-        if (nextOffset === null) nextOffset = page.nextOffset;
       } catch (err) {
         logger.warn({ err, adapterId: adapter.id, projectId }, 'Failed to scan external sessions');
       }
     }
 
+    collected.sort((a, b) => {
+      const d = new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+      return d !== 0 ? d : a.sessionId < b.sessionId ? 1 : -1;
+    });
+    const sessions = collected.slice(offset, offset + limit);
+    const nextOffset = offset + limit < total ? offset + limit : null;
     return { sessions, total, nextOffset };
   }
 

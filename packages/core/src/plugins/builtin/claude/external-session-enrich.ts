@@ -122,6 +122,7 @@ export async function enrichSession(candidate: Candidate, projectPath: string): 
   try {
     modifiedAt = (await stat(candidate.filePath)).mtime.toISOString();
   } catch {
+    /* expected: file may have been deleted between listing and enriching */
     modifiedAt = new Date(candidate.mtimeMs).toISOString();
   }
 
