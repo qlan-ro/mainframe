@@ -3,13 +3,23 @@ import { create } from 'zustand';
 export type ThemeMode = 'light' | 'dark';
 export type ColorScheme = 'classic' | 'ocean' | 'velvet';
 export type WindowStyle = 'unified' | 'split' | 'glass';
+export type UiScale = 'compact' | 'normal' | 'large';
 
 const MODE_KEY = 'mf-theme';
 const SCHEME_KEY = 'mf-scheme';
 const WINDOW_STYLE_KEY = 'mf-window-style';
+const UI_SCALE_KEY = 'mf-ui-scale';
 
 const SCHEMES: readonly ColorScheme[] = ['classic', 'ocean', 'velvet'];
 const WINDOW_STYLES: readonly WindowStyle[] = ['unified', 'split', 'glass'];
+const UI_SCALES: readonly UiScale[] = ['compact', 'normal', 'large'];
+
+/** Provisional — tuned so Normal dominant text ≈ 13px, Large ≈ 15px. */
+export const UI_SCALE_FACTORS: Record<UiScale, number> = {
+  compact: 1,
+  normal: 1.15,
+  large: 1.3,
+};
 
 function readMode(): ThemeMode {
   try {
@@ -38,6 +48,24 @@ function readWindowStyle(): WindowStyle {
   }
 }
 
+function readUiScale(): UiScale {
+  try {
+    const v = localStorage.getItem(UI_SCALE_KEY);
+    return UI_SCALES.includes(v as UiScale) ? (v as UiScale) : 'normal';
+  } catch {
+    return 'normal';
+  }
+}
+
+/**
+ * Apply the persisted UI scale to <html> synchronously (FOUC guard, called from
+ * main.tsx before React mounts). CSS `zoom` scales text + spacing + icons
+ * uniformly, so the px spacing tokens stay in proportion with the rem type scale.
+ */
+export function applyStoredScale(): void {
+  document.documentElement.style.zoom = String(UI_SCALE_FACTORS[readUiScale()]);
+}
+
 function persist(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
@@ -63,16 +91,19 @@ interface ThemeState {
   mode: ThemeMode;
   scheme: ColorScheme;
   windowStyle: WindowStyle;
+  uiScale: UiScale;
   toggle: () => void;
   setMode: (mode: ThemeMode) => void;
   setScheme: (scheme: ColorScheme) => void;
   setWindowStyle: (windowStyle: WindowStyle) => void;
+  setUiScale: (uiScale: UiScale) => void;
 }
 
 export const useTheme = create<ThemeState>((set, get) => ({
   mode: readMode(),
   scheme: readScheme(),
   windowStyle: readWindowStyle(),
+  uiScale: readUiScale(),
   toggle: () => get().setMode(get().mode === 'dark' ? 'light' : 'dark'),
   setMode: (mode) => {
     persist(MODE_KEY, mode);
@@ -85,5 +116,9 @@ export const useTheme = create<ThemeState>((set, get) => ({
   setWindowStyle: (windowStyle) => {
     persist(WINDOW_STYLE_KEY, windowStyle);
     set({ windowStyle });
+  },
+  setUiScale: (uiScale) => {
+    persist(UI_SCALE_KEY, uiScale);
+    set({ uiScale });
   },
 }));

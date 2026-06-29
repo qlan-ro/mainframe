@@ -131,3 +131,46 @@ describe('theme store — scheme + windowStyle axes', () => {
     expect(['classic', 'ocean', 'velvet']).toContain(useTheme.getState().scheme);
   });
 });
+
+// ---------------------------------------------------------------------------
+// theme store — uiScale axis
+// ---------------------------------------------------------------------------
+describe('theme store — uiScale axis', () => {
+  it("uiScale defaults to 'normal' when localStorage is empty", async () => {
+    const { useTheme } = await import('../theme');
+    expect(useTheme.getState().uiScale).toBe('normal');
+  });
+
+  it("uiScale reads a stored 'compact'", async () => {
+    localStorage.setItem('mf-ui-scale', 'compact');
+    const { useTheme } = await import('../theme');
+    expect(useTheme.getState().uiScale).toBe('compact');
+  });
+
+  it("invalid stored uiScale falls back to 'normal'", async () => {
+    localStorage.setItem('mf-ui-scale', 'gigantic');
+    const { useTheme } = await import('../theme');
+    expect(useTheme.getState().uiScale).toBe('normal');
+  });
+
+  it("setUiScale('large') updates state and persists", async () => {
+    const { useTheme } = await import('../theme');
+    useTheme.getState().setUiScale('large');
+    expect(useTheme.getState().uiScale).toBe('large');
+    expect(localStorage.getItem('mf-ui-scale')).toBe('large');
+  });
+
+  it('applyStoredScale writes the matching zoom factor to <html>', async () => {
+    localStorage.setItem('mf-ui-scale', 'large');
+    const { applyStoredScale, UI_SCALE_FACTORS } = await import('../theme');
+    applyStoredScale();
+    expect(document.documentElement.style.zoom).toBe(String(UI_SCALE_FACTORS.large));
+  });
+
+  it('applyStoredScale writes 1 for compact', async () => {
+    localStorage.setItem('mf-ui-scale', 'compact');
+    const { applyStoredScale } = await import('../theme');
+    applyStoredScale();
+    expect(document.documentElement.style.zoom).toBe('1');
+  });
+});
