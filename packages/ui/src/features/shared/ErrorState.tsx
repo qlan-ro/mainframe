@@ -49,10 +49,10 @@ export function ErrorState({ error, onRetry, embedded = false }: ErrorStateProps
         </div>
 
         {/* Heading */}
-        <p className="text-title font-semibold text-foreground mt-[14px] tracking-[-0.2px]">Something went wrong</p>
+        <p className="text-title font-semibold text-foreground mt-[14px] tracking-tight">Something went wrong</p>
 
         {/* Reassurance */}
-        <p className="text-label text-muted-foreground mt-[5px] leading-[1.5]">
+        <p className="text-label text-muted-foreground mt-[5px] leading-normal">
           This view hit an error and stopped rendering. Your session and files are unaffected.
         </p>
 
@@ -61,7 +61,7 @@ export function ErrorState({ error, onRetry, embedded = false }: ErrorStateProps
           className={[
             'mt-[14px] py-[10px] px-[12px] rounded-[8px]',
             'bg-mf-code-bg border-[0.5px] border-border',
-            'font-mono text-caption text-muted-foreground text-left leading-[1.5]',
+            'font-mono text-caption text-muted-foreground text-left leading-normal',
             'max-h-[96px] overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]',
           ].join(' ')}
         >

@@ -93,7 +93,7 @@ function QueuedMeta({
   return (
     <span
       className={cn(
-        'mr-1 inline-flex items-center gap-1.5 font-mono text-micro tracking-[-0.1px]',
+        'mr-1 inline-flex items-center gap-1.5 font-mono text-micro tracking-tight',
         dimmed ? 'text-mf-text-4' : 'text-mf-text-3',
       )}
     >
@@ -168,7 +168,7 @@ export function QueuedUserTurn({
           <div
             style={PENDING_CARD}
             className={cn(
-              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-[1.58] tracking-[-0.1px] text-mf-um-ink',
+              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-loose tracking-tight text-mf-um-ink',
               'transition-[opacity,border-color] duration-200 ease-in-out',
               sending ? 'border-solid border-mf-um-edge' : 'border-dashed border-mf-um-dash opacity-[0.82]',
             )}

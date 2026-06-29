@@ -108,7 +108,7 @@ function CoolCard({ children, className }: CoolCardProps) {
       className={cn(
         'relative max-w-[470px] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-[1.58] tracking-[-0.1px]',
+        'text-body leading-loose tracking-tight',
         className,
       )}
     >

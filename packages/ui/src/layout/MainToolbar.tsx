@@ -71,7 +71,7 @@ export function MainToolbar({
             </button>
           </Hint>
         )}
-        <span className="flex min-w-0 items-center gap-[5px] text-body font-semibold tracking-[-0.2px] text-foreground">
+        <span className="flex min-w-0 items-center gap-[5px] text-body font-semibold tracking-tight text-foreground">
           <span className="truncate">{projectName}</span>
           {branchName && (
             <>

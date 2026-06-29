@@ -62,8 +62,8 @@ function Spinner(): React.ReactElement {
 function TextBlock(): React.ReactElement {
   return (
     <div className="text-center">
-      <p className="text-heading font-semibold text-foreground tracking-[-0.15px]">Reconnecting to daemon…</p>
-      <p className="text-label text-muted-foreground mt-[5px] leading-[1.5] max-w-[248px]">
+      <p className="text-heading font-semibold text-foreground tracking-tight">Reconnecting to daemon…</p>
+      <p className="text-label text-muted-foreground mt-[5px] leading-normal max-w-[248px]">
         Your sessions are safe. Work resumes automatically the moment the connection is back.
       </p>
     </div>

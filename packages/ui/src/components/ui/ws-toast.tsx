@@ -111,9 +111,9 @@ export function WsToastCard({ id, type, title, description, chatId, onOpenSessio
 
       {/* text column */}
       <div className="flex-1 min-w-0">
-        <div className="text-body font-semibold text-foreground tracking-[-0.1px]">{title}</div>
+        <div className="text-body font-semibold text-foreground tracking-tight">{title}</div>
         {description && (
-          <div className="text-label text-muted-foreground mt-[3px] leading-[1.45] max-h-[88px] overflow-auto [overflow-wrap:anywhere]">
+          <div className="text-label text-muted-foreground mt-[3px] leading-normal max-h-[88px] overflow-auto [overflow-wrap:anywhere]">
             {description}
           </div>
         )}
