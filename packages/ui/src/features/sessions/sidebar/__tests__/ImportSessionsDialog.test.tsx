@@ -21,7 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ExternalSession, Project } from '@qlan-ro/mainframe-types';
+import type { ExternalSession, ExternalSessionPage, Project } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -97,11 +97,14 @@ const EXTERNAL_SESSION: ExternalSession = {
 // Reset per test
 // ---------------------------------------------------------------------------
 
+/** Empty page returned when the mock doesn't specify a return value. */
+const EMPTY_PAGE: ExternalSessionPage = { sessions: [], total: 0, nextOffset: null };
+
 beforeEach(() => {
   reloadSpy.mockReset();
   reloadSpy.mockResolvedValue(undefined);
   getExternalSessionsSpy.mockReset();
-  getExternalSessionsSpy.mockResolvedValue([]);
+  getExternalSessionsSpy.mockResolvedValue(EMPTY_PAGE);
   importExternalSessionSpy.mockReset();
   importExternalSessionSpy.mockResolvedValue({});
 });
@@ -129,19 +132,19 @@ function renderDialog({ projects, filterProjectId }: { projects: Project[]; filt
 // ---------------------------------------------------------------------------
 
 describe('ImportSessionsDialog — with filterProjectId set, calls getExternalSessions', () => {
-  it('calls getExternalSessions(31415, "proj-1") when filterProjectId="proj-1" and the dialog opens', async () => {
-    getExternalSessionsSpy.mockResolvedValue([]);
+  it('calls getExternalSessions(31415, "proj-1", opts) when filterProjectId="proj-1" and the dialog opens', async () => {
+    getExternalSessionsSpy.mockResolvedValue(EMPTY_PAGE);
 
     renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
     await waitFor(() => {
       expect(getExternalSessionsSpy).toHaveBeenCalledTimes(1);
-      expect(getExternalSessionsSpy).toHaveBeenCalledWith(31415, 'proj-1');
+      expect(getExternalSessionsSpy).toHaveBeenCalledWith(31415, 'proj-1', { offset: 0, limit: 50 });
     });
   });
 
   it('does not render the project picker when filterProjectId is set', async () => {
-    getExternalSessionsSpy.mockResolvedValue([]);
+    getExternalSessionsSpy.mockResolvedValue(EMPTY_PAGE);
 
     renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
@@ -158,7 +161,7 @@ describe('ImportSessionsDialog — with filterProjectId set, calls getExternalSe
 
 describe('ImportSessionsDialog — renders one external-session-item per returned session', () => {
   it('renders one external-session-item for a single returned session', async () => {
-    getExternalSessionsSpy.mockResolvedValue([EXTERNAL_SESSION]);
+    getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION], total: 1, nextOffset: null });
 
     renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
@@ -173,7 +176,7 @@ describe('ImportSessionsDialog — renders one external-session-item per returne
       sessionId: 'ext-sess-002',
       firstPrompt: 'Add type safety',
     };
-    getExternalSessionsSpy.mockResolvedValue([EXTERNAL_SESSION, second]);
+    getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION, second], total: 2, nextOffset: null });
 
     renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
@@ -189,7 +192,7 @@ describe('ImportSessionsDialog — renders one external-session-item per returne
 
 describe('ImportSessionsDialog — clicking import-session-btn calls importExternalSession then reload', () => {
   it('calls importExternalSession with the exact body derived from the session', async () => {
-    getExternalSessionsSpy.mockResolvedValue([EXTERNAL_SESSION]);
+    getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION], total: 1, nextOffset: null });
 
     renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
@@ -212,7 +215,7 @@ describe('ImportSessionsDialog — clicking import-session-btn calls importExter
   });
 
   it('calls runtime.threads.reload() after a successful import', async () => {
-    getExternalSessionsSpy.mockResolvedValue([EXTERNAL_SESSION]);
+    getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION], total: 1, nextOffset: null });
 
     renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
@@ -247,7 +250,7 @@ describe('ImportSessionsDialog — project picker step when filterProjectId is n
   });
 
   it('calls getExternalSessions after clicking a project picker button', async () => {
-    getExternalSessionsSpy.mockResolvedValue([]);
+    getExternalSessionsSpy.mockResolvedValue(EMPTY_PAGE);
 
     renderDialog({ projects: [PROJECT_1, PROJECT_2], filterProjectId: null });
 
@@ -255,7 +258,7 @@ describe('ImportSessionsDialog — project picker step when filterProjectId is n
 
     await waitFor(() => {
       expect(getExternalSessionsSpy).toHaveBeenCalledTimes(1);
-      expect(getExternalSessionsSpy).toHaveBeenCalledWith(31415, 'proj-2');
+      expect(getExternalSessionsSpy).toHaveBeenCalledWith(31415, 'proj-2', { offset: 0, limit: 50 });
     });
   });
 });
