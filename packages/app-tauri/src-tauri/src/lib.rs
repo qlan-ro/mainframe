@@ -31,14 +31,16 @@ use preview::{
 /// so we also kill on the `app::exit` event.
 static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
 
-/// Daemon HTTP/WS port for this session. Configurable via the `daemon_port()` env
+/// Daemon HTTP/WS port for this session. Configurable via the `DAEMON_PORT` env
 /// (the dev launch configs set it, alongside `VITE_DAEMON_HTTP_PORT`); falls back
 /// to 31500 — non-default to avoid colliding with a system daemon on 31415.
 fn daemon_port() -> u16 {
-    std::env::var("daemon_port()")
-        .ok()
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(31500)
+    parse_daemon_port(std::env::var("DAEMON_PORT").ok())
+}
+
+/// Parse a raw `DAEMON_PORT` value, falling back to 31500 when unset or invalid.
+fn parse_daemon_port(raw: Option<String>) -> u16 {
+    raw.and_then(|s| s.parse::<u16>().ok()).unwrap_or(31500)
 }
 
 /// True when `MAINFRAME_EXTERNAL_DAEMON` opts out of spawning — the renderer then
@@ -359,6 +361,29 @@ fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 // ── Resolver unit tests ───────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod daemon_port_tests {
+    use super::{daemon_port, parse_daemon_port};
+
+    #[test]
+    fn parse_uses_value_then_falls_back() {
+        assert_eq!(parse_daemon_port(Some("31416".into())), 31416);
+        assert_eq!(parse_daemon_port(Some("not-a-port".into())), 31500);
+        assert_eq!(parse_daemon_port(None), 31500);
+    }
+
+    // Regression: the reader used a malformed env-var name (`"daemon_port()"`)
+    // and always returned the 31500 fallback, ignoring the launch config's
+    // `DAEMON_PORT` — so the dev shell could never reach the configured daemon.
+    #[test]
+    fn daemon_port_reads_the_daemon_port_env() {
+        std::env::set_var("DAEMON_PORT", "31416");
+        assert_eq!(daemon_port(), 31416);
+        std::env::remove_var("DAEMON_PORT");
+        assert_eq!(daemon_port(), 31500);
+    }
+}
 
 #[cfg(test)]
 mod resolver_tests {
