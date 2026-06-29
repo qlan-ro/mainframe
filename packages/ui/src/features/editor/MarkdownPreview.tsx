@@ -81,7 +81,7 @@ const components = {
     return (
       <code
         {...props}
-        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-caption text-[#7a4d2a] dark:text-[var(--mf-code-cmt)]"
+        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-caption text-mf-code-cmt"
       >
         {children}
       </code>

@@ -38,7 +38,7 @@ function tabGlyph(tab: EditorTabModel, isActive: boolean) {
   const cls = `flex-shrink-0 ${baseColor}`;
 
   if (tab.kind === 'diff') {
-    const color = isActive ? 'text-[#ff9500]' : 'text-mf-text-3';
+    const color = isActive ? 'text-mf-accent-amber' : 'text-mf-text-3';
     return <GitCompare size={11} className={`flex-shrink-0 ${color}`} />;
   }
   if (tab.kind === 'code') {

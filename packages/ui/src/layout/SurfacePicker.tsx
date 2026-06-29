@@ -45,14 +45,14 @@ function FilesPickerContent() {
     <>
       <PickerRow
         testid="files-picker-open-file"
-        icon={<Code2 size={14} className="flex-shrink-0 text-[#5b269a]" />}
+        icon={<Code2 size={14} className="flex-shrink-0 text-mf-accent-violet" />}
         label="Open file…"
         chevron
         onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
       />
       <PickerRow
         testid="files-picker-view-changes"
-        icon={<GitCompare size={14} className="flex-shrink-0 text-[#ff9500]" />}
+        icon={<GitCompare size={14} className="flex-shrink-0 text-mf-accent-amber" />}
         label="View changes…"
         chevron
         onClick={() => emitSurfaceIntent({ type: 'inspector-tab', tab: 'changes' })}
