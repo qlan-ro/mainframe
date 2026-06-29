@@ -68,7 +68,7 @@ export function SessionAttachmentsGrid({ chatId, attachments }: Props) {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span
-                        className="h-7 w-full overflow-hidden break-all text-center text-[9px] leading-tight"
+                        className="h-7 w-full overflow-hidden break-all text-center text-micro leading-tight"
                         tabIndex={0}
                       >
                         {att.name}

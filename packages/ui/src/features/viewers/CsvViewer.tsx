@@ -143,16 +143,8 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                       >
                         <span className={['inline-flex items-center gap-1', isNum ? 'flex-row-reverse' : ''].join(' ')}>
                           {header}
-                          {isActive && sort.dir === 'asc' && (
-                            <span className="text-primary" style={{ fontSize: 10 }}>
-                              ▲
-                            </span>
-                          )}
-                          {isActive && sort.dir === 'desc' && (
-                            <span className="text-primary" style={{ fontSize: 10 }}>
-                              ▼
-                            </span>
-                          )}
+                          {isActive && sort.dir === 'asc' && <span className="text-primary text-micro">▲</span>}
+                          {isActive && sort.dir === 'desc' && <span className="text-primary text-micro">▼</span>}
                         </span>
                       </th>
                     );

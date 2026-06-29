@@ -31,7 +31,7 @@ export function AboutPane() {
   return (
     <div data-testid="settings-pane-about">
       <div className="mb-8 flex items-center gap-3.5">
-        <div className="inline-flex size-[52px] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,var(--primary),oklch(0.62_0.23_304))] text-hero font-extrabold text-white shadow-md">
+        <div className="inline-flex size-[52px] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,var(--primary),oklch(0.62_0.23_304))] text-hero font-bold text-white shadow-md">
           m
         </div>
         <div className="min-w-0">
