@@ -125,6 +125,9 @@
   --mf-shadow-picker: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
+  --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.06);
+  --mf-accent-amber: #ff9500;
+  --mf-accent-violet: #5b269a;
 
   /* User-message cool card extras */
   --mf-um-dash: rgba(40, 70, 150, 0.32);
@@ -241,6 +244,9 @@
   --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.22);
+  --mf-accent-amber: #ff9f0a;
+  --mf-accent-violet: #bd9bf5;
 
   --mf-um-dash: rgba(160, 180, 250, 0.34);
 
@@ -719,6 +725,8 @@
   --color-mf-viewer-check-a: var(--mf-viewer-check-a);
   --color-mf-viewer-check-b: var(--mf-viewer-check-b);
   --color-mf-scrim: var(--mf-scrim);
+  --color-mf-accent-amber: var(--mf-accent-amber);
+  --color-mf-accent-violet: var(--mf-accent-violet);
 
   /* Diff tint utilities */
   --color-mf-diff-add-bg: var(--mf-diff-add-bg);
@@ -752,6 +760,7 @@
   --leading-tight: 1.15;
   --leading-normal: 1.5;
   --leading-relaxed: 1.65;
+  --leading-loose: 1.58;
 
   /* Fonts + easings */
   --font-sans: var(--font-sans);

@@ -30,11 +30,11 @@ function productionSources() {
 }
 
 describe('design token audit', () => {
-  // xterm.js ITheme requires literal hex color strings; terminal-cache feeds them via
-  // tokenColor(cssVar, hexFallback) so the CSS var wins at runtime but a concrete hex is a
-  // mandatory fallback (the theme is built before first paint). Exempt that one file from
-  // the raw-color-literal ban — it is not a styling shortcut.
-  const COLOR_LITERAL_ALLOWLIST = new Set(['features/terminal/terminal-cache.ts']);
+  // xterm.js ITheme + the Electron preview overlay both inject literal colors into
+  // contexts where the app's CSS custom properties don't resolve (terminal canvas;
+  // an injected cssText string in a foreign preview document). Exempt both — they are
+  // not styling shortcuts.
+  const COLOR_LITERAL_ALLOWLIST = new Set(['features/terminal/terminal-cache.ts', 'lib/host/electron-preview.ts']);
 
   it('keeps production UI free of raw color literals outside the token contract', () => {
     const offenders = productionSources()
