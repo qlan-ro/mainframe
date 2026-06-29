@@ -126,6 +126,7 @@
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
   --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.06);
+  --mf-shadow-keycap: 0 1px 0 rgba(0, 0, 0, 0.03);
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
 
@@ -245,6 +246,7 @@
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.22);
+  --mf-shadow-keycap: 0 1px 0 rgba(0, 0, 0, 0.18);
   --mf-accent-amber: #ff9f0a;
   --mf-accent-violet: #bd9bf5;
 
