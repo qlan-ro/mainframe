@@ -27,10 +27,11 @@
  *  9. (replaced) StatusDot/AnswerPill badge presentation tests.
  */
 import { isValidElement } from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
+import { useTagPopoverTarget } from '../../tags/use-tag-popover-target';
 
 // ---------------------------------------------------------------------------
 // Mutable control flags — set per test before rendering
@@ -472,5 +473,44 @@ describe('SessionRow — unpin calls runtime.threads.reload() on success', () =>
     expect(pinChatSpy).toHaveBeenCalledTimes(1);
     expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', false);
     expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. Regression: Tags context-menu action anchors popover at right-click coords
+//
+// Bug: the context-menu "Tags" path called handleTags with no rect, so
+// anchorRect was null and the popover rendered at (0,0).
+// Fix: onContextMenu on the inner trigger div captures clientX/clientY into a
+// ref; the context-menu onTags builds new DOMRect(x, y, 0, 0) from that ref.
+// This test guards against a regression to the null/(0,0) anchor.
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — Tags context-menu action passes right-click coords to useTagPopoverTarget', () => {
+  afterEach(() => {
+    // Prevent store state from leaking into subsequent tests.
+    useTagPopoverTarget.getState().close();
+  });
+
+  it('sets anchorRect.left=120 and anchorRect.top=80 after right-clicking at (120, 80) and selecting Tags', async () => {
+    render(<SessionRow item={makeItem()} />);
+
+    // Dispatch contextMenu on an inner element (the title span) so the event
+    // bubbles through the div that carries onContextMenu and captures the coords.
+    fireEvent.contextMenu(screen.getByTestId('sessions-row-title'), {
+      clientX: 120,
+      clientY: 80,
+    });
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('sessions-ctx-tags'));
+    });
+
+    const { target } = useTagPopoverTarget.getState();
+    expect(target).not.toBeNull();
+    expect(target?.anchorRect).not.toBeNull();
+    // Hardcoded coords — must equal the right-click position, not (0,0).
+    expect(target?.anchorRect?.left).toBe(120);
+    expect(target?.anchorRect?.top).toBe(80);
   });
 });

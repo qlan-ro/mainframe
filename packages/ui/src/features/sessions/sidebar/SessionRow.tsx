@@ -10,7 +10,7 @@
  * Responsive: @max-[300px] hides time; @max-[220px] hides meta row.
  */
 import type { MouseEvent } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ThreadListItemPrimitive,
   ThreadListItemRuntimeProvider,
@@ -192,6 +192,10 @@ function SessionRowInner({
   const isUnread = useUnreadStore((s) => s.isUnread(item.id));
   const badge = deriveSessionBadge(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
+  // Captured on right-click so the context-menu "Tags" action can anchor the
+  // popover at the cursor (same coordinates the context menu opened at) rather
+  // than the host's default (0,0).
+  const contextMenuPoint = useRef<{ x: number; y: number } | null>(null);
 
   const title = item.title ?? 'Untitled session';
 
@@ -230,7 +234,10 @@ function SessionRowInner({
       onRename={() => {
         queueMicrotask(() => setIsRenaming(true));
       }}
-      onTags={handleTags}
+      onTags={() => {
+        const p = contextMenuPoint.current;
+        handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
+      }}
       onArchive={() => void itemRuntime.archive()}
       claudeSessionId={custom.claudeSessionId}
     >
@@ -244,7 +251,12 @@ function SessionRowInner({
             session. Interactive children (PR links, hover actions, the rename
             input) stopPropagation, so they keep their own behavior. */}
         <ThreadListItemPrimitive.Trigger asChild>
-          <div className="flex w-full cursor-pointer items-center gap-[9px] pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left">
+          <div
+            onContextMenu={(e) => {
+              contextMenuPoint.current = { x: e.clientX, y: e.clientY };
+            }}
+            className="flex w-full cursor-pointer items-center gap-[9px] pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left"
+          >
             <div className="flex flex-shrink-0 items-center gap-[5px]">
               {custom.pinned && !inPinnedGroup && (
                 <PinIcon data-testid="sessions-row-pin-glyph" className="size-[11px] flex-shrink-0 text-primary" />

@@ -29,6 +29,16 @@ export function TagPopoverHost({ port }: { port: number }) {
 
   const threads = items.map((t) => ({ id: t.id, custom: { tags: t.custom.tags } }));
 
+  // Read the applied tags LIVE from the thread list (server-authoritative), not the
+  // frozen snapshot captured when the popover opened — otherwise toggling a tag calls
+  // setChatTags + reload but the checkbox state never updates (can't check/uncheck).
+  // SessionRow opens with chatId = remoteId ?? id, so match on either.
+  const currentTags = useMemo(() => {
+    if (!target) return [];
+    const match = items.find((t) => (t.remoteId ?? t.id) === target.chatId || t.id === target.chatId);
+    return match?.custom.tags ?? target.currentTags;
+  }, [items, target]);
+
   async function applyCascade(updates: TagCascadeUpdate[]): Promise<void> {
     if (updates.length === 0) return;
     for (const u of updates) {
@@ -43,7 +53,7 @@ export function TagPopoverHost({ port }: { port: number }) {
       onClose={close}
       chatId={target?.chatId ?? ''}
       port={port}
-      currentTags={target?.currentTags ?? []}
+      currentTags={currentTags}
       anchorRect={target?.anchorRect ?? null}
       registry={registry}
       threads={threads}

@@ -147,6 +147,22 @@ describe('TagPopoverHost — opens for a target', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. Live tags override stale snapshot (regression: host must not forward snapshot)
+// ---------------------------------------------------------------------------
+
+describe('TagPopoverHost — currentTags reflects live thread data, not the open() snapshot', () => {
+  it('passes live tags ["alpha","beta"] when opened with stale snapshot ["stale-snapshot-only"] for t1', () => {
+    render(<TagPopoverHost port={31415} />);
+
+    act(() => {
+      useTagPopoverTarget.getState().open('t1', ['stale-snapshot-only'], null);
+    });
+
+    expect(capturedProps?.currentTags).toEqual(['alpha', 'beta']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. Threads passed as snapshots (id + custom.tags only)
 // ---------------------------------------------------------------------------
 
