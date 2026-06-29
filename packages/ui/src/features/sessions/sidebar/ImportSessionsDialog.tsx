@@ -1,12 +1,13 @@
 /**
  * ImportSessionsDialog — two-step import flow inside a shadcn Dialog:
  *   Step 1: project picker (skipped when filterProjectId is set)
- *   Step 2: list of importable external sessions with per-row Import action
+ *   Step 2: paginated list of importable external sessions (infinite scroll,
+ *           page size 50) with per-row Import action.
  *
  * After a successful import the thread list is reloaded via
  * assistantRuntime.threads.reload() and the dialog closes.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
 import { Loader2, ChevronLeft } from 'lucide-react';
 import type { ExternalSession, Project } from '@qlan-ro/mainframe-types';
@@ -61,33 +62,38 @@ function ProjectPicker({
 
 // ── session list ──────────────────────────────────────────────────────────────
 
-function SessionList({
-  port,
-  projectId,
-  projectPath,
-  onDone,
-  onBack,
-}: {
+const PAGE = 50;
+
+export interface SessionListProps {
   port: number;
   projectId: string;
   projectPath: string | undefined;
   onDone: () => void;
   onBack?: () => void;
-}) {
+}
+
+export function SessionList({ port, projectId, projectPath, onDone, onBack }: SessionListProps) {
   const runtime = useAssistantRuntime();
   const [sessions, setSessions] = useState<ExternalSession[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [retryCounter, setRetryCounter] = useState(0);
+  const fetchingMore = useRef(false);
 
+  // Page 0 (and reset) on project change / retry.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getExternalSessions(port, projectId)
-      .then((list) => {
-        if (!cancelled) setSessions(list);
+    setSessions([]);
+    setNextOffset(null);
+    getExternalSessions(port, projectId, { offset: 0, limit: PAGE })
+      .then((page) => {
+        if (cancelled) return;
+        setSessions(page.sessions);
+        setNextOffset(page.nextOffset);
       })
       .catch((e: unknown) => {
         console.warn('[ImportSessionsDialog] fetch failed', e);
@@ -100,6 +106,33 @@ function SessionList({
       cancelled = true;
     };
   }, [port, projectId, retryCounter]);
+
+  const loadMore = useCallback(() => {
+    if (fetchingMore.current || nextOffset === null) return;
+    fetchingMore.current = true;
+    getExternalSessions(port, projectId, { offset: nextOffset, limit: PAGE })
+      .then((page) => {
+        setSessions((prev) => [...prev, ...page.sessions]);
+        setNextOffset(page.nextOffset);
+      })
+      .catch((e: unknown) => {
+        console.warn('[ImportSessionsDialog] load-more failed', e);
+      })
+      .finally(() => {
+        fetchingMore.current = false;
+      });
+  }, [port, projectId, nextOffset]);
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || nextOffset === null) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) loadMore();
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [nextOffset, loadMore]);
 
   const handleImport = useCallback(
     async (session: ExternalSession) => {
@@ -190,6 +223,16 @@ function SessionList({
               onImport={(s) => void handleImport(s)}
             />
           ))}
+          {nextOffset !== null && (
+            <div
+              ref={sentinelRef}
+              data-testid="sessions-import-load-more"
+              className="flex items-center justify-center gap-2 py-3 text-mf-text-3"
+            >
+              <Loader2 className="size-3.5 animate-spin" />
+              <span className="text-caption">Loading more…</span>
+            </div>
+          )}
         </div>
       </ScrollArea>
     </>
