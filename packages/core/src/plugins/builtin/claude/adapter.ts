@@ -5,6 +5,7 @@ import type {
   AdapterSession,
   CustomCommand,
   ExternalSession,
+  ExternalSessionPage,
   SessionOptions,
   Skill,
   AgentConfig,
@@ -259,7 +260,11 @@ export class ClaudeAdapter implements Adapter {
     return skills.deleteAgent(agentId, projectPath);
   }
 
-  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
-    return listExternalSessions(projectPath, excludeSessionIds);
+  async listExternalSessions(
+    projectPath: string,
+    excludeSessionIds: string[],
+    opts?: { offset?: number; limit?: number },
+  ): Promise<ExternalSessionPage> {
+    return listExternalSessions(projectPath, excludeSessionIds, opts);
   }
 }
