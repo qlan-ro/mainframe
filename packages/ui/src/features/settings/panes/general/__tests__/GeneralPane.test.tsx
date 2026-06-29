@@ -42,4 +42,11 @@ describe('GeneralPane', () => {
     fireEvent.click(screen.getByTestId('settings-appearance-window-style-glass'));
     expect(useTheme.getState().windowStyle).toBe('glass');
   });
+  it('UI size picker writes useTheme.uiScale', () => {
+    useTheme.setState({ uiScale: 'normal' });
+    render(<GeneralPane port={31415} />);
+    fireEvent.click(screen.getByTestId('settings-appearance-ui-scale-large'));
+    expect(useTheme.getState().uiScale).toBe('large');
+    expect(updateGeneralSettings).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,4 @@
-import { useTheme, type ThemeMode, type ColorScheme, type WindowStyle } from '../../../../store/theme';
+import { useTheme, type ThemeMode, type ColorScheme, type WindowStyle, type UiScale } from '../../../../store/theme';
 import { cn } from '@/lib/utils';
 
 const MODES: { id: ThemeMode; label: string }[] = [
@@ -16,6 +16,12 @@ const WINDOW_STYLES: { id: WindowStyle; label: string }[] = [
   { id: 'unified', label: 'Unified' },
   { id: 'split', label: 'Split' },
   { id: 'glass', label: 'Glass' },
+];
+
+const UI_SIZES: { id: UiScale; label: string }[] = [
+  { id: 'compact', label: 'Compact' },
+  { id: 'normal', label: 'Normal' },
+  { id: 'large', label: 'Large' },
 ];
 
 function PickerRow<T extends string>({
@@ -60,12 +66,21 @@ export function AppearanceControls() {
   const mode = useTheme((s) => s.mode);
   const scheme = useTheme((s) => s.scheme);
   const windowStyle = useTheme((s) => s.windowStyle);
+  const uiScale = useTheme((s) => s.uiScale);
   const setMode = useTheme((s) => s.setMode);
   const setScheme = useTheme((s) => s.setScheme);
   const setWindowStyle = useTheme((s) => s.setWindowStyle);
+  const setUiScale = useTheme((s) => s.setUiScale);
 
   return (
     <div className="flex flex-col gap-3">
+      <PickerRow
+        label="UI Size"
+        options={UI_SIZES}
+        current={uiScale}
+        prefix="settings-appearance-ui-scale"
+        onSelect={setUiScale}
+      />
       <PickerRow label="Mode" options={MODES} current={mode} prefix="settings-appearance-mode" onSelect={setMode} />
       <PickerRow
         label="Color Scheme"
