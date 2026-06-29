@@ -17,6 +17,7 @@ import type {
   Unsubscribe,
 } from '@qlan-ro/mainframe-types';
 import * as preview from '@/lib/tauri/preview';
+import { getUiZoom } from '@/lib/tauri/bridge';
 
 let tabSeq = 0;
 
@@ -25,7 +26,11 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
 
   const readBounds = () => {
     const r = container.getBoundingClientRect();
-    return { x: r.left, y: r.top, w: r.width, h: r.height };
+    // The native child webview is positioned in window-logical px. Under UI page
+    // zoom, a CSS-px DOM rect maps to (css × zoom) logical px, so scale to match
+    // the anchor (z === 1 when unzoomed, leaving the original behaviour intact).
+    const z = getUiZoom();
+    return { x: r.left * z, y: r.top * z, w: r.width * z, h: r.height * z };
   };
 
   void preview.previewCreate(tabId, url, readBounds()).catch((e) => console.warn('[preview] tauri create', e));

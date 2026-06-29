@@ -40,12 +40,24 @@ export async function getHomedir(): Promise<string> {
   return invoke<string>('get_homedir');
 }
 
+let currentUiZoom = 1;
+
+/**
+ * The last UI page-zoom factor applied (1 = unzoomed). Native child webviews
+ * (the sandbox preview) are positioned in window-logical px, so a DOM rect (CSS
+ * px) must be multiplied by this to line up with its anchor under page zoom.
+ */
+export function getUiZoom(): number {
+  return currentUiZoom;
+}
+
 /**
  * Apply native webview page zoom (scales the entire UI). Unlike the CSS `zoom`
  * property, WebKit page zoom reinterprets the viewport, so the 100vh app shell
  * stays exactly one window tall and does not overflow. No-op in browser dev mode.
  */
 export async function setUiZoom(factor: number): Promise<void> {
+  currentUiZoom = factor;
   if (!IS_TAURI) return;
   await getCurrentWebview().setZoom(factor);
 }

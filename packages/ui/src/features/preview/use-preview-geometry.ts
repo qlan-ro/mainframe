@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
+import { useTheme } from '@/store/theme';
 
 interface PreviewGeometryProps {
   handle: PreviewHandle | null;
@@ -36,10 +37,13 @@ export function usePreviewGeometry({ handle, anchorRef, containerRef, active, st
   const vFlex = useLayoutStore((s) => s.layout.vFlex);
   const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
+  // UI page-zoom changes the native-webview bounds multiplier but NOT the CSS
+  // layout, so the ResizeObserver never fires — refit explicitly on scale change.
+  const uiScale = useTheme((s) => s.uiScale);
 
   useEffect(() => {
     scheduleRefit();
-  }, [topFlex, vFlex, sidebarVisible, inspectorVisible, handle]);
+  }, [topFlex, vFlex, sidebarVisible, inspectorVisible, uiScale, handle]);
 
   useEffect(() => {
     if (active) scheduleRefit();
