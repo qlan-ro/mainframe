@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 interface ScopedListRowProps {
@@ -24,14 +24,7 @@ export function ScopedListRow({ testId, icon: Icon, name, description, scope, fi
       <div className="min-w-0">
         <div className="truncate text-caption font-medium text-foreground">{name}</div>
         {description && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="truncate text-micro text-mf-text-3" tabIndex={0}>
-                {description}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>{description}</TooltipContent>
-          </Tooltip>
+          <TruncatedWithTooltip text={description} tabIndex={0} className="block text-micro text-mf-text-3" />
         )}
       </div>
       <span className="rounded-lg bg-mf-hover px-[5px] text-micro uppercase tracking-wide text-mf-text-3">{scope}</span>

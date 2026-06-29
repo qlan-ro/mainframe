@@ -17,6 +17,9 @@ function TooltipContent({
         sideOffset={sideOffset}
         className={cn(
           'z-50 overflow-hidden rounded-lg border border-border bg-popover px-2 py-1',
+          // Default width floor so long content wraps instead of stretching the
+          // tooltip across the viewport. Callers override via a `max-w-*` class.
+          'max-w-xs break-words',
           'text-caption text-popover-foreground',
           'shadow-[var(--mf-shadow-pop)]',
           'animate-in fade-in-0 zoom-in-95',
