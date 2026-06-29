@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useTheme } from '@/store/theme';
+import { useTheme, UI_SCALE_FACTORS } from '@/store/theme';
 import { invalidateShikiTheme } from '@/lib/shiki-highlighter';
 
 /**
@@ -20,5 +20,11 @@ export function ThemeEffect() {
     else root.setAttribute('data-scheme', scheme);
     invalidateShikiTheme();
   }, [mode, scheme]);
+
+  const uiScale = useTheme((s) => s.uiScale);
+  useEffect(() => {
+    document.documentElement.style.zoom = String(UI_SCALE_FACTORS[uiScale]);
+  }, [uiScale]);
+
   return null;
 }
