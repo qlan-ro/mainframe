@@ -13,6 +13,7 @@
  * auth token is needed in this mode.
  */
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { sendNotification } from '@tauri-apps/plugin-notification';
@@ -37,6 +38,16 @@ export async function getAppInfo(): Promise<AppInfo> {
 export async function getHomedir(): Promise<string> {
   if (!IS_TAURI) return '';
   return invoke<string>('get_homedir');
+}
+
+/**
+ * Apply native webview page zoom (scales the entire UI). Unlike the CSS `zoom`
+ * property, WebKit page zoom reinterprets the viewport, so the 100vh app shell
+ * stays exactly one window tall and does not overflow. No-op in browser dev mode.
+ */
+export async function setUiZoom(factor: number): Promise<void> {
+  if (!IS_TAURI) return;
+  await getCurrentWebview().setZoom(factor);
 }
 
 export async function getDaemonPort(): Promise<number> {

@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme, applyStoredTheme } from '../theme';
 
+// applyStoredScale delegates to the native page-zoom bridge (no-op in jsdom);
+// mock it so we can assert the factor it is called with.
+const { setUiZoomMock } = vi.hoisted(() => ({ setUiZoomMock: vi.fn() }));
+vi.mock('@/lib/tauri/bridge', () => ({ setUiZoom: setUiZoomMock }));
+
 // Reset module registry and localStorage before every test so each case starts
 // from a clean slate. The theme store reads localStorage at module-init time,
 // so tests that verify the initial value must re-import after seeding storage.
 beforeEach(() => {
   localStorage.clear();
   vi.resetModules();
+  setUiZoomMock.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -160,17 +166,17 @@ describe('theme store — uiScale axis', () => {
     expect(localStorage.getItem('mf-ui-scale')).toBe('large');
   });
 
-  it('applyStoredScale writes the matching zoom factor to <html>', async () => {
+  it('applyStoredScale calls native zoom with the matching factor', async () => {
     localStorage.setItem('mf-ui-scale', 'large');
     const { applyStoredScale, UI_SCALE_FACTORS } = await import('../theme');
     applyStoredScale();
-    expect(document.documentElement.style.zoom).toBe(String(UI_SCALE_FACTORS.large));
+    expect(setUiZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
   });
 
-  it('applyStoredScale writes 1 for compact', async () => {
+  it('applyStoredScale calls native zoom with 1 for compact', async () => {
     localStorage.setItem('mf-ui-scale', 'compact');
     const { applyStoredScale } = await import('../theme');
     applyStoredScale();
-    expect(document.documentElement.style.zoom).toBe('1');
+    expect(setUiZoomMock).toHaveBeenCalledWith(1);
   });
 });

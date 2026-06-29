@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { setUiZoom } from '@/lib/tauri/bridge';
 
 export type ThemeMode = 'light' | 'dark';
 export type ColorScheme = 'classic' | 'ocean' | 'velvet';
@@ -58,12 +59,14 @@ function readUiScale(): UiScale {
 }
 
 /**
- * Apply the persisted UI scale to <html> synchronously (FOUC guard, called from
- * main.tsx before React mounts). CSS `zoom` scales text + spacing + icons
- * uniformly, so the px spacing tokens stay in proportion with the rem type scale.
+ * Apply the persisted UI scale via native webview page zoom. Called from main.tsx
+ * at boot (fire-and-forget — native zoom is async, so it cannot be a synchronous
+ * pre-paint guard; a brief scale-pop on launch is acceptable). Page zoom (NOT the
+ * CSS `zoom` property) reinterprets the viewport, so the 100vh shell does not
+ * overflow. No-op in browser dev mode.
  */
 export function applyStoredScale(): void {
-  document.documentElement.style.zoom = String(UI_SCALE_FACTORS[readUiScale()]);
+  void setUiZoom(UI_SCALE_FACTORS[readUiScale()]);
 }
 
 function persist(key: string, value: string): void {

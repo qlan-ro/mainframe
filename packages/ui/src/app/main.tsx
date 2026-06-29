@@ -7,7 +7,7 @@ import { getHost, HostProvider } from '../lib/host';
 import { App } from './App';
 
 applyStoredTheme(); // sync FOUC guard: dark class + data-scheme before first paint
-applyStoredScale(); // sync FOUC guard: UI-scale zoom before first paint
+applyStoredScale(); // fire-and-forget: native webview page zoom (async, Tauri-only)
 
 // Install the host-level window-drag listener once at startup.
 // TauriAdapter.init() wires the mousedown → startDragging listener.
