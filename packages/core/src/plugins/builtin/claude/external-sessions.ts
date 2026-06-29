@@ -96,7 +96,7 @@ export async function listExternalSessions(
   }
 
   const total = candidates.length;
-  if (limit <= 0) return { sessions: [], total, nextOffset: offset };
+  if (limit <= 0) return { sessions: [], total, nextOffset: null };
 
   const window = candidates.slice(offset, offset + limit);
   const sessions = await enrichWindow(window, projectPath);

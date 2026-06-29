@@ -147,6 +147,7 @@ describe('listExternalSessions (paged)', () => {
     const page = await listExternalSessions(PROJECT, [], { limit: 0 });
     expect(page.total).toBe(1);
     expect(page.sessions).toEqual([]);
+    expect(page.nextOffset).toBeNull();
     expect(mockOpen).not.toHaveBeenCalled();
   });
 
