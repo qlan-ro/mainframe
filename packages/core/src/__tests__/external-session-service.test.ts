@@ -2,12 +2,26 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { initializeSchema } from '../db/schema.js';
 import { ExternalSessionService } from '../chat/external-session-service.js';
-import type { Adapter, ExternalSession, DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { Adapter, ExternalSession, ExternalSessionPage, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { AdapterRegistry } from '../adapters/index.js';
 import { ChatsRepository } from '../db/chats.js';
 import { ProjectsRepository } from '../db/projects.js';
 
-function createMockAdapter(sessions: ExternalSession[] = []): Adapter {
+function makeSession(sessionId: string, projectPath = '/test/project'): ExternalSession {
+  return {
+    sessionId,
+    adapterId: 'claude',
+    projectPath,
+    createdAt: '2026-01-01T00:00:00Z',
+    modifiedAt: '2026-01-01T00:00:00Z',
+  };
+}
+
+function makePageResult(sessions: ExternalSession[], total?: number): ExternalSessionPage {
+  return { sessions, total: total ?? sessions.length, nextOffset: null };
+}
+
+function createMockAdapter(page: ExternalSessionPage = { sessions: [], total: 0, nextOffset: null }): Adapter {
   return {
     id: 'claude',
     name: 'Claude',
@@ -17,7 +31,7 @@ function createMockAdapter(sessions: ExternalSession[] = []): Adapter {
     listModels: async () => [],
     createSession: vi.fn() as unknown as Adapter['createSession'],
     killAll: vi.fn(),
-    listExternalSessions: vi.fn().mockResolvedValue(sessions),
+    listExternalSessions: vi.fn().mockResolvedValue(page),
   };
 }
 
@@ -42,7 +56,7 @@ describe('ExternalSessionService', () => {
     projectId = project.id;
 
     emittedEvents = [];
-    mockAdapter = createMockAdapter([]);
+    mockAdapter = createMockAdapter();
 
     adapterRegistry = new AdapterRegistry();
     adapterRegistry.register(mockAdapter);
@@ -62,38 +76,41 @@ describe('ExternalSessionService', () => {
     db.close();
   });
 
-  describe('scan', () => {
-    it('returns empty array for unknown project', async () => {
-      const result = await service.scan('nonexistent');
-      expect(result).toEqual([]);
+  describe('scanPage', () => {
+    it('returns empty page for unknown project', async () => {
+      const result = await service.scanPage('nonexistent', 0, 20);
+      expect(result).toEqual({ sessions: [], total: 0, nextOffset: null });
     });
 
-    it('returns sessions from adapter', async () => {
-      const sessions: ExternalSession[] = [
-        {
-          sessionId: 'ext-1',
-          adapterId: 'claude',
-          projectPath: '/test',
-          createdAt: '2026-01-01T00:00:00Z',
-          modifiedAt: '2026-01-01T00:00:00Z',
-        },
-      ];
-      (mockAdapter.listExternalSessions as ReturnType<typeof vi.fn>).mockResolvedValue(sessions);
+    it('returns sessions from adapter with adapterId stamped', async () => {
+      const sessions = [makeSession('ext-1')];
+      (mockAdapter.listExternalSessions as ReturnType<typeof vi.fn>).mockResolvedValue(makePageResult(sessions, 1));
 
-      const result = await service.scan(projectId);
-      expect(result).toHaveLength(1);
-      expect(result[0]!.sessionId).toBe('ext-1');
+      const result = await service.scanPage(projectId, 0, 20);
+      expect(result.sessions).toHaveLength(1);
+      expect(result.sessions[0]!.sessionId).toBe('ext-1');
+      expect(result.sessions[0]!.adapterId).toBe('claude');
+      expect(result.total).toBe(1);
+      expect(result.nextOffset).toBeNull();
+    });
+
+    it('passes offset and limit to adapter', async () => {
+      await service.scanPage(projectId, 10, 5);
+      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith('/test/project', [], { offset: 10, limit: 5 });
     });
 
     it('passes exclude IDs to adapter', async () => {
       const chat = chatsRepo.create(projectId, 'claude');
       chatsRepo.update(chat.id, { claudeSessionId: 'already-imported' });
 
-      await service.scan(projectId);
-      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith('/test/project', ['already-imported']);
+      await service.scanPage(projectId, 0, 20);
+      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith('/test/project', ['already-imported'], {
+        offset: 0,
+        limit: 20,
+      });
     });
 
-    it('returns empty array when adapter has no listExternalSessions', async () => {
+    it('returns empty page when adapter has no listExternalSessions', async () => {
       const adapterWithoutList: Adapter = {
         id: 'other',
         name: 'Other',
@@ -113,11 +130,32 @@ describe('ExternalSessionService', () => {
       const serviceWithout = new ExternalSessionService(mockDb as any, registryWithout, vi.fn());
 
       try {
-        const result = await serviceWithout.scan(projectId);
-        expect(result).toEqual([]);
+        const result = await serviceWithout.scanPage(projectId, 0, 20);
+        expect(result).toEqual({ sessions: [], total: 0, nextOffset: null });
       } finally {
         serviceWithout.stopAll();
       }
+    });
+
+    it('scanPage forwards offset/limit and stamps adapterId', async () => {
+      const listSpy = vi.fn().mockResolvedValue({
+        sessions: [{ sessionId: 's1', adapterId: 'x', projectPath: '/p', createdAt: 'a', modifiedAt: 'a' }],
+        total: 5,
+        nextOffset: 2,
+      });
+      const adapters = { getAll: () => [{ id: 'claude', listExternalSessions: listSpy }] } as any;
+      const db2 = {
+        projects: { get: () => ({ id: 'proj', path: '/p' }) },
+        chats: { getImportedSessionIds: () => [] },
+      } as any;
+      const svc = new ExternalSessionService(db2, adapters, vi.fn());
+
+      const page = await svc.scanPage('proj', 2, 2);
+
+      expect(listSpy).toHaveBeenCalledWith('/p', [], { offset: 2, limit: 2 });
+      expect(page.total).toBe(5);
+      expect(page.sessions[0]!.adapterId).toBe('claude');
+      expect(page.nextOffset).toBe(2);
     });
   });
 

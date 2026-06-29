@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent, ExternalSession } from '@qlan-ro/mainframe-types';
+import type { Chat, DaemonEvent, ExternalSession, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createChildLogger } from '../logger.js';
@@ -18,29 +18,36 @@ export class ExternalSessionService {
     private emitEvent: (event: DaemonEvent) => void,
   ) {}
 
-  /** Scan for importable external sessions for a project */
-  async scan(projectId: string): Promise<ExternalSession[]> {
+  /**
+   * Page of importable external sessions across all adapters for a project.
+   *
+   * Aggregation: sessions concatenated, total summed, nextOffset = first non-null
+   * among adapters. Exact for the single-adapter (claude) case today; documented
+   * caveat for multi-adapter future.
+   */
+  async scanPage(projectId: string, offset: number, limit: number): Promise<ExternalSessionPage> {
     const project = this.db.projects.get(projectId);
-    if (!project) return [];
+    if (!project) return { sessions: [], total: 0, nextOffset: null };
 
-    const allAdapters = this.adapters.getAll();
-    const allSessions: ExternalSession[] = [];
+    const sessions: ExternalSession[] = [];
+    let total = 0;
+    let nextOffset: number | null = null;
 
-    for (const adapter of allAdapters) {
+    for (const adapter of this.adapters.getAll()) {
       if (!adapter.listExternalSessions) continue;
       const excludeIds = this.db.chats.getImportedSessionIds(projectId);
       try {
-        const sessions = await adapter.listExternalSessions(project.path, excludeIds);
-        for (const session of sessions) {
-          session.adapterId = adapter.id;
-        }
-        allSessions.push(...sessions);
+        const page = await adapter.listExternalSessions(project.path, excludeIds, { offset, limit });
+        for (const s of page.sessions) s.adapterId = adapter.id;
+        sessions.push(...page.sessions);
+        total += page.total;
+        if (nextOffset === null) nextOffset = page.nextOffset;
       } catch (err) {
         logger.warn({ err, adapterId: adapter.id, projectId }, 'Failed to scan external sessions');
       }
     }
 
-    return allSessions;
+    return { sessions, total, nextOffset };
   }
 
   /** Import an external session, creating a Mainframe chat for it */
@@ -126,16 +133,14 @@ export class ExternalSessionService {
   }
 
   private async emitCount(projectId: string): Promise<void> {
-    const sessions = await this.scan(projectId);
-    const count = sessions.length;
+    const { total } = await this.scanPage(projectId, 0, 0); // count-only (no enrichment)
     const lastCount = this.lastCounts.get(projectId);
-
-    if (lastCount !== count) {
-      this.lastCounts.set(projectId, count);
+    if (lastCount !== total) {
+      this.lastCounts.set(projectId, total);
       this.emitEvent({
         type: 'sessions.external.count',
         projectId,
-        count,
+        count: total,
       } as DaemonEvent);
     }
   }
