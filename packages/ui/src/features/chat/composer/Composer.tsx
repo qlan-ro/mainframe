@@ -142,7 +142,7 @@ export function Composer() {
               placeholder="Type @ to search files, / for skills…"
               rows={1}
               autoFocus
-              className="relative w-full resize-none bg-transparent px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-transparent caret-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative w-full resize-none overflow-hidden bg-transparent px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-transparent caret-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
