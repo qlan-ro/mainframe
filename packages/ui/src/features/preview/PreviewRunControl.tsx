@@ -1,5 +1,6 @@
 import { Play, Square, RotateCw } from 'lucide-react';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
+import { Hint } from '@/components/ui/hint';
 import { PreviewIconButton } from './PreviewIconButton';
 
 interface PreviewRunControlProps {
@@ -32,15 +33,16 @@ export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewR
 
   return (
     <div className="flex flex-shrink-0 items-center gap-px">
-      <button
-        data-testid="preview-run-stop"
-        title="Stop"
-        onClick={onStop}
-        className="inline-flex h-[24px] items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[8px] pr-[10px] text-label font-semibold text-foreground"
-      >
-        <Square size={10} className="fill-current text-destructive" />
-        Stop
-      </button>
+      <Hint label="Stop">
+        <button
+          data-testid="preview-run-stop"
+          onClick={onStop}
+          className="inline-flex h-[24px] items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[8px] pr-[10px] text-label font-semibold text-foreground"
+        >
+          <Square size={10} className="fill-current text-destructive" />
+          Stop
+        </button>
+      </Hint>
       <PreviewIconButton testId="preview-run-restart" title="Restart" onClick={onRestart} className="w-[24px]">
         <RotateCw size={13} />
       </PreviewIconButton>

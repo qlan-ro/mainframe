@@ -22,6 +22,7 @@
  */
 import React from 'react';
 import { ChevronRight, Crosshair, Folder } from 'lucide-react';
+import { Hint } from '@/components/ui/hint';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 interface ViewerShellProps {
@@ -62,15 +63,16 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
 
         <div className="mx-0.5 h-[13px] w-px bg-border" />
 
-        <button
-          data-testid="viewer-shell-reveal"
-          title="Reveal in file tree"
-          className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
-          onClick={handleReveal}
-          type="button"
-        >
-          <Crosshair size={12} aria-hidden />
-        </button>
+        <Hint label="Reveal in file tree">
+          <button
+            data-testid="viewer-shell-reveal"
+            className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
+            onClick={handleReveal}
+            type="button"
+          >
+            <Crosshair size={12} aria-hidden />
+          </button>
+        </Hint>
       </div>
 
       {/* Body */}

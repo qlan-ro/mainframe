@@ -12,6 +12,7 @@ import React from 'react';
 import { Play, Edit, Trash2, Paperclip, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Hint } from '@/components/ui/hint';
 import type { Todo } from '@/lib/api/todos';
 import { typeTint, priorityTint, priorityDotClass } from './task-palettes';
 
@@ -105,13 +106,12 @@ export const TaskCard = React.memo(function TaskCard({
           {todo.priority}
         </span>
         <span className="flex-1" />
-        <span
-          title={`Updated ${new Date(todo.updated_at).toLocaleDateString()}`}
-          className="inline-flex items-center gap-1 text-caption text-muted-foreground shrink-0 whitespace-nowrap"
-        >
-          <Clock size={10} aria-hidden />
-          {relativeTime(todo.updated_at)}
-        </span>
+        <Hint label={`Updated ${new Date(todo.updated_at).toLocaleDateString()}`}>
+          <span className="inline-flex items-center gap-1 text-caption text-muted-foreground shrink-0 whitespace-nowrap">
+            <Clock size={10} aria-hidden />
+            {relativeTime(todo.updated_at)}
+          </span>
+        </Hint>
       </div>
 
       {/* Row 3: labels + attachments + hover actions */}

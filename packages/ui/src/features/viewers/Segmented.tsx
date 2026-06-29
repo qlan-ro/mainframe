@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Hint } from '@/components/ui/hint';
 
 /**
  * Segmented — the small pill toggle reused across viewers (Preview/Source,
@@ -33,21 +34,21 @@ export function Segmented({ value, onChange, options }: SegmentedProps) {
       {options.map((o) => {
         const active = o.id === value;
         return (
-          <button
-            key={o.id}
-            type="button"
-            data-testid={o.testId}
-            title={o.title ?? o.label}
-            aria-pressed={active}
-            onClick={() => onChange(o.id)}
-            className={[
-              'inline-flex h-[18px] items-center gap-[4px] rounded-md px-[8px] text-caption font-medium transition-colors',
-              active ? SEG_ACTIVE : SEG_IDLE,
-            ].join(' ')}
-          >
-            {o.icon}
-            {o.label}
-          </button>
+          <Hint key={o.id} label={o.title ?? o.label}>
+            <button
+              type="button"
+              data-testid={o.testId}
+              aria-pressed={active}
+              onClick={() => onChange(o.id)}
+              className={[
+                'inline-flex h-[18px] items-center gap-[4px] rounded-md px-[8px] text-caption font-medium transition-colors',
+                active ? SEG_ACTIVE : SEG_IDLE,
+              ].join(' ')}
+            >
+              {o.icon}
+              {o.label}
+            </button>
+          </Hint>
         );
       })}
     </div>

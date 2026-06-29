@@ -14,6 +14,7 @@ import { TAG_DOT_STYLE } from '../tags/tag-colors';
 import type { SessionBadge } from '../view-model/session-status';
 import { AnswerPill } from './SessionRow';
 import { projectColor } from './project-color';
+import { Hint } from '@/components/ui/hint';
 
 interface SessionRowMetaProps {
   worktreePath?: string;
@@ -49,49 +50,51 @@ export function SessionRowMeta({
   return (
     <div className="flex min-w-0 items-center gap-[8px] text-micro tracking-normal text-mf-text-3">
       {projectName != null && chipColor != null && (
-        <span
-          data-testid="sessions-row-meta-project"
-          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] px-1.5 py-px text-micro font-semibold"
-          style={{
-            backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
-            color: chipColor,
-          }}
-          title={projectName}
-        >
+        <Hint label={projectName}>
           <span
-            className="size-[5px] flex-shrink-0 rounded-full"
-            style={{ backgroundColor: chipColor }}
-            aria-hidden="true"
-          />
-          <span className="truncate">{projectName}</span>
-        </span>
+            data-testid="sessions-row-meta-project"
+            className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] px-1.5 py-px text-micro font-semibold"
+            style={{
+              backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
+              color: chipColor,
+            }}
+          >
+            <span
+              className="size-[5px] flex-shrink-0 rounded-full"
+              style={{ backgroundColor: chipColor }}
+              aria-hidden="true"
+            />
+            <span className="truncate">{projectName}</span>
+          </span>
+        </Hint>
       )}
       {worktreePath != null && (
-        <span
-          data-testid="sessions-row-meta-worktree"
-          className={[
-            'inline-flex min-w-0 items-center gap-[3px] font-mono',
-            worktreeMissing ? 'text-destructive' : 'text-muted-foreground',
-          ].join(' ')}
-          title={worktreePath}
-        >
-          {worktreeMissing && <span data-testid="sessions-row-meta-worktree-missing" aria-label="worktree missing" />}
-          <svg
-            width="9"
-            height="9"
-            viewBox="0 0 16 16"
-            fill="none"
-            className="flex-shrink-0 text-mf-text-3"
-            aria-hidden
+        <Hint label={worktreePath}>
+          <span
+            data-testid="sessions-row-meta-worktree"
+            className={[
+              'inline-flex min-w-0 items-center gap-[3px] font-mono',
+              worktreeMissing ? 'text-destructive' : 'text-muted-foreground',
+            ].join(' ')}
           >
-            <path
-              d="M5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
-              fill="currentColor"
-            />
-            <path d="M5 7v1.17A3 3 0 0 1 6.83 10H9a2 2 0 0 0 2-2V7" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-          <span className="max-w-[8rem] truncate">{worktreeBasename(worktreePath)}</span>
-        </span>
+            {worktreeMissing && <span data-testid="sessions-row-meta-worktree-missing" aria-label="worktree missing" />}
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 16 16"
+              fill="none"
+              className="flex-shrink-0 text-mf-text-3"
+              aria-hidden
+            >
+              <path
+                d="M5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
+                fill="currentColor"
+              />
+              <path d="M5 7v1.17A3 3 0 0 1 6.83 10H9a2 2 0 0 0 2-2V7" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+            <span className="max-w-[8rem] truncate">{worktreeBasename(worktreePath)}</span>
+          </span>
+        </Hint>
       )}
       {detectedPrs.map((pr) => (
         <a
@@ -109,21 +112,19 @@ export function SessionRowMeta({
       {badge != null && <AnswerPill badge={badge} />}
       <div className="flex-1" />
       {visibleTags.length > 0 && colorOf != null && (
-        <span
-          data-testid="sessions-row-meta-tag-dots"
-          className="inline-flex flex-shrink-0 items-center gap-[3px]"
-          title={tags?.join(' · ')}
-        >
-          {visibleTags.map((name) => (
-            <span
-              key={name}
-              data-testid={`sessions-row-meta-tag-dot-${name}`}
-              className="inline-block size-[6px] rounded-full"
-              style={TAG_DOT_STYLE(colorOf(name))}
-              aria-hidden="true"
-            />
-          ))}
-        </span>
+        <Hint label={tags?.join(' · ')}>
+          <span data-testid="sessions-row-meta-tag-dots" className="inline-flex flex-shrink-0 items-center gap-[3px]">
+            {visibleTags.map((name) => (
+              <span
+                key={name}
+                data-testid={`sessions-row-meta-tag-dot-${name}`}
+                className="inline-block size-[6px] rounded-full"
+                style={TAG_DOT_STYLE(colorOf(name))}
+                aria-hidden="true"
+              />
+            ))}
+          </span>
+        </Hint>
       )}
     </div>
   );

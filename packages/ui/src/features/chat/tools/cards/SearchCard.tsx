@@ -13,6 +13,7 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { SearchIcon } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Hint } from '@/components/ui/hint';
 import { StatusDot, CollapsibleCardShell, FamilyTile, ErrorBody, resolveResultText } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
@@ -81,9 +82,11 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
   const patternTarget = pattern ? (
     <>
       <span className="text-mf-text-4 shrink-0">·</span>
-      <code className="font-mono text-caption text-muted-foreground truncate min-w-0 max-w-[200px]" title={pattern}>
-        &quot;{pattern}&quot;
-      </code>
+      <Hint label={pattern}>
+        <code className="font-mono text-caption text-muted-foreground truncate min-w-0 max-w-[200px]">
+          &quot;{pattern}&quot;
+        </code>
+      </Hint>
     </>
   ) : null;
 

@@ -19,6 +19,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useHost } from '@/lib/host';
+import { Hint } from '@/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ViewerShell } from './ViewerShell';
 import { formatBytes } from './viewer-status';
@@ -80,16 +81,17 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
   const status = base64 ? `PDF · ${formatBytes(bytes)}` : 'PDF · Loading…';
 
   const actions = (
-    <button
-      type="button"
-      data-testid="viewer-pdf-fallback"
-      onClick={() => void handleOpenExternal()}
-      disabled={fileUrl === null}
-      title={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}
-      className="rounded-sm px-2 py-0.5 text-caption font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      Open externally
-    </button>
+    <Hint label={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}>
+      <button
+        type="button"
+        data-testid="viewer-pdf-fallback"
+        onClick={() => void handleOpenExternal()}
+        disabled={fileUrl === null}
+        className="rounded-sm px-2 py-0.5 text-caption font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Open externally
+      </button>
+    </Hint>
   );
 
   return (

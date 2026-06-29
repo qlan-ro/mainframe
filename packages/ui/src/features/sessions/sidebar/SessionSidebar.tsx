@@ -44,6 +44,7 @@ import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
 import { resolveProjectSession } from './resolve-project-session';
+import { Hint } from '@/components/ui/hint';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
@@ -70,15 +71,11 @@ function SessionsGroupHeader({ count }: { count: number }) {
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
       <ThreadListPrimitive.New asChild>
-        <button
-          data-testid="sessions-new-button"
-          data-tut="sessions"
-          type="button"
-          title="New session"
-          className={iconBtn}
-        >
-          <PlusIcon className="size-[12px]" />
-        </button>
+        <Hint label="New session">
+          <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={iconBtn}>
+            <PlusIcon className="size-[12px]" />
+          </button>
+        </Hint>
       </ThreadListPrimitive.New>
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />

@@ -24,6 +24,7 @@ import { ReadonlyThreadProvider, ThreadPrimitive } from '@assistant-ui/react';
 import { Bot, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { ErrorDot } from '../shared';
 import { boundedMessageComponents } from '../../messages/bounded-messages';
@@ -47,19 +48,17 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
       </span>
 
       {/* Agent name */}
-      <span
-        data-testid="chat-task-agent"
-        className="max-w-[180px] truncate text-label font-semibold text-primary"
-        title={agentName}
-      >
-        {agentName}
-      </span>
+      <Hint label={agentName}>
+        <span data-testid="chat-task-agent" className="max-w-[180px] truncate text-label font-semibold text-primary">
+          {agentName}
+        </span>
+      </Hint>
 
       {/* Model (mono, muted) */}
       {model && (
-        <span className="truncate font-mono text-caption text-mf-text-4" title={model}>
-          {model}
-        </span>
+        <Hint label={model}>
+          <span className="truncate font-mono text-caption text-mf-text-4">{model}</span>
+        </Hint>
       )}
 
       {/* Description / prompt */}

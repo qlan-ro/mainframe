@@ -20,6 +20,7 @@ import { AlertTriangle, Check, GitFork, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Hint } from '@/components/ui/hint';
 import { MenuDivider, MenuLabel } from '@/components/ui/menu';
 import { enableWorktree, attachWorktree, getGitBranches, getProjectWorktrees } from '@/lib/api/git';
 import type { WorktreeEntry } from '@/lib/api/git';
@@ -44,9 +45,9 @@ function ActiveInfo({ chat }: { chat: Chat }) {
         <span className="text-caption text-mf-text-3">Branch</span>
         <span className="truncate font-mono text-caption text-foreground">{chat.branchName ?? '—'}</span>
         <span className="text-caption text-mf-text-3">Path</span>
-        <span className="truncate font-mono text-caption text-foreground" title={chat.worktreePath}>
-          {chat.worktreePath}
-        </span>
+        <Hint label={chat.worktreePath}>
+          <span className="truncate font-mono text-caption text-foreground">{chat.worktreePath}</span>
+        </Hint>
       </div>
     </div>
   );

@@ -28,6 +28,7 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { useSurfaceDragStore } from './use-surface-drag';
+import { Hint } from '@/components/ui/hint';
 import type { RunPane, RunTab } from '@/store/run-pane';
 
 const ACTION_BTN =
@@ -71,18 +72,19 @@ function RunTabPill({ pane, tab }: { pane: RunPane; tab: RunTab }) {
       <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-caption leading-none">
         {tab.title}
       </span>
-      <button
-        data-testid={`run-tab-close-${tab.id}`}
-        type="button"
-        title={`Close ${tab.title}`}
-        className={`inline-flex h-[14px] w-[14px] flex-shrink-0 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-[120ms] hover:bg-accent group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          closeRunTab(pane.id, tab.id);
-        }}
-      >
-        <X size={9} />
-      </button>
+      <Hint label={`Close ${tab.title}`}>
+        <button
+          data-testid={`run-tab-close-${tab.id}`}
+          type="button"
+          className={`inline-flex h-[14px] w-[14px] flex-shrink-0 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-[120ms] hover:bg-accent group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            closeRunTab(pane.id, tab.id);
+          }}
+        >
+          <X size={9} />
+        </button>
+      </Hint>
     </div>
   );
 }
@@ -95,16 +97,17 @@ function RunAddMenu({ paneId }: { paneId: string }) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          data-testid={`run-tab-strip-add-${paneId}`}
-          type="button"
-          title="New terminal / Open preview"
-          className={`${ACTION_BTN} ml-0.5 data-[state=open]:bg-mf-chip`}
-        >
-          <Plus size={11} className="text-mf-text-3" />
-        </button>
-      </PopoverTrigger>
+      <Hint label="New terminal / Open preview">
+        <PopoverTrigger asChild>
+          <button
+            data-testid={`run-tab-strip-add-${paneId}`}
+            type="button"
+            className={`${ACTION_BTN} ml-0.5 data-[state=open]:bg-mf-chip`}
+          >
+            <Plus size={11} className="text-mf-text-3" />
+          </button>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent data-testid={`run-add-menu-${paneId}`} className="w-[214px] rounded-[8px] p-[4px]" align="start">
         <MenuLabel>New terminal</MenuLabel>
         <MenuRow
@@ -184,47 +187,51 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
       <div className="flex flex-shrink-0 items-center gap-px pl-[2px] pr-[6px]">
         {primary && splitAvailable && (
           <>
-            <button
-              data-testid="run-tab-strip-split-right"
-              type="button"
-              title="Split right"
-              onClick={() => splitSurface('v')}
-              className={ACTION_BTN}
-            >
-              <LayoutPanelLeft size={13} className="text-mf-text-3" />
-            </button>
-            <button
-              data-testid="run-tab-strip-split-down"
-              type="button"
-              title="Split down"
-              onClick={() => splitSurface('h')}
-              className={ACTION_BTN}
-            >
-              <LayoutPanelTop size={13} className="text-mf-text-3" />
-            </button>
+            <Hint label="Split right">
+              <button
+                data-testid="run-tab-strip-split-right"
+                type="button"
+                onClick={() => splitSurface('v')}
+                className={ACTION_BTN}
+              >
+                <LayoutPanelLeft size={13} className="text-mf-text-3" />
+              </button>
+            </Hint>
+            <Hint label="Split down">
+              <button
+                data-testid="run-tab-strip-split-down"
+                type="button"
+                onClick={() => splitSurface('h')}
+                className={ACTION_BTN}
+              >
+                <LayoutPanelTop size={13} className="text-mf-text-3" />
+              </button>
+            </Hint>
           </>
         )}
         {primary ? (
-          <button
-            data-testid="run-surface-close"
-            type="button"
-            title="Close Run"
-            disabled={runIsFloor}
-            onClick={() => toggleSurface('run')}
-            className={`${ACTION_BTN} ${runIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
-          >
-            <X size={12} className="text-mf-text-3" />
-          </button>
+          <Hint label="Close Run">
+            <button
+              data-testid="run-surface-close"
+              type="button"
+              disabled={runIsFloor}
+              onClick={() => toggleSurface('run')}
+              className={`${ACTION_BTN} ${runIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
+            >
+              <X size={12} className="text-mf-text-3" />
+            </button>
+          </Hint>
         ) : (
-          <button
-            data-testid={`run-pane-close-${pane.id}`}
-            type="button"
-            title="Close pane (un-split)"
-            onClick={() => closePane(pane.id)}
-            className={ACTION_BTN}
-          >
-            <LayoutPanelLeft size={12} className="text-mf-text-3" />
-          </button>
+          <Hint label="Close pane (un-split)">
+            <button
+              data-testid={`run-pane-close-${pane.id}`}
+              type="button"
+              onClick={() => closePane(pane.id)}
+              className={ACTION_BTN}
+            >
+              <LayoutPanelLeft size={12} className="text-mf-text-3" />
+            </button>
+          </Hint>
         )}
       </div>
     </div>

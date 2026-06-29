@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 
 interface PreviewIconButtonProps {
   testId: string;
@@ -31,20 +32,21 @@ export function PreviewIconButton({
   className,
 }: PreviewIconButtonProps) {
   return (
-    <button
-      data-testid={testId}
-      title={title}
-      aria-label={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-sm transition-colors',
-        active ? 'bg-mf-chip text-primary' : 'text-muted-foreground hover:bg-accent',
-        disabled && 'pointer-events-none opacity-40',
-        className,
-      )}
-    >
-      {children}
-    </button>
+    <Hint label={title}>
+      <button
+        data-testid={testId}
+        aria-label={title}
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-sm transition-colors',
+          active ? 'bg-mf-chip text-primary' : 'text-muted-foreground hover:bg-accent',
+          disabled && 'pointer-events-none opacity-40',
+          className,
+        )}
+      >
+        {children}
+      </button>
+    </Hint>
   );
 }

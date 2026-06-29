@@ -30,6 +30,7 @@ import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { Hint } from '@/components/ui/hint';
 
 function dotClass(badge: SessionBadge): string {
   switch (badge.base) {
@@ -131,37 +132,30 @@ function RowHoverActions({
   };
   return (
     <div className="hidden flex-shrink-0 items-center group-hover:flex">
-      <button
-        data-testid="sessions-row-action-tags"
-        type="button"
-        title="Tags"
-        className={btn}
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          onTags(e.currentTarget.getBoundingClientRect());
-        }}
-      >
-        <TagIcon className="size-[11px]" />
-      </button>
-      <button
-        data-testid="sessions-row-action-rename"
-        type="button"
-        title="Rename"
-        className={btn}
-        onClick={stop(onRename)}
-      >
-        <PencilIcon className="size-[11px]" />
-      </button>
-      <button
-        data-testid="sessions-row-action-archive"
-        type="button"
-        title="Archive"
-        className={btn}
-        onClick={stop(onArchive)}
-      >
-        <ArchiveIcon className="size-[11px]" />
-      </button>
+      <Hint label="Tags">
+        <button
+          data-testid="sessions-row-action-tags"
+          type="button"
+          className={btn}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onTags(e.currentTarget.getBoundingClientRect());
+          }}
+        >
+          <TagIcon className="size-[11px]" />
+        </button>
+      </Hint>
+      <Hint label="Rename">
+        <button data-testid="sessions-row-action-rename" type="button" className={btn} onClick={stop(onRename)}>
+          <PencilIcon className="size-[11px]" />
+        </button>
+      </Hint>
+      <Hint label="Archive">
+        <button data-testid="sessions-row-action-archive" type="button" className={btn} onClick={stop(onArchive)}>
+          <ArchiveIcon className="size-[11px]" />
+        </button>
+      </Hint>
     </div>
   );
 }

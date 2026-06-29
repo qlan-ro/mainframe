@@ -1,6 +1,7 @@
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSettingsStore } from '@/store/settings';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
+import { Hint } from '@/components/ui/hint';
 
 export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 
@@ -15,44 +16,47 @@ function TrafficLightsSpacer() {
 
 function TasksBtn() {
   return (
-    <button
-      data-testid="sidebar-tasks-button"
-      type="button"
-      title="Tasks"
-      className="inline-flex h-[24px] w-[28px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
-      onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
-    >
-      <TasksGlyph size={14} className="text-muted-foreground" />
-    </button>
+    <Hint label="Tasks">
+      <button
+        data-testid="sidebar-tasks-button"
+        type="button"
+        className="inline-flex h-[24px] w-[28px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+        onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
+      >
+        <TasksGlyph size={14} className="text-muted-foreground" />
+      </button>
+    </Hint>
   );
 }
 
 function SettingsBtn() {
   return (
-    <button
-      data-testid="sidebar-settings-button"
-      type="button"
-      title="Settings · ⌘,"
-      className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
-      onClick={() => useSettingsStore.getState().open()}
-    >
-      <GearGlyph size={15} className="text-muted-foreground" />
-    </button>
+    <Hint label="Settings · ⌘,">
+      <button
+        data-testid="sidebar-settings-button"
+        type="button"
+        className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+        onClick={() => useSettingsStore.getState().open()}
+      >
+        <GearGlyph size={15} className="text-muted-foreground" />
+      </button>
+    </Hint>
   );
 }
 
 function HideSidebarBtn() {
   const toggleSidebar = useUiPrefs((s) => s.toggleSidebar);
   return (
-    <button
-      data-testid="sidebar-hide-button"
-      type="button"
-      title="Hide sidebar"
-      className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
-      onClick={toggleSidebar}
-    >
-      <SidebarLeftGlyph size={14} className="text-muted-foreground" />
-    </button>
+    <Hint label="Hide sidebar">
+      <button
+        data-testid="sidebar-hide-button"
+        type="button"
+        className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+        onClick={toggleSidebar}
+      >
+        <SidebarLeftGlyph size={14} className="text-muted-foreground" />
+      </button>
+    </Hint>
   );
 }
 

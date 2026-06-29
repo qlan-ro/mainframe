@@ -12,6 +12,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { CodeIcon, QuoteIcon } from 'lucide-react';
+import { Hint } from '@/components/ui/hint';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import type { ReviewComment, ReviewCommentItem } from '../view-model/parse-review-comment';
@@ -56,12 +57,11 @@ export function ReviewCommentCard({ review }: { review: ReviewComment }) {
     >
       <div className="flex items-center gap-2 border-b-[0.5px] border-border bg-mf-raised px-3 py-1.5">
         <CodeIcon size={12} className="flex-shrink-0 text-primary" />
-        <span
-          title={review.file}
-          className="min-w-0 truncate font-mono text-caption font-semibold text-muted-foreground"
-        >
-          {fileName}
-        </span>
+        <Hint label={review.file}>
+          <span className="min-w-0 truncate font-mono text-caption font-semibold text-muted-foreground">
+            {fileName}
+          </span>
+        </Hint>
         <span className="flex-1" />
         {review.comments.length > 1 && (
           <span className="flex-shrink-0 font-mono text-micro text-mf-text-4">{review.comments.length} comments</span>

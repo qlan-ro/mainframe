@@ -1,5 +1,6 @@
 import { ShieldIcon, PencilIcon, ZapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import type { ComponentType } from 'react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 
@@ -29,23 +30,23 @@ export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProp
         const isYolo = id === 'yolo';
 
         return (
-          <button
-            key={id}
-            type="button"
-            title={desc}
-            data-testid={`chat-plan-execmode-${id}`}
-            onClick={() => onChange(id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',
-              'text-label font-semibold transition-colors',
-              selected && isYolo && 'bg-background text-destructive shadow-sm',
-              selected && !isYolo && 'bg-background text-primary shadow-sm',
-              !selected && 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Icon className="size-3 shrink-0" />
-            {label}
-          </button>
+          <Hint key={id} label={desc}>
+            <button
+              type="button"
+              data-testid={`chat-plan-execmode-${id}`}
+              onClick={() => onChange(id)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',
+                'text-label font-semibold transition-colors',
+                selected && isYolo && 'bg-background text-destructive shadow-sm',
+                selected && !isYolo && 'bg-background text-primary shadow-sm',
+                !selected && 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Icon className="size-3 shrink-0" />
+              {label}
+            </button>
+          </Hint>
         );
       })}
     </div>

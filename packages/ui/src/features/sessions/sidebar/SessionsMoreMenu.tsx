@@ -26,6 +26,7 @@ import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useProjects } from '../use-projects';
 import { useSessionFilters } from '@/store/session-filters';
 import { ImportSessionsDialog } from './ImportSessionsDialog';
+import { Hint } from '@/components/ui/hint';
 import { ArchivedSessionsDialog } from './ArchivedSessionsDialog';
 
 const ICON_BTN =
@@ -44,11 +45,13 @@ export function SessionsMoreMenu() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button data-testid="sessions-more-button" type="button" title="More" className={ICON_BTN}>
-            <MoreHorizontalIcon className="size-[11px]" />
-          </button>
-        </DropdownMenuTrigger>
+        <Hint label="More">
+          <DropdownMenuTrigger asChild>
+            <button data-testid="sessions-more-button" type="button" className={ICON_BTN}>
+              <MoreHorizontalIcon className="size-[11px]" />
+            </button>
+          </DropdownMenuTrigger>
+        </Hint>
 
         {/* Order matches the 02-chrome prototype moreOpen panel: Archived, then Import. */}
         <DropdownMenuContent align="end" sideOffset={6} className="w-52">

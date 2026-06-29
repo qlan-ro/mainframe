@@ -30,6 +30,7 @@
 import { useEffect, useRef } from 'react';
 import { Send, Sparkles, X } from 'lucide-react';
 import { SnippetLines, rangeLabel } from '@/features/chat/messages/code-snippet';
+import { Hint } from '@/components/ui/hint';
 
 export interface InlineCommentWidgetProps {
   text: string;
@@ -102,15 +103,16 @@ export function InlineCommentWidget({
           <span className="text-caption font-semibold text-muted-foreground">Review comment</span>
           {lineLabel !== null && <span className="font-mono text-micro text-mf-text-4">{lineLabel}</span>}
           <div className="flex-1" />
-          <button
-            data-testid="editor-comment-widget-close"
-            type="button"
-            onClick={onClose}
-            title="Close"
-            className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] border-none bg-transparent text-mf-text-3 hover:bg-accent"
-          >
-            <X size={10} aria-hidden />
-          </button>
+          <Hint label="Close">
+            <button
+              data-testid="editor-comment-widget-close"
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] border-none bg-transparent text-mf-text-3 hover:bg-accent"
+            >
+              <X size={10} aria-hidden />
+            </button>
+          </Hint>
         </div>
 
         {/* Code snippet preview */}

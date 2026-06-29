@@ -15,6 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { ReviewCommentCard } from '../ReviewCommentCard';
 import type { ReviewComment } from '../../view-model/parse-review-comment';
 
@@ -38,10 +39,13 @@ describe('ReviewCommentCard — single comment', () => {
     expect(screen.getByText('globals.css')).toBeTruthy();
   });
 
-  it('has the full path in the title attribute of the filename span', () => {
+  it('shows the full path as a tooltip when the filename span is hovered', async () => {
+    const user = userEvent.setup();
     render(<ReviewCommentCard review={singleReview} />);
-    const span = screen.getByTitle('/Users/x/app/globals.css');
-    expect(span).toBeTruthy();
+    // The filename span shows the basename; the full path is the Hint tooltip label.
+    await user.hover(screen.getByText('globals.css'));
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent('/Users/x/app/globals.css');
   });
 
   it('shows the "L43" range label', () => {

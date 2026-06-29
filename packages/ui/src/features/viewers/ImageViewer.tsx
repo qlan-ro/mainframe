@@ -20,6 +20,7 @@
  */
 import { useState } from 'react';
 import { ZoomOut, ZoomIn, Maximize2 } from 'lucide-react';
+import { Hint } from '@/components/ui/hint';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import { ViewerShell } from './ViewerShell';
 import { splitImageStatus } from './viewer-status';
@@ -93,26 +94,28 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
   // Header controls: zoom out, zoom in, Fit/100% segmented toggle.
   const actions = (
     <div className="flex items-center gap-1">
-      <button
-        type="button"
-        data-testid="viewer-image-zoom-out"
-        title="Zoom out"
-        disabled={isFit}
-        onClick={handleZoomOut}
-        className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
-      >
-        <ZoomOut size={12} aria-hidden />
-      </button>
-      <button
-        type="button"
-        data-testid="viewer-image-zoom-in"
-        title="Zoom in"
-        disabled={isFit}
-        onClick={handleZoomIn}
-        className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
-      >
-        <ZoomIn size={12} aria-hidden />
-      </button>
+      <Hint label="Zoom out">
+        <button
+          type="button"
+          data-testid="viewer-image-zoom-out"
+          disabled={isFit}
+          onClick={handleZoomOut}
+          className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
+        >
+          <ZoomOut size={12} aria-hidden />
+        </button>
+      </Hint>
+      <Hint label="Zoom in">
+        <button
+          type="button"
+          data-testid="viewer-image-zoom-in"
+          disabled={isFit}
+          onClick={handleZoomIn}
+          className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
+        >
+          <ZoomIn size={12} aria-hidden />
+        </button>
+      </Hint>
       <div className="inline-flex items-center gap-px rounded-md bg-mf-chip p-0.5">
         <button
           type="button"

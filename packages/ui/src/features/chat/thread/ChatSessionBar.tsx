@@ -18,6 +18,7 @@ import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useAdapters } from '../composer/config-toolbar/use-composer-tuning';
 import { providerDot } from '../composer/config-toolbar/ProviderModelSelect';
 import { deriveContextPct, deriveSessionBarStatus, type SessionBarStatus } from './session-bar-status';
+import { Hint } from '@/components/ui/hint';
 
 const SEGMENTS = 8;
 
@@ -100,14 +101,19 @@ export function ChatSessionBar() {
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
         {pct != null && (
           <>
-            <div className="flex gap-[1.5px]" title={`Context: ${pct}% used`}>
-              {Array.from({ length: SEGMENTS }, (_, i) => (
-                <div
-                  key={i}
-                  className={cn('h-[9px] w-[3px] rounded-[1.5px]', i < filled ? fillClass : 'bg-mf-text-3 opacity-15')}
-                />
-              ))}
-            </div>
+            <Hint label={`Context: ${pct}% used`}>
+              <div className="flex gap-[1.5px]">
+                {Array.from({ length: SEGMENTS }, (_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'h-[9px] w-[3px] rounded-[1.5px]',
+                      i < filled ? fillClass : 'bg-mf-text-3 opacity-15',
+                    )}
+                  />
+                ))}
+              </div>
+            </Hint>
             <span
               data-testid="chat-session-bar-context-pct"
               className="font-mono text-micro tabular-nums text-mf-text-3"

@@ -8,6 +8,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { BranchPopover } from '../features/git/BranchPopover';
 import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
+import { Hint } from '@/components/ui/hint';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -64,15 +65,11 @@ export function MainToolbar({
         style={leadingInset > 0 ? { paddingLeft: leadingInset } : undefined}
       >
         {!sidebarRendered && (
-          <button
-            data-testid="show-sidebar-button"
-            type="button"
-            title="Show sidebar"
-            onClick={onExpandSidebar}
-            className={ICON_BTN}
-          >
-            <PanelLeft size={14} />
-          </button>
+          <Hint label="Show sidebar">
+            <button data-testid="show-sidebar-button" type="button" onClick={onExpandSidebar} className={ICON_BTN}>
+              <PanelLeft size={14} />
+            </button>
+          </Hint>
         )}
         <span className="flex min-w-0 items-center gap-[5px] text-body font-semibold tracking-[-0.2px] text-foreground">
           <span className="truncate">{projectName}</span>
@@ -87,35 +84,37 @@ export function MainToolbar({
                   open={branchOpen}
                   onOpenChange={setBranchOpen}
                 >
+                  <Hint label="Switch branch">
+                    <button
+                      data-testid="main-toolbar-branch"
+                      type="button"
+                      onClick={() => setBranchOpen((o) => !o)}
+                      className={cn(
+                        'inline-flex h-[22px] min-w-0 max-w-[230px] cursor-pointer items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal',
+                        branchOpen
+                          ? 'bg-primary/10 border border-primary/40 text-foreground'
+                          : 'text-muted-foreground hover:bg-accent',
+                      )}
+                    >
+                      <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
+                      <span className="truncate">{branchName}</span>
+                      <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+                    </button>
+                  </Hint>
+                </BranchPopover>
+              ) : (
+                <Hint label="Switch branch — coming with its surface">
                   <button
                     data-testid="main-toolbar-branch"
                     type="button"
-                    title="Switch branch"
-                    onClick={() => setBranchOpen((o) => !o)}
-                    className={cn(
-                      'inline-flex h-[22px] min-w-0 max-w-[230px] cursor-pointer items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal',
-                      branchOpen
-                        ? 'bg-primary/10 border border-primary/40 text-foreground'
-                        : 'text-muted-foreground hover:bg-accent',
-                    )}
+                    disabled
+                    className="inline-flex h-[22px] min-w-0 max-w-[230px] cursor-not-allowed items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal text-muted-foreground opacity-80"
                   >
                     <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
                     <span className="truncate">{branchName}</span>
                     <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
                   </button>
-                </BranchPopover>
-              ) : (
-                <button
-                  data-testid="main-toolbar-branch"
-                  type="button"
-                  title="Switch branch — coming with its surface"
-                  disabled
-                  className="inline-flex h-[22px] min-w-0 max-w-[230px] cursor-not-allowed items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal text-muted-foreground opacity-80"
-                >
-                  <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                  <span className="truncate">{branchName}</span>
-                  <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
-                </button>
+                </Hint>
               )}
             </>
           )}
@@ -124,45 +123,43 @@ export function MainToolbar({
 
       {/* Right: controls — order mirrors the artboard (search → launch → play → surfaces → theme → inspector). */}
       <div className="flex flex-shrink-0 items-center gap-[4px]">
-        <button
-          data-testid="main-toolbar-search"
-          type="button"
-          title="Search (⌘O)"
-          onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
-          className={`${ICON_BTN} h-[24px] w-auto gap-[6px] pl-[7px] pr-[6px]`}
-        >
-          <Search size={14} />
-          <span
-            data-testid="main-toolbar-search-hint"
-            className="inline-flex h-[17px] items-center rounded-[4px] bg-background px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[0_1px_0_rgba(0,0,0,0.03)]"
+        <Hint label="Search (⌘O)">
+          <button
+            data-testid="main-toolbar-search"
+            type="button"
+            onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
+            className={`${ICON_BTN} h-[24px] w-auto gap-[6px] pl-[7px] pr-[6px]`}
           >
-            ⌘O
-          </span>
-        </button>
+            <Search size={14} />
+            <span
+              data-testid="main-toolbar-search-hint"
+              className="inline-flex h-[17px] items-center rounded-[4px] bg-background px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[0_1px_0_rgba(0,0,0,0.03)]"
+            >
+              ⌘O
+            </span>
+          </button>
+        </Hint>
         <span className="mx-[4px] h-[16px] w-px bg-border" />
         {/* Launch picker ("Preview" dropdown) + run button, wired to the launch subsystem. */}
         <ToolbarLaunchControls port={port} projectId={projectId} chatId={chatId} />
         <span className="mx-[4px] h-[16px] w-px bg-border" />
         <SurfaceRail />
-        <button
-          data-testid="main-toolbar-theme"
-          type="button"
-          title={isDark ? 'Switch to light' : 'Switch to dark'}
-          onClick={toggleTheme}
-          className={ICON_BTN}
-        >
-          {isDark ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
-        <button
-          data-testid="main-toolbar-inspector"
-          type="button"
-          title="Toggle inspector"
-          aria-pressed={inspectorVisible}
-          onClick={toggleInspector}
-          className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip text-foreground' : ''}`}
-        >
-          <PanelRight size={14} />
-        </button>
+        <Hint label={isDark ? 'Switch to light' : 'Switch to dark'}>
+          <button data-testid="main-toolbar-theme" type="button" onClick={toggleTheme} className={ICON_BTN}>
+            {isDark ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+        </Hint>
+        <Hint label="Toggle inspector">
+          <button
+            data-testid="main-toolbar-inspector"
+            type="button"
+            aria-pressed={inspectorVisible}
+            onClick={toggleInspector}
+            className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip text-foreground' : ''}`}
+          >
+            <PanelRight size={14} />
+          </button>
+        </Hint>
       </div>
     </div>
   );

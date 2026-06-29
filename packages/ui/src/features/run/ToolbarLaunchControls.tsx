@@ -19,6 +19,7 @@ import { useCallback, useState } from 'react';
 import { ChevronDown, Eye, Play, Sparkles, Square, Terminal } from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuDivider, MenuEmpty, MenuRow, menuItemVariants } from '@/components/ui/menu';
 import { useLaunchActions } from './use-launch-actions';
@@ -70,17 +71,18 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
   return (
     <>
       <Popover open={open} onOpenChange={handleOpen}>
-        <PopoverTrigger asChild>
-          <button
-            data-testid="main-toolbar-launch"
-            type="button"
-            title="Launch configurations"
-            className="inline-flex h-[24px] max-w-[200px] cursor-pointer items-center gap-[5px] rounded-[6px] bg-mf-chip px-[8px] text-label font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
-          >
-            <span className="truncate">{label}</span>
-            <ChevronDown size={9} className="flex-shrink-0 text-mf-text-3" />
-          </button>
-        </PopoverTrigger>
+        <Hint label="Launch configurations">
+          <PopoverTrigger asChild>
+            <button
+              data-testid="main-toolbar-launch"
+              type="button"
+              className="inline-flex h-[24px] max-w-[200px] cursor-pointer items-center gap-[5px] rounded-[6px] bg-mf-chip px-[8px] text-label font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+            >
+              <span className="truncate">{label}</span>
+              <ChevronDown size={9} className="flex-shrink-0 text-mf-text-3" />
+            </button>
+          </PopoverTrigger>
+        </Hint>
         <PopoverContent data-testid="main-toolbar-launch-popover" className="w-56" align="end">
           {configs.length === 0 ? (
             <MenuEmpty>No launch configs found.</MenuEmpty>
@@ -98,29 +100,31 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
             ))
           )}
           <MenuDivider />
-          <MenuRow
-            data-testid="main-toolbar-launch-generate"
-            icon={<Sparkles className="size-[12px] text-primary" />}
-            label="Generate with Agent"
-            disabled
-            title="Generate with Agent — coming soon"
-          />
+          <Hint label="Generate with Agent — coming soon">
+            <MenuRow
+              data-testid="main-toolbar-launch-generate"
+              icon={<Sparkles className="size-[12px] text-primary" />}
+              label="Generate with Agent"
+              disabled
+            />
+          </Hint>
         </PopoverContent>
       </Popover>
-      <button
-        data-testid="main-toolbar-play"
-        type="button"
-        title={!runTarget ? 'No launch configs' : running ? `Stop ${runTarget.name}` : `Start ${runTarget.name}`}
-        onClick={onRunClick}
-        disabled={!runTarget}
-        className="inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {running ? (
-          <Square size={15} className="text-destructive" fill="currentColor" />
-        ) : (
-          <Play size={15} className="text-mf-success" fill="currentColor" />
-        )}
-      </button>
+      <Hint label={!runTarget ? 'No launch configs' : running ? `Stop ${runTarget.name}` : `Start ${runTarget.name}`}>
+        <button
+          data-testid="main-toolbar-play"
+          type="button"
+          onClick={onRunClick}
+          disabled={!runTarget}
+          className="inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {running ? (
+            <Square size={15} className="text-destructive" fill="currentColor" />
+          ) : (
+            <Play size={15} className="text-mf-success" fill="currentColor" />
+          )}
+        </button>
+      </Hint>
     </>
   );
 }
@@ -166,23 +170,24 @@ function LaunchPickerRow({ config, status, selected, onSelect, onStart, onStop }
           aria-hidden
         />
       )}
-      <button
-        type="button"
-        data-testid={`main-toolbar-launch-${live ? 'stop' : 'start'}-${config.name}`}
-        title={live ? `Stop ${config.name}` : `Start ${config.name}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (live) onStop(config);
-          else onStart(config);
-        }}
-        className="inline-flex h-[24px] w-[26px] shrink-0 items-center justify-center rounded-[6px] hover:bg-mf-chip"
-      >
-        {live ? (
-          <Square size={15} className="text-destructive" fill="currentColor" />
-        ) : (
-          <Play size={16} className="text-mf-success" fill="currentColor" />
-        )}
-      </button>
+      <Hint label={live ? `Stop ${config.name}` : `Start ${config.name}`}>
+        <button
+          type="button"
+          data-testid={`main-toolbar-launch-${live ? 'stop' : 'start'}-${config.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (live) onStop(config);
+            else onStart(config);
+          }}
+          className="inline-flex h-[24px] w-[26px] shrink-0 items-center justify-center rounded-[6px] hover:bg-mf-chip"
+        >
+          {live ? (
+            <Square size={15} className="text-destructive" fill="currentColor" />
+          ) : (
+            <Play size={16} className="text-mf-success" fill="currentColor" />
+          )}
+        </button>
+      </Hint>
     </div>
   );
 }

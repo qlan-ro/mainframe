@@ -24,6 +24,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useTabsStore } from '@/store/tabs';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { Hint } from '@/components/ui/hint';
 import type { EditorTabModel } from '@/store/tabs';
 
 const ACTION_BTN =
@@ -93,18 +94,19 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
       />
 
       {/* Close button */}
-      <button
-        data-testid={`files-tab-close-${tab.id}`}
-        type="button"
-        title={`Close ${tab.title}`}
-        className={`inline-flex h-[14px] w-[14px] flex-shrink-0 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-[120ms] hover:bg-accent group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose(tab.id);
-        }}
-      >
-        <X size={9} />
-      </button>
+      <Hint label={`Close ${tab.title}`}>
+        <button
+          data-testid={`files-tab-close-${tab.id}`}
+          type="button"
+          className={`inline-flex h-[14px] w-[14px] flex-shrink-0 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-[120ms] hover:bg-accent group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose(tab.id);
+          }}
+        >
+          <X size={9} />
+        </button>
+      </Hint>
     </div>
   );
 }
@@ -158,15 +160,16 @@ export function FilesTabStrip() {
       </div>
 
       {/* + add button — opens the file-open command palette */}
-      <button
-        data-testid="files-tab-strip-add"
-        type="button"
-        title="Open file"
-        onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
-        className={`${ACTION_BTN} ml-0.5`}
-      >
-        <Plus size={11} className="text-mf-text-3" />
-      </button>
+      <Hint label="Open file">
+        <button
+          data-testid="files-tab-strip-add"
+          type="button"
+          onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
+          className={`${ACTION_BTN} ml-0.5`}
+        >
+          <Plus size={11} className="text-mf-text-3" />
+        </button>
+      </Hint>
 
       <div className="flex-1" />
 
@@ -174,36 +177,39 @@ export function FilesTabStrip() {
       <div className="flex flex-shrink-0 items-center gap-px pl-[2px] pr-[6px]">
         {splitAvailable && (
           <>
-            <button
-              data-testid="files-tab-strip-split-right"
-              type="button"
-              title="Split right"
-              onClick={() => splitSurface('v')}
-              className={ACTION_BTN}
-            >
-              <LayoutPanelLeft size={13} className="text-mf-text-3" />
-            </button>
-            <button
-              data-testid="files-tab-strip-split-down"
-              type="button"
-              title="Split down"
-              onClick={() => splitSurface('h')}
-              className={ACTION_BTN}
-            >
-              <LayoutPanelTop size={13} className="text-mf-text-3" />
-            </button>
+            <Hint label="Split right">
+              <button
+                data-testid="files-tab-strip-split-right"
+                type="button"
+                onClick={() => splitSurface('v')}
+                className={ACTION_BTN}
+              >
+                <LayoutPanelLeft size={13} className="text-mf-text-3" />
+              </button>
+            </Hint>
+            <Hint label="Split down">
+              <button
+                data-testid="files-tab-strip-split-down"
+                type="button"
+                onClick={() => splitSurface('h')}
+                className={ACTION_BTN}
+              >
+                <LayoutPanelTop size={13} className="text-mf-text-3" />
+              </button>
+            </Hint>
           </>
         )}
-        <button
-          data-testid="files-tab-strip-close"
-          type="button"
-          title="Close Files"
-          disabled={filesIsFloor}
-          onClick={() => toggleSurface('files')}
-          className={`${ACTION_BTN} ${filesIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
-        >
-          <X size={12} className="text-mf-text-3" />
-        </button>
+        <Hint label="Close Files">
+          <button
+            data-testid="files-tab-strip-close"
+            type="button"
+            disabled={filesIsFloor}
+            onClick={() => toggleSurface('files')}
+            className={`${ACTION_BTN} ${filesIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
+          >
+            <X size={12} className="text-mf-text-3" />
+          </button>
+        </Hint>
       </div>
     </div>
   );

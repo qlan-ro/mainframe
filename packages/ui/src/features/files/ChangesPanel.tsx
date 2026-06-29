@@ -15,6 +15,7 @@ import { gitStatusKind } from '@/lib/git-status-kind';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { daemonWs } from '@/lib/daemon/ws-client';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { Hint } from '@/components/ui/hint';
 
 type ScopeMode = 'session' | 'uncommitted' | 'branch';
 
@@ -159,15 +160,16 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
             </button>
           ))}
         </div>
-        <button
-          data-testid="changes-refresh"
-          type="button"
-          title="Refresh"
-          onClick={bump}
-          className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
-        >
-          <RotateCw size={11} className="text-mf-text-3" />
-        </button>
+        <Hint label="Refresh">
+          <button
+            data-testid="changes-refresh"
+            type="button"
+            onClick={bump}
+            className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
+          >
+            <RotateCw size={11} className="text-mf-text-3" />
+          </button>
+        </Hint>
       </div>
 
       {/* Count + (branch comparison, right-aligned) */}

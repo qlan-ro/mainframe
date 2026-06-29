@@ -13,6 +13,7 @@
 import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 
 // ── MarkerWrap ────────────────────────────────────────────────────────────────
 
@@ -52,34 +53,35 @@ export function MarkerPill({
   const clickable = expandable && !isPending && !isError;
 
   return (
-    <button
-      data-testid={testId}
-      type="button"
-      disabled={!clickable}
-      onClick={clickable ? onClick : undefined}
-      title={title}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-3 py-1',
-        'font-mono text-caption text-mf-text-3 select-none',
-        'border border-border bg-mf-content2',
-        'transition-colors duration-100',
-        clickable && 'hover:bg-accent cursor-pointer',
-        !clickable && 'cursor-default',
-        isError && 'border-destructive bg-mf-destructive-tint',
-        'max-w-full overflow-hidden',
-      )}
-    >
-      <span className="shrink-0 text-mf-text-4">{icon}</span>
-      <span className="truncate min-w-0">{children}</span>
-      {isPending && <span className="w-1.5 h-1.5 rounded-full bg-mf-text-4 animate-pulse shrink-0" />}
-      {isError && <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />}
-      {clickable &&
-        (open ? (
-          <ChevronDownIcon size={11} className="text-mf-text-4 shrink-0" />
-        ) : (
-          <ChevronRightIcon size={11} className="text-mf-text-4 shrink-0" />
-        ))}
-    </button>
+    <Hint label={title}>
+      <button
+        data-testid={testId}
+        type="button"
+        disabled={!clickable}
+        onClick={clickable ? onClick : undefined}
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-full px-3 py-1',
+          'font-mono text-caption text-mf-text-3 select-none',
+          'border border-border bg-mf-content2',
+          'transition-colors duration-100',
+          clickable && 'hover:bg-accent cursor-pointer',
+          !clickable && 'cursor-default',
+          isError && 'border-destructive bg-mf-destructive-tint',
+          'max-w-full overflow-hidden',
+        )}
+      >
+        <span className="shrink-0 text-mf-text-4">{icon}</span>
+        <span className="truncate min-w-0">{children}</span>
+        {isPending && <span className="w-1.5 h-1.5 rounded-full bg-mf-text-4 animate-pulse shrink-0" />}
+        {isError && <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />}
+        {clickable &&
+          (open ? (
+            <ChevronDownIcon size={11} className="text-mf-text-4 shrink-0" />
+          ) : (
+            <ChevronRightIcon size={11} className="text-mf-text-4 shrink-0" />
+          ))}
+      </button>
+    </Hint>
   );
 }
 

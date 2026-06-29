@@ -12,6 +12,7 @@ import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { Hint } from '@/components/ui/hint';
 
 // 24×24 header buttons (hdrBtn in artboard), distinct from the 22×22 SurfaceTabStrip actions.
 const HDR_BTN =
@@ -44,61 +45,65 @@ export function ChatCardHeader() {
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
       <span className="min-w-0 flex-1 truncate text-caption font-semibold">{title}</span>
       {prs.map((pr) => (
-        <button
-          key={`${pr.owner}/${pr.repo}/${pr.number}`}
-          data-testid={`chat-header-pr-${pr.number}`}
-          type="button"
-          title={`${pr.owner}/${pr.repo} #${pr.number}`}
-          onClick={() => void host.shell.openExternal(pr.url)}
-          className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
-        >
-          <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}
-        </button>
+        <Hint key={`${pr.owner}/${pr.repo}/${pr.number}`} label={`${pr.owner}/${pr.repo} #${pr.number}`}>
+          <button
+            data-testid={`chat-header-pr-${pr.number}`}
+            type="button"
+            onClick={() => void host.shell.openExternal(pr.url)}
+            className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
+          >
+            <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}
+          </button>
+        </Hint>
       ))}
-      <button
-        data-testid="chat-header-review"
-        type="button"
-        title="Review changes (⌘⇧R)"
-        disabled={!worktreePath}
-        onClick={() => emitSurfaceIntent({ type: 'open-review' })}
-        className={`inline-flex h-6 flex-shrink-0 items-center gap-1.5 rounded-[6px] border-none bg-transparent px-2 text-caption text-muted-foreground ${!worktreePath ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-accent hover:text-foreground'}`}
-      >
-        <ClipboardCheck size={13} />
-        Review
-      </button>
+      <Hint label="Review changes (⌘⇧R)">
+        <button
+          data-testid="chat-header-review"
+          type="button"
+          disabled={!worktreePath}
+          onClick={() => emitSurfaceIntent({ type: 'open-review' })}
+          className={`inline-flex h-6 flex-shrink-0 items-center gap-1.5 rounded-[6px] border-none bg-transparent px-2 text-caption text-muted-foreground ${!worktreePath ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-accent hover:text-foreground'}`}
+        >
+          <ClipboardCheck size={13} />
+          Review
+        </button>
+      </Hint>
       {splitAvailable && (
         <>
-          <button
-            data-testid="chat-header-split-right"
-            type="button"
-            title="Split right"
-            onClick={() => splitSurface('v')}
-            className={HDR_BTN}
-          >
-            <LayoutPanelLeft size={13} className="text-mf-text-3" />
-          </button>
-          <button
-            data-testid="chat-header-split-down"
-            type="button"
-            title="Split down"
-            onClick={() => splitSurface('h')}
-            className={HDR_BTN}
-          >
-            <LayoutPanelTop size={13} className="text-mf-text-3" />
-          </button>
+          <Hint label="Split right">
+            <button
+              data-testid="chat-header-split-right"
+              type="button"
+              onClick={() => splitSurface('v')}
+              className={HDR_BTN}
+            >
+              <LayoutPanelLeft size={13} className="text-mf-text-3" />
+            </button>
+          </Hint>
+          <Hint label="Split down">
+            <button
+              data-testid="chat-header-split-down"
+              type="button"
+              onClick={() => splitSurface('h')}
+              className={HDR_BTN}
+            >
+              <LayoutPanelTop size={13} className="text-mf-text-3" />
+            </button>
+          </Hint>
         </>
       )}
       {/* Hide Chat — disabled when chat is the last lit surface (the dynamic floor). */}
-      <button
-        data-testid="chat-header-hide"
-        type="button"
-        title="Hide Chat"
-        disabled={chatIsFloor}
-        onClick={() => toggleSurface('chat')}
-        className={`${HDR_BTN} ${chatIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
-      >
-        <EyeOff size={13} className="text-mf-text-3" />
-      </button>
+      <Hint label="Hide Chat">
+        <button
+          data-testid="chat-header-hide"
+          type="button"
+          disabled={chatIsFloor}
+          onClick={() => toggleSurface('chat')}
+          className={`${HDR_BTN} ${chatIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
+        >
+          <EyeOff size={13} className="text-mf-text-3" />
+        </button>
+      </Hint>
     </div>
   );
 }

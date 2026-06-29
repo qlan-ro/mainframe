@@ -20,6 +20,7 @@ import { useTabsStore } from '@/store/tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
+import { Hint } from '@/components/ui/hint';
 
 /** Join an absolute base with a repo-relative path; falls back to the relative path when no base is known. */
 function toFullPath(base: string | undefined, relativePath: string): string {
@@ -260,15 +261,16 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
             {lastSegment(base ?? projectId)}
           </span>
         </FileTreeRowMenu>
-        <button
-          data-testid="file-tree-refresh"
-          type="button"
-          title="Refresh"
-          onClick={() => setRefreshKey((k) => k + 1)}
-          className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
-        >
-          <RotateCw size={11} className="text-mf-text-3" />
-        </button>
+        <Hint label="Refresh">
+          <button
+            data-testid="file-tree-refresh"
+            type="button"
+            onClick={() => setRefreshKey((k) => k + 1)}
+            className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
+          >
+            <RotateCw size={11} className="text-mf-text-3" />
+          </button>
+        </Hint>
       </div>
       <div className="py-[4px]">
         {sortEntries(roots).map((entry) => (

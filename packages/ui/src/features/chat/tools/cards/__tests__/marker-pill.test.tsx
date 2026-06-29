@@ -3,6 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { MarkerPill, MarkerWrap, MarkerBody, MarkerCapsLabel, MarkerPre } from '../marker-pill';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -109,13 +110,17 @@ describe('MarkerPill', () => {
     expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
   });
 
-  it('renders title attribute when provided', () => {
+  it('shows a tooltip with the provided title when the pill is hovered', async () => {
+    const user = userEvent.setup();
     render(
       <MarkerPill icon={<span />} title="my-title" testId="pill">
         text
       </MarkerPill>,
     );
-    expect(screen.getByTestId('pill')).toHaveAttribute('title', 'my-title');
+    // The pill button is the Hint trigger; hovering it reveals the tooltip.
+    await user.hover(screen.getByTestId('pill'));
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent('my-title');
   });
 });
 

@@ -1,6 +1,7 @@
 import type { SurfaceId } from '@/store/layout';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { ChatGlyph, EditorGlyph, PreviewGlyph } from './surface-icons';
+import { Hint } from '@/components/ui/hint';
 
 interface SurfaceDef {
   id: SurfaceId;
@@ -27,27 +28,27 @@ export function SurfaceRail() {
         const isFloor = isSurfaceFloor(layout, id);
 
         return (
-          <button
-            key={id}
-            data-testid={`surface-rail-${id}`}
-            data-tut={id === 'run' ? 'run' : undefined}
-            type="button"
-            title={label}
-            disabled={isFloor}
-            onClick={() => toggleSurface(id)}
-            className={[
-              'inline-flex h-[21px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] border-none p-0',
-              'transition-[background,box-shadow] duration-[120ms] ease',
-              on
-                ? 'bg-mf-tab-active shadow-[var(--mf-shadow-rail-active)]'
-                : 'cursor-pointer bg-transparent hover:bg-accent',
-              isFloor ? 'cursor-default opacity-60' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            <Icon size={12} className={on ? activeColor : 'text-mf-text-4'} />
-          </button>
+          <Hint key={id} label={label}>
+            <button
+              data-testid={`surface-rail-${id}`}
+              data-tut={id === 'run' ? 'run' : undefined}
+              type="button"
+              disabled={isFloor}
+              onClick={() => toggleSurface(id)}
+              className={[
+                'inline-flex h-[21px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] border-none p-0',
+                'transition-[background,box-shadow] duration-[120ms] ease',
+                on
+                  ? 'bg-mf-tab-active shadow-[var(--mf-shadow-rail-active)]'
+                  : 'cursor-pointer bg-transparent hover:bg-accent',
+                isFloor ? 'cursor-default opacity-60' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <Icon size={12} className={on ? activeColor : 'text-mf-text-4'} />
+            </button>
+          </Hint>
         );
       })}
     </div>
