@@ -1,6 +1,13 @@
 // packages/core/src/plugins/builtin/codex/adapter.ts
 import { execFile, spawn } from 'node:child_process';
-import type { Adapter, AdapterModel, AdapterSession, ExternalSession, SessionOptions } from '@qlan-ro/mainframe-types';
+import type {
+  Adapter,
+  AdapterModel,
+  AdapterSession,
+  ExternalSession,
+  ExternalSessionPage,
+  SessionOptions,
+} from '@qlan-ro/mainframe-types';
 import { CodexSession } from './session.js';
 import { CodexPlanModeHandler } from './plan-mode-handler.js';
 import { JsonRpcClient } from './jsonrpc.js';
@@ -104,7 +111,11 @@ export class CodexAdapter implements Adapter {
   // TODO: implement listAgents, createAgent, updateAgent, deleteAgent
   // TODO: implement listCommands
 
-  async listExternalSessions(projectPath: string, _excludeSessionIds: string[]): Promise<ExternalSession[]> {
+  async listExternalSessions(
+    projectPath: string,
+    excludeSessionIds: string[],
+    opts?: { offset?: number; limit?: number },
+  ): Promise<ExternalSessionPage> {
     let client: JsonRpcClient | null = null;
     try {
       client = await this.spawnTempAppServer();
@@ -132,10 +143,18 @@ export class CodexAdapter implements Adapter {
       } catch (err) {
         log.warn({ err, projectPath }, 'codex: failed to list external sessions for path');
       }
-      return aggregated;
+      const excludeSet = new Set(excludeSessionIds);
+      const filtered = aggregated.filter((s) => !excludeSet.has(s.sessionId));
+      const offset = Math.max(0, opts?.offset ?? 0);
+      const limit = opts?.limit ?? 50;
+      const total = filtered.length;
+      if (limit <= 0) return { sessions: [], total, nextOffset: null };
+      const sessions = filtered.slice(offset, offset + limit);
+      const nextOffset = offset + limit < total ? offset + limit : null;
+      return { sessions, total, nextOffset };
     } catch (err) {
       log.warn({ err }, 'codex: failed to list external sessions');
-      return [];
+      return { sessions: [], total: 0, nextOffset: null };
     } finally {
       client?.close();
     }

@@ -4,7 +4,6 @@ import type {
   AdapterModel,
   AdapterSession,
   CustomCommand,
-  ExternalSession,
   ExternalSessionPage,
   SessionOptions,
   Skill,
