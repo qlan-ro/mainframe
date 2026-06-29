@@ -284,6 +284,7 @@ export interface ExternalSession {
   projectPath: string; // Project root the session was attributed to (Mainframe-side)
   cwd?: string; // Working directory the session actually ran in (worktree, subdir, or root)
   firstPrompt?: string; // First user message (truncated)
+  title?: string; // Resolved display title (customTitle > aiTitle > summary > firstPrompt > synthetic)
   summary?: string; // AI-generated summary if available
   messageCount?: number;
   createdAt: string; // ISO-8601
