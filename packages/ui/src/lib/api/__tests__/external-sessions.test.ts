@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Chat, ExternalSession } from '@qlan-ro/mainframe-types';
+import type { Chat, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import { getExternalSessions, importExternalSession } from '../external-sessions';
 
 // ---------------------------------------------------------------------------
@@ -9,15 +9,10 @@ import { getExternalSessions, importExternalSession } from '../external-sessions
 const port = 31415;
 const projectId = 'proj-abc';
 
-const EXTERNAL_SESSION_FIXTURE: ExternalSession = {
-  sessionId: 'sess-001',
-  adapterId: 'claude',
-  projectPath: '/projects/mainframe',
-  cwd: '/projects/mainframe',
-  firstPrompt: 'Fix the bug in the parser',
-  createdAt: '2026-01-01T00:00:00.000Z',
-  modifiedAt: '2026-06-01T10:00:00.000Z',
-  gitBranch: 'fix/parser-bug',
+const PAGE_FIXTURE: ExternalSessionPage = {
+  sessions: [],
+  total: 0,
+  nextOffset: null,
 };
 
 const CHAT_FIXTURE: Chat = {
@@ -76,41 +71,39 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('getExternalSessions', () => {
-  it('calls GET /api/projects/:projectId/external-sessions with the exact URL', async () => {
-    mockFetchOk([EXTERNAL_SESSION_FIXTURE]);
+  it('requests a page with offset/limit and returns the page', async () => {
+    mockFetchOk(PAGE_FIXTURE);
+
+    const result = await getExternalSessions(port, projectId, { offset: 50, limit: 50 });
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:31415/api/projects/proj-abc/external-sessions?offset=50&limit=50',
+      { method: 'GET' },
+    );
+    expect(result).toBe(PAGE_FIXTURE);
+  });
+
+  it('defaults offset=0 and limit=50 when opts are omitted', async () => {
+    mockFetchOk(PAGE_FIXTURE);
 
     await getExternalSessions(port, projectId);
 
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects/proj-abc/external-sessions', {
-      method: 'GET',
-    });
-  });
-
-  it('returns the unwrapped ExternalSession[] from the ApiResponse envelope', async () => {
-    mockFetchOk([EXTERNAL_SESSION_FIXTURE]);
-
-    const result = await getExternalSessions(port, projectId);
-
-    expect(result).toEqual([EXTERNAL_SESSION_FIXTURE]);
-  });
-
-  it('returns an empty array when the daemon reports no sessions', async () => {
-    mockFetchOk([]);
-
-    const result = await getExternalSessions(port, projectId);
-
-    expect(result).toEqual([]);
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:31415/api/projects/proj-abc/external-sessions?offset=0&limit=50',
+      { method: 'GET' },
+    );
   });
 
   it('uses the correct projectId in the URL (different project)', async () => {
-    mockFetchOk([]);
+    mockFetchOk(PAGE_FIXTURE);
 
-    await getExternalSessions(port, 'proj-xyz');
+    await getExternalSessions(port, 'proj-xyz', { offset: 0, limit: 10 });
 
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects/proj-xyz/external-sessions', {
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:31415/api/projects/proj-xyz/external-sessions?offset=0&limit=10',
+      { method: 'GET' },
+    );
   });
 
   it('throws the error message when the HTTP response is not ok (403)', async () => {

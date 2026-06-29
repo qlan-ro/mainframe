@@ -5,7 +5,7 @@
  * The daemon returns the standard {success, data} envelope; `request<T>`
  * unwraps it, so callers receive the typed payload directly.
  */
-import type { Chat, ExternalSession } from '@qlan-ro/mainframe-types';
+import type { Chat, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import { apiBase, request } from './http';
 
 /** Body sent to POST /api/projects/:projectId/external-sessions/import. */
@@ -17,9 +17,19 @@ export interface ImportExternalSessionBody {
   modifiedAt?: string;
 }
 
-/** List external sessions the daemon found for a project (not yet imported). */
-export const getExternalSessions = (port: number, projectId: string): Promise<ExternalSession[]> =>
-  request<ExternalSession[]>('GET', `${apiBase(port)}/api/projects/${projectId}/external-sessions`);
+/** List a page of importable external sessions (not yet imported). */
+export const getExternalSessions = (
+  port: number,
+  projectId: string,
+  opts?: { offset?: number; limit?: number },
+): Promise<ExternalSessionPage> => {
+  const offset = opts?.offset ?? 0;
+  const limit = opts?.limit ?? 50;
+  return request<ExternalSessionPage>(
+    'GET',
+    `${apiBase(port)}/api/projects/${projectId}/external-sessions?offset=${offset}&limit=${limit}`,
+  );
+};
 
 /** Import a single external session into the daemon's chat store. */
 export const importExternalSession = (
