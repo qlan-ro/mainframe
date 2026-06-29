@@ -33,7 +33,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
         className="bg-card border-[0.5px] border-border rounded-[13px]"
         style={{
           padding: '14px 15px 13px',
-          boxShadow: '0 18px 48px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.05)',
+          boxShadow: 'var(--mf-shadow-pop)',
         }}
       >
         {/* Header row */}

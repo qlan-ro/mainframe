@@ -94,7 +94,7 @@ export function WsToastCard({ id, type, title, description, chatId, onOpenSessio
         'relative w-[332px] flex items-start gap-[10px]',
         'pt-[11px] px-[12px] pb-[12px]',
         'rounded-[11px] bg-background border-[0.5px] border-mf-border-hover overflow-hidden',
-        'shadow-[0_10px_30px_rgba(0,0,0,0.14),0_2px_6px_rgba(0,0,0,0.06),0_0_0_0.5px_rgba(0,0,0,0.03)]',
+        'shadow-[var(--mf-shadow-pop)]',
       )}
     >
       {/* status chip */}

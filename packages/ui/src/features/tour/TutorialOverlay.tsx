@@ -140,7 +140,7 @@ function WsTourCore() {
             left: rect.left - PAD,
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
-            boxShadow: '0 0 0 9999px rgba(28,28,30,0.50)',
+            boxShadow: '0 0 0 9999px var(--mf-scrim)',
             outline: '2px solid var(--primary)',
             outlineOffset: 2,
             transition:
@@ -172,8 +172,8 @@ function WsTourCore() {
         onClick={skip}
         className="absolute bottom-[16px] right-[18px] z-[3] pointer-events-auto rounded-[8px] border-[0.5px] border-border py-[6px] px-[12px] text-muted-foreground text-label font-medium"
         style={{
-          background: 'rgba(255,255,255,0.9)',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.10)',
+          background: 'var(--popover)',
+          boxShadow: 'var(--mf-shadow-pop)',
         }}
       >
         Skip tour

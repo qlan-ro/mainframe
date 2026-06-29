@@ -133,7 +133,7 @@ export function MainToolbar({
             <Search size={14} />
             <span
               data-testid="main-toolbar-search-hint"
-              className="inline-flex h-[17px] items-center rounded-[4px] bg-background px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[0_1px_0_rgba(0,0,0,0.03)]"
+              className="inline-flex h-[17px] items-center rounded-[4px] bg-background px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[var(--mf-shadow-rail-active)]"
             >
               ⌘O
             </span>

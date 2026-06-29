@@ -75,7 +75,7 @@ export function PreviewBodyState({
         ) : (
           <div className="flex items-center justify-center h-full">
             <div
-              className={`relative w-[230px] h-[420px] overflow-hidden rounded-[22px] [border:0.5px_solid_var(--border)] [box-shadow:0_12px_32px_rgba(0,0,0,0.22)] ${inspectFrame}`}
+              className={`relative w-[230px] h-[420px] overflow-hidden rounded-[22px] [border:0.5px_solid_var(--border)] [box-shadow:var(--mf-shadow-pop)] ${inspectFrame}`}
             >
               <div ref={anchorRef} className="w-full h-full" />
               {inspectBadge}

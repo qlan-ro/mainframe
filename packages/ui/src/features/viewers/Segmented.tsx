@@ -25,7 +25,7 @@ interface SegmentedProps {
   options: SegmentedOption[];
 }
 
-const SEG_ACTIVE = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border),_0_1px_1.5px_rgba(0,0,0,0.06)]';
+const SEG_ACTIVE = 'bg-background text-foreground shadow-[var(--mf-shadow-segment)]';
 const SEG_IDLE = 'text-mf-text-3 hover:text-foreground';
 
 export function Segmented({ value, onChange, options }: SegmentedProps) {

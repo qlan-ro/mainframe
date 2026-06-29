@@ -105,7 +105,7 @@ export function ReviewCommitRail({
             onClick={onCommit}
             className={`mb-[8px] inline-flex h-[36px] items-center justify-center gap-1.5 rounded-md text-body font-bold tracking-tight transition-opacity ${
               canCommit
-                ? 'bg-primary text-primary-foreground shadow-[0_1px_3px_rgba(10,132,255,0.4)] hover:opacity-90'
+                ? 'bg-primary text-primary-foreground shadow-[0_1px_3px_color-mix(in_oklab,var(--primary)_40%,transparent)] hover:opacity-90'
                 : 'cursor-not-allowed bg-mf-chip text-mf-text-3'
             }`}
           >

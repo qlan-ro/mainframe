@@ -186,7 +186,7 @@ export function SpotlightPalette() {
         data-testid="search-palette"
         hideClose
         aria-describedby={undefined}
-        className="top-[11vh] w-[580px] max-w-[90vw] translate-y-0 gap-0 overflow-hidden rounded-[13px] border-0 p-0 shadow-[0_32px_80px_rgba(0,0,0,0.34),0_0_0_0.5px_rgba(0,0,0,0.16)] max-h-[62vh]"
+        className="top-[11vh] w-[580px] max-w-[90vw] translate-y-0 gap-0 overflow-hidden rounded-[13px] border-0 p-0 shadow-[var(--mf-shadow-modal)] max-h-[62vh]"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <PaletteBody onClose={() => setPaletteOpen(false)} />

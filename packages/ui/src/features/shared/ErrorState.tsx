@@ -40,7 +40,7 @@ export function ErrorState({ error, onRetry, embedded = false }: ErrorStateProps
           'w-[420px] max-w-full bg-background rounded-[13px]',
           'border-[0.5px] border-mf-border-hover text-center',
           'pt-[26px] px-[24px] pb-[22px]',
-          'shadow-[0_24px_64px_rgba(0,0,0,0.14),0_0_0_0.5px_rgba(0,0,0,0.05)]',
+          'shadow-[var(--mf-shadow-modal)]',
         ].join(' ')}
       >
         {/* Icon tile */}

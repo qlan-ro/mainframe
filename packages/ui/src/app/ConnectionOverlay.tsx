@@ -13,7 +13,7 @@ export function ConnectionOverlay({ open, embedded = false }: ConnectionOverlayP
     <div
       className="absolute inset-0 z-[11000] flex items-center justify-center"
       style={{
-        background: 'rgba(233,231,226,0.62)',
+        background: 'var(--mf-glass)',
         backdropFilter: 'blur(10px) saturate(120%)',
         WebkitBackdropFilter: 'blur(10px) saturate(120%)',
       }}
@@ -33,7 +33,7 @@ function Card(): React.ReactElement {
       data-testid="connection-overlay"
       className="flex flex-col items-center gap-[16px] rounded-[13px] bg-background border-[0.5px] border-mf-border-hover min-w-[320px] pt-[30px] px-[38px] pb-[26px]"
       style={{
-        boxShadow: '0 30px 80px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(0,0,0,0.06)',
+        boxShadow: 'var(--mf-shadow-modal)',
       }}
     >
       <Spinner />
@@ -46,7 +46,7 @@ function Card(): React.ReactElement {
 function Spinner(): React.ReactElement {
   return (
     <div className="relative w-[46px] h-[46px]">
-      <div className="absolute inset-0 rounded-full" style={{ border: '2px solid rgba(0,0,0,0.06)' }} />
+      <div className="absolute inset-0 rounded-full" style={{ border: '2px solid var(--border)' }} />
       <div
         className="absolute inset-0 rounded-full border-2 border-transparent animate-[tw-spin_0.9s_linear_infinite]"
         style={{
@@ -72,7 +72,7 @@ function TextBlock(): React.ReactElement {
 
 function ProgressRail(): React.ReactElement {
   return (
-    <div className="w-[200px] h-[3px] rounded-[2px] overflow-hidden" style={{ background: 'rgba(0,0,0,0.06)' }}>
+    <div className="w-[200px] h-[3px] rounded-[2px] overflow-hidden" style={{ background: 'var(--mf-chip)' }}>
       <div className="w-[40%] h-full rounded-[2px] bg-primary animate-[ws-indeterminate_1.5s_ease-in-out_infinite]" />
     </div>
   );
