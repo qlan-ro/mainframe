@@ -51,9 +51,10 @@ function DialogContent({
         {!hideClose && (
           <DialogPrimitive.Close
             className={cn(
-              'absolute right-4 top-4 rounded-sm opacity-70',
-              'ring-offset-background transition-opacity hover:opacity-100',
-              'focus:outline-none focus:ring-0',
+              'absolute right-3 top-3 flex size-7 items-center justify-center rounded-md',
+              'text-muted-foreground transition-colors',
+              'hover:bg-accent hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:pointer-events-none',
             )}
           >

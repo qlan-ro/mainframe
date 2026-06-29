@@ -12,7 +12,7 @@ import { Clock, Loader2 } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { unarchiveChat } from '@/lib/api/chats';
 import { archivedThreadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { filterArchivedSessions } from '../view-model/archived-sessions';
@@ -39,42 +39,36 @@ function ArchivedSessionRow({ id, title, projectName, updatedAt, restoring, onRe
       data-testid="archived-session-item"
       className="flex items-start gap-2 rounded-md px-2 py-2 transition-colors hover:bg-accent"
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-body font-medium text-foreground">{title}</div>
-            <div className="mt-0.5 flex items-center gap-1 text-caption text-mf-text-3">
-              {projectName !== null && (
-                <>
-                  <span className="max-w-[140px] truncate">{projectName}</span>
-                  <span>·</span>
-                </>
-              )}
-              <Clock className="size-2.5 shrink-0" />
-              <span>{when}</span>
-            </div>
+      <div className="min-w-0 flex-1">
+        <TruncatedWithTooltip text={title} side="left" className="block text-body font-medium text-foreground" />
+        {projectName !== null && (
+          <div className="mt-0.5 flex items-center gap-1 text-caption text-mf-text-3">
+            <TruncatedWithTooltip text={projectName} side="left" className="max-w-[140px]" />
           </div>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="max-w-[280px] whitespace-pre-wrap break-words">
-          {title}
-        </TooltipContent>
-      </Tooltip>
-      <button
-        type="button"
-        data-testid="restore-session-btn"
-        disabled={isAny}
-        onClick={() => onRestore(id)}
-        className="inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-caption text-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:opacity-40"
-      >
-        {isThis ? (
-          <>
-            <Loader2 className="size-2.5 animate-spin" />
-            Restoring…
-          </>
-        ) : (
-          'Restore'
         )}
-      </button>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <button
+          type="button"
+          data-testid="restore-session-btn"
+          disabled={isAny}
+          onClick={() => onRestore(id)}
+          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-caption text-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:opacity-40"
+        >
+          {isThis ? (
+            <>
+              <Loader2 className="size-2.5 animate-spin" />
+              Restoring…
+            </>
+          ) : (
+            'Restore'
+          )}
+        </button>
+        <div className="flex items-center gap-1 whitespace-nowrap text-caption text-mf-text-3">
+          <Clock className="size-2.5 shrink-0" />
+          <span>{when}</span>
+        </div>
+      </div>
     </div>
   );
 }
