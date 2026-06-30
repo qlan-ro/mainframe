@@ -21,7 +21,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { TooltipProvider } from '../tooltip';
-import { Hint } from '../hint';
+import { Hint, DismissibleHint } from '../hint';
 
 function renderWithProvider(ui: React.ReactElement) {
   return render(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>);
@@ -180,6 +180,57 @@ describe('Hint', () => {
       // The role="tooltip" element is the accessible label holder; it contains the text.
       const tooltip = screen.getByRole('tooltip');
       expect(tooltip).toHaveTextContent('Rich label');
+    });
+  });
+
+  describe('DismissibleHint', () => {
+    it('shows the label and a dismiss affordance in the tooltip when not dismissed', async () => {
+      const user = userEvent.setup();
+      render(
+        <DismissibleHint
+          label="Right-click for options"
+          dismissed={false}
+          onDismiss={() => undefined}
+          dismissTestId="dismiss"
+        >
+          <button data-testid="pill">Pill</button>
+        </DismissibleHint>,
+      );
+      await user.hover(screen.getByTestId('pill'));
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Right-click for options');
+      // Radix mirrors tooltip content into an accessible copy, so the button appears twice.
+      expect(screen.getAllByTestId('dismiss')[0]).toHaveTextContent("Don't show anymore");
+    });
+
+    it('calls onDismiss when the dismiss affordance is clicked', async () => {
+      const onDismiss = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <DismissibleHint
+          label="Right-click for options"
+          dismissed={false}
+          onDismiss={onDismiss}
+          dismissTestId="dismiss"
+        >
+          <button data-testid="pill">Pill</button>
+        </DismissibleHint>,
+      );
+      await user.hover(screen.getByTestId('pill'));
+      await user.click(screen.getAllByTestId('dismiss')[0]!);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders the child bare with no tooltip once dismissed', async () => {
+      const user = userEvent.setup();
+      render(
+        <DismissibleHint label="Right-click for options" dismissed onDismiss={() => undefined} dismissTestId="dismiss">
+          <button data-testid="pill">Pill</button>
+        </DismissibleHint>,
+      );
+      expect(screen.getByTestId('pill')).toBeInTheDocument();
+      await user.hover(screen.getByTestId('pill'));
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('dismiss')).not.toBeInTheDocument();
     });
   });
 

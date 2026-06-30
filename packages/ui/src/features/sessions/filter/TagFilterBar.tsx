@@ -1,10 +1,11 @@
 /**
- * Wrapping, collapsible tag + synthetic filter bar pinned at the BOTTOM of the
- * sidebar (artboard "Tag filter row … sits above bottom panel"). Wraps to
- * multiple lines and collapses to the first 4 tags with a compact "+N more"/
- * "Less" text control (synthetic has-pr/has-worktree chips reveal when expanded) — no
- * horizontal scroll. Reads the in-use tag set from the loaded items and
- * dispatches toggles into the session-filters store.
+ * Collapsible tag + synthetic filter bar pinned at the BOTTOM of the sidebar
+ * (artboard "Tag filter row … sits above bottom panel"). The row fills with as
+ * many tag pills as fit on a single line (measured against the available width,
+ * not a hardcoded count), then a compact "+N more"/"Less" text control reveals
+ * the overflow tags plus the synthetic has-pr/has-worktree chips. Expanding
+ * wraps the bar to multiple lines — no horizontal scroll. Reads the in-use tag
+ * set from the loaded items and dispatches toggles into the session-filters store.
  *
  * Color swatches use an inline style from tag-colors.ts — never a
  * `bg-mf-tag-*` utility, which has no token in app-tauri's globals.css and
@@ -17,8 +18,11 @@ import { cn } from '../../../lib/utils';
 import { useSessionFilters } from '../../../store/session-filters';
 import { tagsInUse, hasSynthetic } from './tags-in-use';
 import { TAG_DOT_STYLE } from '../tags/tag-colors';
+import { useRowOverflow } from '../use-row-overflow';
 import type { TagRegistry } from '../tags/use-tag-registry';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
+
+const ROW_GAP_PX = 6;
 
 interface Props {
   items: SessionItem[];
@@ -95,17 +99,33 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
   const inUse = tagsInUse(items, filterProjectId);
   const visibleSynthetic = SYNTHETIC_TAGS.filter((kind) => hasSynthetic(items, kind));
 
+  const signature = `${filterProjectId ?? ''}|${inUse.join(',')}|${visibleSynthetic.join(',')}`;
+  const { containerRef, visibleCount, measuring } = useRowOverflow({
+    itemCount: inUse.length,
+    leadingCount: 1, // the "Tags" label
+    trailingCount: 0,
+    gapPx: ROW_GAP_PX,
+    signature,
+  });
+
   if (inUse.length === 0 && visibleSynthetic.length === 0) return null;
 
-  const COLLAPSE_AT = 4;
-  const shownTags = expanded ? inUse : inUse.slice(0, COLLAPSE_AT);
-  const hiddenCount = Math.max(0, inUse.length - COLLAPSE_AT) + visibleSynthetic.length;
-  const collapsible = hiddenCount > 0;
+  const showAll = measuring || expanded;
+  const shownTags = showAll ? inUse : inUse.slice(0, visibleCount);
+  const overflow = visibleCount < inUse.length;
+  const hiddenCount = inUse.length - visibleCount + visibleSynthetic.length;
+  const collapsible = measuring || overflow || visibleSynthetic.length > 0;
+  const moreLabel = measuring
+    ? `+${inUse.length + visibleSynthetic.length} more`
+    : expanded
+      ? 'Less'
+      : `+${hiddenCount} more`;
 
   return (
     <div
+      ref={containerRef}
       data-testid="sessions-tag-filter-bar"
-      className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t-[0.5px] border-border/75 px-[12px] pb-[7px] pt-1.5"
+      className={`flex w-full min-w-0 flex-shrink-0 items-center gap-1.5 px-[12px] pb-[7px] pt-1.5 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
     >
       <span className="shrink-0 select-none text-micro font-semibold uppercase tracking-wide text-mf-text-3">Tags</span>
       {shownTags.map((name) => (
@@ -134,7 +154,7 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
           onClick={() => setExpanded((v) => !v)}
           className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
         >
-          {expanded ? 'Less' : `+${hiddenCount} more`}
+          {moreLabel}
         </button>
       )}
     </div>

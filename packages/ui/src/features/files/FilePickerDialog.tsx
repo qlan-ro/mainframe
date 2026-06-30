@@ -74,6 +74,7 @@ function PickerBody({
       <div className="flex items-center border-b border-border px-3">
         <input
           ref={inputRef}
+          data-noring=""
           data-testid="file-picker-input"
           type="text"
           placeholder="Type to search files…"

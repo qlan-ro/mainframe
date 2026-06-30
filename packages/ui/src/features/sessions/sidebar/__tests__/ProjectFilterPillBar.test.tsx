@@ -11,11 +11,65 @@
  *  - Clicking the "All" pill calls onSelect(null).
  *  - Clicking the currently-active project pill calls onSelect(null) (deselect → All).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { ProjectFilterPillBar } from '../ProjectFilterPillBar';
+
+// ---------------------------------------------------------------------------
+// Row-overflow measurement stubs.
+//
+// ProjectFilterPillBar fills the row by available width (useRowOverflow) instead
+// of a hardcoded cap. jsdom reports 0 for layout geometry, so without these
+// stubs the bar always shows every pill. We give each child a fixed 100px width
+// (via getBoundingClientRect — matching the hook's fractional measurement) and
+// pin the container's content width (clientWidth) so collapse is deterministic.
+// ---------------------------------------------------------------------------
+
+const ITEM_W = 100;
+const layoutPatches: Array<() => void> = [];
+
+function patchLayout(name: string, descriptor: PropertyDescriptor): void {
+  let proto: object | null = HTMLElement.prototype;
+  while (proto && !Object.getOwnPropertyDescriptor(proto, name)) proto = Object.getPrototypeOf(proto) as object | null;
+  const target = proto ?? HTMLElement.prototype;
+  const original = Object.getOwnPropertyDescriptor(target, name);
+  Object.defineProperty(target, name, { configurable: true, ...descriptor });
+  layoutPatches.push(() => {
+    if (original) Object.defineProperty(target, name, original);
+  });
+}
+
+function stubRowLayout(containerWidth: number): void {
+  patchLayout('clientWidth', { get: () => containerWidth });
+  patchLayout('getBoundingClientRect', {
+    value: () => ({
+      width: ITEM_W,
+      height: 0,
+      top: 0,
+      left: 0,
+      right: ITEM_W,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+  });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    },
+  );
+}
+
+function restoreRowLayout(): void {
+  while (layoutPatches.length > 0) layoutPatches.pop()?.();
+  vi.unstubAllGlobals();
+}
 
 const PROJECTS: Project[] = [
   {
@@ -181,8 +235,9 @@ describe('ProjectFilterPillBar — clicking the active project pill deselects (c
 });
 
 // ---------------------------------------------------------------------------
-// 8. Collapse: with >2 projects, only the first 2 show + a "+N more" toggle that
-//    expands/collapses the rest (artboard COLLAPSE_AT = 2).
+// 8. Collapse: the row fills to the available width, then hides the overflow
+//    behind a "+N more" toggle. At ITEM_W=100/gap=4, a 450px row fits "All" + 2
+//    project pills before the toggle, so 4 projects collapse to 2 + "+2 more".
 // ---------------------------------------------------------------------------
 
 const FOUR_PROJECTS: Project[] = [
@@ -204,6 +259,9 @@ const FOUR_PROJECTS: Project[] = [
 ];
 
 describe('ProjectFilterPillBar — collapsible project pills', () => {
+  beforeEach(() => stubRowLayout(450));
+  afterEach(() => restoreRowLayout());
+
   it('shows only the first 2 project pills collapsed, hiding the rest behind "+N more"', () => {
     render(
       <ProjectFilterPillBar
@@ -292,9 +350,25 @@ describe('ProjectFilterPillBar — collapsible project pills', () => {
     );
     expect(screen.queryByTestId('sessions-projects-more')).toBeNull();
   });
+
+  it('renders the "+N more" toggle AFTER the Add project pill in DOM order', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={() => undefined}
+      />,
+    );
+    const addProject = screen.getByTestId('sessions-add-project');
+    const more = screen.getByTestId('sessions-projects-more');
+    // Node.DOCUMENT_POSITION_FOLLOWING (4) ⇒ `more` comes after `addProject`.
+    expect(addProject.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
-describe('ProjectFilterPillBar — project action menu affordance', () => {
+describe('ProjectFilterPillBar — project action affordance', () => {
   it('renders project pills larger than the plain All filter pill', () => {
     render(
       <ProjectFilterPillBar
@@ -307,11 +381,10 @@ describe('ProjectFilterPillBar — project action menu affordance', () => {
     );
 
     expect(screen.getByTestId('sessions-filter-pill-p1-wrap').className).toContain('h-[24px]');
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('w-6');
     expect(screen.getByTestId('sessions-filter-pill-all').className).toContain('h-[22px]');
   });
 
-  it('keeps the project pill menu affordance hidden until hover, focus, or open', () => {
+  it('does not render a chevron menu trigger or a hover padding-shift on project pills', () => {
     render(
       <ProjectFilterPillBar
         projects={PROJECTS}
@@ -322,19 +395,13 @@ describe('ProjectFilterPillBar — project action menu affordance', () => {
       />,
     );
 
-    expect(screen.getByTestId('sessions-filter-pill-p1-wrap').className).toContain('group');
-    expect(screen.getByTestId('sessions-filter-pill-p1-wrap').className).toContain('relative');
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('opacity-0');
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('absolute');
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('right-0');
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('group-hover:opacity-100');
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('group-focus-within:opacity-100');
-    expect(screen.getByTestId('sessions-filter-pill-p1').className).toContain('pr-2');
-    expect(screen.getByTestId('sessions-filter-pill-p1').className).toContain('group-hover:pr-8');
-    expect(screen.getByTestId('sessions-filter-pill-p1').className).toContain('group-focus-within:pr-8');
+    // The chevron affordance (which shifted the label on hover) is gone.
+    expect(screen.queryByTestId('sessions-filter-pill-menu-p1')).toBeNull();
+    expect(screen.getByTestId('sessions-filter-pill-p1').className).not.toContain('group-hover:pr-8');
   });
 
-  it('renders a dedicated menu trigger on project pills but not on the All pill', () => {
+  it('shows a "Right-click for options" hint when a project pill is hovered', async () => {
+    const user = userEvent.setup();
     render(
       <ProjectFilterPillBar
         projects={PROJECTS}
@@ -345,9 +412,8 @@ describe('ProjectFilterPillBar — project action menu affordance', () => {
       />,
     );
 
-    expect(screen.getByTestId('sessions-filter-pill-menu-p1')).toBeTruthy();
-    expect(screen.getByTestId('sessions-filter-pill-menu-p2')).toBeTruthy();
-    expect(screen.queryByTestId('sessions-filter-pill-menu-all')).toBeNull();
+    await user.hover(screen.getByTestId('sessions-filter-pill-p1'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Right-click for options');
   });
 
   it('opens Remove Project from the project pill right-click menu', async () => {
@@ -371,29 +437,6 @@ describe('ProjectFilterPillBar — project action menu affordance', () => {
 
     expect(handleRemove).toHaveBeenCalledTimes(1);
     expect(handleRemove).toHaveBeenCalledWith(PROJECTS[0]);
-  });
-
-  it('opens Remove Project from the visible project pill menu trigger', async () => {
-    const handleRemove = vi.fn();
-    render(
-      <ProjectFilterPillBar
-        projects={PROJECTS}
-        filterProjectId={null}
-        attentionCounts={{}}
-        onSelect={() => undefined}
-        onRemoveProject={handleRemove}
-      />,
-    );
-
-    await userEvent.click(screen.getByTestId('sessions-filter-pill-menu-p2'));
-    expect(screen.getByTestId('sessions-project-rename-p2').textContent).toContain('Rename Project');
-    expect(screen.getByTestId('sessions-project-rename-p2')).toHaveAttribute('data-disabled');
-    expect(screen.getByTestId('sessions-project-rename-p2').className).toContain('text-caption');
-    expect(screen.getByTestId('sessions-project-remove-p2').className).toContain('text-caption');
-    await userEvent.click(screen.getByTestId('sessions-project-remove-p2'));
-
-    expect(handleRemove).toHaveBeenCalledTimes(1);
-    expect(handleRemove).toHaveBeenCalledWith(PROJECTS[1]);
   });
 });
 

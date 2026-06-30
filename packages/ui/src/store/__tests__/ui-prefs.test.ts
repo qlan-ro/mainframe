@@ -19,6 +19,7 @@ beforeEach(() => {
     sidebarWidth: SIDEBAR_EXPANDED_WIDTH,
     bottomPanelTab: 'context',
     bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
+    rightClickHintDismissed: false,
   });
 });
 
@@ -30,6 +31,7 @@ describe('useUiPrefs defaults', () => {
     expect(s.sidebarWidth).toBe(SIDEBAR_EXPANDED_WIDTH);
     expect(s.bottomPanelTab).toBe('context');
     expect(s.bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
+    expect(s.rightClickHintDismissed).toBe(false);
   });
 });
 
@@ -63,6 +65,12 @@ describe('useUiPrefs actions', () => {
     useUiPrefs.getState().setBottomPanelHeight(99999);
     expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_MAX_FALLBACK);
   });
+
+  it('dismissRightClickHint permanently suppresses the hint', () => {
+    expect(useUiPrefs.getState().rightClickHintDismissed).toBe(false);
+    useUiPrefs.getState().dismissRightClickHint();
+    expect(useUiPrefs.getState().rightClickHintDismissed).toBe(true);
+  });
 });
 
 describe('clampBottomPanelHeight', () => {
@@ -82,7 +90,14 @@ describe('useUiPrefs persistence', () => {
     // zustand persist wraps as { state, version }.
     expect(parsed.state.bottomPanelTab).toBe('agents');
     expect(Object.keys(parsed.state).sort()).toEqual(
-      ['bottomPanelHeight', 'bottomPanelTab', 'inspectorVisible', 'sidebarVisible', 'sidebarWidth'].sort(),
+      [
+        'bottomPanelHeight',
+        'bottomPanelTab',
+        'inspectorVisible',
+        'rightClickHintDismissed',
+        'sidebarVisible',
+        'sidebarWidth',
+      ].sort(),
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();

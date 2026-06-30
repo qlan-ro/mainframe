@@ -27,11 +27,14 @@ interface UiPrefsState {
   sidebarWidth: number;
   bottomPanelTab: BottomPanelTab;
   bottomPanelHeight: number;
+  /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
+  rightClickHintDismissed: boolean;
   toggleSidebar: () => void;
   toggleInspector: () => void;
   setSidebarWidth: (width: number) => void;
   setBottomPanelTab: (tab: BottomPanelTab) => void;
   setBottomPanelHeight: (height: number) => void;
+  dismissRightClickHint: () => void;
 }
 
 export const useUiPrefs = create<UiPrefsState>()(
@@ -42,12 +45,14 @@ export const useUiPrefs = create<UiPrefsState>()(
       sidebarWidth: SIDEBAR_EXPANDED_WIDTH,
       bottomPanelTab: 'context',
       bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
+      rightClickHintDismissed: false,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       setBottomPanelTab: (bottomPanelTab) => set({ bottomPanelTab }),
       setBottomPanelHeight: (height) =>
         set({ bottomPanelHeight: clampBottomPanelHeight(height, BOTTOM_PANEL_MAX_FALLBACK) }),
+      dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
     }),
     {
       name: 'mf:ui-prefs',
@@ -58,6 +63,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         sidebarWidth: s.sidebarWidth,
         bottomPanelTab: s.bottomPanelTab,
         bottomPanelHeight: s.bottomPanelHeight,
+        rightClickHintDismissed: s.rightClickHintDismissed,
       }),
     },
   ),

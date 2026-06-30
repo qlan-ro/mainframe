@@ -20,7 +20,7 @@
  * 14. After expanding 1 tag + both synthetics → both synthetic chips present, button reads "Less".
  * 15. 2 tags, no synthetics → no toggle button (hiddenCount=0), both pills shown.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { TagRegistry } from '../../tags/use-tag-registry';
@@ -87,6 +87,60 @@ const fakeRegistry: TagRegistry = {
 // ---------------------------------------------------------------------------
 
 import { TagFilterBar } from '../TagFilterBar';
+
+// ---------------------------------------------------------------------------
+// Row-overflow measurement stubs.
+//
+// TagFilterBar fills the row by available width (useRowOverflow) instead of a
+// hardcoded cap. jsdom reports 0 for offsetWidth/clientWidth, so without these
+// stubs the bar shows every tag. We give each child a fixed 100px width and pin
+// the container's content width so width-driven collapse is deterministic.
+// (Synthetic-only collapse needs no stub: it triggers regardless of width.)
+// ---------------------------------------------------------------------------
+
+const ITEM_W = 100;
+const layoutPatches: Array<() => void> = [];
+
+function patchLayout(name: string, descriptor: PropertyDescriptor): void {
+  let proto: object | null = HTMLElement.prototype;
+  while (proto && !Object.getOwnPropertyDescriptor(proto, name)) proto = Object.getPrototypeOf(proto) as object | null;
+  const target = proto ?? HTMLElement.prototype;
+  const original = Object.getOwnPropertyDescriptor(target, name);
+  Object.defineProperty(target, name, { configurable: true, ...descriptor });
+  layoutPatches.push(() => {
+    if (original) Object.defineProperty(target, name, original);
+  });
+}
+
+function stubRowLayout(containerWidth: number): void {
+  patchLayout('clientWidth', { get: () => containerWidth });
+  patchLayout('getBoundingClientRect', {
+    value: () => ({
+      width: ITEM_W,
+      height: 0,
+      top: 0,
+      left: 0,
+      right: ITEM_W,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+  });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    },
+  );
+}
+
+function restoreRowLayout(): void {
+  while (layoutPatches.length > 0) layoutPatches.pop()?.();
+  vi.unstubAllGlobals();
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -250,6 +304,11 @@ describe('TagFilterBar — aria-pressed="false" when tag is not in selectedTags'
 // ---------------------------------------------------------------------------
 
 describe('TagFilterBar — collapses to first 4 tags when 6 are in use', () => {
+  // At ITEM_W=100/gap=6, a 700px row fits the "Tags" label + 4 tag pills before
+  // the toggle, so 6 tags collapse to 4 + "+2 more".
+  beforeEach(() => stubRowLayout(700));
+  afterEach(() => restoreRowLayout());
+
   it('shows only a,b,c,d and hides e,f with "+2 more" button when collapsed', () => {
     __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
     renderBar();
@@ -330,5 +389,42 @@ describe('TagFilterBar — no toggle button when hiddenCount is 0', () => {
     expect(screen.queryByTestId('sessions-tag-filter-more')).toBeNull();
     expect(screen.getByTestId('sessions-tag-filter-alpha')).toBeTruthy();
     expect(screen.getByTestId('sessions-tag-filter-beta')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resize observation must survive the empty→populated transition.
+//
+// The bar renders null until tags arrive. A one-shot observer effect would bind
+// to a null container on first commit and never re-run, so the bar would never
+// react to sidebar resizes (project pills did, tags didn't). The callback ref
+// must observe the container once it actually mounts.
+// ---------------------------------------------------------------------------
+
+describe('TagFilterBar — observes resize after first rendering empty', () => {
+  it('attaches a ResizeObserver to the bar once tags arrive', () => {
+    const observed: Element[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(el: Element): void {
+          observed.push(el);
+        }
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+
+    // First render: no tags in use → the bar renders null, nothing to observe.
+    __tagsInUseResult = [];
+    const { rerender } = renderBar();
+    expect(observed.some((el) => el.getAttribute('data-testid') === 'sessions-tag-filter-bar')).toBe(false);
+
+    // Tags arrive → the bar mounts → its callback ref must observe it.
+    __tagsInUseResult = ['alpha', 'beta'];
+    rerender(<TagFilterBar items={EMPTY_ITEMS} filterProjectId={null} registry={fakeRegistry} />);
+    expect(observed.some((el) => el.getAttribute('data-testid') === 'sessions-tag-filter-bar')).toBe(true);
+
+    vi.unstubAllGlobals();
   });
 });

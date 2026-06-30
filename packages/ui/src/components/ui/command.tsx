@@ -45,6 +45,9 @@ const CommandInput = React.forwardRef<
     <SearchIcon className="mr-2 size-4 shrink-0 text-muted-foreground" />
     <CommandPrimitive.Input
       ref={ref}
+      // The palette modal is the focus context; a ring around the bare inner
+      // input (borderless, inset past the icon) just looks broken.
+      data-noring=""
       className={cn(
         'flex h-10 w-full rounded-md bg-transparent py-3',
         'text-heading tracking-tight outline-none',

@@ -75,12 +75,16 @@ export function MenuSearchField({ value, onValueChange, className, inputRef, ...
     <div
       className={cn(
         'flex h-[30px] items-center gap-[7px] rounded-md border-[0.5px] border-border bg-mf-content2 px-2',
+        // Ring the whole field (icon + input) on focus, not the bare inner input —
+        // the inner input opts out of the global focus ring via data-noring.
+        'transition-shadow focus-within:border-ring focus-within:shadow-[var(--mf-focus-ring)]',
         className,
       )}
     >
       <Search size={13} className="shrink-0 text-mf-text-3" aria-hidden />
       <input
         ref={inputRef}
+        data-noring=""
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
         className="min-w-0 flex-1 bg-transparent text-body text-foreground outline-none placeholder:text-mf-text-4"

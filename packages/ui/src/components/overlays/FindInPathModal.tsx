@@ -193,6 +193,7 @@ export function FindInPathModal() {
         <div className="px-4 pb-3 flex items-center gap-3 border-b border-border">
           <input
             autoFocus
+            data-noring=""
             type="text"
             data-testid="find-in-path-input"
             value={query}

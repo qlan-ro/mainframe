@@ -54,6 +54,7 @@ function PaletteField({
       )}
       <input
         autoFocus
+        data-noring=""
         data-testid="search-palette-input"
         type="text"
         value={query}

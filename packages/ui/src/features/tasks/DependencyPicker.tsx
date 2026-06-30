@@ -113,6 +113,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
                 <Search size={12} className="text-muted-foreground shrink-0" />
                 <input
                   ref={searchRef}
+                  data-noring=""
                   type="text"
                   className="bg-transparent text-caption text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
                   placeholder="Search tasks…"

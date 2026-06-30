@@ -52,10 +52,11 @@ export function BranchListView({
     <>
       {/* Search + Fetch */}
       <div className="flex items-center gap-1.5 px-2 pt-2 pb-1.5">
-        <div className="flex-1 flex items-center gap-[7px] h-[30px] px-[9px] rounded-md border-[0.5px] border-border bg-mf-content2">
+        <div className="flex-1 flex items-center gap-[7px] h-[30px] px-[9px] rounded-md border-[0.5px] border-border bg-mf-content2 transition-shadow focus-within:border-ring focus-within:shadow-[var(--mf-focus-ring)]">
           <Search size={13} className="text-muted-foreground shrink-0" />
           <input
             data-testid="git-branch-search"
+            data-noring=""
             ref={searchRef}
             value={search}
             onChange={(e) => onSearch(e.target.value)}

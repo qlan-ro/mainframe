@@ -1,11 +1,13 @@
 /**
  * ProjectFilterPillBar — "All" + per-project filter pills with attention badges.
  *
- * Collapsible (artboard: COLLAPSE_AT = 2): shows "All" + the first 2 project pills,
- * then a compact accent text control that expands/collapses the rest. View-only
- * (D12): selecting a pill filters but does NOT auto-activate the project's
- * most-recent chat. Attention badge = unread-or-pending count per project. Pills
- * are the shared FilterPill primitive.
+ * Collapsible by available width (not a hardcoded count): the row fills with as
+ * many project pills as fit on a single line, then a compact accent "+N more"
+ * control — placed AFTER the "Add project" affordance — expands/collapses the
+ * rest. Expanding wraps the bar to multiple lines. View-only (D12): selecting a
+ * pill filters but does NOT auto-activate the project's most-recent chat.
+ * Attention badge = unread-or-pending count per project. Pills are the shared
+ * FilterPill primitive.
  *
  * Includes the dashed "Add project" affordance (artboard 02-chrome.jsx) when an
  * onAddProject handler is provided; the bar stays presentational (no daemon calls).
@@ -15,8 +17,9 @@ import { Plus } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { FilterPill } from './FilterPill';
 import { ProjectPillContextMenu } from './ProjectPillContextMenu';
+import { useRowOverflow } from '../use-row-overflow';
 
-const COLLAPSE_AT = 2;
+const ROW_GAP_PX = 4;
 
 interface ProjectFilterPillBarProps {
   projects: Project[];
@@ -38,12 +41,29 @@ export function ProjectFilterPillBar({
   const [expanded, setExpanded] = useState(false);
   const totalAttn = Object.values(attentionCounts).reduce((a, b) => a + b, 0);
 
-  const hiddenCount = Math.max(0, projects.length - COLLAPSE_AT);
-  const collapsible = hiddenCount > 0;
-  const shownProjects = expanded ? projects : projects.slice(0, COLLAPSE_AT);
+  const signature = `${filterProjectId ?? ''}|${projects
+    .map((p) => `${p.id}:${attentionCounts[p.id] ?? 0}`)
+    .join(',')}|${onAddProject != null ? 'add' : ''}`;
+  const { containerRef, visibleCount, measuring } = useRowOverflow({
+    itemCount: projects.length,
+    leadingCount: 1, // the "All" pill
+    trailingCount: onAddProject != null ? 1 : 0, // the "Add project" affordance
+    gapPx: ROW_GAP_PX,
+    signature,
+  });
+
+  const showAll = measuring || expanded;
+  const shownProjects = showAll ? projects : projects.slice(0, visibleCount);
+  const overflow = visibleCount < projects.length;
+  const hiddenCount = projects.length - visibleCount;
+  const collapsible = measuring || overflow;
+  const moreLabel = measuring ? `+${projects.length} more` : expanded ? 'Less' : `+${hiddenCount} more`;
 
   return (
-    <div className="flex flex-wrap gap-[4px] px-2.5 pb-1.5 pt-[4px]">
+    <div
+      ref={containerRef}
+      className={`flex w-full min-w-0 items-center gap-[4px] px-2.5 pb-1.5 pt-[4px] ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
+    >
       <FilterPill
         label="All"
         active={filterProjectId == null}
@@ -80,17 +100,6 @@ export function ProjectFilterPillBar({
           />
         );
       })}
-      {collapsible && (
-        <button
-          data-testid="sessions-projects-more"
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((v) => !v)}
-          className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
-        >
-          {expanded ? 'Less' : `+${hiddenCount} more`}
-        </button>
-      )}
       {onAddProject != null && (
         <button
           data-testid="sessions-add-project"
@@ -100,6 +109,17 @@ export function ProjectFilterPillBar({
         >
           <Plus className="size-[12px]" aria-hidden />
           <span>Add project</span>
+        </button>
+      )}
+      {collapsible && (
+        <button
+          data-testid="sessions-projects-more"
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
+        >
+          {moreLabel}
         </button>
       )}
     </div>

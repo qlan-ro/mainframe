@@ -28,7 +28,7 @@ export function BottomPanel() {
 
   return (
     <div className="flex shrink-0 flex-col" style={{ height }}>
-      <div className="flex shrink-0 items-center gap-0.5 border-b border-border/50 px-2 py-1">
+      <div className="flex shrink-0 items-center gap-0.5 px-2 py-1">
         {tabs.map((t) => {
           const active = tab === t.id;
           const Icon = t.icon;

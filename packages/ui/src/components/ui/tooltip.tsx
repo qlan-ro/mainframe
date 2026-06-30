@@ -16,11 +16,13 @@ function TooltipContent({
       <TooltipPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 overflow-hidden rounded-lg border border-border bg-popover px-2 py-1',
+          // Arbitrary px padding: app-tauri compresses the integer spacing scale
+          // (--spacing-2 = 4px), so `px-2 py-1` rendered as a cramped 4px/2px.
+          'z-50 overflow-hidden rounded-lg border border-border bg-popover px-[10px] py-[6px]',
           // Default width floor so long content wraps instead of stretching the
           // tooltip across the viewport. Callers override via a `max-w-*` class.
           'max-w-xs break-words',
-          'text-caption text-popover-foreground',
+          'text-caption leading-snug text-popover-foreground',
           'shadow-[var(--mf-shadow-pop)]',
           'animate-in fade-in-0 zoom-in-95',
           'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
