@@ -220,3 +220,34 @@ describe('DaemonFooterStatus — unreachable overlay', () => {
     expect(captured.target?.id).toBe('local');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression I1 — single overlay when active is remote + disconnected
+// ---------------------------------------------------------------------------
+
+describe('DaemonFooterStatus — single overlay regression (I1)', () => {
+  it('active REMOTE + disconnected: renders daemon-unreachable, NOT the generic reconnect card', () => {
+    render(<DaemonFooterStatus />, {
+      wrapper: makeWrapper(REMOTE_STUDIO_TARGET, 'disconnected'),
+    });
+
+    // DaemonUnreachableBody must be present (owned by DaemonFooterStatus).
+    expect(screen.getByTestId('daemon-unreachable')).toBeInTheDocument();
+
+    // The generic reconnect card (data-testid="connection-overlay") must NOT
+    // appear here — the App.tsx overlay is gated to local-only in DaemonGatedShell
+    // and does not render in this unit test. We verify DaemonFooterStatus itself
+    // does not render a second generic overlay alongside the unreachable body.
+    expect(screen.queryByTestId('connection-overlay')).not.toBeInTheDocument();
+  });
+
+  it('active LOCAL + disconnected: DaemonFooterStatus does not emit any overlay', () => {
+    render(<DaemonFooterStatus />, {
+      wrapper: makeWrapper(LOCAL_TARGET, 'disconnected'),
+    });
+
+    // Neither overlay body should come from DaemonFooterStatus when local is active.
+    expect(screen.queryByTestId('daemon-unreachable')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('connection-overlay')).not.toBeInTheDocument();
+  });
+});

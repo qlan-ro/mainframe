@@ -17,7 +17,7 @@ import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
 import { AppShell } from './AppShell';
-import { ConnectionStatusProvider } from './ConnectionStatusContext';
+import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatusContext';
 import { ConnectionOverlay } from './ConnectionOverlay';
 import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
@@ -31,18 +31,28 @@ import { Toaster } from '@/components/ui/sonner';
  * active target URL has port 0 (the default singleton value before the first
  * health success seeds it). This ensures the initial local boot path passes the
  * correct port to DaemonPortProvider even when setActiveDaemon hasn't fired yet.
+ *
+ * Post-boot disconnect overlay lives here (not in App) so useActiveDaemon() is
+ * in scope. It is suppressed when the active daemon is REMOTE — the remote case
+ * is owned by DaemonFooterStatus's DaemonUnreachableBody overlay.
  */
 function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   const { target } = useActiveDaemon();
+  const { state } = useConnectionStatus();
   const parsedUrl = new URL(target.baseUrl);
   const urlPort = parsedUrl.port ? Number(parsedUrl.port) : 0;
   // Fall back to the health-resolved port when the active target URL has port 0
   // (singleton not yet seeded by useConnectionState's first health success).
   const activePort = urlPort > 0 ? urlPort : fallbackPort;
 
+  // Only show the generic reconnect overlay for LOCAL daemon disconnects.
+  // REMOTE disconnects are handled by DaemonFooterStatus → DaemonUnreachableBody.
+  const showReconnectOverlay = target.kind === 'local' && state !== 'connected';
+
   return (
     <DaemonPortProvider port={activePort}>
       <AppShell key={target.id} port={activePort} />
+      <ConnectionOverlay open={showReconnectOverlay} />
     </DaemonPortProvider>
   );
 }
@@ -90,10 +100,6 @@ export function App() {
               />
             </div>
           )}
-          {/* Post-boot disconnect overlay. `ready` latches on first /health, so
-              this never covers the initial "Waiting for daemon…" boot screen —
-              only a later drop while the app is live. */}
-          <ConnectionOverlay open={ready && state !== 'connected'} />
         </ConnectionStatusProvider>
         <Toaster />
       </div>
