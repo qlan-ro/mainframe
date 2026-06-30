@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type { UpdateStatus } from '../main/auto-updater.js';
+import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 
 export type { UpdateStatus };
 
@@ -25,6 +26,14 @@ export interface DaemonAPI {
   onStatus: (callback: (status: string) => void) => () => void;
 }
 
+export interface DaemonsAPI {
+  list: () => Promise<DaemonMeta[]>;
+  upsert: (meta: DaemonMeta) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  getToken: (id: string) => Promise<string | null>;
+  setToken: (id: string, token: string) => Promise<void>;
+}
+
 export interface MainframeAPI {
   platform: NodeJS.Platform;
   versions: {
@@ -47,6 +56,7 @@ export interface MainframeAPI {
   terminal: TerminalAPI;
   updates: UpdateAPI;
   daemon: DaemonAPI;
+  daemons: DaemonsAPI;
 }
 
 const api: MainframeAPI = {
@@ -120,6 +130,13 @@ const api: MainframeAPI = {
         ipcRenderer.removeListener('daemon:status', handler);
       };
     },
+  },
+  daemons: {
+    list: () => ipcRenderer.invoke('daemons:list'),
+    upsert: (meta: DaemonMeta) => ipcRenderer.invoke('daemons:upsert', meta),
+    remove: (id: string) => ipcRenderer.invoke('daemons:remove', id),
+    getToken: (id: string) => ipcRenderer.invoke('daemons:get-token', id),
+    setToken: (id: string, token: string) => ipcRenderer.invoke('daemons:set-token', id, token),
   },
 };
 

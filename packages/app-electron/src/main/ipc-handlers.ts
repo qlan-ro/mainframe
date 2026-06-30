@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, ipcMain, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, Notification, ipcMain, safeStorage, session, shell, webContents } from 'electron';
 import { join, resolve, sep } from 'path';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
@@ -13,6 +13,14 @@ import {
 import type { DaemonStatusTracker } from './daemon-status.js';
 import { logFromRenderer } from './logger.js';
 import { parseIpcArg } from './ipc-validate.js';
+import {
+  readRegistry,
+  writeRegistry,
+  getToken,
+  setToken,
+  removeDaemon,
+  SecureStorageUnavailable,
+} from './daemons-store.js';
 
 const APP_AUTHOR = 'Mainframe Contributors';
 
@@ -38,6 +46,55 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   ipcMain.handle('daemon:port', () => getDaemonStatus()?.port() ?? 31415);
   ipcMain.handle('daemon:status', () => getDaemonStatus()?.get() ?? 'initializing');
+
+  ipcMain.handle('daemons:list', async () => {
+    try {
+      return await readRegistry();
+    } catch (err) {
+      log.warn({ err }, 'daemons:list failed');
+      return [];
+    }
+  });
+
+  ipcMain.handle('daemons:upsert', async (_event, meta: unknown) => {
+    try {
+      const incoming = meta as import('@qlan-ro/mainframe-types').DaemonMeta;
+      const metas = await readRegistry();
+      const idx = metas.findIndex((m) => m.id === incoming.id);
+      if (idx >= 0) {
+        metas[idx] = incoming;
+      } else {
+        metas.push(incoming);
+      }
+      await writeRegistry(metas);
+    } catch (err) {
+      log.warn({ err }, 'daemons:upsert failed');
+    }
+  });
+
+  ipcMain.handle('daemons:remove', async (_event, id: unknown) => {
+    try {
+      await removeDaemon(String(id));
+    } catch (err) {
+      log.warn({ err }, 'daemons:remove failed');
+    }
+  });
+
+  ipcMain.handle('daemons:get-token', async (_event, id: unknown) => {
+    try {
+      return await getToken(String(id));
+    } catch (err) {
+      log.warn({ err }, 'daemons:get-token failed');
+      return null;
+    }
+  });
+
+  ipcMain.handle('daemons:set-token', async (_event, id: unknown, token: unknown) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new SecureStorageUnavailable();
+    }
+    await setToken(String(id), String(token), log);
+  });
 
   ipcMain.handle('app:getInfo', () => ({
     version: app.getVersion(),
