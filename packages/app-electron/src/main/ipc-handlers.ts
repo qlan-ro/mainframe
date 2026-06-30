@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import type { Logger } from 'pino';
 import {
   ClearSessionSchema,
+  DaemonMetaSchema,
   FilePathSchema,
   LogRecordSchema,
   NotifySchema,
@@ -58,7 +59,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   ipcMain.handle('daemons:upsert', async (_event, meta: unknown) => {
     try {
-      const incoming = meta as import('@qlan-ro/mainframe-types').DaemonMeta;
+      const incoming = parseIpcArg(DaemonMetaSchema, meta, 'daemons:upsert');
       const metas = await readRegistry();
       const idx = metas.findIndex((m) => m.id === incoming.id);
       if (idx >= 0) {

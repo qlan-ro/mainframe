@@ -4,6 +4,9 @@ import { homedir } from 'node:os';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import type { Logger } from 'pino';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
+import { createMainLogger } from './logger.js';
+
+const log = createMainLogger('electron:daemons-store');
 
 export class SecureStorageUnavailable extends Error {
   constructor() {
@@ -35,7 +38,11 @@ export async function readRegistry(): Promise<DaemonMeta[]> {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed as DaemonMeta[];
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      /* ENOENT is expected when the registry has not been written yet */
+      log.warn({ err }, 'daemons-store: readRegistry failed');
+    }
     return [];
   }
 }
@@ -52,7 +59,11 @@ async function readTokenMap(): Promise<Record<string, string>> {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
     return parsed as Record<string, string>;
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      /* ENOENT is expected on first write — not an error condition */
+      log.warn({ err }, 'daemons-store: readTokenMap failed');
+    }
     return {};
   }
 }
@@ -63,9 +74,9 @@ async function writeTokenMap(map: Record<string, string>): Promise<void> {
   await writeFile(path, JSON.stringify(map, null, 2), 'utf-8');
 }
 
-export async function setToken(id: string, token: string, log?: Logger): Promise<void> {
+export async function setToken(id: string, token: string, callerLog?: Logger): Promise<void> {
   if (!safeStorage.isEncryptionAvailable()) {
-    log?.warn({ id }, 'daemons-store: safeStorage unavailable, cannot store token');
+    (callerLog ?? log).warn({ id }, 'daemons-store: safeStorage unavailable, cannot store token');
     throw new SecureStorageUnavailable();
   }
   const encrypted = safeStorage.encryptString(token);
@@ -91,7 +102,7 @@ export async function deleteToken(id: string): Promise<void> {
 }
 
 export async function removeDaemon(id: string): Promise<void> {
-  const [metas] = await Promise.all([readRegistry()]);
+  const metas = await readRegistry();
   const filtered = metas.filter((m) => m.id !== id);
   await Promise.all([writeRegistry(filtered), deleteToken(id)]);
 }
