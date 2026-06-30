@@ -27,7 +27,7 @@ export function ContextSection({ icon: Icon, title, count, defaultOpen = false, 
           className={`shrink-0 text-mf-text-3 transition-transform ${open ? '' : '-rotate-90'}`}
         />
         <Icon size={11} className="shrink-0 text-mf-text-2" aria-hidden />
-        <span className="flex-1 truncate text-micro font-semibold text-foreground">{title}</span>
+        <span className="min-w-0 flex-1 truncate text-micro font-semibold text-foreground">{title}</span>
         <span className="shrink-0 rounded-md bg-mf-hover px-1.5 font-mono text-micro text-mf-text-3">{count}</span>
       </button>
       {open && <div className="pb-1">{children}</div>}

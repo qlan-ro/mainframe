@@ -29,11 +29,6 @@ export interface EffortPickerProps {
   providerDefaults?: ProviderConfig;
 }
 
-/** Trigger label shown inside the button. */
-function EffortLabel({ value }: { value: string }) {
-  return <span className="text-label font-medium">{value}</span>;
-}
-
 export function EffortPicker({ chat, model, setEffort, disabled, providerDefaults }: EffortPickerProps) {
   const options = effortOptions(model);
 
@@ -57,7 +52,8 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
               disabled={isDisabled}
               aria-label={`Effort: ${triggerLabel}`}
               className={[
-                'flex h-[20px] items-center gap-[5px] pl-[8px] pr-[7px]',
+                'flex h-[20px] shrink-0 items-center justify-center gap-[3px] px-[6px]',
+                '@[480px]:justify-start @[480px]:gap-[5px] @[480px]:pl-[8px] @[480px]:pr-[7px]',
                 'rounded-[11px] border-[0.5px] border-border text-caption text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
@@ -68,13 +64,15 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
               ].join(' ')}
             >
               <Gauge size={11} className="shrink-0" />
-              <EffortLabel value={triggerLabel} />
+              <span className="hidden @[480px]:inline whitespace-nowrap text-label font-medium">{triggerLabel}</span>
               {locked && <Lock size={10} className="shrink-0 text-mf-text-4" />}
-              <ChevronDown size={9} className="shrink-0 opacity-60" />
+              <ChevronDown size={9} className="hidden @[480px]:inline shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top">{locked ? 'Effort locked by Ultracode' : 'Reasoning effort'}</TooltipContent>
+        <TooltipContent side="top">
+          {locked ? 'Effort locked by Ultracode' : `Reasoning effort: ${triggerLabel}`}
+        </TooltipContent>
       </Tooltip>
 
       <DropdownMenuContent align="start" side="top" sideOffset={6} className="min-w-40">

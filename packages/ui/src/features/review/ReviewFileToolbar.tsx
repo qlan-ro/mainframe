@@ -27,8 +27,8 @@ export function ReviewFileToolbar({
 
   return (
     <div className="flex h-[40px] shrink-0 items-center gap-[10px] border-b border-border bg-mf-content2 px-[14px]">
-      <span className="font-mono text-label font-semibold text-foreground">{name}</span>
-      {dir && <span className="truncate font-mono text-caption text-mf-text-4">{dir}/</span>}
+      <span className="shrink-0 font-mono text-label font-semibold text-foreground">{name}</span>
+      {dir && <span className="min-w-0 truncate font-mono text-caption text-mf-text-4">{dir}/</span>}
       <span className="inline-flex gap-[7px] font-mono text-caption">
         <span className="font-semibold text-mf-success">+{additions}</span>
         <span className="font-semibold text-destructive">−{deletions}</span>

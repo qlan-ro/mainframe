@@ -159,14 +159,14 @@ export function ProviderModelSelect({
               data-tut="model"
               aria-label={`Provider and model: ${triggerLabel}`}
               className={cn(
-                'flex h-[20px] items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-caption text-muted-foreground',
+                'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-caption text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors focus-visible:outline-none',
               )}
             >
               <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
-              <span className="font-medium">{triggerLabel}</span>
+              <span className="truncate font-medium">{triggerLabel}</span>
               <ChevronDown size={9} className="flex-shrink-0 opacity-60" />
             </button>
           </PopoverTrigger>

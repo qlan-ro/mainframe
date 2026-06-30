@@ -109,7 +109,7 @@ export function Composer() {
       <ComposerPrimitive.Root
         data-testid="chat-composer"
         data-tut="composer"
-        className="rounded-xl [border-width:0.5px] border-border bg-card shadow-sm transition-colors focus-within:border-ring"
+        className="min-w-[240px] rounded-xl [border-width:0.5px] border-border bg-card shadow-sm transition-colors focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
@@ -146,9 +146,9 @@ export function Composer() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
+          <div className="@container flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
             {/* Left slot: paperclip + separator + config toolbar */}
-            <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
+            <div data-testid="chat-composer-toolbar" className="flex min-w-0 min-h-8 items-center gap-1 text-mf-text-3">
               <ComposerAddAttachment />
               {/* 1×12px hairline divider separating attachment actions from config chips */}
               <div className="mx-1 h-3 w-px shrink-0 bg-border" aria-hidden />

@@ -7,7 +7,7 @@ interface PreviewDeviceToggleProps {
 
 export function PreviewDeviceToggle({ device, onChange }: PreviewDeviceToggleProps) {
   return (
-    <div data-testid="preview-device-toggle" className="flex gap-px p-0.5 rounded-sm bg-mf-chip">
+    <div data-testid="preview-device-toggle" className="flex shrink-0 gap-px p-0.5 rounded-sm bg-mf-chip">
       <button
         data-testid="preview-device-desktop"
         className={`w-[24px] h-[20px] rounded-xs flex items-center justify-center ${

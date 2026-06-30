@@ -70,7 +70,7 @@ export function BranchRow({
       {/* Branch name in monospace */}
       <span
         className={cn(
-          'truncate flex-1 font-mono text-label',
+          'min-w-0 truncate flex-1 font-mono text-label',
           isCurrent && 'font-semibold text-foreground',
           !isCurrent && 'font-medium text-foreground',
         )}

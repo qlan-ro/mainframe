@@ -151,7 +151,7 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
               data-testid="composer-worktree-trigger"
               aria-label={isIsolated ? `Worktree: ${branchLabel}` : 'Isolate in worktree'}
               className={[
-                'relative flex h-[20px] items-center gap-[4px] px-[7px]',
+                'relative flex h-[20px] shrink-0 items-center justify-center gap-[3px] px-[6px]',
                 'rounded-[11px] border-[0.5px] text-muted-foreground',
                 isIsolated ? 'border-mf-success text-mf-success' : 'border-border',
                 'hover:bg-accent hover:text-accent-foreground',
@@ -160,9 +160,6 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
               ].join(' ')}
             >
               <GitFork size={11} />
-              {isIsolated && branchLabel && (
-                <span className="max-w-[80px] truncate font-mono text-micro">{branchLabel}</span>
-              )}
               {isIsolated && <Check size={9} className="shrink-0" aria-hidden />}
             </button>
           </PopoverTrigger>

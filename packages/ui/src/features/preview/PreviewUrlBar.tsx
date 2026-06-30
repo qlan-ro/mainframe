@@ -53,7 +53,7 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
   }
 
   return (
-    <div className="flex-1 flex items-center gap-0.5 h-[26px] rounded-md border-[0.5px] border-border bg-card pl-0.5 pr-[4px]">
+    <div className="min-w-0 flex-1 flex items-center gap-0.5 h-[26px] rounded-md border-[0.5px] border-border bg-card pl-0.5 pr-[4px]">
       <PreviewIconButton
         testId="preview-url-reload"
         title="Reload preview"
