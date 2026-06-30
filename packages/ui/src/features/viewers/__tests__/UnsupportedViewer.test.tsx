@@ -17,6 +17,9 @@
  * 12. "Open externally" button uses primary accent fill (bg-primary class).
  * 13. Icon chip is 46×46 with rounded-[11px] bg-mf-chip container.
  * 14. Card uses bg-background (not bg-card or bg-mf-tab-bar).
+ * 15. (remote daemon) "Open externally" is disabled (aria-disabled) when useDaemonIsLocal() returns false.
+ * 16. (remote daemon) Clicking the disabled button does NOT call host.shell.openExternal.
+ * 17. (local daemon) Clicking "Open externally" calls host.shell.openExternal normally.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -37,6 +40,10 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: vi.fn(() => ({ projectId: null, chatId: null })),
 }));
+
+// Controls the useDaemonIsLocal() gate; reset to true (local) before each test.
+let daemonIsLocal = true;
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => daemonIsLocal }));
 
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -60,6 +67,7 @@ beforeEach(() => {
   vi.spyOn(fakeHost.shell, 'openExternal').mockResolvedValue(undefined);
   mockEmit.mockClear();
   mockUseActiveIdentity.mockReturnValue({ projectId: null, chatId: null, projectPath: undefined });
+  daemonIsLocal = true;
 });
 
 describe('UnsupportedViewer', () => {
@@ -162,6 +170,38 @@ describe('UnsupportedViewer', () => {
       renderUnsupported('src/spec.pdf');
       const btn = screen.getByTestId('viewer-unsupported-open');
       expect(btn).toBeDisabled();
+    });
+  });
+
+  describe('remote daemon gate', () => {
+    it('disables "Open externally" (aria-disabled) when daemon is remote', () => {
+      daemonIsLocal = false;
+      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/proj' });
+      renderUnsupported('/archive.zip');
+      const btn = screen.getByTestId('viewer-unsupported-open');
+      expect(btn).toBeDisabled();
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('does NOT call openExternal when daemon is remote and button is clicked', async () => {
+      daemonIsLocal = false;
+      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/proj' });
+      const user = userEvent.setup();
+      renderUnsupported('/archive.zip');
+      const btn = screen.getByTestId('viewer-unsupported-open');
+      // Attempt click on a disabled button — userEvent skips the handler
+      await user.click(btn);
+      expect(fakeHost.shell.openExternal).not.toHaveBeenCalled();
+    });
+
+    it('calls openExternal normally when daemon is local', async () => {
+      daemonIsLocal = true;
+      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/proj' });
+      const user = userEvent.setup();
+      renderUnsupported('/archive.zip');
+      await user.click(screen.getByTestId('viewer-unsupported-open'));
+      expect(fakeHost.shell.openExternal).toHaveBeenCalledOnce();
+      expect(fakeHost.shell.openExternal).toHaveBeenCalledWith('file:///archive.zip');
     });
   });
 });

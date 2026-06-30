@@ -27,6 +27,7 @@ import { File } from 'lucide-react';
 import { useHost } from '@/lib/host';
 import { Hint } from '@/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ViewerShell } from './ViewerShell';
 import { toFileUrl } from './viewer-file-url';
@@ -43,6 +44,7 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
 
   const { projectPath } = useActiveIdentity();
   const fileUrl = toFileUrl(path, projectPath);
+  const isLocal = useDaemonIsLocal();
 
   async function handleOpenExternal() {
     if (!fileUrl) return;
@@ -83,12 +85,21 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
           </div>
 
           <div className="flex gap-2">
-            <Hint label={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}>
+            <Hint
+              label={
+                !isLocal
+                  ? 'Cannot open: file lives on the remote server'
+                  : fileUrl === null
+                    ? 'Cannot open: project root is unknown for this relative path'
+                    : undefined
+              }
+            >
               <button
                 data-testid="viewer-unsupported-open"
                 type="button"
                 onClick={() => void handleOpenExternal()}
-                disabled={fileUrl === null}
+                disabled={fileUrl === null || !isLocal}
+                aria-disabled={fileUrl === null || !isLocal}
                 className="rounded-md bg-primary px-3 py-1.5 text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Open externally
