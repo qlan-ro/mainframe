@@ -1,14 +1,20 @@
 /**
  * Minimal HTTP helpers for the daemon REST API.
  *
- * Port is dynamic (sidecar chooses a free port) — callers pass it in
- * rather than reading a build-time env var. The Tauri bridge provides
- * the live port via `getDaemonPort()`.
+ * `apiBase` returns the active daemon's baseUrl. The `port` argument is
+ * accepted for call-site compatibility but ignored — the active daemon
+ * target owns the base URL (local or remote tunnel).
  */
 import type { ApiResponse, ApiResponseEmpty } from '@qlan-ro/mainframe-types';
+import { getActiveDaemon } from '../daemon/active-daemon';
 
-export function apiBase(port: number): string {
-  return `http://127.0.0.1:${port}`;
+export function apiBase(_port?: number): string {
+  return getActiveDaemon().baseUrl;
+}
+
+function authHeaders(): Record<string, string> {
+  const { token } = getActiveDaemon();
+  return token !== null ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function extractError(res: Response): Promise<string> {
@@ -26,7 +32,8 @@ async function extractError(res: Response): Promise<string> {
 export async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
-    ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    headers: { ...authHeaders(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) throw new Error(await extractError(res));
   const json = (await res.json()) as ApiResponse<T>;
@@ -38,7 +45,8 @@ export async function request<T>(method: string, url: string, body?: unknown): P
 export async function requestEmpty(method: string, url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, {
     method,
-    ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    headers: { ...authHeaders(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) throw new Error(await extractError(res));
   const json = (await res.json()) as ApiResponseEmpty;
@@ -47,7 +55,7 @@ export async function requestEmpty(method: string, url: string, body?: unknown):
 
 /** For routes that return HTTP 204 with no body (e.g. DELETE /api/tags/:name). */
 export async function requestNoContent(method: string, url: string): Promise<void> {
-  const res = await fetch(url, { method });
+  const res = await fetch(url, { method, headers: authHeaders() });
   if (!res.ok) throw new Error(await extractError(res));
 }
 
@@ -59,7 +67,8 @@ export async function requestNoContent(method: string, url: string): Promise<voi
 export async function requestPlugin<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
-    ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    headers: { ...authHeaders(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) throw new Error(await extractError(res));
   return (await res.json()) as T;
@@ -67,7 +76,7 @@ export async function requestPlugin<T>(method: string, url: string, body?: unkno
 
 /** For plugin routes that return HTTP 204 with no body (DELETE). */
 export async function requestPluginNoContent(method: string, url: string): Promise<void> {
-  const res = await fetch(url, { method });
+  const res = await fetch(url, { method, headers: authHeaders() });
   if (!res.ok) throw new Error(await extractError(res));
 }
 
