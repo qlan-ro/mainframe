@@ -15,6 +15,7 @@ import { startLaunchConfig, stopLaunchConfig } from '@/lib/api/launch';
 import { buildLaunchScope } from '@/lib/launch-scope';
 import { useSandboxStore } from '@/store/sandbox';
 import { useLayoutStore } from '@/store/layout';
+import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { useLaunchConfigs } from './use-launch-configs';
 import { runTabForConfig } from './run-tab-for-config';
 
@@ -36,6 +37,7 @@ export function useLaunchActions(
   chatId: string | undefined,
 ): UseLaunchActionsResult {
   const { configs, statusData, refetch } = useLaunchConfigs(port, projectId, chatId);
+  const isLocal = useDaemonIsLocal();
   const processStatuses = useSandboxStore((s) => s.processStatuses);
   const selectedConfigByScope = useSandboxStore((s) => s.selectedConfigByScope);
   const setSelectedConfig = useSandboxStore((s) => s.setSelectedConfig);
@@ -73,7 +75,8 @@ export function useLaunchActions(
       // full-space `console` tab. Distinct configs never share a tab. The tab
       // carries the launch scope so its console/status survive a later switch to
       // a chat that doesn't resolve to this scope.
-      addRunTab(runTabForConfig(config, scopeKey));
+      const tab = runTabForConfig(config, scopeKey, isLocal);
+      if (tab) addRunTab(tab);
       try {
         await startLaunchConfig(port, projectId, config.name, chatId ?? undefined);
       } catch (err) {
@@ -81,7 +84,7 @@ export function useLaunchActions(
         console.warn('[launch] start failed', err);
       }
     },
-    [port, projectId, chatId, scopeKey, addRunTab, setSelectedConfig],
+    [port, projectId, chatId, scopeKey, isLocal, addRunTab, setSelectedConfig],
   );
 
   const handleStop = useCallback(

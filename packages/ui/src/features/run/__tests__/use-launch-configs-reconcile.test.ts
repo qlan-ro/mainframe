@@ -51,6 +51,11 @@ vi.mock('@/store/layout-persist', () => ({
   },
 }));
 
+// ── mock useDaemonIsLocal ────────────────────────────────────────────────────
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({
+  useDaemonIsLocal: vi.fn().mockReturnValue(true),
+}));
+
 // ── mock launch API ──────────────────────────────────────────────────────────
 const devConfig: LaunchConfiguration = {
   name: 'dev',

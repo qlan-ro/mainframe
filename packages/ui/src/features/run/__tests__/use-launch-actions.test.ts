@@ -53,6 +53,13 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
+// ── mock useDaemonIsLocal ────────────────────────────────────────────────────
+// Default to local so existing tests are unaffected; individual tests can
+// override via vi.mocked(useDaemonIsLocal).mockReturnValue(false).
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({
+  useDaemonIsLocal: vi.fn().mockReturnValue(true),
+}));
+
 // ── fixtures ─────────────────────────────────────────────────────────────────
 const devServer: LaunchConfiguration = {
   name: 'dev server',
