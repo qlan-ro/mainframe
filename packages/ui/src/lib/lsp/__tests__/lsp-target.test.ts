@@ -1,9 +1,14 @@
 /**
- * A4 — LSP WS URL is built from the active daemon target.
+ * A4 — LSP seam: WS URL and HTTP calls built from the active daemon target.
  *
- * Asserts that `LspClientManager.ensureClient` opens a WebSocket against
- * the active target's host (not a hardcoded 127.0.0.1) and appends
- * `?token=<encoded>` only when the target carries a non-null token.
+ * Asserts that:
+ * 1. `LspClientManager.ensureClient` opens a WebSocket against the active
+ *    target's host (not a hardcoded 127.0.0.1) with `?token=` when present.
+ * 2. `discoverWorkspaceFolders` (called by ensureClient) makes HTTP requests
+ *    against the active target's baseUrl with an Authorization header for
+ *    remote targets.
+ * 3. `preloadDocument` makes HTTP requests against the active target's baseUrl
+ *    with an Authorization header for remote targets.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { setActiveDaemon } from '../../daemon/active-daemon';
@@ -86,18 +91,19 @@ vi.mock('../../api/files', () => ({
   }),
 }));
 
+// Spy on fetch so tests can inspect the URLs and headers it was called with.
+let fetchSpy: ReturnType<typeof vi.fn>;
+
 beforeEach(() => {
   capturedUrls.length = 0;
   vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() =>
-      Promise.resolve({
-        json: () => Promise.resolve({ success: false }),
-        ok: true,
-      }),
-    ),
+  fetchSpy = vi.fn(() =>
+    Promise.resolve({
+      json: () => Promise.resolve({ success: false }),
+      ok: true,
+    }),
   );
+  vi.stubGlobal('fetch', fetchSpy);
 });
 
 afterEach(() => {
@@ -174,5 +180,147 @@ describe('LspClientManager — A4: URL built from the active daemon target', () 
     expect(capturedUrls[capturedUrls.length - 1]).toBe(
       'wss://studio.example.com/lsp/p1/typescript?chatId=chat-99&token=jwt',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A4 follow-up — HTTP seam: discoverWorkspaceFolders
+// ---------------------------------------------------------------------------
+
+describe('LspClientManager — A4 follow-up: discoverWorkspaceFolders HTTP uses active target', () => {
+  it('uses the active target baseUrl (not 127.0.0.1) for the search/files call', async () => {
+    setActiveDaemon({
+      id: 'studio',
+      kind: 'remote',
+      label: 'Studio',
+      baseUrl: 'https://studio.example.com',
+      token: 'jwt',
+    });
+
+    const manager = new LspClientManager(0);
+    await manager.ensureClient('p1', 'typescript', '/home/user/project');
+
+    // discoverWorkspaceFolders is called during ensureClient initialization.
+    const searchCall = fetchSpy.mock.calls.find(
+      ([url]) => typeof url === 'string' && (url as string).includes('/search/files'),
+    );
+    expect(searchCall).toBeDefined();
+    const searchUrl = searchCall![0] as string;
+    // Must use the remote baseUrl, not the localhost fallback.
+    expect(searchUrl).toContain('https://studio.example.com/api/projects/p1/search/files');
+    expect(searchUrl).not.toContain('127.0.0.1');
+  });
+
+  it('sends Authorization: Bearer header for remote target in search/files call', async () => {
+    setActiveDaemon({
+      id: 'studio',
+      kind: 'remote',
+      label: 'Studio',
+      baseUrl: 'https://studio.example.com',
+      token: 'jwt',
+    });
+
+    const manager = new LspClientManager(0);
+    await manager.ensureClient('p1', 'typescript', '/home/user/project');
+
+    const searchCall = fetchSpy.mock.calls.find(
+      ([url]) => typeof url === 'string' && (url as string).includes('/search/files'),
+    );
+    expect(searchCall).toBeDefined();
+    const init = searchCall![1] as RequestInit | undefined;
+    expect((init?.headers as Record<string, string> | undefined)?.Authorization).toBe('Bearer jwt');
+  });
+
+  it('omits Authorization header for local target (token null) in search/files call', async () => {
+    setActiveDaemon({
+      id: 'local',
+      kind: 'local',
+      label: 'Local',
+      baseUrl: 'http://127.0.0.1:31415',
+      token: null,
+    });
+
+    const manager = new LspClientManager(31415);
+    await manager.ensureClient('p1', 'typescript', '/home/user/project');
+
+    const searchCall = fetchSpy.mock.calls.find(
+      ([url]) => typeof url === 'string' && (url as string).includes('/search/files'),
+    );
+    expect(searchCall).toBeDefined();
+    const init = searchCall![1] as RequestInit | undefined;
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    expect(headers['Authorization']).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A4 follow-up — HTTP seam: preloadDocument
+// ---------------------------------------------------------------------------
+
+describe('LspClientManager — A4 follow-up: preloadDocument HTTP uses active target', () => {
+  it('uses the active target baseUrl (not 127.0.0.1) for the files content call', async () => {
+    setActiveDaemon({
+      id: 'studio',
+      kind: 'remote',
+      label: 'Studio',
+      baseUrl: 'https://studio.example.com',
+      token: 'jwt',
+    });
+
+    // fetchSpy also returns { success: false } for the files endpoint (no content loaded,
+    // but the URL and headers are what we're testing here).
+    fetchSpy.mockImplementation((url: unknown) => {
+      if (typeof url === 'string' && url.includes('/files?')) {
+        return Promise.resolve({
+          json: () => Promise.resolve({ success: false }),
+          ok: true,
+        });
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({ success: false }),
+        ok: true,
+      });
+    });
+
+    const manager = new LspClientManager(0);
+    await manager.ensureClient('p1', 'typescript', '/home/user/project');
+
+    // preloadDocument is called explicitly after ensureClient finishes.
+    manager.preloadDocument('p1', 'typescript', 'src/index.ts');
+    // Allow the fire-and-forget fetch to kick off.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const filesCall = fetchSpy.mock.calls.find(
+      ([url]) => typeof url === 'string' && /\/projects\/p1\/files\?/.test(url as string),
+    );
+    expect(filesCall).toBeDefined();
+    const filesUrl = filesCall![0] as string;
+    expect(filesUrl).toContain('https://studio.example.com/api/projects/p1/files');
+    expect(filesUrl).not.toContain('127.0.0.1');
+  });
+
+  it('sends Authorization: Bearer header for remote target in files content call', async () => {
+    setActiveDaemon({
+      id: 'studio',
+      kind: 'remote',
+      label: 'Studio',
+      baseUrl: 'https://studio.example.com',
+      token: 'jwt',
+    });
+
+    const manager = new LspClientManager(0);
+    await manager.ensureClient('p1', 'typescript', '/home/user/project');
+
+    manager.preloadDocument('p1', 'typescript', 'src/index.ts');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const filesCall = fetchSpy.mock.calls.find(
+      ([url]) => typeof url === 'string' && (url as string).includes('/files?'),
+    );
+    expect(filesCall).toBeDefined();
+    const init = filesCall![1] as RequestInit | undefined;
+    expect((init?.headers as Record<string, string> | undefined)?.Authorization).toBe('Bearer jwt');
   });
 });

@@ -30,6 +30,7 @@
  */
 
 import { resolvePath } from '../api/files';
+import { apiBase } from '../api/http';
 import { getActiveDaemon } from '../daemon/active-daemon';
 
 // ---------------------------------------------------------------------------
@@ -147,14 +148,17 @@ function makeKey(projectId: string, language: string): string {
 async function discoverWorkspaceFolders(
   projectId: string,
   resolvedBase: string,
-  port: number,
   chatId: string | undefined,
 ): Promise<{ uri: string; name: string }[]> {
-  const base = `http://127.0.0.1:${port}`;
+  const base = apiBase();
   const qs = new URLSearchParams({ q: 'tsconfig.json', limit: '20' });
   if (chatId) qs.set('chatId', chatId);
+  const { token } = getActiveDaemon();
+  const authHeader: Record<string, string> = token !== null ? { Authorization: `Bearer ${token}` } : {};
   try {
-    const res = await fetch(`${base}/api/projects/${projectId}/search/files?${qs}`);
+    const res = await fetch(`${base}/api/projects/${projectId}/search/files?${qs}`, {
+      headers: authHeader,
+    });
     const envelope = (await res.json()) as {
       success: boolean;
       data?: { path: string; type: string }[];
@@ -285,7 +289,7 @@ export class LspClientManager implements LspProviders {
     ws.onclose = () => this.removeEntry(key);
     ws.onerror = () => this.removeEntry(key);
 
-    const workspaceFolders = await discoverWorkspaceFolders(projectId, resolvedBase, this.port, chatId);
+    const workspaceFolders = await discoverWorkspaceFolders(projectId, resolvedBase, chatId);
 
     try {
       await this.sendRequest(entry, 'initialize', {
@@ -436,10 +440,12 @@ export class LspClientManager implements LspProviders {
     if (entry.openedUris.has(uri)) return;
     entry.openedUris.add(uri);
 
-    const base = `http://127.0.0.1:${this.port}`;
+    const base = apiBase();
     const qs = new URLSearchParams({ path: filePath });
     if (entry.chatId) qs.set('chatId', entry.chatId);
-    fetch(`${base}/api/projects/${projectId}/files?${qs}`)
+    const { token } = getActiveDaemon();
+    const authHeader: Record<string, string> = token !== null ? { Authorization: `Bearer ${token}` } : {};
+    fetch(`${base}/api/projects/${projectId}/files?${qs}`, { headers: authHeader })
       .then((r) => r.json())
       .then((envelope: unknown) => {
         const env = envelope as { success: boolean; data?: { content: string } };
