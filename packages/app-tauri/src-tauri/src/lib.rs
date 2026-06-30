@@ -17,7 +17,11 @@ use tauri::{Emitter, Manager};
 use tauri::ipc::CapabilityBuilder;
 
 // Re-export commands at crate root so generate_handler! can find them.
-use commands::{get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64, show_item_in_folder};
+use commands::{
+    daemon_token_get, daemon_token_set, daemons_list, daemons_remove, daemons_upsert,
+    get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64,
+    show_item_in_folder,
+};
 use presence::{report_activity, DaemonPort};
 use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
 use preview::{
@@ -118,6 +122,12 @@ pub fn run() {
             updater::updater_check,
             updater::updater_download,
             updater::updater_install,
+            // remote daemon registry + keyring token commands (Task B1t)
+            daemons_list,
+            daemons_upsert,
+            daemons_remove,
+            daemon_token_get,
+            daemon_token_set,
         ])
         .setup(move |app| {
             // Build + set the native application menu. Errors are logged and the

@@ -33,6 +33,7 @@ dirs = "5"
 which = "6"
 portable-pty = "0.9"
 ureq = { version = "2", default-features = false, features = ["json"] }
+keyring = "3"
 
 # Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
 # DOM inspection, IPC). Optional + behind the non-default `mcp-bridge` feature
