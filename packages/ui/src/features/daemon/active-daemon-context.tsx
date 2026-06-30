@@ -17,6 +17,7 @@ import { getActiveDaemon, setActiveDaemon, subscribeActiveDaemon } from '@/lib/d
 import { disposeDaemonSession } from '@/lib/daemon/dispose-daemon-session';
 import { daemonWs } from '@/lib/daemon/ws-client';
 import { rebindLspToActiveDaemon } from '@/lib/lsp';
+import { resetDaemonScopedStores } from './reset-daemon-scoped-stores';
 
 interface ActiveDaemonContextValue {
   target: DaemonTarget;
@@ -56,10 +57,15 @@ export function ActiveDaemonProvider({ children, initialTarget }: ActiveDaemonPr
   const switchTo = useCallback(async (t: DaemonTarget): Promise<void> => {
     disposeDaemonSession();
     setActiveDaemon(t);
-    const port = derivePort(t);
-    daemonWs.setPort(port);
-    daemonWs.connect();
-    await rebindLspToActiveDaemon();
+    resetDaemonScopedStores();
+    try {
+      const port = derivePort(t);
+      daemonWs.setPort(port);
+      daemonWs.connect();
+      await rebindLspToActiveDaemon();
+    } catch (err) {
+      console.warn('[switchTo] reconnect/rebind failed', err);
+    }
   }, []);
 
   return <ActiveDaemonContext.Provider value={{ target, switchTo }}>{children}</ActiveDaemonContext.Provider>;
