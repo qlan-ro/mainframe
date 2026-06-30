@@ -6,6 +6,7 @@
  *   - Port comes from getHost().daemon.port() (host port), not env-var build-time
  *   - auto-connect import deferred to Phase 7 (initAutoConnect export)
  *   - Singleton persisted across HMR reloads to avoid reconnection cascades
+ *   - A4: WS URL built from active daemon target; rebindLspToActiveDaemon exported
  */
 export { getLspLanguage, hasLspSupport } from './language-detection';
 export { LspClientManager } from './lsp-client';
@@ -14,6 +15,7 @@ export { initAutoConnect } from './auto-connect';
 
 import { LspClientManager } from './lsp-client';
 import { getHost } from '@/lib/host';
+import { getActiveDaemon } from '../daemon/active-daemon';
 
 // Extend the window type for HMR persistence only in this module.
 type LspWindow = Window & {
@@ -53,4 +55,31 @@ export function initLspPort(): Promise<void> {
     }
   })();
   return win.__lspPortInitPromise;
+}
+
+/**
+ * Dispose all active LSP clients and reinitialize the singleton against the
+ * current active daemon target. Call this when the active target changes
+ * (e.g. switching from local to remote). The WS URL for new connections is
+ * always read from `getActiveDaemon()` at connect time (A4 seam), so this
+ * primarily flushes stale open connections.
+ *
+ * `initLspPort()` (the local boot path) is unaffected and continues to work.
+ */
+export async function rebindLspToActiveDaemon(): Promise<void> {
+  try {
+    lspClientManager.disposeAll();
+    const t = getActiveDaemon();
+    // Extract the numeric port from the target URL for HTTP calls; remote
+    // targets without an explicit port get 0 (HTTP seam handled by A2).
+    const parsed = new URL(t.baseUrl);
+    const port = parsed.port ? parseInt(parsed.port, 10) : 0;
+    const freshManager = new LspClientManager(port);
+    Object.assign(lspClientManager, freshManager);
+    win.__lspClientManager = lspClientManager;
+    // Reset the init-promise so initLspPort can be called again if needed.
+    win.__lspPortInitPromise = undefined;
+  } catch (err) {
+    console.warn('[lsp] rebindLspToActiveDaemon failed', err);
+  }
 }

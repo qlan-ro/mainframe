@@ -13,6 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LspClientManager } from '../lsp-client';
+import { setActiveDaemon } from '../../daemon/active-daemon';
 
 // ---------------------------------------------------------------------------
 // FakeWebSocket — minimal stand-in for the browser WebSocket global.
@@ -120,6 +121,11 @@ beforeEach(() => {
     basePath: '/home/user/project',
     contained: true,
   });
+
+  // A4: URL is built from the active daemon target. Default to local at 31415
+  // so existing tests that create LspClientManager(31415) get the same URL
+  // they expected before the seam change.
+  setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:31415', token: null });
 });
 
 afterEach(() => {

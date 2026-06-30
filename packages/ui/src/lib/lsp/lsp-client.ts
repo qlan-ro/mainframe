@@ -30,6 +30,7 @@
  */
 
 import { resolvePath } from '../api/files';
+import { getActiveDaemon } from '../daemon/active-daemon';
 
 // ---------------------------------------------------------------------------
 // Plain LSP types (no editor dependency)
@@ -221,8 +222,13 @@ export class LspClientManager implements LspProviders {
   ): Promise<void> {
     if (this.clients.has(key)) return;
 
-    const wsQs = chatId ? `?chatId=${encodeURIComponent(chatId)}` : '';
-    const wsUrl = `ws://127.0.0.1:${this.port}/lsp/${projectId}/${language}${wsQs}`;
+    const t = getActiveDaemon();
+    const wsBase = t.baseUrl.replace(/^http/, 'ws');
+    const qs = new URLSearchParams();
+    if (chatId) qs.set('chatId', chatId);
+    if (t.token !== null) qs.set('token', t.token);
+    const wsQsStr = qs.size > 0 ? `?${qs.toString()}` : '';
+    const wsUrl = `${wsBase}/lsp/${projectId}/${language}${wsQsStr}`;
     const ws = new WebSocket(wsUrl);
 
     // Connect timeout: if the socket doesn't open within requestTimeoutMs, reject.
