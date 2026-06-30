@@ -5,7 +5,7 @@
 /// service `ro.qlan.mainframe.daemon` (account = daemon id). Tokens NEVER
 /// appear in the registry file.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const KEYRING_SERVICE: &str = "ro.qlan.mainframe.daemon";
 
@@ -51,7 +51,7 @@ pub fn resolve_registry_path(data_dir: Option<String>) -> PathBuf {
 /// Reads the registry file. Returns `vec![]` on any I/O or parse error (the
 /// file simply not existing is the expected initial state, so that is not
 /// logged as a warning — only malformed content is).
-pub fn read_registry(path: &PathBuf) -> Vec<DaemonMeta> {
+pub fn read_registry(path: &Path) -> Vec<DaemonMeta> {
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -73,7 +73,7 @@ pub fn read_registry(path: &PathBuf) -> Vec<DaemonMeta> {
 }
 
 /// Writes the registry file, creating the parent directory if needed.
-pub fn write_registry(path: &PathBuf, metas: &[DaemonMeta]) -> Result<(), String> {
+pub fn write_registry(path: &Path, metas: &[DaemonMeta]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("create_dir_all {}: {e}", parent.display()))?;
@@ -238,41 +238,40 @@ mod tests {
 
     #[test]
     fn upsert_replaces_existing_entry() {
+        // Use a unique subdirectory so this test is isolated from others.
         let dir = std::env::temp_dir().join(format!(
             "mf-test-upsert-{}",
             std::process::id()
         ));
-        let path = dir.join("remote-daemons.json");
-        let initial = DaemonMeta {
-            id: "x".into(),
+        std::fs::create_dir_all(&dir).unwrap();
+        let data_dir = dir.to_str().unwrap().to_string();
+
+        let v1 = DaemonMeta {
+            id: "alpha".into(),
             kind: "remote".into(),
-            label: "Old".into(),
+            label: "Old Label".into(),
             host: "old.example.com".into(),
             device: None,
             paired: None,
         };
-        write_registry(&path, &[initial]).unwrap();
+        // First upsert: inserts a new entry.
+        daemons_upsert(Some(data_dir.clone()), v1);
 
-        let updated = DaemonMeta {
-            id: "x".into(),
+        let v2 = DaemonMeta {
+            id: "alpha".into(),
             kind: "remote".into(),
-            label: "New".into(),
+            label: "New Label".into(),
             host: "new.example.com".into(),
             device: None,
             paired: None,
         };
-        // Drive through the command logic (path-level, not the Tauri command).
-        let mut list = read_registry(&path);
-        if let Some(e) = list.iter_mut().find(|d| d.id == updated.id) {
-            *e = updated.clone();
-        } else {
-            list.push(updated.clone());
-        }
-        write_registry(&path, &list).unwrap();
+        // Second upsert: same id → must replace, not append.
+        daemons_upsert(Some(data_dir.clone()), v2);
 
-        let back = read_registry(&path);
-        assert_eq!(back.len(), 1);
-        assert_eq!(back[0].label, "New");
-        assert_eq!(back[0].host, "new.example.com");
+        let list = daemons_list(Some(data_dir));
+        assert_eq!(list.len(), 1, "upsert must replace, not append");
+        assert_eq!(list[0].id, "alpha");
+        assert_eq!(list[0].label, "New Label");
+        assert_eq!(list[0].host, "new.example.com");
     }
 }
