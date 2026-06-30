@@ -205,10 +205,6 @@ describe('useDaemonRegistry — switchTo', () => {
   });
 
   it('switchTo("studio") builds a DaemonTarget with the stored token', async () => {
-    const capturedTargets: DaemonTarget[] = [];
-
-    // We'll spy by wrapping the active daemon context.
-    // The simplest approach: check the final state via getActiveDaemon.
     const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
       wrapper: makeWrapper(fakeHost),
     });
@@ -219,15 +215,11 @@ describe('useDaemonRegistry — switchTo', () => {
       await result.current.registry.switchTo('studio');
     });
 
-    // After switching, the active daemon's target should carry the token and correct baseUrl.
     const target = result.current.daemon.target;
     expect(target.id).toBe('studio');
     expect(target.kind).toBe('remote');
     expect(target.token).toBe(REMOTE_TOKEN);
     expect(target.baseUrl).toBe(`https://${REMOTE_STUDIO.host}`);
-
-    // Suppress the unused variable warning on capturedTargets.
-    void capturedTargets;
   });
 
   it('switchTo("local") switches back to local daemon with null token', async () => {
