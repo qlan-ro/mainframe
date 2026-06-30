@@ -7,6 +7,7 @@
  * - Exposes only what Phase 1 needs: connect, subscribe, send, onEvent, disconnect
  */
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
+import { getActiveDaemon } from './active-daemon';
 
 type EventHandler = (event: DaemonEvent) => void;
 type ConnectionListener = () => void;
@@ -43,7 +44,10 @@ export class DaemonWsClient {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return;
     this.intentionalClose = false;
 
-    const socket = new WebSocket(`ws://127.0.0.1:${this.port}`);
+    const t = getActiveDaemon();
+    const wsBase = t.baseUrl.replace(/^http/, 'ws');
+    const url = t.token ? `${wsBase}?token=${encodeURIComponent(t.token)}` : wsBase;
+    const socket = new WebSocket(url);
     this.ws = socket;
 
     socket.onopen = () => {
