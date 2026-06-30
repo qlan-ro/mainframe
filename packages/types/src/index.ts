@@ -19,6 +19,7 @@ export * from './api.js';
 export * from './host/host-contract.js';
 export * from './host/host-bridge.js';
 export * from './host/external-schemes.js';
+export * from './host/daemon-target.js';
 export type {
   PluginCapability,
   PluginManifest,
