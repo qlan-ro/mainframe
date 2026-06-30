@@ -45,11 +45,10 @@ function isDown(status: DaemonStatus): boolean {
 interface FallbackBannerProps {
   active: DaemonMeta;
   status: DaemonStatus;
-  local: DaemonMeta;
   onUseLocal: () => void;
 }
 
-function FallbackBanner({ active, status, local: _local, onUseLocal }: FallbackBannerProps) {
+function FallbackBanner({ active, status, onUseLocal }: FallbackBannerProps) {
   const needsRepair = status === 'needs-repair';
   const Icon = needsRepair ? Lock : WifiOff;
   const detail = needsRepair ? 'needs re-pairing' : 'is unreachable';
@@ -120,12 +119,7 @@ export function DaemonPicker({
         {/* ── Fallback banner ────────────────────────────────────────── */}
         {activeDown && active != null && activeStatus != null && local != null && (
           <div className="pb-[4px]">
-            <FallbackBanner
-              active={active}
-              status={activeStatus}
-              local={local}
-              onUseLocal={() => handleSwitch(local)}
-            />
+            <FallbackBanner active={active} status={activeStatus} onUseLocal={() => handleSwitch(local)} />
           </div>
         )}
 

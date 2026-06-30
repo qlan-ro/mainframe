@@ -4,6 +4,8 @@
  * Behaviors covered:
  *  1. With an active unreachable remote: fallback banner renders; clicking it
  *     calls onSwitch with the local entry.
+ *  1b. With an active needs-repair remote: fallback banner renders with Lock
+ *      icon + "needs re-pairing" copy; clicking still switches to local.
  *  2. The "Add remote daemon" footer fires onAdd (and close).
  *  3. With no remote daemons: the empty-state element renders.
  */
@@ -89,6 +91,74 @@ describe('DaemonPicker — fallback banner', () => {
     );
 
     expect(screen.queryByTestId('daemon-picker-fallback')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 1b — fallback banner when active remote needs-repair
+// ---------------------------------------------------------------------------
+
+describe('DaemonPicker — fallback banner (needs-repair branch)', () => {
+  function statusOfRepair(id: string): DaemonStatus {
+    if (id === 'hel1') return 'needs-repair';
+    return 'connected';
+  }
+
+  it('renders the fallback banner with needs-repair status', () => {
+    render(
+      <DaemonPicker
+        daemons={ALL_DAEMONS}
+        statusOf={statusOfRepair}
+        activeId="hel1"
+        onSwitch={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('daemon-picker-fallback')).toBeInTheDocument();
+  });
+
+  it('shows the Lock icon (svg) and "needs re-pairing" detail text', () => {
+    render(
+      <DaemonPicker
+        daemons={ALL_DAEMONS}
+        statusOf={statusOfRepair}
+        activeId="hel1"
+        onSwitch={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+
+    const banner = screen.getByTestId('daemon-picker-fallback');
+    // The Lock svg should be present inside the banner
+    expect(banner.querySelector('svg')).not.toBeNull();
+    // "needs re-pairing" copy should appear
+    expect(banner).toHaveTextContent('needs re-pairing');
+    // "is unreachable" copy should NOT appear
+    expect(banner).not.toHaveTextContent('is unreachable');
+  });
+
+  it('clicking the needs-repair banner still calls onSwitch with local', async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    const close = vi.fn();
+
+    render(
+      <DaemonPicker
+        daemons={ALL_DAEMONS}
+        statusOf={statusOfRepair}
+        activeId="hel1"
+        onSwitch={onSwitch}
+        onAdd={vi.fn()}
+        close={close}
+      />,
+    );
+
+    await user.click(screen.getByTestId('daemon-picker-fallback'));
+
+    expect(onSwitch).toHaveBeenCalledTimes(1);
+    expect(onSwitch).toHaveBeenCalledWith(LOCAL);
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });
 
