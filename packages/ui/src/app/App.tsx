@@ -50,11 +50,14 @@ export function App() {
               <AppShell port={port} />
             </DaemonPortProvider>
           ) : (
-            <div
-              data-testid="app-waiting-daemon"
-              className="flex flex-1 items-center justify-center bg-mf-window text-muted-foreground"
-            >
-              <span className="text-body">Waiting for daemon…</span>
+            <div className="relative flex-1 bg-mf-window">
+              <ConnectionOverlay
+                open
+                embedded
+                testId="app-waiting-daemon"
+                title="Starting up…"
+                subtitle="Connecting to the daemon. This only takes a moment."
+              />
             </div>
           )}
           {/* Post-boot disconnect overlay. `ready` latches on first /health, so

@@ -37,6 +37,7 @@ interface MainframeBridge {
   showNotification(title: string, body?: string): Promise<void>;
   clearSandboxSession(projectId: string): Promise<void>;
   log(level: string, module: string, message: string, data?: unknown): void;
+  setZoomFactor(factor: number): void;
   terminal: {
     create(opts: { id: string; cwd: string; cols: number; rows: number }): Promise<{ id: string }>;
     write(id: string, data: string): Promise<void>;
@@ -103,6 +104,10 @@ export class ElectronAdapter implements HostBridge {
 
   notify(title: string, body?: string): Promise<void> {
     return bridge().showNotification(title, body);
+  }
+
+  setZoom(factor: number): void {
+    bridge().setZoomFactor(factor);
   }
 
   private installTerminalListeners(): void {

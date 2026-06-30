@@ -1,12 +1,27 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 
+const DEFAULT_TITLE = 'Reconnecting to daemon…';
+const DEFAULT_SUBTITLE = 'Your sessions are safe. Work resumes automatically the moment the connection is back.';
+
 interface ConnectionOverlayProps {
   open: boolean;
   embedded?: boolean;
+  /** Overlay heading. Defaults to the reconnect copy. */
+  title?: string;
+  /** Secondary line under the heading. Defaults to the reconnect copy. */
+  subtitle?: string;
+  /** Card `data-testid` (so the boot/“starting” variant can keep its own hook). */
+  testId?: string;
 }
 
-export function ConnectionOverlay({ open, embedded = false }: ConnectionOverlayProps): React.ReactElement | null {
+export function ConnectionOverlay({
+  open,
+  embedded = false,
+  title = DEFAULT_TITLE,
+  subtitle = DEFAULT_SUBTITLE,
+  testId = 'connection-overlay',
+}: ConnectionOverlayProps): React.ReactElement | null {
   if (!open) return null;
 
   const body = (
@@ -18,7 +33,7 @@ export function ConnectionOverlay({ open, embedded = false }: ConnectionOverlayP
         WebkitBackdropFilter: 'blur(10px) saturate(120%)',
       }}
     >
-      <Card />
+      <Card title={title} subtitle={subtitle} testId={testId} />
     </div>
   );
 
@@ -27,17 +42,17 @@ export function ConnectionOverlay({ open, embedded = false }: ConnectionOverlayP
   return ReactDOM.createPortal(<div className="fixed inset-0 z-[11000]">{body}</div>, document.body);
 }
 
-function Card(): React.ReactElement {
+function Card({ title, subtitle, testId }: { title: string; subtitle: string; testId: string }): React.ReactElement {
   return (
     <div
-      data-testid="connection-overlay"
+      data-testid={testId}
       className="flex flex-col items-center gap-[16px] rounded-[13px] bg-background border-[0.5px] border-mf-border-hover min-w-[320px] pt-[30px] px-[38px] pb-[26px]"
       style={{
         boxShadow: 'var(--mf-shadow-modal)',
       }}
     >
       <Spinner />
-      <TextBlock />
+      <TextBlock title={title} subtitle={subtitle} />
       <ProgressRail />
     </div>
   );
@@ -59,13 +74,11 @@ function Spinner(): React.ReactElement {
   );
 }
 
-function TextBlock(): React.ReactElement {
+function TextBlock({ title, subtitle }: { title: string; subtitle: string }): React.ReactElement {
   return (
     <div className="text-center">
-      <p className="text-heading font-semibold text-foreground tracking-tight">Reconnecting to daemon…</p>
-      <p className="text-label text-muted-foreground mt-[5px] leading-normal max-w-[248px]">
-        Your sessions are safe. Work resumes automatically the moment the connection is back.
-      </p>
+      <p className="text-heading font-semibold text-foreground tracking-tight">{title}</p>
+      <p className="text-label text-muted-foreground mt-[5px] leading-normal max-w-[248px]">{subtitle}</p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { setUiZoom } from '@/lib/tauri/bridge';
+import { getHost } from '@/lib/host';
 
 export type ThemeMode = 'light' | 'dark';
 export type ColorScheme = 'classic' | 'ocean' | 'velvet';
@@ -59,14 +59,14 @@ function readUiScale(): UiScale {
 }
 
 /**
- * Apply the persisted UI scale via native webview page zoom. Called from main.tsx
- * at boot (fire-and-forget — native zoom is async, so it cannot be a synchronous
- * pre-paint guard; a brief scale-pop on launch is acceptable). Page zoom (NOT the
- * CSS `zoom` property) reinterprets the viewport, so the 100vh shell does not
- * overflow. No-op in browser dev mode.
+ * Apply the persisted UI scale via the host's native page zoom (Tauri
+ * `webview.setZoom` / Electron `webFrame.setZoomFactor`; no-op in browser).
+ * Called from main.tsx at boot — a brief scale-pop on launch is acceptable.
+ * Page zoom (NOT the CSS `zoom` property) reinterprets the viewport, so the
+ * 100vh shell does not overflow.
  */
 export function applyStoredScale(): void {
-  void setUiZoom(UI_SCALE_FACTORS[readUiScale()]);
+  getHost().setZoom(UI_SCALE_FACTORS[readUiScale()]);
 }
 
 function persist(key: string, value: string): void {

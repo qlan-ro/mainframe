@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type { UpdateStatus } from '../main/auto-updater.js';
 
 export type { UpdateStatus };
@@ -43,6 +43,7 @@ export interface MainframeAPI {
   destroyWebview: (webContentsId: number) => Promise<void>;
   showNotification: (title: string, body?: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
+  setZoomFactor: (factor: number) => void;
   terminal: TerminalAPI;
   updates: UpdateAPI;
   daemon: DaemonAPI;
@@ -67,6 +68,10 @@ const api: MainframeAPI = {
   showNotification: (title: string, body?: string) => ipcRenderer.invoke('notify:show', title, body),
   log: (level: string, module: string, message: string, data?: unknown) =>
     ipcRenderer.send('log', level, module, message, data),
+  // Native renderer page zoom (UI Scale). webFrame is available in the preload;
+  // no main-process IPC needed. Scales the whole renderer incl. the in-DOM
+  // <webview> preview, which tracks the page zoom automatically.
+  setZoomFactor: (factor: number) => webFrame.setZoomFactor(factor),
   terminal: {
     create: (options: { id: string; cwd: string; cols: number; rows: number }) =>
       ipcRenderer.invoke('terminal:create', options),

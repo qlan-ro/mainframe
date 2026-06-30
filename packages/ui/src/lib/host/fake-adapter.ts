@@ -71,6 +71,10 @@ export class FakeHostBridge implements HostBridge {
     return Promise.resolve();
   }
 
+  setZoom(_factor: number): void {
+    /* no-op in browser/dev — page zoom is a native-shell capability */
+  }
+
   terminal = {
     create: (): Promise<TerminalHandle> => notSupported('terminal.create'),
   };

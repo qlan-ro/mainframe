@@ -3,17 +3,17 @@ import { render } from '@testing-library/react';
 import { ThemeEffect } from '../ThemeEffect';
 import { useTheme, UI_SCALE_FACTORS } from '@/store/theme';
 
-// The zoom effect delegates to the native page-zoom bridge (no-op in jsdom);
-// mock it so we can assert the factor it is called with.
-const { setUiZoomMock } = vi.hoisted(() => ({ setUiZoomMock: vi.fn() }));
-vi.mock('@/lib/tauri/bridge', () => ({ setUiZoom: setUiZoomMock }));
+// The zoom effect delegates to the host's native page zoom (no-op in jsdom);
+// mock the host so we can assert the factor setZoom is called with.
+const { setZoomMock } = vi.hoisted(() => ({ setZoomMock: vi.fn() }));
+vi.mock('@/lib/host', () => ({ getHost: () => ({ setZoom: setZoomMock }) }));
 
 describe('ThemeEffect', () => {
   beforeEach(() => {
     document.documentElement.className = '';
     document.documentElement.removeAttribute('data-scheme');
     useTheme.setState({ mode: 'light', scheme: 'classic', windowStyle: 'glass', uiScale: 'normal' });
-    setUiZoomMock.mockClear();
+    setZoomMock.mockClear();
   });
 
   it('applies dark class for dark mode', () => {
@@ -34,6 +34,6 @@ describe('ThemeEffect', () => {
   it('applies native zoom for the active uiScale', () => {
     useTheme.setState({ uiScale: 'large' });
     render(<ThemeEffect />);
-    expect(setUiZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
+    expect(setZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
   });
 });

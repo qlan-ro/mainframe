@@ -145,6 +145,13 @@ export interface HostBridge {
     reportActivity(state: PresenceState): Promise<void>;
   };
   log(level: LogLevel, module: string, message: string, data?: unknown): void;
+  /**
+   * Set the renderer's page-zoom factor (the UI Scale setting). Native page zoom
+   * per shell — Tauri: `webview.setZoom`; Electron: `webFrame.setZoomFactor`;
+   * browser/fake: no-op. Page zoom reinterprets the viewport, so the 100vh shell
+   * never overflows (unlike the CSS `zoom` property).
+   */
+  setZoom(factor: number): void;
   /** Tauri installs the window-drag listener here; Electron is a CSS no-op. */
   init?(): void;
 }

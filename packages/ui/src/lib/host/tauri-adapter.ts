@@ -94,6 +94,10 @@ export class TauriAdapter implements HostBridge {
     bridge.log(level, module, message, data);
   }
 
+  setZoom(factor: number): void {
+    void bridge.setUiZoom(factor);
+  }
+
   /**
    * Install the window-drag listener (relocated from bridge.ts module scope).
    * Tauri 2 does not auto-wire mousedown → startDragging for [data-drag-region].

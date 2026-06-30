@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useTheme, UI_SCALE_FACTORS } from '@/store/theme';
 import { invalidateShikiTheme } from '@/lib/shiki-highlighter';
-import { setUiZoom } from '@/lib/tauri/bridge';
+import { getHost } from '@/lib/host';
 
 /**
  * Maintains the GLOBAL appearance axes on <html> for runtime changes:
@@ -24,7 +24,7 @@ export function ThemeEffect() {
 
   const uiScale = useTheme((s) => s.uiScale);
   useEffect(() => {
-    void setUiZoom(UI_SCALE_FACTORS[uiScale]);
+    getHost().setZoom(UI_SCALE_FACTORS[uiScale]);
   }, [uiScale]);
 
   return null;

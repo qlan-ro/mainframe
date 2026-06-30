@@ -27,4 +27,20 @@ describe('ConnectionOverlay', () => {
     render(<ConnectionOverlay open embedded />);
     expect(screen.getByTestId('connection-overlay')).toBeTruthy();
   });
+
+  it('renders custom title/subtitle and testId (boot/starting variant)', () => {
+    render(
+      <ConnectionOverlay
+        open
+        embedded
+        testId="app-waiting-daemon"
+        title="Starting up…"
+        subtitle="Connecting to the daemon. This only takes a moment."
+      />,
+    );
+    expect(screen.getByTestId('app-waiting-daemon')).toBeTruthy();
+    expect(screen.getByText('Starting up…')).toBeTruthy();
+    expect(screen.getByText(/Connecting to the daemon/)).toBeTruthy();
+    expect(screen.queryByText('Reconnecting to daemon…')).toBeNull();
+  });
 });

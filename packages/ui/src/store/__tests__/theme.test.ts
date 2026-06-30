@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme, applyStoredTheme } from '../theme';
 
-// applyStoredScale delegates to the native page-zoom bridge (no-op in jsdom);
-// mock it so we can assert the factor it is called with.
-const { setUiZoomMock } = vi.hoisted(() => ({ setUiZoomMock: vi.fn() }));
-vi.mock('@/lib/tauri/bridge', () => ({ setUiZoom: setUiZoomMock }));
+// applyStoredScale delegates to the host's native page zoom (no-op in jsdom);
+// mock the host so we can assert the factor setZoom is called with.
+const { setZoomMock } = vi.hoisted(() => ({ setZoomMock: vi.fn() }));
+vi.mock('@/lib/host', () => ({ getHost: () => ({ setZoom: setZoomMock }) }));
 
 // Reset module registry and localStorage before every test so each case starts
 // from a clean slate. The theme store reads localStorage at module-init time,
@@ -12,7 +12,7 @@ vi.mock('@/lib/tauri/bridge', () => ({ setUiZoom: setUiZoomMock }));
 beforeEach(() => {
   localStorage.clear();
   vi.resetModules();
-  setUiZoomMock.mockClear();
+  setZoomMock.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -166,17 +166,17 @@ describe('theme store — uiScale axis', () => {
     expect(localStorage.getItem('mf-ui-scale')).toBe('large');
   });
 
-  it('applyStoredScale calls native zoom with the matching factor', async () => {
+  it('applyStoredScale calls host.setZoom with the matching factor', async () => {
     localStorage.setItem('mf-ui-scale', 'large');
     const { applyStoredScale, UI_SCALE_FACTORS } = await import('../theme');
     applyStoredScale();
-    expect(setUiZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
+    expect(setZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
   });
 
-  it('applyStoredScale calls native zoom with 1 for compact', async () => {
+  it('applyStoredScale calls host.setZoom with 1 for compact', async () => {
     localStorage.setItem('mf-ui-scale', 'compact');
     const { applyStoredScale } = await import('../theme');
     applyStoredScale();
-    expect(setUiZoomMock).toHaveBeenCalledWith(1);
+    expect(setZoomMock).toHaveBeenCalledWith(1);
   });
 });
