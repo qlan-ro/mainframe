@@ -32,6 +32,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
+// Mock active-daemon so we can count setActiveDaemon calls without side effects.
+// ---------------------------------------------------------------------------
+
+const setActiveDaemonMock = vi.fn();
+vi.mock('../../lib/daemon/active-daemon', () => ({
+  setActiveDaemon: (...args: unknown[]) => setActiveDaemonMock(...args),
+  getActiveDaemon: vi.fn(() => ({
+    id: 'local',
+    kind: 'local',
+    label: 'Local',
+    baseUrl: 'http://127.0.0.1:0',
+    token: null,
+  })),
+  subscribeActiveDaemon: vi.fn(() => () => {}),
+}));
+
+// ---------------------------------------------------------------------------
 // Fake host wiring — intercepts getHost() in the source under test.
 // ---------------------------------------------------------------------------
 
@@ -60,6 +77,7 @@ describe('healthUrl', () => {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  setActiveDaemonMock.mockClear();
   const fake = new FakeHostBridge();
   fake.daemon.port = mockGetDaemonPort;
   fake.daemon.status = mockGetDaemonStatus;
@@ -193,5 +211,38 @@ describe('useConnectionState', () => {
     // If the AbortController timeout interaction ever makes this flaky, the port
     // assertion above is the load-bearing signal and this one can be softened.
     expect(result.current.state).toBe('connected');
+  });
+
+  it('seeds the local daemon target exactly once — not once per healthy poll', async () => {
+    // Regression test for I1: setActiveDaemon must fire on the FIRST healthy
+    // poll only. The steady-state poll loop (healthy every ~2s) must NOT re-seed
+    // an equivalent target on each tick, which would trigger setTarget re-renders
+    // every 2 seconds inside ActiveDaemonProvider.
+    mockGetDaemonPort.mockResolvedValue(31415);
+    mockGetDaemonStatus.mockResolvedValue('ready');
+    // All polls succeed.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    renderHook(() => useConnectionState());
+
+    // First poll — port resolves and health succeeds.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Advance through several more poll ticks (3× POLL_INTERVAL_MS = 6 s).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6500);
+    });
+
+    // setActiveDaemon must have been called exactly once despite multiple healthy polls.
+    expect(setActiveDaemonMock).toHaveBeenCalledTimes(1);
+    expect(setActiveDaemonMock).toHaveBeenCalledWith({
+      id: 'local',
+      kind: 'local',
+      label: 'Local',
+      baseUrl: 'http://127.0.0.1:31415',
+      token: null,
+    });
   });
 });

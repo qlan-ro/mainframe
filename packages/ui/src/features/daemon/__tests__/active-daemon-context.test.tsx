@@ -199,8 +199,7 @@ describe('ActiveDaemonProvider — switchTo wires daemonWs with a non-null port 
 
     expect(daemonWsMock.setPort).toHaveBeenCalled();
     const portArg: unknown = daemonWsMock.setPort.mock.calls[daemonWsMock.setPort.mock.calls.length - 1]?.[0];
-    expect(typeof portArg).toBe('number');
-    expect(portArg).not.toBeNull();
+    expect(portArg).toBeGreaterThan(0);
     expect(daemonWsMock.connect).toHaveBeenCalled();
   });
 });

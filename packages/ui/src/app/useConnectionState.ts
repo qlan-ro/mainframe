@@ -61,6 +61,8 @@ export function useConnectionState(): {
   const [port, setPort] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const portRef = useRef<number | null>(null);
+  /** Guards the local target seed — fires setActiveDaemon exactly once. */
+  const seededRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,13 +83,16 @@ export function useConnectionState(): {
       setState(healthy ? 'connected' : 'disconnected');
       if (healthy) {
         setReady(true); // one-way latch — never reset to false
-        setActiveDaemon({
-          id: 'local',
-          kind: 'local',
-          label: 'Local',
-          baseUrl: `http://127.0.0.1:${currentPort}`,
-          token: null,
-        });
+        if (!seededRef.current) {
+          seededRef.current = true;
+          setActiveDaemon({
+            id: 'local',
+            kind: 'local',
+            label: 'Local',
+            baseUrl: `http://127.0.0.1:${currentPort}`,
+            token: null,
+          });
+        }
       }
       pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     }
