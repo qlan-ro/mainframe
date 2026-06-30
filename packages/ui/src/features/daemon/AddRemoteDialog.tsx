@@ -2,7 +2,7 @@
  * AddRemoteDialog — two-step pairing dialog (Connect → Pair).
  *
  * Exports:
- *   StepRail          — pure progress indicator component.
+ *   StepRail          — pure progress indicator component (re-exported from pairing-shared).
  *   AddRemoteBody     — pure/controlled dialog body (no async logic).
  *   AddRemoteDialog   — live state machine wired to verifyDaemon/confirmPairing/registry.
  *
@@ -11,7 +11,7 @@
  *   bg-mf-content2 / mf-success / destructive / primary / rounded-md /
  *   font-mono / text-micro / text-caption / text-label / text-body.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Server, X } from 'lucide-react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
@@ -19,17 +19,16 @@ import { getHost } from '@/lib/host';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { verifyDaemon, confirmPairing, PairingError } from './pair-daemon';
 import { useDaemonRegistry } from './use-daemon-registry';
-import { StepRail, Step0Body, Step1Body, FooterStep0, FooterStep1, type UrlPhase } from './pairing-dialog-parts';
+import { StepRail, type UrlPhase } from './pairing-shared';
+import { Step0Body, Step1Body, FooterStep0, FooterStep1, type Step1Phase } from './pairing-steps';
 
-export { StepRail } from './pairing-dialog-parts';
+export { StepRail } from './pairing-shared';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export type DialogMode = 'add' | 'repair';
-
-type Step1Phase = 'idle' | 'confirming' | 'invalid' | 'done' | 'unreachable';
 
 export interface AddRemoteBodyProps {
   mode: DialogMode;
@@ -162,6 +161,7 @@ export interface AddRemoteDialogProps {
 
 export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }: AddRemoteDialogProps) {
   const registry = useDaemonRegistry();
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initialStep: 0 | 1 = mode === 'repair' ? 1 : 0;
   const initialUrl = mode === 'repair' && target != null ? `https://${target.host}` : '';
@@ -171,9 +171,17 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
   const [urlVersion, setUrlVersion] = useState<string | undefined>(undefined);
   const [step1Phase, setStep1Phase] = useState<Step1Phase>('idle');
   const [url, setUrl] = useState(initialUrl);
+  // 6-space string is the blank sentinel for PairCodeInput (one space per character slot)
   const [code, setCode] = useState('      ');
   const [device, setDevice] = useState('This Mac');
   const [pairedLabel, setPairedLabel] = useState<string | undefined>(undefined);
+
+  // Clear the deferred close timer on unmount to avoid setting state after unmount.
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current != null) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   const handleUrlChange = useCallback((v: string) => {
     setUrl(v);
@@ -232,15 +240,14 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
 
       setStep1Phase('done');
       setPairedLabel(mode === 'repair' && target != null ? target.label : undefined);
+
+      // Fire onDone immediately; defer close by 800 ms so the "Paired" notice
+      // and button label are visible before the dialog dismisses.
       onDone();
-      onClose();
+      closeTimerRef.current = setTimeout(onClose, 800);
     } catch (err) {
       if (err instanceof PairingError) {
-        if (err.kind === 'invalid') {
-          setStep1Phase('invalid');
-        } else {
-          setStep1Phase('unreachable');
-        }
+        setStep1Phase(err.kind === 'invalid' ? 'invalid' : 'unreachable');
       } else {
         setStep1Phase('unreachable');
       }

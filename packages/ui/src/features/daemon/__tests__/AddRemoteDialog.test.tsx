@@ -5,8 +5,9 @@
  *  1. add-mode: type URL → Verify → reachable → Continue → enter code → Pair
  *     → confirmPairing called with url+code, registry.add called, onDone fired.
  *  2. repair-mode: starts at step 1 with locked URL, enter code → Re-pair
- *     → host.daemons.setToken called, onDone fired.
+ *     → host.daemons.setToken called with correct id+token, onDone fired.
  *  3. failing code (PairingError 'invalid') → error notice rendered, no add.
+ *  4. network error (PairingError 'network') → error UI shown, no crash, no add.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -71,6 +72,7 @@ import { AddRemoteDialog } from '../AddRemoteDialog';
 
 const TEST_URL = 'https://my-server.example.com';
 const VALID_CODE = 'ABC123';
+const RETURNED_TOKEN = 'jwt-abc';
 
 const REMOTE_META: DaemonMeta = {
   id: 'server-1',
@@ -87,9 +89,11 @@ const mockAdd = vi.fn();
 const mockSwitchTo = vi.fn();
 
 let fakeHost: FakeHostBridge;
+let setTokenSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   fakeHost = new FakeHostBridge();
+  setTokenSpy = vi.spyOn(fakeHost.daemons, 'setToken');
   setHostForTesting(fakeHost);
 
   vi.mocked(useDaemonRegistry).mockReturnValue({
@@ -103,7 +107,7 @@ beforeEach(() => {
   });
 
   vi.mocked(verifyDaemon).mockResolvedValue({ ok: true, version: '1.2.3', ms: 45 });
-  vi.mocked(confirmPairing).mockResolvedValue({ token: 'jwt-abc', deviceId: 'dev-123' });
+  vi.mocked(confirmPairing).mockResolvedValue({ token: RETURNED_TOKEN, deviceId: 'dev-123' });
   mockAdd.mockResolvedValue(undefined);
   mockSwitchTo.mockResolvedValue(undefined);
 });
@@ -112,6 +116,33 @@ afterEach(() => {
   resetHostForTesting();
   vi.clearAllMocks();
 });
+
+// ---------------------------------------------------------------------------
+// Helper: type a 6-char code into the PairCodeInput
+// ---------------------------------------------------------------------------
+
+async function typeCode(user: ReturnType<typeof userEvent.setup>, code: string) {
+  const codeInput = screen.getByTestId('daemon-pair-code');
+  const boxes = codeInput.querySelectorAll('input');
+  expect(boxes).toHaveLength(6);
+  for (let i = 0; i < code.length; i++) {
+    await user.click(boxes[i]!);
+    await user.keyboard(code[i]!);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: advance from step 0 to step 1 (verify + continue)
+// ---------------------------------------------------------------------------
+
+async function advanceToStep1(user: ReturnType<typeof userEvent.setup>) {
+  const urlInput = screen.getByTestId('daemon-add-url');
+  await user.clear(urlInput);
+  await user.type(urlInput, TEST_URL);
+  await user.click(screen.getByTestId('daemon-add-verify'));
+  await waitFor(() => screen.getByText(/daemon reachable/i));
+  await user.click(screen.getByTestId('daemon-add-continue'));
+}
 
 // ---------------------------------------------------------------------------
 // Behavior 1 — add-mode happy path
@@ -125,37 +156,11 @@ describe('AddRemoteDialog — add-mode happy path', () => {
 
     render(<AddRemoteDialog open mode="add" onClose={onClose} onDone={onDone} />);
 
-    // Step 0: enter URL
-    const urlInput = screen.getByTestId('daemon-add-url');
-    await user.clear(urlInput);
-    await user.type(urlInput, TEST_URL);
-
-    // Click Verify
-    await user.click(screen.getByTestId('daemon-add-verify'));
-
-    // Reachable notice should appear
-    await waitFor(() => {
-      expect(screen.getByText(/daemon reachable/i)).toBeInTheDocument();
-    });
-
+    await advanceToStep1(user);
     expect(verifyDaemon).toHaveBeenCalledWith(TEST_URL);
 
-    // Continue to step 1
-    await user.click(screen.getByTestId('daemon-add-continue'));
+    await typeCode(user, VALID_CODE);
 
-    // Step 1: enter 6-char code via PairCodeInput
-    const codeInput = screen.getByTestId('daemon-pair-code');
-    // The 6 individual inputs inside PairCodeInput
-    const boxes = codeInput.querySelectorAll('input');
-    expect(boxes).toHaveLength(6);
-
-    // Type each char into the corresponding input
-    for (let i = 0; i < VALID_CODE.length; i++) {
-      await user.click(boxes[i]!);
-      await user.keyboard(VALID_CODE[i]!);
-    }
-
-    // Click Pair
     const pairBtn = screen.getByTestId('daemon-add-confirm');
     expect(pairBtn).not.toBeDisabled();
     await user.click(pairBtn);
@@ -175,11 +180,11 @@ describe('AddRemoteDialog — add-mode happy path', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Behavior 2 — repair-mode: starts at step 1 with locked URL
+// Behavior 2 — repair-mode: starts at step 1 with locked URL + setToken
 // ---------------------------------------------------------------------------
 
 describe('AddRemoteDialog — repair-mode', () => {
-  it('skips step 0, shows locked URL chip, confirms with setToken and calls onDone', async () => {
+  it('skips step 0, shows locked URL chip, setToken called with correct id+token, onDone fires', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     const onDone = vi.fn();
@@ -189,30 +194,24 @@ describe('AddRemoteDialog — repair-mode', () => {
     // Should start at step 1 (no Verify button visible)
     expect(screen.queryByTestId('daemon-add-verify')).not.toBeInTheDocument();
 
-    // URL chip visible with the locked URL
+    // Locked URL chip should show the target host
     expect(screen.getByText(new RegExp(REMOTE_META.host))).toBeInTheDocument();
 
-    // Enter code
-    const codeInput = screen.getByTestId('daemon-pair-code');
-    const boxes = codeInput.querySelectorAll('input');
+    await typeCode(user, VALID_CODE);
 
-    for (let i = 0; i < VALID_CODE.length; i++) {
-      await user.click(boxes[i]!);
-      await user.keyboard(VALID_CODE[i]!);
-    }
-
-    // Click Re-pair
-    const repairBtn = screen.getByTestId('daemon-add-confirm');
-    await user.click(repairBtn);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
 
     await waitFor(() => {
       expect(confirmPairing).toHaveBeenCalledTimes(1);
     });
 
-    // repair-mode uses setToken, not add
+    // Positive assertion: setToken must be called with the daemon id and the returned token
     await waitFor(() => {
-      expect(mockAdd).not.toHaveBeenCalled();
+      expect(setTokenSpy).toHaveBeenCalledWith(REMOTE_META.id, RETURNED_TOKEN);
     });
+
+    // repair-mode must NOT call registry.add
+    expect(mockAdd).not.toHaveBeenCalled();
 
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);
@@ -221,7 +220,7 @@ describe('AddRemoteDialog — repair-mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Behavior 3 — invalid pairing code
+// Behavior 3 — invalid pairing code (PairingError 'invalid')
 // ---------------------------------------------------------------------------
 
 describe('AddRemoteDialog — invalid code', () => {
@@ -232,22 +231,8 @@ describe('AddRemoteDialog — invalid code', () => {
     const onDone = vi.fn();
     render(<AddRemoteDialog open mode="add" onClose={vi.fn()} onDone={onDone} />);
 
-    // Fast-path to step 1: set URL then verify+continue via clicks
-    const urlInput = screen.getByTestId('daemon-add-url');
-    await user.clear(urlInput);
-    await user.type(urlInput, TEST_URL);
-    await user.click(screen.getByTestId('daemon-add-verify'));
-
-    await waitFor(() => screen.getByText(/daemon reachable/i));
-
-    await user.click(screen.getByTestId('daemon-add-continue'));
-
-    const codeInput = screen.getByTestId('daemon-pair-code');
-    const boxes = codeInput.querySelectorAll('input');
-    for (let i = 0; i < VALID_CODE.length; i++) {
-      await user.click(boxes[i]!);
-      await user.keyboard(VALID_CODE[i]!);
-    }
+    await advanceToStep1(user);
+    await typeCode(user, VALID_CODE);
 
     await user.click(screen.getByTestId('daemon-add-confirm'));
 
@@ -256,6 +241,36 @@ describe('AddRemoteDialog — invalid code', () => {
     });
 
     expect(mockAdd).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 4 — network error (PairingError 'network')
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — network error', () => {
+  it('shows error UI, does NOT crash, does NOT call add or setToken on PairingError(network)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirmPairing).mockRejectedValue(new PairingError('network'));
+
+    const onDone = vi.fn();
+    render(<AddRemoteDialog open mode="add" onClose={vi.fn()} onDone={onDone} />);
+
+    await advanceToStep1(user);
+    await typeCode(user, VALID_CODE);
+
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    // Network error → unreachable phase. The confirm button stays enabled (user
+    // can retry), but add/setToken/onDone must NOT have been called.
+    await waitFor(() => {
+      // confirmPairing was called but threw, so the dialog is still mounted
+      expect(confirmPairing).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockAdd).not.toHaveBeenCalled();
+    expect(setTokenSpy).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
   });
 });
