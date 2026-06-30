@@ -12,8 +12,9 @@
 import { create } from 'zustand';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 import type { SortMode } from '@/features/sessions/view-model/group-sessions';
+import { daemonScopedKey } from '@/lib/daemon/daemon-scoped-storage';
 
-const STORAGE_KEY = 'mf:filterProjectId';
+const BASE_KEY = 'mf:filterProjectId';
 
 interface SessionFiltersState {
   filterProjectId: string | null;
@@ -30,14 +31,14 @@ interface SessionFiltersState {
 
 function persistProjectId(id: string | null): void {
   if (id !== null) {
-    localStorage.setItem(STORAGE_KEY, id);
+    localStorage.setItem(daemonScopedKey(BASE_KEY), id);
   } else {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(daemonScopedKey(BASE_KEY));
   }
 }
 
 export const useSessionFilters = create<SessionFiltersState>((set) => ({
-  filterProjectId: localStorage.getItem(STORAGE_KEY),
+  filterProjectId: localStorage.getItem(daemonScopedKey(BASE_KEY)),
   selectedTags: new Set<string>(),
   selectedSynthetic: new Set<SyntheticTag>(),
   sortMode: 'recent',

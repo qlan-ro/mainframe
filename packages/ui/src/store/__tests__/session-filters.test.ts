@@ -1,18 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
+import { setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useSessionFilters } from '../session-filters';
+
+// The active daemon defaults to 'local', so the scoped key is 'mf:filterProjectId::local'.
+const SCOPED_KEY = 'mf:filterProjectId::local';
 
 // Reset the singleton store and localStorage between tests so each test starts
 // with a clean slate. Behavior 1 uses vi.resetModules() + dynamic import
 // instead, so this beforeEach covers behaviors 2–9 only.
 beforeEach(() => {
+  setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:0', token: null });
   useSessionFilters.setState({
     filterProjectId: null,
     selectedTags: new Set(),
     selectedSynthetic: new Set(),
     sortMode: 'recent',
   });
-  localStorage.removeItem('mf:filterProjectId');
+  localStorage.removeItem(SCOPED_KEY);
 });
 
 // ---------------------------------------------------------------------------
@@ -47,7 +52,7 @@ describe('session-filters — setSortMode updates the sort mode', () => {
 
 describe('session-filters — initial filterProjectId reads localStorage on module import', () => {
   it('initialises to the value seeded in localStorage before module load', async () => {
-    localStorage.setItem('mf:filterProjectId', 'proj-seed');
+    localStorage.setItem(SCOPED_KEY, 'proj-seed');
     vi.resetModules();
 
     const { useSessionFilters: freshStore } = await import('../session-filters');
@@ -55,7 +60,7 @@ describe('session-filters — initial filterProjectId reads localStorage on modu
     expect(freshStore.getState().filterProjectId).toBe('proj-seed');
 
     // Cleanup: remove the seeded key so subsequent tests start clean.
-    localStorage.removeItem('mf:filterProjectId');
+    localStorage.removeItem(SCOPED_KEY);
   });
 });
 
@@ -64,11 +69,11 @@ describe('session-filters — initial filterProjectId reads localStorage on modu
 // ---------------------------------------------------------------------------
 
 describe('session-filters — setFilterProjectId updates state and persists to localStorage', () => {
-  it('sets filterProjectId to proj-1 and writes proj-1 to localStorage', () => {
+  it('sets filterProjectId to proj-1 and writes proj-1 to localStorage under the scoped key', () => {
     useSessionFilters.getState().setFilterProjectId('proj-1');
 
     expect(useSessionFilters.getState().filterProjectId).toBe('proj-1');
-    expect(localStorage.getItem('mf:filterProjectId')).toBe('proj-1');
+    expect(localStorage.getItem(SCOPED_KEY)).toBe('proj-1');
   });
 });
 
@@ -77,12 +82,12 @@ describe('session-filters — setFilterProjectId updates state and persists to l
 // ---------------------------------------------------------------------------
 
 describe('session-filters — setFilterProjectId(null) clears state and removes localStorage key', () => {
-  it('sets filterProjectId to null and removes the localStorage key', () => {
+  it('sets filterProjectId to null and removes the scoped localStorage key', () => {
     useSessionFilters.getState().setFilterProjectId('proj-1');
     useSessionFilters.getState().setFilterProjectId(null);
 
     expect(useSessionFilters.getState().filterProjectId).toBe(null);
-    expect(localStorage.getItem('mf:filterProjectId')).toBe(null);
+    expect(localStorage.getItem(SCOPED_KEY)).toBe(null);
   });
 });
 
@@ -154,7 +159,7 @@ describe('session-filters — toggleSynthetic removes has-pr on a second call', 
 // ---------------------------------------------------------------------------
 
 describe('session-filters — clearFilters resets filterProjectId, selectedTags, and selectedSynthetic', () => {
-  it('all three fields are empty/null and localStorage key is removed after clearFilters', () => {
+  it('all three fields are empty/null and scoped localStorage key is removed after clearFilters', () => {
     useSessionFilters.getState().setFilterProjectId('proj-1');
     useSessionFilters.getState().toggleTag('go');
     useSessionFilters.getState().toggleSynthetic('has-worktree');
@@ -164,7 +169,7 @@ describe('session-filters — clearFilters resets filterProjectId, selectedTags,
     expect(useSessionFilters.getState().filterProjectId).toBe(null);
     expect(useSessionFilters.getState().selectedTags.size).toBe(0);
     expect(useSessionFilters.getState().selectedSynthetic.size).toBe(0);
-    expect(localStorage.getItem('mf:filterProjectId')).toBe(null);
+    expect(localStorage.getItem(SCOPED_KEY)).toBe(null);
   });
 });
 
@@ -173,11 +178,11 @@ describe('session-filters — clearFilters resets filterProjectId, selectedTags,
 // ---------------------------------------------------------------------------
 
 describe('session-filters — setFilterProjectId updates from one project to another', () => {
-  it('state and localStorage reflect proj-B after switching from proj-A', () => {
+  it('state and scoped localStorage reflect proj-B after switching from proj-A', () => {
     useSessionFilters.getState().setFilterProjectId('proj-A');
     useSessionFilters.getState().setFilterProjectId('proj-B');
 
     expect(useSessionFilters.getState().filterProjectId).toBe('proj-B');
-    expect(localStorage.getItem('mf:filterProjectId')).toBe('proj-B');
+    expect(localStorage.getItem(SCOPED_KEY)).toBe('proj-B');
   });
 });

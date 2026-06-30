@@ -1,4 +1,5 @@
 import { beforeEach, describe, it, expect } from 'vitest';
+import { setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { sanitizeRun, serializeSessions, reviveSessions } from '../layout-persist';
 import { useLayoutStore } from '../layout';
 import type { RunState } from '../run-pane';
@@ -57,8 +58,11 @@ describe('layout-persist', () => {
   });
 });
 
+const LAYOUT_SCOPED_KEY = 'mf:session-layout::local';
+
 describe('layout store persistence', () => {
   beforeEach(() => {
+    setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:0', token: null });
     localStorage.clear();
     useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
   });
@@ -73,11 +77,11 @@ describe('layout store persistence', () => {
     expect(useLayoutStore.getState().sessions.has('chat-b')).toBe(true);
   });
 
-  it('persists sessions to mf:session-layout and sanitizes on write', () => {
+  it('persists sessions to the daemon-scoped key and sanitizes on write', () => {
     useLayoutStore.getState().setActiveSession('chat-x');
     // mutates active session layout → triggers persist
     useLayoutStore.getState().setTopFrac(0.7);
-    const raw = JSON.parse(localStorage.getItem('mf:session-layout')!);
+    const raw = JSON.parse(localStorage.getItem(LAYOUT_SCOPED_KEY)!);
     expect(raw.state.sessions['chat-x']).toBeTruthy();
   });
 
@@ -86,12 +90,12 @@ describe('layout store persistence', () => {
     useLayoutStore.getState().setActiveSession('chat-r');
     useLayoutStore.getState().setTopFrac(0.65);
 
-    // Simulate rehydrate: push a serialized state into localStorage
+    // Simulate rehydrate: push a serialized state into localStorage under the scoped key
     const persisted = {
       state: { sessions: { 'chat-r': { layout, run: null } } },
       version: 1,
     };
-    localStorage.setItem('mf:session-layout', JSON.stringify(persisted));
+    localStorage.setItem(LAYOUT_SCOPED_KEY, JSON.stringify(persisted));
 
     // Reset store (as if the app restarted) — merge will revive from localStorage
     useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });

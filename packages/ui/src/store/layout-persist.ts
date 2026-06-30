@@ -1,4 +1,5 @@
 import { createJSONStorage, type PersistOptions } from 'zustand/middleware';
+import { daemonScopedKey } from '@/lib/daemon/daemon-scoped-storage';
 import type { LayoutStore, SessionWorkspace } from './layout';
 import type { RunState, RunTab } from './run-pane';
 
@@ -53,11 +54,17 @@ export function prunePersistedSessions(
 
 type PersistedLayout = { sessions: Record<string, SessionWorkspace> };
 
+const LAYOUT_BASE_KEY = 'mf:session-layout';
+
 /** zustand persist config for the per-session layout store (`mf:session-layout`). */
 export const layoutPersistOptions: PersistOptions<LayoutStore, PersistedLayout> = {
-  name: 'mf:session-layout',
+  name: LAYOUT_BASE_KEY,
   version: 1,
-  storage: createJSONStorage(() => localStorage),
+  storage: createJSONStorage(() => ({
+    getItem: (name) => localStorage.getItem(daemonScopedKey(name)),
+    setItem: (name, value) => localStorage.setItem(daemonScopedKey(name), value),
+    removeItem: (name) => localStorage.removeItem(daemonScopedKey(name)),
+  })),
   partialize: (s) => ({ sessions: serializeSessions(s.sessions) }),
   merge: (persisted, current) => ({
     ...current,

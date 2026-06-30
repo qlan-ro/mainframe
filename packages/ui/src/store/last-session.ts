@@ -9,7 +9,8 @@
  * most-recent session when it no longer maps to a live, non-archived chat.
  */
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { daemonScopedKey } from '@/lib/daemon/daemon-scoped-storage';
 
 interface LastSessionState {
   /** Daemon chat id of the last opened session, or null if none. */
@@ -32,6 +33,11 @@ export const useLastSessionStore = create<LastSessionState>()(
     {
       name: 'mf:last-session',
       version: 2,
+      storage: createJSONStorage(() => ({
+        getItem: (name) => localStorage.getItem(daemonScopedKey(name)),
+        setItem: (name, value) => localStorage.setItem(daemonScopedKey(name), value),
+        removeItem: (name) => localStorage.removeItem(daemonScopedKey(name)),
+      })),
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Partial<LastSessionState>;
         if (version < 2 && p.lastByProject == null) p.lastByProject = {};
