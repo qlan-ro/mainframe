@@ -11,8 +11,14 @@ interface ConnectionOverlayProps {
   title?: string;
   /** Secondary line under the heading. Defaults to the reconnect copy. */
   subtitle?: string;
-  /** Card `data-testid` (so the boot/“starting” variant can keep its own hook). */
+  /** Card `data-testid` (so the boot/"starting" variant can keep its own hook). */
   testId?: string;
+  /**
+   * Optional body override. When provided, renders this node instead of the
+   * default spinner card. The glass scrim container is still applied.
+   * Use this slot to inject DaemonUnreachableBody or similar surfaces.
+   */
+  children?: React.ReactNode;
 }
 
 export function ConnectionOverlay({
@@ -21,8 +27,11 @@ export function ConnectionOverlay({
   title = DEFAULT_TITLE,
   subtitle = DEFAULT_SUBTITLE,
   testId = 'connection-overlay',
+  children,
 }: ConnectionOverlayProps): React.ReactElement | null {
   if (!open) return null;
+
+  const inner = children != null ? children : <Card title={title} subtitle={subtitle} testId={testId} />;
 
   const body = (
     <div
@@ -33,7 +42,7 @@ export function ConnectionOverlay({
         WebkitBackdropFilter: 'blur(10px) saturate(120%)',
       }}
     >
-      <Card title={title} subtitle={subtitle} testId={testId} />
+      {inner}
     </div>
   );
 
