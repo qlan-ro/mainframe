@@ -31,3 +31,10 @@ token. Local-only affordances are disabled under a remote daemon: "Reveal in
 Finder", "Open externally", and the embedded preview tab. The terminal stays
 laptop-local and its working directory falls back to home when the active
 daemon is remote.
+
+**One-time reset on first launch of this build:** the persisted keys
+`mf:last-session`, `mf:filterProjectId`, and `mf:session-layout` are now
+namespaced by daemon id (e.g. `mf:last-session:local`). Existing local users
+will start with a fresh default for each key on first launch — the selected
+session, project filter, and panel layout will revert to defaults once, then
+persist normally per daemon going forward.

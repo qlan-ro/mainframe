@@ -9,9 +9,11 @@
  *  5. confirmPairing body carries a stable clientDeviceId (same UUID across two calls).
  *  6. getOrCreateClientDeviceId returns a valid UUID and persists it in localStorage.
  *  7. Trailing slash on the URL is trimmed before appending paths.
+ *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl }.
+ *  9. verifyDaemon with a no-scheme input fetches the correct absolute URL.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { verifyDaemon, confirmPairing, getOrCreateClientDeviceId, PairingError } from '../pair-daemon';
+import { verifyDaemon, confirmPairing, getOrCreateClientDeviceId, PairingError, parseRemoteUrl } from '../pair-daemon';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -174,5 +176,63 @@ describe('getOrCreateClientDeviceId', () => {
 
     const id = getOrCreateClientDeviceId();
     expect(id).toBe(stored);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 8 — parseRemoteUrl: normalizes user-typed URLs into { host, baseUrl }
+// ---------------------------------------------------------------------------
+
+describe('parseRemoteUrl', () => {
+  it('prepends https:// when input has no scheme and returns bare host', () => {
+    const result = parseRemoteUrl('tunnel.example.com');
+    expect(result).toEqual({ host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com' });
+  });
+
+  it('preserves an explicit http:// scheme (no forced upgrade to https)', () => {
+    const result = parseRemoteUrl('http://h:31600');
+    expect(result).toEqual({ host: 'h:31600', baseUrl: 'http://h:31600' });
+  });
+
+  it('strips a trailing slash from https://h/', () => {
+    const result = parseRemoteUrl('https://h/');
+    expect(result).toEqual({ host: 'h', baseUrl: 'https://h' });
+  });
+
+  it('strips a path suffix from https://h/path — baseUrl carries only origin', () => {
+    const result = parseRemoteUrl('https://h/path');
+    expect(result).toEqual({ host: 'h', baseUrl: 'https://h' });
+  });
+
+  it('handles a bare host:port with no scheme', () => {
+    const result = parseRemoteUrl('h:8443');
+    expect(result).toEqual({ host: 'h:8443', baseUrl: 'https://h:8443' });
+  });
+
+  it('normalizes a full https URL — the URL API strips the default https port 443', () => {
+    // The URL API considers 443 the default for https and omits it from host/origin.
+    const result = parseRemoteUrl('https://studio.example.com:443');
+    expect(result).toEqual({ host: 'studio.example.com', baseUrl: 'https://studio.example.com' });
+  });
+
+  it('throws on an input that cannot be parsed as a URL', () => {
+    expect(() => parseRemoteUrl('not a url ##')).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 9 — verifyDaemon: no-scheme input hits the correct absolute URL
+// ---------------------------------------------------------------------------
+
+describe('verifyDaemon — no-scheme input', () => {
+  it('fetches an absolute URL even when the input has no scheme', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse({ version: '2.0.0' }, 200));
+
+    const result = await verifyDaemon('tunnel.example.com');
+
+    expect(result.ok).toBe(true);
+    // Must NOT be a relative URL resolved against app origin — must be absolute.
+    const fetchedUrl = spy.mock.calls[0]?.[0] as string;
+    expect(fetchedUrl).toBe('https://tunnel.example.com/health');
   });
 });

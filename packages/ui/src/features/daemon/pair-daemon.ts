@@ -10,6 +10,39 @@ const STORAGE_KEY = 'mf:client-device-id';
 const HEALTH_TIMEOUT_MS = 5_000;
 
 // ---------------------------------------------------------------------------
+// parseRemoteUrl
+// ---------------------------------------------------------------------------
+
+export interface RemoteUrlParts {
+  /** Bare `host[:port]` with no scheme or path — safe to store as DaemonMeta.host. */
+  host: string;
+  /** `scheme://host[:port]` with no trailing slash or path — ready for use as a fetch base URL. */
+  baseUrl: string;
+}
+
+/**
+ * Normalizes any user-typed daemon URL into a canonical `{ host, baseUrl }` pair.
+ *
+ * - If the input has no `http://` or `https://` scheme, `https://` is prepended.
+ * - `baseUrl` is always the *origin* only (`scheme://host[:port]`), with no path or trailing slash.
+ * - An explicit `http://` scheme is preserved (no forced upgrade to https).
+ * - Throws a descriptive `Error` when the input cannot be parsed as a URL.
+ */
+export function parseRemoteUrl(input: string): RemoteUrlParts {
+  const trimmed = input.trim();
+  const prefixed = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  let u: URL;
+  try {
+    u = new URL(prefixed);
+  } catch {
+    throw new Error(`Invalid daemon URL: "${input}"`);
+  }
+
+  return { host: u.host, baseUrl: u.origin };
+}
+
+// ---------------------------------------------------------------------------
 // PairingError
 // ---------------------------------------------------------------------------
 
@@ -55,12 +88,20 @@ export interface VerifyResult {
 }
 
 /**
- * Probes `GET <url>/health` with a 5-second timeout.
+ * Probes `GET <baseUrl>/health` with a 5-second timeout.
+ * Accepts any user-typed URL (with or without a scheme) — normalizes via
+ * `parseRemoteUrl` before fetching so the request is always absolute.
  * Returns `{ ok: true, version?, ms }` on any 2xx; `{ ok: false }` on
- * timeout or network error — never throws.
+ * timeout, parse error, or network error — never throws.
  */
 export async function verifyDaemon(url: string): Promise<VerifyResult> {
-  const base = url.replace(/\/+$/, '');
+  let base: string;
+  try {
+    base = parseRemoteUrl(url).baseUrl;
+  } catch {
+    return { ok: false };
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
   const start = Date.now();
@@ -100,13 +141,19 @@ interface ConfirmEnvelope {
 /**
  * Exchanges a pairing code for a session token.
  *
- * POSTs `{ pairingCode, clientDeviceId, deviceName }` to `<url>/api/auth/confirm`.
+ * POSTs `{ pairingCode, clientDeviceId, deviceName }` to `<baseUrl>/api/auth/confirm`.
+ * Normalizes the URL via `parseRemoteUrl` — any scheme/path oddities are fixed.
  * On success returns `{ token, deviceId }` from the envelope's `data` field.
  * Throws `PairingError('invalid')` on a 401 or an envelope with `success:false`.
  * Throws `PairingError('network')` on a network/timeout failure.
  */
 export async function confirmPairing(url: string, code: string, deviceName: string): Promise<PairResult> {
-  const base = url.replace(/\/+$/, '');
+  let base: string;
+  try {
+    base = parseRemoteUrl(url).baseUrl;
+  } catch {
+    throw new PairingError('network');
+  }
   const clientDeviceId = getOrCreateClientDeviceId();
 
   let res: Response;

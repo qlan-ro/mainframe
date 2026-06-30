@@ -17,7 +17,7 @@ import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { getHost } from '@/lib/host';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { verifyDaemon, confirmPairing, PairingError } from './pair-daemon';
+import { verifyDaemon, confirmPairing, parseRemoteUrl, PairingError } from './pair-daemon';
 import { useDaemonRegistry } from './use-daemon-registry';
 import { StepRail, type UrlPhase } from './pairing-shared';
 import { Step0Body, Step1Body, FooterStep0, FooterStep1, type Step1Phase } from './pairing-steps';
@@ -222,7 +222,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
       const { token } = await confirmPairing(targetUrl, trimmedCode, device.trim() || 'This Mac');
 
       if (mode === 'add') {
-        const host = targetUrl.replace(/^https?:\/\//, '');
+        const host = parseRemoteUrl(targetUrl).host;
         const label = host.split('.')[0] ?? 'New server';
         const meta: DaemonMeta = {
           id: crypto.randomUUID(),

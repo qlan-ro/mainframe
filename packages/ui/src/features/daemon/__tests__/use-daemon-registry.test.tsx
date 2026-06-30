@@ -219,7 +219,8 @@ describe('useDaemonRegistry — switchTo', () => {
     expect(target.id).toBe('studio');
     expect(target.kind).toBe('remote');
     expect(target.token).toBe(REMOTE_TOKEN);
-    expect(target.baseUrl).toBe(`https://${REMOTE_STUDIO.host}`);
+    // parseRemoteUrl normalizes https://host:443 → https://host (port 443 is the https default).
+    expect(target.baseUrl).toBe('https://studio.example.com');
   });
 
   it('switchTo("local") switches back to local daemon with null token', async () => {

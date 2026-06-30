@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { getHost } from '@/lib/host';
+import { parseRemoteUrl } from './pair-daemon';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveDaemon } from './active-daemon-context';
 
@@ -34,7 +35,8 @@ function buildLocalTarget(port: number): DaemonTarget {
 
 async function buildRemoteTarget(meta: DaemonMeta): Promise<DaemonTarget> {
   const token = await getHost().daemons.getToken(meta.id);
-  return { id: meta.id, kind: 'remote', label: meta.label, baseUrl: `https://${meta.host}`, token };
+  const { baseUrl } = parseRemoteUrl(`https://${meta.host}`);
+  return { id: meta.id, kind: 'remote', label: meta.label, baseUrl, token };
 }
 
 export function useDaemonRegistry(): UseDaemonRegistryResult {

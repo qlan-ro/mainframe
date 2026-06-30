@@ -25,6 +25,7 @@ import { DaemonSmallDialog } from './DaemonSmallDialog';
 import { DaemonUnreachableBody } from './DaemonUnreachableBody';
 import { useActiveDaemon } from './active-daemon-context';
 import { useDaemonRegistry } from './use-daemon-registry';
+import { parseRemoteUrl } from './pair-daemon';
 
 // ---------------------------------------------------------------------------
 // Dialog state
@@ -43,7 +44,7 @@ type DialogState =
 // ---------------------------------------------------------------------------
 
 function targetToMeta(target: import('@qlan-ro/mainframe-types').DaemonTarget): DaemonMeta {
-  const host = target.baseUrl.replace(/^https?:\/\//, '');
+  const host = parseRemoteUrl(target.baseUrl).host;
   return { id: target.id, kind: target.kind, label: target.label, host };
 }
 
