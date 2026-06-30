@@ -33,6 +33,10 @@ class ChatControllerRegistry {
     controller.dispose();
     this.controllers.delete(chatId);
   }
+
+  disposeAll(): void {
+    for (const id of [...this.controllers.keys()]) this.dispose(id);
+  }
 }
 
 export const chatControllerRegistry = new ChatControllerRegistry();
