@@ -1,0 +1,255 @@
+/**
+ * useDaemonRegistry — TDD test.
+ *
+ * Behaviors covered:
+ *  1. daemons list includes a synthetic local entry prepended before persisted remotes.
+ *  2. add persists meta + token and the daemon appears in the list.
+ *  3. switchTo('studio') resolves a DaemonTarget with the stored token and flips activeId.
+ */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { setHostForTesting, resetHostForTesting } from '@/lib/host';
+import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
+import { ActiveDaemonProvider, useActiveDaemon } from '../active-daemon-context';
+import { useDaemonRegistry } from '../use-daemon-registry';
+
+// ---------------------------------------------------------------------------
+// Mocks — needed because ActiveDaemonProvider.switchTo calls into modules that
+// don't exist in jsdom. Mock the side-effecting modules only.
+// ---------------------------------------------------------------------------
+
+import { vi } from 'vitest';
+
+vi.mock('@/lib/daemon/dispose-daemon-session', () => ({
+  disposeDaemonSession: vi.fn(),
+}));
+vi.mock('@/lib/lsp', () => ({
+  rebindLspToActiveDaemon: vi.fn(() => Promise.resolve()),
+  initLspPort: vi.fn(() => Promise.resolve()),
+  lspClientManager: {},
+  getLspLanguage: vi.fn(() => null),
+  hasLspSupport: vi.fn(() => false),
+  initAutoConnect: vi.fn(() => () => undefined),
+}));
+vi.mock('@/lib/daemon/ws-client', () => ({
+  daemonWs: {
+    setPort: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    onEvent: vi.fn(() => () => {}),
+    subscribe: vi.fn(),
+    send: vi.fn(),
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// Fixture data
+// ---------------------------------------------------------------------------
+
+const TEST_PORT = 31415;
+
+const REMOTE_STUDIO: DaemonMeta = {
+  id: 'studio',
+  kind: 'remote',
+  label: 'Studio Mac',
+  host: 'studio.example.com:443',
+};
+
+const REMOTE_TOKEN = 'jwt-secret-token';
+
+const LOCAL_TARGET: DaemonTarget = {
+  id: 'local',
+  kind: 'local',
+  label: 'This Mac',
+  baseUrl: `http://127.0.0.1:${TEST_PORT}`,
+  token: null,
+};
+
+// ---------------------------------------------------------------------------
+// Wrapper that provides all required contexts
+// ---------------------------------------------------------------------------
+
+function makeWrapper(_fakeHost: FakeHostBridge) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <DaemonPortProvider port={TEST_PORT}>
+        <ActiveDaemonProvider initialTarget={LOCAL_TARGET}>{children}</ActiveDaemonProvider>
+      </DaemonPortProvider>
+    );
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Setup / teardown
+// ---------------------------------------------------------------------------
+
+let fakeHost: FakeHostBridge;
+
+beforeEach(async () => {
+  fakeHost = new FakeHostBridge();
+  // Seed one remote daemon + token before any hook renders.
+  await fakeHost.daemons.upsert(REMOTE_STUDIO);
+  await fakeHost.daemons.setToken(REMOTE_STUDIO.id, REMOTE_TOKEN);
+  setHostForTesting(fakeHost);
+});
+
+afterEach(() => {
+  resetHostForTesting();
+  vi.clearAllMocks();
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 1 — daemons list includes synthetic local + persisted remote
+// ---------------------------------------------------------------------------
+
+describe('useDaemonRegistry — initial list', () => {
+  it('includes a synthetic local entry as the first item', async () => {
+    const { result } = renderHook(() => useDaemonRegistry(), { wrapper: makeWrapper(fakeHost) });
+
+    // Wait for the async load to settle.
+    await act(async () => {});
+
+    const first = result.current.daemons[0];
+    expect(first).toBeDefined();
+    expect(first?.id).toBe('local');
+    expect(first?.kind).toBe('local');
+    expect(first?.label).toBe('This Mac');
+    expect(first?.host).toBe(`127.0.0.1:${TEST_PORT}`);
+  });
+
+  it('includes the persisted remote after the local entry', async () => {
+    const { result } = renderHook(() => useDaemonRegistry(), { wrapper: makeWrapper(fakeHost) });
+
+    await act(async () => {});
+
+    expect(result.current.daemons).toHaveLength(2);
+    const second = result.current.daemons[1];
+    expect(second?.id).toBe('studio');
+    expect(second?.label).toBe('Studio Mac');
+  });
+
+  it('activeId reflects the initial local daemon', async () => {
+    const { result } = renderHook(() => useDaemonRegistry(), { wrapper: makeWrapper(fakeHost) });
+
+    await act(async () => {});
+
+    expect(result.current.activeId).toBe('local');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 2 — add persists meta + token and the daemon appears in the list
+// ---------------------------------------------------------------------------
+
+describe('useDaemonRegistry — add', () => {
+  it('persists the new meta so it appears in daemons after add', async () => {
+    const { result } = renderHook(() => useDaemonRegistry(), { wrapper: makeWrapper(fakeHost) });
+
+    await act(async () => {});
+
+    const newMeta: DaemonMeta = {
+      id: 'laptop',
+      kind: 'remote',
+      label: 'Laptop',
+      host: 'laptop.example.com:443',
+    };
+    const newToken = 'laptop-token';
+
+    await act(async () => {
+      await result.current.add(newMeta, newToken);
+    });
+
+    const ids = result.current.daemons.map((d) => d.id);
+    expect(ids).toContain('laptop');
+  });
+
+  it('stores the token so getToken returns it after add', async () => {
+    const { result } = renderHook(() => useDaemonRegistry(), { wrapper: makeWrapper(fakeHost) });
+
+    await act(async () => {});
+
+    const newMeta: DaemonMeta = { id: 'laptop', kind: 'remote', label: 'Laptop', host: 'laptop.example.com:443' };
+    const newToken = 'laptop-token';
+
+    await act(async () => {
+      await result.current.add(newMeta, newToken);
+    });
+
+    await expect(fakeHost.daemons.getToken('laptop')).resolves.toBe('laptop-token');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 3 — switchTo('studio') resolves a DaemonTarget with the stored
+// token and flips activeId
+// ---------------------------------------------------------------------------
+
+describe('useDaemonRegistry — switchTo', () => {
+  it('switchTo("studio") flips activeId to "studio"', async () => {
+    const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeWrapper(fakeHost),
+    });
+
+    await act(async () => {});
+
+    expect(result.current.registry.activeId).toBe('local');
+
+    await act(async () => {
+      await result.current.registry.switchTo('studio');
+    });
+
+    expect(result.current.registry.activeId).toBe('studio');
+  });
+
+  it('switchTo("studio") builds a DaemonTarget with the stored token', async () => {
+    const capturedTargets: DaemonTarget[] = [];
+
+    // We'll spy by wrapping the active daemon context.
+    // The simplest approach: check the final state via getActiveDaemon.
+    const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeWrapper(fakeHost),
+    });
+
+    await act(async () => {});
+
+    await act(async () => {
+      await result.current.registry.switchTo('studio');
+    });
+
+    // After switching, the active daemon's target should carry the token and correct baseUrl.
+    const target = result.current.daemon.target;
+    expect(target.id).toBe('studio');
+    expect(target.kind).toBe('remote');
+    expect(target.token).toBe(REMOTE_TOKEN);
+    expect(target.baseUrl).toBe(`https://${REMOTE_STUDIO.host}`);
+
+    // Suppress the unused variable warning on capturedTargets.
+    void capturedTargets;
+  });
+
+  it('switchTo("local") switches back to local daemon with null token', async () => {
+    const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeWrapper(fakeHost),
+    });
+
+    await act(async () => {});
+
+    // First switch to remote.
+    await act(async () => {
+      await result.current.registry.switchTo('studio');
+    });
+
+    // Then switch back to local.
+    await act(async () => {
+      await result.current.registry.switchTo('local');
+    });
+
+    const target = result.current.daemon.target;
+    expect(target.id).toBe('local');
+    expect(target.token).toBeNull();
+    expect(target.baseUrl).toBe(`http://127.0.0.1:${TEST_PORT}`);
+  });
+});
