@@ -10,6 +10,7 @@ import type {
   Platform,
   LogLevel,
   DaemonStatus,
+  DaemonMeta,
   TerminalOpts,
   TerminalHandlers,
   TerminalHandle,
@@ -88,6 +89,14 @@ export class TauriAdapter implements HostBridge {
 
   presence = {
     reportActivity: (state: PresenceState): Promise<void> => bridge.reportActivity(state),
+  };
+
+  daemons = {
+    list: (): Promise<DaemonMeta[]> => bridge.daemonsList(),
+    upsert: (meta: DaemonMeta): Promise<void> => bridge.daemonsUpsert(meta),
+    remove: (id: string): Promise<void> => bridge.daemonsRemove(id),
+    getToken: (id: string): Promise<string | null> => bridge.daemonTokenGet(id),
+    setToken: (id: string, token: string): Promise<void> => bridge.daemonTokenSet(id, token),
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {

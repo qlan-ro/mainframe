@@ -14,6 +14,7 @@ import type {
   Platform,
   LogLevel,
   DaemonStatus,
+  DaemonMeta,
   TerminalOpts,
   TerminalHandlers,
   TerminalHandle,
@@ -58,6 +59,13 @@ interface MainframeBridge {
     download(): Promise<void>;
     install(): void;
     onStatus(cb: (s: UpdateStatus) => void): () => void;
+  };
+  daemons: {
+    list(): Promise<DaemonMeta[]>;
+    upsert(meta: DaemonMeta): Promise<void>;
+    remove(id: string): Promise<void>;
+    getToken(id: string): Promise<string | null>;
+    setToken(id: string, token: string): Promise<void>;
   };
 }
 
@@ -170,6 +178,14 @@ export class ElectronAdapter implements HostBridge {
         body: JSON.stringify({ state }),
       });
     },
+  };
+
+  daemons = {
+    list: (): Promise<DaemonMeta[]> => bridge().daemons.list(),
+    upsert: (meta: DaemonMeta): Promise<void> => bridge().daemons.upsert(meta),
+    remove: (id: string): Promise<void> => bridge().daemons.remove(id),
+    getToken: (id: string): Promise<string | null> => bridge().daemons.getToken(id),
+    setToken: (id: string, token: string): Promise<void> => bridge().daemons.setToken(id, token),
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {

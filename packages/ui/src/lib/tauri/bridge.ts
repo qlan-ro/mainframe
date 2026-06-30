@@ -144,7 +144,7 @@ export async function showNotification(title: string, body?: string): Promise<vo
   sendNotification({ title, body });
 }
 
-import type { UpdateStatus } from '@qlan-ro/mainframe-types';
+import type { UpdateStatus, DaemonMeta } from '@qlan-ro/mainframe-types';
 
 /** Reports user activity state to the daemon sidecar. No-op in browser dev mode. */
 export async function reportActivity(state: 'active' | 'idle'): Promise<void> {
@@ -202,6 +202,36 @@ export function log(level: LogLevel, module: string, msg: string, data?: unknown
   } else {
     fn(`[${module}] ${msg}`);
   }
+}
+
+/** Lists all persisted daemon entries from the host registry. */
+export async function daemonsList(): Promise<DaemonMeta[]> {
+  if (!IS_TAURI) return [];
+  return invoke<DaemonMeta[]>('daemons_list', { dataDir: null });
+}
+
+/** Upserts (insert-or-replace) a daemon entry in the host registry. */
+export async function daemonsUpsert(meta: DaemonMeta): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke<void>('daemons_upsert', { dataDir: null, meta });
+}
+
+/** Removes a daemon entry from the host registry by id. */
+export async function daemonsRemove(id: string): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke<void>('daemons_remove', { dataDir: null, id });
+}
+
+/** Retrieves the stored bearer token for a daemon from the host keyring. */
+export async function daemonTokenGet(id: string): Promise<string | null> {
+  if (!IS_TAURI) return null;
+  return invoke<string | null>('daemon_token_get', { id });
+}
+
+/** Stores a bearer token for a daemon in the host keyring. */
+export async function daemonTokenSet(id: string, token: string): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke<void>('daemon_token_set', { id, token });
 }
 
 /**

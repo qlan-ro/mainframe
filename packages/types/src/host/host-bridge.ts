@@ -16,7 +16,9 @@ export type Unsubscribe = () => void;
 import type { Platform, DaemonStatus, LogLevel, UpdateStatus, PresenceState } from './host-contract.js';
 import type { AppInfoSchema, RegionSchema } from './host-contract.js';
 import type { z } from 'zod';
+import type { DaemonMeta } from './daemon-target.js';
 export type { Platform, DaemonStatus, LogLevel, UpdateStatus, PresenceState } from './host-contract.js';
+export type { DaemonMeta } from './daemon-target.js';
 
 export type AppInfo = z.infer<typeof AppInfoSchema>;
 
@@ -143,6 +145,13 @@ export interface HostBridge {
   };
   presence: {
     reportActivity(state: PresenceState): Promise<void>;
+  };
+  daemons: {
+    list(): Promise<DaemonMeta[]>;
+    upsert(meta: DaemonMeta): Promise<void>;
+    remove(id: string): Promise<void>;
+    getToken(id: string): Promise<string | null>;
+    setToken(id: string, token: string): Promise<void>;
   };
   log(level: LogLevel, module: string, message: string, data?: unknown): void;
   /**

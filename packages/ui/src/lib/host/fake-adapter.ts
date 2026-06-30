@@ -12,6 +12,7 @@ import type {
   Platform,
   LogLevel,
   DaemonStatus,
+  DaemonMeta,
   TerminalHandle,
   Unsubscribe,
   UpdateStatus,
@@ -45,6 +46,9 @@ function notSupported(name: string): Promise<never> {
 
 export class FakeHostBridge implements HostBridge {
   constructor(private readonly overrides: FakeHostOverrides = {}) {}
+
+  private readonly _daemonsMeta = new Map<string, DaemonMeta>();
+  private readonly _daemonsTokens = new Map<string, string>();
 
   app = {
     getInfo: (): Promise<AppInfo> => Promise.resolve(this.overrides.app?.getInfo ?? DEFAULT_APP_INFO),
@@ -124,6 +128,24 @@ export class FakeHostBridge implements HostBridge {
 
   presence = {
     reportActivity: (_state: PresenceState): Promise<void> => Promise.resolve(),
+  };
+
+  daemons = {
+    list: (): Promise<DaemonMeta[]> => Promise.resolve([...this._daemonsMeta.values()]),
+    upsert: (meta: DaemonMeta): Promise<void> => {
+      this._daemonsMeta.set(meta.id, meta);
+      return Promise.resolve();
+    },
+    remove: (id: string): Promise<void> => {
+      this._daemonsMeta.delete(id);
+      this._daemonsTokens.delete(id);
+      return Promise.resolve();
+    },
+    getToken: (id: string): Promise<string | null> => Promise.resolve(this._daemonsTokens.get(id) ?? null),
+    setToken: (id: string, token: string): Promise<void> => {
+      this._daemonsTokens.set(id, token);
+      return Promise.resolve();
+    },
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {
