@@ -11,6 +11,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { getHost } from '../lib/host';
+import { setActiveDaemon } from '../lib/daemon/active-daemon';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -78,7 +79,16 @@ export function useConnectionState(): {
       const healthy = await checkHealth(currentPort);
       if (cancelled) return;
       setState(healthy ? 'connected' : 'disconnected');
-      if (healthy) setReady(true); // one-way latch — never reset to false
+      if (healthy) {
+        setReady(true); // one-way latch — never reset to false
+        setActiveDaemon({
+          id: 'local',
+          kind: 'local',
+          label: 'Local',
+          baseUrl: `http://127.0.0.1:${currentPort}`,
+          token: null,
+        });
+      }
       pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     }
 

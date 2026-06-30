@@ -2,9 +2,12 @@
  * App — sessions shell (step 11). The REAL application root.
  *
  * App owns only the connection gate + the persistent status badge; once a port
- * is live it mounts AppShell, which holds the one global runtime wrapped in
- * DaemonPortProvider (so useDaemonPort resolves for the whole sessions runtime
- * layer).
+ * is live it mounts AppShell wrapped in ActiveDaemonProvider. AppShell is given
+ * `key={target.id}` so React REMOUNTS it on every daemon switch — no stale
+ * per-session state leaks across targets.
+ *
+ * DaemonPortProvider is kept (port-keyed hooks under the sessions runtime still
+ * consume it) and fed the active target's port.
  */
 import { useEffect } from 'react';
 import { useConnectionState } from './useConnectionState';
@@ -12,6 +15,7 @@ import { daemonWs } from '../lib/daemon/ws-client';
 import { installSessionTodosSubscriber } from '@/store/session-todos';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
+import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
 import { AppShell } from './AppShell';
 import { ConnectionStatusProvider } from './ConnectionStatusContext';
 import { ConnectionOverlay } from './ConnectionOverlay';
@@ -19,10 +23,36 @@ import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
 
+/**
+ * Inner shell — must run inside ActiveDaemonProvider so it can read the active
+ * target for the key prop and DaemonPortProvider port.
+ *
+ * `fallbackPort` is the port resolved by useConnectionState and is used when the
+ * active target URL has port 0 (the default singleton value before the first
+ * health success seeds it). This ensures the initial local boot path passes the
+ * correct port to DaemonPortProvider even when setActiveDaemon hasn't fired yet.
+ */
+function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
+  const { target } = useActiveDaemon();
+  const parsedUrl = new URL(target.baseUrl);
+  const urlPort = parsedUrl.port ? Number(parsedUrl.port) : 0;
+  // Fall back to the health-resolved port when the active target URL has port 0
+  // (singleton not yet seeded by useConnectionState's first health success).
+  const activePort = urlPort > 0 ? urlPort : fallbackPort;
+
+  return (
+    <DaemonPortProvider port={activePort}>
+      <AppShell key={target.id} port={activePort} />
+    </DaemonPortProvider>
+  );
+}
+
 export function App() {
   const { state, daemonStatus, port, ready } = useConnectionState();
 
   // Wire the WS client to the port once available (AppShell's router subscribes).
+  // The port useEffect handles the initial local boot connection; switchTo handles
+  // subsequent daemon switches.
   useEffect(() => {
     if (port == null) return;
     daemonWs.setPort(port);
@@ -46,9 +76,9 @@ export function App() {
               requests, so mounting on port-known alone races the initial REST
               loads. `ready` latches, so a later blip won't unmount the shell. */}
           {ready && port != null ? (
-            <DaemonPortProvider port={port}>
-              <AppShell port={port} />
-            </DaemonPortProvider>
+            <ActiveDaemonProvider>
+              <DaemonGatedShell fallbackPort={port} />
+            </ActiveDaemonProvider>
           ) : (
             <div className="relative flex-1 bg-mf-window">
               <ConnectionOverlay
