@@ -43,7 +43,7 @@ export interface QuestionField {
 export interface QuestionStep extends BaseStep {
   question: {
     title: string;
-    timeout?: number;
+    timeout?: { afterMinutes: number; onTimeout: 'cancel' | 'fail' | 'continue' };
     fields: QuestionField[];
   };
 }
