@@ -216,6 +216,10 @@ app.whenReady().then(() => {
   const connectSources = [
     `http://127.0.0.1:${DAEMON_PORT}`,
     `ws://127.0.0.1:${DAEMON_PORT}`,
+    // Remote daemons are reached over their Cloudflare tunnel (always https/wss);
+    // the specific host is user-configured at runtime, so allow the schemes.
+    'https:',
+    'wss:',
     ...(process.env.NODE_ENV === 'development'
       ? [`http://localhost:${DEV_VITE_PORT}`, `ws://localhost:${DEV_VITE_PORT}`]
       : []),
