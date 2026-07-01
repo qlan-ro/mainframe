@@ -1,4 +1,4 @@
-import type { ChooseStep, ForeachStep, StepDef, WorkflowDef } from '../dsl/types.js';
+import type { ChooseStep, ForeachStep, ParallelStep, StepDef, WorkflowDef } from '../dsl/types.js';
 import { stepKind } from '../dsl/types.js';
 import { renderValue } from '../template/render.js';
 import type { RunRecord, TriggerKind } from '../store/types.js';
@@ -6,7 +6,7 @@ import type { EngineDeps, Scope, StepContext, StepOutcome, WalkResult } from './
 import { bind, rootScope } from './scope.js';
 import { makeConnectorExecutor, type CredentialResolver } from './executors/connector.js';
 import { decideFailure } from './failure.js';
-import { executeChoose, executeForeach, type NestedWalker } from './blocks.js';
+import { executeChoose, executeForeach, executeParallel, type NestedWalker } from './blocks.js';
 
 export class WorkflowEngine {
   readonly store: EngineDeps['store'];
@@ -320,7 +320,9 @@ export class WorkflowEngine {
       return executeForeach(ctx, step as ForeachStep, walk);
     }
     if (kind === 'parallel') {
-      return { type: 'failed', error: `block kind '${kind}' not implemented yet`, retryable: false };
+      const walk: NestedWalker = (steps, pathPrefix, scope) =>
+        this.walkNested(ctx.run, steps, pathPrefix, scope, signal);
+      return executeParallel(ctx, step as ParallelStep, walk);
     }
     return { type: 'failed', error: `unknown block kind '${kind}'`, retryable: false };
   }

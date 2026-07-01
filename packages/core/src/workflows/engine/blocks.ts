@@ -1,7 +1,6 @@
-import type { ChooseStep, ForeachStep } from '../dsl/types.js';
+import type { ChooseStep, ForeachStep, ParallelStep, StepDef } from '../dsl/types.js';
 import { renderCondition, renderValue } from '../template/render.js';
 import type { Scope, StepContext, StepOutcome, WalkResult } from './types.js';
-import type { StepDef } from '../dsl/types.js';
 
 /** Callback type for recursing into a nested step sequence. */
 export type NestedWalker = (steps: StepDef[], pathPrefix: string, scope: Scope) => Promise<WalkResult>;
@@ -116,4 +115,43 @@ export async function executeForeach(ctx: StepContext, step: ForeachStep, walk: 
     output: collected,
     scratch: { iterations },
   } as StepOutcome & { scratch: Record<string, unknown> };
+}
+
+/**
+ * Execute a `parallel` block: all branches run concurrently via Promise.all.
+ * Each branch receives an isolated copy of the outer scope so mutations within
+ * one branch cannot affect another. better-sqlite3 commits are synchronous, so
+ * checkpoint writes from concurrent branches serialize safely on the JS event loop.
+ *
+ * Output: `{ [branchName]: lastStepOutput }`. Any failure fails the block after
+ * all branches settle; any parked branch parks the block.
+ */
+export async function executeParallel(ctx: StepContext, step: ParallelStep, walk: NestedWalker): Promise<StepOutcome> {
+  const names = Object.keys(step.parallel);
+  const results = await Promise.all(
+    names.map((name) => {
+      const branch = step.parallel[name] as StepDef[];
+      return walk(branch, `${ctx.stepPath}.parallel.${name}`, { ...ctx.scope });
+    }),
+  );
+
+  const failures = results.filter((r): r is Extract<WalkResult, { type: 'failed' }> => r.type === 'failed');
+  if (failures.length > 0) {
+    return { type: 'failed', error: failures.map((f) => f.error).join('; '), retryable: false };
+  }
+
+  if (results.some((r) => r.type === 'parked')) {
+    return { type: 'wait', wait: { kind: 'timer', wakeAt: null } };
+  }
+
+  const output: Record<string, unknown> = {};
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i] as string;
+    const branch = step.parallel[name] as StepDef[];
+    const last = branch[branch.length - 1];
+    const scope = (results[i] as Extract<WalkResult, { type: 'done' }>).scope;
+    output[name] = last ? ((scope[last.id] as { output: unknown } | undefined)?.output ?? null) : null;
+  }
+
+  return { type: 'completed', output };
 }
