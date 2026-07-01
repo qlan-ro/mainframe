@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Zap, Bell, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkflowsModal, type WfSection } from './use-workflows-modal';
 import { useWorkflowsStore, selectPendingCount } from './use-workflows-store';
 import { WfLibrary } from './WfLibrary';
 import { WfRunsList } from './WfRunsList';
+import { WfRunDetail } from './WfRunDetail';
 
 const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
   { id: 'needs', label: 'Needs you', Icon: Bell },
@@ -15,6 +16,17 @@ const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
 export function WorkflowsView({ port }: { port: number }): React.ReactElement {
   const { section, selectedRunId, setSection } = useWorkflowsModal();
   const pending = useWorkflowsStore(selectPendingCount);
+  const selectRun = useWorkflowsStore((s) => s.selectRun);
+  const clearRun = useWorkflowsStore((s) => s.clearRun);
+
+  // Fetch run detail whenever the selectedRunId changes.
+  useEffect(() => {
+    if (selectedRunId != null) {
+      void selectRun(port, selectedRunId);
+    } else {
+      clearRun();
+    }
+  }, [selectedRunId, port, selectRun, clearRun]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-mf-window font-sans" data-testid="workflows-view">
@@ -57,11 +69,13 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
           </div>
         </nav>
 
-        {/* Body — Library active; Runs/NeedsYou/RunDetail filled by Tasks 8–13. */}
+        {/* Body — run detail takes precedence over section views. */}
         <div className="min-w-0 flex-1 overflow-hidden">
-          {section === 'library' && !selectedRunId ? (
+          {selectedRunId ? (
+            <WfRunDetail port={port} />
+          ) : section === 'library' ? (
             <WfLibrary port={port} />
-          ) : section === 'runs' && !selectedRunId ? (
+          ) : section === 'runs' ? (
             <WfRunsList port={port} />
           ) : (
             <div className="p-6 text-body text-muted-foreground" data-testid="workflows-body-placeholder">
