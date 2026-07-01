@@ -27,6 +27,8 @@ import { logger } from './logger.js';
 import { wrapClaudeForRecording } from './testing/record-wrapper.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 import { backfillWorktreeRelationships } from './workspace/worktree.js';
+import { WorkflowService } from './workflows/index.js';
+import { makeChatManagerPort } from './workflows/agent-port.js';
 
 function enrichPath(): void {
   try {
@@ -96,6 +98,14 @@ async function main(): Promise<void> {
     if (manager) await manager.stopAll();
   });
 
+  const workflows = new WorkflowService({
+    dataDir: getDataDir(),
+    logger,
+    emitEvent: (event) => broadcastEvent(event),
+    agentPort: makeChatManagerPort(chats, () => db.projects.list()[0]?.id ?? null),
+    listProjects: () => db.projects.list().map((p) => ({ id: p.id, path: p.path })),
+  });
+
   // PluginManager owns its own Express Router; no circular dep on the Express app
   const daemonBus = new EventEmitter();
   const emitEvent = (event: DaemonEvent) => broadcastEvent(event);
@@ -136,13 +146,25 @@ async function main(): Promise<void> {
     tunnelManager,
     port: config.port,
     backgroundTasks,
+    workflows,
   });
 
   await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
 
   await server.start(config.port);
-  broadcastEvent = (event) => server.broadcastEvent(event);
+  // Bind the real WS broadcast AND feed daemon events to the workflow engine.
+  // All event sources (chats, launchRegistry, tunnelManager, backgroundTasks,
+  // pluginManager) use the broadcastEvent closure by reference, so every event
+  // is forwarded here after server.start().
+  broadcastEvent = (event) => {
+    server.broadcastEvent(event);
+    workflows.onDaemonEvent(event);
+  };
+
+  await workflows.start().catch((err) => {
+    logger.error({ err }, 'WorkflowService failed to start — continuing without workflows');
+  });
 
   // Probe adapters for dynamic model lists (non-blocking)
   adapters
@@ -184,6 +206,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    workflows.stop();
     chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();
