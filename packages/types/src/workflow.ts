@@ -1,3 +1,12 @@
+export interface QuestionField {
+  key: string;
+  type: 'text' | 'number' | 'choice' | 'multi' | 'textarea';
+  label?: string;
+  options?: string[];
+  required?: boolean;
+  when?: { key: string; equals: string };
+}
+
 export type WorkflowRunStatus = 'running' | 'waiting' | 'succeeded' | 'failed' | 'cancelled';
 export type WorkflowStepStatus = 'running' | 'waiting' | 'succeeded' | 'failed' | 'skipped' | 'ambiguous';
 
@@ -43,7 +52,7 @@ export interface WorkflowInteractionSummary {
   runId: string;
   stepPath: string;
   title: string;
-  formSchema: Record<string, unknown>;
+  formSchema: QuestionField[];
   createdAt: number;
   expiresAt: number | null;
 }
