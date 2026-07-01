@@ -217,7 +217,7 @@ export class WorkflowService {
       workflowName: wf?.name ?? '',
       runId,
       outputs: run.outputs,
-    } as never);
+    });
   }
 }
 

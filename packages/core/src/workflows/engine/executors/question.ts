@@ -1,6 +1,6 @@
-import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { DaemonEvent, WorkflowInteractionSummary } from '@qlan-ro/mainframe-types';
 import type { QuestionStep, StepDef } from '../../dsl/types.js';
-import type { InteractionStore } from '../../store/interaction-store.js';
+import type { InteractionRecord, InteractionStore } from '../../store/interaction-store.js';
 import type { StepContext, StepOutcome } from '../types.js';
 import { renderValue } from '../../template/render.js';
 
@@ -21,12 +21,24 @@ export function makeQuestionExecutor(interactions: InteractionStore, emitEvent: 
         formSchema: q.fields,
         expiresAt,
       });
-      emitEvent({ type: 'workflow.interaction.created', interaction: created } as never);
+      emitEvent({ type: 'workflow.interaction.created', interaction: toInteractionSummary(created) });
     }
 
     return {
       type: 'wait',
       wait: { kind: 'question', wakeAt: existing?.expiresAt ?? expiresAt },
     };
+  };
+}
+
+function toInteractionSummary(record: InteractionRecord): WorkflowInteractionSummary {
+  return {
+    id: record.id,
+    runId: record.runId,
+    stepPath: record.stepPath,
+    title: record.title,
+    formSchema: record.formSchema as unknown as Record<string, unknown>,
+    createdAt: record.createdAt,
+    expiresAt: record.expiresAt,
   };
 }

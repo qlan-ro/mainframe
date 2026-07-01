@@ -80,7 +80,16 @@ export type DaemonEvent =
   | { type: 'subscribe:ack'; chatId: string }
   | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
-  | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask };
+  | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask }
+  | { type: 'workflow.run.updated'; run: import('./workflow.js').WorkflowRunSummary }
+  | {
+      type: 'workflow.step.updated';
+      runId: string;
+      step: Pick<import('./workflow.js').WorkflowStepSummary, 'stepPath' | 'stepId' | 'status' | 'attempt'>;
+    }
+  | { type: 'workflow.interaction.created'; interaction: import('./workflow.js').WorkflowInteractionSummary }
+  | { type: 'workflow.interaction.resolved'; interactionId: string; runId: string }
+  | { type: 'workflow.completed'; workflowId: string; workflowName: string; runId: string; outputs: unknown };
 
 export type ClientEvent =
   | {

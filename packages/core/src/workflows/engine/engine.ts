@@ -1,7 +1,8 @@
-import type { ChooseStep, ForeachStep, ParallelStep, StepDef, WorkflowDef } from '../dsl/types.js';
+import type { WorkflowRunSummary, WorkflowStepSummary } from '@qlan-ro/mainframe-types';
+import type { ChooseStep, ConnectorStep, ForeachStep, ParallelStep, StepDef, WorkflowDef } from '../dsl/types.js';
 import { stepKind } from '../dsl/types.js';
 import { renderValue } from '../template/render.js';
-import type { RunRecord, TriggerKind } from '../store/types.js';
+import type { RunRecord, StepRunRecord, TriggerKind } from '../store/types.js';
 import type { EngineDeps, Scope, StepContext, StepOutcome, WalkResult } from './types.js';
 import { bind, rootScope } from './scope.js';
 import { makeConnectorExecutor, type CredentialResolver } from './executors/connector.js';
@@ -39,7 +40,7 @@ export class WorkflowEngine {
       }
     }
     const run = this.store.createRun({ ...args, inputs });
-    this.deps.emitEvent({ type: 'workflow.run.updated', run: toRunSummary(run) } as never);
+    this.deps.emitEvent({ type: 'workflow.run.updated', run: toRunSummary(run) });
     return run;
   }
 
@@ -285,7 +286,7 @@ export class WorkflowEngine {
         return { type: 'completed', output: value };
       }
       case 'connector':
-        return this.connectorExec(ctx, step as never);
+        return this.connectorExec(ctx, step as ConnectorStep);
       case 'choose':
       case 'foreach':
       case 'parallel':
@@ -344,7 +345,7 @@ export class WorkflowEngine {
   emitRun(runId: string): void {
     const run = this.store.getRun(runId);
     if (run) {
-      this.deps.emitEvent({ type: 'workflow.run.updated', run: toRunSummary(run) } as never);
+      this.deps.emitEvent({ type: 'workflow.run.updated', run: toRunSummary(run) });
     }
   }
 
@@ -354,26 +355,33 @@ export class WorkflowEngine {
       this.deps.emitEvent({
         type: 'workflow.step.updated',
         runId,
-        step: {
-          stepPath: latest.stepPath,
-          stepId: latest.stepId,
-          status: latest.status,
-          attempt: latest.attempt,
-        },
-      } as never);
+        step: toStepUpdateSummary(latest),
+      });
     }
   }
 }
 
-export function toRunSummary(run: RunRecord): object {
+export function toRunSummary(run: RunRecord): WorkflowRunSummary {
   return {
     id: run.id,
     workflowId: run.workflowId,
     status: run.status,
     triggerKind: run.triggerKind,
+    parentRunId: run.parentRunId,
     startedAt: run.startedAt,
     finishedAt: run.finishedAt,
     error: run.error,
     outputs: run.outputs,
+  };
+}
+
+function toStepUpdateSummary(
+  step: StepRunRecord,
+): Pick<WorkflowStepSummary, 'stepPath' | 'stepId' | 'status' | 'attempt'> {
+  return {
+    stepPath: step.stepPath,
+    stepId: step.stepId,
+    status: step.status,
+    attempt: step.attempt,
   };
 }

@@ -120,7 +120,7 @@ export class InteractionService {
       scratch: null,
       error: null,
     });
-    this.emitEvent({ type: 'workflow.interaction.resolved', interactionId, runId: interaction.runId } as never);
+    this.emitEvent({ type: 'workflow.interaction.resolved', interactionId, runId: interaction.runId });
     await this.engine.advance(interaction.runId);
   }
 
