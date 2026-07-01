@@ -13,7 +13,7 @@ export interface PendingWait {
 }
 
 export type StepOutcome =
-  | { type: 'completed'; output: unknown }
+  | { type: 'completed'; output: unknown; scratch?: Record<string, unknown> }
   | { type: 'wait'; wait: PendingWait; scratch?: Record<string, unknown> }
   | { type: 'failed'; error: string; retryable: boolean };
 

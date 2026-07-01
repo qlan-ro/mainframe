@@ -1,4 +1,4 @@
-import type { StepDef, WorkflowDef } from '../dsl/types.js';
+import type { ChooseStep, StepDef, WorkflowDef } from '../dsl/types.js';
 import { stepKind } from '../dsl/types.js';
 import { renderValue } from '../template/render.js';
 import type { RunRecord, TriggerKind } from '../store/types.js';
@@ -6,6 +6,7 @@ import type { EngineDeps, Scope, StepContext, StepOutcome, WalkResult } from './
 import { bind, rootScope } from './scope.js';
 import { makeConnectorExecutor, type CredentialResolver } from './executors/connector.js';
 import { decideFailure } from './failure.js';
+import { executeChoose, type NestedWalker } from './blocks.js';
 
 export class WorkflowEngine {
   readonly store: EngineDeps['store'];
@@ -221,7 +222,7 @@ export class WorkflowEngine {
           status: 'succeeded',
           input: null,
           output: outcome.output,
-          scratch: null,
+          scratch: outcome.scratch ?? null,
           error: null,
         });
         this.emitStep(run.id, stepPath);
@@ -302,14 +303,21 @@ export class WorkflowEngine {
     }
   }
 
-  // Placeholder — implemented in Tasks 9-11 (choose/foreach/parallel).
   protected async executeBlock(
-    _ctx: StepContext,
-    _step: StepDef,
+    ctx: StepContext,
+    step: StepDef,
     kind: string,
-    _signal: AbortSignal,
+    signal: AbortSignal,
   ): Promise<StepOutcome> {
-    return { type: 'failed', error: `block kind '${kind}' not implemented yet`, retryable: false };
+    if (kind === 'choose') {
+      const walk: NestedWalker = (steps, pathPrefix, scope) =>
+        this.walkNested(ctx.run, steps, pathPrefix, scope, signal);
+      return executeChoose(ctx, step as ChooseStep, walk);
+    }
+    if (kind === 'foreach' || kind === 'parallel') {
+      return { type: 'failed', error: `block kind '${kind}' not implemented yet`, retryable: false };
+    }
+    return { type: 'failed', error: `unknown block kind '${kind}'`, retryable: false };
   }
 
   // Exposed for Tasks 9-11 to recurse into nested sequences.
