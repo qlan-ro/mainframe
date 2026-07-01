@@ -1,7 +1,9 @@
+import { Zap } from 'lucide-react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSettingsStore } from '@/store/settings';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 import { Hint } from '@/components/ui/hint';
+import { useWorkflowsStore, selectPendingCount } from '@/features/workflows/use-workflows-store';
 
 export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 
@@ -24,6 +26,28 @@ function TasksBtn() {
         onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
       >
         <TasksGlyph size={14} className="text-muted-foreground" />
+      </button>
+    </Hint>
+  );
+}
+
+function WorkflowsBtn() {
+  const pending = useWorkflowsStore(selectPendingCount);
+  return (
+    <Hint label="Workflows">
+      <button
+        data-testid="sidebar-workflows-button"
+        type="button"
+        className="relative inline-flex h-[24px] w-[28px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+        onClick={() => window.dispatchEvent(new CustomEvent('mf:open-workflows'))}
+      >
+        <Zap size={14} className="text-muted-foreground" aria-hidden />
+        {pending > 0 && (
+          <span
+            className="absolute right-[3px] top-[2px] h-[7px] w-[7px] rounded-full bg-mf-warning ring-2 ring-mf-content2"
+            aria-hidden
+          />
+        )}
       </button>
     </Hint>
   );
@@ -70,6 +94,7 @@ export function SidebarHeader() {
       <TrafficLightsSpacer />
       <div className="flex-1" />
       <div className="flex items-center gap-0.5">
+        <WorkflowsBtn />
         <TasksBtn />
         <SettingsBtn />
         <span className="mx-px h-[16px] w-px bg-border" />

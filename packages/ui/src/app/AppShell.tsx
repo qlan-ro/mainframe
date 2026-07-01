@@ -11,6 +11,7 @@ import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
+import { WorkflowsModalHost } from '../features/workflows/WorkflowsModalHost';
 import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SpotlightPalette } from '../features/palette/SpotlightPalette';
@@ -178,6 +179,7 @@ function RuntimeBody({ port }: { port: number }) {
       <ReviewPanel />
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
+      <WorkflowsModalHost port={port} />
       <GitConfirmDialog />
       <SettingsDialog port={port} />
       {showTour && <TutorialOverlay />}
