@@ -1,9 +1,17 @@
 /**
  * WorkflowEditor — header + mode toggle + YAML pane + validation footer + save.
  *
- * Default mode is 'yaml'. Builder/Split show a "Visual builder — coming next"
- * placeholder until Task 15.  Validation is debounced ~400ms via server.
- * For new workflows, the id is derived from the `name:` line in the YAML.
+ * Builder and Split modes render WfBuilderPane (Task 15); any builder mutation
+ * calls serializeWorkflow(model) → updates the YAML live.
+ *
+ * Scope note: builder is only available for NEW workflows (target.mode === 'new').
+ * For edit mode, YAML→model reparse is reliable only server-side; we keep the
+ * loaded YAML text as-is and default to yaml mode. The mode buttons still render
+ * for visual consistency, but clicking Builder/Split in edit mode shows an
+ * informational placeholder rather than clobbering the loaded YAML.
+ *
+ * Validation is debounced ~400ms via server. For new workflows, the id is derived
+ * from the `name:` line in the YAML.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Zap, SlidersHorizontal, Columns2, Code, Check, TriangleAlert, X } from 'lucide-react';
@@ -12,6 +20,9 @@ import * as wfApi from '@/lib/api/workflows';
 import { useWorkflowsModal, type WfEditorTarget } from '../use-workflows-modal';
 import { useWorkflowsStore } from '../use-workflows-store';
 import { WfYamlPane } from './WfYamlPane';
+import { WfBuilderPane } from './WfBuilderPane';
+import { serializeWorkflow, blankDraft } from './yaml-serialize';
+import type { WfDraft } from './yaml-serialize';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -129,14 +140,17 @@ function ValidationFooter({ validation, isNew }: { validation: ValidationResult 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.ReactElement {
+  const isNew = target.mode === 'new';
+
+  const [model, setModel] = useState<WfDraft>(blankDraft);
   const [yaml, setYaml] = useState('');
-  const [mode, setMode] = useState<EditorMode>('yaml');
+  // Builder is only meaningful for new workflows; edit mode stays YAML-only.
+  const [mode, setMode] = useState<EditorMode>(isNew ? 'yaml' : 'yaml');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { closeEditor } = useWorkflowsModal();
   const loadAll = useWorkflowsStore((s) => s.loadAll);
-  const isNew = target.mode === 'new';
 
   // Load YAML from server for edit mode
   useEffect(() => {
@@ -178,6 +192,18 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       setYaml(value);
       setValidation(null); // reset until new validation arrives
       scheduleValidation(value);
+    },
+    [scheduleValidation],
+  );
+
+  /** Builder mutation: re-serialize the model to YAML and validate. */
+  const handleModelChange = useCallback(
+    (nextModel: WfDraft) => {
+      setModel(nextModel);
+      const nextYaml = serializeWorkflow(nextModel);
+      setYaml(nextYaml);
+      setValidation(null);
+      scheduleValidation(nextYaml);
     },
     [scheduleValidation],
   );
@@ -236,9 +262,15 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       <div className="flex min-h-0 flex-1">
         {(mode === 'builder' || mode === 'split') && (
           <div className={cn('min-w-0 flex-1', mode === 'split' ? 'border-r border-border' : '')}>
-            <div className="flex h-full items-center justify-center p-8 text-body text-muted-foreground">
-              Visual builder — coming next
-            </div>
+            {isNew ? (
+              <WfBuilderPane model={model} onChange={handleModelChange} />
+            ) : (
+              // Edit mode: reliable YAML→model reparse is deferred to a future task.
+              // The builder shows an informational message rather than clobbering the YAML.
+              <div className="flex h-full items-center justify-center p-8 text-body text-muted-foreground">
+                Visual builder is available for new workflows. Edit mode uses YAML only.
+              </div>
+            )}
           </div>
         )}
         {(mode === 'yaml' || mode === 'split') && (
