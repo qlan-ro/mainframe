@@ -111,7 +111,7 @@ export function Step1Body({
         <p className="text-caption text-mf-text-3 leading-[1.4]">
           On the server, open{' '}
           <strong className="font-semibold text-foreground">Remote Access → Generate pairing code</strong> (or{' '}
-          <code className="font-mono text-[11px]">curl POST /api/auth/pair</code>). It&apos;s valid for 5 minutes.
+          <code className="font-mono text-[11px]">mainframe-daemon pair</code>). It&apos;s valid for 5 minutes.
         </p>
       </div>
 

@@ -8,7 +8,7 @@
  *
  * Pattern mirrors useProjects (useState + effect keyed by port, reload on demand).
  */
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { getHost } from '@/lib/host';
 import { parseRemoteUrl } from './pair-daemon';
@@ -39,32 +39,37 @@ async function buildRemoteTarget(meta: DaemonMeta): Promise<DaemonTarget> {
   return { id: meta.id, kind: 'remote', label: meta.label, baseUrl, token };
 }
 
+// The remote list is shared across ALL useDaemonRegistry consumers (mirrors the
+// active-daemon singleton pattern) so a mutation in one surface — e.g. add() in
+// the Add-remote dialog — is reflected everywhere — e.g. the footer picker —
+// immediately, without waiting for a reload/remount. Per-component useState made
+// each call site independent, so a paired daemon stayed invisible until reload.
+let remotesSnapshot: DaemonMeta[] = [];
+const remotesListeners = new Set<() => void>();
+function subscribeRemotes(cb: () => void): () => void {
+  remotesListeners.add(cb);
+  return () => {
+    remotesListeners.delete(cb);
+  };
+}
+async function loadRemotes(): Promise<void> {
+  try {
+    remotesSnapshot = await getHost().daemons.list();
+    remotesListeners.forEach((l) => l());
+  } catch (e: unknown) {
+    console.warn('[useDaemonRegistry] daemons.list failed', e);
+  }
+}
+
 export function useDaemonRegistry(): UseDaemonRegistryResult {
   const port = useDaemonPort();
   const { target, switchTo: contextSwitchTo } = useActiveDaemon();
-  const [remotes, setRemotes] = useState<DaemonMeta[]>([]);
+  const remotes = useSyncExternalStore(subscribeRemotes, () => remotesSnapshot);
 
-  const reload = useCallback(async (): Promise<void> => {
-    try {
-      setRemotes(await getHost().daemons.list());
-    } catch (e: unknown) {
-      console.warn('[useDaemonRegistry] daemons.list failed', e);
-    }
-  }, []);
+  const reload = useCallback((): Promise<void> => loadRemotes(), []);
 
   useEffect(() => {
-    let cancelled = false;
-    getHost()
-      .daemons.list()
-      .then((list) => {
-        if (!cancelled) setRemotes(list);
-      })
-      .catch((e: unknown) => {
-        console.warn('[useDaemonRegistry] daemons.list failed', e);
-      });
-    return () => {
-      cancelled = true;
-    };
+    void loadRemotes();
   }, [port]);
 
   const daemons = useMemo<DaemonMeta[]>(() => [buildSyntheticLocal(port), ...remotes], [port, remotes]);
