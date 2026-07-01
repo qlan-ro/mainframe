@@ -3,6 +3,7 @@ import { Zap, Bell, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkflowsModal, type WfSection } from './use-workflows-modal';
 import { useWorkflowsStore, selectPendingCount } from './use-workflows-store';
+import { WfLibrary } from './WfLibrary';
 
 const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
   { id: 'needs', label: 'Needs you', Icon: Bell },
@@ -10,7 +11,7 @@ const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
   { id: 'library', label: 'Library', Icon: Zap },
 ];
 
-export function WorkflowsView({ port: _port }: { port: number }): React.ReactElement {
+export function WorkflowsView({ port }: { port: number }): React.ReactElement {
   const { section, selectedRunId, setSection } = useWorkflowsModal();
   const pending = useWorkflowsStore(selectPendingCount);
 
@@ -55,11 +56,15 @@ export function WorkflowsView({ port: _port }: { port: number }): React.ReactEle
           </div>
         </nav>
 
-        {/* Body — filled by Tasks 7 (Library), 8 (Runs), 10 (RunDetail), 13 (NeedsYou). */}
-        <div className="min-w-0 flex-1">
-          <div className="p-6 text-body text-muted-foreground" data-testid="workflows-body-placeholder">
-            Section: {section}
-          </div>
+        {/* Body — Library active; Runs/NeedsYou/RunDetail filled by Tasks 8–13. */}
+        <div className="min-w-0 flex-1 overflow-hidden">
+          {section === 'library' && !selectedRunId ? (
+            <WfLibrary port={port} />
+          ) : (
+            <div className="p-6 text-body text-muted-foreground" data-testid="workflows-body-placeholder">
+              Section: {section}
+            </div>
+          )}
         </div>
       </div>
     </div>
