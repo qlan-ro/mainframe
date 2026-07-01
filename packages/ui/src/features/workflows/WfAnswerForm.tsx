@@ -48,7 +48,9 @@ export function WfAnswerForm({ port, interaction, onDone }: WfAnswerFormProps): 
   }
 
   // Fields whose `when` guard is not satisfied are hidden.
-  const visible = interaction.formSchema.filter((f) => !f.when || vals[f.when.key] === f.when.equals);
+  // Guard against missing formSchema (e.g. store seeds used in tests).
+  const schema = interaction.formSchema ?? [];
+  const visible = schema.filter((f) => !f.when || vals[f.when.key] === f.when.equals);
 
   // Collect only visible-field keys into the response payload.
   const payload = Object.fromEntries(visible.map((f) => [f.key, vals[f.key]]).filter(([, v]) => v !== undefined));

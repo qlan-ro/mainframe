@@ -6,6 +6,7 @@ import { useWorkflowsStore, selectPendingCount } from './use-workflows-store';
 import { WfLibrary } from './WfLibrary';
 import { WfRunsList } from './WfRunsList';
 import { WfRunDetail } from './WfRunDetail';
+import { WfNeedsYou } from './WfNeedsYou';
 
 const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
   { id: 'needs', label: 'Needs you', Icon: Bell },
@@ -77,11 +78,9 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
             <WfLibrary port={port} />
           ) : section === 'runs' ? (
             <WfRunsList port={port} />
-          ) : (
-            <div className="p-6 text-body text-muted-foreground" data-testid="workflows-body-placeholder">
-              Section: {section}
-            </div>
-          )}
+          ) : section === 'needs' ? (
+            <WfNeedsYou port={port} />
+          ) : null}
         </div>
       </div>
     </div>
