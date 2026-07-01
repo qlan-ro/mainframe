@@ -77,3 +77,6 @@ export const putWorkflow = (port: number, id: string, yaml: string): Promise<Wor
 
 export const deleteWorkflow = (port: number, id: string): Promise<void> =>
   requestEmpty('DELETE', `${b(port)}/workflows/${encodeURIComponent(id)}`);
+
+export const getWorkflowSource = (port: number, id: string): Promise<{ summary: WorkflowSummary; yaml: string }> =>
+  request('GET', `${b(port)}/workflows/${encodeURIComponent(id)}`);

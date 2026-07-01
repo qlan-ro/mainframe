@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { unlink } from 'node:fs/promises';
+import { unlink, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
@@ -103,6 +103,27 @@ export function workflowRoutes(ctx: RouteContext): Router {
         logger.error({ err }, 'validate unexpected error');
         fail(res, 500, 'validation failed');
       }
+    }),
+  );
+
+  // ── get source ────────────────────────────────────────────────────────────
+
+  router.get(
+    '/api/workflows/:id',
+    asyncHandler(async (req, res) => {
+      const service = ctx.workflows;
+      if (!service) return void fail(res, 503, 'workflow service not available');
+      const wfId = param(req, 'id');
+      const wf = service.loader.get(wfId);
+      if (!wf) return void fail(res, 404, 'workflow not found');
+      let yaml: string;
+      try {
+        yaml = await readFile(wf.filePath, 'utf8');
+      } catch (err) {
+        logger.warn({ err, wfId, filePath: wf.filePath }, 'read workflow source failed');
+        return void fail(res, 404, 'workflow source file not found');
+      }
+      ok(res, { summary: toWorkflowSummary(wf), yaml });
     }),
   );
 

@@ -37,7 +37,7 @@ function toInteractionSummary(record: InteractionRecord): WorkflowInteractionSum
     runId: record.runId,
     stepPath: record.stepPath,
     title: record.title,
-    formSchema: record.formSchema as unknown as Record<string, unknown>,
+    formSchema: record.formSchema,
     createdAt: record.createdAt,
     expiresAt: record.expiresAt,
   };

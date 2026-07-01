@@ -271,4 +271,21 @@ describe('workflow REST routes', () => {
     const res = await request(app).delete(`/api/workflows/${wfId}`);
     expect(res.status).toBe(404);
   });
+
+  // ── get source ──────────────────────────────────────────────────────────────
+
+  it('GET /api/workflows/:id returns summary and yaml for a known workflow', async () => {
+    const wfId = encodeURIComponent('global:simple');
+    const res = await request(app).get(`/api/workflows/${wfId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.summary.name).toBe('simple');
+    expect(res.body.data.yaml).toContain('name: simple');
+  });
+
+  it('GET /api/workflows/:id returns 404 for unknown workflow', async () => {
+    const wfId = encodeURIComponent('global:no-such');
+    const res = await request(app).get(`/api/workflows/${wfId}`);
+    expect(res.status).toBe(404);
+  });
 });
