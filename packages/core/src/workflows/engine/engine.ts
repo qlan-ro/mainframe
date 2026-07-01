@@ -76,10 +76,12 @@ export class WorkflowEngine {
         this.store.finalizeRun(runId, 'succeeded', outputs, null);
       }
       this.emitRun(runId);
+      await this.deps.onRunFinalized?.(runId);
     } catch (err) {
       this.deps.logger.error({ err, runId }, 'workflow advance crashed');
       this.store.finalizeRun(runId, 'failed', null, String(err instanceof Error ? err.message : err));
       this.emitRun(runId);
+      await this.deps.onRunFinalized?.(runId);
     } finally {
       this.aborts.delete(runId);
     }
@@ -89,6 +91,7 @@ export class WorkflowEngine {
     this.aborts.get(runId)?.abort();
     this.store.finalizeRun(runId, 'cancelled', null, null);
     this.emitRun(runId);
+    await this.deps.onRunFinalized?.(runId);
   }
 
   /** Walk one step list. Committed results bind and skip; first live step executes. */

@@ -38,6 +38,7 @@ export interface EngineDeps {
   logger: Logger;
   emitEvent: (event: DaemonEvent) => void;
   executors: ExecutorMap;
+  onRunFinalized?: (runId: string) => Promise<void>;
 }
 
 /** Walk result for a sequence/block. */
