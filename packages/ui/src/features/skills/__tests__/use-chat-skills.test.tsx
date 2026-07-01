@@ -46,6 +46,7 @@ import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
 import { useChatExtras } from '../../chat/runtime/use-chat-thread-runtime';
+import { setDraftConfig, useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import type { Skill, Project, AgentConfig } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -114,6 +115,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useDraftConfigStore.setState({ drafts: new Map() });
 });
 
 // ---------------------------------------------------------------------------
@@ -146,6 +148,32 @@ describe('useChatSkills — happy path', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(PORT, ADAPTER_ID, PROJECT_PATH);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. Draft thread (no daemon chat yet) — skills load from the in-memory draft's
+//     project + adapter, so the pickers populate BEFORE the first send.
+// ---------------------------------------------------------------------------
+
+describe('useChatSkills — new-thread draft (no daemon chatConfig)', () => {
+  it('loads skills from the draft project + adapter for a __LOCALID_* thread', async () => {
+    setDraftConfig('__LOCALID_9', { projectId: PROJECT_ID, adapterId: ADAPTER_ID });
+    const draftExtras = {
+      ...makeFakeExtras(),
+      state: { chatId: '__LOCALID_9', chatConfig: undefined },
+    };
+    vi.mocked(useChatExtras).mockReturnValue(draftExtras as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
+
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.skills).toEqual([SKILL_FIXTURE]);
     expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(PORT, ADAPTER_ID, PROJECT_PATH);
   });
 });

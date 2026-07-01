@@ -44,6 +44,7 @@ import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
 import { resolveProjectSession } from './resolve-project-session';
+import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
 import { Hint } from '@/components/ui/hint';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
@@ -62,6 +63,7 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
  */
 function SessionsGroupHeader({ count }: { count: number }) {
   const { sortMode, setSortMode } = useSessionFilters();
+  const runtime = useAssistantRuntime();
   const iconBtn =
     'inline-flex size-[22px] items-center justify-center rounded-[6px] text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
@@ -70,13 +72,16 @@ function SessionsGroupHeader({ count }: { count: number }) {
       <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">Sessions</span>
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
-      <ThreadListPrimitive.New asChild>
-        <Hint label="New session">
+      <Hint label="New session">
+        {/* Reset the reused newThreadId's stale draft before the primitive's
+            switchToNewThread runs (composed onClick), so an abandoned draft can't
+            leak its project into this New — see resetNewThreadDraft. */}
+        <ThreadListPrimitive.New asChild onClick={() => resetNewThreadDraft(runtime.threads.getState().newThreadId)}>
           <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={iconBtn}>
             <PlusIcon className="size-[12px]" />
           </button>
-        </Hint>
-      </ThreadListPrimitive.New>
+        </ThreadListPrimitive.New>
+      </Hint>
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />
     </div>

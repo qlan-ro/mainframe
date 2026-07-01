@@ -69,6 +69,24 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
     .filter((msg): msg is NonNullable<typeof msg> => msg != null)
     .map((msg) => convertMessage(msg) as ThreadMessageLike as ThreadMessage);
 
+  // Streaming "typing" reveal: while a run is active, mark the TAIL assistant
+  // message `running` so assistant-ui's default useSmooth (in MarkdownTextPrimitive)
+  // reveals its text character-by-character as the daemon streams
+  // display.message.updated deltas. We use a pre-built messageRepository, which
+  // assistant-ui imports verbatim WITHOUT the auto-status it applies on the
+  // messages+convertMessage path — so the running status must be set here, or
+  // every message stays `complete` and appears instantly. Only the tail streams;
+  // earlier turns and all loaded history (runState idle) stay complete/instant.
+  if (state.runState.type === 'running') {
+    for (let i = serverMessages.length - 1; i >= 0; i--) {
+      const msg = serverMessages[i]!;
+      if (msg.role === 'assistant') {
+        serverMessages[i] = { ...msg, status: { type: 'running' } } as ThreadMessage;
+        break;
+      }
+    }
+  }
+
   // Pending (optimistic) messages sorted by createdAt
   const pendingMessages: ThreadUserMessage[] = Object.values(state.pendingUserMessages)
     .filter((p): p is PendingUserMessage => p != null)

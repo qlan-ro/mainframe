@@ -22,6 +22,8 @@ import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
 import { useChatExtras } from '../chat/runtime/use-chat-thread-runtime';
+import { useDraftConfig } from '../sessions/runtime/draft-config';
+import { resolveDraftChatContext } from '../chat/composer/triggers/resolve-draft-chat-context';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -43,8 +45,13 @@ const Ctx = createContext<ChatSkills>(DEFAULT);
 export function SkillsProvider({ children }: { children: ReactNode }) {
   const extras = useChatExtras();
   const port = extras?.port ?? null;
-  const adapterId = extras?.state.chatConfig?.adapterId ?? null;
-  const projectId = extras?.state.chatConfig?.projectId ?? null;
+  const chatId = extras?.state.chatId ?? null;
+  const chatConfig = extras?.state.chatConfig ?? null;
+  // Draft-aware: a brand-new __LOCALID_* thread has no daemon chatConfig yet, so
+  // fall back to the in-memory draft's project + adapter (see resolveDraftChatContext)
+  // so the `/` skills and `@` agents pickers populate before the first send.
+  const draft = useDraftConfig(chatId != null && chatConfig == null ? chatId : null);
+  const { adapterId, projectId } = resolveDraftChatContext(chatId, chatConfig, draft);
 
   const [skills, setSkills] = useState<Skill[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);

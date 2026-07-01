@@ -26,11 +26,14 @@
  *  7. data-testid="sessions-filter-pill-all" is present (ProjectFilterPillBar rendered).
  */
 import type React from 'react';
+import { cloneElement, isValidElement } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
 import type { Project, SyntheticTag } from '@qlan-ro/mainframe-types';
+import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
+import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 
 // ---------------------------------------------------------------------------
 // Mutable control state — set per test before rendering
@@ -42,8 +45,11 @@ let __filterProjectId: string | null = null;
 let __selectedTags: Set<string> = new Set();
 const __selectedSynthetic: Set<SyntheticTag> = new Set();
 let __sortMode: 'recent' | 'name' | 'status' = 'recent';
+let __newThreadId: string | null = null;
 const setFilterProjectIdSpy = vi.fn();
 const setSortModeSpy = vi.fn();
+// Spy injected by the ThreadListPrimitive.New `asChild` Slot — see the mock below.
+const newThreadClickSpy = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
@@ -55,13 +61,36 @@ vi.mock('@assistant-ui/react', () => ({
       getState: () => {
         const threadIds = __threads.map((t) => t.id);
         const threadItems = Object.fromEntries(__threads.map((t) => [t.id, t]));
-        return { threadIds, threadItems, mainThreadId: '' };
+        return { threadIds, threadItems, mainThreadId: '', newThreadId: __newThreadId };
       },
       getItemById: (_id: string) => ({ rename: vi.fn(), archive: vi.fn() }),
     },
   }),
+  // Faithful `asChild` repro: the real primitive is a Radix Slot that clones its
+  // single child and injects onClick onto it — composing the caller's onClick
+  // BEFORE its own switchToNewThread (composeEventHandlers), then the switch itself
+  // (here newThreadClickSpy). A passthrough `<>{children}</>` would hide the
+  // prop-forwarding bug; dropping the caller onClick would hide the draft reset.
   ThreadListPrimitive: {
-    New: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    New: ({
+      children,
+      asChild,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      asChild?: boolean;
+      onClick?: (e: unknown) => void;
+    }) => {
+      const composed = (e: unknown) => {
+        onClick?.(e);
+        newThreadClickSpy(e);
+      };
+      return asChild && isValidElement(children) ? (
+        cloneElement(children as React.ReactElement<Record<string, unknown>>, { onClick: composed })
+      ) : (
+        <>{children}</>
+      );
+    },
   },
 }));
 
@@ -241,8 +270,12 @@ beforeEach(() => {
   __filterProjectId = null;
   __selectedTags = new Set();
   __sortMode = 'recent';
+  __newThreadId = null;
   setFilterProjectIdSpy.mockReset();
   setSortModeSpy.mockReset();
+  newThreadClickSpy.mockReset();
+  useDraftConfigStore.setState({ drafts: new Map() });
+  useNewThreadReady.setState({ readyIds: new Set() });
 });
 
 // ---------------------------------------------------------------------------
@@ -264,6 +297,43 @@ describe('SessionSidebar — new-button is present', () => {
   it('renders data-testid="sessions-new-button"', () => {
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-new-button')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b. Clicking the new-button fires the ThreadListPrimitive.New handler.
+//     The `Hint` tooltip wrapper must not sit between the asChild Slot and the
+//     button, or the injected onClick never reaches the DOM element.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — new-button triggers the New-thread handler', () => {
+  it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clicked', async () => {
+    render(<SessionSidebar />);
+    await userEvent.click(screen.getByTestId('sessions-new-button'));
+    expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2c. Clicking the new-button resets the reused newThreadId's stale draft.
+//     aui reuses the same __LOCALID_* slot until a message is sent, so an
+//     abandoned draft (project seeded, never sent) must not leak into the next
+//     New — else the chat is created in the stale project / the picker is skipped.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — new-button resets a stale reused-slot draft', () => {
+  it('clears the draft-config and ready flag for the current newThreadId on click', async () => {
+    __newThreadId = '__LOCALID_reuse';
+    setDraftConfig('__LOCALID_reuse', { projectId: 'stale-proj', adapterId: 'claude' });
+    useNewThreadReady.getState().markReady('__LOCALID_reuse');
+
+    render(<SessionSidebar />);
+    await userEvent.click(screen.getByTestId('sessions-new-button'));
+
+    expect(getDraftConfig('__LOCALID_reuse')).toBeUndefined();
+    expect(useNewThreadReady.getState().isReady('__LOCALID_reuse')).toBe(false);
+    // The switch still fires — the reset composes BEFORE it, not instead of it.
+    expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
   });
 });
 

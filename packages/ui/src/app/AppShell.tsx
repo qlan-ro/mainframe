@@ -24,6 +24,7 @@ import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useNewChatHotkey } from '../features/sessions/use-new-chat-hotkey';
+import { resetNewThreadDraft } from '../features/sessions/new-thread/reset-new-thread-draft';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { activeLaunchScope } from '../lib/launch-scope';
@@ -66,7 +67,12 @@ function RuntimeBody({ port }: { port: number }) {
   }, [runtime]);
 
   // Global ⌘N / Ctrl+N → new chat (same path as the sidebar's New button).
-  useNewChatHotkey(() => void runtime.threads.switchToNewThread());
+  // Reset the reused newThreadId's stale draft first so it can't leak an abandoned
+  // draft's project into the next New (see resetNewThreadDraft).
+  useNewChatHotkey(() => {
+    resetNewThreadDraft(runtime.threads.getState().newThreadId);
+    void runtime.threads.switchToNewThread();
+  });
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();

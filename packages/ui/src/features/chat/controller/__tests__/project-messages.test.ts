@@ -10,6 +10,7 @@
  * Fix: removed the `status` field from the user-message projection.
  */
 import { describe, it, expect } from 'vitest';
+import type { DisplayMessage } from '@qlan-ro/mainframe-types';
 import { createChatThreadState, reduceChatThreadState, type PendingUserMessage } from '../chat-thread-state';
 import { projectChatThreadMessages, projectChatThreadRepository } from '../project-messages';
 
@@ -87,5 +88,83 @@ describe('projectChatThreadRepository — fromArray integration', () => {
     expect(() => {
       projectChatThreadRepository(state);
     }).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 3: streaming "typing" status — the tail assistant message is marked
+// `running` while a run is active so assistant-ui's useSmooth reveals its text
+// character-by-character. Historical/idle messages stay complete (instant).
+// ---------------------------------------------------------------------------
+
+function makeDisplayMessage(id: string, type: DisplayMessage['type'], text: string): DisplayMessage {
+  return { id, chatId: 'chat-1', type, content: [{ type: 'text', text }], timestamp: '2026-07-01T00:00:00.000Z' };
+}
+
+/** Seeds server messages via the official `history.loaded` reducer, then optionally
+ *  flips the run active via `run.started` — never a hand-rolled state object. */
+function stateWithMessages(messages: DisplayMessage[], running: boolean) {
+  let state = reduceChatThreadState(createChatThreadState('chat-1'), { type: 'history.loaded', messages });
+  if (running) state = reduceChatThreadState(state, { type: 'run.started' });
+  return state;
+}
+
+/** Narrow read of an optional assistant status (convertMessage omits it → undefined). */
+function statusTypeOf(msg: unknown): string | undefined {
+  return (msg as { status?: { type?: string } }).status?.type;
+}
+
+describe('projectChatThreadMessages — streaming assistant status', () => {
+  it('marks the tail assistant message running while the run is active', () => {
+    const state = stateWithMessages(
+      [makeDisplayMessage('u1', 'user', 'hi'), makeDisplayMessage('a1', 'assistant', 'partial repl')],
+      true,
+    );
+
+    const messages = projectChatThreadMessages(state);
+    const tail = messages[messages.length - 1]!;
+
+    expect(tail.role).toBe('assistant');
+    expect(statusTypeOf(tail)).toBe('running');
+  });
+
+  it('leaves an EARLIER assistant message complete — only the tail streams', () => {
+    const state = stateWithMessages(
+      [
+        makeDisplayMessage('a-old', 'assistant', 'first turn answer'),
+        makeDisplayMessage('u2', 'user', 'follow up'),
+        makeDisplayMessage('a-new', 'assistant', 'second turn stream'),
+      ],
+      true,
+    );
+
+    const messages = projectChatThreadMessages(state);
+    const oldAssistant = messages.find((m) => m.id === 'a-old')!;
+    const newAssistant = messages.find((m) => m.id === 'a-new')!;
+
+    expect(statusTypeOf(newAssistant)).toBe('running');
+    expect(statusTypeOf(oldAssistant)).not.toBe('running');
+  });
+
+  it('does NOT mark the tail assistant running when the run is idle (loaded history is instant)', () => {
+    const state = stateWithMessages(
+      [makeDisplayMessage('u1', 'user', 'hi'), makeDisplayMessage('a1', 'assistant', 'complete answer')],
+      false,
+    );
+
+    const messages = projectChatThreadMessages(state);
+    const tail = messages[messages.length - 1]!;
+
+    expect(tail.role).toBe('assistant');
+    expect(statusTypeOf(tail)).not.toBe('running');
+  });
+
+  it('builds a repository without throwing when the tail assistant is running (fromArray integration)', () => {
+    const state = stateWithMessages(
+      [makeDisplayMessage('u1', 'user', 'hi'), makeDisplayMessage('a1', 'assistant', 'streaming…')],
+      true,
+    );
+    // fromThreadMessageLike must accept the explicit running status on an assistant.
+    expect(() => projectChatThreadRepository(state)).not.toThrow();
   });
 });

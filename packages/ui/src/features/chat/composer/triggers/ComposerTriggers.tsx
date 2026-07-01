@@ -16,6 +16,8 @@ import { ComposerPrimitive, useAui } from '@assistant-ui/react';
 import type { Unstable_TriggerItem } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
+import { useDraftConfig } from '@/features/sessions/runtime/draft-config';
+import { resolveDraftChatContext } from './resolve-draft-chat-context';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
 import { createMentionCache, buildMentionTriggerAdapter, type MentionCache } from './mention-adapter';
@@ -86,8 +88,13 @@ function MentionDriver({ cache }: { cache: MentionCache }) {
 export function ComposerTriggers({ children }: { children: ReactNode }) {
   const extras = useChatExtras();
   const port = extras?.port ?? null;
-  const projectId = extras?.state.chatConfig?.projectId ?? null;
-  const chatId = extras?.state.chatId ?? null;
+  const activeChatId = extras?.state.chatId ?? null;
+  const chatConfig = extras?.state.chatConfig ?? null;
+  // Draft-aware: before the first send a __LOCALID_* thread has no daemon chat, so
+  // fall back to the draft's project (fileChatId stays null — a draft has no
+  // worktree) so `@` file search works on a fresh thread. See resolveDraftChatContext.
+  const draft = useDraftConfig(activeChatId != null && chatConfig == null ? activeChatId : null);
+  const { projectId, fileChatId: chatId } = resolveDraftChatContext(activeChatId, chatConfig, draft);
 
   const { skills } = useChatSkills();
   const agents = useChatAgents();
