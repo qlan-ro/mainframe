@@ -13,8 +13,8 @@ import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { ChatListFilters } from '../db/chats.js';
-import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
+import { isWorktreePresent } from '../workspace/worktree.js';
 import { createChildLogger } from '../logger.js';
 import { MessageCache } from './message-cache.js';
 import { PermissionManager } from './permission-manager.js';
@@ -774,7 +774,7 @@ export class ChatManager {
     const hasPending = this.permissions.hasPending(chat.id);
     chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
     chat.isRunning = chat.processState === 'working' && !hasPending;
-    chat.worktreeMissing = chat.worktreePath ? !existsSync(chat.worktreePath) : false;
+    chat.worktreeMissing = chat.worktreePath ? !isWorktreePresent(chat.worktreePath) : false;
     return chat;
   }
 

@@ -19,8 +19,13 @@ import { useOverlaysStore } from '@/store/overlays';
 // ---------------------------------------------------------------------------
 
 const mockGetGitStatus = vi.fn();
+const mockGetWorkingStat = vi.fn();
+const mockGitCommit = vi.fn();
 vi.mock('@/lib/api/git', () => ({
   getGitStatus: (...args: unknown[]) => mockGetGitStatus(...args),
+  getWorkingStat: (...args: unknown[]) => mockGetWorkingStat(...args),
+  getGitBranch: () => Promise.resolve({ branch: 'feat/rail-collapse' }),
+  gitCommit: (...args: unknown[]) => mockGitCommit(...args),
   // getWorkingDiff is used by ReviewDiffView; mock it to prevent actual calls
   getWorkingDiff: () => Promise.resolve({ original: '', modified: '', diff: '', source: 'git' }),
 }));
@@ -87,6 +92,10 @@ function openReview() {
 
 beforeEach(() => {
   mockGetGitStatus.mockReset();
+  mockGetWorkingStat.mockReset();
+  mockGetWorkingStat.mockResolvedValue({ files: [], totalAdditions: 0, totalDeletions: 0 });
+  mockGitCommit.mockReset();
+  mockGitCommit.mockResolvedValue({ commit: 'abc123' });
   mockAppend.mockReset();
   act(() => {
     useOverlaysStore.setState({ reviewOpen: false, paletteOpen: false, findInPath: null });
@@ -208,5 +217,72 @@ describe('ReviewPanel — close', () => {
     const closeButtons = screen.getAllByRole('button', { name: /close/i });
     expect(closeButtons).toHaveLength(1);
     expect(screen.getByTestId('review-close')).toBeInTheDocument();
+  });
+});
+
+describe('ReviewPanel — commit rail', () => {
+  it('commits with the typed message and shows the committed state', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+    mockGetWorkingStat.mockResolvedValue({
+      files: [{ path: 'src/a.ts', additions: 4, deletions: 1 }],
+      totalAdditions: 4,
+      totalDeletions: 1,
+    });
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-commit-input')).not.toBeNull();
+    });
+
+    await userEvent.type(screen.getByTestId('review-commit-input'), 'feat: do the thing');
+    await userEvent.click(screen.getByTestId('review-commit-submit'));
+
+    await waitFor(() => {
+      expect(mockGitCommit).toHaveBeenCalledWith(31415, 'proj-1', 'feat: do the thing', 'chat-1');
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Changes committed/i)).toBeTruthy();
+    });
+  });
+
+  it('keeps the commit button disabled until a message is typed', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-commit-submit')).not.toBeNull();
+    });
+
+    expect(screen.getByTestId('review-commit-submit')).toBeDisabled();
+    await userEvent.type(screen.getByTestId('review-commit-input'), 'fix: x');
+    expect(screen.getByTestId('review-commit-submit')).not.toBeDisabled();
+  });
+});
+
+describe('ReviewPanel — viewed counter', () => {
+  it('updates the header viewed count when a file is marked viewed in the toolbar', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-file-row-src/a.ts')).not.toBeNull();
+    });
+    expect(screen.getByText('0/1 viewed')).toBeTruthy();
+
+    await userEvent.click(screen.getByTestId('review-file-row-src/a.ts'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-viewed-toggle')).not.toBeNull();
+    });
+    await userEvent.click(screen.getByTestId('review-viewed-toggle'));
+
+    await waitFor(() => {
+      expect(screen.getByText('1/1 viewed')).toBeTruthy();
+    });
   });
 });

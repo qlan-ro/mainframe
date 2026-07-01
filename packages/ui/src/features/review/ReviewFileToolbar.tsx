@@ -40,9 +40,9 @@ export function ReviewFileToolbar({
         type="button"
         data-testid="review-open-in-workspace"
         onClick={onOpenInWorkspace}
-        className="inline-flex h-[26px] items-center gap-1.5 rounded-md border border-border bg-background px-[10px] text-caption font-semibold text-muted-foreground transition-colors hover:bg-accent"
+        className="inline-flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-[10px] text-caption font-semibold text-muted-foreground transition-colors hover:bg-accent"
       >
-        <ExternalLink size={12} aria-hidden />
+        <ExternalLink size={12} className="shrink-0" aria-hidden />
         Open in workspace
       </button>
 
@@ -51,7 +51,7 @@ export function ReviewFileToolbar({
         data-testid="review-viewed-toggle"
         aria-pressed={viewed}
         onClick={onToggleViewed}
-        className={`inline-flex h-[26px] items-center gap-[7px] rounded-md border px-[10px] transition-colors ${
+        className={`inline-flex h-[26px] shrink-0 items-center gap-[7px] whitespace-nowrap rounded-md border px-[10px] transition-colors ${
           viewed ? 'border-mf-success/40 bg-mf-success/10' : 'border-border bg-background hover:bg-accent'
         }`}
       >

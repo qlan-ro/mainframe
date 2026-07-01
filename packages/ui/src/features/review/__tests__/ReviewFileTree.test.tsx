@@ -6,10 +6,10 @@ import type { ReviewFile } from '../git-status-to-files';
 const { ReviewFileTree } = await import('../ReviewFileTree');
 
 const FILES: ReviewFile[] = [
-  { path: 'src/a.ts', status: 'modified' },
-  { path: 'src/b.ts', status: 'added' },
-  { path: 'src/c.ts', status: 'deleted' },
-  { path: 'src/d.ts', status: 'renamed' },
+  { path: 'src/a.ts', status: 'modified', additions: 18, deletions: 7 },
+  { path: 'src/b.ts', status: 'added', additions: 42, deletions: 0 },
+  { path: 'src/c.ts', status: 'deleted', additions: 0, deletions: 96 },
+  { path: 'src/d.ts', status: 'renamed', additions: 3, deletions: 3 },
 ];
 
 describe('ReviewFileTree', () => {
@@ -18,6 +18,11 @@ describe('ReviewFileTree', () => {
     for (const f of FILES) {
       expect(screen.queryByTestId(`review-file-row-${f.path}`)).not.toBeNull();
     }
+  });
+
+  it('renders a "Changed files" heading', () => {
+    render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
+    expect(screen.getByText(/Changed files/i)).toBeTruthy();
   });
 
   it('calls onSelectFile with the path when a row is clicked', async () => {
@@ -34,11 +39,17 @@ describe('ReviewFileTree', () => {
 
   it('shows a status badge for each file', () => {
     render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
-    // Each status kind renders a visible badge text
     expect(screen.getByText('M')).toBeTruthy();
     expect(screen.getByText('A')).toBeTruthy();
     expect(screen.getByText('D')).toBeTruthy();
     expect(screen.getByText('R')).toBeTruthy();
+  });
+
+  it('renders a stat meter for each file', () => {
+    render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
+    for (const f of FILES) {
+      expect(screen.queryByTestId(`review-file-stat-${f.path}`)).not.toBeNull();
+    }
   });
 
   it('marks the selected row with the brand selection tint (distinct from unselected)', () => {
@@ -47,5 +58,15 @@ describe('ReviewFileTree', () => {
     const unselected = screen.getByTestId('review-file-row-src/b.ts');
     expect(selected.className).toContain('bg-mf-selection');
     expect(unselected.className).not.toContain('bg-mf-selection');
+  });
+
+  it('strikes through and dims a viewed (non-selected) file', () => {
+    render(
+      <ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} viewedFiles={new Set(['src/a.ts'])} />,
+    );
+    const viewedName = screen.getByText('a.ts');
+    expect(viewedName.className).toContain('line-through');
+    const notViewedName = screen.getByText('b.ts');
+    expect(notViewedName.className).not.toContain('line-through');
   });
 });

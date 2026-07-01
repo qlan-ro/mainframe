@@ -78,7 +78,7 @@ export function ReviewCommitRail({
                 type="button"
                 data-testid={`review-commit-suggestion-${s.trim().replace(/[^a-z]/gi, '')}`}
                 onClick={() => onMessageChange(s)}
-                className="rounded-[13px] border border-border bg-background px-[9px] py-1 text-micro text-muted-foreground transition-colors hover:border-primary"
+                className="rounded-[13px] border border-border bg-background px-[9px] py-[4px] text-micro text-muted-foreground transition-colors hover:border-primary"
               >
                 {s.trim()}
               </button>
@@ -86,7 +86,7 @@ export function ReviewCommitRail({
           </div>
 
           {unviewedCount > 0 && (
-            <div className="mb-[12px] flex items-start gap-2 rounded-md border border-mf-warning/30 bg-mf-warning/10 px-[10px] py-[9px]">
+            <div className="mb-[12px] flex items-start gap-[8px] rounded-md border border-mf-warning/30 bg-mf-warning/10 px-[10px] py-[9px]">
               <TriangleAlert size={13} className="mt-px shrink-0 text-mf-warning" aria-hidden />
               <span className="text-caption leading-snug text-mf-warning">
                 {unviewedCount} {unviewedCount === 1 ? 'file' : 'files'} not yet reviewed.

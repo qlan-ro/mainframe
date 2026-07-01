@@ -17,6 +17,7 @@ import type {
   RebaseResult,
   DeleteBranchResult,
   UpdateAllResult,
+  WorkingStat,
 } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
@@ -86,6 +87,18 @@ function projGit(port: number, projectId: string): string {
 function chatQs(chatId?: string): string {
   return chatId ? `?chatId=${encodeURIComponent(chatId)}` : '';
 }
+
+/** Per-file +/- counts for the working tree, plus repo-wide totals. */
+export const getWorkingStat = (port: number, projectId: string, chatId?: string): Promise<WorkingStat> =>
+  request('GET', `${projGit(port, projectId)}/working-stat${chatQs(chatId)}`);
+
+/** Stage every change and commit with `message`; resolves with the new commit sha. */
+export const gitCommit = (
+  port: number,
+  projectId: string,
+  message: string,
+  chatId?: string,
+): Promise<{ commit: string }> => request('POST', `${projGit(port, projectId)}/commit${chatQs(chatId)}`, { message });
 
 export const getGitBranch = (port: number, projectId: string, chatId?: string): Promise<{ branch: string | null }> =>
   request('GET', `${projGit(port, projectId)}/branch${chatQs(chatId)}`);
