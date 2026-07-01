@@ -12,6 +12,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useWorkflowsModal } from './use-workflows-modal';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsEvents } from './use-workflows-events';
+import { useWorkflowsToasts } from './use-workflows-toasts';
 import { WorkflowsView } from './WorkflowsView';
 import { WorkflowEditor } from './editor/WorkflowEditor';
 
@@ -24,6 +25,7 @@ export function WorkflowsModalHost({ port }: Props): React.ReactElement {
   const loadAll = useWorkflowsStore((s) => s.loadAll);
 
   useWorkflowsEvents(port);
+  useWorkflowsToasts(port);
 
   // `mf:open-workflows` custom event (dispatched by SidebarHeader WorkflowsBtn)
   useEffect(() => {

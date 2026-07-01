@@ -17,11 +17,18 @@ import { cn } from '@/lib/utils';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
+export interface WsToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface WsToastProps {
   id: string | number;
   type: ToastType;
   title: string;
   description?: string;
+  /** Generic action button rendered below the title. Takes precedence over chatId CTA. */
+  action?: WsToastAction;
   chatId?: string;
   /** Invoked with `chatId` when the "Open session →" CTA is clicked. */
   onOpenSession?: (chatId: string) => void;
@@ -72,7 +79,7 @@ function ChipIcon({ type }: { type: ToastType }) {
 
 const AUTO_DISMISS_MS = 4200;
 
-export function WsToastCard({ id, type, title, description, chatId, onOpenSession, onDismiss }: WsToastProps) {
+export function WsToastCard({ id, type, title, description, action, chatId, onOpenSession, onDismiss }: WsToastProps) {
   const chip = CHIP_CONFIG[type];
   const isAuto = type !== 'error';
   const [hover, setHover] = useState(false);
@@ -117,7 +124,20 @@ export function WsToastCard({ id, type, title, description, chatId, onOpenSessio
             {description}
           </div>
         )}
-        {chatId && (
+        {action && (
+          <button
+            type="button"
+            data-testid="toast-action"
+            onClick={() => {
+              action.onClick();
+              onDismiss(id);
+            }}
+            className="text-caption font-medium text-primary mt-[6px] block"
+          >
+            {action.label} →
+          </button>
+        )}
+        {!action && chatId && (
           <button
             type="button"
             data-testid="toast-open-session"

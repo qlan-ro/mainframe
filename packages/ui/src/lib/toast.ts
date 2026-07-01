@@ -12,7 +12,7 @@
 import { createElement } from 'react';
 import { toast } from 'sonner';
 import { WsToastCard } from '@/components/ui/ws-toast';
-import type { ToastType } from '@/components/ui/ws-toast';
+import type { ToastType, WsToastAction } from '@/components/ui/ws-toast';
 import { openSessionById } from '@/lib/session-nav';
 
 const AUTO_DISMISS_MS = 4200;
@@ -20,6 +20,7 @@ const AUTO_DISMISS_MS = 4200;
 export interface MfToastOptions {
   description?: string;
   chatId?: string;
+  action?: WsToastAction;
 }
 
 export interface MfToastInput extends MfToastOptions {
@@ -28,7 +29,7 @@ export interface MfToastInput extends MfToastOptions {
 }
 
 function fire(input: MfToastInput) {
-  const { type, title, description, chatId } = input;
+  const { type, title, description, chatId, action } = input;
   const duration = type === 'error' ? Infinity : AUTO_DISMISS_MS;
 
   toast.custom(
@@ -38,6 +39,7 @@ function fire(input: MfToastInput) {
         type,
         title,
         description,
+        action,
         chatId,
         onOpenSession: openSessionById,
         onDismiss: (tid) => toast.dismiss(tid),
