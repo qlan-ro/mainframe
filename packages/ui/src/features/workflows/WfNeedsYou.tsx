@@ -33,15 +33,18 @@ export function WfNeedsYou({ port }: { port: number }): React.ReactElement {
   const headline = `${count} ${count === 1 ? 'run is' : 'runs are'} waiting for your answer`;
 
   return (
-    <div data-testid="workflows-needsyou" className="h-full overflow-y-auto bg-mf-content2 px-[18px] pb-6 pt-4">
+    <div
+      data-testid="workflows-needsyou"
+      className="h-full overflow-y-auto bg-mf-content2 px-[18px] pb-[24px] pt-[16px]"
+    >
       {/* Header */}
-      <p className="mb-3 text-caption text-muted-foreground">
+      <p className="mb-[13px] text-caption text-muted-foreground">
         <span className="font-bold text-foreground">{count}</span> {count === 1 ? 'run is' : 'runs are'} waiting for
         your answer
       </p>
 
       {/* Interaction list */}
-      <div className="flex max-w-[760px] flex-col gap-3" aria-label={headline}>
+      <div className="flex max-w-[760px] flex-col gap-[12px]" aria-label={headline}>
         {interactions.map((interaction, i) => (
           <WfInteractionCard key={interaction.id} port={port} interaction={interaction} defaultExpanded={i === 0} />
         ))}

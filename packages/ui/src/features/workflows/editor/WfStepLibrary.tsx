@@ -139,9 +139,10 @@ function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.Re
         }
       }}
       className={cn(
-        'flex cursor-pointer flex-col gap-[9px] rounded-lg border border-border bg-card p-[13px]',
+        'group flex cursor-pointer flex-col gap-[9px] rounded-lg border bg-card p-[13px]',
+        'shadow-[0_1px_2px_rgba(0,0,0,0.03)]',
         'transition-[border-color,box-shadow] duration-[120ms]',
-        'hover:shadow-md',
+        'border-border hover:border-primary/50 hover:shadow-[0_4px_14px_rgba(0,0,0,0.07)]',
       )}
     >
       {/* Header row */}
@@ -158,10 +159,9 @@ function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.Re
           className={cn(
             'inline-flex h-[18px] items-center rounded-full px-2',
             'text-micro font-bold uppercase tracking-wide',
-            isControl
-              ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-              : 'bg-muted text-mf-text-3',
+            isControl ? '' : 'bg-muted text-mf-text-3',
           )}
+          style={isControl ? { background: 'rgba(91,38,154,0.12)', color: '#7a4d9e' } : undefined}
         >
           {isControl ? 'Control flow' : 'Leaf'}
         </span>

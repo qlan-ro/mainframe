@@ -27,6 +27,40 @@ function leaf(stepPath: string, stepId?: string): RunTreeNode {
   };
 }
 
+// ── Rail structure ─────────────────────────────────────────────────────────────
+
+describe('WfTree — rail structure', () => {
+  it('renders a single vertical spine line (positioned at left:13)', () => {
+    const { container } = render(<WfTree nodes={[leaf('root.a'), leaf('root.b')]} onOpenChat={noop} />);
+    // The spine is an absolute hairline at left-[13px]; there is exactly one at
+    // the top level.
+    const spine = container.querySelector('.left-\\[13px\\]');
+    expect(spine).toBeTruthy();
+  });
+
+  it('does NOT use border-l-2 colored bars (removed in the rail rebuild)', () => {
+    const node: RunTreeNode = {
+      ...leaf('root.p', 'parallel'),
+      kind: 'parallel',
+      status: 'running',
+      lanes: [{ label: 'Lane A', status: 'succeeded', steps: [leaf('root.p.a')] }],
+    };
+    const { container } = render(<WfTree nodes={[node]} onOpenChat={noop} />);
+    expect(container.querySelector('.border-l-2')).toBeNull();
+  });
+
+  it('indents composite children past the spine (marginLeft:30)', () => {
+    const node: RunTreeNode = {
+      ...leaf('root.p', 'parallel'),
+      kind: 'parallel',
+      status: 'running',
+      lanes: [{ label: 'Lane A', status: 'succeeded', steps: [leaf('root.p.a')] }],
+    };
+    const { container } = render(<WfTree nodes={[node]} onOpenChat={noop} />);
+    expect(container.querySelector('.ml-\\[30px\\]')).toBeTruthy();
+  });
+});
+
 // ── Parallel (lanes) ──────────────────────────────────────────────────────────
 
 describe('WfTree — parallel node', () => {

@@ -8,13 +8,27 @@
  * expose declared inputs; that is deferred to when the daemon adds that field).
  */
 import React, { useState } from 'react';
-import { Plus, Play, Pencil, Calendar, Zap } from 'lucide-react';
+import { Plus, Play, Pencil, Calendar, Zap, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsModal } from './use-workflows-modal';
 import * as wfApi from '@/lib/api/workflows';
 import { getRunStatusMeta, formatAgo } from './glyphs';
 import type { WorkflowSummary, WorkflowRunSummary } from '@qlan-ro/mainframe-types';
+
+// ── Trigger kind → icon + default label map ────────────────────────────────────
+
+type TriggerKind = 'manual' | 'schedule' | 'event' | 'webhook';
+
+const TRIGGER_META: Record<
+  TriggerKind,
+  { Icon: React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>; label: string }
+> = {
+  manual: { Icon: Play, label: 'Manual' },
+  schedule: { Icon: Calendar, label: 'Schedule' },
+  event: { Icon: Zap, label: 'Event' },
+  webhook: { Icon: Globe, label: 'Webhook' },
+};
 
 // ── Trigger chips ──────────────────────────────────────────────────────────────
 
@@ -24,17 +38,17 @@ interface TriggerChipsProps {
 
 function WfTriggerChips({ triggers }: TriggerChipsProps): React.ReactElement {
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
+    <span className="inline-flex flex-wrap items-center gap-[6px]">
       {triggers.map((t, i) => {
-        const Icon = t.kind === 'schedule' ? Calendar : Zap;
-        const label = t.kind === 'schedule' ? 'Schedule' : 'Event';
+        const meta = TRIGGER_META[t.kind as TriggerKind] ?? TRIGGER_META.event;
+        const { Icon, label: defaultLabel } = meta;
         return (
           <span
             key={i}
-            className="inline-flex h-5 items-center gap-1.5 rounded-full bg-muted px-2 text-caption font-medium text-muted-foreground whitespace-nowrap"
+            className="inline-flex h-5 items-center gap-[5px] rounded-full bg-muted px-[9px] text-caption font-medium text-muted-foreground whitespace-nowrap"
           >
             <Icon size={10} className="text-mf-text-3" aria-hidden />
-            {t.detail || label}
+            {defaultLabel}
           </span>
         );
       })}
@@ -72,19 +86,19 @@ function WfLibraryRow({ wf, lastRun, port }: WfLibraryRowProps): React.ReactElem
   return (
     <div
       data-testid={`workflows-library-row-${wf.id}`}
-      className="flex items-center gap-3 border-b border-border px-[18px] py-[13px] transition-colors hover:bg-accent"
+      className="flex items-center gap-[13px] border-b border-border px-[18px] py-[13px] transition-colors hover:bg-accent"
     >
       {/* Main content */}
       <div className="min-w-0 flex-1">
         {/* Name row */}
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-body font-bold tracking-tight text-foreground">{wf.name}</span>
-          {/* Scope pill */}
+          {/* Scope pill — global uses muted #7a4d9e per prototype */}
           <span
             className={cn(
               'inline-flex h-[17px] shrink-0 items-center gap-1 rounded-xs px-[7px]',
               'text-micro font-bold uppercase tracking-[0.3px] whitespace-nowrap',
-              isGlobal ? 'bg-purple-600/10 text-purple-600' : 'bg-primary/10 text-primary',
+              isGlobal ? 'bg-[#7a4d9e]/10 text-[#7a4d9e]' : 'bg-primary/10 text-primary',
             )}
           >
             {isGlobal ? 'Global' : 'Project'}
@@ -192,7 +206,7 @@ export function WfLibrary({ port }: WfLibraryProps): React.ReactElement {
               data-testid={`workflows-library-scope-${id}`}
               onClick={() => setScope(id)}
               className={cn(
-                'inline-flex h-[27px] items-center rounded-full px-3 text-label font-medium transition-colors',
+                'inline-flex h-[27px] items-center rounded-full px-[12px] text-label font-medium transition-colors',
                 on ? 'bg-primary/10 font-semibold text-primary' : 'bg-muted text-muted-foreground hover:bg-accent',
               )}
             >

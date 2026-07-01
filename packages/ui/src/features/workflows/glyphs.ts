@@ -28,51 +28,52 @@ export interface KindMeta {
  * Maps a workflow step kind to its icon, label, and a Tailwind text color class.
  * Prototype `WF_KIND` entries map to the icon table in the plan's Token Map.
  *
- * The prototype uses ad-hoc hex colors; we map to the nearest semantic token
- * or an approximate Tailwind named color. All tokens confirmed present in the
- * theme CSS or standard Tailwind palette.
+ * Colors are the prototype's exact `WF_KIND` hexes. Where a hex matches a real
+ * theme token it uses that token (agent→primary, value→muted-foreground #5e5d5a,
+ * branch→mf-accent-violet #5b269a); the rest use arbitrary `text-[#hex]` since no
+ * named token matches — never eyeballed named-Tailwind approximations.
  */
 export const KIND_META: Record<string, KindMeta> = {
   agent: {
     Icon: Sparkles,
     label: 'Agent',
-    colorClass: 'text-primary',
+    colorClass: 'text-primary', // ACCENT
   },
   // prototype "service" key mapped from the connector kind name
   connector: {
     Icon: Plug,
     label: 'Service',
-    colorClass: 'text-purple-600',
+    colorClass: 'text-[#7a4d9e]',
   },
   question: {
     Icon: MessageSquare,
     label: 'Question',
-    colorClass: 'text-orange-700',
+    colorClass: 'text-[#c2540a]',
   },
   set: {
     Icon: CircleDot,
     label: 'Value',
-    colorClass: 'text-mf-text-3',
+    colorClass: 'text-muted-foreground', // #5e5d5a — exact token match
   },
   choose: {
     Icon: GitBranch,
     label: 'Branch',
-    colorClass: 'text-violet-700',
+    colorClass: 'text-mf-accent-violet', // #5b269a — exact token match
   },
   foreach: {
     Icon: RotateCw,
     label: 'Loop',
-    colorClass: 'text-emerald-700',
+    colorClass: 'text-[#1f8a5b]',
   },
   parallel: {
     Icon: Columns3,
     label: 'Parallel',
-    colorClass: 'text-orange-600',
+    colorClass: 'text-[#b0560f]',
   },
   call: {
     Icon: Layers,
     label: 'Sub-workflow',
-    colorClass: 'text-blue-600',
+    colorClass: 'text-[#2a6fdb]',
   },
 };
 

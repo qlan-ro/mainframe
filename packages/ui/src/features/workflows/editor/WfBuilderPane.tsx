@@ -28,8 +28,8 @@ interface WfbSectionProps {
 
 function WfbSection({ Icon, title, count, action, children }: WfbSectionProps): React.ReactElement {
   return (
-    <div className="mb-4">
-      <div className="mb-2 flex items-center gap-2">
+    <div className="mb-[16px]">
+      <div className="mb-[8px] flex items-center gap-2">
         <Icon size={13} className="text-mf-text-3" aria-hidden />
         <span className="text-micro font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
         {count != null && <span className="font-mono text-micro text-mf-text-3">{count}</span>}
@@ -119,6 +119,12 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
     patch({ steps: model.steps.filter((_, k) => k !== i) });
   }
 
+  function setStepTitle(i: number, title: string): void {
+    const steps = model.steps.slice();
+    steps[i] = { ...steps[i]!, title };
+    patch({ steps });
+  }
+
   function addOutput(): void {
     const newOutput = { name: `output${(model.outputs ?? []).length + 1}`, expr: '${ ... }' };
     patch({ outputs: [...(model.outputs ?? []), newOutput] });
@@ -140,7 +146,10 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
   }
 
   return (
-    <div data-testid="workflows-builder" className="h-full min-h-0 overflow-y-auto bg-card px-[18px] pb-[28px] pt-4">
+    <div
+      data-testid="workflows-builder"
+      className="h-full min-h-0 overflow-y-auto bg-card px-[18px] pb-[28px] pt-[16px]"
+    >
       <div className="max-w-[560px]">
         {/* ── Identity ── */}
         <div className="mb-[18px] flex flex-col gap-[10px]">
@@ -150,7 +159,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
             value={model.name}
             onChange={(e) => patch({ name: e.target.value })}
             placeholder="Workflow name"
-            className="border-none bg-transparent p-0 font-sans text-[1.125rem] font-bold leading-tight text-foreground outline-none placeholder:text-muted-foreground"
+            className="border-none bg-transparent p-0 font-sans text-[22px] font-bold leading-tight tracking-[-0.4px] text-foreground outline-none placeholder:text-muted-foreground"
           />
           <input
             data-testid="workflows-builder-description"
@@ -238,7 +247,13 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
         <WfbSection Icon={Layers} title="Steps" count={model.steps.length}>
           <div className="relative">
             {model.steps.map((s, i) => (
-              <WfbStepRow key={s.id ?? i} step={s} index={i} onRemove={() => removeStep(i)} />
+              <WfbStepRow
+                key={s.id ?? i}
+                step={s}
+                index={i}
+                onTitle={(t) => setStepTitle(i, t)}
+                onRemove={() => removeStep(i)}
+              />
             ))}
             {model.steps.length === 0 && <p className="px-0.5 py-1 text-caption text-mf-text-3">No steps yet.</p>}
             <button
@@ -253,10 +268,15 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
               <Plus size={12} aria-hidden />
               Add step
             </button>
-            {/* Library overlay */}
+            {/* Step library — a centered modal with its own bounded height.
+                It must NOT be `absolute inset-0` of this steps container: with
+                zero steps that container is only tall enough for the row above,
+                which collapses the library's flex-1 card grid to nothing. */}
             {libraryOpen && (
-              <div className="absolute inset-0 z-10 overflow-hidden rounded-lg border border-border shadow-[var(--mf-shadow-pop)]">
-                <WfStepLibrary onAdd={addStep} onClose={() => setLibraryOpen(false)} />
+              <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(22,19,15,0.34)]">
+                <div className="h-[82vh] max-h-[720px] w-[720px] max-w-[92vw] overflow-hidden rounded-xl bg-card shadow-[var(--mf-shadow-pop)]">
+                  <WfStepLibrary onAdd={addStep} onClose={() => setLibraryOpen(false)} />
+                </div>
               </div>
             )}
           </div>

@@ -99,14 +99,14 @@ function ModeToggle({ mode, setMode }: { mode: EditorMode; setMode: (m: EditorMo
 function ValidationFooter({ validation, isNew }: { validation: ValidationResult | null; isNew: boolean }) {
   if (!validation) {
     return (
-      <div className="flex min-h-[40px] flex-shrink-0 items-center gap-2.5 border-t border-border bg-card px-4 py-2">
+      <div className="flex min-h-[40px] flex-shrink-0 items-center gap-2.5 border-t border-border bg-mf-content2 px-[16px] py-2">
         <span className="text-caption text-muted-foreground">Validating…</span>
       </div>
     );
   }
   const { valid, errors } = validation;
   return (
-    <div className="flex min-h-[40px] flex-shrink-0 items-center gap-2.5 border-t border-border bg-card px-4 py-2">
+    <div className="flex min-h-[40px] flex-shrink-0 items-center gap-2.5 border-t border-border bg-mf-content2 px-[16px] py-2">
       {valid ? (
         <span className="inline-flex items-center gap-1.5 text-label font-semibold text-mf-success">
           <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-mf-success">
@@ -144,8 +144,8 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
 
   const [model, setModel] = useState<WfDraft>(blankDraft);
   const [yaml, setYaml] = useState('');
-  // Builder is only meaningful for new workflows; edit mode stays YAML-only.
-  const [mode, setMode] = useState<EditorMode>(isNew ? 'yaml' : 'yaml');
+  // New workflows default to split view (builder + YAML); edit mode is YAML-only.
+  const [mode, setMode] = useState<EditorMode>(isNew ? 'split' : 'yaml');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -229,7 +229,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       <div className="flex h-[52px] flex-shrink-0 items-center gap-3 border-b border-border bg-card px-3.5">
         <button
           type="button"
-          data-testid="workflows-editor-cancel"
+          data-testid="workflows-editor-close"
           onClick={closeEditor}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
         >
@@ -243,13 +243,21 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
         <ModeToggle mode={mode} setMode={setMode} />
         <button
           type="button"
+          data-testid="workflows-editor-cancel"
+          onClick={closeEditor}
+          className="inline-flex h-[30px] items-center rounded-md border border-border px-[13px] text-label font-medium text-muted-foreground hover:bg-accent"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
           data-testid="workflows-editor-save"
           disabled={!validation?.valid || saving}
           onClick={() => {
             void handleSave();
           }}
           className={cn(
-            'inline-flex h-[30px] items-center gap-1.5 rounded-md px-3.5 text-label font-semibold text-white',
+            'inline-flex h-[30px] items-center gap-1.5 rounded-md px-[14px] text-label font-semibold text-white',
             validation?.valid && !saving ? 'cursor-pointer bg-primary' : 'cursor-default bg-primary opacity-45',
           )}
         >

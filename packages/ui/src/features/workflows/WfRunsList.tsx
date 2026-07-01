@@ -18,16 +18,18 @@ import type { WorkflowRunSummary } from '@qlan-ro/mainframe-types';
 
 // ── Trigger icon map ──────────────────────────────────────────────────────────
 
-const TRIGGER_ICON: Record<string, React.ReactElement> = {
+// A run's triggerKind is the mechanism that started it (engine emits these),
+// distinct from a workflow's definition triggers (manual|schedule|event|webhook).
+const TRIGGER_ICON: Record<WorkflowRunSummary['triggerKind'], React.ReactElement> = {
   manual: <Play size={10} className="text-mf-text-4" aria-hidden />,
   cron: <Calendar size={10} className="text-mf-text-4" aria-hidden />,
   event: <Zap size={10} className="text-mf-text-4" aria-hidden />,
   call: <Layers size={10} className="text-mf-text-4" aria-hidden />,
 };
 
-const TRIGGER_LABEL: Record<string, string> = {
+const TRIGGER_LABEL: Record<WorkflowRunSummary['triggerKind'], string> = {
   manual: 'Manual',
-  cron: 'Schedule',
+  cron: 'Scheduled',
   event: 'Event',
   call: 'Sub-workflow',
 };

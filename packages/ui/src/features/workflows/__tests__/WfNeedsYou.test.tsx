@@ -165,4 +165,50 @@ describe('WfNeedsYou', () => {
     const submits = screen.getAllByTestId('workflows-answer-submit');
     expect(submits.length).toBe(2);
   });
+
+  it('renders the prompt text when the interaction has a prompt (content-loss regression guard)', () => {
+    const promptText = 'A quick read on how the day went.';
+    seedStore({
+      interactions: [makeInteraction({ prompt: promptText } as Parameters<typeof makeInteraction>[0])],
+      workflows: [makeWorkflow()],
+      runs: [makeRun()],
+    });
+    render(<WfNeedsYou port={31415} />);
+
+    expect(screen.getByText(promptText)).toBeInTheDocument();
+  });
+
+  it('shows future-tense expiry copy ("expires in …") in the chip', () => {
+    const expiresAt = Date.now() + 9 * 60 * 60 * 1000 + 56 * 60 * 1000; // ~9h 56m from now
+    seedStore({
+      interactions: [makeInteraction({ expiresAt })],
+      workflows: [makeWorkflow()],
+      runs: [makeRun()],
+    });
+    render(<WfNeedsYou port={31415} />);
+
+    // The expiry chip text must start with "expires" (future-tense, not past)
+    expect(screen.getByText(/^expires in/i)).toBeInTheDocument();
+    // The chip must NOT say "ago" — that would be formatAgo() called on a future timestamp
+    // (note: the sub-line uses formatAgo for createdAt which is in the past, so we
+    //  narrow the assertion to the chip element whose content starts with "expires")
+    const chip = screen.getByText(/^expires in/i);
+    expect(chip.textContent).not.toMatch(/ago/i);
+  });
+
+  it('uses "waiting" not "waited" in the sub-line age', () => {
+    seedStore({
+      interactions: [makeInteraction()],
+      workflows: [makeWorkflow()],
+      runs: [makeRun()],
+    });
+    render(<WfNeedsYou port={31415} />);
+
+    // Sub-line should say "· waiting Xm ago", not "· waited Xm ago"
+    // Use getAllByText since "waiting" also appears in the header count line
+    const waitingElements = screen.getAllByText(/waiting/);
+    expect(waitingElements.length).toBeGreaterThan(0);
+    // No element should contain the word "waited"
+    expect(screen.queryByText(/waited/)).not.toBeInTheDocument();
+  });
 });

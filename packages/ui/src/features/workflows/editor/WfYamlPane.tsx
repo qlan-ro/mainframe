@@ -23,7 +23,7 @@ export function WfYamlPane({ yaml, onChange, validation }: WfYamlPaneProps): Rea
   return (
     <div className="flex h-full min-h-0 flex-col bg-mf-code-bg">
       {/* header */}
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
+      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-mf-content2 px-3 py-2">
         <FileText size={13} className="text-muted-foreground" aria-hidden />
         <span className="font-mono text-caption font-semibold text-muted-foreground">workflow.yaml</span>
         <span className="text-micro uppercase tracking-wide text-mf-text-4">canonical</span>

@@ -57,7 +57,7 @@ function PillGroup({ field, value, onChange }: PillGroupProps): React.ReactEleme
             type="button"
             onClick={() => toggle(option)}
             className={cn(
-              'inline-flex items-center gap-1.5 h-[30px] px-3 rounded-full cursor-pointer',
+              'inline-flex items-center gap-[6px] h-[30px] px-[12px] rounded-full cursor-pointer',
               'text-label font-medium transition-colors',
               on
                 ? 'border border-primary bg-primary/10 text-primary font-semibold'
@@ -67,7 +67,7 @@ function PillGroup({ field, value, onChange }: PillGroupProps): React.ReactEleme
             {isMulti && (
               <span
                 className={cn(
-                  'w-3.5 h-3.5 rounded-sm shrink-0 inline-flex items-center justify-center',
+                  'w-3.5 h-3.5 rounded-[4px] shrink-0 inline-flex items-center justify-center',
                   on ? 'bg-primary' : 'border-[1.5px] border-muted-foreground',
                 )}
               >
@@ -112,7 +112,7 @@ export function WfField({ field, value, onChange }: WfFieldProps): React.ReactEl
         placeholder={field.label}
         rows={3}
         className={cn(
-          'flex w-full rounded-md border-[0.5px] border-input bg-card px-3 py-1.5',
+          'flex w-full rounded-md border-[0.5px] border-input bg-card px-[11px] py-[8px]',
           'text-body placeholder:text-muted-foreground resize-none leading-[1.5]',
           'focus-visible:outline-none focus-visible:ring-0',
           'transition-colors',

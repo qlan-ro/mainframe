@@ -31,15 +31,15 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-mf-window font-sans" data-testid="workflows-view">
-      {/* Title bar */}
-      <div className="flex h-[50px] flex-shrink-0 items-center gap-3 border-b border-border bg-card px-3.5">
+      {/* Title bar — prototype: gap 11px, padding 0 14px */}
+      <div className="flex h-[50px] flex-shrink-0 items-center gap-[11px] border-b border-border bg-card px-[14px]">
         <Zap size={16} className="text-primary" aria-hidden />
         <span className="text-heading font-bold tracking-tight text-foreground">Workflows</span>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* Left nav */}
-        <nav className="flex w-[190px] flex-shrink-0 flex-col gap-0.5 border-r border-border bg-mf-content2 p-2">
+        {/* Left nav — prototype: padding 10px 8px, gap 2px between items */}
+        <nav className="flex w-[190px] flex-shrink-0 flex-col gap-[2px] border-r border-border bg-mf-content2 py-[10px] px-[8px]">
           {NAV.map(({ id, label, Icon }) => {
             const on = !selectedRunId && section === id;
             return (
@@ -49,7 +49,7 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
                 type="button"
                 onClick={() => setSection(id)}
                 className={cn(
-                  'flex h-[34px] items-center gap-2.5 rounded-md px-2.5 text-label',
+                  'flex h-[34px] items-center gap-[9px] rounded-md px-[10px] text-label',
                   on
                     ? 'bg-card font-semibold text-foreground shadow-sm'
                     : 'font-medium text-muted-foreground hover:bg-accent',
@@ -58,14 +58,14 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
                 <Icon size={15} className={on ? 'text-primary' : 'text-mf-text-3'} aria-hidden />
                 <span className="flex-1 text-left">{label}</span>
                 {id === 'needs' && pending > 0 && (
-                  <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-mf-warning px-1.5 text-micro font-bold text-white">
+                  <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-mf-warning px-[5px] text-micro font-bold text-white">
                     {pending}
                   </span>
                 )}
               </button>
             );
           })}
-          <div className="mt-auto border-t border-border px-2.5 py-2 text-micro leading-normal text-mf-text-3">
+          <div className="mt-auto border-t border-border px-[10px] py-[8px] text-micro leading-normal text-mf-text-3">
             Runs continue in the background — even with the app closed.
           </div>
         </nav>

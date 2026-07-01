@@ -2,9 +2,13 @@
  * WfInteractionCard — a single pending workflow interaction, collapsible.
  *
  * Header: title + optional expiry chip (red when <2h, amber otherwise).
- * Sub-line: workflow name (looked up by run → workflow), run id, "waited" age.
+ * Sub-line: workflow name (looked up by run → workflow), run id, "waiting" age.
+ * Prompt: the human-readable question text below the sub-line.
  * Body (expanded): WfAnswerForm.
  * Actions: Answer/Collapse toggle + View run.
+ *
+ * Spacing note: all layout values use arbitrary [Npx] classes to be immune
+ * to the compressed integer-spacing override in globals.css.
  */
 import React, { useState } from 'react';
 import { Clock, MessageSquare, CornerDownLeft } from 'lucide-react';
@@ -22,7 +26,24 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 function expiryChipClass(expiresAt: number): string {
   return Date.now() >= expiresAt - TWO_HOURS_MS
     ? 'text-destructive bg-destructive/10'
-    : 'text-mf-warning bg-mf-warning/10';
+    : 'text-amber-600 bg-amber-500/10';
+}
+
+/**
+ * Formats a future Unix timestamp (ms) as a human-readable "in X" string.
+ * Used for expiry chips — timestamps are in the future, not the past.
+ */
+function formatIn(ts: number): string {
+  const diffMs = ts - Date.now();
+  if (diffMs <= 0) return 'expiring';
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `in ${diffMin}m`;
+  const diffHr = Math.floor(diffMin / 60);
+  const remMin = diffMin % 60;
+  if (diffHr < 24) return remMin > 0 ? `in ${diffHr}h ${remMin}m` : `in ${diffHr}h`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `in ${diffDay}d`;
 }
 
 function useWorkflowName(runId: string): string {
@@ -53,11 +74,11 @@ export function WfInteractionCard({
   const { expiresAt, createdAt } = interaction;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-      <div className="flex items-start gap-3 px-4 py-3.5">
+    <div className="overflow-hidden rounded-lg border-[0.5px] border-border bg-card shadow-sm">
+      <div className="flex items-start gap-[12px] px-[16px] py-[14px]">
         {/* Icon disc */}
-        <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-mf-warning/13">
-          <MessageSquare size={17} className="text-mf-warning" aria-hidden />
+        <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-amber-500/13">
+          <MessageSquare size={17} className="text-amber-600" aria-hidden />
         </span>
 
         {/* Body */}
@@ -68,38 +89,43 @@ export function WfInteractionCard({
             {expiresAt != null && (
               <span
                 className={cn(
-                  'inline-flex h-[19px] items-center gap-1 rounded-full px-2 text-micro font-bold',
+                  'inline-flex h-[19px] items-center gap-[4px] rounded-full px-[8px] text-micro font-bold',
                   expiryChipClass(expiresAt),
                 )}
               >
                 <Clock size={10} aria-hidden />
-                {formatAgo(expiresAt)}
+                expires {formatIn(expiresAt)}
               </span>
             )}
           </div>
 
           {/* Sub-line */}
-          <div className="mt-0.5 flex items-center gap-2 text-caption text-muted-foreground">
+          <div className="mt-[3px] flex items-center gap-2 text-caption text-muted-foreground">
             <span className="font-semibold text-foreground/70">{workflowName}</span>
             <span>· run #{interaction.runId}</span>
-            <span>· waited {formatAgo(createdAt)}</span>
+            <span>· waiting {formatAgo(createdAt)}</span>
           </div>
+
+          {/* Prompt — the human-readable question text */}
+          {interaction.prompt != null && (
+            <div className="mt-[7px] text-label leading-[1.5] text-foreground/70">{interaction.prompt}</div>
+          )}
 
           {/* Expanded form */}
           {open && (
-            <div className="mt-3">
+            <div className="mt-[13px]">
               <WfAnswerForm port={port} interaction={interaction} onDone={() => setOpen(false)} />
             </div>
           )}
         </div>
 
         {/* Action buttons */}
-        <div className="flex shrink-0 flex-col gap-1.5">
+        <div className="flex shrink-0 flex-col gap-[6px]">
           {open ? (
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="inline-flex h-8 items-center px-3.5 rounded-md border border-border bg-card text-label font-medium text-foreground/70"
+              className="inline-flex h-[32px] items-center px-[13px] rounded-md border-[0.5px] border-border bg-card text-label font-medium text-foreground/70"
             >
               Collapse
             </button>
@@ -108,7 +134,7 @@ export function WfInteractionCard({
               type="button"
               data-testid={`workflows-interaction-answer-${interaction.id}`}
               onClick={() => setOpen(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3.5 text-label font-semibold text-white"
+              className="inline-flex h-[32px] items-center gap-[6px] rounded-md bg-primary px-[14px] text-label font-semibold text-white"
             >
               <CornerDownLeft size={12} aria-hidden />
               Answer
@@ -118,7 +144,7 @@ export function WfInteractionCard({
             type="button"
             data-testid={`workflows-interaction-viewrun-${interaction.id}`}
             onClick={() => openRun(interaction.runId)}
-            className="inline-flex h-[30px] items-center justify-center gap-1.5 rounded-md border border-border bg-transparent px-3 text-caption font-medium text-foreground/70"
+            className="inline-flex h-[30px] items-center justify-center gap-[5px] rounded-md border-[0.5px] border-border bg-transparent px-[11px] text-caption font-medium text-foreground/70"
           >
             View run
           </button>

@@ -16,7 +16,7 @@ export interface WorkflowSummary {
   description?: string;
   projectId: string | null;
   filePath: string;
-  triggers: Array<{ kind: 'schedule' | 'event'; detail: string }>;
+  triggers: Array<{ kind: 'manual' | 'schedule' | 'event' | 'webhook'; detail?: string }>;
 }
 
 export interface WorkflowRunSummary {
@@ -52,6 +52,9 @@ export interface WorkflowInteractionSummary {
   runId: string;
   stepPath: string;
   title: string;
+  // Optional human-readable question text shown under the title. Populated once
+  // the question step DSL plumbs `prompt` through the interaction record.
+  prompt?: string;
   formSchema: QuestionField[];
   createdAt: number;
   expiresAt: number | null;

@@ -5,7 +5,7 @@
  * with all inline styles replaced by Tailwind classes + real theme tokens.
  */
 import React from 'react';
-import { Check, X, TriangleAlert, Loader2 } from 'lucide-react';
+import { Check, X, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStepStatusMeta, getRunStatusMeta, getKindMeta } from './glyphs';
 
@@ -28,7 +28,9 @@ interface WfStatusPipProps {
  * - skipped   → dashed ring (border-dashed)
  */
 export function WfStatusPip({ status, size = 16 }: WfStatusPipProps): React.ReactElement {
-  const sizeClass = size === 14 ? 'w-3.5 h-3.5' : 'w-4 h-4';
+  // Integer w-4/h-4 render compressed (8px) under the theme's spacing override;
+  // use an arbitrary px for the 16px pip. w-3.5 (14px, fractional) is standard.
+  const sizeClass = size === 14 ? 'w-3.5 h-3.5' : 'w-[16px] h-[16px]';
 
   if (status === 'running') {
     return (
@@ -74,13 +76,15 @@ export function WfStatusPip({ status, size = 16 }: WfStatusPipProps): React.Reac
   }
 
   if (status === 'waiting') {
+    // Prototype: an expanding-ring halo (animate-ping) behind a solid inner dot
+    // ringed by a faint warning glow. The halo pings; the inner dot is static.
     return (
       <span className={cn(sizeClass, 'shrink-0 relative inline-flex items-center justify-center')} aria-hidden>
-        <span className={cn('absolute rounded-full bg-mf-warning opacity-30 animate-pulse', sizeClass)} />
+        <span className={cn('absolute rounded-full bg-mf-warning opacity-75 animate-ping', sizeClass)} />
         <span
           className={cn(
-            'relative rounded-full bg-mf-warning animate-pulse',
-            size === 14 ? 'w-2 h-2' : 'w-[10px] h-[10px]',
+            'relative rounded-full bg-mf-warning shadow-[0_0_0_2px] shadow-mf-warning/20',
+            size === 14 ? 'w-[9px] h-[9px]' : 'w-[10px] h-[10px]',
           )}
         />
       </span>
@@ -115,14 +119,20 @@ export function WfStatusTag({ status, kind }: WfStatusTagProps): React.ReactElem
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-[5px] h-[19px] px-2 rounded-full',
+        'inline-flex items-center gap-[5px] h-[19px] px-[8px] rounded-full',
         'text-micro font-bold uppercase tracking-wide whitespace-nowrap',
-        // Low-opacity background tint derived from the color token
-        isMuted ? 'bg-muted' : 'bg-current/10',
+        // Low-opacity background tint derived from the color token (prototype ~0.13)
+        isMuted ? 'bg-muted' : 'bg-current/[0.13]',
         meta.colorClass,
       )}
     >
-      {status === 'running' && <Loader2 size={8} className="animate-spin shrink-0" aria-hidden />}
+      {status === 'running' && (
+        // Hollow spinning ring (prototype), not a filled Loader2 icon.
+        <span
+          className="w-1.5 h-1.5 rounded-full border-[1.4px] border-current [border-top-color:transparent] animate-spin shrink-0"
+          aria-hidden
+        />
+      )}
       {status === 'waiting' && (
         <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse shrink-0" aria-hidden />
       )}
@@ -150,7 +160,7 @@ export function WfKindChip({ kind }: WfKindChipProps): React.ReactElement {
       title={label}
       className={cn(
         'inline-flex items-center justify-center w-[22px] h-[22px] rounded-sm shrink-0',
-        'bg-current/10',
+        'bg-current/[0.12]',
         colorClass,
       )}
     >

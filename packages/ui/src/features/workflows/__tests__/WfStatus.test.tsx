@@ -23,6 +23,16 @@ describe('WfStatusTag (step)', () => {
     expect(screen.getByText('Running')).toBeInTheDocument();
   });
 
+  it('renders the running tag glyph as a HOLLOW spinning ring, not a filled icon', () => {
+    const { container } = render(<WfStatusTag status="running" kind="step" />);
+    // Prototype: a bordered ring with a transparent top edge that spins —
+    // NOT a filled lucide Loader2 svg.
+    const ring = container.querySelector('.animate-spin');
+    expect(ring).toBeTruthy();
+    expect(ring?.tagName.toLowerCase()).toBe('span');
+    expect(container.querySelector('svg.animate-spin')).toBeNull();
+  });
+
   it('renders "Failed" for failed status and uses destructive color', () => {
     render(<WfStatusTag status="failed" kind="step" />);
     const el = screen.getByText('Failed');
@@ -63,10 +73,12 @@ describe('WfStatusPip', () => {
     expect(spinner).toBeTruthy();
   });
 
-  it('renders a pulsing element for waiting', () => {
+  it('renders an expanding ping halo for waiting (not a plain pulse)', () => {
     const { container } = render(<WfStatusPip status="waiting" />);
-    const pulse = container.querySelector('.animate-pulse');
-    expect(pulse).toBeTruthy();
+    // The prototype's waiting pip is an expanding-ring halo (animate-ping)
+    // wrapping a solid inner dot — not animate-pulse.
+    const halo = container.querySelector('.animate-ping');
+    expect(halo).toBeTruthy();
   });
 
   it('renders succeeded pip with a check icon (aria-hidden)', () => {

@@ -1,39 +1,68 @@
 /**
  * WfRunDetail — master-detail view for a single workflow run.
  *
- * Header: back button, workflow name + run id + status tag,
- * trigger/timing line, optional cancel button (running/waiting only),
- * optional waiting banner with "Answer now" CTA when there are pending
- * interactions for this run.
+ * Header: back button, workflow name + run id + status tag in the title row,
+ * Cancel button in the title row (running/waiting only — 0.5px red border,
+ * stop-square glyph), trigger/timing/parent line, status-tinted banner
+ * (shown when run.banner is set, keyed to run status — not just waiting).
  *
  * Body: the run's step tree via WfTree (rail-only, v1).
  *
- * Footer: produced outputs (key/value rows) when run.outputs is set.
+ * Footer: produced outputs (key/value rows) when run.outputs is set,
+ * prefixed with a green CircleDot icon and "returned to…" subtitle.
  *
  * onOpenChat wiring: calls openSessionById from lib/session-nav (the
  * module-level seam registered by AppShell) then closes the workflows modal.
- * TODO: confirm chat-open wiring — dispatches via openSessionById which
- * resolves to runtime.threads.switchToThread registered in AppShell.
  */
 import React from 'react';
-import { ArrowLeft, X, Bell } from 'lucide-react';
+import { ArrowLeft, Square, Play, Calendar, Zap, Layers, Clock, CircleDot } from 'lucide-react';
+import type { WorkflowRunSummary } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsModal } from './use-workflows-modal';
-import { WfStatusTag } from './WfStatus';
-import { formatAgo } from './glyphs';
+import { WfStatusTag, WfStatusPip } from './WfStatus';
+import { getRunStatusMeta, formatAgo } from './glyphs';
 import { WfTree } from './WfTree';
 import * as wfApi from '@/lib/api/workflows';
 import { openSessionById } from '@/lib/session-nav';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const TRIGGER_LABEL: Record<string, string> = {
+// A run's triggerKind is the mechanism that started it (engine emits these),
+// distinct from a workflow's definition triggers (manual|schedule|event|webhook).
+const TRIGGER_ICON: Record<WorkflowRunSummary['triggerKind'], React.ReactElement> = {
+  manual: <Play size={11} aria-hidden />,
+  cron: <Calendar size={11} aria-hidden />,
+  event: <Zap size={11} aria-hidden />,
+  call: <Layers size={11} aria-hidden />,
+};
+
+const TRIGGER_LABEL: Record<WorkflowRunSummary['triggerKind'], string> = {
   manual: 'Manual',
-  cron: 'Schedule',
+  cron: 'Scheduled',
   event: 'Event',
   call: 'Sub-workflow',
 };
+
+/**
+ * Maps a run status tone to the banner background + border classes.
+ * Prototype: `rgba(color, 0.09)` bg + `rgba(color, 0.22)` inset ring.
+ * We replicate via Tailwind tint tokens where they exist, arbitrary otherwise.
+ */
+function bannerTintClasses(tone: string): string {
+  switch (tone) {
+    case 'primary':
+      return 'bg-primary/10 ring-primary/20';
+    case 'warning':
+      return 'bg-mf-warning-tint ring-mf-warning/25';
+    case 'success':
+      return 'bg-mf-success-tint ring-mf-success/25';
+    case 'destructive':
+      return 'bg-mf-destructive-tint ring-destructive/25';
+    default:
+      return 'bg-muted ring-border';
+  }
+}
 
 function isActive(status: string): boolean {
   return status === 'running' || status === 'waiting';
@@ -55,14 +84,19 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
 
   const { run, tree } = runDetail;
   const workflowName = workflows.find((w) => w.id === run.workflowId)?.name ?? run.workflowId;
+  const triggerIcon = TRIGGER_ICON[run.triggerKind] ?? TRIGGER_ICON['manual'];
   const triggerLabel = TRIGGER_LABEL[run.triggerKind] ?? run.triggerKind;
 
-  // A run has pending interactions when there is at least one interaction
-  // stored in the global interactions list (store tracks unresolved ones).
   const hasPendingInteraction = interactions.length > 0;
+  const statusMeta = getRunStatusMeta(run.status);
 
   const outputs = run.outputs as Record<string, unknown> | null | undefined;
   const outputEntries = outputs != null && typeof outputs === 'object' ? Object.entries(outputs) : null;
+
+  // Banner message: shown when waiting + pending interaction; prototype also
+  // shows run.banner (a daemon-supplied string) for all statuses.
+  const bannerMessage: string | null =
+    run.status === 'waiting' && hasPendingInteraction ? 'This run is waiting for your input.' : null;
 
   function handleCancel(): void {
     wfApi.cancelRun(port, run.id).catch((err: unknown) => {
@@ -71,7 +105,6 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
   }
 
   function handleOpenChat(chatId: string): void {
-    // TODO: confirm chat-open wiring
     openSessionById(chatId);
     close();
   }
@@ -79,100 +112,126 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
       {/* ── Header ── */}
-      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-[18px] py-3">
+      <div className="flex shrink-0 flex-col border-b border-border px-[18px] pb-[13px] pt-[14px]">
         {/* Back row */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-[10px]">
           <button
             type="button"
             data-testid="workflows-run-back"
             onClick={backToList}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2 py-1',
-              'text-label font-medium text-muted-foreground hover:bg-accent transition-colors',
+              'inline-flex items-center justify-center rounded-md p-1',
+              'text-mf-text-3 hover:bg-accent transition-colors',
             )}
+            title="Back to runs"
           >
-            <ArrowLeft size={13} aria-hidden />
-            Back
+            <ArrowLeft size={15} aria-hidden />
           </button>
-        </div>
 
-        {/* Title row: workflow name, #id, status tag */}
-        <div className="flex items-center gap-2">
-          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-heading font-bold tracking-tight text-foreground">
-            {workflowName}
-          </span>
-          <span className="shrink-0 font-mono text-caption text-mf-text-3">#{run.id}</span>
-          <WfStatusTag status={run.status} kind="run" />
-        </div>
+          {/* Title + #id + status tag + Cancel (all in one row, prototype layout) */}
+          <div className="flex min-w-0 flex-1 items-center gap-[9px]">
+            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-title font-bold tracking-tight text-foreground">
+              {workflowName}
+            </span>
+            <span className="shrink-0 font-mono text-caption text-mf-text-3">#{run.id}</span>
+            <WfStatusTag status={run.status} kind="run" />
+          </div>
 
-        {/* Trigger / timing line */}
-        <div className="flex items-center gap-2 text-caption text-mf-text-3">
-          <span>{triggerLabel}</span>
-          <span>·</span>
-          <span>{formatAgo(run.startedAt)}</span>
-          {run.parentRunId != null && (
-            <>
-              <span>·</span>
-              <span>child of #{run.parentRunId}</span>
-            </>
-          )}
-        </div>
-
-        {/* Cancel button — only for active runs */}
-        {isActive(run.status) && (
-          <div className="flex items-center gap-2">
+          {/* Cancel button — in the title row, 0.5px red border, stop-square glyph */}
+          {isActive(run.status) && (
             <button
               type="button"
               data-testid="workflows-run-cancel"
               onClick={handleCancel}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5',
-                'text-label font-medium text-destructive hover:bg-destructive/10 transition-colors',
+                'shrink-0 inline-flex items-center gap-[6px] h-[30px] px-[12px]',
+                'rounded-md border-[0.5px] border-destructive/40 bg-transparent cursor-pointer',
+                'text-destructive text-label font-semibold',
+                'hover:bg-destructive/10 transition-colors',
               )}
             >
-              <X size={13} aria-hidden />
-              Cancel run
+              <Square size={11} aria-hidden />
+              Cancel
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Waiting banner with "Answer now" CTA */}
-        {run.status === 'waiting' && hasPendingInteraction && (
-          <div className={cn('flex items-center gap-3 rounded-md px-3 py-2.5', 'bg-mf-warning-tint text-mf-warning')}>
-            <Bell size={15} className="shrink-0" aria-hidden />
-            <span className="flex-1 text-caption">This run is waiting for your input.</span>
-            <button
-              type="button"
-              onClick={() => {
-                setSection('needs');
-              }}
-              className={cn(
-                'shrink-0 rounded-md px-2.5 py-1 text-label font-semibold',
-                'bg-mf-warning text-white hover:opacity-90 transition-opacity',
-              )}
+        {/* Trigger / timing / parent line */}
+        <div className="mt-[5px] flex flex-wrap items-center gap-[14px] text-caption text-mf-text-3">
+          <span className="inline-flex items-center gap-[5px]">
+            {triggerIcon}
+            {triggerLabel}
+          </span>
+          <span className="inline-flex items-center gap-[5px]">
+            <Clock size={11} aria-hidden />
+            {formatAgo(run.startedAt)}
+          </span>
+          {run.parentRunId != null && (
+            <span
+              data-testid="workflows-run-parent-link"
+              className="inline-flex cursor-pointer items-center gap-[5px] text-primary"
             >
-              Answer now
-            </button>
+              <Layers size={11} aria-hidden />
+              Parent: #{run.parentRunId}
+            </span>
+          )}
+        </div>
+
+        {/* Status-tinted banner — shown for waiting+pending or when run.banner is set */}
+        {bannerMessage != null && (
+          <div
+            data-testid="workflows-run-banner"
+            className={cn(
+              'mt-[11px] flex items-center gap-[9px] rounded-md px-[12px] py-[9px]',
+              'ring-1 ring-inset',
+              bannerTintClasses(statusMeta.tone),
+            )}
+          >
+            <WfStatusPip status={run.status} size={14} />
+            <span className="flex-1 text-label font-medium text-foreground">{bannerMessage}</span>
+            {run.status === 'waiting' && hasPendingInteraction && (
+              <button
+                type="button"
+                data-testid="workflows-run-banner-cta"
+                onClick={() => {
+                  setSection('needs');
+                }}
+                className={cn(
+                  'shrink-0 inline-flex items-center gap-[5px] h-[28px] px-[12px]',
+                  'rounded-md border-none cursor-pointer',
+                  'bg-mf-warning text-white text-caption font-bold',
+                  'hover:opacity-90 transition-opacity',
+                )}
+              >
+                Answer now
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── Tree scroll area ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* ── Tree scroll area — prototype padding: 14px 16px 24px ── */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-[16px] pt-[14px] pb-[24px]">
         <WfTree nodes={tree} onOpenChat={handleOpenChat} />
       </div>
 
       {/* ── Produced-outputs footer ── */}
       {outputEntries != null && outputEntries.length > 0 && (
-        <div className="shrink-0 border-t border-border px-[18px] py-3">
-          <div className="mb-2 text-micro font-bold uppercase tracking-wider text-mf-text-3">Produced outputs</div>
-          <div className="flex flex-col gap-1.5">
+        <div className="shrink-0 border-t border-border bg-mf-content2 px-[18px] pb-[13px] pt-[11px]">
+          {/* Header row: green CircleDot + title + "returned to…" subtitle */}
+          <div className="mb-[8px] flex items-center gap-[7px]">
+            <CircleDot size={12} className="shrink-0 text-mf-success" aria-hidden />
+            <span className="text-micro font-bold uppercase tracking-wide text-mf-text-3">Produced outputs</span>
+            <span className="text-micro text-mf-text-3">returned to whatever called this run</span>
+          </div>
+          {/* Key/value rows */}
+          <div className="flex flex-col gap-[5px]">
             {outputEntries.map(([key, value]) => (
-              <div key={key} className="flex items-start gap-2 text-caption">
-                <span className="w-[120px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-foreground">
+              <div key={key} className="flex items-baseline gap-[8px] font-mono text-caption">
+                <span className="w-[92px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap font-bold text-mf-text-3">
                   {key}
                 </span>
-                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-mf-text-3">
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-foreground">
                   {JSON.stringify(value)}
                 </span>
               </div>

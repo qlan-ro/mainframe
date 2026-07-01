@@ -174,4 +174,51 @@ describe('WfLibrary', () => {
     const row = screen.getByTestId(`workflows-library-row-${globalWf.id}`);
     expect(row.textContent).toMatch(/Last run/i);
   });
+
+  // ── Trigger chip kind mapping ────────────────────────────────────────────────
+
+  it('renders "Schedule" chip label for schedule triggers', () => {
+    // No detail — chip must fall back to the kind label "Schedule"
+    const wf: WorkflowSummary = { ...globalWf, triggers: [{ kind: 'schedule' }] };
+    seedStore([wf]);
+    render(<WfLibrary port={31415} />);
+    expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Schedule/i);
+  });
+
+  it('renders "Event" chip label for event triggers', () => {
+    const wf: WorkflowSummary = { ...globalWf, triggers: [{ kind: 'event' }] };
+    seedStore([wf]);
+    render(<WfLibrary port={31415} />);
+    expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Event/i);
+  });
+
+  it('renders "Manual" chip label for manual triggers', () => {
+    const wf: WorkflowSummary = { ...globalWf, triggers: [{ kind: 'manual' }] };
+    seedStore([wf]);
+    render(<WfLibrary port={31415} />);
+    expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Manual/i);
+  });
+
+  it('renders "Webhook" chip label for webhook triggers', () => {
+    const wf: WorkflowSummary = { ...globalWf, triggers: [{ kind: 'webhook' }] };
+    seedStore([wf]);
+    render(<WfLibrary port={31415} />);
+    expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Webhook/i);
+  });
+
+  // ── Global scope pill uses muted purple (#7a4d9e), NOT bright purple-600 ────
+
+  it('global scope pill carries the muted purple token, not bright purple-600', () => {
+    seedStore([globalWf]);
+    render(<WfLibrary port={31415} />);
+    const row = screen.getByTestId(`workflows-library-row-${globalWf.id}`);
+    // The scope pill element text is "Global" and should carry the muted color class
+    const pill = Array.from(row.querySelectorAll('span')).find(
+      (el) => el.textContent?.trim() === 'Global' && el.className.includes('rounded'),
+    );
+    expect(pill).toBeTruthy();
+    // Must use the muted arbitrary color, not the bright purple-600 tailwind class
+    expect(pill?.className).not.toContain('text-purple-600');
+    expect(pill?.className).toContain('#7a4d9e');
+  });
 });

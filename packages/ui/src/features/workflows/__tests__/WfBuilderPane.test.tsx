@@ -172,7 +172,8 @@ describe('WfBuilderPane', () => {
   it('shows existing steps as rows', () => {
     const onChange = vi.fn();
     render(<WfBuilderPane model={makeDraftWithTriggerAndStep()} onChange={onChange} />);
-    expect(screen.getByText('Ask the user')).toBeInTheDocument();
+    // Title is now an inline editable input; use getByDisplayValue.
+    expect(screen.getByDisplayValue('Ask the user')).toBeInTheDocument();
   });
 
   it('removing a step calls onChange with step removed', () => {

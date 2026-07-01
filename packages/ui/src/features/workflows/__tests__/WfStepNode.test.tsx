@@ -66,11 +66,17 @@ describe('WfStepNode — collapsed row', () => {
     expect(screen.queryByTestId('workflows-step-root.step1-retry')).not.toBeInTheDocument();
   });
 
-  it('applies an amber inset ring class on ambiguous nodes', () => {
+  it('applies an amber inset ring/fill on ambiguous nodes', () => {
     render(<WfStepNode node={makeNode({ status: 'ambiguous' })} onOpenChat={noop} />);
     const row = screen.getByTestId('workflows-step-root.step1');
-    // The row wrapper should carry a ring/border class indicating warning
-    expect(row.className).toMatch(/ring|border.*warning|warning.*border/i);
+    // The row wrapper should carry a ring/warning-tint class indicating warning
+    expect(row.className).toMatch(/ring|warning/i);
+  });
+
+  it('renders an on-spine status pip for the row', () => {
+    render(<WfStepNode node={makeNode({ status: 'succeeded' })} onOpenChat={noop} />);
+    // The pip sits absolutely on the rail spine, scoped to the step path.
+    expect(screen.getByTestId('workflows-step-root.step1-pip')).toBeInTheDocument();
   });
 });
 
@@ -131,6 +137,19 @@ describe('WfStepNode — ambiguous step', () => {
     render(<WfStepNode node={node} onOpenChat={noop} />);
     fireEvent.click(screen.getByTestId('workflows-step-root.step1'));
     expect(screen.getByText(/Outcome uncertain/i)).toBeInTheDocument();
+  });
+
+  it('renders the actual error text alongside the headline (does not drop it)', () => {
+    const node = makeNode({
+      status: 'ambiguous',
+      error: 'connection reset by peer',
+      output: null,
+    });
+    render(<WfStepNode node={node} onOpenChat={noop} />);
+    fireEvent.click(screen.getByTestId('workflows-step-root.step1'));
+    // Both the headline AND the underlying error must be visible.
+    expect(screen.getByText(/Outcome uncertain/i)).toBeInTheDocument();
+    expect(screen.getByText('connection reset by peer')).toBeInTheDocument();
   });
 
   it('amber box has the warning tint class', () => {

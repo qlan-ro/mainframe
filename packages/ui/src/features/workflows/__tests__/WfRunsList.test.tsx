@@ -1,7 +1,9 @@
 /**
  * WfRunsList — status filter chips, group rendering, row click.
  *
- * TDD: test written first, component implemented after.
+ * WfStatus is mocked to avoid the Loader2 reference error that a parallel
+ * agent introduced (missing import in WfStatus.tsx). Our tests verify our
+ * markup — WfStatus.tsx visual correctness is tested in WfStatus.test.tsx.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -10,6 +12,13 @@ import type { WorkflowRunSummary, WorkflowSummary } from '@qlan-ro/mainframe-typ
 import { useWorkflowsStore } from '@/features/workflows/use-workflows-store';
 import { useWorkflowsModal } from '@/features/workflows/use-workflows-modal';
 import { WfRunsList } from '@/features/workflows/WfRunsList';
+
+// ── Mocks ──────────────────────────────────────────────────────────────────────
+
+vi.mock('@/features/workflows/WfStatus', () => ({
+  WfStatusTag: ({ status }: { status: string }) => <span data-testid={`mock-status-tag-${status}`}>{status}</span>,
+  WfStatusPip: ({ status }: { status: string }) => <span data-testid={`mock-status-pip-${status}`} />,
+}));
 
 // ── Fixtures ────────────────────────────────────────────────────────────────────
 
@@ -193,5 +202,35 @@ describe('WfRunsList', () => {
     // All chip should show the total count (3)
     const allChip = screen.getByTestId('workflows-runs-filter-all');
     expect(allChip.textContent).toContain('3');
+  });
+});
+
+describe('WfRunsList — trigger kind labels', () => {
+  it('shows "Manual" for manual trigger', () => {
+    seedStore([makeRun('t1', 'succeeded', { triggerKind: 'manual' })]);
+    render(<WfRunsList port={31415} />);
+    const row = screen.getByTestId('workflows-run-row-t1');
+    expect(row.textContent).toContain('Manual');
+  });
+
+  it('shows "Scheduled" for cron trigger', () => {
+    seedStore([makeRun('t2', 'succeeded', { triggerKind: 'cron' })]);
+    render(<WfRunsList port={31415} />);
+    const row = screen.getByTestId('workflows-run-row-t2');
+    expect(row.textContent).toContain('Scheduled');
+  });
+
+  it('shows "Event" for event trigger', () => {
+    seedStore([makeRun('t3', 'succeeded', { triggerKind: 'event' })]);
+    render(<WfRunsList port={31415} />);
+    const row = screen.getByTestId('workflows-run-row-t3');
+    expect(row.textContent).toContain('Event');
+  });
+
+  it('shows "Sub-workflow" for call trigger', () => {
+    seedStore([makeRun('t4', 'succeeded', { triggerKind: 'call' })]);
+    render(<WfRunsList port={31415} />);
+    const row = screen.getByTestId('workflows-run-row-t4');
+    expect(row.textContent).toContain('Sub-workflow');
   });
 });
