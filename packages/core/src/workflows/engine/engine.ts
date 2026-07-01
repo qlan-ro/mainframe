@@ -120,6 +120,32 @@ export class WorkflowEngine {
       if (prior?.status === 'failed') {
         return { type: 'failed', error: prior.error ?? 'step failed' };
       }
+      if (prior?.status === 'ambiguous') {
+        return { type: 'failed', error: prior.error ?? 'step is ambiguous' };
+      }
+      if (prior?.status === 'running') {
+        const isIdempotent =
+          stepKind(step) !== 'connector' ||
+          this.deps.connectors.resolve((step as { connector: string }).connector).action.idempotent;
+        if (!isIdempotent) {
+          this.store.commitStep(run.id, {
+            stepPath,
+            stepId: step.id,
+            kind: prior.kind,
+            attempt: prior.attempt,
+            status: 'ambiguous',
+            input: null,
+            output: null,
+            scratch: null,
+            error: 'daemon restarted mid-execution; side effect state unknown',
+          });
+          return {
+            type: 'failed',
+            error: `step '${step.id}' is ambiguous: daemon restarted mid-execution of a non-idempotent action`,
+          };
+        }
+        // idempotent: fall through and re-execute as attempt+1
+      }
       if (prior?.status === 'waiting') {
         // Block kinds re-enter; leaf kinds that wait externally stay parked.
         const k = stepKind(step);
@@ -163,6 +189,27 @@ export class WorkflowEngine {
         logger: this.deps.logger.child({ runId: run.id, stepPath }),
         signal,
       };
+
+      // Write a 'running' marker before non-idempotent connector actions so that
+      // if the daemon restarts mid-execution, the next advance() sees a stale
+      // 'running' row and marks the step 'ambiguous' rather than re-running it.
+      const needsMarker =
+        kind === 'connector' &&
+        !this.deps.connectors.resolve((step as { connector: string }).connector).action.idempotent;
+      if (needsMarker && !this.store.getStepRun(run.id, stepPath, attempt)) {
+        this.store.commitStep(run.id, {
+          stepPath,
+          stepId: step.id,
+          kind,
+          attempt,
+          status: 'running',
+          input: null,
+          output: null,
+          scratch: null,
+          error: null,
+        });
+      }
+
       const outcome = await this.executeStep(ctx, step, signal);
 
       if (outcome.type === 'completed') {
