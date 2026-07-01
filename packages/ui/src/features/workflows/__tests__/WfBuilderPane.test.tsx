@@ -145,24 +145,25 @@ describe('WfBuilderPane', () => {
     expect(screen.getByTestId('workflows-builder-add-step')).toBeInTheDocument();
   });
 
-  it('clicking add-step opens the kind picker and picking "agent" calls onChange', () => {
+  it('clicking add-step opens the step library and picking "agent" calls onChange', () => {
     const onChange = vi.fn();
     render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
     fireEvent.click(screen.getByTestId('workflows-builder-add-step'));
-    const agentOption = screen.getByRole('button', { name: /^agent$/i });
-    fireEvent.click(agentOption);
+    // The library overlay renders with testid cards
+    const agentCard = screen.getByTestId('workflows-steplib-agent');
+    fireEvent.click(agentCard);
     expect(onChange).toHaveBeenCalledOnce();
     const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
     expect(updatedModel.steps).toHaveLength(1);
     expect(updatedModel.steps[0]?.kind).toBe('agent');
   });
 
-  it('clicking add-step and picking "question" calls onChange with a question step', () => {
+  it('clicking add-step and picking "question" from the library calls onChange with a question step', () => {
     const onChange = vi.fn();
     render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
     fireEvent.click(screen.getByTestId('workflows-builder-add-step'));
-    const questionOption = screen.getByRole('button', { name: /^question$/i });
-    fireEvent.click(questionOption);
+    const questionCard = screen.getByTestId('workflows-steplib-question');
+    fireEvent.click(questionCard);
     expect(onChange).toHaveBeenCalledOnce();
     const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
     expect(updatedModel.steps[0]?.kind).toBe('question');

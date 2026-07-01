@@ -7,11 +7,13 @@
  * YAML-only until YAML→model reparse is implemented in a future task).
  * Ported from WfBuilderPane in 19-wfeditor.jsx; tokens → Tailwind v4.
  */
-import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, Globe, BoltIcon } from 'lucide-react';
+import { useState } from 'react';
+import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, Globe, BoltIcon, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { stubStep, stubTrigger } from './yaml-serialize';
-import { WfbAddTrigger, WfbAddStep } from './WfbDropdowns';
+import { WfbAddTrigger } from './WfbDropdowns';
 import { WfbStepRow } from './WfbStepRow';
+import { WfStepLibrary } from './WfStepLibrary';
 import type { WfDraft, WfTrigger, WfStep } from './yaml-serialize';
 
 // ── WfbSection ────────────────────────────────────────────────────────────────
@@ -94,6 +96,8 @@ export interface WfBuilderPaneProps {
 }
 
 export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.ReactElement {
+  const [libraryOpen, setLibraryOpen] = useState(false);
+
   function patch(partial: Partial<WfDraft>): void {
     onChange({ ...model, ...partial });
   }
@@ -108,6 +112,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
 
   function addStep(kind: WfStep['kind']): void {
     patch({ steps: [...model.steps, stubStep(kind)] });
+    setLibraryOpen(false);
   }
 
   function removeStep(i: number): void {
@@ -231,12 +236,29 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
 
         {/* ── Steps ── */}
         <WfbSection Icon={Layers} title="Steps" count={model.steps.length}>
-          <div>
+          <div className="relative">
             {model.steps.map((s, i) => (
               <WfbStepRow key={s.id ?? i} step={s} index={i} onRemove={() => removeStep(i)} />
             ))}
             {model.steps.length === 0 && <p className="px-0.5 py-1 text-caption text-mf-text-3">No steps yet.</p>}
-            <WfbAddStep onAdd={addStep} />
+            <button
+              type="button"
+              data-testid="workflows-builder-add-step"
+              onClick={() => setLibraryOpen(true)}
+              className={cn(
+                'mt-[3px] inline-flex h-7 items-center gap-[6px] rounded-md border border-dashed border-mf-border-hover px-[11px]',
+                'text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              <Plus size={12} aria-hidden />
+              Add step
+            </button>
+            {/* Library overlay */}
+            {libraryOpen && (
+              <div className="absolute inset-0 z-10 overflow-hidden rounded-lg border border-border shadow-[var(--mf-shadow-pop)]">
+                <WfStepLibrary onAdd={addStep} onClose={() => setLibraryOpen(false)} />
+              </div>
+            )}
           </div>
         </WfbSection>
 
