@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useWorkflowsModal, type WfSection } from './use-workflows-modal';
 import { useWorkflowsStore, selectPendingCount } from './use-workflows-store';
 import { WfLibrary } from './WfLibrary';
+import { WfRunsList } from './WfRunsList';
 
 const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
   { id: 'needs', label: 'Needs you', Icon: Bell },
@@ -60,6 +61,8 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
         <div className="min-w-0 flex-1 overflow-hidden">
           {section === 'library' && !selectedRunId ? (
             <WfLibrary port={port} />
+          ) : section === 'runs' && !selectedRunId ? (
+            <WfRunsList port={port} />
           ) : (
             <div className="p-6 text-body text-muted-foreground" data-testid="workflows-body-placeholder">
               Section: {section}
