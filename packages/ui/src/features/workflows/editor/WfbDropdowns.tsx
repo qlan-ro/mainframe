@@ -10,10 +10,13 @@
  * a duplicate testid collision.
  */
 import { useState } from 'react';
-import { Calendar, Play, Globe, BoltIcon } from 'lucide-react';
+import { Calendar, Play, BoltIcon } from 'lucide-react';
 import type { WfTrigger } from './yaml-serialize';
 
 // ── Trigger kind metadata ─────────────────────────────────────────────────────
+// Note: 'webhook' remains a valid WfTrigger['kind'] in the model/serializer —
+// it is intentionally omitted from this add-trigger menu (design offers only
+// manual/schedule/event here).
 
 const TRIGGER_KINDS: Array<{
   kind: WfTrigger['kind'];
@@ -23,7 +26,6 @@ const TRIGGER_KINDS: Array<{
   { kind: 'manual', label: 'Manual', Icon: Play },
   { kind: 'schedule', label: 'Schedule', Icon: Calendar },
   { kind: 'event', label: 'Event', Icon: BoltIcon },
-  { kind: 'webhook', label: 'Webhook', Icon: Globe },
 ];
 
 // ── WfbAddTrigger ─────────────────────────────────────────────────────────────

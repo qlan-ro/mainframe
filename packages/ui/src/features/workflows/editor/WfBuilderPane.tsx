@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, Globe, BoltIcon, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { stubStep, stubTrigger } from './yaml-serialize';
 import { WfbAddTrigger } from './WfbDropdowns';
 import { WfbStepRow } from './WfbStepRow';
@@ -76,14 +77,16 @@ function TriggerRow({ trigger, onRemove }: TriggerRowProps): React.ReactElement 
         <div className="text-label font-semibold text-foreground">{label}</div>
         <div className="font-mono text-micro text-mf-text-3">{detail}</div>
       </div>
-      <button
-        type="button"
-        aria-label="Remove trigger"
-        onClick={onRemove}
-        className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
-      >
-        <X size={12} aria-hidden />
-      </button>
+      <Hint label="Remove trigger">
+        <button
+          type="button"
+          aria-label="Remove trigger"
+          onClick={onRemove}
+          className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+        >
+          <X size={12} aria-hidden />
+        </button>
+      </Hint>
     </div>
   );
 }
@@ -317,14 +320,16 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
                     placeholder="${ step.output.field }"
                     className="min-w-0 flex-1 rounded-md border border-border bg-mf-content2 px-[9px] py-[6px] font-mono text-caption text-mf-code-fn outline-none"
                   />
-                  <button
-                    type="button"
-                    aria-label="Remove output"
-                    onClick={() => removeOutput(i)}
-                    className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
-                  >
-                    <X size={12} aria-hidden />
-                  </button>
+                  <Hint label="Remove output">
+                    <button
+                      type="button"
+                      aria-label="Remove output"
+                      onClick={() => removeOutput(i)}
+                      className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+                    >
+                      <X size={12} aria-hidden />
+                    </button>
+                  </Hint>
                 </div>
               ))}
             </div>

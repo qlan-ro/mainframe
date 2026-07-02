@@ -59,6 +59,13 @@ function deriveIdFromYaml(yaml: string): string {
   return `global:${slug(name)}`;
 }
 
+/** Derive a slugified name from a workflow's YAML by reading the `name:` line. */
+function deriveNameFromYaml(yaml: string): string {
+  const m = yaml.match(/^name:\s*(.+)$/m);
+  const raw = m?.[1] ?? '';
+  return raw.trim().replace(/^["']|["']$/g, '');
+}
+
 const DEBOUNCE_MS = 400;
 
 // ── Mode toggle bar ───────────────────────────────────────────────────────────
@@ -151,6 +158,8 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { closeEditor } = useWorkflowsModal();
   const loadAll = useWorkflowsStore((s) => s.loadAll);
+
+  const filename = `${slug(isNew ? model.name : deriveNameFromYaml(yaml)) || 'workflow'}.yaml`;
 
   // Load YAML from server for edit mode
   useEffect(() => {
@@ -283,7 +292,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
         )}
         {(mode === 'yaml' || mode === 'split') && (
           <div className="min-w-0 flex-1">
-            <WfYamlPane yaml={yaml} onChange={handleYamlChange} validation={validation} />
+            <WfYamlPane yaml={yaml} onChange={handleYamlChange} validation={validation} filename={filename} />
           </div>
         )}
       </div>

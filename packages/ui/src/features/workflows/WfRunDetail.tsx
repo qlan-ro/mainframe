@@ -18,6 +18,7 @@ import React from 'react';
 import { ChevronLeft, Square, Play, Calendar, Zap, Layers, Clock, CircleDot } from 'lucide-react';
 import type { WorkflowRunSummary } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsModal } from './use-workflows-modal';
 import { WfStatusTag, WfStatusPip } from './WfStatus';
@@ -112,18 +113,19 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
       <div className="flex shrink-0 flex-col border-b-[0.5px] border-border px-[18px] pb-[13px] pt-[14px]">
         {/* Back row */}
         <div className="flex items-center gap-[10px]">
-          <button
-            type="button"
-            data-testid="workflows-run-back"
-            onClick={backToList}
-            className={cn(
-              'inline-flex items-center justify-center rounded-md h-[30px] w-[30px]',
-              'text-mf-text-3 hover:bg-accent transition-colors',
-            )}
-            title="Back to runs"
-          >
-            <ChevronLeft size={15} aria-hidden />
-          </button>
+          <Hint label="Back to runs">
+            <button
+              type="button"
+              data-testid="workflows-run-back"
+              onClick={backToList}
+              className={cn(
+                'inline-flex items-center justify-center rounded-md h-[30px] w-[30px]',
+                'text-mf-text-3 hover:bg-accent transition-colors',
+              )}
+            >
+              <ChevronLeft size={15} aria-hidden />
+            </button>
+          </Hint>
 
           {/* Title + #id + status tag + Cancel (all in one row, prototype layout) */}
           <div className="flex min-w-0 flex-1 items-center gap-[9px]">

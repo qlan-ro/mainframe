@@ -10,6 +10,7 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, Play, Pencil, Calendar, Zap, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsModal } from './use-workflows-modal';
 import * as wfApi from '@/lib/api/workflows';
@@ -150,15 +151,16 @@ function WfLibraryRow({ wf, lastRun, port, projectName }: WfLibraryRowProps): Re
       </button>
 
       {/* Edit button */}
-      <button
-        type="button"
-        data-testid={`workflows-library-edit-${wf.id}`}
-        title="Edit definition"
-        onClick={() => openEditor({ mode: 'edit', workflowId: wf.id })}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-muted"
-      >
-        <Pencil size={13} aria-hidden />
-      </button>
+      <Hint label="Edit definition">
+        <button
+          type="button"
+          data-testid={`workflows-library-edit-${wf.id}`}
+          onClick={() => openEditor({ mode: 'edit', workflowId: wf.id })}
+          className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-muted"
+        >
+          <Pencil size={13} aria-hidden />
+        </button>
+      </Hint>
     </div>
   );
 }

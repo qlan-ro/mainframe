@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import { GripVertical, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { getKindMeta } from '../glyphs';
 import type { WfStep } from './yaml-serialize';
 
@@ -84,30 +85,34 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
         <span className="shrink-0 font-mono text-micro text-mf-text-3">{summary}</span>
 
         {/* Configure expand toggle — prototype line 345-347 */}
-        <button
-          type="button"
-          aria-label="Configure step"
-          aria-expanded={configOpen}
-          data-testid={`workflows-builder-step-configure-${step.id ?? String(index)}`}
-          onClick={() => setConfigOpen((o) => !o)}
-          className={cn(
-            'inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm',
-            configOpen ? 'bg-muted text-foreground' : 'text-mf-text-3 hover:bg-accent hover:text-foreground',
-          )}
-        >
-          <SlidersHorizontal size={13} aria-hidden />
-        </button>
+        <Hint label="Configure step">
+          <button
+            type="button"
+            aria-label="Configure step"
+            aria-expanded={configOpen}
+            data-testid={`workflows-builder-step-configure-${step.id ?? String(index)}`}
+            onClick={() => setConfigOpen((o) => !o)}
+            className={cn(
+              'inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm',
+              configOpen ? 'bg-muted text-foreground' : 'text-mf-text-3 hover:bg-accent hover:text-foreground',
+            )}
+          >
+            <SlidersHorizontal size={13} aria-hidden />
+          </button>
+        </Hint>
 
         {/* Remove */}
-        <button
-          type="button"
-          aria-label="Remove step"
-          data-testid={`workflows-builder-step-remove-${step.id ?? String(index)}`}
-          onClick={onRemove}
-          className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
-        >
-          <Trash2 size={13} aria-hidden />
-        </button>
+        <Hint label="Remove step">
+          <button
+            type="button"
+            aria-label="Remove step"
+            data-testid={`workflows-builder-step-remove-${step.id ?? String(index)}`}
+            onClick={onRemove}
+            className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+          >
+            <Trash2 size={13} aria-hidden />
+          </button>
+        </Hint>
       </div>
 
       {/* Configure panel — DEFERRED: full composite sub-lane nesting (parallel lanes,

@@ -12,6 +12,7 @@
  */
 import { X, Layers, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { getKindMetaByModel } from '../glyphs';
 import type { WfStep } from './yaml-serialize';
 
@@ -224,14 +225,16 @@ export function WfStepLibrary({ onAdd, onClose }: WfStepLibraryProps): React.Rea
           <div className="text-heading font-bold leading-tight tracking-[-0.02em] text-foreground">Step types</div>
           <div className="text-caption text-mf-text-3">Pick a step to add to the workflow</div>
         </div>
-        <button
-          type="button"
-          aria-label="Close step library"
-          onClick={onClose}
-          className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
-        >
-          <X size={15} aria-hidden />
-        </button>
+        <Hint label="Close step library">
+          <button
+            type="button"
+            aria-label="Close step library"
+            onClick={onClose}
+            className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+          >
+            <X size={15} aria-hidden />
+          </button>
+        </Hint>
       </div>
 
       {/* Scrollable group list */}
