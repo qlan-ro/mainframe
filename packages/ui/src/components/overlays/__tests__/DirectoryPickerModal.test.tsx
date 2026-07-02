@@ -106,6 +106,26 @@ describe('DirectoryPickerModal — open renders tree rows', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. Empty directory → empty state, not a perpetual loader
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — empty directory', () => {
+  it('shows an empty state (not "Loading…") when the browse returns no entries', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-empty')).not.toBeNull();
+    });
+    // The stuck-loading bug: an empty result kept the loader visible forever.
+    expect(screen.queryByTestId('directory-picker-loading')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. Select a directory → confirm enabled → click resolves path
 // ---------------------------------------------------------------------------
 

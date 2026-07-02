@@ -151,6 +151,10 @@ export function DirectoryPickerModal() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<'file' | 'directory' | null>(null);
   const [rootError, setRootError] = useState<string | null>(null);
+  // Distinguishes "browse in flight" from "browse returned an empty list" — an
+  // empty directory (e.g. a fresh remote home) must show an empty state, not a
+  // perpetual "Loading…" (both have rootPaths.length === 0).
+  const [loading, setLoading] = useState(false);
 
   // Seed the tree whenever pending changes (open, close, or reopen).
   // The cancelled flag mirrors the ReviewPanel pattern: the effect cleanup
@@ -162,18 +166,22 @@ export function DirectoryPickerModal() {
     setSelectedPath(null);
     setSelectedType(null);
     setRootError(null);
+    setLoading(false);
 
     if (!pending) return;
 
     let cancelled = false;
+    setLoading(true);
     const includeFiles = pending.mode === 'file';
     browseFilesystem(port, '~', { includeFiles })
       .then((entries) => {
         if (cancelled) return;
+        setLoading(false);
         setTree(buildTree(entries, 0));
       })
       .catch((err) => {
         if (cancelled) return;
+        setLoading(false);
         console.warn('[directory-picker] browse failed', err);
         setRootError('Failed to load directory. Please try again.');
       });
@@ -272,8 +280,21 @@ export function DirectoryPickerModal() {
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {rootError && <p className="px-4 py-4 text-caption text-destructive">{rootError}</p>}
-          {!rootError && tree.rootPaths.length === 0 && pending && (
-            <p className="px-4 py-6 text-center text-caption text-muted-foreground">Loading…</p>
+          {!rootError && loading && (
+            <p
+              data-testid="directory-picker-loading"
+              className="px-4 py-6 text-center text-caption text-muted-foreground"
+            >
+              Loading…
+            </p>
+          )}
+          {!rootError && !loading && tree.rootPaths.length === 0 && pending && (
+            <p
+              data-testid="directory-picker-empty"
+              className="px-4 py-6 text-center text-caption text-muted-foreground"
+            >
+              This folder is empty.
+            </p>
           )}
           {tree.rootPaths.length > 0 && (
             <FlatTreeView tree={tree} selectedPath={selectedPath} onSelect={handleSelect} onToggle={handleToggle} />
