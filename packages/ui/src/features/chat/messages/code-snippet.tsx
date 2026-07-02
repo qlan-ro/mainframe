@@ -80,7 +80,7 @@ export function SnippetBlock({ id, lines, start }: { id: string; lines: readonly
           data-testid={`chat-user-snippet-expand-${id}`}
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-px flex w-full items-center justify-center gap-1.5 border-t-[0.5px] border-border py-1.5 text-caption font-semibold text-primary hover:bg-mf-raised"
+          className="mt-px flex w-full items-center justify-center gap-[5px] border-t-[0.5px] border-border bg-mf-content2 py-[7px] text-caption font-semibold text-primary hover:bg-mf-raised"
         >
           {expanded ? 'Collapse' : `Show all ${lines.length} lines`}
           {expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}
