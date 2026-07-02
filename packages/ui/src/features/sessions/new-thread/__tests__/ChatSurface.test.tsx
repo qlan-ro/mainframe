@@ -20,6 +20,7 @@ let __mainThreadId: string | null = '__LOCALID_1';
 let __itemStatus: string | undefined = 'new';
 let __messageCount = 0;
 let __projects: { id: string }[] = [{ id: 'proj-a' }];
+let __loading = false;
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
@@ -29,7 +30,7 @@ vi.mock('@assistant-ui/react', () => ({
       thread: { messages: { length: __messageCount } },
     }),
 }));
-vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: __projects }) }));
+vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: __projects, loading: __loading }) }));
 vi.mock('../../runtime/draft-config', () => ({
   useDraftConfigStore: (sel: (s: unknown) => unknown) =>
     sel({ drafts: new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]) }),
@@ -51,13 +52,23 @@ describe('ChatSurface', () => {
     __itemStatus = 'new';
     __messageCount = 0;
     __projects = [{ id: 'proj-a' }];
+    __loading = false;
   });
 
   it('renders the first-run hero (no ChatThread) when there are no projects', () => {
     __projects = [];
+    __loading = false;
     render(<ChatSurface port={31415} />);
     expect(screen.getByTestId('empty-firstrun')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('does not show the first-run hero while projects are still loading', () => {
+    __projects = [];
+    __loading = true;
+    render(<ChatSurface port={31415} />);
+    expect(screen.queryByTestId('empty-firstrun')).toBeNull();
+    expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
   });
 
   it('renders ChatThread with the welcome empty-state for a resolved draft', () => {

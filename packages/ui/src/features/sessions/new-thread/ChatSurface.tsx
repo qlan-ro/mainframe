@@ -1,8 +1,11 @@
 /**
  * ChatSurface — chooses what the right pane shows for the active thread.
  *
- * - Zero projects → the first-run hero (no ChatThread, no composer) — there is
- *   nowhere to send a message yet.
+ * - Zero projects, once useProjects has finished its initial load → the
+ *   first-run hero (no ChatThread, no composer) — there is nowhere to send a
+ *   message yet. Gated on `!loading` so a cold-boot render (projects still
+ *   `[]` while the fetch is in flight) falls through to ChatThread instead of
+ *   flashing the hero.
  * - A brand-new local thread (__LOCALID_* / status 'new' / no messages) whose
  *   draft already resolved a project (seeded by useNewThreadAutoConfig when a
  *   project pill is active, or by the ChatEmptyState welcome flow itself —
@@ -33,12 +36,12 @@ export function ChatSurface({ port: _port }: { port: number }) {
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const draftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.get(mainThreadId) : undefined));
-  const { projects } = useProjects();
+  const { projects, loading } = useProjects();
 
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
 
-  if (isNewLocal && projects.length === 0) {
+  if (isNewLocal && !loading && projects.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <ChatCardHeader />
