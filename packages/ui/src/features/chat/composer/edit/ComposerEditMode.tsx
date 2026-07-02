@@ -78,8 +78,16 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       />
 
       <div className="flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
-        {/* Config shown muted — content-only edit per the daemon queue contract. */}
-        <div className="pointer-events-none flex min-h-8 items-center gap-1 opacity-50" aria-hidden>
+        {/* Config shown muted — content-only edit per the daemon queue contract.
+            opacity-40 + saturate-[0.6] (not just opacity-50) so colored/active
+            chips (amber Plan toggle, accent-tinted Features/Worktree dots)
+            visibly desaturate as well as dim, matching the design's
+            `filter: saturate(0.6)` treatment. */}
+        <div
+          data-testid="chat-composer-edit-toolbar"
+          className="pointer-events-none flex min-h-8 items-center gap-1 opacity-40 saturate-[0.6]"
+          aria-hidden
+        >
           <ComposerToolbar />
         </div>
         <div className="flex items-center gap-2">

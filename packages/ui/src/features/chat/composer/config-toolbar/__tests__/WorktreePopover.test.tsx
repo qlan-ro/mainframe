@@ -279,3 +279,30 @@ describe('WorktreePopover — cancel closes the popover', () => {
     await waitFor(() => expect(screen.queryByTestId('composer-worktree-enable')).not.toBeInTheDocument());
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Trigger shape — fixed 26x20 rounded-sm icon button (RADIUS.sm), matching
+//    the design's distinct icon-button family (03-content.jsx:599-608), not the
+//    auto-sized rounded-[11px] pill shared with the text-bearing chips.
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — trigger shape', () => {
+  it('trigger has w-[26px] and rounded-sm, not rounded-[11px]', () => {
+    renderPopover(makeChat());
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger.className).toContain('w-[26px]');
+    expect(trigger.className).toContain('rounded-sm');
+    expect(trigger.className).not.toContain('rounded-[11px]');
+  });
+
+  it('GitFork glyph renders at 13px (design size), not 11px', () => {
+    renderPopover(makeChat());
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    const svg = trigger.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute('width')).toBe('13');
+    expect(svg!.getAttribute('height')).toBe('13');
+  });
+});

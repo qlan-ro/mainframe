@@ -45,8 +45,9 @@ vi.mock('@assistant-ui/react', () => ({
       <button {...rest}>{children}</button>
     ),
   },
-  useAuiState: (selector: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
-    selector({ thread: { isRunning: false, messages: [] } }),
+  useAuiState: (
+    selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; composer: { quote: undefined } }) => unknown,
+  ) => selector({ thread: { isRunning: false, messages: [] }, composer: { quote: undefined } }),
   useAui: () => ({ composer: () => ({ send: vi.fn() }) }),
 }));
 
@@ -61,6 +62,7 @@ vi.mock('../config-toolbar/ComposerToolbar', () => ({
 vi.mock('@/components/ui/assistant-ui/attachment', () => ({
   ComposerAttachments: () => null,
   ComposerAddAttachment: () => <button data-testid="composer-add-attachment" />,
+  ComposerAddMention: () => <button data-testid="composer-add-mention" />,
 }));
 
 vi.mock('@/components/ui/assistant-ui/quote', () => ({
@@ -69,6 +71,14 @@ vi.mock('@/components/ui/assistant-ui/quote', () => ({
 
 vi.mock('../triggers/ComposerTriggers', () => ({
   ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// ComposerHighlight reads useAuiState(s => s.composer.text) — a selector shape
+// this file's useAuiState fake (thread-only) doesn't provide. Stub it out, same
+// as Composer.test.tsx, since these tests assert on send/toolbar/plan/etc., not
+// the highlight overlay's own rendering (covered by ComposerHighlight.test.tsx).
+vi.mock('../highlight/ComposerHighlight', () => ({
+  ComposerHighlight: () => null,
 }));
 
 // ---------------------------------------------------------------------------
@@ -181,6 +191,42 @@ describe('Composer — send button is a 26px rounded-square, not a 32px circle',
     expect(send.className).toContain('rounded-md');
     expect(send.className).not.toContain('rounded-full');
   });
+
+  it('send button icon uses size-3.5 (14px, closest standard rung to the design 13px glyph), not size-4 (8px under the compressed scale)', () => {
+    render(
+      <TooltipProvider>
+        <Composer />
+      </TooltipProvider>,
+    );
+
+    const send = screen.getByTestId('chat-composer-send');
+    const svg = send.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute('class')).toContain('size-3.5');
+    expect(svg!.getAttribute('class')).not.toContain('size-4');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. Toolbar left slot — dedicated "@" mention button beside the paperclip
+// ---------------------------------------------------------------------------
+
+describe('Composer — toolbar renders a dedicated "@" mention button beside the paperclip', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __extrasReturn = { worktreeMissing: false };
+  });
+
+  it('renders composer-add-mention inside the toolbar left slot', () => {
+    render(
+      <TooltipProvider>
+        <Composer />
+      </TooltipProvider>,
+    );
+
+    const toolbar = screen.getByTestId('chat-composer-toolbar');
+    expect(toolbar.querySelector('[data-testid="composer-add-mention"]')).not.toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -242,6 +288,19 @@ describe('PlanModeToggle — amber active styling', () => {
     const btn = screen.getByTestId('composer-plan-toggle');
     expect(btn.className).not.toContain('bg-mf-warning-tint');
     expect(btn.className).not.toContain('border-mf-warning');
+  });
+
+  it('trigger is a fixed 26x20 rounded-sm icon button (RADIUS.sm), not an auto-sized rounded-[11px] pill', () => {
+    render(
+      <TooltipProvider>
+        <PlanModeToggle chat={makeChat({ planMode: false })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
+      </TooltipProvider>,
+    );
+
+    const btn = screen.getByTestId('composer-plan-toggle');
+    expect(btn.className).toContain('w-[26px]');
+    expect(btn.className).toContain('rounded-sm');
+    expect(btn.className).not.toContain('rounded-[11px]');
   });
 });
 
@@ -331,6 +390,24 @@ describe('FeaturesPopover — accent dot visible when a feature is active', () =
     const trigger = screen.getByTestId('composer-features-trigger');
     const dot = trigger.querySelector('span[class*="bg-primary"]');
     expect(dot).toBeNull();
+  });
+
+  it('trigger is a fixed 26x20 rounded-sm icon button (RADIUS.sm), not an auto-sized rounded-[11px] pill', () => {
+    render(
+      <TooltipProvider>
+        <FeaturesPopover
+          chat={makeChat({ fast: false, ultracode: false, adaptiveThinking: false })}
+          model={MODEL_WITH_ULTRACODE}
+          setFeature={vi.fn()}
+          disabled={false}
+        />
+      </TooltipProvider>,
+    );
+
+    const trigger = screen.getByTestId('composer-features-trigger');
+    expect(trigger.className).toContain('w-[26px]');
+    expect(trigger.className).toContain('rounded-sm');
+    expect(trigger.className).not.toContain('rounded-[11px]');
   });
 });
 

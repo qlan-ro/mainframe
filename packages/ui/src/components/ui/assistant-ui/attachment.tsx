@@ -1,7 +1,7 @@
 'use client';
 
 import { type PropsWithChildren, useEffect, useState, type FC } from 'react';
-import { XIcon, Paperclip, FileText } from 'lucide-react';
+import { AtSignIcon, XIcon, Paperclip, FileText } from 'lucide-react';
 import { AttachmentPrimitive, ComposerPrimitive, MessagePrimitive, useAuiState, useAui } from '@assistant-ui/react';
 import { useShallow } from 'zustand/react/shallow';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -184,9 +184,37 @@ export const ComposerAddAttachment: FC = () => {
         aria-label="Add Attachment"
         className="size-[22px] rounded-sm p-1 text-mf-text-3 hover:text-foreground"
       >
-        <Paperclip className="size-4 stroke-[1.5px]" />
+        <Paperclip className="size-3 stroke-[1.5px]" />
       </TooltipIconButton>
     </ComposerPrimitive.AddAttachment>
+  );
+};
+
+// ── Add-mention button — dedicated "@" toolbar affordance (mirrors the design's
+//    second gActionStyle icon button, sitting beside the paperclip). Clicking it
+//    appends "@" to the composer text, which opens the native `@` mention trigger
+//    popover (ComposerTriggers) the same way typing "@" does. ─────────────────
+export const ComposerAddMention: FC = () => {
+  const aui = useAui();
+  const handleClick = () => {
+    const composer = aui.composer();
+    const text = composer.getState().text;
+    composer.setText(text.length > 0 && !text.endsWith(' ') ? `${text} @` : `${text}@`);
+  };
+
+  return (
+    <TooltipIconButton
+      data-testid="composer-add-mention"
+      tooltip="Mention a file or agent"
+      side="bottom"
+      variant="ghost"
+      size="icon"
+      aria-label="Mention a file or agent"
+      onClick={handleClick}
+      className="size-[22px] rounded-sm p-1 text-mf-text-3 hover:text-foreground"
+    >
+      <AtSignIcon className="size-3 stroke-[1.5px]" />
+    </TooltipIconButton>
   );
 };
 

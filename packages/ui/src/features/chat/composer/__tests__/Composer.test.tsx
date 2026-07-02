@@ -51,6 +51,10 @@ vi.mock('../../runtime/use-chat-thread-runtime', () => ({
 // a fake state object so the real selector path is exercised.
 let __isRunning = false;
 let __sendSpy = vi.fn();
+// Controls the value the `(s) => s.composer.quote` selector resolves to —
+// undefined (no quote pending) by default; tests set a QuoteInfo-shaped object
+// to exercise the "Add a message…" placeholder variant (finding 8.3).
+let __quote: { text: string } | undefined;
 
 // Stub ComposerPrimitive with passthrough primitives that forward the props
 // our assertions depend on (data-testid, disabled, children).
@@ -71,11 +75,15 @@ vi.mock('@assistant-ui/react', () => ({
     ),
   },
   // useAuiState invokes the selector against a fake state object. This means
-  // the component's real selector `(s) => s.thread.isRunning` is exercised and
-  // the return value tracks __isRunning. Both the Composer and SendOrCancelButton
-  // call useAuiState with the same selector, so a single fake state object works.
-  useAuiState: (selector: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
-    selector({ thread: { isRunning: __isRunning, messages: [] } }),
+  // the component's real selectors are exercised and the return value tracks
+  // the mutable cells above. Composer, SendOrCancelButton, and the placeholder
+  // logic all call useAuiState with selectors over this same fake state object.
+  useAuiState: (
+    selector: (s: {
+      thread: { isRunning: boolean; messages: unknown[] };
+      composer: { quote: { text: string } | undefined };
+    }) => unknown,
+  ) => selector({ thread: { isRunning: __isRunning, messages: [] }, composer: { quote: __quote } }),
   // useAui returns a composer handle; send() is a spy so tests can assert on it.
   useAui: () => ({ composer: () => ({ send: __sendSpy }) }),
 }));
@@ -94,6 +102,7 @@ vi.mock('../config-toolbar/ComposerToolbar', () => ({
 vi.mock('@/components/ui/assistant-ui/attachment', () => ({
   ComposerAttachments: () => null,
   ComposerAddAttachment: () => null,
+  ComposerAddMention: () => null,
 }));
 
 // ComposerQuotePreview renders ComposerPrimitive.Quote/QuoteText/QuoteDismiss,
@@ -313,5 +322,33 @@ describe('Composer — highlight overlay wired + input is text-transparent', () 
     renderComposer();
     const input = screen.getByTestId('chat-composer-input');
     expect(input.className).toContain('caret-foreground');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Placeholder copy — "Reply to Mainframe…" default, "Add a message…" when a
+// quote is pending (finding 8.3: design 03-content.jsx:747).
+// ---------------------------------------------------------------------------
+
+describe('Composer — placeholder copy switches on pending-quote state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __isRunning = false;
+    __sendSpy = vi.fn();
+    __extrasReturn = { worktreeMissing: false };
+    __quote = undefined;
+  });
+
+  it('shows "Reply to Mainframe…" when no quote is pending', () => {
+    renderComposer();
+    const input = screen.getByTestId('chat-composer-input');
+    expect(input).toHaveAttribute('placeholder', 'Reply to Mainframe…');
+  });
+
+  it('shows "Add a message…" when a quote is pending', () => {
+    __quote = { text: 'quoted snippet' };
+    renderComposer();
+    const input = screen.getByTestId('chat-composer-input');
+    expect(input).toHaveAttribute('placeholder', 'Add a message…');
   });
 });

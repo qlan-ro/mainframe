@@ -39,8 +39,8 @@ export function PlanModeToggle({ chat, adapter, setPlanMode }: PlanModeTogglePro
           aria-pressed={active}
           onClick={() => setPlanMode(!active)}
           className={[
-            'flex h-[20px] shrink-0 items-center justify-center px-[6px]',
-            'rounded-[11px] border-[0.5px] text-caption',
+            'flex h-[20px] w-[26px] shrink-0 items-center justify-center',
+            'rounded-sm border-[0.5px] text-caption',
             'transition-colors',
             'focus-visible:outline-none',
             active
