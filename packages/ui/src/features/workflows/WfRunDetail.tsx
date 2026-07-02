@@ -15,7 +15,7 @@
  * module-level seam registered by AppShell) then closes the workflows modal.
  */
 import React from 'react';
-import { ArrowLeft, Square, Play, Calendar, Zap, Layers, Clock, CircleDot } from 'lucide-react';
+import { ChevronLeft, Square, Play, Calendar, Zap, Layers, Clock, CircleDot } from 'lucide-react';
 import type { WorkflowRunSummary } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { useWorkflowsStore } from './use-workflows-store';
@@ -31,7 +31,7 @@ import { openSessionById } from '@/lib/session-nav';
 // A run's triggerKind is the mechanism that started it (engine emits these),
 // distinct from a workflow's definition triggers (manual|schedule|event|webhook).
 const TRIGGER_ICON: Record<WorkflowRunSummary['triggerKind'], React.ReactElement> = {
-  manual: <Play size={11} aria-hidden />,
+  manual: <Play size={11} fill="currentColor" aria-hidden />,
   cron: <Calendar size={11} aria-hidden />,
   event: <Zap size={11} aria-hidden />,
   call: <Layers size={11} aria-hidden />,
@@ -77,7 +77,7 @@ interface WfRunDetailProps {
 export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | null {
   const runDetail = useWorkflowsStore((s) => s.runDetail);
   const workflows = useWorkflowsStore((s) => s.workflows);
-  const { backToList, setSection, close } = useWorkflowsModal();
+  const { backToList, setSection, close, openRun } = useWorkflowsModal();
 
   if (!runDetail) return null;
 
@@ -117,12 +117,12 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
             data-testid="workflows-run-back"
             onClick={backToList}
             className={cn(
-              'inline-flex items-center justify-center rounded-md p-1',
+              'inline-flex items-center justify-center rounded-md h-[30px] w-[30px]',
               'text-mf-text-3 hover:bg-accent transition-colors',
             )}
             title="Back to runs"
           >
-            <ArrowLeft size={15} aria-hidden />
+            <ChevronLeft size={15} aria-hidden />
           </button>
 
           {/* Title + #id + status tag + Cancel (all in one row, prototype layout) */}
@@ -147,7 +147,7 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
                 'hover:bg-destructive/10 transition-colors',
               )}
             >
-              <Square size={11} aria-hidden />
+              <Square size={11} fill="currentColor" aria-hidden />
               Cancel
             </button>
           )}
@@ -164,13 +164,15 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
             {formatAgo(run.startedAt)}
           </span>
           {run.parentRunId != null && (
-            <span
+            <button
+              type="button"
               data-testid="workflows-run-parent-link"
+              onClick={() => openRun(String(run.parentRunId))}
               className="inline-flex cursor-pointer items-center gap-[5px] text-primary"
             >
               <Layers size={11} aria-hidden />
               Parent: #{run.parentRunId}
-            </span>
+            </button>
           )}
         </div>
 

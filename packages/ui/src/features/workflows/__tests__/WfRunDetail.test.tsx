@@ -295,6 +295,15 @@ describe('WfRunDetail — trigger/timing/parent line', () => {
     render(<WfRunDetail port={31415} />);
     expect(screen.queryByTestId('workflows-run-parent-link')).not.toBeInTheDocument();
   });
+
+  it('parent link is a button that calls openRun with the parent id', () => {
+    // running status has bannerCta: null, so only the parent-link click moves selectedRunId
+    // (avoids the Task 3 banner CTA, which calls setSection('needs') and nulls selectedRunId).
+    seedDetail(makeRun('r14', 'running', { parentRunId: 'run-parent' }));
+    render(<WfRunDetail port={31415} />);
+    fireEvent.click(screen.getByTestId('workflows-run-parent-link'));
+    expect(useWorkflowsModal.getState().selectedRunId).toBe('run-parent');
+  });
 });
 
 describe('WfRunDetail — navigation', () => {
