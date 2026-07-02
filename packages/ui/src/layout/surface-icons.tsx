@@ -121,7 +121,7 @@ export function SidebarLeftGlyph({ size = 14, className }: GlyphProps) {
   );
 }
 
-/** Show sidebar / inspector toggle — panel with a right rail (prototype 'sidebar.right'; mirror of SidebarLeftGlyph). */
+/** Inspector toggle — panel with a right rail (prototype `sidebar.right`; mirror of SidebarLeftGlyph). */
 export function SidebarRightGlyph({ size = 14, className }: GlyphProps) {
   return (
     <StrokeGlyph size={size} className={className}>
