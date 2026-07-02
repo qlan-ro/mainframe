@@ -132,7 +132,7 @@ interface SlashPillProps {
 function SlashPill({ kind, name }: SlashPillProps) {
   const Icon = kind === 'command' ? Wrench : Zap;
   const colorClass = kind === 'command' ? 'text-primary' : 'text-mf-directive-skill';
-  const bgClass = kind === 'command' ? 'bg-mf-selection' : 'bg-mf-directive-skill-tint';
+  const bgClass = kind === 'command' ? 'bg-mf-directive-command-tint' : 'bg-mf-directive-skill-tint';
 
   return (
     // Design 7.5: padding 2px 8px 2px 6px, gap 5, marginRight 8 — py-0.5 (2px)

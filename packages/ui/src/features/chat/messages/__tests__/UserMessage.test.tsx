@@ -313,6 +313,21 @@ describe('UserMessage — SP: SlashPill spacing (mr-4, gap-[5px], pr-4)', () => 
     expect(pill!.className).toContain('pl-1.5');
     expect(pill!.className).toContain('pr-4');
   });
+
+  // 7.12: command pill uses the purpose-built ~8% accent tint token, mirroring
+  // the skill pill's own dedicated `bg-mf-directive-skill-tint` treatment,
+  // instead of reusing the coarser text-selection `bg-mf-selection` token.
+  it('uses the bg-mf-directive-command-tint token for the command pill background', () => {
+    __messageFixture = makeFixture({
+      mainframe: { command: { name: 'debug', source: 'commands', userText: 'run this' } },
+    });
+    renderUserMessage();
+    const pillLabel = screen.getByText('/debug');
+    const pill = pillLabel.closest('span')?.parentElement;
+    expect(pill).not.toBeNull();
+    expect(pill!.className).toContain('bg-mf-directive-command-tint');
+    expect(pill!.className).not.toContain('bg-mf-selection');
+  });
 });
 
 // ---------------------------------------------------------------------------

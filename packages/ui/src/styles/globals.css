@@ -112,6 +112,7 @@
   --mf-surface-run: #1f9d4d;
   --mf-directive-skill: #7a4dd0;
   --mf-directive-skill-tint: rgba(122, 77, 208, 0.08);
+  --mf-directive-command-tint: rgba(10, 132, 255, 0.08);
   --mf-tool-read: #5b8def;
   --mf-tool-read-tint: rgba(91, 141, 239, 0.11);
   --mf-tool-search: #9b59c4;
@@ -238,6 +239,7 @@
   --mf-surface-run: #50d97c;
   --mf-directive-skill: #b48cff;
   --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
+  --mf-directive-command-tint: rgba(138, 112, 245, 0.14);
   --mf-tool-read: #8fb2ff;
   --mf-tool-read-tint: rgba(143, 178, 255, 0.14);
   --mf-tool-search: #c18ee8;
@@ -446,6 +448,7 @@
   --mf-surface-run: #3fd789;
   --mf-directive-skill: #9fb9ff;
   --mf-directive-skill-tint: rgba(159, 185, 255, 0.14);
+  --mf-directive-command-tint: rgba(47, 198, 183, 0.14);
   --mf-tool-read: #7ab8f5;
   --mf-tool-read-tint: rgba(122, 184, 245, 0.14);
   --mf-tool-search: #a8d4f0;
@@ -643,6 +646,7 @@
   --mf-surface-run: #50d97c;
   --mf-directive-skill: #c49df7;
   --mf-directive-skill-tint: rgba(196, 157, 247, 0.14);
+  --mf-directive-command-tint: rgba(240, 107, 179, 0.14);
   --mf-tool-read: #90c8ff;
   --mf-tool-read-tint: rgba(144, 200, 255, 0.14);
   --mf-tool-search: #f06bb3;
@@ -724,6 +728,7 @@
   --color-mf-surface-run: var(--mf-surface-run);
   --color-mf-directive-skill: var(--mf-directive-skill);
   --color-mf-directive-skill-tint: var(--mf-directive-skill-tint);
+  --color-mf-directive-command-tint: var(--mf-directive-command-tint);
   --color-mf-tool-read: var(--mf-tool-read);
   --color-mf-tool-read-tint: var(--mf-tool-read-tint);
   --color-mf-tool-search: var(--mf-tool-search);
