@@ -25,6 +25,7 @@ import {
   worktreeRoutes,
   tagRoutes,
   workflowRoutes,
+  suggestionRoutes,
 } from './routes/index.js';
 import { workflowAdminRoutes } from './routes/workflow-admin.js';
 import { authRoutes } from './routes/auth.js';
@@ -132,6 +133,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(fileRoutes(ctx));
   app.use(contentSearchRoutes(ctx));
   app.use(gitRoutes(ctx));
+  app.use(suggestionRoutes(ctx));
   app.use(contextRoutes(ctx));
   app.use(attachmentRoutes(ctx));
   app.use(adapterRoutes(ctx));

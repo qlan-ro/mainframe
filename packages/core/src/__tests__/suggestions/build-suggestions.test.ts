@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { buildChurnSuggestions } from '../../server/suggestions/build-suggestions.js';
+import {
+  buildChurnSuggestions,
+  buildTodoSuggestions,
+  mergeSuggestions,
+} from '../../server/suggestions/build-suggestions.js';
 
 describe('buildChurnSuggestions', () => {
   it('emits a working-changes suggestion (accent) when the tree is dirty', () => {
@@ -59,5 +63,48 @@ describe('buildChurnSuggestions', () => {
     expect(
       buildChurnSuggestions({ branch: 'feat/x', baseBranch: null, workingFileCount: 0, branchDiffCount: 3 }),
     ).toEqual([]);
+  });
+});
+
+describe('buildTodoSuggestions', () => {
+  it('groups matches by top-level dir and reports the largest area (amber)', () => {
+    const out = buildTodoSuggestions([
+      { file: 'src/a.ts' },
+      { file: 'src/b.ts' },
+      { file: 'src/c.ts' },
+      { file: 'docs/x.md' },
+    ]);
+    expect(out).toEqual([
+      {
+        icon: 'list-checks',
+        tint: 'amber',
+        title: 'Clean up the 3 TODO comments in src',
+        meta: 'code · 3 matches',
+        prefill: 'Find and address the TODO/FIXME comments in `src`.',
+      },
+    ]);
+  });
+
+  it('uses a root-file bucket label when a match is at the repo root', () => {
+    const out = buildTodoSuggestions([{ file: 'README.md' }]);
+    expect(out[0]?.title).toBe('Clean up the 1 TODO comments in the project root');
+  });
+
+  it('returns [] for no matches', () => {
+    expect(buildTodoSuggestions([])).toEqual([]);
+  });
+});
+
+describe('mergeSuggestions', () => {
+  it('keeps churn first, then todos, capped at 3', () => {
+    const churn = [
+      { icon: 'a', tint: 'accent', title: 'c1', meta: '', prefill: 'p' },
+      { icon: 'b', tint: 'accent', title: 'c2', meta: '', prefill: 'p' },
+    ] as const;
+    const todos = [
+      { icon: 'c', tint: 'amber', title: 't1', meta: '', prefill: 'p' },
+      { icon: 'd', tint: 'amber', title: 't2', meta: '', prefill: 'p' },
+    ] as const;
+    expect(mergeSuggestions([...churn], [...todos]).map((s) => s.title)).toEqual(['c1', 'c2', 't1']);
   });
 });
