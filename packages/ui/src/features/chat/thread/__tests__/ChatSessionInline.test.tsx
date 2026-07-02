@@ -185,6 +185,27 @@ describe('ChatSessionInline — status part context percentage', () => {
     expect(meter.querySelectorAll('.w-\\[3px\\]').length).toBe(8);
   });
 
+  it('colors the unfilled segments with muted-foreground, not the lighter mf-text-3 (15.4)', () => {
+    const state = reduceChatThreadState(stateWithChat(makeChat()), {
+      type: 'context.usage',
+      percentage: 10,
+      totalTokens: 20_000,
+      maxTokens: 200_000,
+    });
+    vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
+
+    render(<ChatSessionInline part="status" />);
+
+    const meter = screen.getByTestId('chat-header-context');
+    const segments = meter.querySelectorAll('.w-\\[3px\\]');
+    // 10% of 8 segments rounds to 1 filled (low tier), 7 unfilled — both should
+    // use text-muted-foreground (design T.text2), never the lighter mf-text-3.
+    expect(segments.length).toBe(8);
+    segments.forEach((seg) => {
+      expect(seg.className).not.toContain('mf-text-3');
+    });
+  });
+
   it('renders nothing when pct is null (no contextUsage and no contextWindow)', () => {
     const adapterNoWindow: AdapterInfo = {
       id: 'claude',

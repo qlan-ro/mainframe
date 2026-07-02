@@ -65,10 +65,10 @@ describe('ChatCardHeader — structure', () => {
     expect(screen.getByTestId('chat-header').hasAttribute('data-drag-region')).toBe(true);
   });
 
-  it('has the fixed h-[38px] height class', () => {
+  it('has the fixed h-[36px] height class (uniform SurfaceTabStrip height, 15.5)', () => {
     renderHeader();
 
-    expect(screen.getByTestId('chat-header')).toHaveClass('h-[38px]');
+    expect(screen.getByTestId('chat-header')).toHaveClass('h-[36px]');
   });
 
   it('renders grip and message-square icons as SVGs inside the header', () => {

@@ -129,7 +129,7 @@ export function FilesTabStrip() {
   return (
     <div
       data-testid="files-tab-strip"
-      className="flex h-[34px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]"
+      className="flex h-[36px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]"
     >
       {/* Drag grip — repositions the whole Files surface. */}
       <div

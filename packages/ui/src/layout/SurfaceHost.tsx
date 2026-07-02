@@ -89,7 +89,11 @@ function SurfaceHostImpl({ port }: Props) {
   const twoCol = top.length === 2;
 
   return (
-    <div data-testid="chat-thread-area" ref={outerRef} className="flex flex-1 flex-col overflow-hidden">
+    <div
+      data-testid="chat-thread-area"
+      ref={outerRef}
+      className={`flex flex-1 flex-col overflow-hidden ${geo.workspaceInset}`}
+    >
       {/* Top row: 1 or 2 surfaces side by side. */}
       <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
         {top.map((name, i) => (
@@ -99,9 +103,15 @@ function SurfaceHostImpl({ port }: Props) {
             </div>
             {i < top.length - 1 &&
               (twoCol ? (
-                <SurfDivider axis="x" containerRef={topRef} onFrac={setTopFrac} lineClass={geo.divider} />
+                <SurfDivider
+                  axis="x"
+                  containerRef={topRef}
+                  onFrac={setTopFrac}
+                  lineClass={geo.divider}
+                  gutter={geo.gutter}
+                />
               ) : (
-                <div style={{ width: 6, flexShrink: 0 }} />
+                <div style={{ width: geo.gutter, flexShrink: 0 }} />
               ))}
           </Fragment>
         ))}
@@ -110,7 +120,13 @@ function SurfaceHostImpl({ port }: Props) {
       {/* Vertical divider + bottom strip. */}
       {bottom && (
         <>
-          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} lineClass={geo.divider} />
+          <SurfDivider
+            axis="y"
+            containerRef={outerRef}
+            onFrac={setVFrac}
+            lineClass={geo.divider}
+            gutter={geo.gutter}
+          />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${panelCls}`}>
               <SurfaceView name={bottom} port={port} />

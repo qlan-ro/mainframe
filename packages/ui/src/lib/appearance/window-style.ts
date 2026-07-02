@@ -15,6 +15,13 @@ export interface WindowStyleGeometry {
   divider: string;
   /** MainToolbar band. */
   toolbar: string;
+  /** SurfaceHost outer wrapper — the WorkspaceArea inset applied below the
+   *  toolbar, independent of the sidebar↔pane gap (04-engine `SHELL.pad`).
+   *  Gives the floating surface cards their side/bottom margin from the window
+   *  edge; the sidebar itself is NOT inset by this (finding 15.2/15.6). */
+  workspaceInset: string;
+  /** SurfDivider / single-column spacer gutter width in px (04-engine `SHELL.gutter`). */
+  gutter: number;
 }
 
 /**
@@ -24,15 +31,21 @@ export interface WindowStyleGeometry {
  */
 export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
   unified: {
-    windowRoot: 'bg-mf-window p-2 gap-2',
+    // Window-level pad/gap is 0 — the sidebar sits flush against the window
+    // edge and against the main column with zero gap (04-engine:777-781); the
+    // floating-card inset comes from `workspaceInset` below instead.
+    windowRoot: 'bg-mf-window p-0 gap-0',
     sidebar: 'bg-transparent backdrop-blur-0 rounded-none shadow-none',
     // Opaque (same colour as the window backdrop it sits on) so the pane slides
     // as a SOLID cover over the sidebar during a drag-collapse — otherwise the
     // transparent toolbar strip lets the sidebar header icons show through.
-    pane: 'bg-mf-window gap-2',
+    pane: 'bg-mf-window gap-0',
     surface: 'rounded-[10px] bg-background shadow-[var(--mf-shadow-panel)] ring-[0.5px] ring-border',
     divider: 'bg-transparent',
     toolbar: 'bg-transparent',
+    // SHELL.pad = '4px 10px 10px': 4px below the toolbar, 10px from the side/bottom edges.
+    workspaceInset: 'pt-[4px] px-[10px] pb-[10px]',
+    gutter: 8,
   },
   split: {
     windowRoot: 'bg-background p-0 gap-0',
@@ -41,6 +54,8 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
     surface: 'bg-background',
     divider: 'bg-border',
     toolbar: 'bg-background [border-bottom:0.5px_solid_var(--border)]',
+    workspaceInset: '',
+    gutter: 9,
   },
   glass: {
     windowRoot: 'bg-mf-window p-[7px] gap-[7px]',
@@ -52,6 +67,10 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
     surface: 'rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]',
     divider: 'bg-transparent',
     toolbar: 'bg-transparent',
+    // Additional inset on top of the outer 7px window pad/gap: top/sides 4px,
+    // flush at the bottom to align with the sidebar card's bottom edge (04-engine:787-791).
+    workspaceInset: 'pt-[4px] px-[4px] pb-0',
+    gutter: 8,
   },
 };
 

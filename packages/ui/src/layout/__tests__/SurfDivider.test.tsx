@@ -152,3 +152,19 @@ describe('SurfDivider — axis="x"', () => {
     expect(onFrac).not.toHaveBeenCalled();
   });
 });
+
+describe('SurfDivider — gutter width', () => {
+  it('defaults to 6px when no gutter prop is given', () => {
+    const containerRef = makeContainerRef();
+    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} />);
+    expect(getByTestId('surf-divider-x').style.width).toBe('6px');
+  });
+
+  it('renders the window-style gutter (8px unified/glass, 9px split) via the gutter prop', () => {
+    const containerRef = makeContainerRef();
+    const { getByTestId } = render(
+      <SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} gutter={9} />,
+    );
+    expect(getByTestId('surf-divider-x').style.width).toBe('9px');
+  });
+});

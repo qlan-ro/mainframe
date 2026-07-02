@@ -159,7 +159,7 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
   const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
 
   return (
-    <div className="flex h-[34px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]">
+    <div className="flex h-[36px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]">
       {primary && (
         <div
           data-testid="run-surface-drag"

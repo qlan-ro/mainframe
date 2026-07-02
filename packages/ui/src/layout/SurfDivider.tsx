@@ -6,14 +6,17 @@ interface Props {
   onFrac: (frac: number) => void;
   /** Permanent hairline class: `bg-border` for split, `bg-transparent` for glass/unified. */
   lineClass?: string;
+  /** Gutter width in px — per window style (04-engine `SHELL.gutter`: 8 for
+   *  unified/glass, 9 for split). Defaults to 6 for standalone callers. */
+  gutter?: number;
 }
 
 /**
- * 6px drag handle between surface panels.
+ * Drag handle between surface panels (width per the caller's window-style gutter).
  * On hover: a 2px accent line appears (matches 04-engine.jsx SurfDivider).
  * On drag: calls onFrac(0.18–0.82) so the caller can update flex weights.
  */
-export function SurfDivider({ axis, containerRef, onFrac, lineClass = 'bg-transparent' }: Props) {
+export function SurfDivider({ axis, containerRef, onFrac, lineClass = 'bg-transparent', gutter = 6 }: Props) {
   const [hot, setHot] = useState(false);
   const isX = axis === 'x';
 
@@ -55,7 +58,7 @@ export function SurfDivider({ axis, containerRef, onFrac, lineClass = 'bg-transp
       onPointerDown={onDown}
       onMouseEnter={() => setHot(true)}
       onMouseLeave={() => setHot(false)}
-      style={{ flexShrink: 0, [isX ? 'width' : 'height']: 6 }}
+      style={{ flexShrink: 0, [isX ? 'width' : 'height']: gutter }}
       className={`relative z-[6] flex items-center justify-center self-stretch ${isX ? 'cursor-col-resize' : 'cursor-row-resize'}`}
     >
       {/* Permanent hairline: visible only for split (bg-border); transparent for glass/unified. */}

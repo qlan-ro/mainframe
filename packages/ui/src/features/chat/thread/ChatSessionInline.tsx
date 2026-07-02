@@ -23,7 +23,9 @@ function segmentColor(pct: number): string {
   if (pct >= 90) return 'bg-destructive';
   if (pct >= 75) return 'bg-mf-warning';
   if (pct >= 50) return 'bg-mf-warning opacity-60';
-  return 'bg-mf-text-3 opacity-60';
+  // <50% tier keys off muted-foreground (design T.text2), not the lighter
+  // mf-text-3 — matches the design's ~67%-alpha low-fill segment (15.4).
+  return 'bg-muted-foreground opacity-60';
 }
 
 export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
@@ -65,7 +67,13 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
           {Array.from({ length: SEGMENTS }, (_, i) => (
             <span
               key={i}
-              className={cn('h-[9px] w-[3px] rounded-[1.5px]', i < filled ? fillClass : 'bg-mf-text-3 opacity-15')}
+              className={cn(
+                'h-[9px] w-[3px] rounded-[1.5px]',
+                // Unfilled segments key off muted-foreground (design T.text2), not
+                // the lighter mf-text-3 — matches the design's ~15%-alpha unfilled
+                // segment color (15.4).
+                i < filled ? fillClass : 'bg-muted-foreground opacity-15',
+              )}
             />
           ))}
         </span>

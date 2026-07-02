@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Search, Sun } from 'lucide-react';
+import { ChevronDown, GitBranch, Moon, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -8,6 +8,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { BranchPopover } from '../features/git/BranchPopover';
 import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
+import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
 import { Hint } from '@/components/ui/hint';
 
 interface MainToolbarProps {
@@ -67,7 +68,7 @@ export function MainToolbar({
         {!sidebarRendered && (
           <Hint label="Show sidebar">
             <button data-testid="show-sidebar-button" type="button" onClick={onExpandSidebar} className={ICON_BTN}>
-              <PanelLeft size={14} />
+              <SidebarLeftGlyph size={14} />
             </button>
           </Hint>
         )}
@@ -157,7 +158,7 @@ export function MainToolbar({
             onClick={toggleInspector}
             className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip text-foreground' : ''}`}
           >
-            <PanelRight size={14} />
+            <SidebarRightGlyph size={14} />
           </button>
         </Hint>
       </div>
