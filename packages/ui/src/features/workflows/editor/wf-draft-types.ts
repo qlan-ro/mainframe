@@ -45,7 +45,7 @@ export interface WfStep {
   title?: string;
 
   // question
-  timeout?: { afterMinutes: number; onTimeout: 'cancel' | 'skip' };
+  timeout?: { afterMinutes: number; onTimeout: 'cancel' | 'fail' | 'continue' };
   fields?: WfField[];
 
   // service

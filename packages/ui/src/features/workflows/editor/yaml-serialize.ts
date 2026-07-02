@@ -22,6 +22,8 @@
 export type { WfTrigger, WfField, WfLane, WfArm, WfStep, WfInput, WfOutput, WfDraft } from './wf-draft-types';
 
 import type { WfTrigger, WfStep, WfDraft } from './wf-draft-types';
+import { KIND_ALIAS } from '../glyphs';
+import { slug } from './wf-slug';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,9 +31,16 @@ function ind(n: number): string {
   return '  '.repeat(n);
 }
 
-/** Fallback id for a step that has no explicit name/id: `${kind}_${idx}`. */
+/**
+ * Fallback id for a step: prefer the unique `s.id` (every stubbed step has
+ * one). `s.name` is a non-unique display field (e.g. two stub agent steps
+ * both default to `name:'agent'`) and must never be used as the id — it
+ * produces duplicate `- id:` lines that the daemon's verifier rejects.
+ * The idx-based fallback canonicalizes the kind (branch→choose etc.) so a
+ * nameless/idless step emits `choose_0`, not the raw model kind `branch_0`.
+ */
 function stepId(s: WfStep, idx: number): string {
-  return s.name || s.id || `${s.kind}_${idx}`;
+  return s.id || `${KIND_ALIAS[s.kind] ?? s.kind}_${idx}`;
 }
 
 // ── Step serializer ───────────────────────────────────────────────────────────
@@ -39,7 +48,7 @@ function stepId(s: WfStep, idx: number): string {
 function serializeQuestionStep(prefix: string, sid: string, s: WfStep, lines: string[]): void {
   lines.push(`${prefix}- id: ${sid}`);
   lines.push(`${prefix}  question:`);
-  lines.push(`${prefix}    title: ${s.title ?? ''}`);
+  lines.push(`${prefix}    title: ${JSON.stringify(s.title ?? '')}`);
   if (s.timeout) {
     lines.push(
       `${prefix}    timeout: { afterMinutes: ${s.timeout.afterMinutes}, onTimeout: ${s.timeout.onTimeout ?? 'cancel'} }`,
@@ -64,7 +73,7 @@ function serializeServiceStep(prefix: string, sid: string, s: WfStep, lines: str
   if (args.length > 0) {
     lines.push(`${prefix}  with:`);
     for (const [key, val] of args) {
-      lines.push(`${prefix}    ${key}: ${val}`);
+      lines.push(`${prefix}    ${key}: ${JSON.stringify(val ?? '')}`);
     }
   }
   if (s.credential) {
@@ -120,7 +129,7 @@ function serializeSubflowStep(prefix: string, sid: string, s: WfStep, lines: str
   if (entries.length > 0) {
     lines.push(`${prefix}  with:`);
     for (const [key, val] of entries) {
-      lines.push(`${prefix}    ${key}: ${val}`);
+      lines.push(`${prefix}    ${key}: ${JSON.stringify(val ?? '')}`);
     }
   }
 }
@@ -167,9 +176,9 @@ export function serializeWorkflow(d: WfDraft): string {
   const lines: string[] = [];
 
   lines.push('version: 1');
-  lines.push(`name: ${d.name || 'untitled'}`);
+  lines.push(`name: ${slug(d.name) || 'untitled'}`);
   if (d.description) {
-    lines.push(`description: ${d.description}`);
+    lines.push(`description: ${JSON.stringify(d.description)}`);
   }
   lines.push(`scope: ${d.scope || 'global'}`);
 
@@ -198,7 +207,7 @@ export function serializeWorkflow(d: WfDraft): string {
     lines.push('');
     lines.push('outputs:');
     for (const o of outputs) {
-      lines.push(`  ${o.name}: ${o.expr || '${ ... }'}`);
+      lines.push(`  ${o.name}: ${JSON.stringify(o.expr || '${ ... }')}`);
     }
   }
 

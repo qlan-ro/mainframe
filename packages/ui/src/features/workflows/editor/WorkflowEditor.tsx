@@ -23,6 +23,7 @@ import { WfYamlPane } from './WfYamlPane';
 import { WfBuilderPane } from './WfBuilderPane';
 import { serializeWorkflow, blankDraft } from './yaml-serialize';
 import type { WfDraft } from './yaml-serialize';
+import { slug, deriveNameFromYaml } from './wf-slug';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,30 +41,9 @@ interface WorkflowEditorProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Slugify a workflow name for use as the id segment. */
-function slug(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'untitled'
-  );
-}
-
 /** Derive an id from a new workflow's YAML by reading the `name:` line. */
 function deriveIdFromYaml(yaml: string): string {
-  const m = yaml.match(/^name:\s*(.+)$/m);
-  const raw = m?.[1] ?? '';
-  const name = raw.trim().replace(/^["']|["']$/g, '');
-  return `global:${slug(name)}`;
-}
-
-/** Derive a slugified name from a workflow's YAML by reading the `name:` line. */
-function deriveNameFromYaml(yaml: string): string {
-  const m = yaml.match(/^name:\s*(.+)$/m);
-  const raw = m?.[1] ?? '';
-  return raw.trim().replace(/^["']|["']$/g, '');
+  return `global:${slug(deriveNameFromYaml(yaml))}`;
 }
 
 const DEBOUNCE_MS = 400;

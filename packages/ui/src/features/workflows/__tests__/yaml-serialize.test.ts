@@ -78,8 +78,14 @@ describe('serializeWorkflow', () => {
 
   it('emits canonical name and scope lines', () => {
     const yaml = serializeWorkflow(KID_HEALTH);
-    expect(yaml).toContain('name: Daily kid health log');
+    expect(yaml).toContain('name: daily-kid-health-log');
     expect(yaml).toContain('scope: global');
+  });
+
+  it('slugifies the name so it matches the daemon idSchema (alnum/dash/underscore only)', () => {
+    const yaml = serializeWorkflow(KID_HEALTH);
+    const nameLine = yaml.split('\n').find((l) => l.startsWith('name: '));
+    expect(nameLine).toMatch(/^name: [a-zA-Z0-9_-]+$/);
   });
 
   it('emits description when present', () => {
@@ -245,7 +251,7 @@ describe('serializeWorkflow', () => {
     const yaml = serializeWorkflow(draft);
     expect(yaml).toContain('call: ship-work');
     expect(yaml).toContain('with:');
-    expect(yaml).toContain('target: main');
+    expect(yaml).toContain('target: "main"');
   });
 
   it('emits an id line for choose/foreach/call composites', () => {
@@ -331,6 +337,62 @@ describe('serializeWorkflow', () => {
     expect(yaml).toContain('region:');
     expect(yaml).toContain('type: string');
     expect(yaml).toContain('default: us-east');
+  });
+
+  it('emits distinct ids for two same-kind steps with identical default stub names', () => {
+    const draft: WfDraft = {
+      name: 'dup id test',
+      description: '',
+      scope: 'project',
+      triggers: [{ kind: 'manual' }],
+      inputs: [],
+      steps: [
+        { id: 'agent_abc', kind: 'agent', name: 'agent', title: 'agent step' },
+        { id: 'agent_xyz', kind: 'agent', name: 'agent', title: 'agent step' },
+      ],
+      outputs: [],
+    };
+    const yaml = serializeWorkflow(draft);
+    const idLines = yaml.split('\n').filter((l) => /^  - id: agent/.test(l));
+    const uniqueIds = new Set(idLines);
+    expect(idLines).toHaveLength(2);
+    expect(uniqueIds.size).toBe(2);
+  });
+
+  it('falls back to the canonicalized kind alias, not the raw model kind, for a nameless/idless step', () => {
+    const draft: WfDraft = {
+      name: 'fallback id test',
+      description: '',
+      scope: 'project',
+      triggers: [{ kind: 'manual' }],
+      inputs: [],
+      steps: [{ kind: 'branch', arms: [] }],
+      outputs: [],
+    };
+    const yaml = serializeWorkflow(draft);
+    expect(yaml).toContain('\n  - id: choose_0\n');
+    expect(yaml).not.toContain('branch_0');
+  });
+
+  it('escapes a question title containing a colon and a hash as a JSON-quoted scalar', () => {
+    const draft: WfDraft = {
+      name: 'escape test',
+      description: '',
+      scope: 'project',
+      triggers: [{ kind: 'manual' }],
+      inputs: [],
+      steps: [
+        {
+          id: 'q',
+          kind: 'question',
+          title: 'has: colon # hash',
+        },
+      ],
+      outputs: [],
+    };
+    const yaml = serializeWorkflow(draft);
+    expect(yaml).toContain(`title: ${JSON.stringify('has: colon # hash')}`);
+    expect(yaml).not.toContain('title: has: colon # hash');
   });
 
   it('serializes a service step with credential', () => {
