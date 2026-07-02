@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { writeFileSync } from 'fs';
+import { rmSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 
 // Minimal 1x1 red PNG — valid image, tiny payload
 const TINY_PNG_BASE64 =
@@ -304,5 +306,140 @@ test.describe('§composer attachments', () => {
     const messageThumb = page.locator('[data-testid="message-image-thumb"]').first();
     await messageThumb.waitFor({ timeout: 10_000 });
     await expect(messageThumb).toBeVisible();
+  });
+});
+
+// ─── Plan-mode toggle (§9a) ────────────────────────────────────────────────────
+test.describe('§composer plan-mode toggle', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // PlanModeToggle.tsx returns null unless `adapter.capabilities.planMode` is true. Every
+  // adapter registered in this suite (builtin claude/codex, plus mock-cli under E2E_MODE=mock —
+  // verified in plugins/mock-cli/src/adapter.ts: `capabilities = { planMode: true }`) declares
+  // the capability, so there's no non-capable adapter here to assert the hidden branch against;
+  // this exercises the visible/on path only.
+  test('is visible for the plan-capable adapter and aria-pressed flips with active styling', async () => {
+    const { page } = app;
+    const toggle = page.getByTestId('composer-plan-toggle');
+    await expect(toggle).toBeVisible({ timeout: 10_000 });
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(toggle).not.toHaveClass(/border-mf-warning/);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 });
+    await expect(toggle).toHaveClass(/border-mf-warning/);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false', { timeout: 5_000 });
+    await expect(toggle).not.toHaveClass(/border-mf-warning/);
+  });
+});
+
+// ─── Provider/model locked after the first message (§9b) ──────────────────────
+test.describe('§composer provider locked after first message', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'messaging' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('sending the first message locks the provider row (Locked copy, disabled pills)', async () => {
+    const { page } = app;
+    await sendMessage(page, 'List the files in this project using bash ls.');
+    await waitForIdle(page, 90_000);
+
+    await page.locator('[data-testid="composer-model-select"]').click();
+    await expect(page.locator('[data-testid="composer-provider-model-popover"]')).toBeVisible({ timeout: 5_000 });
+
+    // ProviderModelSelect.tsx: `locked` = `thread.messages.length > 0` (ComposerToolbar's
+    // hasMessages). The header swaps in the Lock glyph + "Locked" label, and the footer copy
+    // switches from the pre-message hint asserted in M4 above to the fixed-for-session copy.
+    await expect(page.locator('[data-testid="composer-provider-header"]')).toContainText('Locked');
+    await expect(page.locator('[data-testid="composer-provider-footer"]')).toContainText(
+      'Provider stays fixed for this session.',
+    );
+
+    // ProviderPill's `disabled = !installed || (locked && !active)` — the active provider (here
+    // mock-cli, createTauriChat's default adapterId under E2E_MODE=mock) stays clickable as a
+    // no-op re-pick; every OTHER provider pill is disabled by the lock. `claude` is a builtin,
+    // always present in the adapter list.
+    const otherProvider = page.locator('[data-testid="composer-adapter-select-option-claude"]');
+    await expect(otherProvider).toBeVisible();
+    await expect(otherProvider).toBeDisabled();
+
+    await page.keyboard.press('Escape');
+  });
+});
+
+// ─── Worktree-missing banner (§9c) ─────────────────────────────────────────────
+test.describe('§composer worktree-missing banner', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+  let chatId: string;
+  let worktreePath: string;
+  const branchName = 'e2e-worktree-missing';
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    chatId = await createTauriChat(app.page, project.projectId, 'default');
+
+    // Enable a worktree via the composer popover — real `git worktree add`, same flow as
+    // composer-advanced.spec.ts's "§composer worktree setup" describe.
+    const { page } = app;
+    await page.getByTestId('composer-worktree-trigger').click();
+    await expect(page.getByTestId('composer-worktree-tab-new')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('composer-worktree-branch-name').fill(branchName);
+    await page.getByTestId('composer-worktree-enable').click();
+    await expect(page.getByTestId('composer-worktree-popover')).toHaveCount(0, { timeout: 15_000 });
+
+    // createWorktree() (packages/core/src/workspace/worktree.ts) resolves to
+    // <projectPath>/<settings.general.worktreeDir, default '.worktrees'>/<branch, '/'→'-'>.
+    // branchName has no '/', so the sanitized segment equals it verbatim.
+    worktreePath = path.join(project.projectPath, '.worktrees', branchName);
+    rmSync(worktreePath, { recursive: true, force: true });
+
+    // isWorktreePresent() (packages/core/src/workspace/worktree.ts) is a live fs check recomputed
+    // on every enrichChat() — a reload + reselect is enough to pick up worktreeMissing:true with
+    // no daemon restart needed.
+    await page.reload();
+    await waitConnected(page);
+    await sessionsSidebar(page).row(chatId).click();
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('shows the worktree-missing banner and locks the input + send button', async () => {
+    const { page } = app;
+    const banner = page.getByTestId('chat-composer-worktree-missing');
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toContainText('The worktree for this session was deleted');
+    await expect(banner).toContainText(worktreePath);
+
+    await expect(page.getByTestId('chat-composer-input')).toBeDisabled();
+    await expect(page.getByTestId('chat-composer-send')).toBeDisabled();
   });
 });
