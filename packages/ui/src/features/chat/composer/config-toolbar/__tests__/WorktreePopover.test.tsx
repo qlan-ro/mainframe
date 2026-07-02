@@ -329,6 +329,17 @@ describe('WorktreePopover — isolated-state indicator', () => {
     expect(svgs.length).toBe(1); // only GitFork
   });
 
+  it('corner dot uses the primary accent color, not success', () => {
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat);
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    const dot = trigger.querySelector('span[aria-hidden]');
+    expect(dot).not.toBeNull();
+    expect(dot!.className).toContain('bg-primary');
+    expect(dot!.className).not.toContain('bg-mf-success');
+  });
+
   it('does NOT render the corner dot when not isolated', () => {
     renderPopover(makeChat());
 

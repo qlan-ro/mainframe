@@ -161,7 +161,7 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
             >
               <GitFork size={13} />
               {isIsolated && (
-                <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-mf-success" aria-hidden />
+                <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
               )}
             </button>
           </PopoverTrigger>
