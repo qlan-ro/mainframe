@@ -23,6 +23,7 @@ import { ZoomOut, ZoomIn, Maximize2 } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import { ViewerShell } from './ViewerShell';
+import { Segmented } from './Segmented';
 import { splitImageStatus } from './viewer-status';
 
 interface ImageViewerProps {
@@ -42,10 +43,6 @@ type FitMode = 'fit' | 'actual';
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
-
-const SEG_BTN = 'rounded-sm px-1.5 py-0.5 text-caption font-medium transition-colors';
-const SEG_ACTIVE = 'bg-background text-foreground shadow-[var(--mf-shadow-segment)]';
-const SEG_IDLE = 'text-mf-text-3 hover:text-foreground';
 
 function getExt(path: string): string {
   const parts = path.split('.');
@@ -100,7 +97,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
           data-testid="viewer-image-zoom-out"
           disabled={isFit}
           onClick={handleZoomOut}
-          className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
+          className="inline-flex h-[20px] w-[22px] shrink-0 items-center justify-center rounded-sm border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
         >
           <ZoomOut size={12} aria-hidden />
         </button>
@@ -111,32 +108,19 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
           data-testid="viewer-image-zoom-in"
           disabled={isFit}
           onClick={handleZoomIn}
-          className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
+          className="inline-flex h-[20px] w-[22px] shrink-0 items-center justify-center rounded-sm border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
         >
           <ZoomIn size={12} aria-hidden />
         </button>
       </Hint>
-      <div className="inline-flex items-center gap-px rounded-md bg-mf-chip p-0.5">
-        <button
-          type="button"
-          data-testid="viewer-image-fit-toggle"
-          aria-pressed={isFit}
-          onClick={() => handleFitToggle('fit')}
-          className={`${SEG_BTN} inline-flex items-center gap-[4px] ${isFit ? SEG_ACTIVE : SEG_IDLE}`}
-        >
-          <Maximize2 size={11} aria-hidden />
-          Fit
-        </button>
-        <button
-          type="button"
-          data-testid="viewer-image-actual-toggle"
-          aria-pressed={!isFit}
-          onClick={() => handleFitToggle('actual')}
-          className={`${SEG_BTN} ${!isFit ? SEG_ACTIVE : SEG_IDLE}`}
-        >
-          100%
-        </button>
-      </div>
+      <Segmented
+        value={fitMode}
+        onChange={(id) => handleFitToggle(id as FitMode)}
+        options={[
+          { id: 'fit', label: 'Fit', icon: <Maximize2 size={11} aria-hidden />, testId: 'viewer-image-fit-toggle' },
+          { id: 'actual', label: '100%', testId: 'viewer-image-actual-toggle' },
+        ]}
+      />
     </div>
   );
 

@@ -246,4 +246,10 @@ describe('MarkdownEditorTab', () => {
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     expect(lastProps?.readOnly).toBe(false);
   });
+
+  it('Preview/Source toggle buttons use rounded-sm (6px) inner radius, not rounded-md (8px)', () => {
+    render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
+    expect(screen.getByTestId('markdown-mode-preview').className).toContain('rounded-sm');
+    expect(screen.getByTestId('markdown-mode-edit').className).toContain('rounded-sm');
+  });
 });

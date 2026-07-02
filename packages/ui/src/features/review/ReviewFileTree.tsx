@@ -9,12 +9,16 @@
 import { KIND_LABEL } from '@/lib/git-status-kind';
 import type { ReviewFile } from './git-status-to-files';
 
-/** Square badge tint per semantic status (text + 12%-alpha chip background). */
+/**
+ * Square badge tint per semantic status (text + chip background).
+ * Alpha matches the design's exact `${statusColor}1f` hex-alpha (~12.16%),
+ * not the previous /15 approximation.
+ */
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
-  added: 'text-mf-success bg-mf-success/15',
-  modified: 'text-mf-warning bg-mf-warning/15',
-  deleted: 'text-mf-diff-del-text bg-mf-diff-del-text/15',
-  renamed: 'text-mf-warning bg-mf-warning/15',
+  added: 'text-mf-success bg-mf-success/[12.16%]',
+  modified: 'text-mf-warning bg-mf-warning/[12.16%]',
+  deleted: 'text-mf-diff-del-text bg-mf-diff-del-text/[12.16%]',
+  renamed: 'text-mf-warning bg-mf-warning/[12.16%]',
 };
 
 interface ReviewFileTreeProps {

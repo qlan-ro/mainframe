@@ -166,4 +166,16 @@ describe('ImageViewer', () => {
     const card = root.querySelector('.bg-white');
     expect(card).not.toBeNull();
   });
+
+  it('zoom buttons are 20px tall (h-[20px]), not the compressed h-5=12px', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    expect(screen.getByTestId('viewer-image-zoom-in').className).toContain('h-[20px]');
+    expect(screen.getByTestId('viewer-image-zoom-out').className).toContain('h-[20px]');
+  });
+
+  it('zoom buttons use rounded-sm (6px), not rounded-md (8px)', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    expect(screen.getByTestId('viewer-image-zoom-in').className).toContain('rounded-sm');
+    expect(screen.getByTestId('viewer-image-zoom-out').className).toContain('rounded-sm');
+  });
 });

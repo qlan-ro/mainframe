@@ -41,7 +41,7 @@ export function Segmented({ value, onChange, options }: SegmentedProps) {
               aria-pressed={active}
               onClick={() => onChange(o.id)}
               className={[
-                'inline-flex h-[18px] items-center gap-[4px] rounded-md px-[8px] text-caption font-medium transition-colors',
+                'inline-flex h-[18px] items-center gap-[4px] rounded-sm px-[8px] text-caption font-medium transition-colors',
                 active ? SEG_ACTIVE : SEG_IDLE,
               ].join(' ')}
             >

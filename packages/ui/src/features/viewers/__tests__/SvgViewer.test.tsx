@@ -119,4 +119,10 @@ describe('SvgViewer', () => {
     expect(card?.className).toMatch(/rounded-/);
     expect(card?.className).toMatch(/shadow-/);
   });
+
+  it('Preview/Code segmented toggle outer track uses the shared 8px radius (rounded-[8px])', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    const track = screen.getByTestId('viewer-svg-preview-toggle').parentElement as HTMLElement;
+    expect(track.className).toContain('rounded-[8px]');
+  });
 });

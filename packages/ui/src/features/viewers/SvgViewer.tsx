@@ -18,6 +18,7 @@
  */
 import { useEffect, useState } from 'react';
 import { ViewerShell } from './ViewerShell';
+import { Segmented } from './Segmented';
 import { splitSvgStatus } from './viewer-status';
 
 interface SvgViewerProps {
@@ -42,10 +43,6 @@ function parseSvgMeta(svg: string): { viewBox: string; w: number; h: number } | 
   if (!viewBox || isNaN(w) || isNaN(h)) return null;
   return { viewBox, w, h };
 }
-
-const SEG_BTN = 'rounded-sm px-1.5 py-0.5 text-caption font-medium transition-colors';
-const SEG_ACTIVE = 'bg-background text-foreground shadow-[var(--mf-shadow-segment)]';
-const SEG_IDLE = 'text-mf-text-3 hover:text-foreground';
 
 export function SvgViewer({ content, path }: SvgViewerProps) {
   const [mode, setMode] = useState<SvgMode>('preview');
@@ -73,28 +70,16 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
     ? splitSvgStatus({ viewBox: svgMeta.viewBox, w: svgMeta.w, h: svgMeta.h, bytes })
     : { left: 'SVG · Loading…', right: '' };
 
-  // Preview/Source segmented toggle — lives in the ViewerShell breadcrumb header.
+  // Preview/Code segmented toggle — lives in the ViewerShell breadcrumb header.
   const seg = (
-    <div className="inline-flex items-center gap-px rounded-md bg-mf-chip p-0.5">
-      <button
-        type="button"
-        data-testid="viewer-svg-preview-toggle"
-        aria-pressed={mode === 'preview'}
-        onClick={() => setMode('preview')}
-        className={`${SEG_BTN} ${mode === 'preview' ? SEG_ACTIVE : SEG_IDLE}`}
-      >
-        Preview
-      </button>
-      <button
-        type="button"
-        data-testid="viewer-svg-source-toggle"
-        aria-pressed={mode === 'source'}
-        onClick={() => setMode('source')}
-        className={`${SEG_BTN} ${mode === 'source' ? SEG_ACTIVE : SEG_IDLE}`}
-      >
-        Code
-      </button>
-    </div>
+    <Segmented
+      value={mode}
+      onChange={(id) => setMode(id as SvgMode)}
+      options={[
+        { id: 'preview', label: 'Preview', testId: 'viewer-svg-preview-toggle' },
+        { id: 'source', label: 'Code', testId: 'viewer-svg-source-toggle' },
+      ]}
+    />
   );
 
   return (

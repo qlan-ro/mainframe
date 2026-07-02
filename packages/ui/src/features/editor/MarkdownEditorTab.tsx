@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { CmEditor } from './CmEditor';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ViewerShell } from '@/features/viewers/ViewerShell';
+import { Segmented } from '@/features/viewers/Segmented';
 import { splitMarkdownStatus } from '@/features/viewers/viewer-status';
 
 type Mode = 'edit' | 'preview';
@@ -22,11 +23,6 @@ interface MarkdownEditorTabProps {
   onSave?: (value: string) => void;
   readOnly?: boolean;
 }
-
-// Active segment gets a subtle raised-card ring per spec (0.5px uniform ring via border var).
-const ACTIVE_CLASS = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border)]';
-const INACTIVE_CLASS = 'text-muted-foreground hover:text-foreground';
-const SEG_BTN = 'h-[18px] rounded-md px-[8px] text-caption transition-colors';
 
 /** Count words in markdown source (split on whitespace, filter empty). */
 function countWords(text: string): number {
@@ -48,26 +44,14 @@ export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = fa
   // Toggle segment control — passed into ViewerShell's actions slot so it lives
   // in the header row, not as a separate sub-bar.
   const toggle = (
-    <div className="flex items-center gap-px rounded-md bg-mf-chip p-0.5">
-      <button
-        data-testid="markdown-mode-preview"
-        type="button"
-        onClick={() => setMode('preview')}
-        aria-pressed={mode === 'preview'}
-        className={`${SEG_BTN} ${mode === 'preview' ? ACTIVE_CLASS : INACTIVE_CLASS}`}
-      >
-        Preview
-      </button>
-      <button
-        data-testid="markdown-mode-edit"
-        type="button"
-        onClick={() => setMode('edit')}
-        aria-pressed={mode === 'edit'}
-        className={`${SEG_BTN} ${mode === 'edit' ? ACTIVE_CLASS : INACTIVE_CLASS}`}
-      >
-        Source
-      </button>
-    </div>
+    <Segmented
+      value={mode}
+      onChange={(id) => setMode(id as Mode)}
+      options={[
+        { id: 'preview', label: 'Preview', testId: 'markdown-mode-preview' },
+        { id: 'edit', label: 'Source', testId: 'markdown-mode-edit' },
+      ]}
+    />
   );
 
   return (

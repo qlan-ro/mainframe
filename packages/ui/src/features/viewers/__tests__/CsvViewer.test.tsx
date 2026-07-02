@@ -206,4 +206,28 @@ describe('CsvViewer', () => {
     expect(thead?.className).toContain('bg-mf-content2');
     expect(thead?.className).not.toContain('bg-background');
   });
+
+  it('filter chip is 20px tall with rounded-sm (6px), not the compressed h-5/rounded-md', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const chip = screen.getByTestId('viewer-csv-filter').parentElement as HTMLElement;
+    expect(chip.className).toContain('h-[20px]');
+    expect(chip.className).toContain('rounded-sm');
+    expect(chip.className).not.toContain('rounded-md');
+  });
+
+  it('odd zebra rows use bg-mf-code-bg (design #fbfaf7 tint), not bg-card', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const tbody = document.querySelector('tbody')!;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    expect(rows[1]!.className).toContain('bg-mf-code-bg');
+    expect(rows[1]!.className).not.toContain('bg-card');
+  });
+
+  it('active sort header shows a decorative ChevronsUpDown icon alongside the ▲/▼ arrow', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const nameHeader = screen.getByTestId('viewer-csv-header-name');
+    fireEvent.click(nameHeader);
+    const svg = nameHeader.querySelector('svg.lucide-chevrons-up-down');
+    expect(svg).not.toBeNull();
+  });
 });

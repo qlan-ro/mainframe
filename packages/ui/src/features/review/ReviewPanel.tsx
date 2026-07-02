@@ -110,7 +110,7 @@ export function ReviewPanel() {
       <DialogContent
         data-testid="review-modal"
         hideClose
-        className="flex h-[86vh] w-full max-w-[1180px] flex-col gap-0 overflow-hidden p-0"
+        className="flex h-[86vh] w-full max-w-[1180px] flex-col gap-0 overflow-hidden p-0 max-h-[880px]"
       >
         <ReviewPanelHeader
           branch={branch}

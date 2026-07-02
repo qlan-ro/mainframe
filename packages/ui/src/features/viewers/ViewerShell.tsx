@@ -45,7 +45,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-[24px] shrink-0 items-center gap-[4px] border-b border-border bg-[var(--mf-code-bg)] pl-5 pr-1.5 text-caption">
+      <div className="flex h-[24px] shrink-0 items-center gap-[4px] border-b border-border bg-mf-tab-bar pl-5 pr-1.5 text-caption">
         <Folder size={10} className="shrink-0 text-mf-text-3" aria-hidden />
 
         {dirParts.map((segment, i) => (
@@ -66,7 +66,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
         <Hint label="Reveal in file tree">
           <button
             data-testid="viewer-shell-reveal"
-            className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
+            className="inline-flex h-[20px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
             onClick={handleReveal}
             type="button"
           >

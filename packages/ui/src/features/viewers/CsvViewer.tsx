@@ -18,7 +18,7 @@
  * data-testid="viewer-csv" on the root.
  */
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, ChevronsUpDown } from 'lucide-react';
 import { parseCsv, isNumericColumn, type CsvRow } from './csv-parser';
 import { ViewerShell } from './ViewerShell';
 import { splitCsvStatus } from './viewer-status';
@@ -96,7 +96,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
 
   // Filter chip — lives in the ViewerShell header actions slot.
   const filterChip = (
-    <div className="inline-flex h-5 items-center gap-1 rounded-md bg-mf-chip px-[8px]">
+    <div className="inline-flex h-[20px] items-center gap-1 rounded-sm bg-mf-chip px-[8px]">
       <Search size={10} className="shrink-0 text-mf-text-3" aria-hidden />
       <input
         type="text"
@@ -145,6 +145,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                           {header}
                           {isActive && sort.dir === 'asc' && <span className="text-primary text-micro">▲</span>}
                           {isActive && sort.dir === 'desc' && <span className="text-primary text-micro">▼</span>}
+                          {isActive && <ChevronsUpDown size={9} className="shrink-0 text-mf-text-3" aria-hidden />}
                         </span>
                       </th>
                     );
@@ -153,7 +154,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               </thead>
               <tbody>
                 {displayRows.map((row, rowIdx) => (
-                  <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
+                  <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-mf-code-bg'}>
                     <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right font-mono text-micro text-mf-text-4 tabular-nums">
                       {rowIdx + 1}
                     </td>

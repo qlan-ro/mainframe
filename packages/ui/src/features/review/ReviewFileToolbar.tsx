@@ -52,7 +52,7 @@ export function ReviewFileToolbar({
         aria-pressed={viewed}
         onClick={onToggleViewed}
         className={`inline-flex h-[26px] shrink-0 items-center gap-[7px] whitespace-nowrap rounded-md border px-[10px] transition-colors ${
-          viewed ? 'border-mf-success/40 bg-mf-success/10' : 'border-border bg-background hover:bg-accent'
+          viewed ? 'border-mf-success/[33%] bg-mf-success/[8.6%]' : 'border-border bg-background hover:bg-accent'
         }`}
       >
         <span

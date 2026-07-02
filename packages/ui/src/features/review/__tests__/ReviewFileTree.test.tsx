@@ -69,4 +69,11 @@ describe('ReviewFileTree', () => {
     const notViewedName = screen.getByText('b.ts');
     expect(notViewedName.className).not.toContain('line-through');
   });
+
+  it('status badge background uses the design 12.16% alpha (/[12.16%]), not /15', () => {
+    render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
+    const badge = screen.getByText('M');
+    expect(badge.className).toContain('/[12.16%]');
+    expect(badge.className).not.toContain('/15');
+  });
 });
