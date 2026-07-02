@@ -9,6 +9,7 @@
  */
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { useWorkflowsModal } from './use-workflows-modal';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsEvents } from './use-workflows-events';
@@ -21,7 +22,7 @@ interface Props {
 }
 
 export function WorkflowsModalHost({ port }: Props): React.ReactElement {
-  const { open, openModal, close, editorTarget } = useWorkflowsModal();
+  const { open, openModal, close, editorTarget, selectedRunId, backToList } = useWorkflowsModal();
   const loadAll = useWorkflowsStore((s) => s.loadAll);
 
   useWorkflowsEvents(port);
@@ -39,6 +40,10 @@ export function WorkflowsModalHost({ port }: Props): React.ReactElement {
     if (open) void loadAll(port);
   }, [open, port, loadAll]);
 
+  const sizeClass = editorTarget
+    ? 'h-[90vh] max-h-[920px] w-full max-w-[1080px]'
+    : 'h-[88vh] max-h-[880px] w-full max-w-[1040px]';
+
   return (
     <Dialog
       open={open}
@@ -49,7 +54,13 @@ export function WorkflowsModalHost({ port }: Props): React.ReactElement {
       <DialogContent
         data-testid="workflows-modal"
         hideClose
-        className="flex h-[88vh] max-h-[880px] w-full max-w-[1040px] flex-col gap-0 overflow-hidden p-0"
+        onEscapeKeyDown={(e) => {
+          if (selectedRunId != null) {
+            e.preventDefault();
+            backToList();
+          }
+        }}
+        className={cn('flex flex-col gap-0 overflow-hidden p-0', sizeClass)}
       >
         {editorTarget ? <WorkflowEditor port={port} target={editorTarget} /> : <WorkflowsView port={port} />}
       </DialogContent>

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { Zap, Bell, Activity } from 'lucide-react';
+import { Zap, Bell, Activity, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { useWorkflowsModal, type WfSection } from './use-workflows-modal';
 import { useWorkflowsStore, selectPendingCount } from './use-workflows-store';
 import { WfLibrary } from './WfLibrary';
@@ -15,10 +16,12 @@ const NAV: Array<{ id: WfSection; label: string; Icon: typeof Bell }> = [
 ];
 
 export function WorkflowsView({ port }: { port: number }): React.ReactElement {
-  const { section, selectedRunId, setSection } = useWorkflowsModal();
+  const { section, selectedRunId, setSection, close } = useWorkflowsModal();
   const pending = useWorkflowsStore(selectPendingCount);
+  const runs = useWorkflowsStore((s) => s.runs);
   const selectRun = useWorkflowsStore((s) => s.selectRun);
   const clearRun = useWorkflowsStore((s) => s.clearRun);
+  const active = runs.filter((r) => r.status === 'running' || r.status === 'waiting').length;
 
   // Fetch run detail whenever the selectedRunId changes.
   useEffect(() => {
@@ -33,8 +36,24 @@ export function WorkflowsView({ port }: { port: number }): React.ReactElement {
     <div className="flex h-full min-h-0 flex-col bg-mf-window font-sans" data-testid="workflows-view">
       {/* Title bar — prototype: gap 11px, padding 0 14px */}
       <div className="flex h-[50px] flex-shrink-0 items-center gap-[11px] border-b border-border bg-card px-[14px]">
+        <Hint label="Close">
+          <button
+            type="button"
+            data-testid="workflows-close"
+            onClick={close}
+            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md text-mf-text-3 hover:bg-accent"
+          >
+            <X size={15} aria-hidden />
+          </button>
+        </Hint>
         <Zap size={16} className="text-primary" aria-hidden />
         <span className="text-heading font-bold tracking-tight text-foreground">Workflows</span>
+        <span
+          data-testid="workflows-title-count"
+          className="inline-flex items-center rounded-md bg-muted px-[8px] py-[2px] font-mono text-micro text-mf-text-3"
+        >
+          {active} active · {pending} need you
+        </span>
       </div>
 
       <div className="flex min-h-0 flex-1">
