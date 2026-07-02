@@ -76,6 +76,7 @@ import { fetchLaunchConfigs, fetchLaunchStatuses } from '@/lib/api/launch';
 // ── real stores ───────────────────────────────────────────────────────────────
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
+import { buildLaunchScope } from '@/lib/launch-scope';
 
 const CLEAN_SANDBOX = {
   captures: [],
@@ -232,5 +233,27 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
     // Still exactly one 'dev' tab for scope B — no duplicate appended.
     const devTabs = allRunTabs().filter((t) => t.config === 'dev' && t.scopeKey === 'proj-B:/ws/b');
     expect(devTabs).toHaveLength(1);
+  });
+});
+
+describe('useLaunchConfigs — tunnel URL seed', () => {
+  it('seeds tunnelUrls from the status fetch into the sandbox store', async () => {
+    vi.mocked(fetchLaunchStatuses).mockResolvedValue({
+      statuses: { dev: 'running' },
+      tunnelUrls: { dev: 'https://dev.trycloudflare.com' },
+      effectivePath: '/ws/b',
+    });
+
+    const { useLaunchConfigs } = await import('../use-launch-configs');
+
+    await act(async () => {
+      renderHook(() => useLaunchConfigs(31415, 'proj-B', 'chat-1'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const scope = buildLaunchScope('proj-B', '/ws/b');
+      expect(useSandboxStore.getState().tunnelUrls[scope]?.['dev']).toBe('https://dev.trycloudflare.com');
+    });
   });
 });

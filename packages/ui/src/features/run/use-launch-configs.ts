@@ -51,6 +51,11 @@ export function useLaunchConfigs(
         // running before this client subscribed would otherwise never appear.
         const setProcessStatus = useSandboxStore.getState().setProcessStatus;
         const scope = buildLaunchScope(projectId, statuses.effectivePath);
+        // Seed tunnel URLs (remote-daemon preview): the WS launch.tunnel event
+        // only fires once on tunnel creation, so a client that subscribes later
+        // (reload, reconnect, tab opened after the tunnel came up) relies on this
+        // status-fetch seed to learn the URL.
+        useSandboxStore.getState().seedTunnelUrls(scope, statuses.tunnelUrls);
         // Run tabs already open FOR THIS SCOPE, keyed by config name (don't
         // re-add/re-focus). Scope-scoped so a same-named config running in
         // another project/worktree still gets reconciled into its own tab.
