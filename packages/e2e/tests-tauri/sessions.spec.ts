@@ -29,10 +29,14 @@
  *   import-session-btn            — Import button on each external-session row
  *   sessions-new-picker           — sidebar "New" project picker (no filter pill active)
  *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
+ *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button (hasWorktree=true)
+ *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button (hasWorktree=true)
+ *   sessions-import-load-more     — ImportSessionsDialog infinite-scroll sentinel (IntersectionObserver)
+ *   sessions-import-retry         — ImportSessionsDialog "Try again" button (fetch error state)
  */
 
 import { test, expect } from '@playwright/test';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -72,6 +76,13 @@ function seedExternalSession(
   ];
   writeFileSync(filePath, lines.join('\n') + '\n');
   return claudeDir;
+}
+
+/** Deterministic UUID-shaped session id for bulk pagination fixtures (see isUuidJsonl,
+ *  external-session-paths.ts) — every group segment is fixed except the last (12 hex
+ *  chars), which carries the zero-padded index so ids stay unique and lowercase-hex-valid. */
+function uuidForIndex(n: number): string {
+  return `eeeeeeee-eeee-4eee-8eee-${n.toString(16).padStart(12, '0')}`;
 }
 
 // ─── §45 Sessions panel ───────────────────────────────────────────────────────
@@ -195,6 +206,97 @@ test.describe('§45 Sessions panel', () => {
   });
 });
 
+// ─── §45 Sessions panel — archive dialog worktree branch ─────────────────────
+//
+// SP8 above covers the NO-worktree path: ArchiveWorktreeDialog renders only
+// `sessions-archive-confirm` (hasWorktree:false), which SP8 clicks. This block
+// covers the hasWorktree:true branch — the dialog swaps in
+// `sessions-archive-keep-worktree` / `sessions-archive-delete-worktree` instead
+// (ArchiveWorktreeDialog.tsx) — and exercises BOTH choices end to end, asserting
+// the worktree directory's fate on disk via node:fs (not just the dialog UI).
+//
+// `hasWorktree` is derived by chats-remote-adapter.archiveWithConfirm from a
+// fresh `getChat` read of `chat.worktreePath` at archive-click time (not from
+// any cached list), so a chat REST-seeded with a worktree via `enable-worktree`
+// is picked up with no reload needed — same pattern as chat-header.spec.ts's
+// "review button (worktree gate)" block.
+test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+  let chatKeep: string;
+  let chatDelete: string;
+  let worktreePathKeep: string;
+  let worktreePathDelete: string;
+
+  /** REST-enable a worktree on `chatId` and return its resolved worktreePath (read back
+   *  via GET /api/chats/:id so the on-disk path is known independent of the dialog). */
+  async function enableWorktree(chatId: string, branchName: string): Promise<string> {
+    const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/enable-worktree`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseBranch: 'main', branchName }),
+    });
+    expect(res.ok).toBe(true);
+
+    const chatRes = await fetch(`${DAEMON_BASE}/api/chats/${chatId}`);
+    const body = (await chatRes.json()) as { data?: { worktreePath?: string } };
+    const worktreePath = body.data?.worktreePath;
+    if (!worktreePath) throw new Error(`enableWorktree: chat ${chatId} has no worktreePath after enabling`);
+    return worktreePath;
+  }
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    chatKeep = await createTauriChat(app.page, project.projectId, 'default');
+    chatDelete = await createTauriChat(app.page, project.projectId, 'default');
+    worktreePathKeep = await enableWorktree(chatKeep, 'e2e-archive-keep');
+    worktreePathDelete = await enableWorktree(chatDelete, 'e2e-archive-delete');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a chat with a worktree shows keep/delete worktree buttons, not the single confirm', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+    const row = sidebar.row(chatKeep);
+    await row.waitFor({ timeout: 10_000 });
+    await row.hover();
+    await row.getByTestId('sessions-row-action-archive').evaluate((el) => (el as HTMLElement).click());
+
+    const confirmDialog = page.getByTestId('sessions-archive-confirm-dialog');
+    await confirmDialog.waitFor({ timeout: 5_000 });
+    await expect(page.getByTestId('sessions-archive-keep-worktree')).toBeVisible();
+    await expect(page.getByTestId('sessions-archive-delete-worktree')).toBeVisible();
+    await expect(page.getByTestId('sessions-archive-confirm')).toHaveCount(0);
+
+    // Keep worktree — the row leaves the active list but the directory survives on disk.
+    await page.getByTestId('sessions-archive-keep-worktree').click();
+    await expect(row).toHaveCount(0, { timeout: 10_000 });
+
+    await expect.poll(() => existsSync(worktreePathKeep), { timeout: 10_000 }).toBe(true);
+  });
+
+  test('deleting the worktree removes the directory from disk', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+    const row = sidebar.row(chatDelete);
+    await row.waitFor({ timeout: 10_000 });
+    await row.hover();
+    await row.getByTestId('sessions-row-action-archive').evaluate((el) => (el as HTMLElement).click());
+
+    const confirmDialog = page.getByTestId('sessions-archive-confirm-dialog');
+    await confirmDialog.waitFor({ timeout: 5_000 });
+    await page.getByTestId('sessions-archive-delete-worktree').click();
+    await expect(row).toHaveCount(0, { timeout: 10_000 });
+
+    await expect.poll(() => existsSync(worktreePathDelete), { timeout: 10_000 }).toBe(false);
+  });
+});
+
 // ─── §35 External session import ─────────────────────────────────────────────
 
 test.describe('§35 External session import', () => {
@@ -206,11 +308,15 @@ test.describe('§35 External session import', () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
 
-    claudeDir = seedExternalSession(project.projectPath, 'ext-session-aaa', {
+    // Session ids must be UUID-shaped: the daemon's scanner (external-session-paths.ts
+    // isUuidJsonl, matching real Claude CLI session file naming) filters out any <uuid>.jsonl
+    // candidate whose stem isn't a UUID — a non-UUID id like the old 'ext-session-aaa' is
+    // silently skipped, so the dialog always showed zero importable sessions.
+    claudeDir = seedExternalSession(project.projectPath, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
       firstPrompt: 'Fix the login bug',
       gitBranch: 'feat/login-fix',
     });
-    seedExternalSession(project.projectPath, 'ext-session-bbb', {
+    seedExternalSession(project.projectPath, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', {
       firstPrompt: 'Add unit tests for auth module',
       gitBranch: 'feat/auth-tests',
     });
@@ -344,5 +450,144 @@ test.describe('§35 External session import', () => {
     await expect(activeRow).toBeVisible({ timeout: 5_000 });
     const activeTitleAfter = await activeRow.getByTestId('sessions-row-title').textContent();
     expect(activeTitleAfter).toBe(activeTitleBefore);
+  });
+});
+
+// ─── §35 External session import — pagination ────────────────────────────────
+//
+// SessionList (ImportSessionsDialog.tsx) pages at PAGE=50 via an
+// IntersectionObserver sentinel (`sessions-import-load-more`), no root option
+// (defaults to the top-level viewport, but intersection is still clipped by the
+// dialog's ScrollArea ancestor) — so scrolling the sentinel into view is enough
+// to trigger `loadMore()` for real, no IntersectionObserver mocking needed here
+// (unlike the component test, which mocks the observer because jsdom has none).
+test.describe('§35 External session import — pagination', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+  let claudeDir: string;
+  const TOTAL_SESSIONS = 55;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+
+    for (let i = 0; i < TOTAL_SESSIONS; i++) {
+      claudeDir = seedExternalSession(project.projectPath, uuidForIndex(i), {
+        firstPrompt: `External session number ${i}`,
+        gitBranch: 'main',
+      });
+    }
+
+    // Trigger the daemon's external-session scan for the project (same pre-warm
+    // pattern as the §35 import block above).
+    await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+  });
+
+  test.afterAll(async () => {
+    rmSync(claudeDir, { recursive: true, force: true });
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('the import dialog shows the first page (50 rows) and a load-more sentinel', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+
+    await sidebar.openImport();
+    const importDialog = page.getByTestId('sessions-import-dialog');
+    await importDialog.waitFor({ timeout: 5_000 });
+
+    const projectBtn = sidebar.importProjectOption(project.projectId);
+    await projectBtn.waitFor({ timeout: 5_000 });
+    await projectBtn.click();
+
+    const items = page.getByTestId('external-session-item');
+    await expect(items).toHaveCount(50, { timeout: 20_000 });
+    await expect(page.getByTestId('sessions-import-load-more')).toBeVisible();
+  });
+
+  test('scrolling the sentinel into view loads page 2; the sentinel then disappears', async () => {
+    const { page } = app;
+    const sentinel = page.getByTestId('sessions-import-load-more');
+    await sentinel.scrollIntoViewIfNeeded();
+
+    const items = page.getByTestId('external-session-item');
+    await expect(items).toHaveCount(TOTAL_SESSIONS, { timeout: 20_000 });
+    await expect(page.getByTestId('sessions-import-load-more')).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+  });
+});
+
+// ─── §35 External session import — retry on error ────────────────────────────
+//
+// Network-level fault injection via page.route on the GET external-sessions
+// endpoint (getExternalSessions → request<T> throws on a non-ok response,
+// which SessionList's fetch effect catches into the `error` state — the same
+// path a real daemon 5xx or connection failure would take). Only the list GET
+// is intercepted (matched by pathname, not method, so the import POST +
+// load-more GETs on other pages are unaffected); the interception is one-shot
+// via a closure flag so the `sessions-import-retry` click's re-fetch succeeds.
+test.describe('§35 External session import — retry on error', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+  let claudeDir: string;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    claudeDir = seedExternalSession(project.projectPath, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
+      firstPrompt: 'Session recovered after retry',
+      gitBranch: 'main',
+    });
+    await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+  });
+
+  test.afterAll(async () => {
+    rmSync(claudeDir, { recursive: true, force: true });
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a failed fetch shows the error state; retry recovers the list', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+
+    let failedOnce = false;
+    await page.route(
+      (url) => url.pathname.endsWith('/external-sessions'),
+      async (route) => {
+        if (route.request().method() === 'GET' && !failedOnce) {
+          failedOnce = true;
+          await route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: JSON.stringify({ success: false, error: 'Injected e2e failure' }),
+          });
+          return;
+        }
+        await route.continue();
+      },
+    );
+
+    await sidebar.openImport();
+    const importDialog = page.getByTestId('sessions-import-dialog');
+    await importDialog.waitFor({ timeout: 5_000 });
+
+    const projectBtn = sidebar.importProjectOption(project.projectId);
+    await projectBtn.waitFor({ timeout: 5_000 });
+    await projectBtn.click();
+
+    const retryButton = page.getByTestId('sessions-import-retry');
+    await expect(retryButton).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Failed to load sessions. Please try again.')).toBeVisible();
+
+    await retryButton.click();
+
+    await expect(page.getByTestId('external-session-item')).toHaveCount(1, { timeout: 10_000 });
+    await expect(retryButton).toHaveCount(0);
+
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await page.keyboard.press('Escape');
   });
 });
