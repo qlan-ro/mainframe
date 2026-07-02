@@ -4,7 +4,7 @@
  * status dot, the fixed "New Session" title, a hover-revealed ✕ discard that
  * swaps out the `now` label, and a meta line (project chip in All view + ghost).
  */
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { XIcon } from 'lucide-react';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { Hint } from '@/components/ui/hint';
@@ -29,16 +29,26 @@ export function DraftSessionRow({
 }: DraftSessionRowProps) {
   const discard = (e: MouseEvent) => {
     e.stopPropagation();
-    e.preventDefault();
     onDiscard();
   };
 
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter') {
+      onSelect();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      onSelect();
+    }
+  };
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       data-testid="sessions-draft-row"
       data-active={selected ? 'true' : 'false'}
       onClick={onSelect}
+      onKeyDown={onKeyDown}
       className="group relative flex w-full items-center gap-[9px] border-l-2 border-l-transparent pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
     >
       <span
@@ -55,18 +65,14 @@ export function DraftSessionRow({
           </span>
           <span className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 group-hover:hidden">now</span>
           <Hint label="Discard draft">
-            <span
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               data-testid="sessions-draft-row-discard"
               onClick={discard}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') discard(e as unknown as MouseEvent);
-              }}
               className="hidden size-5 flex-shrink-0 items-center justify-center rounded-xs text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
             >
               <XIcon className="size-[11px]" />
-            </span>
+            </button>
           </Hint>
         </div>
         <div className="mt-[4px] flex min-w-0 items-center gap-[6px] @max-[220px]:hidden">
@@ -74,6 +80,6 @@ export function DraftSessionRow({
           <span className="truncate text-micro text-mf-text-4">draft — clears if you leave without sending</span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

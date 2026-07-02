@@ -49,4 +49,10 @@ describe('DraftSessionRow', () => {
     setup({ selected: true });
     expect(screen.getByTestId('sessions-draft-row')).toHaveAttribute('data-active', 'true');
   });
+
+  it('calls onSelect when Enter is pressed on the row', () => {
+    const { onSelect } = setup();
+    fireEvent.keyDown(screen.getByTestId('sessions-draft-row'), { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
 });
