@@ -70,6 +70,14 @@ function derivedLine(run: WorkflowRunSummary): string {
     const head = run.error.split('\n')[0] ?? run.error;
     return head.length > 80 ? head.slice(0, 80) + '…' : head;
   }
+  if (run.status === 'succeeded') {
+    const outputs = run.outputs;
+    if (outputs && typeof outputs === 'object') {
+      const keys = Object.keys(outputs);
+      if (keys.length) return `${keys.length} output${keys.length === 1 ? '' : 's'}`;
+    }
+    return 'Done';
+  }
   return '';
 }
 

@@ -203,6 +203,20 @@ describe('WfRunsList', () => {
     const allChip = screen.getByTestId('workflows-runs-filter-all');
     expect(allChip.textContent).toContain('3');
   });
+
+  it('succeeded run row shows an outputs summary line', () => {
+    const run = makeRun('r-outputs', 'succeeded', { outputs: { summary: 'x', count: 3 } });
+    seedStore([run]);
+    render(<WfRunsList port={31415} />);
+    expect(screen.getByTestId(`workflows-run-row-${run.id}`).textContent).toMatch(/2 outputs/);
+  });
+
+  it('succeeded run row with no outputs shows "Done"', () => {
+    const run = makeRun('r-nooutputs', 'succeeded');
+    seedStore([run]);
+    render(<WfRunsList port={31415} />);
+    expect(screen.getByTestId(`workflows-run-row-${run.id}`).textContent).toContain('Done');
+  });
 });
 
 describe('WfRunsList — trigger kind labels', () => {
