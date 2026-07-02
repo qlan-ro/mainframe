@@ -61,14 +61,15 @@ export const DAEMON_STATUS: Record<DaemonStatus, StatusMeta> = {
 // ConnDot
 // ---------------------------------------------------------------------------
 
-export function ConnDot({ status }: { status: DaemonStatus }) {
+export function ConnDot({ status, size = 8 }: { status: DaemonStatus; size?: number }) {
   const m = DAEMON_STATUS[status];
 
   if (m.spin) {
     return (
       <span
         aria-label={m.label}
-        className="inline-block size-[10px] shrink-0 rounded-full border-[1.5px] border-mf-warning border-t-transparent animate-spin"
+        style={{ width: size + 2, height: size + 2 }}
+        className="inline-block shrink-0 rounded-full border-[1.5px] border-mf-warning border-t-transparent animate-spin"
       />
     );
   }
@@ -76,21 +77,27 @@ export function ConnDot({ status }: { status: DaemonStatus }) {
   if (m.lock) {
     return (
       <span aria-label={m.label} className="flex shrink-0 items-center justify-center">
-        <Lock size={11} aria-hidden className="text-mf-warning" />
+        <Lock size={size + 3} aria-hidden className="text-mf-warning" />
       </span>
     );
   }
 
-  return <span aria-label={m.label} className={cn('inline-block size-2 shrink-0 rounded-full', m.dotClass)} />;
+  return (
+    <span
+      aria-label={m.label}
+      style={{ width: size, height: size }}
+      className={cn('inline-block shrink-0 rounded-full', m.dotClass)}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
 // DaemonGlyph
 // ---------------------------------------------------------------------------
 
-export function DaemonGlyph({ kind }: { kind: 'local' | 'remote' }) {
+export function DaemonGlyph({ kind, size = 15 }: { kind: 'local' | 'remote'; size?: number }) {
   const Icon = kind === 'local' ? Laptop : Server;
-  return <Icon size={14} className="text-mf-text-3" aria-hidden />;
+  return <Icon size={size} className="text-mf-text-3" aria-hidden />;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,13 +123,13 @@ function DaemonRowManage({ id, status, d, onRename, onRepair, onRemove }: Daemon
           data-testid={`daemon-row-${id}-manage`}
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-md text-mf-text-3 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-accent"
+          className="inline-flex size-[24px] shrink-0 items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
           aria-label="Manage daemon"
         >
           <MoreHorizontal size={13} aria-hidden />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={4} className="w-44">
+      <PopoverContent align="end" sideOffset={4} className="w-[188px]">
         {onRename != null && (
           <MenuRow
             data-testid={`daemon-row-${id}-rename`}
@@ -192,7 +199,7 @@ export function DaemonRow({ d, status, active, onSwitch, onRename, onRepair, onR
         if (e.key === 'Enter' || e.key === ' ') onSwitch(d);
       }}
       className={cn(
-        'group flex cursor-pointer items-center gap-[8px] rounded-md px-[6px] py-[4px] transition-colors',
+        'group flex cursor-pointer items-center gap-[9px] rounded-md py-[7px] pr-[7px] pl-[8px] transition-colors',
         'hover:bg-accent',
         active && 'bg-accent',
       )}
@@ -219,7 +226,7 @@ export function DaemonRow({ d, status, active, onSwitch, onRename, onRepair, onR
         <span className="flex items-center gap-1.5">
           <span className={cn('truncate text-body text-foreground', active && 'font-semibold')}>{d.label}</span>
           {d.kind === 'local' && (
-            <span className="shrink-0 rounded-sm bg-mf-chip px-[5px] py-px font-mono text-micro font-bold uppercase tracking-wide text-mf-text-3">
+            <span className="shrink-0 rounded-xs bg-mf-chip px-[5px] py-px text-micro font-bold uppercase tracking-wide text-mf-text-3">
               Local
             </span>
           )}

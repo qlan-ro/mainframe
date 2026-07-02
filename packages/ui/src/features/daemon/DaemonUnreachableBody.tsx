@@ -62,7 +62,7 @@ export function DaemonUnreachableBody({ target, onSwitchLocal }: DaemonUnreachab
 
       {/* Indeterminate progress bar */}
       <div className="w-[200px] h-[3px] rounded-[2px] overflow-hidden bg-mf-warning/20">
-        <div className="w-[40%] h-full rounded-[2px] bg-mf-warning animate-pulse" />
+        <div className="w-[40%] h-full rounded-[2px] bg-mf-warning animate-[ws-indeterminate_1.5s_ease-in-out_infinite]" />
       </div>
 
       {/* Action */}

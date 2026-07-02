@@ -83,11 +83,11 @@ export function AddRemoteBody({
     <div className="flex w-[460px] max-w-full flex-col gap-0">
       {/* ── Header ────────────────────────────────────────────────── */}
       <div className="flex items-start gap-[12px] pb-[16px]">
-        <div className="flex size-[36px] shrink-0 items-center justify-center rounded-md bg-primary/10">
-          <Server size={18} className="text-primary" />
+        <div className="flex size-[34px] shrink-0 items-center justify-center rounded-md bg-primary/10">
+          <Server size={17} className="text-primary" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-          <h2 className="text-heading font-semibold text-foreground leading-tight">{title}</h2>
+          <h2 className="text-heading font-bold text-foreground leading-tight">{title}</h2>
           <p className="text-caption text-muted-foreground leading-[1.4]">
             Agents and code run on the server; this Mac stays a control surface.
           </p>

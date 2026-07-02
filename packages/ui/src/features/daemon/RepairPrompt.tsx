@@ -31,7 +31,7 @@ function StatusChip({ host }: { host: string }) {
   return (
     <div className="flex items-center gap-[6px] rounded-md border border-border bg-card px-[10px] py-[6px]">
       <span className="font-mono text-caption text-mf-text-3 truncate">{host}</span>
-      <span className="shrink-0 rounded-sm bg-mf-warning/15 px-[5px] py-px font-mono text-micro font-bold text-mf-warning">
+      <span className="shrink-0 rounded-xs bg-mf-warning/15 px-[5px] py-px font-mono text-micro font-bold text-mf-warning">
         401
       </span>
     </div>
@@ -48,8 +48,8 @@ export function RepairPromptBody({ target, onRepair, onSwitchLocal }: Omit<Repai
       data-testid="daemon-repair-prompt"
       className="flex w-[400px] max-w-full flex-col items-center gap-[16px] px-[4px] py-[4px] text-center"
     >
-      {/* Amber lock circle */}
-      <div className="flex size-[46px] shrink-0 items-center justify-center rounded-full bg-mf-warning/15">
+      {/* Amber lock tile */}
+      <div className="flex size-[46px] shrink-0 items-center justify-center rounded-lg bg-mf-warning/15">
         <Lock size={20} className="text-mf-warning" aria-hidden />
       </div>
 

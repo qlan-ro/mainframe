@@ -128,8 +128,8 @@ export function DaemonFooterStatus() {
               pickerOpen && 'bg-accent text-foreground',
             )}
           >
-            <ConnDot status={activeStatus} />
-            <DaemonGlyph kind={activeKind} />
+            <ConnDot status={activeStatus} size={6} />
+            <DaemonGlyph kind={activeKind} size={11} />
             <span className="min-w-0 flex-1 truncate">{activeLabel}</span>
             <ChevronsUpDown size={10} className="shrink-0 text-mf-text-4" aria-hidden />
           </button>

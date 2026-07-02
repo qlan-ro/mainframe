@@ -8,9 +8,10 @@
  * Visual spec: 17-daemon.jsx DaemonPicker. Token mapping: task-B6-brief.md.
  * Mount this inside a PopoverContent (B9); it does not double-wrap.
  */
-import { WifiOff, Lock, ChevronRight, Plus } from 'lucide-react';
+import { Wifi, Lock, ChevronRight, Plus } from 'lucide-react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
+import { MenuRow } from '@/components/ui/menu';
 import { DaemonRow } from './DaemonRow';
 import type { DaemonStatus } from './DaemonRow';
 
@@ -50,7 +51,7 @@ interface FallbackBannerProps {
 
 function FallbackBanner({ active, status, onUseLocal }: FallbackBannerProps) {
   const needsRepair = status === 'needs-repair';
-  const Icon = needsRepair ? Lock : WifiOff;
+  const Icon = needsRepair ? Lock : Wifi;
   const detail = needsRepair ? 'needs re-pairing' : 'is unreachable';
 
   return (
@@ -165,18 +166,12 @@ export function DaemonPicker({
 
       {/* ── Add footer ─────────────────────────────────────────────── */}
       <div className="px-[5px]">
-        <button
-          type="button"
+        <MenuRow
           data-testid="daemon-picker-add"
           onClick={handleAdd}
-          className={cn(
-            'flex w-full items-center gap-[6px] rounded-md px-[6px] py-[5px]',
-            'text-body text-foreground hover:bg-accent transition-colors',
-          )}
-        >
-          <Plus size={14} className="shrink-0 text-primary" aria-hidden />
-          Add remote daemon…
-        </button>
+          icon={<Plus size={13} className="shrink-0 text-primary" aria-hidden />}
+          label="Add remote daemon…"
+        />
       </div>
     </div>
   );

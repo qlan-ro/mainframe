@@ -24,7 +24,11 @@ export function StepRail({ current }: StepRailProps) {
         const active = i === current;
         return (
           <div key={label} className="flex items-center">
-            {i > 0 && <div className={cn('h-px w-8 transition-colors', done ? 'bg-mf-success' : 'bg-border')} />}
+            {i > 0 && (
+              <div
+                className={cn('h-[1.5px] w-[22px] transition-colors', done ? 'bg-mf-success' : 'bg-border')}
+              />
+            )}
             <div className="flex flex-col items-center gap-[3px]">
               <div
                 className={cn(

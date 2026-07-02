@@ -39,14 +39,14 @@ function IconChip({ kind }: { kind: SmallDialogKind }) {
   return (
     <span
       className={cn(
-        'flex size-[38px] shrink-0 items-center justify-center rounded-lg',
+        'flex size-[36px] shrink-0 items-center justify-center rounded-md',
         isRemove ? 'bg-destructive/10' : 'bg-primary/10',
       )}
     >
       {isRemove ? (
-        <Trash2 size={18} className="text-destructive" aria-hidden />
+        <Trash2 size={17} className="text-destructive" aria-hidden />
       ) : (
-        <Pencil size={18} className="text-primary" aria-hidden />
+        <Pencil size={17} className="text-primary" aria-hidden />
       )}
     </span>
   );
@@ -84,7 +84,7 @@ function RenameBody({ target, onClose, onConfirm }: RenameBodyProps) {
       <div className="flex items-start gap-[12px] pb-[14px]">
         <IconChip kind="rename" />
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-          <h2 className="text-heading font-semibold text-foreground leading-tight">Rename daemon</h2>
+          <h2 className="text-heading font-bold tracking-tight text-foreground leading-tight">Rename daemon</h2>
           <p className="font-mono text-caption text-mf-text-3 truncate">{target.host}</p>
         </div>
       </div>
@@ -131,7 +131,7 @@ function RemoveBody({ target, onClose, onConfirm }: RemoveBodyProps) {
       <div className="flex items-start gap-[12px] pb-[14px]">
         <IconChip kind="remove" />
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-          <h2 className="text-heading font-semibold text-foreground leading-tight">Remove daemon</h2>
+          <h2 className="text-heading font-bold tracking-tight text-foreground leading-tight">Remove daemon</h2>
           <p className="font-mono text-caption text-mf-text-3 truncate">{target.host}</p>
         </div>
       </div>
