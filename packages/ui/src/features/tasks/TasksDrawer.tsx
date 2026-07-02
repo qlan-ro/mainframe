@@ -11,8 +11,7 @@
  * data-testid="tasks-drawer".
  */
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { ExternalLink, Plus } from 'lucide-react';
-import { TasksGlyph } from '@/layout/surface-icons';
+import { ExternalLink, Plus, CircleDashed } from 'lucide-react';
 import { useTodosStore } from './use-todos-store';
 import { useTasksModal } from './use-tasks-modal';
 import { TasksDrawerList } from './TasksDrawerList';
@@ -114,9 +113,21 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
 
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 shrink-0 [border-bottom:0.5px_solid_var(--border)]">
-        <TasksGlyph size={11} className="text-primary flex-shrink-0" />
-        <span className="text-caption font-semibold text-foreground">Tasks</span>
-        {activeCount > 0 && <span className="font-mono text-micro text-mf-text-3">{activeCount}</span>}
+        <CircleDashed size={11} className="text-muted-foreground flex-shrink-0" aria-hidden />
+        <span
+          data-testid="tasks-drawer-label"
+          className="text-caption font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          Tasks
+        </span>
+        {activeCount > 0 && (
+          <span
+            data-testid="tasks-drawer-count"
+            className="font-mono text-micro text-mf-text-3 bg-mf-chip rounded-sm px-1.5 py-px tabular-nums"
+          >
+            {activeCount}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-0.5">
           <button
             data-testid="tasks-drawer-new"

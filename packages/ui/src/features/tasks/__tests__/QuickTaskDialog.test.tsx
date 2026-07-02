@@ -111,6 +111,25 @@ describe('QuickTaskDialog — key testids are rendered', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Priority pills — quick-add excludes Critical (design: 12-todos.jsx:793,
+// finding 9.16). Fast-capture only offers low/medium/high.
+// ---------------------------------------------------------------------------
+
+describe('QuickTaskDialog — priority pills exclude Critical', () => {
+  it('renders low/medium/high priority pills', () => {
+    renderDialog();
+    expect(screen.getByTestId('tasks-quick-priority-low')).toBeTruthy();
+    expect(screen.getByTestId('tasks-quick-priority-medium')).toBeTruthy();
+    expect(screen.getByTestId('tasks-quick-priority-high')).toBeTruthy();
+  });
+
+  it('does NOT render a Critical priority pill', () => {
+    renderDialog();
+    expect(screen.queryByTestId('tasks-quick-priority-critical')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 5–6. Create button gating
 // ---------------------------------------------------------------------------
 

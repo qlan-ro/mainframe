@@ -55,7 +55,14 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
           )}
         >
           {label}
-          {hasSelection && <span className="ml-0.5">({selected.length})</span>}
+          {hasSelection && (
+            <span
+              data-testid={`tasks-filter-${toKebab(label)}-count`}
+              className="ml-0.5 rounded-[6px] bg-primary/[18%] px-[5px] font-mono text-micro font-bold text-primary"
+            >
+              {selected.length}
+            </span>
+          )}
           <ChevronDown size={11} className="ml-0.5" />
         </button>
       </DropdownMenuTrigger>

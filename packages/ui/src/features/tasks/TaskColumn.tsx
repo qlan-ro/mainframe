@@ -62,18 +62,17 @@ export function TaskColumn({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Column header */}
-      <div className="flex shrink-0 items-center gap-2 px-3.5 pb-4 pt-2.5">
+      {/* Column header — chip sits adjacent to the label at a 7px gap, not
+          right-aligned (design: 12-todos.jsx:617, finding 9.15). */}
+      <div className="flex shrink-0 items-center gap-[7px] px-3.5 pb-4 pt-2.5">
         <span className="text-caption font-bold uppercase tracking-wide text-muted-foreground">
           {STATUS_LABEL[status]}
         </span>
-        <span className="ml-auto rounded-md bg-mf-chip px-1.5 py-px font-mono text-micro text-mf-text-3">
-          {todos.length}
-        </span>
+        <span className="rounded-md bg-mf-chip px-1.5 py-px font-mono text-micro text-mf-text-3">{todos.length}</span>
       </div>
 
-      {/* Cards */}
-      <div className="mf-thin-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-5 pb-5">
+      {/* Cards — 9px gap per design (12-todos.jsx:621, finding 9.14) */}
+      <div className="mf-thin-scrollbar flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto px-5 pb-5">
         {todos.map((todo) => (
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}

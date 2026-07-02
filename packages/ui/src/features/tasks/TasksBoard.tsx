@@ -11,7 +11,7 @@
  * data-testid="tasks-board-modal".
  */
 import React, { useState } from 'react';
-import { LayoutList, LayoutGrid, Plus, ListChecks } from 'lucide-react';
+import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
@@ -26,9 +26,10 @@ interface Props {
   port: number;
   projectId: string;
   onStartSession: (todo: Todo) => void;
+  onClose: () => void;
 }
 
-export function TasksBoard({ port, projectId, onStartSession }: Props): React.ReactElement {
+export function TasksBoard({ port, projectId, onStartSession, onClose }: Props): React.ReactElement {
   const { todos, loading, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
   const [editTodo, setEditTodo] = useState<Todo | null | undefined>(undefined);
 
@@ -68,11 +69,20 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
 
   return (
     <div data-testid="tasks-board-modal" className="flex flex-col h-full min-h-0 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+      {/* Header — fixed 52px height per design (12-todos.jsx:714) */}
+      <div className="flex items-center gap-5 h-[52px] px-4 border-b border-border shrink-0">
+        <button
+          data-testid="tasks-board-close"
+          type="button"
+          onClick={onClose}
+          className="flex items-center justify-center border-none bg-transparent text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Close (Esc)"
+        >
+          <X size={15} />
+        </button>
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-body font-semibold text-foreground">Tasks</span>
-        <span className="text-caption text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+        <span className="font-mono text-caption text-mf-text-3 bg-mf-chip rounded-sm px-2 py-0.5">
           {activeCount} active · {doneCount} done
         </span>
 

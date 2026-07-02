@@ -106,6 +106,11 @@ describe('TasksFilterBar — key testids rendered', () => {
     expect(screen.getByTestId('tasks-filter-search')).toBeTruthy();
   });
 
+  it('renders the search input with placeholder "Search tasks…"', () => {
+    renderBar();
+    expect(screen.getByPlaceholderText('Search tasks…')).toBeTruthy();
+  });
+
   it('renders tasks-filter-type button', () => {
     renderBar();
     expect(screen.getByTestId('tasks-filter-type')).toBeTruthy();
@@ -189,15 +194,15 @@ describe('TasksFilterBar — sort menu rendered', () => {
 // ---------------------------------------------------------------------------
 
 describe('TasksFilterBar — sort option click emits onSortChange', () => {
-  it('calls onSortChange({key:"priority",dir:"asc"}) when the priority-asc option is selected', async () => {
+  it('calls onSortChange({key:"priority",dir:"asc"}) when switching to the priority option (default asc)', async () => {
     const { onSortChange } = renderBar();
 
-    // Open the sort dropdown
+    // Open the sort dropdown (default sort is {key:number, dir:desc})
     await userEvent.click(screen.getByTestId('tasks-sort-menu'));
 
-    // Click the priority ascending option
-    const priorityAsc = screen.getByTestId('tasks-sort-priority-asc');
-    await userEvent.click(priorityAsc);
+    // Click the priority option — switching key defaults to asc
+    const priorityOption = screen.getByTestId('tasks-sort-option-priority');
+    await userEvent.click(priorityOption);
 
     await waitFor(() => {
       expect(onSortChange).toHaveBeenCalledOnce();
@@ -205,11 +210,11 @@ describe('TasksFilterBar — sort option click emits onSortChange', () => {
     expect(onSortChange).toHaveBeenCalledWith({ key: 'priority', dir: 'asc' });
   });
 
-  it('calls onSortChange({key:"number",dir:"asc"}) when the number-asc option is selected', async () => {
+  it('calls onSortChange({key:"number",dir:"asc"}) when number is already active and re-clicked (toggles direction)', async () => {
     const { onSortChange } = renderBar({ sort: { key: 'number', dir: 'desc' } });
 
     await userEvent.click(screen.getByTestId('tasks-sort-menu'));
-    await userEvent.click(screen.getByTestId('tasks-sort-number-asc'));
+    await userEvent.click(screen.getByTestId('tasks-sort-option-number'));
 
     await waitFor(() => {
       expect(onSortChange).toHaveBeenCalledOnce();

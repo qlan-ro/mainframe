@@ -18,7 +18,8 @@ import { useTodosStore } from './use-todos-store';
 import type { TodoType, TodoPriority } from '@/lib/api/todos';
 
 type QuickType = 'feature' | 'bug';
-type QuickPriority = 'low' | 'medium' | 'high' | 'critical';
+// Critical is intentionally excluded from the fast-capture path (finding 9.16).
+type QuickPriority = 'low' | 'medium' | 'high';
 
 interface PendingFile {
   id: string;
@@ -261,7 +262,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
           <div className="flex items-center gap-2">
             <span className="text-caption text-muted-foreground">Priority</span>
             <div className="flex gap-1">
-              {(['low', 'medium', 'high', 'critical'] as const).map((p) => (
+              {(['low', 'medium', 'high'] as const).map((p) => (
                 <TypePill
                   key={p}
                   label={p.charAt(0).toUpperCase() + p.slice(1)}

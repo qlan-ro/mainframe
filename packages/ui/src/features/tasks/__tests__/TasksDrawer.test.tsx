@@ -117,6 +117,28 @@ describe('TasksDrawer — key testids are rendered', () => {
     expect(screen.getByTestId('tasks-drawer')).toBeTruthy();
   });
 
+  it('renders the "Tasks" header label uppercase via CSS (text stays "Tasks", class applies uppercase transform)', () => {
+    renderDrawer();
+    const label = screen.getByTestId('tasks-drawer-label');
+    expect(label.textContent).toBe('Tasks');
+    expect(label.className).toContain('uppercase');
+    expect(label.className).toContain('tracking-wide');
+    expect(label.className).toContain('text-muted-foreground');
+  });
+
+  it('renders the active-count badge as a chip (tasks-drawer-count) with chip background and tabular-nums', () => {
+    renderDrawer([OPEN_TODO]);
+    const badge = screen.getByTestId('tasks-drawer-count');
+    expect(badge.textContent).toBe('1');
+    expect(badge.className).toContain('bg-mf-chip');
+    expect(badge.className).toContain('tabular-nums');
+  });
+
+  it('does NOT render the count badge when there are zero active todos', () => {
+    renderDrawer([DONE_TODO]);
+    expect(screen.queryByTestId('tasks-drawer-count')).toBeNull();
+  });
+
   it('renders tasks-drawer-new (New button)', () => {
     renderDrawer();
     expect(screen.getByTestId('tasks-drawer-new')).toBeTruthy();

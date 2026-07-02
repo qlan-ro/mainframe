@@ -234,16 +234,18 @@ describe('sortTodos — by priority rank', () => {
     makeTodo({ id: 'm', priority: 'medium', title: 'M' }),
   ];
 
-  it('ascending: low → medium → high → critical (rank 0→3)', () => {
+  // Rank matches the design's TD_PRI_RANK (critical=0 .. low=3), so ascending
+  // surfaces the most urgent todo first — see finding 9.4.
+  it('ascending: critical → high → medium → low (rank 0→3)', () => {
     const sort: TodoSort = { key: 'priority', dir: 'asc' };
     const result = sortTodos(todos, sort);
-    expect(result.map((t) => t.priority)).toEqual(['low', 'medium', 'high', 'critical']);
+    expect(result.map((t) => t.priority)).toEqual(['critical', 'high', 'medium', 'low']);
   });
 
-  it('descending: critical → high → medium → low (rank 3→0)', () => {
+  it('descending: low → medium → high → critical (rank 3→0)', () => {
     const sort: TodoSort = { key: 'priority', dir: 'desc' };
     const result = sortTodos(todos, sort);
-    expect(result.map((t) => t.priority)).toEqual(['critical', 'high', 'medium', 'low']);
+    expect(result.map((t) => t.priority)).toEqual(['low', 'medium', 'high', 'critical']);
   });
 });
 

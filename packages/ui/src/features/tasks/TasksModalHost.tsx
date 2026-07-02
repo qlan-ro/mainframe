@@ -10,6 +10,7 @@
  */
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useTasksModal } from './use-tasks-modal';
 import { useStartTodoSession } from './use-start-todo-session';
@@ -25,7 +26,7 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
   const { open, quickOpen, closeModal, openModal, openQuick, closeQuick } = useTasksModal();
   const { projectId } = useActiveIdentity();
   const startSession = useStartTodoSession(port, projectId);
-  const { load } = useTodosStore();
+  const { load, view } = useTodosStore();
 
   // Eagerly load todos so modal and quick-add show correct data even when
   // the inspector drawer is hidden.
@@ -66,13 +67,20 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
           if (!o) closeModal();
         }}
       >
-        <DialogContent hideClose className="max-w-4xl w-full max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogContent
+          hideClose
+          className={cn(
+            'w-full max-h-[85vh] flex flex-col p-0 gap-0 transition-[width] duration-200 ease-out',
+            view === 'list' ? 'max-w-[880px]' : 'max-w-[1200px] w-[90vw]',
+          )}
+        >
           <DialogHeader className="sr-only">
             <DialogTitle>Tasks</DialogTitle>
           </DialogHeader>
           <TasksBoard
             port={port}
             projectId={projectId}
+            onClose={closeModal}
             onStartSession={(todo) => {
               closeModal();
               void startSession(todo.id, todo.status);

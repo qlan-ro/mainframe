@@ -1,10 +1,11 @@
 /**
- * SortMenu — dropdown for choosing sort key and direction for the Tasks surface.
+ * SortMenu — dropdown for choosing sort key + direction for the Tasks surface.
  *
- * Renders a shadcn DropdownMenu. Each (key, dir) combination is an option.
- * The active combination gets a checkmark.
- *
- * Sort keys: number | priority | type. Directions: asc | desc.
+ * Single-toggle-per-key interaction model (design: TdSortMenu,
+ * 12-todos.jsx:246-282, finding 9.11): one row per key. Clicking the
+ * already-active key's row toggles its direction in place; clicking a
+ * different key switches to it with a sensible default direction
+ * (asc for priority/type, desc otherwise).
  */
 import React from 'react';
 import { ArrowUpDown, Check } from 'lucide-react';
@@ -14,7 +15,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import type { TodoSort, TodoSortKey } from './todos-filters';
 
@@ -24,18 +24,29 @@ interface Props {
 }
 
 const SORT_KEYS: { key: TodoSortKey; label: string }[] = [
-  { key: 'number', label: '#' },
   { key: 'priority', label: 'Priority' },
-  { key: 'type', label: 'Type' },
+  { key: 'number', label: 'Number' },
   { key: 'updated', label: 'Last updated' },
+  { key: 'type', label: 'Type' },
 ];
 
-function activeSortLabel(sort: TodoSort): string {
-  const keyLabel = SORT_KEYS.find((k) => k.key === sort.key)?.label ?? sort.key;
-  return `${keyLabel} ${sort.dir === 'asc' ? '↑' : '↓'}`;
+// priority/type default to ascending on first pick; everything else descending.
+function defaultDirFor(key: TodoSortKey): TodoSort['dir'] {
+  return key === 'priority' || key === 'type' ? 'asc' : 'desc';
+}
+
+function dirArrow(dir: TodoSort['dir']): string {
+  return dir === 'desc' ? '↓' : '↑';
 }
 
 export function SortMenu({ sort, onChange }: Props): React.ReactElement {
+  const current = SORT_KEYS.find((k) => k.key === sort.key) ?? SORT_KEYS[0];
+
+  function pick(key: TodoSortKey) {
+    if (sort.key === key) onChange({ key, dir: sort.dir === 'desc' ? 'asc' : 'desc' });
+    else onChange({ key, dir: defaultDirFor(key) });
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -48,40 +59,33 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
           )}
         >
           <ArrowUpDown size={11} />
-          <span>{activeSortLabel(sort)}</span>
+          <span>
+            {current?.label} {dirArrow(sort.dir)}
+          </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[160px] p-1">
-        {SORT_KEYS.map(({ key, label }, idx) => (
-          <React.Fragment key={key}>
-            {idx > 0 && <DropdownMenuSeparator className="my-1" />}
-            <div className="px-2 py-1 text-caption text-muted-foreground font-medium">{label}</div>
+      <DropdownMenuContent align="end" className="min-w-[172px] p-1">
+        {SORT_KEYS.map(({ key, label }) => {
+          const active = sort.key === key;
+          return (
             <DropdownMenuItem
-              data-testid={`tasks-sort-${key}-asc`}
-              onSelect={() => onChange({ key, dir: 'asc' })}
-              className="flex items-center gap-2 px-2 py-1.5 text-body cursor-pointer rounded"
+              key={key}
+              data-testid={`tasks-sort-option-${key}`}
+              aria-selected={active}
+              onSelect={() => pick(key)}
+              className={cn(
+                'flex items-center gap-2 px-2 py-1.5 text-body cursor-pointer rounded',
+                active && 'font-semibold text-primary',
+              )}
             >
               <span className="w-3.5 shrink-0">
-                {sort.key === key && sort.dir === 'asc' && (
-                  <Check size={12} strokeWidth={2.5} className="text-primary" />
-                )}
+                {active && <Check size={11} strokeWidth={2.5} className="text-primary" />}
               </span>
-              <span>↑ Ascending</span>
+              <span className="flex-1">{label}</span>
+              {active && <span className="text-primary">{dirArrow(sort.dir)}</span>}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              data-testid={`tasks-sort-${key}-desc`}
-              onSelect={() => onChange({ key, dir: 'desc' })}
-              className="flex items-center gap-2 px-2 py-1.5 text-body cursor-pointer rounded"
-            >
-              <span className="w-3.5 shrink-0">
-                {sort.key === key && sort.dir === 'desc' && (
-                  <Check size={12} strokeWidth={2.5} className="text-primary" />
-                )}
-              </span>
-              <span>↓ Descending</span>
-            </DropdownMenuItem>
-          </React.Fragment>
-        ))}
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

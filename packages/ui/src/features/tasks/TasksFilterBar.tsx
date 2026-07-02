@@ -104,7 +104,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
             type="text"
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
-            placeholder="Filter by title…"
+            placeholder="Search tasks…"
             className="h-[30px] w-[230px] pl-6 pr-6 text-caption"
           />
           {filters.search && (

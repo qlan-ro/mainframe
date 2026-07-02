@@ -29,7 +29,9 @@ import {
 import type { TodoFilters, TodoSort } from './todos-filters';
 
 const DEFAULT_FILTERS: TodoFilters = { types: [], priorities: [], labels: [], search: '' };
-const DEFAULT_SORT: TodoSort = { key: 'number', dir: 'desc' };
+// Priority-first, most-urgent-visible-first on open (design: TD_PRI_RANK
+// critical=0, see finding 9.9 + the rank flip in todos-filters.ts, 9.4).
+const DEFAULT_SORT: TodoSort = { key: 'priority', dir: 'asc' };
 
 // Monotonic counter — lives outside React/Zustand so it persists across renders.
 let _loadSeq = 0;

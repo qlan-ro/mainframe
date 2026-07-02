@@ -23,7 +23,9 @@ export interface TodoSort {
   dir: TodoSortDir;
 }
 
-const PRIORITY_RANK: Record<TodoPriority, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+// Matches the design's TD_PRI_RANK: critical=0 .. low=3, so ascending sort
+// surfaces the most urgent todo first (see audit finding 9.4).
+const PRIORITY_RANK: Record<TodoPriority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 export function sortTodos(todos: Todo[], sort: TodoSort): Todo[] {
   const dir = sort.dir === 'asc' ? 1 : -1;
