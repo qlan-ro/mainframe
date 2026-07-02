@@ -87,7 +87,7 @@ describe('WfBuilderPane', () => {
     fireEvent.change(nameInput, { target: { value: 'Health check' } });
     expect(onChange).toHaveBeenCalledOnce();
     const yaml = serializeWorkflow(currentModel);
-    expect(yaml).toContain('name: Health check');
+    expect(yaml).toContain('name: health-check');
   });
 
   it('shows existing triggers', () => {

@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { GripVertical, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
-import { getKindMeta } from '../glyphs';
+import { getKindMetaByModel } from '../glyphs';
 import type { WfStep } from './yaml-serialize';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ function stepSummary(step: WfStep): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps): React.ReactElement {
-  const meta = getKindMeta(step.kind);
+  const meta = getKindMetaByModel(step.kind);
   const Icon = meta.Icon;
   const summary = stepSummary(step);
   const title = step.title ?? meta.label;
