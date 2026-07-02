@@ -35,7 +35,6 @@
  *   directory-picker-recent-<path>       — a Recent row (RecentDirs.tsx)
  *   sessions-add-project                 — sidebar dashed "Add project" pill (entry point)
  *   toast-root                           — WsToastCard root (add-project outcome toast)
- *   app-status-bar                       — status bar (getByText 'Daemon Connected')
  */
 
 import { test, expect, type Page } from '@playwright/test';

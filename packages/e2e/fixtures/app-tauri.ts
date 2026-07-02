@@ -40,7 +40,15 @@ function assertBundleTargetsTestPort(): void {
   }
 }
 
+/**
+ * Skip via `MF_E2E_SKIP_BUILD=1` when running many describe blocks serially against an
+ * already-built, already-verified bundle (each block calls launchTauriApp() in its own
+ * beforeAll, and a full rebuild is identical work repeated per block). Safe to skip because
+ * assertBundleTargetsTestPort() still runs unconditionally right after this and fails fast if
+ * dist/ is missing or was built for a different port.
+ */
 function buildUi(): void {
+  if (process.env['MF_E2E_SKIP_BUILD'] === '1') return;
   execFileSync(PNPM, ['--filter', '@qlan-ro/mainframe-ui', 'build'], {
     cwd: UI_DIR,
     env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },

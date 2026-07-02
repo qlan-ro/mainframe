@@ -30,23 +30,15 @@
  *   sessions-empty-state              — empty-list message
  *   directory-picker / directory-picker-close — DirectoryPickerModal (add-project flow)
  *   toast-root                        — WsToastCard root (remove-project confirmation)
- *   app-status-bar                    — status bar (getByText 'Daemon Connected')
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
 
 const TAG_NAME = 'e2e-filter';
-
-/** Wait for the status bar to show Daemon Connected (used after reload). */
-async function waitConnected(page: Page): Promise<void> {
-  await page
-    .locator('[data-testid="app-status-bar"]')
-    .getByText('Daemon Connected', { exact: true })
-    .waitFor({ timeout: 20_000 });
-}
 
 // ─── §sessions-filters Project pill bar + tag filter bar + sort menu ─────────
 

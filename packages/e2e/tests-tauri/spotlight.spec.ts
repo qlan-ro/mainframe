@@ -32,16 +32,9 @@ import { writeFileSync } from 'fs';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
-
-/** Wait for the status bar to show Daemon Connected (used after a REST-seed reload). */
-async function waitConnected(page: Page): Promise<void> {
-  await page
-    .locator('[data-testid="app-status-bar"]')
-    .getByText('Daemon Connected', { exact: true })
-    .waitFor({ timeout: 20_000 });
-}
 
 /** `renameChat` does not broadcast `chat.updated` — callers must reload to see it. */
 async function renameChat(page: Page, chatId: string, title: string): Promise<void> {

@@ -38,7 +38,6 @@
  *   sessions-tag-delete-confirm-cancel / -ok — dialog buttons
  *   sessions-row-meta-tag-dot-<name> — applied-tag dot on the row meta line
  *   sessions-tag-filter-<name>       — tag pill in the sidebar filter bar
- *   app-status-bar                   — status bar (getByText 'Daemon Connected')
  *
  * NOTE on the validation-error scenario: TagPopover's client-side
  * validateTagName() (packages/ui/src/features/sessions/tags/validate-tag-name.ts)
@@ -57,6 +56,7 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
 
 // Distinct substrings so the search-filter test can isolate one from the other.
 const TAG_A = 'e2e-alpha';
@@ -147,10 +147,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     const { page } = app;
 
     await page.reload();
-    await page
-      .locator('[data-testid="app-status-bar"]')
-      .getByText('Daemon Connected', { exact: true })
-      .waitFor({ timeout: 20_000 });
+    await waitConnected(page);
 
     const row = sessionsSidebar(page).row(chatId);
     await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 10_000 });
