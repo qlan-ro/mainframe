@@ -20,7 +20,7 @@ function SettingsDialogCloseBtn() {
       type="button"
       data-testid="settings-dialog-close"
       onClick={close}
-      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus:outline-none"
+      className="flex size-[28px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus:outline-none"
       aria-label="Close settings"
     >
       <X size={13} />
@@ -72,7 +72,7 @@ export function SettingsDialog({ port }: { port: number }) {
           data-testid="settings-dialog"
           className="fixed left-1/2 top-1/2 z-50 flex h-[600px] w-full max-w-[760px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-[var(--mf-shadow-modal)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         >
-          <header className="flex h-[50px] shrink-0 items-center justify-between border-b border-border bg-mf-content2 px-[18px]">
+          <header className="flex h-[50px] shrink-0 items-center justify-between border-b-[0.5px] border-border bg-mf-content2 px-[18px]">
             <DialogPrimitive.Title className="text-heading font-bold tracking-tight text-foreground">
               Settings
             </DialogPrimitive.Title>

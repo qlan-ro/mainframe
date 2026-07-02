@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 import { TunnelStatusRow } from './TunnelStatusRow';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 
@@ -56,7 +56,7 @@ export function NamedTunnelSection({
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-caption text-muted-foreground">Named Tunnel</label>
+        <label className="text-label font-semibold text-muted-foreground">Named Tunnel</label>
         <p className="text-micro text-muted-foreground mt-0.5">
           Use a Cloudflare connector token for a persistent URL.
         </p>
@@ -120,7 +120,7 @@ function NamedTunnelConfigured({
           data-testid="named-tunnel-toggle"
           onClick={onStartStop}
           disabled={tunnel.togglingAction !== null}
-          className={`px-3 py-1.5 text-caption rounded-md transition-colors disabled:opacity-50 ${
+          className={`inline-flex h-[30px] items-center justify-center px-[11px] text-caption rounded-md transition-colors disabled:opacity-50 ${
             tunnel.running
               ? 'bg-accent text-foreground border border-border hover:bg-accent/80'
               : 'bg-primary text-primary-foreground hover:opacity-90'
@@ -128,7 +128,7 @@ function NamedTunnelConfigured({
         >
           {tunnel.togglingAction ? (
             <span className="flex items-center gap-1.5">
-              <Loader2 size={12} className="animate-spin" />
+              <RotateCw size={12} className="animate-spin" />
               {tunnel.togglingAction === 'stop' ? 'Stopping...' : 'Starting...'}
             </span>
           ) : tunnel.running ? (
@@ -141,7 +141,7 @@ function NamedTunnelConfigured({
           data-testid="named-tunnel-clear-config"
           onClick={onClear}
           disabled={tunnel.togglingAction === 'stop'}
-          className="px-3 py-1.5 text-caption text-muted-foreground bg-accent border border-border rounded-md hover:bg-accent/80 disabled:opacity-50 transition-colors"
+          className="inline-flex h-[30px] items-center justify-center px-[11px] text-caption text-muted-foreground bg-accent border border-border rounded-md hover:bg-accent/80 disabled:opacity-50 transition-colors"
         >
           Clear Configuration
         </button>
@@ -175,7 +175,7 @@ function NamedTunnelSetup({
         value={token}
         onChange={(e) => onTokenChange(e.target.value)}
         placeholder="Cloudflare connector token"
-        className="w-full px-3 py-1.5 text-caption bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+        className="h-[30px] w-full px-[11px] text-caption bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
       />
       <input
         data-testid="named-tunnel-url-input"
@@ -183,18 +183,18 @@ function NamedTunnelSetup({
         value={url}
         onChange={(e) => onUrlChange(e.target.value)}
         placeholder="https://mainframe.example.com"
-        className="w-full px-3 py-1.5 text-caption bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+        className="h-[30px] w-full px-[11px] text-caption bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
       />
       {saveError && <p className="text-caption text-destructive">{saveError}</p>}
       <button
         data-testid="named-tunnel-save"
         onClick={onSave}
         disabled={togglingStart || !token.trim() || !url.trim()}
-        className="px-3 py-1.5 text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
+        className="inline-flex h-[30px] items-center justify-center px-[11px] text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
         {togglingStart ? (
           <span className="flex items-center gap-1.5">
-            <Loader2 size={12} className="animate-spin" />
+            <RotateCw size={12} className="animate-spin" />
             Saving...
           </span>
         ) : (

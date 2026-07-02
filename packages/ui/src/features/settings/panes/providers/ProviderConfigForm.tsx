@@ -7,7 +7,7 @@ import { ConfigConflictsWarning } from './ConfigConflictsWarning';
 import { ModelDropdown } from './ModelDropdown';
 import { ProviderTuningDefaults } from './ProviderTuningDefaults';
 import { CodexTuningDefaults } from './CodexTuningDefaults';
-import { Switch } from '../../../../components/ui/switch';
+import { Checkbox } from '../../../../components/ui/checkbox';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -97,7 +97,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
     <div data-testid={`settings-pane-provider-${adapterId}`} className="space-y-4">
       {/* Executable path — commits on blur to avoid one PUT per keystroke */}
       <div className="space-y-1.5">
-        <label className="text-label text-muted-foreground">Executable Path</label>
+        <label className="text-label font-semibold text-muted-foreground">Executable Path</label>
         <input
           data-testid={`settings-${adapterId}-executable-path-input`}
           type="text"
@@ -105,7 +105,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
           onChange={(e) => setExecPath(e.target.value)}
           onBlur={handleExecPathBlur}
           placeholder={label.toLowerCase()}
-          className="w-full px-3 py-1.5 text-body bg-card text-foreground border border-border rounded-md focus:outline-none focus:border-primary"
+          className="h-[30px] w-full px-[11px] text-body bg-card text-foreground border border-border rounded-md focus:outline-none focus:border-primary"
         />
         {config.resolvedExecutable?.source === 'fallback' && (
           <p className="text-label text-muted-foreground">Not found on PATH — set the path to the binary above</p>
@@ -153,7 +153,7 @@ function ProviderToggles({
   return (
     <div className="space-y-1">
       <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors">
-        <Switch
+        <Checkbox
           data-testid={`settings-${adapterId}-system-prompt-toggle`}
           checked={config.systemPrompt === 'enabled'}
           onCheckedChange={(checked) => update({ systemPrompt: checked ? 'enabled' : '' })}
@@ -169,7 +169,7 @@ function ProviderToggles({
 
       {adapter.capabilities.planMode && (
         <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors">
-          <Switch
+          <Checkbox
             data-testid={`settings-${adapterId}-plan-mode-toggle`}
             checked={config.defaultPlanMode === 'true'}
             onCheckedChange={(checked) => update({ defaultPlanMode: checked ? 'true' : 'false' })}

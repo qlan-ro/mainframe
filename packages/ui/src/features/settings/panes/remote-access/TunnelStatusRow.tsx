@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import type { TunnelUiState } from './use-tunnel-status';
 
@@ -19,7 +19,7 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
   if (state === 'starting' || (state === 'verifying' && !url)) {
     return (
       <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
-        <Loader2 size={12} className="animate-spin text-mf-warning shrink-0" />
+        <RotateCw size={12} className="animate-spin text-mf-warning shrink-0" />
         <span className="text-caption text-muted-foreground flex-1">
           {state === 'starting' ? 'Starting tunnel…' : 'Verifying DNS…'}
         </span>
@@ -30,7 +30,7 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
   if (state === 'verifying' && url) {
     return (
       <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
-        <Loader2 size={12} className="animate-spin text-mf-warning shrink-0" />
+        <RotateCw size={12} className="animate-spin text-mf-warning shrink-0" />
         <span className="text-caption text-muted-foreground flex-1">
           Verifying DNS for <code className="text-foreground">{url}</code>…
         </span>

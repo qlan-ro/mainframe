@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { RotateCw, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { getDevices, removeDevice } from '../../../../lib/api/remote-access';
 import type { Device } from '@qlan-ro/mainframe-types';
@@ -45,12 +45,12 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-caption text-muted-foreground">Paired Devices</label>
+        <label className="text-label font-semibold text-muted-foreground">Paired Devices</label>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-caption text-muted-foreground">
-          <Loader2 size={14} className="animate-spin" />
+          <RotateCw size={14} className="animate-spin" />
           Loading...
         </div>
       ) : devices.length === 0 ? (

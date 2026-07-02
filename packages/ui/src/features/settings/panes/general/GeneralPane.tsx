@@ -33,13 +33,15 @@ export function GeneralPane({ port }: { port: number }) {
 
   return (
     <div data-testid="settings-pane-general" className="flex flex-col gap-6 p-4">
+      <h2 className="text-title font-bold text-foreground">General</h2>
+
       <section className="flex flex-col gap-3">
-        <h3 className="text-heading font-medium text-foreground">Appearance</h3>
+        <h3 className="text-label font-semibold text-mf-text-3">Appearance</h3>
         <AppearanceControls />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-heading font-medium text-foreground">Worktree Directory</h3>
+        <h3 className="text-label font-semibold text-mf-text-3">Worktree directory</h3>
         <p className="text-label text-muted-foreground">
           Relative path where worktrees are created inside project roots.
         </p>
@@ -49,14 +51,14 @@ export function GeneralPane({ port }: { port: number }) {
             data-testid="settings-worktree-dir-input"
             value={displayDir}
             onChange={handleDirChange}
-            className="flex-1 rounded border-[0.5px] border-input bg-card px-3 py-1.5 text-body text-foreground outline-none focus:border-primary"
+            className="h-[30px] flex-1 rounded border border-input bg-card px-[11px] text-body text-foreground outline-none focus:border-primary"
           />
           {isDirty && (
             <button
               type="button"
               data-testid="settings-worktree-dir-save"
               onClick={handleSave}
-              className="rounded bg-primary px-3 py-1.5 text-body text-primary-foreground hover:opacity-90"
+              className="h-[30px] rounded bg-primary px-[11px] text-body text-primary-foreground hover:opacity-90"
             >
               Save
             </button>

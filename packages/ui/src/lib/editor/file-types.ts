@@ -13,6 +13,13 @@
  *   @codemirror/lang-rust        →  'rust'
  *   @codemirror/legacy-modes     →  'yaml' | 'toml' | 'go' | 'sql' | 'shell' | 'scala' | 'java'
  */
+import {
+  FileCodeIcon,
+  FileJsonIcon,
+  FileTextIcon,
+  FileIcon,
+  type LucideIcon,
+} from 'lucide-react';
 
 export type LangPackId =
   | 'javascript'
@@ -104,4 +111,34 @@ export function inferLanguage(filePath: string): LangPackId {
 export function getFileIcon(filePath: string): string {
   const lang = inferLanguage(filePath);
   return LANG_ICONS[lang] ?? LANG_ICONS.default;
+}
+
+/** Lucide component keyed by lang-pack id, grouped by rendered glyph family. */
+const LANG_ICON_COMPONENT: Record<LangPackId, LucideIcon> = {
+  typescript: FileCodeIcon,
+  javascript: FileCodeIcon,
+  css: FileCodeIcon,
+  html: FileCodeIcon,
+  python: FileCodeIcon,
+  rust: FileCodeIcon,
+  go: FileCodeIcon,
+  sql: FileCodeIcon,
+  shell: FileCodeIcon,
+  scala: FileCodeIcon,
+  java: FileCodeIcon,
+  json: FileJsonIcon,
+  yaml: FileJsonIcon,
+  toml: FileJsonIcon,
+  markdown: FileTextIcon,
+  plaintext: FileTextIcon,
+};
+
+/**
+ * Resolve a per-extension lucide icon component for a file path (used by the
+ * command palette's Files-mode rows). Falls back to the generic `FileIcon`
+ * for extensions with no installed lang pack.
+ */
+export function fileIconFor(filePath: string): LucideIcon {
+  const lang = inferLanguage(filePath);
+  return LANG_ICON_COMPONENT[lang] ?? FileIcon;
 }

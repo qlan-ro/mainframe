@@ -1,11 +1,38 @@
 import { useEffect, useState } from 'react';
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import { cn } from '../../../../lib/utils';
 import { useSettingsStore } from '../../../../store/settings';
 import { getAdapters } from '../../../../lib/api/adapters';
+import { providerDot } from '../../../chat/composer/config-toolbar/ProviderModelSelect';
 import { ProviderConfigForm } from './ProviderConfigForm';
 
 interface ProvidersPaneProps {
   port: number;
+}
+
+/** Avatar tile + name + installed/not-installed status row that anchors each provider pane. */
+function ProviderHeader({ adapter }: { adapter: AdapterInfo }) {
+  return (
+    <div data-testid={`settings-provider-header-${adapter.id}`} className="flex items-center gap-3">
+      <span
+        className={cn(
+          'inline-flex size-[30px] shrink-0 items-center justify-center rounded-[8px] text-heading font-bold text-white',
+          providerDot(adapter.id),
+        )}
+      >
+        {adapter.name.charAt(0).toUpperCase()}
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-title font-bold text-foreground">{adapter.name}</h3>
+        <div className="flex items-center gap-1.5">
+          <span className={cn('size-1.5 rounded-full', adapter.installed ? 'bg-mf-success' : 'bg-mf-text-3')} />
+          <span className="text-caption text-muted-foreground">
+            {adapter.installed ? 'Detected on PATH' : 'Not installed'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Reads `selectedProvider` from the store, fetches the adapter list from the daemon,
@@ -32,7 +59,7 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
       )}
       {selectedProvider && adapter && (
         <>
-          <h3 className="text-heading font-medium text-foreground">{adapter.name}</h3>
+          <ProviderHeader adapter={adapter} />
           <ProviderConfigForm port={port} adapterId={selectedProvider} label={adapter.name} adapter={adapter} />
         </>
       )}

@@ -89,7 +89,7 @@ export function SettingsSidebar({ port }: { port: number }) {
   const setActiveTab = useSettingsStore((s) => s.setActiveTab);
 
   return (
-    <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r border-border bg-mf-content2 p-4">
+    <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r-[0.5px] border-border bg-mf-content2 p-4">
       {SETTINGS_TABS.map((tab) => (
         <div key={tab.id}>
           <SettingsNavItem

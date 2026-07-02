@@ -18,6 +18,10 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('GeneralPane', () => {
+  it('renders a top-level "General" pane heading (StgHeading parity — was entirely missing)', () => {
+    render(<GeneralPane port={31415} />);
+    expect(screen.getByRole('heading', { name: 'General', level: 2 })).toBeInTheDocument();
+  });
   it('Save button appears only when worktreeDir is dirty and PUTs on click', async () => {
     render(<GeneralPane port={31415} />);
     expect(screen.queryByTestId('settings-worktree-dir-save')).toBeNull();

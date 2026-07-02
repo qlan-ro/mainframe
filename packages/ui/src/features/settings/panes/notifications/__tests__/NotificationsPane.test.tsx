@@ -22,6 +22,10 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('NotificationsPane', () => {
+  it('renders a top-level "Notifications" pane heading (was entirely missing)', () => {
+    render(<NotificationsPane port={31415} />);
+    expect(screen.getByRole('heading', { name: 'Notifications', level: 2 })).toBeInTheDocument();
+  });
   it('toggling a chat notification fires a leaf-only PUT and updates the store', () => {
     render(<NotificationsPane port={31415} />);
     fireEvent.click(screen.getByTestId('settings-notify-task-complete-toggle'));

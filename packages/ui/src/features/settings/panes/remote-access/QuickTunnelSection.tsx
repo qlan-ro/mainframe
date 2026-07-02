@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 import { TunnelStatusRow } from './TunnelStatusRow';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 
@@ -17,7 +17,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <label className="text-caption text-muted-foreground">Quick Tunnel</label>
+          <label className="text-label font-semibold text-muted-foreground">Quick Tunnel</label>
           <p className="text-micro text-muted-foreground mt-0.5">
             Ephemeral tunnel via trycloudflare.com (new URL each start).
           </p>
@@ -26,7 +26,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
           data-testid="quick-tunnel-toggle"
           onClick={handleToggle}
           disabled={tunnel.togglingAction !== null}
-          className={`px-3 py-1.5 text-caption rounded-md transition-colors disabled:opacity-50 ${
+          className={`inline-flex h-[30px] items-center justify-center px-[11px] text-caption rounded-md transition-colors disabled:opacity-50 ${
             tunnel.running
               ? 'bg-accent text-foreground border border-border hover:bg-accent/80'
               : 'bg-primary text-primary-foreground hover:opacity-90'
@@ -34,7 +34,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
         >
           {tunnel.togglingAction ? (
             <span className="flex items-center gap-1.5">
-              <Loader2 size={12} className="animate-spin" />
+              <RotateCw size={12} className="animate-spin" />
               {tunnel.togglingAction === 'stop' ? 'Stopping...' : 'Starting...'}
             </span>
           ) : tunnel.running ? (

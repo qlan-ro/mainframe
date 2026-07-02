@@ -42,12 +42,12 @@ function PaletteField({
   onKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
 }) {
   return (
-    <div className="flex h-[54px] shrink-0 items-center gap-[11px] border-b border-border px-[16px]">
-      <SearchIcon className="size-4 shrink-0 text-mf-text-3" />
+    <div className="flex h-[54px] shrink-0 items-center gap-[11px] border-b-[0.5px] border-border px-[16px]">
+      <SearchIcon className="size-[16px] shrink-0 text-mf-text-3" />
       {parsed.chip && (
         <span
           data-testid="search-palette-mode-chip"
-          className="inline-flex h-[22px] shrink-0 items-center rounded-[6px] bg-primary/10 px-[9px] text-caption font-bold text-primary"
+          className="inline-flex h-[22px] shrink-0 items-center rounded-[6px] bg-primary/8 px-[9px] text-caption font-bold text-primary"
         >
           {parsed.chip}
         </span>
@@ -116,7 +116,7 @@ function PaletteFooter() {
   return (
     <div
       data-testid="search-palette-footer"
-      className="flex h-[34px] shrink-0 items-center gap-[16px] border-t border-border bg-mf-content2 px-[14px]"
+      className="flex h-[34px] shrink-0 items-center gap-[16px] border-t-[0.5px] border-border bg-mf-content2 px-[14px]"
     >
       {FOOTER_HINTS.map(([k, l]) => (
         <span key={l} className="inline-flex items-center gap-[5px]">

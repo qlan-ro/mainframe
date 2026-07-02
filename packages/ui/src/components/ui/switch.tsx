@@ -6,7 +6,7 @@ function Switch({ className, ...props }: React.ComponentPropsWithoutRef<typeof S
   return (
     <SwitchPrimitive.Root
       className={cn(
-        'peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
+        'peer inline-flex h-[22px] w-[38px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
         'bg-input transition-colors',
         'focus-visible:outline-none',
         'disabled:cursor-not-allowed disabled:opacity-[0.45]',
@@ -17,9 +17,9 @@ function Switch({ className, ...props }: React.ComponentPropsWithoutRef<typeof S
     >
       <SwitchPrimitive.Thumb
         className={cn(
-          'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm',
+          'pointer-events-none block size-[18px] rounded-full bg-white shadow-sm',
           'transition-transform',
-          'data-[state=checked]:translate-x-[20px]',
+          'data-[state=checked]:translate-x-[16px]',
           'data-[state=unchecked]:translate-x-0',
         )}
       />

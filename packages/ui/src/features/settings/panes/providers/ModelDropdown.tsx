@@ -33,12 +33,12 @@ export function ModelDropdown({ adapterId, value, options, onChange }: ModelDrop
 
   return (
     <div className="space-y-1.5">
-      <label className="text-label text-muted-foreground">Default Model</label>
+      <label className="text-label font-semibold text-muted-foreground">Default Model</label>
       <DropdownMenu>
         <RowWithTooltip option={selected ?? { id: value, label: value }}>
           <DropdownMenuTrigger
             data-testid={`settings-${adapterId}-model-dropdown-trigger`}
-            className="w-full flex items-center justify-between bg-card border border-border rounded-md px-3 py-1.5 text-body text-foreground hover:border-primary focus:outline-none data-[state=open]:border-primary cursor-pointer transition-colors"
+            className="h-[30px] w-full flex items-center justify-between bg-card border border-border rounded-md px-[11px] text-body text-foreground hover:border-primary focus:outline-none data-[state=open]:border-primary cursor-pointer transition-colors"
           >
             <span className="min-w-0 truncate">{selected?.label ?? value}</span>
             <ChevronDown size={14} className="text-muted-foreground shrink-0" />

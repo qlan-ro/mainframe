@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 import { generatePairingCode } from '../../../../lib/api/remote-access';
 import { CopyButton } from './CopyButton';
 
@@ -60,7 +60,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-caption text-muted-foreground">Mobile Pairing</label>
+        <label className="text-label font-semibold text-muted-foreground">Mobile Pairing</label>
         <p className="text-micro text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
       </div>
 
@@ -77,11 +77,11 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
           data-testid="pairing-generate-code"
           onClick={handleGenerate}
           disabled={generating}
-          className="px-3 py-1.5 text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="inline-flex h-[30px] items-center justify-center px-[11px] text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {generating ? (
             <span className="flex items-center gap-1.5">
-              <Loader2 size={12} className="animate-spin" />
+              <RotateCw size={12} className="animate-spin" />
               Generating...
             </span>
           ) : (

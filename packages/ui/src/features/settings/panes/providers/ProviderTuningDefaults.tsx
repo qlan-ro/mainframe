@@ -27,7 +27,7 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
     <div className="space-y-3">
       {efforts.length > 0 && (
         <label className="block space-y-1.5">
-          <span className="text-label text-muted-foreground">Default Effort</span>
+          <span className="text-label font-semibold text-muted-foreground">Default Effort</span>
           <Select
             value={config.defaultEffort ?? INHERIT}
             onValueChange={(v) => onChange({ defaultEffort: (v === INHERIT ? '' : v) as EffortLevel | '' })}

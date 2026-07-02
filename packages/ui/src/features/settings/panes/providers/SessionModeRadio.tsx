@@ -12,7 +12,7 @@ interface SessionModeRadioProps {
 export function SessionModeRadio({ adapterId, config, onChange }: SessionModeRadioProps) {
   return (
     <div className="space-y-1.5">
-      <label className="text-label text-muted-foreground">Default Session Mode</label>
+      <label className="text-label font-semibold text-muted-foreground">Default Session Mode</label>
       <RadioGroup
         value={config.defaultMode ?? 'default'}
         onValueChange={(v) => onChange({ defaultMode: v as NonNullable<ProviderConfig['defaultMode']> })}
