@@ -16,7 +16,7 @@ import { Hint } from '@/components/ui/hint';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import type { ReviewComment, ReviewCommentItem } from '../view-model/parse-review-comment';
-import { rangeLabel, SnippetLines } from './code-snippet';
+import { rangeLabel, SnippetBlock } from './code-snippet';
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
@@ -31,8 +31,8 @@ function CommentSection({ item }: { item: ReviewCommentItem }) {
     <div data-testid={`chat-user-review-comment-L${item.start}`} className="flex flex-col gap-1.5 px-3 py-2.5">
       <span className="font-mono text-micro text-mf-text-4">{rangeLabel({ start: item.start, end: item.end })}</span>
       {lines.length > 0 && (
-        <div className="select-text overflow-hidden rounded-md border-[0.5px] border-border bg-mf-raised py-1">
-          <SnippetLines lines={lines} start={item.start} />
+        <div className="select-text rounded-md border-[0.5px] border-border bg-mf-raised py-1">
+          <SnippetBlock lines={lines} start={item.start} />
         </div>
       )}
       {/* The comment reads as a small user bubble inside the file card. */}

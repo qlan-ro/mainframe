@@ -22,6 +22,13 @@ export type CreateDirectiveTextOptions = {
   iconMap?: Record<string, IconComponent>;
   /** Icon rendered when `iconMap` has no entry for the segment type. */
   fallbackIcon?: IconComponent;
+  /**
+   * Directive types listed here render as plain inline text (accent color +
+   * semibold, no box/border/icon) instead of the boxed DirectiveChip — e.g.
+   * @mentions read as plain accented text in the design, while /command
+   * chips keep the box treatment.
+   */
+  plainTypes?: readonly string[];
 };
 
 // ── Warm-chrome chip ─────────────────────────────────────────────────────────
@@ -55,6 +62,23 @@ function DirectiveChip({ type, label, id, Icon }: DirectiveChipProps) {
   );
 }
 
+// ── Plain (chipless) directive text ──────────────────────────────────────────
+
+interface DirectivePlainProps {
+  type: string;
+  label: string;
+  id: string;
+}
+
+/** Accent-colored inline text, no box/border/icon — e.g. @mentions. */
+function DirectivePlain({ type, label, id }: DirectivePlainProps) {
+  return (
+    <span data-directive-type={type} data-directive-id={id} className="font-semibold text-primary">
+      {label}
+    </span>
+  );
+}
+
 // ── Factory ──────────────────────────────────────────────────────────────────
 
 /**
@@ -69,6 +93,7 @@ export function createDirectiveText(
 ): TextMessagePartComponent {
   const iconMap = options?.iconMap;
   const fallbackIcon = options?.fallbackIcon;
+  const plainTypes = options?.plainTypes;
 
   const Component: TextMessagePartComponent = ({ text }) => {
     const segments = formatter.parse(text);
@@ -86,6 +111,10 @@ export function createDirectiveText(
                 {seg.text}
               </span>
             );
+          }
+
+          if (plainTypes?.includes(seg.type)) {
+            return <DirectivePlain key={i} type={seg.type} label={seg.label} id={seg.id} />;
           }
 
           const Icon = iconMap?.[seg.type] ?? fallbackIcon;

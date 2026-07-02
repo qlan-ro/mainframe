@@ -131,3 +131,29 @@ describe('ReviewCommentCard — empty code string', () => {
     expect(screen.getByText('just a note')).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// RC4 — long snippet (> 7 lines): clamp + "Show all N lines" expander (7.8)
+// ---------------------------------------------------------------------------
+
+describe('ReviewCommentCard — long snippet clamp (7.8)', () => {
+  const longCode = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n');
+  const longReview: ReviewComment = {
+    file: '/project/big.ts',
+    comments: [{ start: 1, code: longCode, body: 'refactor this' }],
+  };
+
+  it('renders the "Show all 10 lines" expander for a 10-line snippet', () => {
+    render(<ReviewCommentCard review={longReview} />);
+    expect(screen.getByTestId('chat-user-snippet-expand')).toHaveTextContent('Show all 10 lines');
+  });
+
+  it('does not render an expander for a short (<=7 line) snippet', () => {
+    const shortReview: ReviewComment = {
+      file: '/project/small.ts',
+      comments: [{ start: 1, code: 'a\nb\nc', body: 'ok' }],
+    };
+    render(<ReviewCommentCard review={shortReview} />);
+    expect(screen.queryByTestId('chat-user-snippet-expand')).not.toBeInTheDocument();
+  });
+});

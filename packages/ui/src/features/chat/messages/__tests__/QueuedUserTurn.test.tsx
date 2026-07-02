@@ -189,6 +189,27 @@ describe('QueuedUserTurn — A1: QueuedAction ghost border', () => {
     expect(cancelBtn.className).toContain('border');
     expect(cancelBtn.className).toContain('border-transparent');
   });
+
+  it('Edit action has gap-[4px] (icon/label gap) and rounded-[7px] (7.10)', () => {
+    renderQueued({ content: 'some text' });
+    const editBtn = screen.getByTestId('chat-queued-edit');
+    expect(editBtn.className).toContain('gap-[4px]');
+    expect(editBtn.className).toContain('rounded-[7px]');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AG — action-row-to-bubble gap matches the design (7.6)
+// ---------------------------------------------------------------------------
+
+describe('QueuedUserTurn — AG: action row to bubble gap', () => {
+  it('the row wrapping the actions + bubble has gap-4 (8px)', () => {
+    renderQueued({ content: 'some text' });
+    const actionsDiv = screen.getByTestId('chat-queued-edit').parentElement;
+    const row = actionsDiv?.parentElement;
+    expect(row).not.toBeNull();
+    expect(row!.className).toContain('gap-4');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -27,20 +27,21 @@
  * but the text itself starts with `/command`, the formatter will emit a command
  * chip — so both paths produce a chip, just at different levels.
  */
-import { memo, useMemo, useState, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { AtSign, Wrench, Zap } from 'lucide-react';
+import { Wrench, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras, useChatQueuedMessages } from '../runtime/use-chat-thread-runtime';
 import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
-import { ImageLightbox } from '../parts/ImageLightbox';
+import { queuePosition } from './queue-position';
+import { InlineImageThumbs } from './InlineImageThumbs';
 import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
 import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
@@ -60,14 +61,15 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * TextMessagePartComponent for user text — renders @mentions as accent chips,
- * optionally a leading /command chip if present in the raw text.
+ * TextMessagePartComponent for user text — renders @mentions as plain accent
+ * text (no box/icon, design 7.1), and a leading /command as a boxed chip if
+ * present in the raw text.
  */
 const UserDirectiveText = createDirectiveText(mainframeUserFormatter, {
   iconMap: {
-    mention: AtSign,
     command: Wrench,
   },
+  plainTypes: ['mention'],
 });
 
 /**
@@ -133,44 +135,13 @@ function SlashPill({ kind, name }: SlashPillProps) {
   const bgClass = kind === 'command' ? 'bg-mf-selection' : 'bg-mf-directive-skill-tint';
 
   return (
-    <span className={cn('mr-2 inline-flex items-center gap-1 rounded-md py-0.5 pl-1.5 pr-2', bgClass)}>
+    // Design 7.5: padding 2px 8px 2px 6px, gap 5, marginRight 8 — py-0.5 (2px)
+    // and pl-1.5 (6px) already match the compressed scale; mr-4/pr-4 hit the
+    // exact 8px tokens, gap-[5px] has no matching integer step (arbitrary).
+    <span className={cn('mr-4 inline-flex items-center gap-[5px] rounded-md py-0.5 pl-1.5 pr-4', bgClass)}>
       <Icon size={12} className={colorClass} />
       <span className={cn('font-mono text-caption font-semibold', colorClass)}>/{name}</span>
     </span>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Image thumbnails
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface InlineImageThumbsProps {
-  parts: Array<{ type: 'image'; image: string }>;
-}
-
-function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-  if (parts.length === 0) return null;
-  return (
-    <div className="flex flex-wrap justify-end gap-2">
-      {parts.map((p, i) => (
-        <button
-          key={p.image}
-          type="button"
-          data-testid="chat-image-zoom-trigger"
-          aria-label="View image full size"
-          onClick={() => setOpenIndex(i)}
-          className="block cursor-zoom-in rounded-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <img
-            src={p.image}
-            alt=""
-            className="size-16 rounded-[11px] border-[0.5px] border-border object-cover shadow-sm"
-          />
-        </button>
-      ))}
-      <ImageLightbox images={parts.map((p) => ({ src: p.image }))} index={openIndex} onIndexChange={setOpenIndex} />
-    </div>
   );
 }
 
@@ -182,10 +153,18 @@ function UserMessageImpl() {
   const meta = useMainframeMeta();
   const chatExtras = useChatExtras();
   const isQueued = meta.queued === true;
+  // FIFO position/total for the queued footer (design 7.2: UMQueuedStack).
+  // Only needed while queued — the hook is cheap (memoized off extras.queued).
+  const queuedRefs = useChatQueuedMessages();
 
   // H6: s.message is typed as MessageState (= ThreadMessage & extras) via the
   // ScopeRegistry augmentation in @assistant-ui/core — no cast needed.
   const messageId = useAuiState((s) => s.message.id);
+
+  const { position: queuePos, total: queueTotal } = useMemo(
+    () => queuePosition(queuedRefs, messageId),
+    [queuedRefs, messageId],
+  );
 
   // Resolve text: prefer cleanText (pipeline-stripped) over raw part text.
   // Read the stable content ref; derive text outside useAuiState to avoid a
@@ -269,13 +248,21 @@ function UserMessageImpl() {
     <MessagePrimitive.Root
       data-testid="chat-user-message"
       data-message-id={messageId}
-      className="flex flex-col items-end gap-2 pt-2"
+      // Design 7.7: marginBottom 16 to the next transcript element — pb-6
+      // hits the compressed 16px token; pt-2 (4px) is the existing top gap.
+      className="flex flex-col items-end gap-2 pt-2 pb-6"
     >
       {reviewCard}
 
       {isQueued ? (
         (body || hasExtras) && (
-          <QueuedUserTurn messageId={messageId} content={cleanText} extrasSlot={extras}>
+          <QueuedUserTurn
+            messageId={messageId}
+            content={cleanText}
+            extrasSlot={extras}
+            position={queuePos}
+            total={queueTotal}
+          >
             {body}
           </QueuedUserTurn>
         )

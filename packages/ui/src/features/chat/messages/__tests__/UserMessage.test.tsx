@@ -32,8 +32,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 // Controllable retry spy for the chat-extras seam (hoisted for vi.mock).
 const { retryMessageSpy } = vi.hoisted(() => ({ retryMessageSpy: vi.fn() }));
+// Mutable queued-refs fixture for the FIFO position/total dispatch tests (7.2).
+let __queuedFixture: import('@qlan-ro/mainframe-types').QueuedMessageRef[] = [];
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   useChatExtras: () => ({ retryMessage: retryMessageSpy }),
+  useChatQueuedMessages: () => __queuedFixture,
 }));
 
 // ---------------------------------------------------------------------------
@@ -108,10 +111,21 @@ vi.mock('../UserAttachments', () => ({
 }));
 
 // QueuedUserTurn renders for real children + the extrasSlot, so a no-body
-// queued send still mounts its attachments/captures.
+// queued send still mounts its attachments/captures. position/total render
+// as data attributes so the FIFO dispatch tests (7.2) can assert on them.
 vi.mock('../QueuedUserTurn', () => ({
-  QueuedUserTurn: ({ children, extrasSlot }: { children?: React.ReactNode; extrasSlot?: React.ReactNode }) => (
-    <div data-testid="chat-queued-message">
+  QueuedUserTurn: ({
+    children,
+    extrasSlot,
+    position,
+    total,
+  }: {
+    children?: React.ReactNode;
+    extrasSlot?: React.ReactNode;
+    position?: number;
+    total?: number;
+  }) => (
+    <div data-testid="chat-queued-message" data-position={position} data-total={total}>
       {children}
       {extrasSlot}
     </div>
@@ -229,6 +243,12 @@ describe('UserMessage — H6: message id and content rendering', () => {
     expect(screen.getByTestId('chat-user-message')).toBeInTheDocument();
   });
 
+  it('carries a 16px bottom margin to the next message (7.7 — pb-6)', () => {
+    __messageFixture = makeFixture();
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-message').className).toContain('pb-6');
+  });
+
   it('renders cleanText from metadata when present, ignoring raw text', () => {
     __messageFixture = makeFixture({
       content: [{ type: 'text', text: 'raw text here' }],
@@ -238,6 +258,60 @@ describe('UserMessage — H6: message id and content rendering', () => {
     // cleanText takes priority over the raw content part
     expect(screen.getByText('cleaned text here')).toBeInTheDocument();
     expect(screen.queryByText('raw text here')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — MT: @mention renders as plain accent text, no boxed chip (7.1)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — MT: @mention renders as plain text, not a chip', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the @mention token with no directive-text-chip wrapper', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'see @Layout.tsx here' }],
+    });
+    renderUserMessage();
+    const mention = screen.getByText('@Layout.tsx');
+    expect(mention.closest('[data-slot="directive-text-chip"]')).toBeNull();
+  });
+
+  it('applies the accent + semibold classes to the plain @mention span', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'see @Layout.tsx here' }],
+    });
+    renderUserMessage();
+    const mention = screen.getByText('@Layout.tsx');
+    expect(mention.className).toContain('text-primary');
+    expect(mention.className).toContain('font-semibold');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — SP: SlashPill spacing matches the design (7.5)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — SP: SlashPill spacing (mr-4, gap-[5px], pr-4)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __skillsFixture = [];
+  });
+
+  it('renders the pill wrapper with mr-4 (8px), gap-[5px], pl-1.5 (6px), pr-4 (8px)', () => {
+    __messageFixture = makeFixture({
+      mainframe: { command: { name: 'debug', source: 'commands', userText: 'run this' } },
+    });
+    renderUserMessage();
+    const pillLabel = screen.getByText('/debug');
+    const pill = pillLabel.closest('span')?.parentElement;
+    expect(pill).not.toBeNull();
+    expect(pill!.className).toContain('mr-4');
+    expect(pill!.className).toContain('gap-[5px]');
+    expect(pill!.className).toContain('pl-1.5');
+    expect(pill!.className).toContain('pr-4');
   });
 });
 
@@ -309,6 +383,7 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __skillsFixture = [];
+    __queuedFixture = [];
   });
 
   it('renders the bubble text of a capture message (captures themselves ride the attachment row)', () => {
@@ -365,6 +440,40 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     });
     renderUserMessage();
     expect(screen.queryByTestId('chat-queued-message')).not.toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // FIFO position/total dispatch (7.2) — sourced from useChatQueuedMessages()
+  // -------------------------------------------------------------------------
+
+  it('passes position=1, total=1 to QueuedUserTurn when the queue holds only this message', () => {
+    __messageFixture = makeFixture({
+      id: 'm1',
+      content: [{ type: 'text', text: 'go' }],
+      mainframe: { queued: true },
+    });
+    __queuedFixture = [{ messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'go', timestamp: '2026-07-02T10:00:00.000Z' }];
+    renderUserMessage();
+    const shell = screen.getByTestId('chat-queued-message');
+    expect(shell).toHaveAttribute('data-position', '1');
+    expect(shell).toHaveAttribute('data-total', '1');
+  });
+
+  it('passes position=2, total=3 to QueuedUserTurn for the second-earliest of three queued messages', () => {
+    __messageFixture = makeFixture({
+      id: 'm2',
+      content: [{ type: 'text', text: 'second' }],
+      mainframe: { queued: true },
+    });
+    __queuedFixture = [
+      { messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'first', timestamp: '2026-07-02T10:00:00.000Z' },
+      { messageId: 'm2', chatId: 'c1', uuid: 'u2', content: 'second', timestamp: '2026-07-02T10:00:01.000Z' },
+      { messageId: 'm3', chatId: 'c1', uuid: 'u3', content: 'third', timestamp: '2026-07-02T10:00:02.000Z' },
+    ];
+    renderUserMessage();
+    const shell = screen.getByTestId('chat-queued-message');
+    expect(shell).toHaveAttribute('data-position', '2');
+    expect(shell).toHaveAttribute('data-total', '3');
   });
 });
 

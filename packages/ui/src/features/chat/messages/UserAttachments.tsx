@@ -34,10 +34,14 @@ function FilePill({ name }: { name: string }) {
   return (
     <div
       data-testid={`chat-user-attachment-${name}`}
-      className="inline-flex items-center gap-2.5 rounded-[11px] border-[0.5px] border-border bg-background py-1.5 pl-1.5 pr-3 shadow-sm"
+      // Design 7.3: padding 6px 12px 6px 6px — pr-5 hits the exact 12px token
+      // (pr-3 was 6px, half the design value).
+      className="inline-flex items-center gap-2.5 rounded-[11px] border-[0.5px] border-border bg-background py-1.5 pl-1.5 pr-5 shadow-sm"
     >
       <span
-        className="inline-flex size-9 flex-shrink-0 items-center justify-center rounded-lg"
+        // Design 7.4: 36×36 icon tile — no exact compressed-scale token (9=32,
+        // 10=40), so arbitrary size-[36px] per the audit's suggested fix.
+        className="inline-flex size-[36px] flex-shrink-0 items-center justify-center rounded-lg"
         style={{ background: extTint(m.color) }}
       >
         <span className="font-mono text-micro font-bold" style={{ color: m.color }}>
@@ -80,7 +84,10 @@ function ImageAttachment({ name }: { name: string }) {
   return (
     <span
       data-testid={`chat-user-attachment-${name}`}
-      className="inline-flex max-w-[280px] items-center gap-2 rounded-lg border-[0.5px] border-border bg-mf-content2 py-1 pl-1 pr-2.5 text-caption text-muted-foreground"
+      // Design 7.13: padding 4px 9px 4px 4px, gap 7, radius 8 (rounded-md),
+      // maxWidth 250 — py-1/pl-1 already hit the 4px tokens; gap/pr have no
+      // exact compressed-scale step so stay arbitrary.
+      className="inline-flex max-w-[250px] items-center gap-[7px] rounded-md border-[0.5px] border-border bg-mf-content2 py-1 pl-1 pr-[9px] text-caption text-muted-foreground"
     >
       {thumb}
       <span className="flex min-w-0 flex-col">

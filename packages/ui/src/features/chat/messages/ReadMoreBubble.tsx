@@ -45,7 +45,9 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
   const collapsed = needsToggle && !expanded;
 
   return (
-    <div className={cn('relative', className)}>
+    // Design 7.11: gap 5 (flex column) between the card and the button —
+    // replaces the button's own mt-1 margin so the two are truly independent.
+    <div className={cn('relative flex flex-col gap-[5px]', className)}>
       <div
         data-clamp={needsToggle ? '' : undefined}
         data-text-part
@@ -76,7 +78,9 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
           data-testid="chat-user-readmore-toggle"
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-1 inline-flex items-center gap-0.5 text-caption font-semibold text-primary hover:underline"
+          // Design 7.11: gap 4 between the label and chevron — gap-2 hits the
+          // exact compressed-scale token (gap-0.5 was 2px, half the design value).
+          className="inline-flex items-center gap-2 text-caption font-semibold text-primary hover:underline"
           aria-label={expanded ? 'Show less' : 'Read more'}
           aria-expanded={expanded}
         >

@@ -49,7 +49,9 @@ function QueuedAction({ icon: Icon, label, onClick, danger, testid }: QueuedActi
       data-testid={testid}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1 rounded-md border border-transparent h-[24px] px-[9px]',
+        // Design 7.10: icon/label gap 4 (gap-1 was 2px), radius 7 (rounded-md
+        // is 8px) — both arbitrary, no exact compressed-scale token.
+        'inline-flex items-center gap-[4px] rounded-[7px] border border-transparent h-[24px] px-[9px]',
         'text-caption text-mf-text-3 transition-colors',
         'hover:bg-mf-content2 hover:border-border',
         danger && 'hover:text-destructive hover:border-destructive/35',
@@ -148,7 +150,8 @@ export function QueuedUserTurn({
 
   return (
     <div data-testid="chat-queued-message" className="group/queued flex w-full flex-col items-end gap-[5px]">
-      <div className="flex items-center gap-2">
+      {/* Design 7.6: gap 8 between the Edit/Cancel action group and the bubble. */}
+      <div className="flex items-center gap-4">
         <div
           className={cn(
             'flex items-center gap-0.5 opacity-0',
