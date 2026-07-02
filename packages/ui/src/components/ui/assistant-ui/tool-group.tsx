@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useRef, useState, type FC, type PropsWithChildren } from 'react';
-import { ChevronDownIcon, LoaderIcon } from 'lucide-react';
+import { ChevronDownIcon } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useScrollLock } from '@assistant-ui/react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -89,10 +89,12 @@ function ToolGroupTrigger({
   label?: string;
 }) {
   const label = labelProp ?? `${count} tool ${count === 1 ? 'call' : 'calls'}`;
+  const countLabel = `${count} ${count === 1 ? 'call' : 'calls'}`;
 
   return (
     <CollapsibleTrigger
       data-slot="tool-group-trigger"
+      aria-busy={active}
       className={cn(
         'aui-tool-group-trigger group/trigger flex items-center gap-1.5',
         'text-caption text-muted-foreground transition-colors hover:text-foreground',
@@ -102,31 +104,6 @@ function ToolGroupTrigger({
       )}
       {...props}
     >
-      {active && (
-        <LoaderIcon
-          data-slot="tool-group-trigger-loader"
-          className="aui-tool-group-trigger-loader size-3.5 shrink-0 animate-spin text-mf-warning"
-        />
-      )}
-      <span
-        data-slot="tool-group-trigger-label"
-        className={cn(
-          'aui-tool-group-trigger-label-wrapper relative inline-block text-start leading-none font-medium',
-          'group-data-[variant=outline]/tool-group-root:grow',
-          'group-data-[variant=muted]/tool-group-root:grow',
-        )}
-      >
-        <span>{label}</span>
-        {active && (
-          <span
-            aria-hidden
-            data-slot="tool-group-trigger-shimmer"
-            className="aui-tool-group-trigger-shimmer shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none"
-          >
-            {label}
-          </span>
-        )}
-      </span>
       <ChevronDownIcon
         data-slot="tool-group-trigger-chevron"
         className={cn(
@@ -134,6 +111,29 @@ function ToolGroupTrigger({
           'transition-transform duration-(--animation-duration) ease-out',
           'group-data-[state=closed]/trigger:-rotate-90',
           'group-data-[state=open]/trigger:rotate-0',
+        )}
+      />
+      <span
+        data-testid="tool-group-trigger-label"
+        data-slot="tool-group-trigger-label"
+        className={cn(
+          'aui-tool-group-trigger-label-wrapper text-start leading-none font-bold uppercase tracking-[0.5px] text-foreground',
+        )}
+      >
+        {label}
+      </span>
+      <span
+        data-testid="tool-group-trigger-count"
+        data-slot="tool-group-trigger-count"
+        className="font-mono text-micro text-mf-text-4"
+      >
+        {countLabel}
+      </span>
+      <span
+        className={cn(
+          'aui-tool-group-trigger-spacer',
+          'group-data-[variant=outline]/tool-group-root:grow',
+          'group-data-[variant=muted]/tool-group-root:grow',
         )}
       />
     </CollapsibleTrigger>

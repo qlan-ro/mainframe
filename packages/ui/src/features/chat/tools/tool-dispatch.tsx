@@ -34,7 +34,7 @@ export function MessageToolGroup({
   children: ReactNode;
 }) {
   return (
-    <ToolGroupRoot data-testid="chat-tool-group">
+    <ToolGroupRoot data-testid="chat-tool-group" defaultOpen>
       <ToolGroupTrigger data-testid="chat-tool-group-toggle" count={indices.length} active={running} label={summary} />
       <ToolGroupContent>{children}</ToolGroupContent>
     </ToolGroupRoot>

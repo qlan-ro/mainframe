@@ -19,7 +19,7 @@ import { Hint } from '@/components/ui/hint';
 
 /** Centers its children on the chat spine with a vertical gap. */
 export function MarkerWrap({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col items-center gap-2 my-2.5 w-full">{children}</div>;
+  return <div className="flex flex-col items-center gap-4 my-2.5 w-full">{children}</div>;
 }
 
 // ── MarkerPill ────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ export function MarkerPill({
         disabled={!clickable}
         onClick={clickable ? onClick : undefined}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full px-3 py-1',
+          'inline-flex items-center gap-1.5 rounded-full pt-[4px] pr-[11px] pb-[4px] pl-[9px]',
           'font-mono text-caption text-mf-text-3 select-none',
           'border border-border bg-mf-content2',
           'transition-colors duration-100',

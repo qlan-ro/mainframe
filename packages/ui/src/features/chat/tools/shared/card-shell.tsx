@@ -129,7 +129,7 @@ export function CollapsibleCardShell({
         data-testid={triggerId}
         disabled={disableTrigger || !hasBody}
         className={cn(
-          'flex w-full items-center gap-2 px-3 py-[7px]',
+          'flex w-full items-center gap-[9px] px-[10px] py-[7px]',
           'text-body transition-colors hover:bg-accent',
           (disableTrigger || !hasBody) && 'cursor-default',
         )}

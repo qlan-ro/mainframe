@@ -24,6 +24,7 @@ import { EnterWorktreeCard, ExitWorktreeCard } from './cards/WorktreeStatusPillC
 import { SlashCommandCard } from './cards/SlashCommandCard';
 import { TaskCard } from './cards/TaskCard';
 import { TaskProgressCard } from './cards/TaskProgressCard';
+import { WebFetchCard } from './cards/WebFetchCard';
 
 Object.assign(TOOL_REGISTRY, {
   // file-mutating
@@ -38,6 +39,8 @@ Object.assign(TOOL_REGISTRY, {
   Bash: BashCard,
   ExitPlanMode: PlanCard,
   AskUserQuestion: AskUserQuestionCard,
+  WebFetch: WebFetchCard,
+  WebSearch: WebFetchCard,
   // marker pills
   _Mcp: MCPToolCard,
   ScheduleWakeup: ScheduleWakeupCard,

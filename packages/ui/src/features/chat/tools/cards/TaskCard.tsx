@@ -43,8 +43,8 @@ interface TaskHeaderProps {
 function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isError }: TaskHeaderProps) {
   return (
     <div className="flex min-w-0 items-center gap-2 py-0.5">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-mf-selection" aria-hidden>
-        <Bot size={13} className="text-primary" />
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-mf-selection" aria-hidden>
+        <Bot size={14} className="text-primary" />
       </span>
 
       {/* Agent name */}
@@ -104,7 +104,7 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
 
 function SubagentTranscript({ messages }: { messages: readonly import('@assistant-ui/react').ThreadMessage[] }) {
   return (
-    <div className="ml-3 border-l-2 border-border pl-3.5">
+    <div className="ml-[12px] border-l-2 border-border pl-3.5">
       <ReadonlyThreadProvider messages={messages}>
         <ThreadPrimitive.Messages components={boundedMessageComponents} />
       </ReadonlyThreadProvider>
