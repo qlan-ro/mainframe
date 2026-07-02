@@ -16,7 +16,7 @@ import type { ComponentType } from 'react';
 import { fileIconFor } from '@/lib/editor/file-types';
 import type { RowType, SpotlightRow } from './use-spotlight-results';
 
-const ICONS: Record<RowType, ComponentType<{ className?: string }>> = {
+const ICONS: Record<RowType, ComponentType<{ className?: string; fill?: string }>> = {
   session: MessageSquareIcon,
   file: FileIcon,
   symbol: BracesIcon,
@@ -25,7 +25,7 @@ const ICONS: Record<RowType, ComponentType<{ className?: string }>> = {
 };
 
 /** Per-command glyph, keyed by the stable palette-commands.ts id (06-palette.jsx:69-76). */
-const COMMAND_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+const COMMAND_ICONS: Record<string, ComponentType<{ className?: string; fill?: string }>> = {
   review: GitCompareIcon,
   settings: SettingsIcon,
   sidebar: PanelLeftIcon,
@@ -33,6 +33,9 @@ const COMMAND_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   files: FolderIcon,
   run: PlayIcon,
 };
+
+/** Command ids whose glyph renders SOLID (design spec: play.fill for `run`). */
+const SOLID_COMMAND_ICONS = new Set(['run']);
 
 /** Per-symbol-kind icon tint, keyed by the tag rendered on `@` rows (symbolKindLabel output). */
 const SYMBOL_TAG_COLOR: Record<string, string> = {
@@ -45,10 +48,14 @@ const SYMBOL_TAG_COLOR: Record<string, string> = {
   enum: 'text-mf-code-type',
 };
 
-function rowIcon(row: SpotlightRow): ComponentType<{ className?: string }> {
+function rowIcon(row: SpotlightRow): ComponentType<{ className?: string; fill?: string }> {
   if (row.type === 'command') return COMMAND_ICONS[row.id] ?? ICONS.command;
   if (row.type === 'file') return fileIconFor(row.title);
   return ICONS[row.type];
+}
+
+function rowIconFill(row: SpotlightRow): string | undefined {
+  return row.type === 'command' && SOLID_COMMAND_ICONS.has(row.id) ? 'currentColor' : undefined;
 }
 
 function iconColorClass(row: SpotlightRow, isActive: boolean): string {
@@ -69,6 +76,7 @@ export function SpotlightRowView({
   onSelect: (row: SpotlightRow) => void;
 }) {
   const Icon = rowIcon(row);
+  const iconFill = rowIconFill(row);
   const mono = row.type !== 'command';
   const hasTrailing = Boolean(row.hint || row.tag || row.status);
   return (
@@ -85,7 +93,7 @@ export function SpotlightRowView({
       }`}
     >
       <span className="inline-flex w-5 shrink-0 justify-center">
-        <Icon className={`size-[15px] ${iconColorClass(row, isActive)}`} />
+        <Icon className={`size-[15px] ${iconColorClass(row, isActive)}`} fill={iconFill} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span

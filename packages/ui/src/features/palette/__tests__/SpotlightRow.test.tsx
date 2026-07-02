@@ -85,6 +85,13 @@ describe('SpotlightRowView', () => {
     expect(tsContainer.querySelector('svg')?.innerHTML).not.toBe(mdContainer.querySelector('svg')?.innerHTML);
   });
 
+  it('renders the run command icon solid (fill=currentColor) to match the design glyph play.fill', () => {
+    const runRow: SpotlightRow = { ...cmdRow, id: 'run', testid: 'search-palette-command-row-run' };
+    render(<SpotlightRowView row={runRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />);
+    const svg = screen.getByTestId('search-palette-command-row-run').querySelector('svg');
+    expect(svg?.getAttribute('fill')).toBe('currentColor');
+  });
+
   it('tints the symbol-row icon color per symbol kind tag', () => {
     const fnRow: SpotlightRow = {
       type: 'symbol',

@@ -58,7 +58,7 @@ export function GeneralPane({ port }: { port: number }) {
               type="button"
               data-testid="settings-worktree-dir-save"
               onClick={handleSave}
-              className="h-[30px] rounded bg-primary px-[11px] text-body text-primary-foreground hover:opacity-90"
+              className="inline-flex h-[30px] items-center justify-center rounded bg-primary px-[11px] text-body text-primary-foreground hover:opacity-90"
             >
               Save
             </button>

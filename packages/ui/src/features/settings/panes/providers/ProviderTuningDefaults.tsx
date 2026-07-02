@@ -32,7 +32,10 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
             value={config.defaultEffort ?? INHERIT}
             onValueChange={(v) => onChange({ defaultEffort: (v === INHERIT ? '' : v) as EffortLevel | '' })}
           >
-            <SelectTrigger data-testid={`settings-${adapterId}-default-effort`}>
+            <SelectTrigger
+              data-testid={`settings-${adapterId}-default-effort`}
+              className="h-[30px] px-[11px] border border-input"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

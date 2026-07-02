@@ -18,7 +18,7 @@ function SelectField({
 }) {
   return (
     <Select value={value ?? INHERIT} onValueChange={(v) => onChange(v === INHERIT ? '' : v)}>
-      <SelectTrigger data-testid={testId}>
+      <SelectTrigger data-testid={testId} className="h-[30px] px-[11px] border border-input">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
