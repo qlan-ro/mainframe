@@ -149,3 +149,44 @@ describe('buildRunTree — choose with call sub-step', () => {
     expect(arm1!.steps).toHaveLength(0);
   });
 });
+
+describe('buildRunTree — leaf duration/sub/waitFor', () => {
+  it('emits a formatted duration for a finished leaf', () => {
+    const def: WorkflowDef = { version: 1, name: 'x', steps: [{ id: 'a', set: { v: 1 } } as any] };
+    const start = 1_000_000;
+    const latest = new Map([makeRec('steps.0', 'succeeded', { startedAt: start, finishedAt: start + 192_000 })]);
+    const tree = buildRunTree(def, latest);
+    expect(tree[0]!.duration).toBe('3m 12s');
+  });
+
+  it('emits waitFor from scratch on a waiting leaf', () => {
+    const def: WorkflowDef = { version: 1, name: 'x', steps: [{ id: 'a', set: { v: 1 } } as any] };
+    const latest = new Map([makeRec('steps.0', 'waiting', { scratch: { waitFor: 'user input' } })]);
+    const tree = buildRunTree(def, latest);
+    expect(tree[0]!.waitFor).toBe('user input');
+  });
+
+  it('omits duration when finishedAt is null', () => {
+    const def: WorkflowDef = { version: 1, name: 'x', steps: [{ id: 'a', set: { v: 1 } } as any] };
+    const latest = new Map([makeRec('steps.0', 'running', { finishedAt: null })]);
+    const tree = buildRunTree(def, latest);
+    expect(tree[0]!.duration).toBeUndefined();
+  });
+});
+
+describe('buildRunTree — composite summary', () => {
+  it('summarizes a parallel node as done-of-total', () => {
+    const def: WorkflowDef = {
+      version: 1,
+      name: 'x',
+      steps: [{ id: 'p', parallel: { a: [{ id: 'a1', set: { v: 1 } }], b: [{ id: 'b1', set: { v: 2 } }] } } as any],
+    };
+    const latest = new Map([
+      makeRec('steps.0', 'running', { kind: 'parallel' }),
+      makeRec('steps.0.parallel.a.0', 'succeeded'),
+      makeRec('steps.0.parallel.b.0', 'running'),
+    ]);
+    const tree = buildRunTree(def, latest);
+    expect(tree[0]!.summary).toBe('1 of 2');
+  });
+});

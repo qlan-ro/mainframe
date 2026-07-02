@@ -13,6 +13,9 @@ export interface RunTreeNode {
   output: unknown;
   error: string | null;
   chatId?: string;
+  duration?: string; // leaf — formatted elapsed time
+  sub?: string; // leaf — secondary narrative line
+  waitFor?: string; // leaf — what a waiting step is blocked on
   // composite children shaped to match the design:
   lanes?: Array<{ label: string; status: string; steps: RunTreeNode[] }>; // parallel
   arms?: Array<{ cond: string; taken: boolean; steps: RunTreeNode[] }>; // choose
@@ -20,6 +23,7 @@ export interface RunTreeNode {
   ref?: string; // call
   childRunId?: string; // call
   steps?: RunTreeNode[]; // call subflow
+  summary?: string; // composite — daemon-supplied rollup line (e.g. "1 of 2")
 }
 
 /** Worst-of rollup ordering — highest severity first. */
@@ -66,10 +70,58 @@ function iterationsOf(rec: StepRunRecord | undefined): Array<{ index: number; la
   return s.iterations ?? [];
 }
 
+/** Format an elapsed millisecond span as "Xm Ys" (or "Ys" under a minute). */
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+/** Derive the leaf-only duration/sub/waitFor fields from the step's run record. */
+function leafFields(
+  rec: StepRunRecord | undefined,
+  scratch: Record<string, unknown> | null,
+  isComposite: boolean,
+): Pick<RunTreeNode, 'duration' | 'sub' | 'waitFor'> {
+  const fields: Pick<RunTreeNode, 'duration' | 'sub' | 'waitFor'> = {};
+  if (isComposite) return fields;
+  if (rec?.startedAt !== undefined && rec.finishedAt != null) {
+    fields.duration = formatDuration(rec.finishedAt - rec.startedAt);
+  }
+  const scratchSub = (scratch as { sub?: string } | null)?.sub;
+  if (scratchSub !== undefined) fields.sub = scratchSub;
+  if (rec?.status === 'waiting') {
+    const waitFor = (scratch as { waitFor?: string } | null)?.waitFor;
+    if (waitFor !== undefined) fields.waitFor = waitFor;
+  }
+  return fields;
+}
+
+/** Derive the composite `summary` rollup line for a parallel/choose/foreach/call node. */
+function compositeSummary(step: StepDef, base: RunTreeNode, takenArm: number): string | undefined {
+  if ('parallel' in step) {
+    const total = base.lanes!.length;
+    const done = base.lanes!.filter((l) => l.status === 'succeeded').length;
+    return `${done} of ${total}`;
+  }
+  if ('choose' in step) {
+    return takenArm >= 0 ? base.arms![takenArm]!.cond : 'not taken';
+  }
+  if ('foreach' in step) {
+    return `${base.iterations!.length} items`;
+  }
+  if ('call' in step) {
+    return step.call;
+  }
+  return undefined;
+}
+
 function buildNode(step: StepDef, path: string, latest: Map<string, StepRunRecord>): RunTreeNode {
   const rec = latest.get(path);
   const kind = stepKind(step);
   const scratch = rec?.scratch ?? null;
+  const isComposite = 'parallel' in step || 'choose' in step || 'foreach' in step || 'call' in step;
   const base: RunTreeNode = {
     stepPath: path,
     stepId: step.id ?? null,
@@ -80,17 +132,24 @@ function buildNode(step: StepDef, path: string, latest: Map<string, StepRunRecor
     output: rec?.output ?? null,
     error: rec?.error ?? null,
     chatId: (scratch as { chatId?: string } | null)?.chatId,
+    ...leafFields(rec, scratch, isComposite),
   };
 
+  let takenArm = -1;
   if ('parallel' in step) {
     base.lanes = buildParallelLanes(step.parallel, path, latest);
   } else if ('choose' in step) {
+    takenArm = (scratch as { takenArm?: number } | null)?.takenArm ?? -1;
     base.arms = buildChooseArms(step.choose, path, scratch, latest);
   } else if ('foreach' in step) {
     base.iterations = buildForeachIterations(step, path, rec, latest);
   } else if ('call' in step) {
     base.ref = step.call;
     base.childRunId = (scratch as { childRunId?: string } | null)?.childRunId;
+  }
+
+  if (isComposite) {
+    base.summary = compositeSummary(step, base, takenArm);
   }
 
   return base;
