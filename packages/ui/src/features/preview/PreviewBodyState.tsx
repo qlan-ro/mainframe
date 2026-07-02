@@ -10,6 +10,8 @@ interface PreviewBodyStateProps {
   inspectActive: boolean;
   anchorRef: RefObject<HTMLDivElement | null>;
   onStart: () => void;
+  /** Remote-daemon preview: status is 'running' but the tunnel URL hasn't arrived yet. */
+  tunnelPending?: boolean;
 }
 
 export function PreviewBodyState({
@@ -20,7 +22,19 @@ export function PreviewBodyState({
   inspectActive,
   anchorRef,
   onStart,
+  tunnelPending,
 }: PreviewBodyStateProps) {
+  if (tunnelPending) {
+    return (
+      <div data-testid="preview-tunnel-pending" className="absolute inset-0 grid place-items-center bg-card">
+        <div className="flex items-center gap-[8px]">
+          <Loader2 size={12} className="animate-spin text-mf-text-3" />
+          <span className="text-label text-mf-text-3">Starting tunnel…</span>
+        </div>
+      </div>
+    );
+  }
+
   if (status === null || status === 'stopped') {
     return (
       <div data-testid="preview-body-stopped" className="absolute inset-0 grid place-items-center bg-card">

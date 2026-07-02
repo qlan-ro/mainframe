@@ -4,6 +4,8 @@ import { usePreviewGeometry } from './use-preview-geometry';
 import { usePreviewVisibility } from './use-preview-visibility';
 import { usePreviewOcclusion } from './use-preview-occlusion';
 import { usePreviewCapture } from './use-preview-capture';
+import { useTunnelFallback } from './use-tunnel-fallback';
+import { resolvePreviewUrl } from './resolve-preview-url';
 import { PreviewToolbar } from './PreviewToolbar';
 import { PreviewBodyState } from './PreviewBodyState';
 import { ConsolePane } from '@/features/run/ConsolePane';
@@ -13,6 +15,7 @@ import { useSandboxStore } from '@/store/sandbox';
 import { startLaunchConfig, stopLaunchConfig } from '@/lib/api/launch';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 
 interface PreviewInstanceProps {
@@ -52,10 +55,16 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
   });
 
   const port = portProp ?? null;
+  const isLocal = useDaemonIsLocal();
+  const tunnelUrls = useSandboxStore((s) => s.tunnelUrls);
+  const tunnelErrors = useSandboxStore((s) => s.tunnelErrors);
+  const { resolvedUrl, tunnelError } = resolvePreviewUrl(isLocal, port, config, scopeKey, tunnelUrls, tunnelErrors);
+  const { tunnelFailed } = useTunnelFallback({ isLocal, status, resolvedUrl, tunnelError, config, scopeKey });
 
-  const { handle } = usePreviewLifecycle({
+  const { handle, pendingTunnel } = usePreviewLifecycle({
     status,
     port,
+    resolvedUrl,
     anchorRef,
     containerRef,
     projectId: effectiveProjectId,
@@ -146,15 +155,22 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
         handle={handle}
       />
       <div ref={containerRef} className="relative min-h-0 flex-1">
-        <PreviewBodyState
-          status={status}
-          configName={config}
-          port={port}
-          device={device}
-          inspectActive={inspectActive}
-          anchorRef={anchorRef}
-          onStart={handleStart}
-        />
+        {tunnelFailed ? (
+          <div data-testid="preview-tunnel-failed" className="absolute inset-0">
+            <ConsolePane scopeKey={scopeKey ?? ''} processName={config ?? ''} variant="full" />
+          </div>
+        ) : (
+          <PreviewBodyState
+            status={status}
+            configName={config}
+            port={port}
+            device={device}
+            inspectActive={inspectActive}
+            anchorRef={anchorRef}
+            onStart={handleStart}
+            tunnelPending={pendingTunnel}
+          />
+        )}
         {annotationBackdrop && (
           <img
             data-testid="preview-annotation-backdrop"
@@ -164,7 +180,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
           />
         )}
       </div>
-      {config && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
+      {config && !tunnelFailed && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
 
       {annotationPopoverOpen && (
         <CaptureAnnotationPopover
