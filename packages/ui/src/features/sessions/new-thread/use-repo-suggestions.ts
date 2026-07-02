@@ -23,8 +23,10 @@ export function useRepoSuggestions(projectId: string | null): { suggestions: Sug
         if (!cancelled) setSuggestions(list);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setSuggestions([]);
-        console.warn('[use-repo-suggestions] getSuggestions failed', err);
+        if (!cancelled) {
+          setSuggestions([]);
+          console.warn('[use-repo-suggestions] getSuggestions failed', err);
+        }
       });
     return () => {
       cancelled = true;

@@ -20,7 +20,7 @@ export function buildChurnSuggestions(input: ChurnInput): Suggestion[] {
       icon: 'git-compare',
       tint: 'accent',
       title: 'Review the working changes',
-      meta: `git · ${input.workingFileCount} files uncommitted`,
+      meta: `git · ${input.workingFileCount} file${input.workingFileCount === 1 ? '' : 's'} uncommitted`,
       prefill:
         'Review the uncommitted changes in the working tree, summarize what they do, and flag anything unsafe to commit.',
     });
@@ -36,7 +36,7 @@ export function buildChurnSuggestions(input: ChurnInput): Suggestion[] {
       icon: 'git-branch',
       tint: 'accent',
       title: `Summarize what changed on ${input.branch}`,
-      meta: `git · ${input.branchDiffCount} files vs ${input.baseBranch}`,
+      meta: `git · ${input.branchDiffCount} file${input.branchDiffCount === 1 ? '' : 's'} vs ${input.baseBranch}`,
       prefill: `Summarize the changes on the \`${input.branch}\` branch compared to \`${input.baseBranch}\`.`,
     });
   }

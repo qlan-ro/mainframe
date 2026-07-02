@@ -64,6 +64,26 @@ describe('buildChurnSuggestions', () => {
       buildChurnSuggestions({ branch: 'feat/x', baseBranch: null, workingFileCount: 0, branchDiffCount: 3 }),
     ).toEqual([]);
   });
+
+  it('singularizes "file" in the working-changes meta when there is exactly 1', () => {
+    const out = buildChurnSuggestions({
+      branch: 'main',
+      baseBranch: 'main',
+      workingFileCount: 1,
+      branchDiffCount: 0,
+    });
+    expect(out[0]?.meta).toBe('git · 1 file uncommitted');
+  });
+
+  it('singularizes "file" in the branch-churn meta when there is exactly 1', () => {
+    const out = buildChurnSuggestions({
+      branch: 'feat/x',
+      baseBranch: 'main',
+      workingFileCount: 0,
+      branchDiffCount: 1,
+    });
+    expect(out[0]?.meta).toBe('git · 1 file vs main');
+  });
 });
 
 describe('buildTodoSuggestions', () => {

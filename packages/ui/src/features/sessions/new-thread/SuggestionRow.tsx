@@ -46,7 +46,7 @@ export function SuggestionRow({
         <span className="truncate text-micro text-mf-text-3">{suggestion.meta}</span>
       </span>
       <span
-        data-testid="sessions-welcome-suggestion-insert"
+        data-testid={`sessions-welcome-suggestion-insert-${index}`}
         className="flex flex-shrink-0 items-center gap-1 text-micro text-mf-text-3 opacity-0 transition-opacity group-hover:opacity-100"
       >
         <CornerDownLeft size={11} /> insert

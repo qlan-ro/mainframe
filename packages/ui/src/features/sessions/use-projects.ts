@@ -2,8 +2,9 @@
  * useProjects — loads the daemon's project list once, keyed off the runtime port.
  *
  * The single project source for the sessions feature: consumed by SessionSidebar
- * (filter pills + grouping) and NewThreadConfigPicker (project select). Reads the
- * port from DaemonPortContext so it works inside aui's runtime binder.
+ * (filter pills + grouping) and the new-session picker / welcome flow (project
+ * select). Reads the port from DaemonPortContext so it works inside aui's
+ * runtime binder.
  */
 import { useEffect, useState } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';

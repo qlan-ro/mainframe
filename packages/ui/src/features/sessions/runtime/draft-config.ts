@@ -2,9 +2,10 @@
  * Draft-config side-channel for the native New-thread flow.
  *
  * A `__LOCALID_*` thread has no daemon chat yet; the project/adapter/model/tuning
- * the user picks (in NewThreadConfigPicker or live in the composer toolbar before
- * the first send) is stashed here keyed by the local threadId, then read by the
- * new-thread coordinator on first send to POST createChat (+ apply tuning).
+ * the user picks (in the new-session picker / welcome flow, or live in the
+ * composer toolbar before the first send) is stashed here keyed by the local
+ * threadId, then read by the new-thread coordinator on first send to POST
+ * createChat (+ apply tuning).
  *
  * Reactive (zustand) so the composer toolbar re-renders when the user edits a
  * draft before sending. The imperative wrappers keep the synchronous get/set the

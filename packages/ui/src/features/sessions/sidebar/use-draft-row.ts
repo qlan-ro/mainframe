@@ -8,7 +8,7 @@
  * the draft (picker pick, pill-active "+", or auto-config) and disappears the
  * instant it's discarded or committed — no imperative getState() polling.
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { draftRowVisible, type DraftRowModel } from '../new-thread/draft-row';
@@ -34,6 +34,24 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
     draftCfg != null && newThreadId != null ? { newThreadId, projectId: draftCfg.projectId } : null;
   const visible = draftRowVisible(model, filterProjectId);
   const selected = model != null && mainThreadId === model.newThreadId;
+
+  // Discard-on-navigate-away: the draft is unsent (draftCfg still exists) and the
+  // user has switched the active thread to something else — treat that exactly
+  // like the explicit ✕ discard. Guard against the first-send commit path (the
+  // coordinator clears draftCfg but keeps the SAME local id — no id-flip, see
+  // new-thread-coordinator.ts) by requiring a draft to still exist; a commit
+  // clears it in the same tick, so `hasDraft` is already false by the time this
+  // effect would otherwise fire. `mainThreadId` is falsy at boot (before any
+  // thread is selected) — treat that as "not navigated" rather than "other".
+  const hasDraft = draftCfg != null;
+  useEffect(() => {
+    if (!hasDraft) return;
+    if (newThreadId == null) return;
+    if (!mainThreadId) return;
+    if (mainThreadId === newThreadId) return;
+    resetNewThreadDraft(newThreadId);
+    useDraftReturnTarget.getState().clear();
+  }, [mainThreadId, newThreadId, hasDraft]);
 
   const onSelect = useCallback(() => {
     if (model != null) runtime.threads.switchToThread(model.newThreadId);

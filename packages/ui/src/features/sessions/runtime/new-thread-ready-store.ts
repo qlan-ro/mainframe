@@ -5,8 +5,9 @@
  * The draft-config Map (`draft-config.ts`) is a plain module singleton — writing
  * to it does NOT re-render anything. So once project+adapter are chosen the picker
  * also marks the local id ready here; ChatSurface subscribes to this store and
- * switches the surface from NewThreadConfigPicker to ChatThread (which carries
- * the real composer) so the user can type and send the first message.
+ * switches the surface from the new-session picker / welcome flow to ChatThread
+ * (which carries the real composer) so the user can type and send the first
+ * message.
  *
  * Lifecycle: the picker marks ready; the new-thread coordinator clears it on the
  * first send (alongside clearing the draft) so a recycled local id starts fresh.
