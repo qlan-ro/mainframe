@@ -1,4 +1,4 @@
-import { Globe, FolderOpen, MessageSquare } from 'lucide-react';
+import { Wifi, FolderOpen, MessageSquare } from 'lucide-react';
 import { useSessionContext } from './use-session-context';
 import { deriveSessionItems } from './derive-session-items';
 import { ContextSection } from './ContextSection';
@@ -26,7 +26,7 @@ export function ContextInspector() {
   return (
     <div className="space-y-1 py-1">
       {todos.length > 0 && <TasksSection todos={todos} />}
-      <ContextSection icon={Globe} title="Global" count={context.globalFiles.length} defaultOpen>
+      <ContextSection icon={Wifi} title="Global" count={context.globalFiles.length} defaultOpen>
         {context.globalFiles.map((f) => (
           <ContextFileItem key={f.path} path={f.path} />
         ))}

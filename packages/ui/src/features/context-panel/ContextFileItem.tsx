@@ -8,6 +8,14 @@ interface ContextFileItemProps {
   badge?: string;
 }
 
+/** Per-badge-type text color: '@'=accent, auto=muted, plan=amber, skill=violet. */
+const BADGE_COLOR_CLASS: Record<string, string> = {
+  '@': 'text-primary',
+  auto: 'text-mf-text-3',
+  plan: 'text-mf-accent-amber',
+  skill: 'text-mf-accent-violet',
+};
+
 /**
  * A context file row: icon + basename + optional badge, full path in a tooltip.
  * Click opens the file via the surface-intent bus (mirrors desktop's
@@ -15,6 +23,7 @@ interface ContextFileItemProps {
  */
 export function ContextFileItem({ path, displayName, badge }: ContextFileItemProps) {
   const fileName = displayName ?? path.split('/').pop() ?? path;
+  const badgeColorClass = badge ? (BADGE_COLOR_CLASS[badge] ?? 'text-mf-text-3') : '';
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -23,11 +32,17 @@ export function ContextFileItem({ path, displayName, badge }: ContextFileItemPro
           data-testid={`sidebar-context-item-${path}`}
           aria-label={path}
           onClick={() => emitSurfaceIntent({ type: 'open-file', path })}
-          className="flex w-full min-w-0 items-center gap-2 rounded-md px-[12px] py-1 text-left text-caption text-foreground hover:bg-mf-hover"
+          className="flex w-full min-w-0 items-center gap-2 rounded-md py-[3px] pl-[24px] pr-[14px] text-left text-caption text-foreground hover:bg-accent"
         >
-          <FileText size={14} className="shrink-0 text-mf-text-3" aria-hidden />
+          <FileText size={10} className="shrink-0 text-mf-text-3" aria-hidden />
           <span className="flex-1 truncate">{fileName}</span>
-          {badge && <span className="shrink-0 rounded-full bg-mf-hover px-1.5 text-micro text-mf-text-3">{badge}</span>}
+          {badge && (
+            <span
+              className={`shrink-0 rounded-[4px] bg-mf-chip px-1.5 font-mono text-micro font-semibold uppercase ${badgeColorClass}`}
+            >
+              {badge}
+            </span>
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent>{path}</TooltipContent>

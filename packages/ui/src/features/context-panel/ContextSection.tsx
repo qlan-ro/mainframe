@@ -28,7 +28,7 @@ export function ContextSection({ icon: Icon, title, count, trailing, defaultOpen
           aria-hidden
           className={`shrink-0 text-mf-text-3 transition-transform ${open ? '' : '-rotate-90'}`}
         />
-        <Icon size={11} className="shrink-0 text-mf-text-2" aria-hidden />
+        <Icon size={11} className="shrink-0 text-muted-foreground" aria-hidden />
         <span
           className={`text-micro font-semibold text-foreground ${trailing != null ? 'flex-none' : 'min-w-0 flex-1 truncate'}`}
         >

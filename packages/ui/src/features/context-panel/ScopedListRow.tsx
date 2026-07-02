@@ -18,7 +18,7 @@ export function ScopedListRow({ testId, icon: Icon, name, description, scope, fi
       type="button"
       data-testid={testId}
       onClick={() => emitSurfaceIntent({ type: 'open-file', path: filePath })}
-      className="grid w-full grid-cols-[14px_1fr_auto] items-center gap-[7px] px-[12px] py-1 text-left hover:bg-mf-hover"
+      className="grid w-full grid-cols-[14px_1fr_auto] items-center gap-[7px] px-[12px] py-[4px] text-left hover:bg-accent"
     >
       <Icon size={11} className="text-primary" aria-hidden />
       <div className="min-w-0">
@@ -27,7 +27,9 @@ export function ScopedListRow({ testId, icon: Icon, name, description, scope, fi
           <TruncatedWithTooltip text={description} tabIndex={0} className="block text-micro text-mf-text-3" />
         )}
       </div>
-      <span className="rounded-lg bg-mf-hover px-[5px] text-micro uppercase tracking-wide text-mf-text-3">{scope}</span>
+      <span className="rounded-[8px] bg-mf-chip px-[5px] py-[1px] text-micro uppercase tracking-wide text-mf-text-3">
+        {scope}
+      </span>
     </button>
   );
 }

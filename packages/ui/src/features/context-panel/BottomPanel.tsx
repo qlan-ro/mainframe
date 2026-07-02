@@ -28,28 +28,37 @@ export function BottomPanel() {
 
   return (
     <div className="flex shrink-0 flex-col" style={{ height }}>
-      <div className="flex shrink-0 items-center gap-0.5 px-2 py-1">
-        {tabs.map((t) => {
-          const active = tab === t.id;
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              data-testid={`sidebar-bottom-tab-${t.id}`}
-              onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-[5px] rounded-md px-[9px] py-1 text-caption ${
-                active
-                  ? 'bg-mf-tab-active font-semibold text-foreground shadow-[var(--mf-shadow-rail-active)]'
-                  : 'font-medium text-mf-text-2 hover:bg-mf-hover'
-              }`}
-            >
-              <Icon size={11} className={active ? 'text-primary' : 'text-mf-text-2'} aria-hidden />
-              <span>{t.label}</span>
-              <span className="rounded-full bg-mf-hover px-1.5 text-micro text-mf-text-3">{t.count}</span>
-            </button>
-          );
-        })}
+      <div className="shrink-0 pb-[5px] pl-[8px] pr-[8px] pt-[6px]">
+        <div
+          data-testid="sidebar-bottom-tab-track"
+          className="flex items-center gap-[2px] rounded-[7px] bg-mf-chip p-[2px]"
+        >
+          {tabs.map((t) => {
+            const active = tab === t.id;
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                data-testid={`sidebar-bottom-tab-${t.id}`}
+                onClick={() => setTab(t.id)}
+                className={`inline-flex flex-1 items-center justify-center gap-[5px] rounded-[5px] px-[6px] py-[4px] text-caption ${
+                  active
+                    ? 'bg-mf-tab-active font-semibold text-foreground shadow-[var(--mf-shadow-rail-active)]'
+                    : 'font-medium text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                <Icon size={11} className={active ? 'text-primary' : 'text-muted-foreground'} aria-hidden />
+                <span>{t.label}</span>
+                <span
+                  className={`text-micro font-semibold ${active ? 'text-primary' : 'text-mf-text-4'}`}
+                >
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="mf-thin-scrollbar min-h-0 flex-1 overflow-y-auto py-1">
         {tab === 'context' && <ContextInspector />}
