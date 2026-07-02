@@ -186,8 +186,8 @@ describe('WfTree — foreach node', () => {
       ],
     };
     render(<WfTree nodes={[node]} onOpenChat={noop} />);
-    expect(screen.getByTestId('workflows-iter-0')).toBeInTheDocument();
-    expect(screen.getByTestId('workflows-iter-1')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-iter-item[0]')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-iter-item[1]')).toBeInTheDocument();
   });
 
   it('shows the selected iteration steps by default', () => {
@@ -228,9 +228,27 @@ describe('WfTree — foreach node', () => {
     };
     render(<WfTree nodes={[node]} onOpenChat={noop} />);
     // Both are succeeded so default is first (index 0); switch to second
-    fireEvent.click(screen.getByTestId('workflows-iter-1'));
+    fireEvent.click(screen.getByTestId('workflows-iter-item[1]'));
     expect(screen.getByTestId('workflows-step-root.foreach.1.step')).toBeInTheDocument();
     expect(screen.queryByTestId('workflows-step-root.foreach.0.step')).not.toBeInTheDocument();
+  });
+
+  it('active succeeded iteration chip uses the success color, not amber', () => {
+    const node: RunTreeNode = {
+      stepPath: 'root.foreach',
+      stepId: 'loop',
+      kind: 'foreach',
+      status: 'succeeded',
+      attempt: 1,
+      input: null,
+      output: null,
+      error: null,
+      iterations: [{ label: 'item[0]', status: 'succeeded', steps: [] }],
+    };
+    render(<WfTree nodes={[node]} onOpenChat={noop} />);
+    const chip = screen.getByTestId('workflows-iter-item[0]');
+    expect(chip.className).toContain('bg-mf-success/10');
+    expect(chip.className).not.toContain('bg-mf-warning/10');
   });
 });
 

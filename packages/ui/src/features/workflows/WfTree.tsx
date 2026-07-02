@@ -10,7 +10,7 @@
  * use arbitrary `[Npx]` classes (integer Tailwind steps render compressed here).
  */
 import React, { useState } from 'react';
-import { ChevronRight, CircleDashed, ExternalLink } from 'lucide-react';
+import { ChevronRight, CircleDashed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WfStepNode } from './WfStepNode';
 import { WfStatusPip, WfStatusTag, WfKindChip } from './WfStatus';
@@ -35,6 +35,23 @@ interface CompositeProps {
 function defaultIterIdx(iterations: Array<{ status: string }>): number {
   const idx = iterations.findIndex((it) => it.status === 'running' || it.status === 'waiting');
   return idx >= 0 ? idx : 0;
+}
+
+/** Maps an iteration's own status to the active-chip border/bg classes. */
+function activeIterChipClasses(status: string): string {
+  switch (status) {
+    case 'succeeded':
+      return 'border-mf-success/60 bg-mf-success/10';
+    case 'running':
+      return 'border-primary/60 bg-primary/10';
+    case 'waiting':
+    case 'ambiguous':
+      return 'border-mf-warning/60 bg-mf-warning/10';
+    case 'failed':
+      return 'border-destructive/60 bg-destructive/10';
+    default:
+      return 'border-border bg-muted';
+  }
 }
 
 // ── Spine ──────────────────────────────────────────────────────────────────────
@@ -121,9 +138,9 @@ function WfParallelRail({ node, onOpenChat }: CompositeProps): React.ReactElemen
         {lanes.map((lane) => (
           <div
             key={lane.label}
-            className="min-w-[200px] flex-[1_1_220px] overflow-hidden rounded-lg border border-border bg-mf-content2"
+            className="min-w-[200px] flex-[1_1_220px] overflow-hidden rounded-lg border-[0.5px] border-border bg-mf-content2"
           >
-            <div className="flex items-center gap-[7px] border-b border-border px-[10px] py-[7px]">
+            <div className="flex items-center gap-[7px] border-b-[0.5px] border-border px-[10px] py-[7px]">
               <WfStatusPip status={lane.status} size={14} />
               <span className="flex-1 text-caption font-bold text-foreground">{lane.label}</span>
               <WfStatusTag status={lane.status} kind="step" />
@@ -150,12 +167,15 @@ function WfBranchRail({ node, onOpenChat }: CompositeProps): React.ReactElement 
           <div
             key={`${node.stepPath}.arm${i}`}
             className={cn(
-              'overflow-hidden rounded-lg border',
+              'overflow-hidden rounded-lg border-[0.5px]',
               arm.taken ? 'border-mf-accent-violet/40 bg-mf-content2' : 'border-border opacity-60',
             )}
           >
             <div
-              className={cn('flex items-center gap-[8px] px-[11px] py-[7px]', arm.taken && 'border-b border-border')}
+              className={cn(
+                'flex items-center gap-[8px] px-[11px] py-[7px]',
+                arm.taken && 'border-b-[0.5px] border-border',
+              )}
             >
               {arm.taken ? (
                 <ChevronRight size={12} className={kindMeta.colorClass} aria-hidden />
@@ -202,14 +222,14 @@ function WfLoopRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
             <button
               key={iter.label}
               type="button"
-              data-testid={`workflows-iter-${i}`}
+              data-testid={`workflows-iter-${iter.label}`}
               title={iter.label}
               onClick={() => setSelectedIdx(i)}
               className={cn(
                 'inline-flex h-[24px] items-center gap-[5px] rounded-sm px-[9px] text-caption transition-colors',
                 on
-                  ? 'border border-mf-warning/60 bg-mf-warning/10 font-bold text-foreground'
-                  : 'border-[0.5px] border-border bg-background font-medium text-muted-foreground hover:bg-accent',
+                  ? cn('border font-bold text-foreground', activeIterChipClasses(iter.status))
+                  : 'border-[0.5px] border-border bg-card font-medium text-muted-foreground hover:bg-accent',
               )}
             >
               <WfIterDot status={iter.status} />
@@ -219,7 +239,7 @@ function WfLoopRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
         })}
       </div>
       {current !== undefined && current.steps.length > 0 && (
-        <div className="rounded-lg border border-border bg-mf-content2 py-[6px] pr-[4px]">
+        <div className="rounded-lg border-[0.5px] border-border bg-mf-content2 py-[6px] pr-[4px]">
           <WfTree nodes={current.steps} onOpenChat={onOpenChat} />
         </div>
       )}
@@ -251,10 +271,10 @@ function WfCallRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
       onClick={() => {
         if (node.childRunId) openRun(node.childRunId);
       }}
-      className="inline-flex h-[24px] items-center gap-[5px] rounded-sm border border-border bg-background px-[9px] text-caption font-semibold text-primary hover:bg-accent"
+      className="inline-flex h-[24px] items-center gap-[5px] rounded-sm border-[0.5px] border-border bg-card px-[9px] text-caption font-semibold text-primary hover:bg-accent"
     >
       {node.ref ?? 'Open run'}
-      <ExternalLink size={11} aria-hidden />
+      <ChevronRight size={9} aria-hidden />
     </button>
   ) : undefined;
 
