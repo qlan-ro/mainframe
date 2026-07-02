@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsModal } from './use-workflows-modal';
 import { WfAnswerForm } from './WfAnswerForm';
-import { formatAgo } from './glyphs';
 import type { WorkflowInteractionSummary } from '@qlan-ro/mainframe-types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -26,7 +25,21 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 function expiryChipClass(expiresAt: number): string {
   return Date.now() >= expiresAt - TWO_HOURS_MS
     ? 'text-destructive bg-destructive/10'
-    : 'text-amber-600 bg-amber-500/10';
+    : 'text-mf-warning bg-mf-warning-tint';
+}
+
+/**
+ * Formats a millisecond duration as a bare "Xh Ym"/"Xm"/"Xd" string (no "ago" suffix).
+ * Used for "waiting {duration}" copy, distinct from formatAgo which appends "ago".
+ */
+function formatDurationBare(ms: number): string {
+  const totalMin = Math.max(0, Math.floor(ms / 60_000));
+  if (totalMin < 60) return `${totalMin}m`;
+  const hr = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (hr < 24) return min > 0 ? `${hr}h ${min}m` : `${hr}h`;
+  const day = Math.floor(hr / 24);
+  return `${day}d`;
 }
 
 /**
@@ -77,8 +90,8 @@ export function WfInteractionCard({
     <div className="overflow-hidden rounded-lg border-[0.5px] border-border bg-card shadow-sm">
       <div className="flex items-start gap-[12px] px-[16px] py-[14px]">
         {/* Icon disc */}
-        <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-amber-500/13">
-          <MessageSquare size={17} className="text-amber-600" aria-hidden />
+        <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-mf-warning-tint">
+          <MessageSquare size={17} className="text-mf-warning" aria-hidden />
         </span>
 
         {/* Body */}
@@ -103,7 +116,7 @@ export function WfInteractionCard({
           <div className="mt-[3px] flex items-center gap-2 text-caption text-muted-foreground">
             <span className="font-semibold text-foreground/70">{workflowName}</span>
             <span>· run #{interaction.runId}</span>
-            <span>· waiting {formatAgo(createdAt)}</span>
+            <span>· waiting {formatDurationBare(Date.now() - createdAt)}</span>
           </div>
 
           {/* Prompt — the human-readable question text */}
