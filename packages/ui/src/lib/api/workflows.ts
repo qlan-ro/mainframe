@@ -14,7 +14,6 @@ export interface RunTreeNode {
   error: string | null;
   chatId?: string;
   duration?: string;
-  sub?: string;
   waitFor?: string;
   lanes?: Array<{ label: string; status: string; steps: RunTreeNode[] }>;
   arms?: Array<{ cond: string; taken: boolean; steps: RunTreeNode[] }>;

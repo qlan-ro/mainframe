@@ -205,3 +205,17 @@ describe('WfStepNode — truncated output', () => {
     expect(screen.queryByText(/truncated for display/i)).not.toBeInTheDocument();
   });
 });
+
+describe('WfStepNode — secondary line (waitFor, no client "sub")', () => {
+  it('shows waitFor as the secondary line when the step is waiting', () => {
+    const node = makeNode({ status: 'waiting', waitFor: 'user reply' });
+    render(<WfStepNode node={node} onOpenChat={noop} />);
+    expect(screen.getByTestId('workflows-step-root.step1').textContent).toContain('user reply');
+  });
+
+  it('shows no secondary line when not waiting, even if waitFor is set on a stale node', () => {
+    const node = makeNode({ status: 'succeeded', waitFor: 'user reply' });
+    render(<WfStepNode node={node} onOpenChat={noop} />);
+    expect(screen.getByTestId('workflows-step-root.step1').textContent).not.toContain('user reply');
+  });
+});

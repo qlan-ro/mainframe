@@ -4,7 +4,8 @@
  * Rebuilt to the design prototype's rail model (18-workflows.jsx WfStepNode):
  * an absolute status pip centered on the spine (left:6/top:11), a row indented
  * marginLeft:30 carrying the kind chip, title, retry badge, optional duration
- * and a secondary sub / waitFor line, plus the status tag. Clicking the row
+ * and a secondary waitFor line (shown only while waiting), plus the status
+ * tag. Clicking the row
  * toggles an inline, indented (ml:31) detail block (NOT a full-bleed card):
  * - error box (amber headline + error text for ambiguous; red for failed)
  * - input / output JSON blocks
@@ -124,8 +125,7 @@ export function WfStepNode({ node, onOpenChat }: WfStepNodeProps): React.ReactEl
   const duration = node.duration ?? null;
   const waiting = node.status === 'waiting';
   const waitFor = node.waitFor ?? null;
-  const sub = node.sub ?? null;
-  const secondary = waiting && waitFor ? waitFor : sub;
+  const secondary = waiting ? waitFor : null;
 
   function handleRowClick(): void {
     if (canExpand) setExpanded((prev) => !prev);
@@ -189,7 +189,7 @@ export function WfStepNode({ node, onOpenChat }: WfStepNodeProps): React.ReactEl
               <WfStatusTag status={node.status} kind="step" />
             </div>
 
-            {/* Secondary line — sub, or waitFor (amber) when waiting */}
+            {/* Secondary line — waitFor (amber), shown only while waiting */}
             {secondary && (
               <div
                 className={cn(
