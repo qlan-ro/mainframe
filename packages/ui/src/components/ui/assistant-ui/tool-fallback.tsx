@@ -113,9 +113,9 @@ function ToolFallbackTrigger({
           <span
             aria-hidden
             data-slot="tool-fallback-trigger-shimmer"
-            className="aui-tool-fallback-trigger-shimmer shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none"
+            className="aui-tool-fallback-trigger-shimmer shimmer text-caption pointer-events-none absolute inset-0 motion-reduce:animate-none"
           >
-            {label}: <b>{toolName}</b>
+            {label}: <b className="font-medium">{toolName}</b>
           </span>
         )}
       </span>
