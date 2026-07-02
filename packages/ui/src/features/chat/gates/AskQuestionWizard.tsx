@@ -63,8 +63,8 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
         <span
           data-radio-indicator
           className={cn(
-            'mt-0.5 size-4 shrink-0 rounded-full transition-all',
-            isSelected ? 'border-[5px] border-primary' : 'border border-mf-text-4',
+            'mt-0.5 size-[17px] shrink-0 rounded-full transition-all',
+            isSelected ? 'border-[5px] border-primary' : 'border-[1.5px] border-mf-text-4',
           )}
         />
       )}
