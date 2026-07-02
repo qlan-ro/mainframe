@@ -17,7 +17,9 @@ steps:
   - id: ask
     question:
       title: "How are you feeling?"
-      timeout: 720
+      timeout:
+        afterMinutes: 720
+        onTimeout: cancel
       fields:
         - key: mood
           type: choice
@@ -101,6 +103,7 @@ describe('parseWorkflowYaml', () => {
     expect(ask.question.fields[0]?.key).toBe('mood');
     expect(ask.question.fields[0]?.type).toBe('choice');
     expect(ask.question.fields[1]?.when).toEqual({ key: 'mood', equals: 'sad' });
+    expect(ask.question.timeout).toEqual({ afterMinutes: 720, onTimeout: 'cancel' });
 
     // choose step with when/else + steps
     const branch = def.steps[1];
@@ -145,6 +148,11 @@ describe('parseWorkflowYaml', () => {
 
   it('rejects unknown top-level fields', () => {
     expect(() => parseWorkflowYaml(GOOD + '\nbogus: 1')).toThrow();
+  });
+
+  it('rejects a bare-number question timeout (must be the {afterMinutes, onTimeout} object)', () => {
+    const bad = GOOD.replace('timeout:\n        afterMinutes: 720\n        onTimeout: cancel', 'timeout: 720');
+    expect(() => parseWorkflowYaml(bad)).toThrow();
   });
 
   it('desugars if/then/else to choose', () => {

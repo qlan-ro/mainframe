@@ -12,8 +12,9 @@ export function makeQuestionExecutor(interactions: InteractionStore, emitEvent: 
     const existing = interactions.findPendingForStep(ctx.run.id, ctx.stepPath);
     const expiresAt = q.timeout ? Date.now() + q.timeout.afterMinutes * 60_000 : null;
 
+    let title = existing?.title;
     if (!existing) {
-      const title = String(await renderValue(q.title, ctx.scope));
+      title = String(await renderValue(q.title, ctx.scope));
       const created = interactions.create({
         runId: ctx.run.id,
         stepPath: ctx.stepPath,
@@ -24,9 +25,14 @@ export function makeQuestionExecutor(interactions: InteractionStore, emitEvent: 
       emitEvent({ type: 'workflow.interaction.created', interaction: toInteractionSummary(created) });
     }
 
+    // Human phrase for the run-tree's waiting indicator — prefer the rendered
+    // question title, falling back when it's empty.
+    const waitFor = title && title.trim().length > 0 ? title : 'your answer';
+
     return {
       type: 'wait',
       wait: { kind: 'question', wakeAt: existing?.expiresAt ?? expiresAt },
+      scratch: { waitFor },
     };
   };
 }

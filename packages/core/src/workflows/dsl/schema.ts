@@ -58,7 +58,12 @@ export const stepSchema: z.ZodType<StepDef> = z.lazy(
         question: z
           .object({
             title: z.string(),
-            timeout: z.number().int().min(1).optional(),
+            timeout: z
+              .object({
+                afterMinutes: z.number().int().min(1),
+                onTimeout: z.enum(['cancel', 'fail', 'continue']),
+              })
+              .optional(),
             fields: z.array(questionFieldSchema),
           })
           .optional(),

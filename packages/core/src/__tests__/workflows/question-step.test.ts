@@ -73,6 +73,22 @@ describe('question steps', () => {
     expect(wakeAt).toBeGreaterThan(Date.now());
   });
 
+  it('sets scratch.waitFor to the question title on the waiting outcome', async () => {
+    const { engine } = setup(db);
+    const run = engine.startRun({
+      workflowId: 'g:qstep',
+      definition: DEF,
+      triggerKind: 'manual',
+      inputs: {},
+      triggerPayload: null,
+    });
+    await engine.advance(run.id);
+
+    const askResult = engine.store.latestStepResults(run.id).get('steps.0');
+    expect(askResult?.status).toBe('waiting');
+    expect((askResult?.scratch as { waitFor?: string } | null)?.waitFor).toBe('Mood?');
+  });
+
   it('respond validates, completes the step, and resumes (echo reads ask.output.mood)', async () => {
     const { engine, interactions, service } = setup(db);
     const run = engine.startRun({

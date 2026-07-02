@@ -14,7 +14,6 @@ export interface RunTreeNode {
   error: string | null;
   chatId?: string;
   duration?: string; // leaf — formatted elapsed time
-  sub?: string; // leaf — secondary narrative line
   waitFor?: string; // leaf — what a waiting step is blocked on
   // composite children shaped to match the design:
   lanes?: Array<{ label: string; status: string; steps: RunTreeNode[] }>; // parallel
@@ -78,19 +77,17 @@ function formatDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
-/** Derive the leaf-only duration/sub/waitFor fields from the step's run record. */
+/** Derive the leaf-only duration/waitFor fields from the step's run record. */
 function leafFields(
   rec: StepRunRecord | undefined,
   scratch: Record<string, unknown> | null,
   isComposite: boolean,
-): Pick<RunTreeNode, 'duration' | 'sub' | 'waitFor'> {
-  const fields: Pick<RunTreeNode, 'duration' | 'sub' | 'waitFor'> = {};
+): Pick<RunTreeNode, 'duration' | 'waitFor'> {
+  const fields: Pick<RunTreeNode, 'duration' | 'waitFor'> = {};
   if (isComposite) return fields;
   if (rec?.startedAt !== undefined && rec.finishedAt != null) {
     fields.duration = formatDuration(rec.finishedAt - rec.startedAt);
   }
-  const scratchSub = (scratch as { sub?: string } | null)?.sub;
-  if (scratchSub !== undefined) fields.sub = scratchSub;
   if (rec?.status === 'waiting') {
     const waitFor = (scratch as { waitFor?: string } | null)?.waitFor;
     if (waitFor !== undefined) fields.waitFor = waitFor;
