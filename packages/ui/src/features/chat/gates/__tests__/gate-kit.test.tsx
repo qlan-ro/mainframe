@@ -119,6 +119,41 @@ describe('GateCardShell', () => {
     expect(el).toHaveClass('bg-card');
     expect(el).not.toHaveClass('bg-background');
   });
+
+  it('caps width at the design maxWidth (680px)', () => {
+    wrap(<GateCardShell data-testid="shell-width">content</GateCardShell>);
+    expect(screen.getByTestId('shell-width')).toHaveClass('max-w-[680px]');
+  });
+
+  it('unresolved + accent="primary": shadow is tinted with the primary accent var', () => {
+    wrap(
+      <GateCardShell data-testid="shell-accent-primary" accent="primary">
+        content
+      </GateCardShell>,
+    );
+    const style = screen.getByTestId('shell-accent-primary').getAttribute('style') ?? '';
+    expect(style).toContain('--primary');
+  });
+
+  it('unresolved + accent="warning": shadow is tinted with the mf-warning accent var', () => {
+    wrap(
+      <GateCardShell data-testid="shell-accent-warning" accent="warning">
+        content
+      </GateCardShell>,
+    );
+    const style = screen.getByTestId('shell-accent-warning').getAttribute('style') ?? '';
+    expect(style).toContain('--mf-warning');
+  });
+
+  it('resolved=true: no accent-tinted shadow style is applied', () => {
+    wrap(
+      <GateCardShell data-testid="shell-resolved-noglow" resolved accent="primary">
+        content
+      </GateCardShell>,
+    );
+    const style = screen.getByTestId('shell-resolved-noglow').getAttribute('style') ?? '';
+    expect(style).not.toContain('--primary');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -149,5 +184,10 @@ describe('GateHead', () => {
     // The icon tile span (wrapping the icon) must carry the tileClassName.
     const tile = screen.getByTestId('gate-head-tile');
     expect(tile).toHaveClass('bg-mf-warning-tint');
+  });
+
+  it('icon tile is sized to the design spec (26px, size-[26px])', () => {
+    wrap(<GateHead eyebrow="Gate" title="Run script" icon={<span data-testid="head-icon" />} />);
+    expect(screen.getByTestId('gate-head-tile')).toHaveClass('size-[26px]');
   });
 });

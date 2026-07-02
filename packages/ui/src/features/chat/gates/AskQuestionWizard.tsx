@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { OTHER } from './answers';
 import type { AskQuestion } from './answers';
 
@@ -30,29 +31,37 @@ interface OptionRowProps {
 }
 
 function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }: OptionRowProps) {
+  // A `<div role="button">` (not a native <button>) so the multi-select branch can
+  // nest the real interactive Checkbox primitive without invalid nested-button HTML.
   return (
-    <button
-      type="button"
+    <div
       data-testid={testId}
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
       className={cn(
-        'flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors',
+        'flex w-full items-start gap-[11px] rounded-md border px-[11px] py-[9px] text-left transition-colors cursor-pointer',
         isSelected ? 'border-primary bg-mf-selection' : 'border-border hover:border-mf-border-hover hover:bg-accent',
       )}
     >
       {isMulti ? (
-        // Checkbox indicator: filled square when selected, outlined when not.
-        <span
-          className={cn(
-            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
-            isSelected ? 'border-primary bg-primary' : 'border-mf-text-4 bg-transparent',
-          )}
-        >
-          {isSelected && <span className="size-2 rounded-sm bg-primary-foreground" />}
-        </span>
+        // Shared pixel-accurate Checkbox primitive (17x17, rounded-[5px], real checkmark icon).
+        <Checkbox
+          className="mt-0.5 pointer-events-none"
+          checked={isSelected}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
       ) : (
         // Radio indicator: thick border when selected (no fill), hairline when not.
         <span
+          data-radio-indicator
           className={cn(
             'mt-0.5 size-4 shrink-0 rounded-full transition-all',
             isSelected ? 'border-[5px] border-primary' : 'border border-mf-text-4',
@@ -63,7 +72,7 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
         <span className="block text-body font-semibold text-foreground">{label}</span>
         {description && <span className="block text-caption text-mf-text-3">{description}</span>}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -109,7 +118,7 @@ export function AskQuestionWizard({
           placeholder="Type your answer…"
           value={otherText}
           onChange={(e) => onOtherText(e.target.value)}
-          className="mt-1 bg-transparent"
+          className="mt-1 animate-in fade-in-0 slide-in-from-top-1 duration-150 bg-transparent"
           autoFocus
         />
       )}

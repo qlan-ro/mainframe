@@ -24,7 +24,7 @@ export interface PlanExecModeControlProps {
 
 export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProps) {
   return (
-    <div className="inline-flex gap-0.5 rounded-lg border border-border bg-mf-raised p-0.5">
+    <div className="inline-flex gap-0.5 rounded-md border border-border bg-mf-raised p-0.5">
       {EXEC_MODE_OPTIONS.map(({ id, label, Icon, desc }) => {
         const selected = value === id;
         const isYolo = id === 'yolo';
@@ -43,7 +43,7 @@ export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProp
                 !selected && 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Icon className="size-3 shrink-0" />
+              <Icon className="size-[12px] shrink-0" />
               {label}
             </button>
           </Hint>

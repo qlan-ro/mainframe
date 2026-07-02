@@ -153,7 +153,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
     <div data-testid="chat-question-gate">
       <GateCardShell>
         <GateHead
-          icon={<MessageCircleQuestionIcon className="size-4" />}
+          icon={<MessageCircleQuestionIcon className="size-[15px]" />}
           tileClassName="bg-mf-selection text-primary"
           eyebrow={eyebrow}
           eyebrowClassName="text-primary"
@@ -167,7 +167,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
           }
         />
         {questionBody && (
-          <p data-testid="chat-question-text" className="px-3.5 pb-1 text-body text-foreground">
+          <p data-testid="chat-question-text" className="pl-[49px] pr-3.5 pb-1 text-body text-foreground">
             {questionBody}
           </p>
         )}

@@ -178,6 +178,33 @@ describe('AskUserQuestionGate', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 3b. Multi-select checkbox indicator reuses the shared pixel-accurate
+  //     Checkbox primitive (17x17, real checkmark icon) instead of a bespoke,
+  //     undersized dot indicator.
+  // -------------------------------------------------------------------------
+
+  it('multi-select option row renders the shared Checkbox primitive as its indicator', () => {
+    wrap(<AskUserQuestionGate entry={multi()} reply={reply} />);
+
+    const option = screen.getByTestId('chat-question-option-0-a');
+    const indicator = option.querySelector('button[role="checkbox"]');
+    expect(indicator).not.toBeNull();
+    expect(indicator).toHaveClass('h-[17px]', 'w-[17px]');
+  });
+
+  it('single-select option row radio indicator grows its border to 5px when selected (no fill)', () => {
+    wrap(<AskUserQuestionGate entry={single()} reply={reply} />);
+
+    const option = screen.getByTestId('chat-question-option-0-MP4');
+    const indicator = option.querySelector('[data-radio-indicator]');
+    expect(indicator).not.toBeNull();
+    expect(indicator).toHaveClass('border-mf-text-4');
+
+    fireEvent.click(option);
+    expect(indicator).toHaveClass('border-[5px]', 'border-primary');
+  });
+
+  // -------------------------------------------------------------------------
   // 4. Other row: clicking __other__ shows text input; typing and submitting
   //    uses the typed text as the answer.
   // -------------------------------------------------------------------------
@@ -193,9 +220,10 @@ describe('AskUserQuestionGate', () => {
 
     fireEvent.click(screen.getByTestId('chat-question-option-0-__other__'));
 
-    // Text input appears.
+    // Text input appears, with an enter-transition on reveal.
     const input = screen.getByTestId('chat-question-other-input-0');
     expect(input).toBeInTheDocument();
+    expect(input).toHaveClass('animate-in', 'fade-in-0');
 
     fireEvent.change(input, { target: { value: 'custom answer' } });
     fireEvent.click(screen.getByTestId('chat-question-submit'));
@@ -301,6 +329,9 @@ describe('AskUserQuestionGate', () => {
     const body = screen.getByTestId('chat-question-text');
     expect(body).toBeInTheDocument();
     expect(body).toHaveTextContent('Which auth approach?');
+
+    // Body row left-aligns under the head title (px-3.5 tile-inset + tile + gap = 49px = pl-[49px]).
+    expect(body).toHaveClass('pl-[49px]');
   });
 
   // -------------------------------------------------------------------------

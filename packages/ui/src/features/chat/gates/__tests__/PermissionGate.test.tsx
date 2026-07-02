@@ -92,6 +92,44 @@ describe('PermissionGate', () => {
     expect(pre.textContent).toContain('"command": "ls -la"');
   });
 
+  // --- Finding 6.8: JSON block uses the dark terminal palette, not a plain raised card ---
+
+  it('the details JSON block uses the terminal bg/fg tokens', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+    fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
+
+    const pre = screen.getByTestId('chat-permission-details-pre');
+    expect(pre).toHaveClass('bg-mf-term-bg', 'text-mf-term-fg');
+  });
+
+  // --- Finding 6.16: Details reveal mounts with an enter transition ---
+
+  it('the details JSON block mounts with an enter transition', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+    fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
+
+    expect(screen.getByTestId('chat-permission-details-pre')).toHaveClass('animate-in', 'fade-in-0');
+  });
+
+  // --- Finding 6.2: ToolNameRow/DetailsDisclosure indent aligns to the head's own
+  //     49px title inset (px-3.5 tile-inset + 26px tile + gap-2.5), not pl-12 (64px) ---
+
+  it('the tool-name row aligns to the head title inset (pl-[49px], not pl-12)', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+    const row = screen.getByText('Bash').closest('div');
+    expect(row).toHaveClass('pl-[49px]');
+    expect(row).not.toHaveClass('pl-12');
+  });
+
+  // --- Finding 6.13: disclosure chevron is 11px, not 6px (size-3) ---
+
+  it('the details chevron is sized to the design spec (11px)', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+    const toggle = screen.getByTestId('chat-permission-details-toggle');
+    const chevron = toggle.querySelector('svg');
+    expect(chevron).toHaveClass('size-[11px]');
+  });
+
   // --- Behavior 3: deny button ---
 
   it('clicking deny calls reply once with the deny ControlResponse', () => {

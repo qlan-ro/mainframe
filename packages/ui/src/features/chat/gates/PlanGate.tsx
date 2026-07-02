@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardListIcon } from 'lucide-react';
+import { SquareCheckIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -126,7 +126,7 @@ function ReviseRow({
   onCancel: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 px-3.5 pb-3">
+    <div className="flex animate-in fade-in-0 slide-in-from-top-1 duration-150 flex-col gap-2 px-3.5 pb-3">
       <Textarea
         data-testid="chat-plan-feedback-input"
         rows={3}
@@ -189,7 +189,7 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
     <div data-testid="chat-plan-gate">
       <GateCardShell>
         <GateHead
-          icon={<ClipboardListIcon className="size-4" />}
+          icon={<SquareCheckIcon className="size-[15px]" />}
           tileClassName="bg-mf-selection text-primary"
           eyebrow="Plan"
           eyebrowClassName="text-primary"
