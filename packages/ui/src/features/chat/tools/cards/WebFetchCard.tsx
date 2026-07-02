@@ -10,17 +10,20 @@
  * Body: url row (WebFetch only) + a summary paragraph built from the result
  *   text — the CLI's opaque string result, no structured shape to parse.
  *
- * Token gap: the design (09-toolcards.jsx TOOL_META.web) specifies a dedicated
- * teal (#16a394) family color, but no `--mf-tool-web`/`--mf-tool-web-tint`
- * token exists in globals.css (only read/search/bash have family tokens).
- * Falls back to `text-primary`/`bg-mf-selection`, the same fallback MCPToolCard
- * uses for its own tokenless family — flagged for a follow-up token addition
- * rather than hardcoding the design's raw hex.
+ * Family color: dedicated teal token (09-toolcards.jsx TOOL_META.web,
+ * #16a394), mirroring the --mf-tool-read/-search/-bash pattern.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { GlobeIcon } from 'lucide-react';
 import { useHost } from '@/lib/host';
 import { StatusDot, CollapsibleCardShell, FamilyTile, ErrorBody, resolveResultText } from '../shared';
+
+// ---------------------------------------------------------------------------
+// Family color (matches 09-toolcards.jsx TOOL_META.web)
+// ---------------------------------------------------------------------------
+
+const FAMILY_COLOR = 'var(--mf-tool-web)';
+const FAMILY_BG = 'var(--mf-tool-web-tint)';
 
 // ---------------------------------------------------------------------------
 // Verb by tool name
@@ -84,8 +87,8 @@ export const WebFetchCard: ToolCallMessagePartComponent = ({ toolName, args, res
   const verb = verbFor(toolName);
 
   const tile = (
-    <FamilyTile color="var(--color-primary)" bg="var(--color-mf-selection)">
-      <GlobeIcon size={13} style={{ color: 'var(--color-primary)' }} />
+    <FamilyTile color={FAMILY_COLOR} bg={FAMILY_BG}>
+      <GlobeIcon size={13} style={{ color: FAMILY_COLOR }} />
     </FamilyTile>
   );
 

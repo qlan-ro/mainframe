@@ -51,6 +51,24 @@ const baseProps = {
 // WebFetch
 // ---------------------------------------------------------------------------
 
+describe('WebFetchCard — family color token', () => {
+  it('renders the family tile using the dedicated --mf-tool-web tint token', () => {
+    const { container } = render(
+      <Wrap>
+        <WebFetchCard
+          {...baseProps}
+          toolName="WebFetch"
+          args={{ url: 'https://example.com/docs', prompt: 'summarize' }}
+          result={'The docs page explains X.'}
+          isError={false}
+        />
+      </Wrap>,
+    );
+    const tile = container.querySelector('span[aria-hidden]') as HTMLElement;
+    expect(tile).toHaveStyle({ backgroundColor: 'var(--mf-tool-web-tint)' });
+  });
+});
+
 describe('WebFetchCard — WebFetch', () => {
   it('renders the "Fetch" verb', () => {
     render(
