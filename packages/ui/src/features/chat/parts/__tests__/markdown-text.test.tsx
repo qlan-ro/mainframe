@@ -402,10 +402,11 @@ describe('markdownComponents list markers', () => {
 describe('markdownComponents inline code', () => {
   const Code = markdownComponents.code as React.ComponentType<React.ComponentProps<'code'>>;
 
-  it('uses bg-mf-raised (not the block-code bg token) — no dedicated warm-brown fg token exists, see report', () => {
+  it('uses bg-mf-raised + the dedicated warm-brown inline-code fg token (not the block-code tokens)', () => {
     const { container } = render(<Code>x</Code>);
     const code = container.querySelector('code');
     expect(code!.className).toContain('bg-mf-raised');
+    expect(code!.className).toContain('text-mf-code-inline-fg');
     expect(code!.className).not.toContain('bg-mf-code-bg');
     expect(code!.className).not.toContain('text-mf-code-fg');
   });

@@ -59,10 +59,9 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
     <code
       className={cn(
         'aui-md-inline-code',
-        // NOTE: design calls for a dedicated warm-brown fg (#7a4d2a) — no such
-        // token exists in globals.css (flagged in area-04-report.md); falls
-        // back to the readable default ink on the correct `mf-raised` bg.
-        'bg-mf-raised text-foreground',
+        // Dedicated warm-brown inline-code fg token (design #7a4d2a light);
+        // distinct from the fenced-code-block `mf-code-fg` token.
+        'bg-mf-raised text-mf-code-inline-fg',
         'rounded-xs border border-border px-1.5 py-0.5',
         'font-mono text-caption',
         className,

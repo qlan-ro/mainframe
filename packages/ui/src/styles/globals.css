@@ -120,6 +120,7 @@
   --mf-tool-bash-tint: rgba(122, 122, 130, 0.11);
   --mf-tool-web: #16a394;
   --mf-tool-web-tint: rgba(22, 163, 148, 0.11);
+  --mf-code-inline-fg: #7a4d2a;
 
   /* App-only elevation variants (panel shadows not in prototype theme) */
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -243,6 +244,7 @@
   --mf-tool-bash-tint: rgba(154, 149, 141, 0.14);
   --mf-tool-web: #2bd6c2;
   --mf-tool-web-tint: rgba(43, 214, 194, 0.14);
+  --mf-code-inline-fg: #e0a878;
 
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -446,6 +448,7 @@
   --mf-tool-bash-tint: rgba(136, 152, 168, 0.14);
   --mf-tool-web: #2fc6b7;
   --mf-tool-web-tint: rgba(47, 198, 183, 0.14);
+  --mf-code-inline-fg: #e0a878;
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
   --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
@@ -638,6 +641,7 @@
   --mf-tool-bash-tint: rgba(158, 142, 174, 0.14);
   --mf-tool-web: #2bd6c2;
   --mf-tool-web-tint: rgba(43, 214, 194, 0.14);
+  --mf-code-inline-fg: #e0a878;
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
   --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
@@ -716,6 +720,7 @@
   --color-mf-tool-bash-tint: var(--mf-tool-bash-tint);
   --color-mf-tool-web: var(--mf-tool-web);
   --color-mf-tool-web-tint: var(--mf-tool-web-tint);
+  --color-mf-code-inline-fg: var(--mf-code-inline-fg);
   --color-mf-code-bg: var(--mf-code-bg);
   --color-mf-code-fg: var(--mf-code-fg);
   --color-mf-code-kw: var(--mf-code-kw);
