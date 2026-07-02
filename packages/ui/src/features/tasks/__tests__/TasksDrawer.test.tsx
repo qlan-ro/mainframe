@@ -134,6 +134,13 @@ describe('TasksDrawer — key testids are rendered', () => {
     expect(badge.className).toContain('tabular-nums');
   });
 
+  it('renders the active-count badge with an 8px radius (design parity)', () => {
+    renderDrawer([OPEN_TODO]);
+    const badge = screen.getByTestId('tasks-drawer-count');
+    expect(badge.className).toContain('rounded-md');
+    expect(badge.className).not.toContain('rounded-sm');
+  });
+
   it('does NOT render the count badge when there are zero active todos', () => {
     renderDrawer([DONE_TODO]);
     expect(screen.queryByTestId('tasks-drawer-count')).toBeNull();

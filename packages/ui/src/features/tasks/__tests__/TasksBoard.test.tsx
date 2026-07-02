@@ -100,3 +100,21 @@ describe('TasksBoard — segmented view switch + new button still render', () =>
     expect(screen.getByTestId('tasks-board-new')).toBeTruthy();
   });
 });
+
+describe('TasksBoard — header spacing (design parity)', () => {
+  it('applies 16px horizontal padding to the header', () => {
+    renderBoard();
+    const header = screen.getByTestId('tasks-board-modal').firstElementChild as HTMLElement;
+    expect(header.className).toContain('px-[16px]');
+    expect(header.className).not.toContain('px-4');
+  });
+
+  it('renders the active/done count chip with an 8px radius and 8px horizontal padding', () => {
+    renderBoard();
+    const chip = screen.getByText(/active/).closest('span') as HTMLElement;
+    expect(chip.className).toContain('rounded-md');
+    expect(chip.className).not.toContain('rounded-sm');
+    expect(chip.className).toContain('px-[8px]');
+    expect(chip.className).toContain('py-0.5');
+  });
+});

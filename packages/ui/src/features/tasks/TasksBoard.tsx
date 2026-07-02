@@ -70,7 +70,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
   return (
     <div data-testid="tasks-board-modal" className="flex flex-col h-full min-h-0 overflow-hidden">
       {/* Header — fixed 52px height per design (12-todos.jsx:714) */}
-      <div className="flex items-center gap-5 h-[52px] px-4 border-b border-border shrink-0">
+      <div className="flex items-center gap-5 h-[52px] px-[16px] border-b border-border shrink-0">
         <button
           data-testid="tasks-board-close"
           type="button"
@@ -82,7 +82,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
         </button>
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-body font-semibold text-foreground">Tasks</span>
-        <span className="font-mono text-caption text-mf-text-3 bg-mf-chip rounded-sm px-2 py-0.5">
+        <span className="font-mono text-caption text-mf-text-3 bg-mf-chip rounded-md px-[8px] py-0.5">
           {activeCount} active · {doneCount} done
         </span>
 

@@ -123,7 +123,7 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
         {activeCount > 0 && (
           <span
             data-testid="tasks-drawer-count"
-            className="font-mono text-micro text-mf-text-3 bg-mf-chip rounded-sm px-1.5 py-px tabular-nums"
+            className="font-mono text-micro text-mf-text-3 bg-mf-chip rounded-md px-1.5 py-px tabular-nums"
           >
             {activeCount}
           </span>
