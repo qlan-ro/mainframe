@@ -49,7 +49,7 @@ describe('useAddProject — happy path (new project)', () => {
       await result.current();
     });
 
-    expect(pickDirectory).toHaveBeenCalledWith({ mode: 'directory', title: 'Add project' });
+    expect(pickDirectory).toHaveBeenCalledWith({ mode: 'directory' });
     expect(createProject).toHaveBeenCalledWith(31415, '/home/user/gamma');
     expect(reloadProjects).toHaveBeenCalledTimes(1);
     expect(toastSuccess).toHaveBeenCalledTimes(1);

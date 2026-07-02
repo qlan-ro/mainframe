@@ -249,6 +249,155 @@ describe('DirectoryPickerModal — lazy-load error', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 8. Title text — default titles match the artboard (area-3 parity, 3.2)
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — title text', () => {
+  it('defaults to "Select Project Directory" in directory mode', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Select Project Directory')).not.toBeNull();
+    });
+  });
+
+  it('defaults to "Select File" in file mode', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'file' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Select File')).not.toBeNull();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Footer — Select label (not "Choose") + selected-path readout (3.6, 3.7)
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — footer parity', () => {
+  it('confirm button always reads "Select", never "Choose"', async () => {
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    expect(screen.getByTestId('directory-picker-confirm').textContent).toBe('Select');
+  });
+
+  it('renders the selected path in the footer once a row is picked', async () => {
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    await userEvent.click(screen.getByTestId('directory-picker-row-/Users/me/proj'));
+
+    expect(screen.getByTestId('directory-picker-selected-path').textContent).toBe('/Users/me/proj');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Home-crumb — fixed home label, not the live selection (3.3)
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — home crumb', () => {
+  it('keeps showing "~" in the crumb after a row is selected', async () => {
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    await userEvent.click(screen.getByTestId('directory-picker-row-/Users/me/proj'));
+
+    expect(screen.getByTestId('directory-picker-crumb').textContent).toBe('~');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Per-node Empty + Loading rows (3.4, 3.5)
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — per-node tree states', () => {
+  it('renders an inline "Empty" row under an expanded node with zero children', async () => {
+    mockBrowse
+      .mockResolvedValueOnce([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }])
+      .mockResolvedValueOnce([]);
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    await userEvent.click(screen.getByTestId('directory-picker-row-/Users/me/proj'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('directory-picker-node-empty-/Users/me/proj')).toBeTruthy();
+    });
+  });
+
+  it('renders an inline pulsing "Loading…" row while a node is expanding', async () => {
+    let resolveChildren!: (v: { name: string; path: string; type: string }[]) => void;
+    const childrenPromise = new Promise<{ name: string; path: string; type: string }[]>((res) => {
+      resolveChildren = res;
+    });
+
+    mockBrowse.mockResolvedValueOnce([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+    mockBrowse.mockReturnValueOnce(childrenPromise);
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    await userEvent.click(screen.getByTestId('directory-picker-row-/Users/me/proj'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('directory-picker-node-loading-/Users/me/proj')).toBeTruthy();
+    });
+    expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+
+    act(() => {
+      resolveChildren([]);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-node-loading-/Users/me/proj')).toBeNull();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 7. Stale-seed guard — second pickDirectory supersedes the first
 // ---------------------------------------------------------------------------
 
@@ -296,5 +445,85 @@ describe('DirectoryPickerModal — stale-seed guard', () => {
       expect(screen.queryByTestId('directory-picker-row-/Users/me/stale')).toBeNull();
     });
     expect(screen.queryByTestId('directory-picker-row-/Users/me/second')).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Header/footer horizontal padding + inline close button (3.1, 3.6, 3.10)
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — header/footer padding + inline close', () => {
+  it('renders the header with 16px horizontal padding and justify-between layout', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Select Project Directory')).not.toBeNull();
+    });
+
+    const header = screen.getByText('Select Project Directory').closest('[class*="justify-between"]');
+    expect(header).not.toBeNull();
+    expect(header?.className).toContain('px-[16px]');
+    expect(header?.className).toContain('justify-between');
+  });
+
+  it('renders the footer with 16px horizontal padding', async () => {
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    const footer = screen.getByTestId('directory-picker-selected-path').closest('[class*="justify-between"]');
+    expect(footer).not.toBeNull();
+    expect(footer?.className).toContain('px-[16px]');
+  });
+
+  it('renders an inline close button in the header row, not the base dialog close', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Select Project Directory')).not.toBeNull();
+    });
+
+    // The base absolutely-positioned dialog close must be suppressed.
+    expect(screen.queryByTestId('dialog-close')).toBeNull();
+
+    const close = screen.getByTestId('directory-picker-close');
+    expect(close.className).toContain('size-[26px]');
+    expect(close.className).toContain('rounded-[7px]');
+    expect(close.getAttribute('aria-label')).toBe('Close');
+
+    const icon = close.querySelector('svg');
+    expect(icon?.getAttribute('class')).toContain('size-[14px]');
+  });
+
+  it('clicking the inline close button resolves null and closes the picker', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    let picked: Promise<string | null>;
+    act(() => {
+      picked = useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-close')).not.toBeNull();
+    });
+
+    await userEvent.click(screen.getByTestId('directory-picker-close'));
+
+    await expect(picked!).resolves.toBeNull();
+    expect(useDirectoryPicker.getState().pending).toBeNull();
   });
 });

@@ -50,15 +50,16 @@ function DialogContent({
         {children}
         {!hideClose && (
           <DialogPrimitive.Close
+            data-testid="dialog-close"
             className={cn(
-              'absolute right-3 top-3 flex size-7 items-center justify-center rounded-md',
+              'absolute right-3 top-3 flex size-[26px] items-center justify-center rounded-[7px]',
               'text-muted-foreground transition-colors',
               'hover:bg-accent hover:text-foreground',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:pointer-events-none',
             )}
           >
-            <XIcon className="size-4" />
+            <XIcon className="size-[14px]" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

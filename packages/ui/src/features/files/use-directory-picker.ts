@@ -12,12 +12,11 @@ import { create } from 'zustand';
 
 export interface PickRequest {
   mode: 'directory' | 'file';
-  title?: string;
 }
 
 interface DirectoryPickerState {
   pending: PickRequest | null;
-  pickDirectory: (opts: { mode?: 'directory' | 'file'; title?: string }) => Promise<string | null>;
+  pickDirectory: (opts: { mode?: 'directory' | 'file' }) => Promise<string | null>;
   resolve: (path: string | null) => void;
 }
 
@@ -31,7 +30,7 @@ export const useDirectoryPicker = create<DirectoryPickerState>((set, get) => ({
       // stranded resolver with null so its caller is unblocked instead of hanging.
       const displaced = resolver;
       resolver = res;
-      set({ pending: { mode: opts.mode ?? 'directory', title: opts.title } });
+      set({ pending: { mode: opts.mode ?? 'directory' } });
       displaced?.(null);
     }),
   resolve: (path) => {

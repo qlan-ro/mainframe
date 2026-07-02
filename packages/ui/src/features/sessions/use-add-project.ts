@@ -18,7 +18,7 @@ export function useAddProject(reloadProjects: () => Promise<void>): () => Promis
   const pickDirectory = useDirectoryPicker((s) => s.pickDirectory);
 
   return useCallback(async () => {
-    const path = await pickDirectory({ mode: 'directory', title: 'Add project' });
+    const path = await pickDirectory({ mode: 'directory' });
     if (path == null) return;
 
     try {

@@ -5,138 +5,17 @@
  * so expand and patch are O(1) keyed updates — no recursive deep clone.
  * Seed effect uses a cancelled flag (ReviewPanel pattern) to guard stale root
  * browses. Child-expand errors set a per-node loadError flag rendered inline.
+ *
+ * Row/state rendering lives in ./directory-picker/PickerTree.tsx (kept
+ * separate to hold both files under the 300-line limit).
  */
 import { useEffect, useState } from 'react';
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FileIcon } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { FolderIcon, XIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useDirectoryPicker } from '@/features/files/use-directory-picker';
-import { browseFilesystem, type FileTreeEntry } from '@/lib/api/files';
+import { browseFilesystem } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-
-// ---------------------------------------------------------------------------
-// Flat tree state types
-// ---------------------------------------------------------------------------
-
-interface FlatNode {
-  entry: FileTreeEntry;
-  /** null = not yet loaded; [] = loaded, empty directory */
-  childrenPaths: string[] | null;
-  expanded: boolean;
-  /** true when the child browse failed — renders a "Failed to load" row */
-  loadError: boolean;
-  depth: number;
-}
-
-interface FlatTree {
-  nodes: Map<string, FlatNode>;
-  rootPaths: string[];
-}
-
-const EMPTY_TREE: FlatTree = { nodes: new Map(), rootPaths: [] };
-
-function buildTree(entries: FileTreeEntry[], depth: number): FlatTree {
-  const nodes = new Map<string, FlatNode>();
-  const rootPaths: string[] = [];
-  for (const e of entries) {
-    rootPaths.push(e.path);
-    nodes.set(e.path, { entry: e, childrenPaths: null, expanded: false, loadError: false, depth });
-  }
-  return { nodes, rootPaths };
-}
-
-// ---------------------------------------------------------------------------
-// Individual tree row
-// ---------------------------------------------------------------------------
-
-interface PickerRowProps {
-  node: FlatNode;
-  selectedPath: string | null;
-  onSelect: (node: FlatNode) => void;
-  onToggle: (node: FlatNode) => void;
-}
-
-function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
-  const { entry, expanded, depth } = node;
-  const isDirectory = entry.type === 'directory';
-  const isSelected = selectedPath === entry.path;
-  const indent = depth * 16;
-
-  return (
-    <button
-      type="button"
-      data-testid={`directory-picker-row-${entry.path}`}
-      onClick={() => {
-        if (isDirectory) onToggle(node);
-        onSelect(node);
-      }}
-      className={`flex w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-body outline-none hover:bg-accent hover:text-accent-foreground ${isSelected ? 'bg-mf-selection text-foreground' : ''}`}
-      style={{ paddingLeft: `${8 + indent}px` }}
-    >
-      {isDirectory ? (
-        expanded ? (
-          <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        )
-      ) : (
-        <span className="size-3.5 shrink-0" />
-      )}
-      {isDirectory ? (
-        <FolderIcon className="size-3.5 shrink-0 text-primary" />
-      ) : (
-        <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      )}
-      <span className="truncate">{entry.name}</span>
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Flat renderer — depth-first traversal via ordered paths
-// ---------------------------------------------------------------------------
-
-interface FlatTreeViewProps {
-  tree: FlatTree;
-  selectedPath: string | null;
-  onSelect: (node: FlatNode) => void;
-  onToggle: (node: FlatNode) => void;
-}
-
-function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTreeViewProps) {
-  const rows: FlatNode[] = [];
-
-  function collect(paths: string[], visited: Set<string>) {
-    for (const p of paths) {
-      if (visited.has(p)) continue;
-      const node = tree.nodes.get(p);
-      if (!node) continue;
-      visited.add(p);
-      rows.push(node);
-      if (node.expanded && node.childrenPaths) collect(node.childrenPaths, visited);
-    }
-  }
-
-  collect(tree.rootPaths, new Set());
-
-  return (
-    <div className="py-1">
-      {rows.map((node) => (
-        <div key={node.entry.path}>
-          <PickerRow node={node} selectedPath={selectedPath} onSelect={onSelect} onToggle={onToggle} />
-          {node.expanded && node.loadError && (
-            <p
-              data-testid={`directory-picker-load-error-${node.entry.path}`}
-              className="px-3 py-0.5 text-micro text-destructive"
-              style={{ paddingLeft: `${8 + (node.depth + 1) * 16}px` }}
-            >
-              Failed to load
-            </p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
+import { type FlatNode, type FlatTree, EMPTY_TREE, buildTree, FlatTreeView } from './directory-picker/PickerTree';
 
 // ---------------------------------------------------------------------------
 // Main modal component
@@ -264,27 +143,36 @@ export function DirectoryPickerModal() {
         if (!o) resolve(null);
       }}
     >
-      <DialogContent data-testid="directory-picker" className="max-w-lg p-0 gap-0 flex flex-col max-h-[70vh]">
-        <DialogHeader className="px-4 pt-4 pb-2 shrink-0">
-          <DialogTitle className="text-body">
-            {pending?.title ?? (pending?.mode === 'file' ? 'Select a file' : 'Select a directory')}
+      <DialogContent
+        hideClose
+        data-testid="directory-picker"
+        className="max-w-[480px] p-0 gap-0 flex flex-col max-h-[70vh]"
+      >
+        <DialogHeader className="flex-row items-center justify-between gap-2 border-b border-border px-[16px] py-[13px] shrink-0">
+          <DialogTitle className="text-heading font-bold tracking-[-0.2px]">
+            {pending?.mode === 'file' ? 'Select File' : 'Select Project Directory'}
           </DialogTitle>
+          <DialogClose
+            data-testid="directory-picker-close"
+            aria-label="Close"
+            className="flex size-[26px] shrink-0 items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+          >
+            <XIcon className="size-[14px]" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
         </DialogHeader>
 
         <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3.5 py-[7px] font-mono text-caption text-mf-text-3">
-          <FolderIcon className="size-3 shrink-0 text-mf-text-4" />
+          <FolderIcon className="size-[12px] shrink-0 text-mf-text-4" fill="currentColor" />
           <span className="truncate" data-testid="directory-picker-crumb">
-            {selectedPath ?? '~'}
+            ~
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="min-h-[300px] flex-1 overflow-y-auto">
           {rootError && <p className="px-4 py-4 text-caption text-destructive">{rootError}</p>}
           {!rootError && loading && (
-            <p
-              data-testid="directory-picker-loading"
-              className="px-4 py-6 text-center text-caption text-muted-foreground"
-            >
+            <p data-testid="directory-picker-loading" className="px-4 py-[32px] text-center text-body text-mf-text-3">
               Loading…
             </p>
           )}
@@ -301,24 +189,32 @@ export function DirectoryPickerModal() {
           )}
         </div>
 
-        <DialogFooter className="px-4 py-3 shrink-0 border-t border-border flex items-center justify-end gap-2">
-          <button
-            type="button"
-            data-testid="directory-picker-cancel"
-            onClick={handleCancel}
-            className="rounded-md bg-mf-chip px-3 py-1.5 text-body text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        <DialogFooter className="flex-row items-center justify-between gap-2 border-t border-border px-[16px] py-[11px] shrink-0 sm:justify-between">
+          <span
+            data-testid="directory-picker-selected-path"
+            className="max-w-[270px] truncate font-mono text-caption text-mf-text-3"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            data-testid="directory-picker-confirm"
-            onClick={handleConfirm}
-            disabled={!canConfirm}
-            className="rounded-md px-3 py-1.5 text-body bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {pending?.mode === 'file' ? 'Select' : 'Choose'}
-          </button>
+            {selectedPath ?? ''}
+          </span>
+          <div className="flex items-center gap-[8px]">
+            <button
+              type="button"
+              data-testid="directory-picker-cancel"
+              onClick={handleCancel}
+              className="rounded-md bg-mf-chip px-[13px] py-[7px] text-label font-medium text-mf-text-2 hover:bg-accent hover:text-accent-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="directory-picker-confirm"
+              onClick={handleConfirm}
+              disabled={!canConfirm}
+              className="rounded-md bg-primary px-[15px] py-[7px] text-label font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Select
+            </button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
