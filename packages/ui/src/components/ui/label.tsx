@@ -7,7 +7,7 @@ function Label({ className, ...props }: React.ComponentPropsWithoutRef<typeof La
     <LabelPrimitive.Root
       className={cn(
         'text-label font-medium text-foreground leading-none',
-        'peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
+        'peer-disabled:cursor-not-allowed peer-disabled:opacity-[0.45]',
         className,
       )}
       {...props}

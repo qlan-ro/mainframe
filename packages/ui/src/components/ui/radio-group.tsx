@@ -10,10 +10,10 @@ function RadioGroupItem({ className, ...props }: React.ComponentPropsWithoutRef<
   return (
     <RadioGroupPrimitive.Item
       className={cn(
-        'aspect-square h-[17px] w-[17px] rounded-full border-[1.5px] border-border',
+        'aspect-square h-[17px] w-[17px] rounded-full border-[1.5px] border-mf-text-4',
         'text-primary transition-colors',
         'focus-visible:outline-none',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'disabled:cursor-not-allowed disabled:opacity-[0.45]',
         'data-[state=checked]:border-[5px] data-[state=checked]:border-primary',
         className,
       )}

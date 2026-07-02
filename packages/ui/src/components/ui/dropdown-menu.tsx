@@ -22,8 +22,8 @@ function DropdownMenuSubTrigger({
   return (
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
-        'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5',
-        'text-body outline-none',
+        menuItemVariants(),
+        'cursor-default select-none',
         'focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
         inset && 'pl-8',
         className,
@@ -43,7 +43,8 @@ function DropdownMenuSubContent({
   return (
     <DropdownMenuPrimitive.SubContent
       className={cn(
-        'z-50 min-w-32 overflow-hidden rounded-lg border border-border bg-popover p-1',
+        'z-50 min-w-32 overflow-hidden rounded-lg border border-border bg-popover',
+        MENU_CONTENT_PADDING,
         'text-popover-foreground shadow-[var(--mf-shadow-pop)]',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
@@ -118,8 +119,9 @@ function DropdownMenuCheckboxItem({
   return (
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2',
-        'text-body outline-none transition-colors',
+        menuItemVariants(),
+        'relative cursor-default select-none pl-8 pr-2',
+        'transition-colors',
         'focus:bg-accent focus:text-accent-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
@@ -145,8 +147,9 @@ function DropdownMenuRadioItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2',
-        'text-body outline-none transition-colors',
+        menuItemVariants(),
+        'relative cursor-default select-none pl-8 pr-2',
+        'transition-colors',
         'focus:bg-accent focus:text-accent-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
