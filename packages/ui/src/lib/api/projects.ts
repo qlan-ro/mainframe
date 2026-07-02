@@ -2,7 +2,7 @@
  * Projects REST wrapper — lists the daemon's known projects.
  */
 import type { Project } from '@qlan-ro/mainframe-types';
-import { apiBase, request, requestNoContent } from './http';
+import { apiBase, authHeaders, request, requestNoContent } from './http';
 
 export const getProjects = (port: number): Promise<Project[]> =>
   request<Project[]>('GET', `${apiBase(port)}/api/projects`);
@@ -24,7 +24,7 @@ export async function createProject(
 ): Promise<{ project: Project; alreadyExists: boolean }> {
   const res = await fetch(`${apiBase(port)}/api/projects`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(name !== undefined ? { path, name } : { path }),
   });
 

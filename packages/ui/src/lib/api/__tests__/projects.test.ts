@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { createProject, getProjects, removeProject } from '../projects';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -53,10 +62,12 @@ function mockFetchApiError(error: string): void {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 describe('getProjects', () => {
@@ -91,12 +102,13 @@ describe('getProjects', () => {
     });
   });
 
-  it('uses a different port when passed', async () => {
+  it('ignores the port arg — the active daemon owns the base URL', async () => {
     mockFetchOk([]);
 
     await getProjects(9000);
 
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:9000/api/projects', { method: 'GET' });
+    // apiBase ignores the passed port and uses the active daemon's baseUrl (local: 31415).
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects', { method: 'GET' });
   });
 
   it('throws when success is false', async () => {
@@ -161,6 +173,32 @@ describe('createProject', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: '/home/user/gamma' }),
+    });
+  });
+
+  it('includes the Bearer auth header and hits the remote base when the active daemon is remote', async () => {
+    setActiveDaemon({
+      id: 'studio',
+      kind: 'remote',
+      label: 'Studio',
+      baseUrl: 'https://studio.example.com',
+      token: 'jwt-xyz',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true, data: CREATED }),
+      }),
+    );
+
+    await createProject(31415, '/srv/agent/gamma');
+
+    expect(fetch).toHaveBeenCalledWith('https://studio.example.com/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer jwt-xyz' },
+      body: JSON.stringify({ path: '/srv/agent/gamma' }),
     });
   });
 
