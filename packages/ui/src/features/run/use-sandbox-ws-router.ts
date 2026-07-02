@@ -11,9 +11,9 @@
  *
  * Event routing:
  *   launch.output         → appendLog(scope, name, data, stream)
- *   launch.status         → setProcessStatus(scope, name, status)
- *   launch.tunnel         → appendLog (log-only; no URL navigation — parity)
- *   launch.tunnel.failed  → appendLog (log-only)
+ *   launch.status         → setProcessStatus(scope, name, status); clears tunnel on stop/failed
+ *   launch.tunnel         → appendLog + setTunnelUrl(scope, name, url)
+ *   launch.tunnel.failed  → appendLog + setTunnelError(scope, name, error)
  *   launch.port.timeout   → appendLog (log-only)
  *   launch.scopeReleased  → releaseRunScope(scopeKey) — prune Run tabs/PTYs
  *   everything else       → no-op
@@ -31,6 +31,9 @@ export interface SandboxRouterStore {
   appendLog: (scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
   setProcessStatus: (scopeKey: string, name: string, status: LaunchProcessStatus) => void;
   releaseRunScope: (scopeKey: string) => void;
+  setTunnelUrl: (scopeKey: string, name: string, url: string) => void;
+  setTunnelError: (scopeKey: string, name: string, error: string) => void;
+  clearTunnel: (scopeKey: string, name: string) => void;
 }
 
 /** Pure event dispatcher — dependency-injected so it is testable without React. */
@@ -44,16 +47,22 @@ export function routeLaunchEvent(event: DaemonEvent, store: SandboxRouterStore):
     case 'launch.status': {
       const scope = buildLaunchScope(event.projectId, event.effectivePath);
       store.setProcessStatus(scope, event.name, event.status);
+      // Tunnel dies with the process — clear its URL/error so the next run starts clean.
+      if (event.status !== 'running' && event.status !== 'starting') {
+        store.clearTunnel(scope, event.name);
+      }
       return;
     }
     case 'launch.tunnel': {
       const scope = buildLaunchScope(event.projectId, event.effectivePath);
       store.appendLog(scope, event.name, `[tunnel] ${event.url}`, 'stdout');
+      store.setTunnelUrl(scope, event.name, event.url);
       return;
     }
     case 'launch.tunnel.failed': {
       const scope = buildLaunchScope(event.projectId, event.effectivePath);
       store.appendLog(scope, event.name, `[tunnel.failed] ${event.error}`, 'stderr');
+      store.setTunnelError(scope, event.name, event.error);
       return;
     }
     case 'launch.port.timeout': {
@@ -77,6 +86,9 @@ export function useSandboxWsRouter(): void {
       appendLog: (...args) => useSandboxStore.getState().appendLog(...args),
       setProcessStatus: (...args) => useSandboxStore.getState().setProcessStatus(...args),
       releaseRunScope: (scopeKey) => useLayoutStore.getState().releaseRunScope(scopeKey),
+      setTunnelUrl: (...args) => useSandboxStore.getState().setTunnelUrl(...args),
+      setTunnelError: (...args) => useSandboxStore.getState().setTunnelError(...args),
+      clearTunnel: (...args) => useSandboxStore.getState().clearTunnel(...args),
     };
 
     const unsubscribe = daemonWs.onEvent((event) => {

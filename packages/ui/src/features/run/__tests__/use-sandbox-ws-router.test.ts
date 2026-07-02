@@ -6,24 +6,26 @@
  *
  * Behaviors covered:
  *  - launch.output → appendLog with the built scope key
- *  - launch.status → setProcessStatus with the built scope key
- *  - launch.tunnel → appendLog (log-only, no navigation)
- *  - launch.tunnel.failed → appendLog (log-only)
+ *  - launch.status → setProcessStatus with the built scope key; clears tunnel on stop/failed
+ *  - launch.tunnel → appendLog AND setTunnelUrl
+ *  - launch.tunnel.failed → appendLog AND setTunnelError
  *  - launch.port.timeout → appendLog (log-only)
  *  - Non-launch events → no-op (neither store method called)
  */
 import { it, expect, vi, describe } from 'vitest';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
-import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import type { SandboxRouterStore } from '../use-sandbox-ws-router';
 import { routeLaunchEvent } from '../use-sandbox-ws-router';
 
 function makeStore(): SandboxRouterStore {
   return {
-    appendLog: vi.fn<(scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void>(),
-    setProcessStatus: vi.fn<(scopeKey: string, name: string, status: LaunchProcessStatus) => void>(),
-    releaseRunScope: vi.fn<(scopeKey: string) => void>(),
-  };
+    appendLog: vi.fn(),
+    setProcessStatus: vi.fn(),
+    releaseRunScope: vi.fn(),
+    setTunnelUrl: vi.fn(),
+    setTunnelError: vi.fn(),
+    clearTunnel: vi.fn(),
+  } as unknown as SandboxRouterStore;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,26 +85,43 @@ describe('launch.status', () => {
 // ---------------------------------------------------------------------------
 
 describe('launch.tunnel', () => {
-  it('appends a log entry and does not call setProcessStatus', () => {
+  it('appends a log AND writes the tunnel url to the store', () => {
     const store = makeStore();
     routeLaunchEvent(
-      { type: 'launch.tunnel', projectId: 'p', effectivePath: '/r', name: 'dev', url: 'https://xyz.tunnel.io' },
+      { type: 'launch.tunnel', projectId: 'p', effectivePath: '/r', name: 'dev', url: 'https://xyz.trycloudflare.com' },
       store,
     );
     expect(store.appendLog).toHaveBeenCalledOnce();
+    expect(store.setTunnelUrl).toHaveBeenCalledWith('p:/r', 'dev', 'https://xyz.trycloudflare.com');
     expect(store.setProcessStatus).not.toHaveBeenCalled();
   });
 });
 
 describe('launch.tunnel.failed', () => {
-  it('appends a log entry', () => {
+  it('appends a log AND writes the tunnel error to the store', () => {
     const store = makeStore();
     routeLaunchEvent(
       { type: 'launch.tunnel.failed', projectId: 'p', effectivePath: '/r', name: 'dev', error: 'timeout' },
       store,
     );
     expect(store.appendLog).toHaveBeenCalledOnce();
-    expect(store.setProcessStatus).not.toHaveBeenCalled();
+    expect(store.setTunnelError).toHaveBeenCalledWith('p:/r', 'dev', 'timeout');
+  });
+});
+
+describe('launch.status clears tunnel on stop', () => {
+  it('clears tunnel entries when status leaves running/starting', () => {
+    const store = makeStore();
+    routeLaunchEvent({ type: 'launch.status', projectId: 'p', effectivePath: '/r', name: 'dev', status: 'stopped' }, store);
+    expect(store.setProcessStatus).toHaveBeenCalledWith('p:/r', 'dev', 'stopped');
+    expect(store.clearTunnel).toHaveBeenCalledWith('p:/r', 'dev');
+  });
+
+  it('does NOT clear tunnel while running or starting', () => {
+    const store = makeStore();
+    routeLaunchEvent({ type: 'launch.status', projectId: 'p', effectivePath: '/r', name: 'dev', status: 'running' }, store);
+    routeLaunchEvent({ type: 'launch.status', projectId: 'p', effectivePath: '/r', name: 'dev', status: 'starting' }, store);
+    expect(store.clearTunnel).not.toHaveBeenCalled();
   });
 });
 
