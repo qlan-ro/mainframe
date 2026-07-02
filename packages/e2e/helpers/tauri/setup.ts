@@ -5,6 +5,7 @@ import path from 'path';
 import type { Page } from '@playwright/test';
 import { DAEMON_PORT } from '../../fixtures/daemon.js';
 import { sessionsSidebar, composer } from './page-objects.js';
+import { waitConnected } from './wait.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 const DEFAULT_CLAUDE_MD =
@@ -42,10 +43,7 @@ export async function createTauriProject(page: Page | undefined, opts?: { claude
 
   if (page) {
     await page.reload();
-    await page
-      .locator('[data-testid="app-status-bar"]')
-      .getByText('Daemon Connected', { exact: true })
-      .waitFor({ timeout: 20_000 });
+    await waitConnected(page);
   }
   return { projectPath, projectId };
 }
@@ -76,10 +74,7 @@ export async function createTauriChat(
   } catch {
     // chat.created broadcast occasionally missed — reload to force a list resync, then retry.
     await page.reload();
-    await page
-      .locator('[data-testid="app-status-bar"]')
-      .getByText('Daemon Connected', { exact: true })
-      .waitFor({ timeout: 15_000 });
+    await waitConnected(page, 15_000);
     await row.waitFor({ timeout: 15_000 });
   }
   await row.click();

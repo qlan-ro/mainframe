@@ -4,10 +4,13 @@ import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { startDaemon, stopDaemon, DAEMON_PORT, type DaemonHandle } from './daemon.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APP_TAURI_DIR = path.resolve(__dirname, '../../../packages/app-tauri');
-const DIST_ASSETS = path.join(APP_TAURI_DIR, 'dist', 'assets');
+// The vite app is `packages/ui` (`@qlan-ro/mainframe-ui`). `packages/app-tauri` is the Rust/Tauri
+// shell (no vite build script) — it depends on packages/ui's build output, it isn't the app itself.
+const UI_DIR = path.resolve(__dirname, '../../../packages/ui');
+const DIST_ASSETS = path.join(UI_DIR, 'dist', 'assets');
 const PREVIEW_PORT = Number(process.env['MF_E2E_PREVIEW_PORT'] ?? 4317);
 const PREVIEW_BASE = `http://127.0.0.1:${PREVIEW_PORT}`;
 const PNPM = 'pnpm';
@@ -26,20 +29,20 @@ function assertBundleTargetsTestPort(): void {
   try {
     files = readdirSync(DIST_ASSETS).filter((f) => f.endsWith('.js'));
   } catch {
-    throw new Error(`Built app-tauri assets not found at ${DIST_ASSETS}. Build first.`);
+    throw new Error(`Built @qlan-ro/mainframe-ui assets not found at ${DIST_ASSETS}. Build first.`);
   }
   const baked = files.some((f) => readFileSync(path.join(DIST_ASSETS, f), 'utf8').includes(DAEMON_PORT));
   if (!baked) {
     throw new Error(
-      `Built app-tauri bundle does not bake the e2e daemon port ${DAEMON_PORT}. ` +
-        `Rebuild: VITE_DAEMON_PORT=${DAEMON_PORT} pnpm --filter @qlan-ro/mainframe-app-tauri build`,
+      `Built @qlan-ro/mainframe-ui bundle does not bake the e2e daemon port ${DAEMON_PORT}. ` +
+        `Rebuild: VITE_DAEMON_PORT=${DAEMON_PORT} pnpm --filter @qlan-ro/mainframe-ui build`,
     );
   }
 }
 
-function buildAppTauri(): void {
-  execFileSync(PNPM, ['--filter', '@qlan-ro/mainframe-app-tauri', 'build'], {
-    cwd: APP_TAURI_DIR,
+function buildUi(): void {
+  execFileSync(PNPM, ['--filter', '@qlan-ro/mainframe-ui', 'build'], {
+    cwd: UI_DIR,
     env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },
     stdio: 'inherit',
   });
@@ -50,7 +53,7 @@ async function startPreview(): Promise<ChildProcess> {
     PNPM,
     [
       '--filter',
-      '@qlan-ro/mainframe-app-tauri',
+      '@qlan-ro/mainframe-ui',
       'exec',
       'vite',
       'preview',
@@ -60,7 +63,7 @@ async function startPreview(): Promise<ChildProcess> {
       '--port',
       String(PREVIEW_PORT),
     ],
-    { cwd: APP_TAURI_DIR, env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT }, stdio: 'ignore' },
+    { cwd: UI_DIR, env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT }, stdio: 'ignore' },
   );
   const deadline = Date.now() + 15_000;
   const ctx = await request.newContext();
@@ -82,7 +85,7 @@ async function startPreview(): Promise<ChildProcess> {
 }
 
 export async function launchTauriApp(opts?: { recordingKey?: string }): Promise<TauriAppFixture> {
-  buildAppTauri();
+  buildUi();
   assertBundleTargetsTestPort();
 
   const daemonHandle = await startDaemon({ recordingKey: opts?.recordingKey });
@@ -94,11 +97,18 @@ export async function launchTauriApp(opts?: { recordingKey?: string }): Promise<
     const page = await browser.newPage();
     await page.goto(PREVIEW_BASE, { waitUntil: 'domcontentloaded' });
 
-    // Readiness: the status bar shows "Daemon Connected" once the IPv4 /health poll succeeds.
-    await page
-      .locator('[data-testid="app-status-bar"]')
-      .getByText('Daemon Connected', { exact: true })
-      .waitFor({ timeout: 20_000 });
+    await waitConnected(page);
+
+    // Suppress the first-run tour. `useFirstRunTour` auto-arms it ~1.5s after boot on any
+    // workspace with zero real sessions (features/tour/use-first-run-tour.ts) — a describe
+    // block whose beforeAll seeds a project but no chat (e.g. the external-session-import
+    // suite) would otherwise race the tour's coachmark overlay (`tour-overlay`, z-11500)
+    // onto the screen mid-test, intercepting clicks meant for the sidebar underneath.
+    await page.evaluate(() =>
+      localStorage.setItem('mf:tutorial', JSON.stringify({ state: { completed: true, step: 4 }, version: 0 })),
+    );
+    await page.reload();
+    await waitConnected(page);
 
     return { browser, page, preview, daemonHandle };
   } catch (err) {

@@ -27,7 +27,8 @@
  *   sessions-import-project-<id> — project picker button in import dialog
  *   external-session-item         — row in session list inside import dialog
  *   import-session-btn            — Import button on each external-session row
- *   app-status-bar                — status bar (getByText 'Daemon Connected')
+ *   sessions-new-picker           — sidebar "New" project picker (no filter pill active)
+ *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
  */
 
 import { test, expect } from '@playwright/test';
@@ -37,6 +38,7 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -72,14 +74,6 @@ function seedExternalSession(
   return claudeDir;
 }
 
-/** Wait for the status bar to show Daemon Connected (used after reload). */
-async function waitConnected(page: import('@playwright/test').Page): Promise<void> {
-  await page
-    .locator('[data-testid="app-status-bar"]')
-    .getByText('Daemon Connected', { exact: true })
-    .waitFor({ timeout: 20_000 });
-}
-
 // ─── §45 Sessions panel ───────────────────────────────────────────────────────
 
 test.describe('§45 Sessions panel', () => {
@@ -101,14 +95,13 @@ test.describe('§45 Sessions panel', () => {
   // SP1: new-session button behaviour.
   //
   // BEHAVIOUR DIFFERENCE vs desktop (documented):
-  //   In app-tauri, ThreadListPrimitive.New creates a LOCAL draft thread
-  //   (__LOCALID_*) that is NOT persisted as a `sessions-row` until the user
-  //   sends the first message (draft-aware new-thread D3, app-tauri/CLAUDE.md).
-  //   The desktop incremented the chat-list-item count immediately (REST on click).
-  //   When no project filter pill is active, the right pane shows a
-  //   NewThreadConfigPicker (`sessions-new-thread-surface`) so the user can
-  //   choose a project BEFORE the composer appears. The composer is only shown
-  //   after project+adapter are chosen (or when a project filter pill is active).
+  //   The in-composer "choose a project" picker (formerly NewThreadConfigPicker)
+  //   is gone. When no project filter pill is active, the sidebar "New" button
+  //   is wrapped in NewSessionPickerPopover (`sessions-new-picker`), which lists
+  //   projects to pick from BEFORE any draft thread is created. Only picking a
+  //   project row calls switchToNewThread() (draft-aware new-thread D3,
+  //   app-tauri/CLAUDE.md) — so no `sessions-row` is created merely by opening
+  //   the popover.
   test('SP1: new-session button shows project picker (no filter active)', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
@@ -116,14 +109,17 @@ test.describe('§45 Sessions panel', () => {
 
     await sidebar.newButton().click();
 
-    // In "All" view (no project filter pill), clicking New opens the
-    // NewThreadConfigPicker — NOT the composer directly.
-    await expect(page.getByTestId('sessions-new-thread-surface')).toBeVisible({ timeout: 10_000 });
+    // In "All" view (no project filter pill), clicking New opens the project
+    // picker popover — NOT the composer directly.
+    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
 
-    // The draft is local-only — the sessions-row count should NOT increase
-    // before project selection (no server-side chat created yet).
+    // No draft/chat is created merely by opening the popover — the sessions-row
+    // count should NOT increase before a project row is picked.
     const rowsAfter = await page.getByTestId('sessions-row').count();
     expect(rowsAfter).toBe(rowsBefore);
+
+    // Close the popover so it doesn't linger over later tests.
+    await page.keyboard.press('Escape');
   });
 
   // SP6: rename a session.

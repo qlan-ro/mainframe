@@ -1,8 +1,9 @@
 /** Desktop→app-tauri 1:1 testid renames. Workflow/dynamic differences live in page-objects.ts.
- *  All values verified against packages/app-tauri/src. */
+ *  All values verified against packages/ui/src. */
 export const T = {
-  statusBar: 'app-status-bar',
-  connectionDot: 'app-connection-dot',
+  // `app-status-bar` was retired (~2026-06-23, App.integration.test.tsx asserts it's absent);
+  // connection status now lives in the sidebar footer — see `waitConnected()` in wait.ts.
+  daemonFooterTrigger: 'daemon-footer-trigger',
   sessionRow: 'sessions-row',
   composerInput: 'chat-composer-input',
   composerSend: 'chat-composer-send',

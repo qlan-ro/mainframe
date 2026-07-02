@@ -53,8 +53,11 @@ test.describe('§composer config selects', () => {
     await expect(provider).toBeVisible({ timeout: 5_000 });
     // Pre-message: the provider is selectable (not locked for the session).
     await expect(provider).toBeEnabled();
-    // No "Locked" footer before the first message.
-    await expect(page.locator('[data-testid="composer-provider-footer"]')).toHaveCount(0);
+    // The footer always renders (ProviderModelSelect.tsx); before the first message it shows
+    // the "pick a provider" hint, not the "Locked"/"stays fixed" copy.
+    await expect(page.locator('[data-testid="composer-provider-footer"]')).toContainText(
+      'Pick a provider before your first message.',
+    );
     await page.keyboard.press('Escape');
   });
 
