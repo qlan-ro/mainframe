@@ -62,12 +62,12 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
       className="mb-[7px] overflow-hidden rounded-md border border-border bg-card"
     >
       {/* Main row */}
-      <div className="flex items-center gap-[9px] px-[10px] py-2">
+      <div className="flex items-center gap-[9px] px-[10px] py-[8px]">
         {/* Drag handle (decorative) */}
         <GripVertical size={14} className="shrink-0 cursor-grab text-mf-text-4" aria-hidden />
 
         {/* Kind icon chip */}
-        <span className={cn('inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-muted')}>
+        <span className={cn('inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-sm bg-muted')}>
           <Icon size={13} className={meta.colorClass} aria-hidden />
         </span>
 
@@ -91,7 +91,7 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
           data-testid={`workflows-builder-step-configure-${step.id ?? String(index)}`}
           onClick={() => setConfigOpen((o) => !o)}
           className={cn(
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm',
+            'inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm',
             configOpen ? 'bg-muted text-foreground' : 'text-mf-text-3 hover:bg-accent hover:text-foreground',
           )}
         >
@@ -102,8 +102,9 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
         <button
           type="button"
           aria-label="Remove step"
+          data-testid={`workflows-builder-step-remove-${step.id ?? String(index)}`}
           onClick={onRemove}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+          className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
         >
           <Trash2 size={13} aria-hidden />
         </button>
@@ -114,7 +115,7 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
           is scoped to a follow-up pass. Currently shows a placeholder for non-composite
           steps, and nothing for composite steps (they expose sub-lanes in the main view). */}
       {configOpen && (
-        <div className="border-t border-border px-[10px] pb-[11px] pl-[43px] pt-[9px]">
+        <div className="border-t border-border pt-[2px] pr-[12px] pb-[12px] pl-[30px]">
           <p className="text-caption text-mf-text-3">
             Configure panel for <span className="font-semibold text-foreground">{meta.label}</span> step.
           </p>

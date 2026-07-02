@@ -187,6 +187,12 @@ describe('WfBuilderPane', () => {
     expect(updatedModel.steps).toHaveLength(0);
   });
 
+  it('step Remove button carries a stable data-testid', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeDraftWithTriggerAndStep()} onChange={onChange} />);
+    expect(screen.getByTestId('workflows-builder-step-remove-q1')).toBeInTheDocument();
+  });
+
   it('add-output button renders with data-testid', () => {
     const onChange = vi.fn();
     render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);

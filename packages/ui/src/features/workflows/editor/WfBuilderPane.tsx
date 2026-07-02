@@ -29,7 +29,7 @@ interface WfbSectionProps {
 function WfbSection({ Icon, title, count, action, children }: WfbSectionProps): React.ReactElement {
   return (
     <div className="mb-[16px]">
-      <div className="mb-[8px] flex items-center gap-2">
+      <div className="mb-[8px] flex items-center gap-[8px]">
         <Icon size={13} className="text-mf-text-3" aria-hidden />
         <span className="text-micro font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
         {count != null && <span className="font-mono text-micro text-mf-text-3">{count}</span>}
@@ -68,8 +68,8 @@ function TriggerRow({ trigger, onRemove }: TriggerRowProps): React.ReactElement 
   const detail = trigger.label ?? trigger.cron ?? trigger.event ?? trigger.path ?? 'started by hand';
 
   return (
-    <div className="flex items-center gap-[9px] rounded-md border border-border bg-card px-[10px] py-2">
-      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-muted">
+    <div className="flex items-center gap-[9px] rounded-md border border-border bg-card px-[10px] py-[8px]">
+      <span className="inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-sm bg-muted">
         <TriggerIcon size={12} className="text-muted-foreground" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
@@ -80,7 +80,7 @@ function TriggerRow({ trigger, onRemove }: TriggerRowProps): React.ReactElement 
         type="button"
         aria-label="Remove trigger"
         onClick={onRemove}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+        className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
       >
         <X size={12} aria-hidden />
       </button>
@@ -184,7 +184,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
                   data-testid={`workflows-builder-scope-${id}`}
                   onClick={() => patch({ scope: id })}
                   className={cn(
-                    'rounded-sm px-3 py-[5px] text-label font-medium',
+                    'rounded-sm px-[12px] py-[5px] text-label font-medium',
                     active ? 'bg-card font-semibold text-foreground shadow-sm' : 'text-mf-text-3 hover:text-foreground',
                   )}
                 >
@@ -230,7 +230,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
           {(model.inputs ?? []).length > 0 ? (
             <div className="flex flex-col gap-1">
               {(model.inputs ?? []).map((inp, i) => (
-                <div key={i} className="flex items-center gap-2 py-[6px] font-mono text-caption">
+                <div key={i} className="flex items-center gap-[8px] py-[6px] font-mono text-caption">
                   <span className="font-semibold text-foreground">{inp.name}</span>
                   <span className="inline-flex h-[17px] items-center rounded-[3px] bg-muted px-[7px] font-semibold text-muted-foreground">
                     {inp.type}
@@ -261,7 +261,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
               data-testid="workflows-builder-add-step"
               onClick={() => setLibraryOpen(true)}
               className={cn(
-                'mt-[3px] inline-flex h-7 items-center gap-[6px] rounded-md border border-dashed border-mf-border-hover px-[11px]',
+                'mt-[3px] inline-flex h-[28px] items-center gap-[6px] rounded-md border border-dashed border-mf-border-hover pl-[9px] pr-[11px]',
                 'text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
@@ -301,7 +301,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
           {(model.outputs ?? []).length > 0 ? (
             <div className="flex flex-col gap-[6px]">
               {(model.outputs ?? []).map((o, i) => (
-                <div key={i} className="flex items-center gap-2">
+                <div key={i} className="flex items-center gap-[8px]">
                   <input
                     type="text"
                     value={o.name}
@@ -321,7 +321,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
                     type="button"
                     aria-label="Remove output"
                     onClick={() => removeOutput(i)}
-                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+                    className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
                   >
                     <X size={12} aria-hidden />
                   </button>
