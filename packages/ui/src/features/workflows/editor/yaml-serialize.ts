@@ -29,122 +29,129 @@ function ind(n: number): string {
   return '  '.repeat(n);
 }
 
+/** Fallback id for a step that has no explicit name/id: `${kind}_${idx}`. */
+function stepId(s: WfStep, idx: number): string {
+  return s.name || s.id || `${s.kind}_${idx}`;
+}
+
 // ── Step serializer ───────────────────────────────────────────────────────────
 
-function serializeStep(s: WfStep, n: number, lines: string[]): void {
+function serializeQuestionStep(prefix: string, sid: string, s: WfStep, lines: string[]): void {
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  question:`);
+  lines.push(`${prefix}    title: ${s.title ?? ''}`);
+  if (s.timeout) {
+    lines.push(
+      `${prefix}    timeout: { afterMinutes: ${s.timeout.afterMinutes}, onTimeout: ${s.timeout.onTimeout ?? 'cancel'} }`,
+    );
+  }
+  if (s.fields && s.fields.length > 0) {
+    lines.push(`${prefix}    fields:`);
+    for (const f of s.fields) {
+      const opts = f.options ? `, options: [${f.options.join(', ')}]` : '';
+      const req = f.required ? ', required: true' : '';
+      lines.push(`${prefix}      - { key: ${f.key}, type: ${f.type}${opts}${req} }`);
+    }
+  }
+}
+
+function serializeServiceStep(prefix: string, sid: string, s: WfStep, lines: string[]): void {
+  const connector = `${s.connector ?? 'unknown'}.${s.action ?? 'unknown'}`;
+  const comment = s.title ? `  # ${s.title}` : '';
+  lines.push(`${prefix}- id: ${sid}${comment}`);
+  lines.push(`${prefix}  connector: ${connector}`);
+  const args = Object.entries(s.args ?? {});
+  if (args.length > 0) {
+    lines.push(`${prefix}  with:`);
+    for (const [key, val] of args) {
+      lines.push(`${prefix}    ${key}: ${val}`);
+    }
+  }
+  if (s.credential) {
+    lines.push(`${prefix}  credential: ${s.credential}`);
+  }
+}
+
+function serializeAgentStep(prefix: string, sid: string, s: WfStep, lines: string[]): void {
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  agent:`);
+  lines.push(`${prefix}    prompt: ${JSON.stringify(s.prompt ?? s.title ?? '')}`);
+  if (s.worktree) {
+    lines.push(`${prefix}    worktree: ${s.worktree}`);
+  }
+}
+
+function serializeParallelStep(prefix: string, sid: string, s: WfStep, lines: string[], n: number): void {
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  parallel:`);
+  for (const ln of s.lanes ?? []) {
+    lines.push(`${prefix}    ${ln.name}:`);
+    (ln.steps ?? []).forEach((child, childIdx) => serializeStep(child, n + 3, lines, childIdx));
+  }
+}
+
+function serializeBranchStep(prefix: string, sid: string, s: WfStep, lines: string[], n: number): void {
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  choose:`);
+  for (const a of s.arms ?? []) {
+    const isElse = a.else === true || a.cond === 'else';
+    if (isElse) {
+      lines.push(`${prefix}    - else: true`);
+    } else {
+      lines.push(`${prefix}    - when: ${JSON.stringify(a.cond)}`);
+    }
+    lines.push(`${prefix}      steps:`);
+    (a.steps ?? []).forEach((child, childIdx) => serializeStep(child, n + 4, lines, childIdx));
+  }
+}
+
+function serializeLoopStep(prefix: string, sid: string, s: WfStep, lines: string[], n: number): void {
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  foreach: ${s.over ?? 'items'}`);
+  lines.push(`${prefix}  as: ${s.as ?? 'item'}`);
+  lines.push(`${prefix}  steps:`);
+  (s.steps ?? []).forEach((child, childIdx) => serializeStep(child, n + 2, lines, childIdx));
+}
+
+function serializeSubflowStep(prefix: string, sid: string, s: WfStep, lines: string[]): void {
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  call: ${s.ref ?? 'untitled'}`);
+  const entries = Object.entries(s.with ?? {});
+  if (entries.length > 0) {
+    lines.push(`${prefix}  with:`);
+    for (const [key, val] of entries) {
+      lines.push(`${prefix}    ${key}: ${val}`);
+    }
+  }
+}
+
+function serializeSetStep(prefix: string, sid: string, s: WfStep, lines: string[]): void {
+  // 'set' kind and any unknown kind → set: { name: value }
+  lines.push(`${prefix}- id: ${sid}`);
+  lines.push(`${prefix}  set: { ${s.name ?? 'value'}: ${JSON.stringify(s.value ?? null)} }`);
+}
+
+function serializeStep(s: WfStep, n: number, lines: string[], idx = 0): void {
   const prefix = ind(n);
+  const sid = stepId(s, idx);
 
   switch (s.kind) {
-    case 'question': {
-      lines.push(`${prefix}- id: ${s.name ?? 'ask'}`);
-      lines.push(`${prefix}  question:`);
-      lines.push(`${prefix}    title: ${s.title ?? ''}`);
-      if (s.timeout) {
-        lines.push(`${prefix}    timeout: ${s.timeout}  # cancels the run if unanswered`);
-      }
-      if (s.fields && s.fields.length > 0) {
-        lines.push(`${prefix}    fields:`);
-        for (const f of s.fields) {
-          const opts = f.options ? `, options: [${f.options.join(', ')}]` : '';
-          const req = f.required ? ', required: true' : '';
-          lines.push(`${prefix}      - { key: ${f.key}, type: ${f.type}${opts}${req} }`);
-        }
-      }
-      break;
-    }
-
-    case 'service': {
-      const connector = `${s.connector ?? 'unknown'}.${s.action ?? 'unknown'}`;
-      const comment = s.title ? `  # ${s.title}` : '';
-      if (s.name) {
-        lines.push(`${prefix}- id: ${s.name}${comment}`);
-        lines.push(`${prefix}  connector: ${connector}`);
-      } else {
-        lines.push(`${prefix}- connector: ${connector}${comment}`);
-      }
-      const args = Object.entries(s.args ?? {});
-      if (args.length > 0) {
-        lines.push(`${prefix}  with:`);
-        for (const [key, val] of args) {
-          lines.push(`${prefix}    ${key}: ${val}`);
-        }
-      }
-      if (s.credential) {
-        lines.push(`${prefix}  credential: ${s.credential}`);
-      }
-      break;
-    }
-
-    case 'agent': {
-      lines.push(`${prefix}- id: ${s.name ?? 'agent'}`);
-      lines.push(`${prefix}  agent:`);
-      lines.push(`${prefix}    prompt: ${JSON.stringify(s.prompt ?? s.title ?? '')}`);
-      if (s.worktree) {
-        lines.push(`${prefix}    worktree: ${s.worktree}`);
-      }
-      break;
-    }
-
-    case 'parallel': {
-      const comment = s.title ? `  # ${s.title}` : '';
-      lines.push(`${prefix}- parallel:${comment}`);
-      for (const ln of s.lanes ?? []) {
-        lines.push(`${prefix}    ${ln.name}:`);
-        for (const child of ln.steps ?? []) {
-          serializeStep(child, n + 3, lines);
-        }
-      }
-      break;
-    }
-
-    case 'branch': {
-      const comment = s.title ? `  # ${s.title}` : '';
-      lines.push(`${prefix}- choose:${comment}`);
-      for (const a of s.arms ?? []) {
-        const isElse = a.else === true || a.cond === 'else';
-        if (isElse) {
-          lines.push(`${prefix}    - else: true`);
-        } else {
-          lines.push(`${prefix}    - when: ${JSON.stringify(a.cond)}`);
-        }
-        lines.push(`${prefix}      steps:`);
-        for (const child of a.steps ?? []) {
-          serializeStep(child, n + 4, lines);
-        }
-      }
-      break;
-    }
-
-    case 'loop': {
-      const comment = s.title ? `  # ${s.title}` : '';
-      lines.push(`${prefix}- foreach: ${s.over ?? 'items'}${comment}`);
-      lines.push(`${prefix}  as: ${s.as ?? 'item'}`);
-      lines.push(`${prefix}  steps:`);
-      for (const child of s.steps ?? []) {
-        serializeStep(child, n + 2, lines);
-      }
-      break;
-    }
-
-    case 'subflow': {
-      const comment = s.title ? `  # ${s.title}` : '';
-      lines.push(`${prefix}- call: ${s.ref ?? 'untitled'}${comment}`);
-      const entries = Object.entries(s.with ?? {});
-      if (entries.length > 0) {
-        lines.push(`${prefix}  with:`);
-        for (const [key, val] of entries) {
-          lines.push(`${prefix}    ${key}: ${val}`);
-        }
-      }
-      break;
-    }
-
-    default: {
-      // 'set' kind and any unknown kind → set: { name: value }
-      const comment = s.title ? `  # ${s.title}` : '';
-      lines.push(`${prefix}- set: { ${s.name ?? 'value'}: ${JSON.stringify(s.value ?? null)} }${comment}`);
-      break;
-    }
+    case 'question':
+      return serializeQuestionStep(prefix, sid, s, lines);
+    case 'service':
+      return serializeServiceStep(prefix, sid, s, lines);
+    case 'agent':
+      return serializeAgentStep(prefix, sid, s, lines);
+    case 'parallel':
+      return serializeParallelStep(prefix, sid, s, lines, n);
+    case 'branch':
+      return serializeBranchStep(prefix, sid, s, lines, n);
+    case 'loop':
+      return serializeLoopStep(prefix, sid, s, lines, n);
+    case 'subflow':
+      return serializeSubflowStep(prefix, sid, s, lines);
+    default:
+      return serializeSetStep(prefix, sid, s, lines);
   }
 }
 
@@ -159,29 +166,32 @@ function serializeStep(s: WfStep, n: number, lines: string[]): void {
 export function serializeWorkflow(d: WfDraft): string {
   const lines: string[] = [];
 
+  lines.push('version: 1');
   lines.push(`name: ${d.name || 'untitled'}`);
   if (d.description) {
     lines.push(`description: ${d.description}`);
   }
   lines.push(`scope: ${d.scope || 'global'}`);
-  lines.push('');
-  lines.push('triggers:');
-  serializeTriggers(d.triggers ?? [], lines);
+
+  const trig = (d.triggers ?? []).filter((t) => t.kind === 'schedule' || t.kind === 'event');
+  if (trig.length > 0) {
+    lines.push('');
+    lines.push('triggers:');
+    serializeTriggers(trig, lines);
+  }
 
   if (d.inputs && d.inputs.length > 0) {
     lines.push('');
     lines.push('inputs:');
     for (const i of d.inputs) {
       const def = i.default !== undefined && i.default !== '' ? `, default: ${String(i.default)}` : '';
-      lines.push(`  - ${i.name}: { type: ${i.type}${def} }`);
+      lines.push(`  ${i.name}: { type: ${i.type}${def} }`);
     }
   }
 
   lines.push('');
   lines.push('steps:');
-  for (const s of d.steps ?? []) {
-    serializeStep(s, 1, lines);
-  }
+  (d.steps ?? []).forEach((s, idx) => serializeStep(s, 1, lines, idx));
 
   const outputs = (d.outputs ?? []).filter((o) => o && o.name);
   if (outputs.length > 0) {
@@ -204,10 +214,6 @@ function serializeTriggers(triggers: WfTrigger[], lines: string[]): void {
       lines.push(`  - schedule: { cron: "${cron}", on_missed: ${onMissed} }${comment}`);
     } else if (t.kind === 'event') {
       lines.push(`  - event: ${t.event ?? 'chat.completed'}`);
-    } else if (t.kind === 'webhook') {
-      lines.push(`  - webhook: ${t.path ?? '/hook'}`);
-    } else {
-      lines.push(`  - manual: true`);
     }
   }
 }

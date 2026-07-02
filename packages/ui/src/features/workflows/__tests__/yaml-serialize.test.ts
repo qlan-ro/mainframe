@@ -24,7 +24,7 @@ const KID_HEALTH: WfDraft = {
       kind: 'question',
       name: 'check_in',
       title: 'Evening check-in',
-      timeout: '12h',
+      timeout: { afterMinutes: 720, onTimeout: 'cancel' },
       fields: [
         { key: 'mood', type: 'choice', options: ['Great', 'OK', 'Rough'], required: true },
         { key: 'appetite', type: 'choice', options: ['Ate well', 'Picky', 'Barely ate'] },
@@ -71,6 +71,11 @@ const KID_HEALTH: WfDraft = {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('serializeWorkflow', () => {
+  it('emits version: 1 as the first line', () => {
+    const lines = serializeWorkflow(KID_HEALTH).split('\n');
+    expect(lines[0]).toBe('version: 1');
+  });
+
   it('emits canonical name and scope lines', () => {
     const yaml = serializeWorkflow(KID_HEALTH);
     expect(yaml).toContain('name: Daily kid health log');
@@ -100,6 +105,16 @@ describe('serializeWorkflow', () => {
     expect(yaml).toContain('key: appetite');
   });
 
+  it('serializes question timeout as a structured object', () => {
+    const yaml = serializeWorkflow(KID_HEALTH);
+    expect(yaml).toContain('timeout: { afterMinutes: 720, onTimeout: cancel }');
+  });
+
+  it('emits an id line for a composite (parallel) step', () => {
+    const yaml = serializeWorkflow(KID_HEALTH);
+    expect(yaml).toContain('\n  - id: save\n    parallel:');
+  });
+
   it('emits parallel: with named lanes containing connector steps', () => {
     const yaml = serializeWorkflow(KID_HEALTH);
     expect(yaml).toContain('parallel:');
@@ -126,6 +141,36 @@ describe('serializeWorkflow', () => {
     expect(yaml).not.toContain('\nif:');
     // service/ connector steps must use "connector:" not a stale "service:" key
     expect(yaml).not.toMatch(/^  connector:(?!.*\.)/m);
+  });
+
+  it('does NOT serialize a manual trigger and omits the triggers block when only manual', () => {
+    const draft: WfDraft = {
+      name: 'm',
+      description: '',
+      scope: 'project',
+      triggers: [{ kind: 'manual' }],
+      inputs: [],
+      steps: [],
+      outputs: [],
+    };
+    const yaml = serializeWorkflow(draft);
+    expect(yaml).not.toContain('manual: true');
+    expect(yaml).not.toContain('triggers:');
+  });
+
+  it('serializes inputs as a MAP (no leading dash)', () => {
+    const draft: WfDraft = {
+      name: 'i',
+      description: '',
+      scope: 'global',
+      triggers: [{ kind: 'manual' }],
+      inputs: [{ name: 'region', type: 'string', default: 'us-east' }],
+      steps: [],
+      outputs: [],
+    };
+    const yaml = serializeWorkflow(draft);
+    expect(yaml).toContain('\n  region: { type: string, default: us-east }');
+    expect(yaml).not.toContain('  - region:');
   });
 
   it('serializes a choose (branch) step with arms', () => {
@@ -201,6 +246,26 @@ describe('serializeWorkflow', () => {
     expect(yaml).toContain('call: ship-work');
     expect(yaml).toContain('with:');
     expect(yaml).toContain('target: main');
+  });
+
+  it('emits an id line for choose/foreach/call composites', () => {
+    const draft: WfDraft = {
+      name: 'ids test',
+      description: '',
+      scope: 'project',
+      triggers: [{ kind: 'manual' }],
+      inputs: [],
+      steps: [
+        { id: 'b', kind: 'branch', title: 'Choose a path', arms: [] },
+        { id: 'l', kind: 'loop', title: 'For each item', over: '${ items }', as: 'item', steps: [] },
+        { id: 'sf', kind: 'subflow', title: 'Run a workflow', ref: 'ship-work' },
+      ],
+      outputs: [],
+    };
+    const yaml = serializeWorkflow(draft);
+    expect(yaml).toContain('\n  - id: b\n    choose:');
+    expect(yaml).toContain('\n  - id: l\n    foreach:');
+    expect(yaml).toContain('\n  - id: sf\n    call:');
   });
 
   it('serializes an agent step', () => {

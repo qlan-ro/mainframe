@@ -29,7 +29,7 @@ interface WfbStepRowProps {
 function stepSummary(step: WfStep): string {
   switch (step.kind) {
     case 'question':
-      return `${(step.fields ?? []).length} fields${step.timeout ? ` · ${step.timeout} timeout` : ''}`;
+      return `${(step.fields ?? []).length} fields${step.timeout ? ` · ${step.timeout.afterMinutes}m timeout` : ''}`;
     case 'service':
       return `${step.connector ?? '?'}.${step.action ?? '?'}`;
     case 'agent':
