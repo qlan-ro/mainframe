@@ -12,7 +12,6 @@ import { fetchLaunchConfigs, fetchLaunchStatuses, type LaunchStatusData } from '
 import { useSandboxStore } from '@/store/sandbox';
 import { useLayoutStore } from '@/store/layout';
 import { buildLaunchScope } from '@/lib/launch-scope';
-import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { runTabForConfig } from './run-tab-for-config';
 
 export interface UseLaunchConfigsResult {
@@ -29,7 +28,6 @@ export function useLaunchConfigs(
   const [configs, setConfigs] = useState<LaunchConfiguration[]>([]);
   const [statusData, setStatusData] = useState<LaunchStatusData | null>(null);
   const [tick, setTick] = useState(0);
-  const isLocal = useDaemonIsLocal();
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);
 
@@ -76,8 +74,7 @@ export function useLaunchConfigs(
           if ((status === 'running' || status === 'starting') && !tabbed.has(name)) {
             const cfg = cfgs.find((c) => c.name === name);
             if (cfg) {
-              const tab = runTabForConfig(cfg, scope, isLocal);
-              if (tab) layout.addRunTab(tab);
+              layout.addRunTab(runTabForConfig(cfg, scope));
               tabbed.add(name);
             }
           }
@@ -88,7 +85,7 @@ export function useLaunchConfigs(
     return () => {
       cancelled = true;
     };
-  }, [port, projectId, chatId, tick, isLocal]);
+  }, [port, projectId, chatId, tick]);
 
   return { configs, statusData, refetch };
 }

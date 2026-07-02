@@ -16,14 +16,7 @@ import type { RunTab } from '@/store/run-pane';
  * the tab can filter its own console/status independently of the active chat —
  * run tabs are global, so the active chat may not resolve to this tab's scope.
  */
-/**
- * Returns `null` when a `preview: true` config is launched under a remote
- * daemon — the dev-server port is on the server and is not reachable from
- * `localhost` over the tunnel. Pass `isLocal=false` (from `useDaemonIsLocal()`)
- * at the React call sites. Defaults to `true` for backwards-compat.
- */
-export function runTabForConfig(config: LaunchConfiguration, scopeKey?: string | null, isLocal = true): RunTab | null {
-  if (config.preview && !isLocal) return null;
+export function runTabForConfig(config: LaunchConfiguration, scopeKey?: string | null): RunTab {
   const kind = config.preview ? 'preview' : 'console';
   const safeName = config.name.replace(/[^A-Za-z0-9_-]/g, '_');
   return {
