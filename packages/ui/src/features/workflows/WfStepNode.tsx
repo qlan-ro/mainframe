@@ -22,17 +22,6 @@ import type { RunTreeNode } from '@/lib/api/workflows';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Optional presentation fields the design prototype renders (duration, waitFor,
- * sub). The daemon's RunTreeNode does not emit them yet; read them defensively
- * so the rail shows them the moment they land, without diverging the canonical
- * type. Absent today → the lines simply don't render.
- */
-function optText(node: RunTreeNode, key: 'duration' | 'waitFor' | 'sub'): string | null {
-  const value = (node as unknown as Record<string, unknown>)[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
 function hasDetail(node: RunTreeNode): boolean {
   return (
     node.status === 'ambiguous' ||
@@ -132,10 +121,10 @@ export function WfStepNode({ node, onOpenChat }: WfStepNodeProps): React.ReactEl
   const canExpand = hasDetail(node);
   const isAmbiguous = node.status === 'ambiguous';
   const isMuted = node.status === 'skipped';
-  const duration = optText(node, 'duration');
+  const duration = node.duration ?? null;
   const waiting = node.status === 'waiting';
-  const waitFor = optText(node, 'waitFor');
-  const sub = optText(node, 'sub');
+  const waitFor = node.waitFor ?? null;
+  const sub = node.sub ?? null;
   const secondary = waiting && waitFor ? waitFor : sub;
 
   function handleRowClick(): void {

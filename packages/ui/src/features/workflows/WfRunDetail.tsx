@@ -77,7 +77,6 @@ interface WfRunDetailProps {
 export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | null {
   const runDetail = useWorkflowsStore((s) => s.runDetail);
   const workflows = useWorkflowsStore((s) => s.workflows);
-  const interactions = useWorkflowsStore((s) => s.interactions);
   const { backToList, setSection, close } = useWorkflowsModal();
 
   if (!runDetail) return null;
@@ -87,16 +86,14 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
   const triggerIcon = TRIGGER_ICON[run.triggerKind] ?? TRIGGER_ICON['manual'];
   const triggerLabel = TRIGGER_LABEL[run.triggerKind] ?? run.triggerKind;
 
-  const hasPendingInteraction = interactions.length > 0;
   const statusMeta = getRunStatusMeta(run.status);
 
   const outputs = run.outputs as Record<string, unknown> | null | undefined;
   const outputEntries = outputs != null && typeof outputs === 'object' ? Object.entries(outputs) : null;
 
-  // Banner message: shown when waiting + pending interaction; prototype also
-  // shows run.banner (a daemon-supplied string) for all statuses.
-  const bannerMessage: string | null =
-    run.status === 'waiting' && hasPendingInteraction ? 'This run is waiting for your input.' : null;
+  // Banner: daemon-supplied narrative shown for any run status.
+  const banner: string | null = run.banner ?? null;
+  const bannerCta = run.bannerCta ?? null;
 
   function handleCancel(): void {
     wfApi.cancelRun(port, run.id).catch((err: unknown) => {
@@ -177,8 +174,8 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
           )}
         </div>
 
-        {/* Status-tinted banner — shown for waiting+pending or when run.banner is set */}
-        {bannerMessage != null && (
+        {/* Status-tinted banner — shown for any status when run.banner is set */}
+        {banner != null && (
           <div
             data-testid="workflows-run-banner"
             className={cn(
@@ -188,13 +185,13 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
             )}
           >
             <WfStatusPip status={run.status} size={14} />
-            <span className="flex-1 text-label font-medium text-foreground">{bannerMessage}</span>
-            {run.status === 'waiting' && hasPendingInteraction && (
+            <span className="flex-1 text-label font-medium text-foreground">{banner}</span>
+            {bannerCta != null && (
               <button
                 type="button"
                 data-testid="workflows-run-banner-cta"
                 onClick={() => {
-                  setSection('needs');
+                  if (bannerCta.action === 'answer') setSection('needs');
                 }}
                 className={cn(
                   'shrink-0 inline-flex items-center gap-[5px] h-[28px] px-[12px]',
@@ -203,7 +200,7 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
                   'hover:opacity-90 transition-opacity',
                 )}
               >
-                Answer now
+                {bannerCta.label}
               </button>
             )}
           </div>

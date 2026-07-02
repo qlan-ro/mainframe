@@ -116,7 +116,7 @@ function WfCompositeShell({
 function WfParallelRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
   const lanes = node.lanes ?? [];
   return (
-    <WfCompositeShell node={node} summary={`${lanes.length} lanes`}>
+    <WfCompositeShell node={node} summary={node.summary ?? ''}>
       <div className="flex flex-wrap gap-[10px]">
         {lanes.map((lane) => (
           <div
@@ -144,7 +144,7 @@ function WfBranchRail({ node, onOpenChat }: CompositeProps): React.ReactElement 
   const arms = node.arms ?? [];
   const kindMeta = getKindMeta(node.kind);
   return (
-    <WfCompositeShell node={node} summary={`${arms.length} arms`}>
+    <WfCompositeShell node={node} summary={node.summary ?? ''}>
       <div className="flex flex-col gap-[7px]">
         {arms.map((arm, i) => (
           <div
@@ -193,7 +193,7 @@ function WfLoopRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
   const [selectedIdx, setSelectedIdx] = useState(() => defaultIterIdx(iterations));
   const current = iterations[selectedIdx];
   return (
-    <WfCompositeShell node={node} summary={`${iterations.length} iterations`}>
+    <WfCompositeShell node={node} summary={node.summary ?? ''}>
       {/* Iteration switcher */}
       <div className="mb-[8px] flex flex-wrap items-center gap-[5px]">
         {iterations.map((iter, i) => {
@@ -259,7 +259,7 @@ function WfCallRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
   ) : undefined;
 
   return (
-    <WfCompositeShell node={node} summary={node.ref ? '' : 'sub-workflow'} right={right}>
+    <WfCompositeShell node={node} summary={node.summary ?? (node.ref ? '' : 'sub-workflow')} right={right}>
       {steps.length > 0 && (
         <div className="ml-px border-l-2 border-[#2a6fdb]/30 pl-[6px]">
           <WfTree nodes={steps} onOpenChat={onOpenChat} />

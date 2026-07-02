@@ -129,8 +129,11 @@ describe('WfRunDetail — status banner', () => {
     vi.clearAllMocks();
   });
 
-  it('shows banner with "Answer now" CTA when run is waiting and has a pending interaction', () => {
-    const run = makeRun('r3', 'waiting');
+  it('shows banner with "Answer now" CTA when run.banner and run.bannerCta are set', () => {
+    const run = makeRun('r3', 'waiting', {
+      banner: 'This run is waiting for your input.',
+      bannerCta: { label: 'Answer now', action: 'answer' },
+    });
     useWorkflowsStore.setState({
       runDetail: { run, tree: [] },
       workflows: [],
@@ -161,7 +164,7 @@ describe('WfRunDetail — status banner', () => {
     expect(screen.getByText(/Answer now/i)).toBeInTheDocument();
   });
 
-  it('does not show banner for a waiting run with no pending interactions', () => {
+  it('does not show banner for a waiting run when run.banner is not set', () => {
     seedDetail(makeRun('r3b', 'waiting'));
     render(<WfRunDetail port={31415} />);
     expect(screen.queryByTestId('workflows-run-banner')).not.toBeInTheDocument();
@@ -173,8 +176,34 @@ describe('WfRunDetail — status banner', () => {
     expect(screen.queryByTestId('workflows-run-banner')).not.toBeInTheDocument();
   });
 
+  it('shows the banner for a succeeded run when run.banner is set', () => {
+    seedDetail(makeRun('r-banner-1', 'succeeded', { banner: 'Completed.' }));
+    render(<WfRunDetail port={31415} />);
+    expect(screen.getByTestId('workflows-run-banner')).toBeInTheDocument();
+    expect(screen.getByText('Completed.')).toBeInTheDocument();
+  });
+
+  it('does not show the banner for a running run when run.banner is null', () => {
+    seedDetail(makeRun('r-banner-2', 'running', { banner: null }));
+    render(<WfRunDetail port={31415} />);
+    expect(screen.queryByTestId('workflows-run-banner')).not.toBeInTheDocument();
+  });
+
+  it('shows the bannerCta button and switches to the needs section on click', () => {
+    seedDetail(
+      makeRun('r-banner-3', 'waiting', {
+        banner: 'This run is waiting for your input.',
+        bannerCta: { label: 'Answer now', action: 'answer' },
+      }),
+    );
+    render(<WfRunDetail port={31415} />);
+    expect(screen.getByTestId('workflows-run-banner-cta')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('workflows-run-banner-cta'));
+    expect(useWorkflowsModal.getState().section).toBe('needs');
+  });
+
   it('banner contains a WfStatusPip', () => {
-    const run = makeRun('r3d', 'waiting');
+    const run = makeRun('r3d', 'waiting', { banner: 'This run is waiting for your input.' });
     useWorkflowsStore.setState({
       runDetail: { run, tree: [] },
       workflows: [],

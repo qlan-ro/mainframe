@@ -13,12 +13,16 @@ export interface RunTreeNode {
   truncated?: boolean;
   error: string | null;
   chatId?: string;
+  duration?: string;
+  sub?: string;
+  waitFor?: string;
   lanes?: Array<{ label: string; status: string; steps: RunTreeNode[] }>;
   arms?: Array<{ cond: string; taken: boolean; steps: RunTreeNode[] }>;
   iterations?: Array<{ label: string; status: string; steps: RunTreeNode[] }>;
   ref?: string;
   childRunId?: string;
   steps?: RunTreeNode[];
+  summary?: string;
 }
 
 export interface RunDetail {

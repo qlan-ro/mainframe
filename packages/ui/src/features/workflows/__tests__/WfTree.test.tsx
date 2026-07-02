@@ -242,6 +242,27 @@ describe('WfTree — leaf step', () => {
     expect(screen.getByTestId('workflows-step-root.step1')).toBeInTheDocument();
   });
 
+  it('renders the daemon-supplied duration chip', () => {
+    const node: RunTreeNode = { ...leaf('root.d', 'do'), duration: '3m 12s' };
+    render(<WfTree nodes={[node]} onOpenChat={noop} />);
+    expect(screen.getByText('3m 12s')).toBeInTheDocument();
+  });
+
+  it('renders the daemon-supplied composite summary', () => {
+    const node: RunTreeNode = {
+      ...leaf('root.p', 'parallel'),
+      kind: 'parallel',
+      status: 'running',
+      summary: '1 of 2',
+      lanes: [
+        { label: 'A', status: 'succeeded', steps: [] },
+        { label: 'B', status: 'running', steps: [] },
+      ],
+    };
+    render(<WfTree nodes={[node]} onOpenChat={noop} />);
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+  });
+
   it('passes onOpenChat down to WfStepNode', () => {
     const onOpenChat = vi.fn();
     const node: RunTreeNode = {
