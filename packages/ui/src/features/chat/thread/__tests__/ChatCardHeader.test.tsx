@@ -11,6 +11,19 @@ vi.mock('@assistant-ui/react', () => ({
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
 
+// Draft-mode collaborators — not exercised by the non-draft structural suite
+// below, but ChatCardHeader reads them unconditionally to detect a draft
+// thread. Safe empty-ish defaults keep the existing (non-draft) tests inert.
+let fakeDrafts = new Map<string, { projectId: string; adapterId: string }>();
+vi.mock('../../../sessions/runtime/draft-config', () => ({
+  useDraftConfigStore: (sel: (s: { drafts: Map<string, { projectId: string; adapterId: string }> }) => unknown) =>
+    sel({ drafts: fakeDrafts }),
+}));
+let fakeProjects: { id: string; name: string }[] = [];
+vi.mock('../../../sessions/use-projects', () => ({
+  useProjects: () => ({ projects: fakeProjects }),
+}));
+
 // ChatSessionInline pulls chat-thread + adapter-registry data that this suite
 // doesn't otherwise fixture; stub it to fixed testid markers so ChatCardHeader
 // structure/order assertions don't depend on that data layer.
@@ -47,6 +60,8 @@ beforeEach(() => {
     layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
   });
   fakeState = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
+  fakeDrafts = new Map();
+  fakeProjects = [];
   mockEmit.mockReset();
 });
 
@@ -192,7 +207,7 @@ describe('ChatCardHeader — PRs + review', () => {
     const review = screen.getByTestId('chat-header-review');
     const pr249 = screen.getByTestId('chat-header-pr-249');
     const position = review.compareDocumentPosition(pr249);
-    // eslint-disable-next-line no-bitwise
+
     expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(root.contains(review)).toBe(true);
     expect(root.contains(pr249)).toBe(true);
@@ -239,5 +254,30 @@ describe('ChatCardHeader — Hide Chat (dynamic floor)', () => {
     const { layout } = useLayoutStore.getState();
     expect(layout.top.includes('chat') || layout.bottom === 'chat').toBe(false);
     expect(layout.top.includes('files')).toBe(true);
+  });
+});
+
+describe('ChatCardHeader — draft variant', () => {
+  it('shows "New Session" + project chip and hides model/review for a draft', () => {
+    fakeState = { threadListItem: { id: '__LOCALID_1', status: 'new' } };
+    fakeDrafts = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
+    fakeProjects = [{ id: 'proj-a', name: 'Mainframe' }];
+
+    renderHeader();
+
+    expect(screen.getByTestId('chat-header')).toHaveTextContent('New Session');
+    expect(screen.getByTestId('chat-header-project')).toHaveTextContent('Mainframe');
+    expect(screen.queryByTestId('chat-header-model')).toBeNull();
+    expect(screen.queryByTestId('chat-header-review')).toBeNull();
+  });
+
+  it('renders the normal header (model chip, review) for a real chat', () => {
+    fakeState = { threadListItem: { id: 'chat-123', status: 'regular', title: 'Fix bug', custom: {} } };
+
+    renderHeader();
+
+    expect(screen.getByTestId('chat-header')).toHaveTextContent('Fix bug');
+    expect(screen.getByTestId('chat-header-model')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-header-review')).toBeInTheDocument();
   });
 });
