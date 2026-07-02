@@ -351,6 +351,24 @@ describe('ProjectFilterPillBar — collapsible project pills', () => {
     expect(screen.queryByTestId('sessions-projects-more')).toBeNull();
   });
 
+  it('renders a chevron-down icon rotated 180deg next to "Less" once expanded (finding 1.15)', async () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    const toggle = screen.getByTestId('sessions-projects-more');
+    expect(toggle.querySelector('svg.lucide-chevron-down')).toBeNull();
+
+    await userEvent.click(toggle);
+    const expandedIcon = screen.getByTestId('sessions-projects-more').querySelector('svg.lucide-chevron-down');
+    expect(expandedIcon).toBeTruthy();
+    expect(expandedIcon?.getAttribute('class')).toContain('rotate-180');
+  });
+
   it('renders the "+N more" toggle AFTER the Add project pill in DOM order', () => {
     render(
       <ProjectFilterPillBar
@@ -482,5 +500,72 @@ describe('ProjectFilterPillBar — Add project pill', () => {
     );
     await userEvent.click(screen.getByTestId('sessions-add-project'));
     expect(handleAdd).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Design-parity findings 1.8 / 1.13 / 1.15 / 3.18 (verifier-corrected) — the
+// "Add project" dashed pill: border token, font weight, hover state, and icon.
+// ---------------------------------------------------------------------------
+
+describe('ProjectFilterPillBar — Add project pill design-parity (1.8/1.13/1.15/3.18)', () => {
+  it('uses border-mf-border-hover, not the plain border-border hairline (finding 1.8)', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={() => undefined}
+      />,
+    );
+    const pill = screen.getByTestId('sessions-add-project');
+    expect(pill.className).toContain('border-mf-border-hover');
+    expect(pill.className).not.toContain('border-border');
+  });
+
+  it('uses font-semibold (600), not font-medium (500) (finding 1.13)', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={() => undefined}
+      />,
+    );
+    const pill = screen.getByTestId('sessions-add-project');
+    expect(pill.className).toContain('font-semibold');
+    expect(pill.className).not.toContain('font-medium');
+  });
+
+  it('hovers to background + text color with the border unchanged, not hover:border-primary (finding 3.18)', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={() => undefined}
+      />,
+    );
+    const pill = screen.getByTestId('sessions-add-project');
+    expect(pill.className).toContain('hover:bg-accent');
+    expect(pill.className).toContain('hover:text-foreground');
+    expect(pill.className).not.toContain('hover:border-primary');
+  });
+
+  it('renders the FolderPlus (folder.plus) icon, not the bare Plus glyph (finding 3.18)', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={() => undefined}
+      />,
+    );
+    const pill = screen.getByTestId('sessions-add-project');
+    expect(pill.querySelector('svg.lucide-folder-plus')).toBeTruthy();
   });
 });

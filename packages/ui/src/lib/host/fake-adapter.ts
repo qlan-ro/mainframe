@@ -36,6 +36,9 @@ export interface FakeHostOverrides {
     port?: number;
     status?: DaemonStatus;
   };
+  updates?: {
+    status?: UpdateStatus;
+  };
 }
 
 const DEFAULT_APP_INFO: AppInfo = { version: 'dev', author: 'mainframe', homedir: '' };
@@ -117,11 +120,11 @@ export class FakeHostBridge implements HostBridge {
   };
 
   updates = {
-    check: (): Promise<UpdateStatus> => Promise.resolve({ state: 'not-available' as const }),
+    check: (): Promise<UpdateStatus> => Promise.resolve(this.overrides.updates?.status ?? { state: 'not-available' }),
     download: (): Promise<void> => Promise.resolve(),
     install: (): void => {},
     onStatus: (cb: (s: UpdateStatus) => void): Promise<Unsubscribe> => {
-      cb({ state: 'not-available' });
+      cb(this.overrides.updates?.status ?? { state: 'not-available' });
       return Promise.resolve(() => {});
     },
   };

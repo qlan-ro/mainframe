@@ -4,6 +4,7 @@ import { useSettingsStore } from '@/store/settings';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 import { Hint } from '@/components/ui/hint';
 import { useWorkflowsStore, selectPendingCount } from '@/features/workflows/use-workflows-store';
+import { UpdatePill } from './UpdatePill';
 
 export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 
@@ -93,6 +94,7 @@ export function SidebarHeader() {
     >
       <TrafficLightsSpacer />
       <div className="flex-1" />
+      <UpdatePill />
       <div className="flex items-center gap-0.5">
         <WorkflowsBtn />
         <TasksBtn />

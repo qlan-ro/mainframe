@@ -317,6 +317,20 @@ describe('SessionSidebar — new-button is present', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2a. The "SESSIONS" group header has no leading chevron (finding 1.9 — the
+// artboard's actual Sidebar() header has no chevron; it only exists on the
+// unused generic SidebarGroup component).
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — Sessions group header has no leading chevron (finding 1.9)', () => {
+  it('does not render a chevron-down icon next to the "Sessions" label', () => {
+    render(<SessionSidebar />);
+    expect(screen.getByText('Sessions')).toBeTruthy();
+    expect(document.querySelector('svg.lucide-chevron-down[aria-hidden="true"]')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 2b. Clicking the new-button fires the ThreadListPrimitive.New handler.
 //     The `Hint` tooltip wrapper must not sit between the asChild Slot and the
 //     button, or the injected onClick never reaches the DOM element.

@@ -13,7 +13,7 @@
  * onAddProject handler is provided; the bar stays presentational (no daemon calls).
  */
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ChevronDown, FolderPlus } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { FilterPill } from './FilterPill';
 import { ProjectPillContextMenu } from './ProjectPillContextMenu';
@@ -112,9 +112,9 @@ export function ProjectFilterPillBar({
           data-testid="sessions-add-project"
           type="button"
           onClick={onAddProject}
-          className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] border border-dashed border-border px-2.5 text-caption font-medium tracking-normal text-mf-text-3 transition-colors hover:border-primary hover:text-foreground"
+          className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] border border-dashed border-mf-border-hover px-2.5 text-caption font-semibold tracking-normal text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground"
         >
-          <Plus className="size-[12px]" aria-hidden />
+          <FolderPlus className="size-[12px]" aria-hidden />
           <span>Add project</span>
         </button>
       )}
@@ -124,9 +124,10 @@ export function ProjectFilterPillBar({
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
+          className="inline-flex shrink-0 items-center gap-[3px] px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
         >
           {moreLabel}
+          {expanded && <ChevronDown className="size-[10px] rotate-180" aria-hidden />}
         </button>
       )}
     </div>

@@ -497,6 +497,43 @@ describe('StatusDot waiting-unread ping-halo', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 16. StatusDot 'working' spinner ring size (audit finding 1.5) — design wants
+// an 8px ring; the compressed spacing scale makes `size-2` resolve to 4px, so
+// the class must be the explicit arbitrary `size-[8px]`.
+// ---------------------------------------------------------------------------
+
+describe('StatusDot working spinner ring size (finding 1.5)', () => {
+  it('working status dot uses size-[8px] (not the compressed-scale size-2)', () => {
+    render(<StatusDot badge={{ base: 'working', unread: false }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('size-[8px]');
+    expect(dot.className).not.toContain('size-2 ');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. Row hover-action glyphs match the artboard's literal (mismatched) icon
+// choice — paperclip for Rename, xmark for Archive (finding 1.16, debatable
+// but scope is full parity with 02-chrome.jsx).
+// ---------------------------------------------------------------------------
+
+describe('SessionRow hover-action glyphs match the artboard (finding 1.16)', () => {
+  it('Rename action uses the paperclip glyph, not PencilIcon', () => {
+    render(<SessionRow item={makeItem()} />);
+    const btn = screen.getByTestId('sessions-row-action-rename');
+    expect(btn.querySelector('svg.lucide-paperclip')).toBeTruthy();
+    expect(btn.querySelector('svg.lucide-pencil')).toBeNull();
+  });
+
+  it('Archive action uses the xmark glyph, not ArchiveIcon', () => {
+    render(<SessionRow item={makeItem()} />);
+    const btn = screen.getByTestId('sessions-row-action-archive');
+    expect(btn.querySelector('svg.lucide-x')).toBeTruthy();
+    expect(btn.querySelector('svg.lucide-archive')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 12. Unpin triggers runtime.threads.reload() (MED-3/4)
 // ---------------------------------------------------------------------------
 

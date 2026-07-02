@@ -348,6 +348,18 @@ describe('TagFilterBar — collapses to first 4 tags when 6 are in use', () => {
     expect(screen.queryByTestId('sessions-tag-filter-f')).toBeNull();
     expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('+2 more');
   });
+
+  it('renders a chevron-down icon rotated 180deg next to "Less" once expanded (finding 1.15)', () => {
+    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
+    renderBar();
+    const toggle = screen.getByTestId('sessions-tag-filter-more');
+    expect(toggle.querySelector('svg.lucide-chevron-down')).toBeNull();
+
+    fireEvent.click(toggle);
+    const expandedIcon = screen.getByTestId('sessions-tag-filter-more').querySelector('svg.lucide-chevron-down');
+    expect(expandedIcon).toBeTruthy();
+    expect(expandedIcon?.getAttribute('class')).toContain('rotate-180');
+  });
 });
 
 // ---------------------------------------------------------------------------

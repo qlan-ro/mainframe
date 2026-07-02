@@ -17,7 +17,7 @@ import {
   useAssistantRuntime,
   useThreadListItemRuntime,
 } from '@assistant-ui/react';
-import { ArchiveIcon, PencilIcon, PinIcon, TagIcon } from 'lucide-react';
+import { PaperclipIcon, PinIcon, TagIcon, XIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionBadge, type SessionBadge } from '../view-model/session-status';
@@ -37,7 +37,7 @@ function dotClass(badge: SessionBadge): string {
     case 'worktree-missing':
       return 'size-1.5 bg-destructive';
     case 'working':
-      return 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin';
+      return 'size-[8px] border-[1.5px] border-primary border-t-transparent animate-spin';
     case 'waiting':
       // waiting+unread is the ping-halo beacon rendered separately in StatusDot.
       return 'size-[9px] bg-mf-warning';
@@ -144,12 +144,12 @@ function RowHoverActions({
       </Hint>
       <Hint label="Rename">
         <button data-testid="sessions-row-action-rename" type="button" className={btn} onClick={stop(onRename)}>
-          <PencilIcon className="size-[11px]" />
+          <PaperclipIcon className="size-[11px]" />
         </button>
       </Hint>
       <Hint label="Archive">
         <button data-testid="sessions-row-action-archive" type="button" className={btn} onClick={stop(onArchive)}>
-          <ArchiveIcon className="size-[11px]" />
+          <XIcon className="size-[11px]" />
         </button>
       </Hint>
     </div>

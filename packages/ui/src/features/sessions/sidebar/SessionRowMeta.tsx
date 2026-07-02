@@ -49,9 +49,9 @@ export function SessionRowMeta({
       {projectName != null && chipColor != null && (
         <span
           data-testid="sessions-row-meta-project"
-          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] px-1.5 py-px text-micro font-semibold"
+          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] pl-[5px] pr-[6px] text-micro font-semibold"
           style={{
-            backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
+            backgroundColor: `color-mix(in oklch, ${chipColor} 10%, transparent)`,
             color: chipColor,
           }}
         >

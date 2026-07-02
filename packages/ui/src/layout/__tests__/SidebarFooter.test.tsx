@@ -110,3 +110,58 @@ describe('SidebarFooter — design-parity (Phase-3)', () => {
     expect(dot).toBeTruthy();
   });
 });
+
+describe('SidebarFooter — design-parity findings 1.7/1.10/1.11/1.12', () => {
+  it('root element uses px-[12px] horizontal padding (finding 1.7 — design wants 12px, px-3 compresses to 6px)', () => {
+    render(<SidebarFooterView counts={{ 'worktree-missing': 0, working: 0, waiting: 0, idle: 0 }} />, {
+      wrapper: Wrapper,
+    });
+    const footer = screen.getByTestId('sidebar-footer');
+    expect(footer.className).toContain('px-[12px]');
+    expect(footer.className).not.toContain('px-3');
+  });
+
+  it('count-cluster wrapper uses gap-[9px] between working/waiting/idle groups (finding 1.10)', () => {
+    render(<SidebarFooterView counts={{ 'worktree-missing': 0, working: 1, waiting: 1, idle: 1 }} />, {
+      wrapper: Wrapper,
+    });
+    const clusterWrap = screen.getByTestId('sidebar-footer-counts');
+    expect(clusterWrap.className).toContain('gap-[9px]');
+  });
+
+  it('each count span uses gap-[4px] between dot and digit (finding 1.11 — gap-1 compresses to 2px)', () => {
+    render(<SidebarFooterView counts={{ 'worktree-missing': 0, working: 1, waiting: 0, idle: 0 }} />, {
+      wrapper: Wrapper,
+    });
+    const workingCount = screen.getByTestId('sidebar-footer-count-working');
+    expect(workingCount.className).toContain('gap-[4px]');
+    expect(workingCount.className).not.toContain('gap-1 ');
+  });
+
+  it('working count digit carries text-primary + font-semibold (finding 1.12)', () => {
+    render(<SidebarFooterView counts={{ 'worktree-missing': 0, working: 1, waiting: 0, idle: 0 }} />, {
+      wrapper: Wrapper,
+    });
+    const workingCount = screen.getByTestId('sidebar-footer-count-working');
+    expect(workingCount.className).toContain('text-primary');
+    expect(workingCount.className).toContain('font-semibold');
+  });
+
+  it('waiting count digit carries text-mf-warning + font-semibold (finding 1.12)', () => {
+    render(<SidebarFooterView counts={{ 'worktree-missing': 0, working: 0, waiting: 1, idle: 0 }} />, {
+      wrapper: Wrapper,
+    });
+    const waitingCount = screen.getByTestId('sidebar-footer-count-waiting');
+    expect(waitingCount.className).toContain('text-mf-warning');
+    expect(waitingCount.className).toContain('font-semibold');
+  });
+
+  it('idle count digit carries text-mf-text-3 + font-semibold (finding 1.12)', () => {
+    render(<SidebarFooterView counts={{ 'worktree-missing': 0, working: 0, waiting: 0, idle: 1 }} />, {
+      wrapper: Wrapper,
+    });
+    const idleCount = screen.getByTestId('sidebar-footer-count-idle');
+    expect(idleCount.className).toContain('text-mf-text-3');
+    expect(idleCount.className).toContain('font-semibold');
+  });
+});

@@ -55,6 +55,22 @@ describe('SessionRowMeta — per-project colored chip', () => {
     render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} projectId="p1" />);
     expect(screen.queryByTestId('sessions-row-meta-project')).toBeNull();
   });
+
+  it('tints the chip background at 10% alpha, not 12% (finding 1.14)', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} projectId="p1" projectName="mainframe" />);
+    const chip = screen.getByTestId('sessions-row-meta-project') as HTMLElement;
+    expect(chip.style.backgroundColor).toContain('10%');
+    expect(chip.style.backgroundColor).not.toContain('12%');
+  });
+
+  it('uses asymmetric horizontal padding with 0 vertical padding, not px-1.5 py-px (finding 1.14)', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} projectId="p1" projectName="mainframe" />);
+    const chip = screen.getByTestId('sessions-row-meta-project') as HTMLElement;
+    expect(chip.className).toContain('pl-[5px]');
+    expect(chip.className).toContain('pr-[6px]');
+    expect(chip.className).not.toContain('py-px');
+    expect(chip.className).not.toContain('px-1.5');
+  });
 });
 
 // ---------------------------------------------------------------------------

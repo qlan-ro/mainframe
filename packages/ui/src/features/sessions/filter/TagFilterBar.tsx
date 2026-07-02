@@ -12,6 +12,7 @@
  * would silently render nothing (MEMORY Tailwind trap).
  */
 import React, { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { cn } from '../../../lib/utils';
@@ -152,9 +153,10 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
           data-testid="sessions-tag-filter-more"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
+          className="inline-flex shrink-0 items-center gap-[3px] px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
         >
           {moreLabel}
+          {expanded && <ChevronDown className="size-[10px] rotate-180" aria-hidden />}
         </button>
       )}
     </div>
