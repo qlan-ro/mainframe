@@ -10,6 +10,15 @@ import {
   resolvePath,
   searchContent,
 } from '../files';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -60,10 +69,12 @@ function mockFetchApiError(error: string): void {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 // ---------------------------------------------------------------------------

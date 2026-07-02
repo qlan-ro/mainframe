@@ -28,6 +28,15 @@ import {
   type Todo,
   type AttachmentMeta,
 } from '../todos';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -104,10 +113,12 @@ function mockFetchHttpError(status: number, error: string): void {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 // ---------------------------------------------------------------------------
@@ -251,6 +262,7 @@ describe('deleteTodo', () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith(`http://127.0.0.1:${PORT}/api/plugins/todos/todos/${TODO_ID}`, {
       method: 'DELETE',
+      headers: {},
     });
   });
 
@@ -437,7 +449,7 @@ describe('deleteAttachment', () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith(
       `http://127.0.0.1:${PORT}/api/plugins/todos/todos/${TODO_ID}/attachments/att-1`,
-      { method: 'DELETE' },
+      { method: 'DELETE', headers: {} },
     );
   });
 

@@ -13,6 +13,15 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { requestPlugin, requestPluginNoContent, expectField } from '../http';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 // ---------------------------------------------------------------------------
 // fetch mock helpers
@@ -66,10 +75,12 @@ function mockFetchNoContent(): void {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 // ---------------------------------------------------------------------------
@@ -189,7 +200,10 @@ describe('requestPluginNoContent — resolves void on 204', () => {
     await requestPluginNoContent('DELETE', 'http://127.0.0.1:31415/api/plugins/todos/todos/todo-1');
 
     expect(fetch).toHaveBeenCalledOnce();
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/plugins/todos/todos/todo-1', { method: 'DELETE' });
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/plugins/todos/todos/todo-1', {
+      method: 'DELETE',
+      headers: {},
+    });
   });
 
   it('throws on HTTP error response', async () => {

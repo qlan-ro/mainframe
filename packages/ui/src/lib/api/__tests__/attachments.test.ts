@@ -1,7 +1,23 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAttachment } from '../attachments';
+import { setActiveDaemon } from '../../daemon/active-daemon';
 
-afterEach(() => vi.restoreAllMocks());
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
+
+beforeEach(() => {
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
 
 describe('getAttachment', () => {
   it('GETs the attachment route and returns the unwrapped attachment', async () => {

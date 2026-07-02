@@ -8,6 +8,15 @@ import {
   getDevices,
   removeDevice,
 } from '../remote-access';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 function mockFetchOk(data: unknown) {
   const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true, data }) });
@@ -20,8 +29,14 @@ function mockFetchEmpty() {
   return fn;
 }
 const PORT = 31415;
-beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
 
 describe('remote-access api', () => {
   it('getTunnelStatus GETs /api/tunnel/status', async () => {

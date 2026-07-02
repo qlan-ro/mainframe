@@ -49,6 +49,7 @@ import {
   enableWorktree,
   attachWorktree,
 } from '../git';
+import { setActiveDaemon } from '../../daemon/active-daemon';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -57,6 +58,14 @@ import {
 const PORT = 31415;
 const PROJECT_ID = 'proj-abc';
 const BASE = `http://127.0.0.1:${PORT}/api/projects/${PROJECT_ID}/git`;
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: `http://127.0.0.1:${PORT}`,
+  token: null,
+} as const;
 
 // ---------------------------------------------------------------------------
 // fetch mock helpers — git routes use the ApiResponse envelope (request/requestEmpty)
@@ -104,10 +113,12 @@ const WORKTREES_FIXTURE = [
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 // ---------------------------------------------------------------------------

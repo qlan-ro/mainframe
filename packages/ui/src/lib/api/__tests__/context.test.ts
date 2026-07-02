@@ -1,6 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionContext } from '@qlan-ro/mainframe-types';
 import { getSessionContext } from '../context';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 const EMPTY: SessionContext = {
   globalFiles: [],
@@ -11,7 +20,12 @@ const EMPTY: SessionContext = {
   skillFiles: [],
 };
 
-afterEach(() => vi.restoreAllMocks());
+beforeEach(() => setActiveDaemon({ ...LOCAL_DAEMON }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
 
 describe('getSessionContext', () => {
   it('GETs the chat context route and unwraps the data envelope', async () => {

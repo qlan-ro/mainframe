@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Chat, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import { getExternalSessions, importExternalSession } from '../external-sessions';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -60,10 +69,12 @@ function mockFetchHttpError(status: number, error: string): void {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
 });
 
 // ---------------------------------------------------------------------------

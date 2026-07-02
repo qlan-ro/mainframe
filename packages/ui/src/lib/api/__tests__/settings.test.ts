@@ -6,6 +6,15 @@ import {
   updateGeneralSettings,
   getConfigConflicts,
 } from '../settings';
+import { setActiveDaemon } from '../../daemon/active-daemon';
+
+const LOCAL_DAEMON = {
+  id: 'local',
+  kind: 'local',
+  label: 'Local',
+  baseUrl: 'http://127.0.0.1:31415',
+  token: null,
+} as const;
 
 function mockFetchOk(data: unknown): ReturnType<typeof vi.fn> {
   const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true, data }) });
@@ -20,17 +29,20 @@ function mockFetchEmpty(): ReturnType<typeof vi.fn> {
 
 const PORT = 31415;
 
-beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn());
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setActiveDaemon({ ...LOCAL_DAEMON });
+});
 
 describe('settings api', () => {
   it('getProviderSettings GETs /api/settings/providers and returns data', async () => {
     const fn = mockFetchOk({ claude: { defaultModel: 'opus' } });
     const out = await getProviderSettings(PORT);
-    expect(fn).toHaveBeenCalledWith(
-      'http://127.0.0.1:31415/api/settings/providers',
-      expect.objectContaining({ method: 'GET' }),
-    );
+    expect(fn).toHaveBeenCalledWith('http://127.0.0.1:31415/api/settings/providers', { method: 'GET' });
     expect(out).toEqual({ claude: { defaultModel: 'opus' } });
   });
 
