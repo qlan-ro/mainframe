@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../styles/globals.css';
 import { applyStoredTheme, applyStoredScale } from '../store/theme';
-import { TooltipProvider } from '../components/ui/tooltip';
+import { TooltipProvider, TOOLTIP_DELAY_MS } from '../components/ui/tooltip';
 import { getHost, HostProvider } from '../lib/host';
 import { App } from './App';
 
@@ -21,7 +21,7 @@ if (!root) throw new Error('root element not found');
 createRoot(root).render(
   <StrictMode>
     <HostProvider host={host}>
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
         <App />
       </TooltipProvider>
     </HostProvider>

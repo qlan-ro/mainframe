@@ -13,14 +13,14 @@
  * The inline `TooltipProvider` is for **test isolation** — each row renders
  * standalone in unit tests without a wrapper. It nests harmlessly under the
  * app's global provider (`app/main.tsx`); the only cost is losing cross-row
- * `skipDelayDuration`, which is fine for clipped labels. `delayDuration={0}`
- * matches the global provider so open-latency is consistent app-wide.
+ * `skipDelayDuration`, which is fine for clipped labels. It uses the shared
+ * `TOOLTIP_DELAY_MS` so open-latency is consistent app-wide.
  *
  * Content defaults to sans + `break-words`. Path/identifier call sites opt into
  * monospace + hard breaks via `contentClassName="font-mono break-all"`.
  */
 import { useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TOOLTIP_DELAY_MS } from './tooltip';
 import { useIsTruncated } from '@/lib/ui/use-is-truncated';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +49,7 @@ export function TruncatedWithTooltip({
   // default tooltip merely repeats the text → only when the text is clipped.
   const canOpen = tooltip !== undefined || truncated;
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
       <Tooltip open={hovered && canOpen} onOpenChange={setHovered}>
         <TooltipTrigger asChild>
           <span ref={ref} className={cn('truncate', className)} {...rest}>

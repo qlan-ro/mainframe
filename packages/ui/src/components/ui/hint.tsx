@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TOOLTIP_DELAY_MS } from './tooltip';
 
 type HintProps = {
   /** Tooltip text. When empty/falsy the child renders bare (no tooltip) so
@@ -20,7 +20,7 @@ type HintProps = {
 export function Hint({ label, children, side, sideOffset }: HintProps) {
   if (label === null || label === undefined || label === '') return children;
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
       <Tooltip>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
         <TooltipContent side={side} sideOffset={sideOffset}>
@@ -62,7 +62,7 @@ export function DismissibleHint({
 }: DismissibleHintProps) {
   if (dismissed || label === null || label === undefined || label === '') return children;
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
       <Tooltip>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
         <TooltipContent side={side} sideOffset={sideOffset} className="flex flex-col items-start gap-1.5">

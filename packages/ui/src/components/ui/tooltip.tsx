@@ -6,6 +6,14 @@ const TooltipProvider = TooltipPrimitive.Provider;
 const Tooltip = TooltipPrimitive.Root;
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
+/**
+ * Shared tooltip open delay (ms). A human pause in the real app so tooltips
+ * don't fire the instant the pointer crosses an element while moving around the
+ * UI; 0 under test so `hover` → `getByRole('tooltip')` assertions stay
+ * synchronous. Every `TooltipProvider` should use this so latency is uniform.
+ */
+export const TOOLTIP_DELAY_MS = (import.meta.env as Record<string, string | undefined>).MODE === 'test' ? 0 : 500;
+
 function TooltipContent({
   className,
   sideOffset = 4,
