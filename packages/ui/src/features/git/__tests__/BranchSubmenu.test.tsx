@@ -38,7 +38,6 @@ function makeProps(overrides: Partial<BranchSubmenuProps> = {}): BranchSubmenuPr
     isCurrent: false,
     isRemote: false,
     isWorktree: false,
-    onClose: vi.fn(),
     onCheckout: vi.fn(),
     onPull: vi.fn(),
     onPush: vi.fn(),

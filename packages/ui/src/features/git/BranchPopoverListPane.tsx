@@ -29,7 +29,6 @@ export interface BranchPopoverListPaneProps {
   busy: boolean;
   busyAction: string | null;
   searchRef: React.RefObject<HTMLInputElement | null>;
-  closeSubmenu: () => void;
   onCheckout: (branch: string) => void;
   onPull: (branch: string) => void;
   onPush: (branch: string) => void;
@@ -57,7 +56,6 @@ export function BranchPopoverListPane({
   busy,
   busyAction,
   searchRef,
-  closeSubmenu,
   onCheckout,
   onPull,
   onPush,
@@ -97,7 +95,6 @@ export function BranchPopoverListPane({
             isCurrent={selected.info.name === currentBranch}
             isRemote={selected.isRemote}
             isWorktree={isSelectedWorktree}
-            onClose={closeSubmenu}
             onCheckout={onCheckout}
             onPull={onPull}
             onPush={onPush}

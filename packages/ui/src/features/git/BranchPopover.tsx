@@ -128,9 +128,6 @@ export function BranchPopover({
     setSelected((prev) => (prev?.info.name === branch.name ? null : { info: branch, isRemote }));
   }, []);
 
-  // Collapse the side-by-side submenu, leaving the list in place (no search reset).
-  const closeSubmenu = useCallback(() => setSelected(null), []);
-
   const handleNewBranch = useCallback((startFrom?: string) => {
     setNewBranchStartFrom(startFrom);
     setView('new-branch');
@@ -225,7 +222,6 @@ export function BranchPopover({
             busy={busy}
             busyAction={busyAction}
             searchRef={searchRef}
-            closeSubmenu={closeSubmenu}
             onCheckout={(b) => {
               void handleCheckout(b).then(() => onBranchChanged?.());
             }}

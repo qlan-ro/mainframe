@@ -11,7 +11,6 @@ export interface BranchSubmenuProps {
   isCurrent: boolean;
   isRemote?: boolean;
   isWorktree?: boolean;
-  onClose: () => void;
   onCheckout: (branch: string) => void;
   onPull: (branch: string) => void;
   onPush: (branch: string) => void;
