@@ -46,6 +46,10 @@ interface SandboxState {
   selectedConfigByScope: Record<string, string>;
   /** Tracks which process was most recently started — used to auto-switch tabs. */
   lastStartedProcess: string | null;
+  /** Tunnel URL per scope then config name (remote-daemon preview). */
+  tunnelUrls: Record<string, Record<string, string>>;
+  /** Tunnel failure reason per scope then config name. */
+  tunnelErrors: Record<string, Record<string, string>>;
 
   addCapture: (capture: Omit<Capture, 'id'>) => void;
   removeCapture: (id: string) => void;
@@ -56,6 +60,10 @@ interface SandboxState {
   clearLogsForProcess: (scopeKey: string, name: string) => void;
   setSelectedConfig: (scopeKey: string, name: string) => void;
   setLastStartedProcess: (name: string | null) => void;
+  setTunnelUrl: (scopeKey: string, name: string, url: string) => void;
+  setTunnelError: (scopeKey: string, name: string, error: string) => void;
+  clearTunnel: (scopeKey: string, name: string) => void;
+  seedTunnelUrls: (scopeKey: string, urls: Record<string, string>) => void;
 }
 
 export const useSandboxStore = create<SandboxState>()((set) => ({
@@ -64,6 +72,8 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
   logsOutput: [],
   selectedConfigByScope: {},
   lastStartedProcess: null,
+  tunnelUrls: {},
+  tunnelErrors: {},
 
   addCapture: (capture) =>
     set((state) => ({
@@ -100,4 +110,43 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
     })),
 
   setLastStartedProcess: (name) => set({ lastStartedProcess: name }),
+
+  setTunnelUrl: (scopeKey, name, url) =>
+    set((state) => ({
+      tunnelUrls: {
+        ...state.tunnelUrls,
+        [scopeKey]: { ...(state.tunnelUrls[scopeKey] ?? {}), [name]: url },
+      },
+    })),
+
+  setTunnelError: (scopeKey, name, error) =>
+    set((state) => ({
+      tunnelErrors: {
+        ...state.tunnelErrors,
+        [scopeKey]: { ...(state.tunnelErrors[scopeKey] ?? {}), [name]: error },
+      },
+    })),
+
+  clearTunnel: (scopeKey, name) =>
+    set((state) => {
+      const nextUrls = { ...(state.tunnelUrls[scopeKey] ?? {}) };
+      const nextErrs = { ...(state.tunnelErrors[scopeKey] ?? {}) };
+      delete nextUrls[name];
+      delete nextErrs[name];
+      return {
+        tunnelUrls: { ...state.tunnelUrls, [scopeKey]: nextUrls },
+        tunnelErrors: { ...state.tunnelErrors, [scopeKey]: nextErrs },
+      };
+    }),
+
+  seedTunnelUrls: (scopeKey, urls) =>
+    set((state) => {
+      const mergedUrls = { ...(state.tunnelUrls[scopeKey] ?? {}), ...urls };
+      const nextErrs = { ...(state.tunnelErrors[scopeKey] ?? {}) };
+      for (const name of Object.keys(urls)) delete nextErrs[name];
+      return {
+        tunnelUrls: { ...state.tunnelUrls, [scopeKey]: mergedUrls },
+        tunnelErrors: { ...state.tunnelErrors, [scopeKey]: nextErrs },
+      };
+    }),
 }));

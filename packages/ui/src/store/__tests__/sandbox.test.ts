@@ -21,6 +21,8 @@ const INITIAL_STATE = {
   logsOutput: [],
   selectedConfigByScope: {},
   lastStartedProcess: null,
+  tunnelUrls: {},
+  tunnelErrors: {},
 };
 
 beforeEach(() => {
@@ -211,5 +213,53 @@ describe('setLastStartedProcess', () => {
     expect(useSandboxStore.getState().lastStartedProcess).toBe('api');
     useSandboxStore.getState().setLastStartedProcess(null);
     expect(useSandboxStore.getState().lastStartedProcess).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setTunnelUrl / setTunnelError / clearTunnel / seedTunnelUrls
+// ---------------------------------------------------------------------------
+
+describe('setTunnelUrl / setTunnelError', () => {
+  it('keys url by scope then name and never bleeds across scopes', () => {
+    useSandboxStore.getState().setTunnelUrl('proj:/a', 'web', 'https://a.trycloudflare.com');
+    useSandboxStore.getState().setTunnelUrl('proj:/b', 'web', 'https://b.trycloudflare.com');
+    const t = useSandboxStore.getState().tunnelUrls;
+    expect(t['proj:/a']!['web']).toBe('https://a.trycloudflare.com');
+    expect(t['proj:/b']!['web']).toBe('https://b.trycloudflare.com');
+  });
+
+  it('keys error by scope then name', () => {
+    useSandboxStore.getState().setTunnelError('proj:/a', 'web', 'cloudflared missing');
+    expect(useSandboxStore.getState().tunnelErrors['proj:/a']!['web']).toBe('cloudflared missing');
+  });
+});
+
+describe('clearTunnel', () => {
+  it('removes both url and error for the given scope+name only', () => {
+    useSandboxStore.getState().setTunnelUrl('proj:/a', 'web', 'https://a.trycloudflare.com');
+    useSandboxStore.getState().setTunnelError('proj:/a', 'web', 'stale');
+    useSandboxStore.getState().setTunnelUrl('proj:/a', 'api', 'https://api.trycloudflare.com');
+    useSandboxStore.getState().clearTunnel('proj:/a', 'web');
+    const s = useSandboxStore.getState();
+    expect(s.tunnelUrls['proj:/a']!['web']).toBeUndefined();
+    expect(s.tunnelErrors['proj:/a']!['web']).toBeUndefined();
+    expect(s.tunnelUrls['proj:/a']!['api']).toBe('https://api.trycloudflare.com');
+  });
+});
+
+describe('seedTunnelUrls', () => {
+  it('merges a name→url map into the scope and clears stale errors for seeded names', () => {
+    useSandboxStore.getState().setTunnelError('proj:/a', 'web', 'was failing');
+    useSandboxStore.getState().seedTunnelUrls('proj:/a', { web: 'https://web.trycloudflare.com' });
+    const s = useSandboxStore.getState();
+    expect(s.tunnelUrls['proj:/a']!['web']).toBe('https://web.trycloudflare.com');
+    expect(s.tunnelErrors['proj:/a']?.['web']).toBeUndefined();
+  });
+
+  it('leaves other scopes untouched when seeding', () => {
+    useSandboxStore.getState().setTunnelUrl('proj:/b', 'web', 'https://b.trycloudflare.com');
+    useSandboxStore.getState().seedTunnelUrls('proj:/a', { web: 'https://a.trycloudflare.com' });
+    expect(useSandboxStore.getState().tunnelUrls['proj:/b']!['web']).toBe('https://b.trycloudflare.com');
   });
 });
