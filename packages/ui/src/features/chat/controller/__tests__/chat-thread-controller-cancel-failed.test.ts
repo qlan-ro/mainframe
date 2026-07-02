@@ -110,3 +110,27 @@ describe('message.queued.cancel_failed toast', () => {
     expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
   });
 });
+
+describe('daemon error toast', () => {
+  it('surfaces a daemon run error targeting this chat via mfToast.error', () => {
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribeLive();
+
+    pushEvent({ type: 'error', chatId: CHAT_ID, error: 'the CLI process failed to start' } as unknown as DaemonEvent);
+
+    expect(vi.mocked(mfToast.error)).toHaveBeenCalledOnce();
+    expect(vi.mocked(mfToast.error).mock.calls[0]![0]).toBe('Agent run failed');
+    expect(vi.mocked(mfToast.error).mock.calls[0]![1]).toEqual({ description: 'the CLI process failed to start' });
+  });
+
+  it('does NOT toast for an error targeting a different chat', () => {
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribeLive();
+
+    pushEvent({ type: 'error', chatId: 'other-chat', error: 'boom' } as unknown as DaemonEvent);
+
+    expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
+  });
+});

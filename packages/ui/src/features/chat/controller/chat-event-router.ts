@@ -47,6 +47,14 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
     });
   }
 
+  // A daemon run error (e.g. the CLI process failed to start) otherwise only
+  // flips runState to 'error' — silent to the user. Surface the message so the
+  // reason is visible (chatId is optional: undefined = global/current run).
+  if (event.type === 'error' && (event.chatId === undefined || event.chatId === chatId)) {
+    const description = typeof event.error === 'string' ? event.error : undefined;
+    mfToast.error('Agent run failed', description !== undefined ? { description } : undefined);
+  }
+
   const result = handleDaemonEvent(event, chatId, state.messagesById);
 
   if (result.kind === 'refresh') {
