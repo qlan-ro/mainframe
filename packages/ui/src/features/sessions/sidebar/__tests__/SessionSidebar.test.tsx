@@ -28,12 +28,13 @@
 import type React from 'react';
 import { cloneElement, isValidElement } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
 import type { Project, SyntheticTag } from '@qlan-ro/mainframe-types';
 import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
+import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
 
 // ---------------------------------------------------------------------------
 // Mutable control state — set per test before rendering
@@ -50,6 +51,10 @@ const setFilterProjectIdSpy = vi.fn();
 const setSortModeSpy = vi.fn();
 // Spy injected by the ThreadListPrimitive.New `asChild` Slot — see the mock below.
 const newThreadClickSpy = vi.fn();
+// Shared across the module-scope useAssistantRuntime() mock so component code and
+// assertions see the SAME spy instance — a fresh vi.fn() per call would be
+// unobservable from the test.
+const switchToThreadSpy = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
@@ -64,14 +69,16 @@ vi.mock('@assistant-ui/react', () => ({
         return { threadIds, threadItems, mainThreadId: '', newThreadId: __newThreadId };
       },
       getItemById: (_id: string) => ({ rename: vi.fn(), archive: vi.fn() }),
-      switchToThread: vi.fn(),
+      switchToThread: switchToThreadSpy,
     },
   }),
   // SessionSidebar now subscribes reactively via useAuiState((s) => s.threads.threadItems)
   // instead of an imperative getState() read. The store-scope threadItems array is the
-  // ordered ThreadListEntry[] the projection consumes.
-  useAuiState: (selector: (s: { threads: { threadItems: unknown; mainThreadId: string } }) => unknown) =>
-    selector({ threads: { threadItems: __threads, mainThreadId: '' } }),
+  // ordered ThreadListEntry[] the projection consumes. newThreadId is exposed the same
+  // way for the reactive draft-row model (useDraftRow).
+  useAuiState: (
+    selector: (s: { threads: { threadItems: unknown; mainThreadId: string; newThreadId: string | null } }) => unknown,
+  ) => selector({ threads: { threadItems: __threads, mainThreadId: '', newThreadId: __newThreadId } }),
   // Faithful `asChild` repro: the real primitive is a Radix Slot that clones its
   // single child and injects onClick onto it — composing the caller's onClick
   // BEFORE its own switchToNewThread (composeEventHandlers), then the switch itself
@@ -290,8 +297,10 @@ beforeEach(() => {
   setFilterProjectIdSpy.mockReset();
   setSortModeSpy.mockReset();
   newThreadClickSpy.mockReset();
+  switchToThreadSpy.mockReset();
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
+  useDraftReturnTarget.setState({ returnThreadId: null });
 });
 
 // ---------------------------------------------------------------------------
@@ -334,10 +343,17 @@ describe('SessionSidebar — Sessions group header has no leading chevron (findi
 // 2b. Clicking the new-button fires the ThreadListPrimitive.New handler.
 //     The `Hint` tooltip wrapper must not sit between the asChild Slot and the
 //     button, or the injected onClick never reaches the DOM element.
+//
+//     NOTE (Task 9 wiring): the "+" is now SessionsNewButton (Task 8). In the
+//     "All" view (filterProjectId=null) it opens NewSessionPickerPopover instead
+//     of firing ThreadListPrimitive.New directly — that primitive only fires from
+//     the pill-active branch, so this test activates a project pill to keep
+//     exercising the same underlying primitive-composition behavior.
 // ---------------------------------------------------------------------------
 
 describe('SessionSidebar — new-button triggers the New-thread handler', () => {
-  it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clicked', async () => {
+  it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clicked with a project pill active', async () => {
+    __filterProjectId = 'p1';
     render(<SessionSidebar />);
     await userEvent.click(screen.getByTestId('sessions-new-button'));
     expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
@@ -349,10 +365,15 @@ describe('SessionSidebar — new-button triggers the New-thread handler', () => 
 //     aui reuses the same __LOCALID_* slot until a message is sent, so an
 //     abandoned draft (project seeded, never sent) must not leak into the next
 //     New — else the chat is created in the stale project / the picker is skipped.
+//
+//     NOTE (Task 9 wiring): same pill-active branch as 2b above — the reset in
+//     the "All" view only runs once a project is picked from the popover
+//     (covered by SessionsNewButton's own tests), not on the trigger click alone.
 // ---------------------------------------------------------------------------
 
 describe('SessionSidebar — new-button resets a stale reused-slot draft', () => {
   it('clears the draft-config and ready flag for the current newThreadId on click', async () => {
+    __filterProjectId = 'p1';
     __newThreadId = '__LOCALID_reuse';
     setDraftConfig('__LOCALID_reuse', { projectId: 'stale-proj', adapterId: 'claude' });
     useNewThreadReady.getState().markReady('__LOCALID_reuse');
@@ -543,5 +564,40 @@ describe('SessionSidebar — TagFilterBar is mounted at the bottom, after the li
     const tagBar = screen.getByTestId('sessions-tag-filter-bar');
     // compareDocumentPosition: FOLLOWING (4) means tagBar comes after pills.
     expect(pills.compareDocumentPosition(tagBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Draft row (Task 9 wiring): the synthetic "New Session" row above the time
+// groups, gated by draftRowVisible(model, filterProjectId) — visible once a
+// draft-config exists for the reactive newThreadId, hidden behind a different
+// project's active pill, and discardable back to the pre-draft selection.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — draft row', () => {
+  it('renders the draft row once a draft-config exists for the new thread', () => {
+    __newThreadId = '__LOCALID_draft';
+    setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-draft-row-title')).toHaveTextContent('New Session');
+  });
+
+  it('hides the draft row when a different project pill is active', () => {
+    __newThreadId = '__LOCALID_draft';
+    setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
+    __filterProjectId = 'proj-b';
+    render(<SessionSidebar />);
+    expect(screen.queryByTestId('sessions-draft-row')).toBeNull();
+  });
+
+  it('discarding the draft resets it and switches to the return target', () => {
+    __newThreadId = '__LOCALID_draft';
+    setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
+    useDraftReturnTarget.getState().setReturnTarget('chat-prev');
+    render(<SessionSidebar />);
+    fireEvent.click(screen.getByTestId('sessions-draft-row-discard'));
+    expect(switchToThreadSpy).toHaveBeenCalledWith('chat-prev');
+    expect(getDraftConfig('__LOCALID_draft')).toBeUndefined();
+    expect(screen.queryByTestId('sessions-draft-row')).toBeNull();
   });
 });

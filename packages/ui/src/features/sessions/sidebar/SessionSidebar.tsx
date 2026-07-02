@@ -19,9 +19,8 @@
  *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
  *   - arrangeSessions / applySessionFilters / attentionCount (pure VMs)
  */
-import { memo, useCallback, useMemo } from 'react';
-import { ThreadListPrimitive, useAssistantRuntime, useAuiState } from '@assistant-ui/react';
-import { PlusIcon } from 'lucide-react';
+import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
@@ -38,14 +37,16 @@ import { SessionListVirtuoso } from './SessionListVirtuoso';
 import { SessionRow } from './SessionRow';
 import { SessionSortMenu } from './SessionSortMenu';
 import { SessionsMoreMenu } from './SessionsMoreMenu';
+import { SessionsNewButton } from './SessionsNewButton';
+import { DraftSessionRow } from './DraftSessionRow';
+import { useDraftRow } from './use-draft-row';
+import { useSessionCounts } from './use-session-counts';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
 import { resolveProjectSession } from './resolve-project-session';
-import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
-import { Hint } from '@/components/ui/hint';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
@@ -57,30 +58,19 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 
 /**
  * SessionsGroupHeader — the sticky "SESSIONS" group header with the count and
- * the new/sort/more icon-button cluster. The +new button is wired to the native
- * ThreadListPrimitive.New; the sort button opens SessionSortMenu; the more (⋯)
- * button opens SessionsMoreMenu (Archived sessions · Import external sessions).
+ * the new/sort/more icon-button cluster. `newButton` is SessionsNewButton
+ * (pill-active → native New; "All" view → the project-picker popover); the sort
+ * button opens SessionSortMenu; the more (⋯) button opens SessionsMoreMenu
+ * (Archived sessions · Import external sessions).
  */
-function SessionsGroupHeader({ count }: { count: number }) {
+function SessionsGroupHeader({ count, newButton }: { count: number; newButton: ReactNode }) {
   const { sortMode, setSortMode } = useSessionFilters();
-  const runtime = useAssistantRuntime();
-  const iconBtn =
-    'inline-flex size-[22px] items-center justify-center rounded-[6px] text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
     <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
       <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">Sessions</span>
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
-      <Hint label="New session">
-        {/* Reset the reused newThreadId's stale draft before the primitive's
-            switchToNewThread runs (composed onClick), so an abandoned draft can't
-            leak its project into this New — see resetNewThreadDraft. */}
-        <ThreadListPrimitive.New asChild onClick={() => resetNewThreadDraft(runtime.threads.getState().newThreadId)}>
-          <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={iconBtn}>
-            <PlusIcon className="size-[12px]" />
-          </button>
-        </ThreadListPrimitive.New>
-      </Hint>
+      {newButton}
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />
     </div>
@@ -138,6 +128,10 @@ function SessionSidebarImpl() {
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
 
+  const sessionCounts = useSessionCounts(allItems);
+  const draftRow = useDraftRow(allItems, filterProjectId);
+  const filterProjectName = filterProjectId != null ? projectNameOf(filterProjectId) : null;
+
   // Selecting a project pill sets the filter AND activates that project's
   // most-recent (or remembered) session. Toggling OFF only clears the filter.
   const onSelectProject = useCallback(
@@ -184,7 +178,18 @@ function SessionSidebarImpl() {
 
   return (
     <>
-      <SessionsGroupHeader count={allItems.length} />
+      <SessionsGroupHeader
+        count={allItems.length}
+        newButton={
+          <SessionsNewButton
+            filterProjectId={filterProjectId}
+            filterProjectName={filterProjectName}
+            projects={sortedProjects}
+            sessionCounts={sessionCounts}
+            onAddProject={() => void handleAddProject()}
+          />
+        }
+      />
 
       <ProjectFilterPillBar
         projects={sortedProjects}
@@ -194,6 +199,17 @@ function SessionSidebarImpl() {
         onRemoveProject={(project) => void handleRemoveProject(project)}
         onAddProject={() => void handleAddProject()}
       />
+
+      {draftRow.visible && draftRow.model != null && (
+        <DraftSessionRow
+          projectId={draftRow.model.projectId}
+          projectName={projectNameOf(draftRow.model.projectId)}
+          selected={draftRow.selected}
+          showProject={showProject}
+          onSelect={draftRow.onSelect}
+          onDiscard={draftRow.onDiscard}
+        />
+      )}
 
       {filteredItems.length === 0 ? (
         <div
