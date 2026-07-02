@@ -122,7 +122,9 @@ export function ReviewPanel() {
         />
 
         {loadError && (
-          <div className="px-4 py-4 text-caption text-destructive">Failed to load git status. Please try again.</div>
+          <div data-testid="review-load-error" className="px-4 py-4 text-caption text-destructive">
+            Failed to load git status. Please try again.
+          </div>
         )}
 
         <div className="flex min-h-0 flex-1">

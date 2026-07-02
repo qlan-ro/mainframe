@@ -124,6 +124,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
         <button
           ref={rowRef}
           data-testid={`file-tree-row-${entry.path}`}
+          data-kind="file"
           data-highlighted={isRevealTarget ? 'true' : undefined}
           type="button"
           onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
@@ -154,6 +155,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
       <FileTreeRowMenu entry={entry} fullPath={fullPath}>
         <button
           data-testid={`file-tree-row-${entry.path}`}
+          data-kind="directory"
           type="button"
           onClick={toggle}
           style={{ paddingLeft: indent }}

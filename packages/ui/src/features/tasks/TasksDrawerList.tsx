@@ -40,7 +40,9 @@ export function TasksDrawerList({ port, projectId, onStartSession }: Props): Rea
     <>
       <div className="flex flex-col overflow-y-auto min-h-0 mf-thin-scrollbar">
         {active.length === 0 ? (
-          <div className="px-3 py-4 text-caption text-muted-foreground">No active tasks.</div>
+          <div data-testid="tasks-drawer-empty" className="px-3 py-4 text-caption text-muted-foreground">
+            No active tasks.
+          </div>
         ) : (
           active.map((todo) => (
             <button

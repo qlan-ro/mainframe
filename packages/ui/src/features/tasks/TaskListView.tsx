@@ -145,7 +145,10 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       onKeyDown={handleKeyDown}
     >
       {totalVisible === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-caption text-muted-foreground py-12">
+        <div
+          data-testid="tasks-list-empty"
+          className="flex-1 flex flex-col items-center justify-center gap-2 text-caption text-muted-foreground py-12"
+        >
           <ListChecks size={26} className="text-muted-foreground/40" aria-hidden />
           {filtersActive ? 'No tasks match these filters' : 'No tasks yet'}
         </div>

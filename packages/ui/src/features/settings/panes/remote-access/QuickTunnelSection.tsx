@@ -14,7 +14,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
   }, [tunnel]);
 
   return (
-    <div className="space-y-3">
+    <div data-testid="settings-remote-access-quick-tunnel-section" className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <label className="text-label font-semibold text-muted-foreground">Quick Tunnel</label>

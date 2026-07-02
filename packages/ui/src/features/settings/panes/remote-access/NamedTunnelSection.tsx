@@ -54,7 +54,7 @@ export function NamedTunnelSection({
   }, [tunnel, savedUrl]);
 
   return (
-    <div className="space-y-3">
+    <div data-testid="settings-remote-access-named-tunnel-section" className="space-y-3">
       <div>
         <label className="text-label font-semibold text-muted-foreground">Named Tunnel</label>
         <p className="text-micro text-muted-foreground mt-0.5">

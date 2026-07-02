@@ -37,6 +37,11 @@ describe('ReviewFileTree', () => {
     expect(screen.getByText(/No changes to review/i)).toBeTruthy();
   });
 
+  it('tags the empty state with review-file-tree-empty', () => {
+    render(<ReviewFileTree files={[]} selectedFile={null} onSelectFile={vi.fn()} />);
+    expect(screen.getByTestId('review-file-tree-empty')).toBeTruthy();
+  });
+
   it('shows a status badge for each file', () => {
     render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
     expect(screen.getByText('M')).toBeTruthy();

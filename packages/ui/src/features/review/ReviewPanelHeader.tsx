@@ -43,7 +43,10 @@ export function ReviewPanelHeader({
       </div>
 
       {branch && (
-        <span className="inline-flex items-center gap-1.5 rounded-md bg-mf-chip px-2.5 py-1">
+        <span
+          data-testid="review-branch-badge"
+          className="inline-flex items-center gap-1.5 rounded-md bg-mf-chip px-2.5 py-1"
+        >
           <GitBranch className="size-[11px] text-mf-text-3" aria-hidden />
           <span className="font-mono text-caption text-muted-foreground">{branch}</span>
         </span>
@@ -51,13 +54,14 @@ export function ReviewPanelHeader({
 
       <div className="flex-1" />
 
-      <span className="text-caption text-mf-text-3">
+      <span data-testid="review-file-counts" className="text-caption text-mf-text-3">
         {fileCount} {fileCount === 1 ? 'file' : 'files'} ·{' '}
         <span className="font-semibold text-mf-success">+{totalAdditions}</span>{' '}
         <span className="font-semibold text-mf-diff-del-text">−{totalDeletions}</span>
       </span>
 
       <span
+        data-testid="review-viewed-counter"
         className={`inline-flex items-center gap-1.5 text-caption ${allViewed ? 'text-mf-success' : 'text-mf-text-3'}`}
       >
         {allViewed && <Check className="size-[12px]" strokeWidth={2.4} aria-hidden />}

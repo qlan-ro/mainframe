@@ -56,7 +56,9 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
         Changed files
       </div>
       {files.length === 0 ? (
-        <div className="px-3.5 py-4 text-caption text-muted-foreground">No changes to review</div>
+        <div data-testid="review-file-tree-empty" className="px-3.5 py-4 text-caption text-muted-foreground">
+          No changes to review
+        </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-[8px]">
           {files.map((f) => {

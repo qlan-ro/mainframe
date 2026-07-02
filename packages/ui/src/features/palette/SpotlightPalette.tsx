@@ -92,6 +92,11 @@ function PaletteResults({
       <div className="px-[10px] pb-[4px] pt-[6px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
         {sectionLabel}
       </div>
+      {rows.length === 0 && loading && (
+        <div data-testid="search-palette-loading" className="px-[10px] py-[26px] text-center text-body text-mf-text-3">
+          Searching…
+        </div>
+      )}
       {rows.length === 0 && !loading && (
         <div data-testid="search-palette-empty" className="px-[10px] py-[26px] text-center text-body text-mf-text-3">
           No matches

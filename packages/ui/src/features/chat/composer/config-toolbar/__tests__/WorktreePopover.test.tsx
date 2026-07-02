@@ -151,6 +151,17 @@ describe('WorktreePopover — setup state (New tab)', () => {
 
     expect(await screen.findByTestId('composer-worktree-base-branch')).toBeInTheDocument();
   });
+
+  it('renders a per-branch testid on each base-branch option row', async () => {
+    renderPopover(makeChat());
+
+    openPopover();
+
+    fireEvent.click(await screen.findByTestId('composer-worktree-base-branch'));
+
+    expect(await screen.findByTestId('composer-worktree-base-branch-option-main')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-worktree-base-branch-option-dev')).toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------

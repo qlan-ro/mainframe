@@ -70,4 +70,19 @@ describe('SpotlightPalette', () => {
     expect(await screen.findByTestId('search-palette-mode-chip')).toBeTruthy();
     await waitFor(() => expect(screen.queryByTestId('search-palette-change-row-src/a.ts')).not.toBeNull());
   });
+
+  it('shows a loading state while results are pending', async () => {
+    let resolveSearch!: (v: never[]) => void;
+    mockSearchFiles.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      }),
+    );
+    render(<SpotlightPalette />);
+    open();
+    const input = await screen.findByTestId('search-palette-input');
+    await userEvent.type(input, 'foo');
+    expect(await screen.findByTestId('search-palette-loading')).toBeTruthy();
+    resolveSearch([]);
+  });
 });

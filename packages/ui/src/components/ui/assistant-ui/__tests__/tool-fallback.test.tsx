@@ -31,3 +31,30 @@ describe('ToolFallbackTrigger running shimmer', () => {
     expect(document.querySelector('[data-slot="tool-fallback-trigger-shimmer"]')).toBeNull();
   });
 });
+
+describe('ToolFallback data-testids (e2e punch-list)', () => {
+  it('applies stable data-testids to the root, trigger, args, result, and error slots', () => {
+    const errorStatus = {
+      type: 'incomplete',
+      reason: 'error',
+      error: 'boom',
+    } as ToolCallMessagePartStatus;
+
+    render(
+      <ToolFallback.Root defaultOpen>
+        <ToolFallback.Trigger toolName="DesignSync" status={status('complete')} />
+        <ToolFallback.Content>
+          <ToolFallback.Error status={errorStatus} />
+          <ToolFallback.Args argsText='{"foo":"bar"}' />
+          <ToolFallback.Result result="done" />
+        </ToolFallback.Content>
+      </ToolFallback.Root>,
+    );
+
+    expect(document.querySelector('[data-testid="chat-tool-fallback-card"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="chat-tool-fallback-trigger"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="chat-tool-fallback-args"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="chat-tool-fallback-result"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="chat-tool-fallback-error"]')).not.toBeNull();
+  });
+});

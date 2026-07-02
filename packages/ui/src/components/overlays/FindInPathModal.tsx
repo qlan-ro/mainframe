@@ -218,15 +218,28 @@ export function FindInPathModal() {
 
         <div role="listbox" aria-label="Search results" className="max-h-96 overflow-y-auto">
           {showHint && (
-            <p className="px-4 py-6 text-center text-caption text-muted-foreground">
+            <p data-testid="find-in-path-hint" className="px-4 py-6 text-center text-caption text-muted-foreground">
               Type at least 2 characters to search
             </p>
           )}
           {!showHint && query.trim().length === 0 && (
-            <p className="px-4 py-6 text-center text-caption text-muted-foreground">Type to search</p>
+            <p
+              data-testid="find-in-path-idle-hint"
+              className="px-4 py-6 text-center text-caption text-muted-foreground"
+            >
+              Type to search
+            </p>
           )}
-          {error != null && <p className="px-4 py-4 text-center text-caption text-destructive">{error}</p>}
-          {showEmpty && <p className="px-4 py-6 text-center text-caption text-muted-foreground">No matches</p>}
+          {error != null && (
+            <p data-testid="find-in-path-error" className="px-4 py-4 text-center text-caption text-destructive">
+              {error}
+            </p>
+          )}
+          {showEmpty && (
+            <p data-testid="find-in-path-empty" className="px-4 py-6 text-center text-caption text-muted-foreground">
+              No matches
+            </p>
+          )}
           {results.length > 0 && (
             <GroupedResults results={results} activeIndex={activeIndex} rowRefs={rowRefs} onSelect={handleSelect} />
           )}

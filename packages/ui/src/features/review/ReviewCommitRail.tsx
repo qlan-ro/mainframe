@@ -86,7 +86,10 @@ export function ReviewCommitRail({
           </div>
 
           {unviewedCount > 0 && (
-            <div className="mb-[12px] flex items-start gap-[8px] rounded-md border border-mf-warning/30 bg-mf-warning/10 px-[10px] py-[9px]">
+            <div
+              data-testid="review-commit-unviewed-warning"
+              className="mb-[12px] flex items-start gap-[8px] rounded-md border border-mf-warning/30 bg-mf-warning/10 px-[10px] py-[9px]"
+            >
               <TriangleAlert size={13} className="mt-px shrink-0 text-mf-warning" aria-hidden />
               <span className="text-caption leading-snug text-mf-warning">
                 {unviewedCount} {unviewedCount === 1 ? 'file' : 'files'} not yet reviewed.
@@ -94,7 +97,11 @@ export function ReviewCommitRail({
             </div>
           )}
 
-          {error && <div className="mb-[12px] text-caption text-destructive">{error}</div>}
+          {error && (
+            <div data-testid="review-commit-error" className="mb-[12px] text-caption text-destructive">
+              {error}
+            </div>
+          )}
 
           <div className="flex-1" />
 

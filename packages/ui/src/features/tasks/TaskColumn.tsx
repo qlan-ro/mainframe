@@ -77,7 +77,10 @@ export function TaskColumn({
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}
         {todos.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-6 border border-dashed border-border rounded-md min-h-[72px]">
+          <div
+            data-testid={`tasks-column-${status}-empty`}
+            className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-6 border border-dashed border-border rounded-md min-h-[72px]"
+          >
             {dragOver ? 'Drop here' : filtersActive ? 'No matches' : 'Nothing here'}
           </div>
         )}

@@ -64,6 +64,14 @@ describe('FileTree', () => {
     await waitFor(() => expect(screen.getByTestId('file-tree-row-src/a.ts')).toBeTruthy());
     expect(getFileTree).toHaveBeenNthCalledWith(2, 1, 'p1', 'src', undefined);
   });
+
+  it('tags each row with data-kind="file" or "directory" without changing the testid', async () => {
+    getFileTree.mockResolvedValueOnce([file('z.ts', 'z.ts'), dir('src', 'src')]);
+    render(<FileTree port={1} projectId="p1" />);
+    await screen.findByTestId('file-tree');
+    expect(screen.getByTestId('file-tree-row-z.ts')).toHaveAttribute('data-kind', 'file');
+    expect(screen.getByTestId('file-tree-row-src')).toHaveAttribute('data-kind', 'directory');
+  });
 });
 
 describe('FileTree — context menu', () => {

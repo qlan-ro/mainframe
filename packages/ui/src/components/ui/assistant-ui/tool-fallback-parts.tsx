@@ -15,7 +15,12 @@ export function ToolFallbackArgs({
   if (!argsText) return null;
 
   return (
-    <div data-slot="tool-fallback-args" className={cn('aui-tool-fallback-args', className)} {...props}>
+    <div
+      data-slot="tool-fallback-args"
+      data-testid="chat-tool-fallback-args"
+      className={cn('aui-tool-fallback-args', className)}
+      {...props}
+    >
       <pre className="aui-tool-fallback-args-value text-caption text-muted-foreground whitespace-pre-wrap font-mono break-all">
         {argsText}
       </pre>
@@ -35,6 +40,7 @@ export function ToolFallbackResult({
   return (
     <div
       data-slot="tool-fallback-result"
+      data-testid="chat-tool-fallback-result"
       className={cn('aui-tool-fallback-result border-t border-dashed border-border pt-2', className)}
       {...props}
     >
@@ -64,7 +70,12 @@ export function ToolFallbackError({
   const headerText = isCancelled ? 'Cancelled reason' : 'Error';
 
   return (
-    <div data-slot="tool-fallback-error" className={cn('aui-tool-fallback-error', className)} {...props}>
+    <div
+      data-slot="tool-fallback-error"
+      data-testid="chat-tool-fallback-error"
+      className={cn('aui-tool-fallback-error', className)}
+      {...props}
+    >
       <p className="aui-tool-fallback-error-header text-caption font-semibold text-destructive mb-1">{headerText}</p>
       <p className="aui-tool-fallback-error-reason text-caption text-muted-foreground">{errorText}</p>
     </div>

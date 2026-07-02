@@ -46,6 +46,7 @@ function ToolFallbackRoot({
     <Collapsible
       ref={collapsibleRef}
       data-slot="tool-fallback-root"
+      data-testid="chat-tool-fallback-card"
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(
@@ -83,6 +84,7 @@ function ToolFallbackTrigger({
   return (
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
+      data-testid="chat-tool-fallback-trigger"
       className={cn(
         'aui-tool-fallback-trigger group/trigger flex w-full items-center gap-1.5 px-3',
         'text-body transition-colors hover:text-foreground text-muted-foreground',

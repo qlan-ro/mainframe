@@ -43,7 +43,7 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
   );
 
   return (
-    <div className="space-y-3">
+    <div data-testid="settings-remote-access-devices-section" className="space-y-3">
       <div>
         <label className="text-label font-semibold text-muted-foreground">Paired Devices</label>
       </div>

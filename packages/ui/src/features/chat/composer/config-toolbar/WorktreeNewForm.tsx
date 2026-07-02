@@ -73,6 +73,7 @@ function BranchSelect({ value, options, currentBranch, onChange }: BranchSelectP
         {options.map((b) => (
           <MenuSelectRow
             key={b}
+            data-testid={`composer-worktree-base-branch-option-${b}`}
             selected={b === value}
             label={b === currentBranch ? `${b} (current)` : b}
             onClick={() => {

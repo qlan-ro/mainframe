@@ -157,6 +157,11 @@ describe('ReviewCommitRail — unviewed warning', () => {
     renderRail({ unviewedCount: 0 });
     expect(screen.queryByText(/not yet reviewed/i)).not.toBeInTheDocument();
   });
+
+  it('tags the unviewed warning with review-commit-unviewed-warning', () => {
+    renderRail({ unviewedCount: 2 });
+    expect(screen.getByTestId('review-commit-unviewed-warning')).toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -172,6 +177,11 @@ describe('ReviewCommitRail — error display', () => {
   it('does not render an error element when error is null', () => {
     renderRail({ error: null });
     expect(screen.queryByText('nothing to commit')).not.toBeInTheDocument();
+  });
+
+  it('tags the error text with review-commit-error', () => {
+    renderRail({ error: 'nothing to commit' });
+    expect(screen.getByTestId('review-commit-error')).toBeInTheDocument();
   });
 });
 

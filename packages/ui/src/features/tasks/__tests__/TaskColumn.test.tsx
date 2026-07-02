@@ -64,6 +64,13 @@ describe('TaskColumn — card list gap (finding 9.14)', () => {
   });
 });
 
+describe('TaskColumn — empty state testid', () => {
+  it('tags the empty column body with tasks-column-open-empty', () => {
+    renderColumn();
+    expect(screen.getByTestId('tasks-column-open-empty')).toBeTruthy();
+  });
+});
+
 describe('TaskColumn — header chip adjacency (finding 9.15)', () => {
   it('does NOT push the count chip to the far right via ml-auto', () => {
     renderColumn([makeTodo({ id: 't1', number: 1 })]);

@@ -58,7 +58,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
   const seconds = Math.floor((remaining % 60000) / 1000);
 
   return (
-    <div className="space-y-3">
+    <div data-testid="settings-remote-access-pairing-section" className="space-y-3">
       <div>
         <label className="text-label font-semibold text-muted-foreground">Mobile Pairing</label>
         <p className="text-micro text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>

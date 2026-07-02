@@ -144,7 +144,12 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
 
       {/* Body */}
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground">Loading tasks…</div>
+        <div
+          data-testid="tasks-board-loading"
+          className="flex-1 flex items-center justify-center text-caption text-muted-foreground"
+        >
+          Loading tasks…
+        </div>
       ) : view === 'list' ? (
         <TaskListView
           port={port}
