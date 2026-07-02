@@ -125,6 +125,8 @@
   /* App-only elevation variants (panel shadows not in prototype theme) */
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
   --mf-shadow-picker: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
@@ -248,6 +250,8 @@
 
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.22);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.20), 0 8px 24px rgba(0, 0, 0, 0.26);
   --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
@@ -348,6 +352,8 @@
   --mf-um-dash: rgba(20, 130, 125, 0.36);
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(10, 40, 40, 0.05);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(10, 40, 40, 0.04);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(10, 40, 40, 0.04), 0 6px 18px rgba(10, 40, 40, 0.05);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(10, 40, 40, 0.05), 0 8px 24px rgba(10, 40, 40, 0.06);
   --mf-shadow-picker: 0 12px 40px rgba(10, 40, 40, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(10, 40, 40, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(10, 50, 50, 0.05);
@@ -451,6 +457,8 @@
   --mf-code-inline-fg: #e0a878;
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.22);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.20), 0 8px 24px rgba(0, 0, 0, 0.26);
   --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
@@ -542,6 +550,8 @@
   --mf-um-dash: rgba(190, 70, 150, 0.38);
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(60, 20, 50, 0.05);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(60, 20, 50, 0.04);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(60, 20, 50, 0.04), 0 6px 18px rgba(60, 20, 50, 0.05);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(60, 20, 50, 0.05), 0 8px 24px rgba(60, 20, 50, 0.06);
   --mf-shadow-picker: 0 12px 40px rgba(60, 20, 50, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(60, 20, 50, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(80, 20, 60, 0.05);
@@ -644,6 +654,8 @@
   --mf-code-inline-fg: #e0a878;
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.22);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.20), 0 8px 24px rgba(0, 0, 0, 0.26);
   --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);

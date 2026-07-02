@@ -51,4 +51,9 @@ describe('windowStyleGeometry', () => {
     expect(WINDOW_STYLE_GEOMETRY.glass.gutter).toBe(8);
     expect(WINDOW_STYLE_GEOMETRY.split.gutter).toBe(9);
   });
+
+  it('unified and glass surfaces use distinct ambient-shadow tokens (15.7)', () => {
+    expect(WINDOW_STYLE_GEOMETRY.unified.surface).toContain('shadow-[var(--mf-shadow-panel-ambient)]');
+    expect(WINDOW_STYLE_GEOMETRY.glass.surface).toContain('shadow-[var(--mf-shadow-panel-glass-ambient)]');
+  });
 });
