@@ -29,6 +29,10 @@ export interface WorkflowRunSummary {
   finishedAt: number | null;
   error: string | null;
   outputs: unknown;
+  /** Daemon-supplied status-tinted narrative shown for ANY run status. */
+  banner?: string | null;
+  /** Optional CTA button rendered in the run's own status color. */
+  bannerCta?: { label: string; action: 'answer' } | null;
 }
 
 export interface WorkflowStepSummary {

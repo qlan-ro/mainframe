@@ -361,6 +361,26 @@ export class WorkflowEngine {
   }
 }
 
+/** Derive the status-tinted banner/CTA shown on a run's summary card. */
+function deriveBanner(run: RunRecord): Pick<WorkflowRunSummary, 'banner' | 'bannerCta'> {
+  switch (run.status) {
+    case 'waiting':
+      return { banner: 'Waiting for you…', bannerCta: { label: 'Answer now', action: 'answer' } };
+    case 'failed':
+      return {
+        banner: run.error ? `Failed — ${run.error.split('\n')[0]}` : 'This run failed.',
+        bannerCta: null,
+      };
+    case 'succeeded':
+      return { banner: 'Completed.', bannerCta: null };
+    case 'cancelled':
+      return { banner: 'Cancelled.', bannerCta: null };
+    case 'running':
+    default:
+      return { banner: null, bannerCta: null };
+  }
+}
+
 export function toRunSummary(run: RunRecord): WorkflowRunSummary {
   return {
     id: run.id,
@@ -372,6 +392,7 @@ export function toRunSummary(run: RunRecord): WorkflowRunSummary {
     finishedAt: run.finishedAt,
     error: run.error,
     outputs: run.outputs,
+    ...deriveBanner(run),
   };
 }
 
