@@ -14,7 +14,7 @@ import { ChevronRight, CircleDashed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WfStepNode } from './WfStepNode';
 import { WfStatusPip, WfStatusTag, WfKindChip } from './WfStatus';
-import { getKindMeta } from './glyphs';
+import { getKindMeta, getStepStatusMeta, iterChipTint } from './glyphs';
 import { useWorkflowsModal } from './use-workflows-modal';
 import type { RunTreeNode } from '@/lib/api/workflows';
 
@@ -35,23 +35,6 @@ interface CompositeProps {
 function defaultIterIdx(iterations: Array<{ status: string }>): number {
   const idx = iterations.findIndex((it) => it.status === 'running' || it.status === 'waiting');
   return idx >= 0 ? idx : 0;
-}
-
-/** Maps an iteration's own status to the active-chip border/bg classes. */
-function activeIterChipClasses(status: string): string {
-  switch (status) {
-    case 'succeeded':
-      return 'border-mf-success/60 bg-mf-success/10';
-    case 'running':
-      return 'border-primary/60 bg-primary/10';
-    case 'waiting':
-    case 'ambiguous':
-      return 'border-mf-warning/60 bg-mf-warning/10';
-    case 'failed':
-      return 'border-destructive/60 bg-destructive/10';
-    default:
-      return 'border-border bg-muted';
-  }
 }
 
 // ── Spine ──────────────────────────────────────────────────────────────────────
@@ -228,7 +211,7 @@ function WfLoopRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
               className={cn(
                 'inline-flex h-[24px] items-center gap-[5px] rounded-sm px-[9px] text-caption transition-colors',
                 on
-                  ? cn('border font-bold text-foreground', activeIterChipClasses(iter.status))
+                  ? cn('border font-bold text-foreground', iterChipTint(getStepStatusMeta(iter.status).tone))
                   : 'border-[0.5px] border-border bg-card font-medium text-muted-foreground hover:bg-accent',
               )}
             >

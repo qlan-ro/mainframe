@@ -207,6 +207,27 @@ export function getStepStatusMeta(status: string): StatusMeta {
   return stepStatusMeta[status] ?? DEFAULT_STEP_META;
 }
 
+/**
+ * Maps a StatusMeta tone to a border/bg tint class pair, for active-chip
+ * treatments (e.g. WfTree's iteration switcher). The single source of
+ * truth for tone→tint so consumers don't hand-roll their own status→color
+ * copy — drive the tone through getStepStatusMeta/getRunStatusMeta first.
+ */
+export function iterChipTint(tone: StatusMeta['tone']): string {
+  switch (tone) {
+    case 'success':
+      return 'border-mf-success/60 bg-mf-success/10';
+    case 'primary':
+      return 'border-primary/60 bg-primary/10';
+    case 'warning':
+      return 'border-mf-warning/60 bg-mf-warning/10';
+    case 'destructive':
+      return 'border-destructive/60 bg-destructive/10';
+    default:
+      return 'border-border bg-muted';
+  }
+}
+
 export function getRunStatusMeta(status: string): StatusMeta {
   return runStatusMeta[status] ?? DEFAULT_RUN_META;
 }
