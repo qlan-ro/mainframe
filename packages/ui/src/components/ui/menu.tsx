@@ -58,7 +58,10 @@ export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {note != null && <span className="shrink-0 text-caption text-mf-text-3">{note}</span>}
-      {hint != null && <span className="shrink-0 text-caption text-mf-text-4">{hint}</span>}
+      {/* font-mono for keyboard-shortcut style hints (e.g. ⌘1, ⤓, ↵) — SKIPPED-macos-typography
+          on the 11px→10px size delta itself (finding 10.12); font-mono is a genuine missing
+          treatment, not a size/weight token swap. */}
+      {hint != null && <span className="shrink-0 font-mono text-caption text-mf-text-4">{hint}</span>}
       {trailing}
     </button>
   ),
@@ -74,7 +77,7 @@ export function MenuSearchField({ value, onValueChange, className, inputRef, ...
   return (
     <div
       className={cn(
-        'flex h-[30px] items-center gap-[7px] rounded-md border-[0.5px] border-border bg-mf-content2 px-2',
+        'flex h-[30px] items-center gap-[7px] rounded-md border-[0.5px] border-border bg-mf-content2 px-[9px]',
         // Ring the whole field (icon + input) on focus, not the bare inner input —
         // the inner input opts out of the global focus ring via data-noring.
         'transition-shadow focus-within:border-ring focus-within:shadow-[var(--mf-focus-ring)]',
@@ -140,10 +143,14 @@ export const MenuSelectRow = React.forwardRef<HTMLButtonElement, MenuSelectRowPr
       className={cn(menuItemVariants(), 'w-full text-left hover:bg-accent', selected && 'bg-mf-selection', className)}
       {...props}
     >
+      {/* Leading checkmark gutter (fixed width:14 in the design) comes FIRST,
+          before the optional status dot and label — finding 10.14. */}
+      <span className="w-[14px] inline-flex items-center justify-center shrink-0">
+        {selected && <Check size={13} className="text-primary" />}
+      </span>
       {dot}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {meta != null && <span className="shrink-0 text-caption text-mf-text-3">{meta}</span>}
-      {selected && <Check size={13} className="shrink-0 text-primary" />}
     </button>
   ),
 );

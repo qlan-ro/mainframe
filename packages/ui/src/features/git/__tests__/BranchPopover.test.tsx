@@ -14,7 +14,7 @@
  *  7.  open=true, conflict files present: opens directly into git-conflict-view.
  *  8.  open=true, activeOperation='merge': opens directly into git-conflict-view.
  *  9.  Abort fires handleAbort and goes back to list.
- * 10.  Back arrow in submenu (git-submenu back) returns to list.
+ * 10.  Re-clicking the selected branch row closes the submenu (no back/close control — finding 10.9).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
@@ -321,23 +321,18 @@ describe('BranchPopover — Abort in conflict view fires handleAbort then return
 });
 
 // ---------------------------------------------------------------------------
-// 10. Back in submenu returns to list
+// 10. No back/close control in submenu (finding 10.9) — closes via row re-click
 // ---------------------------------------------------------------------------
 
-describe('BranchPopover — back arrow in submenu returns to list', () => {
-  it('shows git-branch-search after clicking git-submenu-back', async () => {
+describe('BranchPopover — submenu has no back/close control', () => {
+  it('does not render git-submenu-back', async () => {
     renderPopover({ open: true });
 
     await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
     await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
     await waitFor(() => screen.getByTestId('git-submenu'));
 
-    // Click the back button in the submenu header
-    await userEvent.click(screen.getByTestId('git-submenu-back'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('git-branch-search')).toBeTruthy();
-    });
+    expect(screen.queryByTestId('git-submenu-back')).toBeNull();
   });
 });
 
@@ -387,14 +382,14 @@ describe('BranchPopover — side-by-side submenu', () => {
     expect(screen.getByTestId('git-branch-search')).toBeTruthy();
   });
 
-  it('back button closes the submenu and the list remains visible', async () => {
+  it('re-clicking the selected row closes the submenu and the list remains visible', async () => {
     renderPopover({ open: true });
 
     await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
     await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
     await waitFor(() => screen.getByTestId('git-submenu'));
 
-    await userEvent.click(screen.getByTestId('git-submenu-back'));
+    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
 
     await waitFor(() => {
       expect(screen.queryByTestId('git-submenu')).toBeNull();

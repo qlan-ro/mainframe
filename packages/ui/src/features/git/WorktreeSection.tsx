@@ -35,11 +35,11 @@ export function WorktreeSection({
 
   return (
     <>
-      <div data-testid={`git-worktree-row-${name}`} className="flex items-center pr-1.5">
+      <div data-testid={`git-worktree-row-${name}`} className="flex items-center h-[26px] pr-1.5">
         <button
           data-testid={`git-worktree-toggle-${name}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex-1 flex items-center gap-1 px-2 py-1 text-micro font-bold text-mf-text-3 uppercase tracking-wide"
+          className="flex-1 h-[26px] flex items-center gap-[5px] px-2 text-micro font-bold text-mf-text-3 uppercase tracking-wide"
         >
           {expanded ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
           <GitFork size={11} className="text-mf-warning shrink-0" />

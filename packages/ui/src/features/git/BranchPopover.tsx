@@ -19,11 +19,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { sessionCustomOf } from '../sessions/view-model/chat-to-thread-custom';
 import { useBranchActions } from './use-branch-actions';
 import { useWorktreeSession } from './use-worktree-session';
-import { BranchListView } from './BranchListView';
-import { BranchSubmenu } from './BranchSubmenu';
-import { NewBranchDialog } from './NewBranchDialog';
-import { RenameBranchView } from './RenameBranchView';
-import { ConflictView } from './ConflictView';
+import { BranchPopoverListPane } from './BranchPopoverListPane';
+import { BranchPopoverOverlay } from './BranchPopoverOverlay';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 
 type View = 'list' | 'new-branch' | 'conflict' | 'rename';
@@ -33,7 +30,8 @@ const DEFAULT_ADAPTER_ID = 'claude';
 // Each panel (list, submenu, overlay) is its own card; the popover container is
 // bare so the list + submenu read as two separate cards with a gap (13-popover
 // artboard), not one merged surface.
-const PANEL_CARD = 'rounded-[11px] border border-border bg-popover p-[5px] shadow-[var(--mf-shadow-pop)]';
+const PANEL_CARD_SHELL = 'rounded-[11px] border border-border bg-popover shadow-[var(--mf-shadow-pop)] overflow-hidden';
+const PANEL_CARD = cn(PANEL_CARD_SHELL, 'p-[5px]');
 
 export interface BranchPopoverProps {
   port: number;
@@ -190,8 +188,6 @@ export function BranchPopover({
   // Remote BranchInfo stubs — same mapping as BranchList.tsx.
   const remoteBranchInfos: BranchInfo[] = remoteNames.map((name) => ({ name, current: false }));
 
-  const isSelectedWorktree = selected != null && !!selected.info.worktree;
-
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
@@ -203,118 +199,95 @@ export function BranchPopover({
         sideOffset={4}
       >
         {view === 'list' && (
-          <div className="flex items-start gap-1.5">
-            <div className={cn(PANEL_CARD, 'w-[300px] shrink-0')}>
-              <BranchListView
-                local={localBranches}
-                remote={remoteNames}
-                worktrees={worktrees}
-                currentBranch={currentBranch}
-                selectedBranch={selected?.info.name}
-                search={search}
-                onSearch={setSearch}
-                onSelectBranch={(b) => {
-                  // Remote branches come in as non-worktree BranchInfos with no `worktree`
-                  // field, identified by checking against the remote name list.
-                  const isRemote = remoteNames.includes(b.name);
-                  handleSelectBranch(b, isRemote);
-                }}
-                onNewBranch={() => handleNewBranch()}
-                actions={{
-                  handleFetch,
-                  handleUpdateAll,
-                  handlePush,
-                  handleDeleteWorktree: handleDeleteWorktreeAction,
-                  handleNewSession,
-                }}
-                busy={busy}
-                busyAction={busyAction}
-                searchRef={searchRef}
-              />
-            </div>
-            {selected != null && (
-              <div className={cn(PANEL_CARD, 'w-[260px] shrink-0')}>
-                <BranchSubmenu
-                  branch={selected.info.name}
-                  isCurrent={selected.info.name === currentBranch}
-                  isRemote={selected.isRemote}
-                  isWorktree={isSelectedWorktree}
-                  onClose={closeSubmenu}
-                  onCheckout={(b) => {
-                    void handleCheckout(b).then(() => onBranchChanged?.());
-                  }}
-                  onPull={(b) => {
-                    void handlePull(b);
-                  }}
-                  onPush={(b) => {
-                    void handlePush(b);
-                  }}
-                  onMerge={(b) => {
-                    void handleMerge(b).then(() => onBranchChanged?.());
-                  }}
-                  onRebase={(b) => {
-                    void handleRebase(b).then(() => onBranchChanged?.());
-                  }}
-                  onRename={handleRenameRequest}
-                  onDelete={(b, isRemote) => {
-                    void handleDelete(b, isRemote).then(() => onBranchChanged?.());
-                  }}
-                  onNewBranchFrom={(b) => handleNewBranch(b)}
-                  onNewSession={
-                    isSelectedWorktree
-                      ? (b) => {
-                          handleNewSession(selected.info.worktree!, b);
-                        }
-                      : undefined
+          <BranchPopoverListPane
+            panelCard={PANEL_CARD}
+            localBranches={localBranches}
+            remoteNames={remoteNames}
+            worktrees={worktrees}
+            currentBranch={currentBranch}
+            selected={selected}
+            search={search}
+            onSearch={setSearch}
+            onSelectBranch={(b) => {
+              // Remote branches come in as non-worktree BranchInfos with no `worktree`
+              // field, identified by checking against the remote name list.
+              const isRemote = remoteNames.includes(b.name);
+              handleSelectBranch(b, isRemote);
+            }}
+            onNewBranch={() => handleNewBranch()}
+            listActions={{
+              handleFetch,
+              handleUpdateAll,
+              handlePush,
+              handleDeleteWorktree: handleDeleteWorktreeAction,
+              handleNewSession,
+            }}
+            busy={busy}
+            busyAction={busyAction}
+            searchRef={searchRef}
+            closeSubmenu={closeSubmenu}
+            onCheckout={(b) => {
+              void handleCheckout(b).then(() => onBranchChanged?.());
+            }}
+            onPull={(b) => {
+              void handlePull(b);
+            }}
+            onPush={(b) => {
+              void handlePush(b);
+            }}
+            onMerge={(b) => {
+              void handleMerge(b).then(() => onBranchChanged?.());
+            }}
+            onRebase={(b) => {
+              void handleRebase(b).then(() => onBranchChanged?.());
+            }}
+            onRename={handleRenameRequest}
+            onDelete={(b, isRemote) => {
+              void handleDelete(b, isRemote).then(() => onBranchChanged?.());
+            }}
+            onNewBranchFrom={(b) => handleNewBranch(b)}
+            onNewSession={
+              selected?.info.worktree
+                ? (b) => {
+                    handleNewSession(selected.info.worktree!, b);
                   }
-                  onDeleteWorktree={
-                    isSelectedWorktree
-                      ? (b) => {
-                          void handleDeleteWorktreeAction(selected.info.worktree!, b);
-                        }
-                      : undefined
+                : undefined
+            }
+            onDeleteWorktree={
+              selected?.info.worktree
+                ? (b) => {
+                    void handleDeleteWorktreeAction(selected.info.worktree!, b);
                   }
-                  busy={busy}
-                />
-              </div>
-            )}
-          </div>
+                : undefined
+            }
+          />
         )}
         {view !== 'list' && (
-          <div className={cn(PANEL_CARD, 'w-[300px]')}>
-            {view === 'new-branch' && (
-              <NewBranchDialog
-                localBranches={localBranches.map((b) => b.name)}
-                remoteBranches={remoteBranchInfos.map((b) => b.name)}
-                currentBranch={currentBranch}
-                startFrom={newBranchStartFrom}
-                onBack={goToList}
-                onCreate={handleCreate}
-              />
-            )}
-            {view === 'rename' && (
-              <RenameBranchView
-                target={renameTarget}
-                value={renameValue}
-                onChange={setRenameValue}
-                onSubmit={() => {
-                  void handleRenameSubmit();
-                }}
-                onCancel={goToList}
-                busy={busy}
-              />
-            )}
-            {view === 'conflict' && (
-              <ConflictView
-                conflictFiles={conflictFiles}
-                activeOperation={branches?.activeOperation}
-                onAbort={() => {
-                  void handleAbort().then(goToList);
-                }}
-                aborting={busyAction === 'abort'}
-              />
-            )}
-          </div>
+          <BranchPopoverOverlay
+            view={view}
+            panelCard={PANEL_CARD}
+            panelCardShell={PANEL_CARD_SHELL}
+            localBranches={localBranches.map((b) => b.name)}
+            remoteBranches={remoteBranchInfos.map((b) => b.name)}
+            currentBranch={currentBranch}
+            newBranchStartFrom={newBranchStartFrom}
+            onBack={goToList}
+            onCreate={handleCreate}
+            renameTarget={renameTarget}
+            renameValue={renameValue}
+            onRenameChange={setRenameValue}
+            onRenameSubmit={() => {
+              void handleRenameSubmit();
+            }}
+            onRenameCancel={goToList}
+            conflictFiles={conflictFiles}
+            activeOperation={branches?.activeOperation}
+            onAbort={() => {
+              void handleAbort().then(goToList);
+            }}
+            aborting={busyAction === 'abort'}
+            busy={busy}
+          />
         )}
       </PopoverContent>
     </Popover>

@@ -248,7 +248,7 @@ export function TagPopover({
                     onClick={() => void toggle(t.name)}
                     swatch={
                       <span
-                        className="size-1.5 shrink-0 rounded-full"
+                        className="size-[8px] shrink-0 rounded-full"
                         style={TAG_DOT_STYLE(t.color)}
                         aria-hidden="true"
                       />

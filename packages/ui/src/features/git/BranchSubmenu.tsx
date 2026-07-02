@@ -3,20 +3,7 @@
  * new-branch-from/rename/delete actions, plus optional worktree affordances.
  * Renders as a self-contained menu panel (positioned by the parent popover).
  */
-import {
-  ArrowLeft,
-  Check,
-  Download,
-  GitBranch,
-  GitMerge,
-  GitPullRequest,
-  Globe,
-  Loader2,
-  Pencil,
-  Plus,
-  Trash2,
-  Upload,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, GitBranch, Globe, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { MenuDivider, MenuRow } from '@/components/ui/menu';
 
 export interface BranchSubmenuProps {
@@ -88,21 +75,21 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
       },
       {
         label: `New Branch from '${label}'...`,
-        icon: <Plus />,
+        icon: <GitBranch />,
         testid: 'git-submenu-new-branch-from',
         action: () => onNewBranchFrom(branch),
       },
       { separator: true },
       {
         label: 'Merge into Current Branch',
-        icon: <GitMerge />,
+        icon: <ArrowDown />,
         testid: 'git-submenu-merge',
         action: () => onMerge(branch),
         disabled: busy,
       },
       {
         label: 'Rebase Current onto This',
-        icon: <GitPullRequest />,
+        icon: <ArrowUp />,
         testid: 'git-submenu-rebase',
         action: () => onRebase(branch),
         disabled: busy,
@@ -122,7 +109,7 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
   const items: MenuEntry[] = [
     {
       label: `New Branch from '${label}'...`,
-      icon: <Plus />,
+      icon: <GitBranch />,
       testid: 'git-submenu-new-branch-from',
       action: () => onNewBranchFrom(branch),
     },
@@ -136,14 +123,14 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     },
     {
       label: 'Pull',
-      icon: <Download />,
+      icon: <ArrowDown />,
       testid: 'git-submenu-pull',
       action: () => onPull(branch),
       disabled: isWorktree || busy,
     },
     {
       label: 'Push',
-      icon: <Upload />,
+      icon: <ArrowUp />,
       testid: 'git-submenu-push',
       action: () => onPush(branch),
       disabled: busy,
@@ -151,14 +138,14 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     { separator: true },
     {
       label: 'Merge into Current Branch',
-      icon: <GitMerge />,
+      icon: <ArrowDown />,
       testid: 'git-submenu-merge',
       action: () => onMerge(branch),
       disabled: isCurrent || busy,
     },
     {
       label: 'Rebase Current onto This',
-      icon: <GitPullRequest />,
+      icon: <ArrowUp />,
       testid: 'git-submenu-rebase',
       action: () => onRebase(branch),
       disabled: isCurrent || busy,
@@ -211,20 +198,13 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
 
   return (
     <div data-testid="git-submenu" className="min-w-[220px]">
+      {/* No back/close control (finding 10.9) — the submenu is dismissed by
+          re-clicking the already-selected branch row, wired in BranchPopover. */}
       <div className="px-1.5 py-1.5 border-b border-border flex items-center gap-1.5">
-        <button
-          data-testid="git-submenu-back"
-          type="button"
-          onClick={props.onClose}
-          aria-label="Back to branch list"
-          className="flex-shrink-0 inline-flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-accent text-muted-foreground transition-colors"
-        >
-          <ArrowLeft size={12} />
-        </button>
         {props.isRemote ? (
-          <Globe size={12} className="text-muted-foreground shrink-0" />
+          <Globe size={12} className="text-mf-text-3 shrink-0" />
         ) : (
-          <GitBranch size={12} className="text-muted-foreground shrink-0" />
+          <GitBranch size={12} className="text-mf-text-3 shrink-0" />
         )}
         <span className="flex-1 truncate font-mono text-label font-semibold text-foreground">{branch}</span>
         {busy && <Loader2 size={11} className="animate-spin text-muted-foreground shrink-0" />}

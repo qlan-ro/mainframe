@@ -22,7 +22,7 @@ function BranchDivergence({ ahead, behind }: { ahead?: number; behind?: number }
     return <span className="text-caption text-mf-text-4 shrink-0">up to date</span>;
   }
   return (
-    <span className="inline-flex items-center gap-[7px] font-mono text-caption text-muted-foreground shrink-0">
+    <span className="inline-flex items-center gap-[7px] font-mono text-caption text-mf-text-3 shrink-0">
       {(ahead ?? 0) > 0 && (
         <span className="inline-flex items-center gap-[1px] text-mf-success">
           <ArrowUp size={9} className="text-mf-success" />
@@ -57,8 +57,10 @@ export function BranchRow({
       onClick={() => onSelect(branch)}
       className={cn(
         'w-full flex items-center gap-2 px-2 py-1.5 text-left text-body rounded-sm transition-colors',
-        // Selected (submenu open beside the list) wins over the current-branch tint.
-        selected ? 'bg-mf-selection' : isCurrent ? 'bg-accent hover:bg-accent' : 'hover:bg-accent',
+        // Background is driven ONLY by `selected` (submenu-open state) → the neutral
+        // hover tint; a merely-current (checked-out) branch is transparent when not
+        // selected — only the checkmark + green dot distinguish it (findings 10.3/10.4).
+        selected ? 'bg-accent' : 'hover:bg-accent',
       )}
     >
       {/* Checkmark gutter — fixed ~13px wide */}
