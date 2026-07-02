@@ -13,6 +13,7 @@ export * from './launch.js';
 export * from './search.js';
 export * from './lsp.js';
 export * from './git.js';
+export * from './suggestion.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
 export * from './workflow.js';
