@@ -201,6 +201,39 @@ describe('ShikiCode', () => {
 // Theme invalidation: re-requests the highlighter when theme is invalidated
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Line-number gutter — showLineNumbers renders a right-aligned mono gutter
+// column to the left of each code line (design: 34px, text-4, pe-5=12px).
+// ---------------------------------------------------------------------------
+
+describe('ShikiCode line-number gutter', () => {
+  it('does not render a gutter by default (showLineNumbers unset)', () => {
+    render(<ShikiCode code={'a\nb'} lang="typescript" preClass="" />);
+    expect(document.querySelector('[data-slot="code-line-number"]')).toBeNull();
+  });
+
+  it('renders one line-number cell per line when showLineNumbers is true', () => {
+    render(<ShikiCode code={'a\nb\nc'} lang="typescript" preClass="" showLineNumbers />);
+    const numbers = document.querySelectorAll('[data-slot="code-line-number"]');
+    expect(numbers).toHaveLength(3);
+    expect(numbers[0]!.textContent).toBe('1');
+    expect(numbers[2]!.textContent).toBe('3');
+  });
+
+  it('gutter cells use the mf-text-4 token and mono font', () => {
+    render(<ShikiCode code="a" lang="typescript" preClass="" showLineNumbers />);
+    const cell = document.querySelector('[data-slot="code-line-number"]');
+    expect(cell!.className).toContain('text-mf-text-4');
+    expect(cell!.className).toContain('font-mono');
+  });
+
+  it('renders the gutter for the plain (pre-shiki) fallback path too', () => {
+    render(<ShikiCode code={'x\ny'} lang="unknownlang" preClass="" showLineNumbers />);
+    const numbers = document.querySelectorAll('[data-slot="code-line-number"]');
+    expect(numbers).toHaveLength(2);
+  });
+});
+
 it('re-requests the highlighter when the theme is invalidated', async () => {
   const spy = vi.spyOn(hl, 'getShikiHighlighter').mockResolvedValue({
     // minimal stub

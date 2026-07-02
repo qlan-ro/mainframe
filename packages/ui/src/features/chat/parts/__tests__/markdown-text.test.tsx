@@ -22,7 +22,7 @@ import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
 // Import the component under test (no bridge mock needed — HostProvider provides the host).
-import { markdownComponents } from '../markdown-text';
+import { markdownComponents, MARKDOWN_ROOT_CLASS } from '../markdown-text';
 import { CodeHeader } from '../CodeHeader';
 import { SyntaxHighlighter } from '../syntax-highlight';
 
@@ -306,5 +306,179 @@ describe('fenced code block container', () => {
     expect(pre!.className).toContain('border-border');
     // header's bottom border is the divider — the pre must not double it
     expect(pre!.className).toContain('border-t-0');
+  });
+
+  it('SyntaxHighlighter renders a line-number gutter cell per line', () => {
+    const components = {} as unknown as SyntaxHighlighterProps['components'];
+    const { container } = render(
+      <SyntaxHighlighter code={'line one\nline two'} language="ts" components={components} />,
+    );
+    const numbers = container.querySelectorAll('[data-slot="code-line-number"]');
+    expect(numbers.length).toBeGreaterThan(0);
+  });
+
+  it('CodeHeader language label is uppercase, not lowercase', () => {
+    const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
+    const label = container.querySelector('span');
+    expect(label!.className).toContain('uppercase');
+    expect(label!.className).not.toContain('lowercase');
+  });
+
+  it('CodeHeader copy button shows a visible "Copy" text label', () => {
+    const { getByTestId } = render(<CodeHeader language="ts" code="const x = 1;" />);
+    const button = getByTestId('chat-code-copy');
+    expect(button.textContent).toContain('Copy');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task-list checkbox (remark-gfm) — bespoke checkbox visual, not raw <input>.
+// ---------------------------------------------------------------------------
+
+const Li = markdownComponents.li as React.ComponentType<
+  React.LiHTMLAttributes<HTMLLIElement> & { className?: string }
+>;
+const MdInput = (markdownComponents as Record<string, unknown>).input as
+  | React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>
+  | undefined;
+
+describe('markdownComponents task-list checkbox', () => {
+  it('renders a checked-state checkbox with the custom checkbox class, not a bare native checkbox', () => {
+    expect(MdInput).toBeDefined();
+    const Comp = MdInput as React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>;
+    const { container } = render(<Comp type="checkbox" checked readOnly disabled />);
+    const box = container.querySelector('[data-slot="md-task-checkbox"]');
+    expect(box).not.toBeNull();
+    expect(box!.getAttribute('data-checked')).toBe('true');
+  });
+
+  it('unchecked task item renders data-checked="false"', () => {
+    const Comp = MdInput as React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>;
+    const { container } = render(<Comp type="checkbox" checked={false} readOnly disabled />);
+    const box = container.querySelector('[data-slot="md-task-checkbox"]');
+    expect(box!.getAttribute('data-checked')).toBe('false');
+  });
+
+  it('a task-list <li> applies line-through styling to its checked label via data attribute', () => {
+    const Comp = MdInput as React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>;
+    const { container } = render(
+      <ul>
+        <Li className="task-list-item">
+          <Comp type="checkbox" checked readOnly disabled />
+          done thing
+        </Li>
+      </ul>,
+    );
+    const li = container.querySelector('li');
+    expect(li!.className).toContain('aui-md-li-task');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ordered/unordered list markers — custom mono index / dot, not browser markers.
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents list markers', () => {
+  const Ul = markdownComponents.ul as React.ComponentType<React.HTMLAttributes<HTMLUListElement>>;
+  const Ol = markdownComponents.ol as React.ComponentType<React.OlHTMLAttributes<HTMLOListElement>>;
+
+  it('ul does not use browser list-disc markers (replaced by a custom dot)', () => {
+    const { container } = render(<Ul><Li>item</Li></Ul>);
+    const ul = container.querySelector('ul');
+    expect(ul!.className).not.toContain('list-disc');
+  });
+
+  it('ol does not use browser list-decimal markers (replaced by a custom mono index)', () => {
+    const { container } = render(<Ol><Li>item</Li></Ol>);
+    const ol = container.querySelector('ol');
+    expect(ol!.className).not.toContain('list-decimal');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inline code chip — warm-brown token, xs radius (not the code-block tokens).
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents inline code', () => {
+  const Code = markdownComponents.code as React.ComponentType<React.ComponentProps<'code'>>;
+
+  it('uses bg-mf-raised (not the block-code bg token) — no dedicated warm-brown fg token exists, see report', () => {
+    const { container } = render(<Code>x</Code>);
+    const code = container.querySelector('code');
+    expect(code!.className).toContain('bg-mf-raised');
+    expect(code!.className).not.toContain('bg-mf-code-bg');
+    expect(code!.className).not.toContain('text-mf-code-fg');
+  });
+
+  it('uses rounded-xs (4px), not rounded-sm (6px)', () => {
+    const { container } = render(<Code>x</Code>);
+    const code = container.querySelector('code');
+    expect(code!.className).toContain('rounded-xs');
+    expect(code!.className).not.toContain('rounded-sm');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blockquote left padding — ps-3.5 (14px), not ps-3 (6px, compressed scale).
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents blockquote padding', () => {
+  const Bq = markdownComponents.blockquote as React.ComponentType<React.BlockquoteHTMLAttributes<HTMLElement>>;
+
+  it('uses ps-3.5 (14px fractional rung), not the compressed ps-3 (6px)', () => {
+    const { container } = render(<Bq>quoted text</Bq>);
+    const bq = container.querySelector('blockquote');
+    expect(bq!.className).toContain('ps-3.5');
+    expect(bq!.className).not.toContain('ps-3 ');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Heading top margins — flat mt-0.5 across h1-h4, not a per-level scale.
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents heading top margins', () => {
+  const H1 = markdownComponents.h1 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+  const H2 = markdownComponents.h2 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+  const H3 = markdownComponents.h3 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+  const H4 = markdownComponents.h4 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+
+  it('h1-h4 all share the same flat top-margin utility', () => {
+    const { container: c1 } = render(<H1>a</H1>);
+    const { container: c2 } = render(<H2>a</H2>);
+    const { container: c3 } = render(<H3>a</H3>);
+    const { container: c4 } = render(<H4>a</H4>);
+    const classes = [c1, c2, c3, c4].map((c) => c.querySelector('h1,h2,h3,h4')!.className);
+    for (const cls of classes) {
+      expect(cls).toContain('mt-0.5');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Link underline — faint accent-toned decoration, not a solid full-opacity one.
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents link underline', () => {
+  it('LinkWithPreview with no href uses a faint border-bottom rule, not a solid text-decoration underline', () => {
+    const A = markdownComponents.a as React.ComponentType<React.AnchorHTMLAttributes<HTMLAnchorElement>>;
+    const { container } = render(<A>bare</A>);
+    const a = container.querySelector('a');
+    expect(a!.className).toContain('border-b');
+    expect(a!.className).toContain('border-primary/40');
+    expect(a!.className).toContain('no-underline');
+    const classTokens = a!.className.split(/\s+/);
+    expect(classTokens).not.toContain('underline');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Markdown body tracking — tracking-tight applied to the .aui-md container.
+// ---------------------------------------------------------------------------
+
+describe('MarkdownText container tracking', () => {
+  it('exports MARKDOWN_ROOT_CLASS with tracking-tight applied', () => {
+    expect(MARKDOWN_ROOT_CLASS).toContain('tracking-tight');
+    expect(MARKDOWN_ROOT_CLASS).toContain('aui-md');
   });
 });

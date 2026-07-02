@@ -90,6 +90,20 @@ export function TokenLine({ tokens, addNewline }: { tokens: ThemedToken[]; addNe
   );
 }
 
+// ── Line-number gutter ────────────────────────────────────────────────────────
+// Design: a 34px, right-aligned, mono 10px, `T.text4` gutter column to the
+// left of each code line (padding-right: 12px = the `pe-5` compressed rung).
+
+const GUTTER_CLASS = 'inline-block w-[34px] shrink-0 pe-5 text-right font-mono text-micro text-mf-text-4 select-none';
+
+function LineNumberGutter({ n }: { n: number }) {
+  return (
+    <span data-slot="code-line-number" className={GUTTER_CLASS}>
+      {n}
+    </span>
+  );
+}
+
 // ── ShikiCode ─────────────────────────────────────────────────────────────────
 
 interface ShikiCodeProps {
@@ -97,6 +111,8 @@ interface ShikiCodeProps {
   lang: string | undefined;
   /** Tailwind / CSS class string applied to the outer `<pre>` element. */
   preClass: string;
+  /** Renders a right-aligned line-number gutter to the left of each line. */
+  showLineNumbers?: boolean;
 }
 
 /**
@@ -106,24 +122,50 @@ interface ShikiCodeProps {
  * Pass `preClass` to control all visual styling — the component itself applies
  * no theme tokens so each consumer can use its own pre class.
  */
-export function ShikiCode({ code, lang, preClass }: ShikiCodeProps) {
+export function ShikiCode({ code, lang, preClass, showLineNumbers }: ShikiCodeProps) {
   const lines = useShikiTokens(code, lang);
 
   if (lines) {
     return (
       <pre className={preClass}>
         <code>
-          {lines.map((tokens, i) => (
-            <TokenLine key={i} tokens={tokens} addNewline={i < lines.length - 1} />
-          ))}
+          {lines.map((tokens, i) =>
+            showLineNumbers ? (
+              <span key={i} className="flex">
+                <LineNumberGutter n={i + 1} />
+                <TokenLine tokens={tokens} addNewline={i < lines.length - 1} />
+              </span>
+            ) : (
+              <TokenLine key={i} tokens={tokens} addNewline={i < lines.length - 1} />
+            ),
+          )}
         </code>
       </pre>
     );
   }
 
+  if (!showLineNumbers) {
+    return (
+      <pre className={preClass}>
+        <code>{code}</code>
+      </pre>
+    );
+  }
+
+  const plainLines = code.split('\n');
   return (
     <pre className={preClass}>
-      <code>{code}</code>
+      <code>
+        {plainLines.map((line, i) => (
+          <span key={i} className="flex">
+            <LineNumberGutter n={i + 1} />
+            <span className="block">
+              {line}
+              {i < plainLines.length - 1 && '\n'}
+            </span>
+          </span>
+        ))}
+      </code>
     </pre>
   );
 }

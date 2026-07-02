@@ -18,7 +18,7 @@ const PRE_CLASS = cn(
 );
 
 export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ code, language }) => (
-  <ShikiCode code={code} lang={language} preClass={PRE_CLASS} />
+  <ShikiCode code={code} lang={language} preClass={PRE_CLASS} showLineNumbers />
 );
 
 SyntaxHighlighter.displayName = 'SyntaxHighlighter';

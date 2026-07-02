@@ -8,6 +8,8 @@
  *   - markdownComponents: warm-chrome styled component overrides
  *   - SyntaxHighlighter slot: shiki-based token highlighter on mf-code-* tokens
  *   - CodeHeader slot: language label + copy button (data-testid chat-code-copy)
+ *   - markdown-lists.tsx: ul/ol/li markers + task-list checkbox visual
+ *   - markdown-table.tsx: table/thead/th/td/tr components
  *
  * Code-block layout follows the native single path:
  *   primitive detects fenced block → calls CodeHeader slot, then SyntaxHighlighter slot.
@@ -32,6 +34,8 @@ import { useHost } from '@/lib/host';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
+import { MarkdownUl, MarkdownOl, MarkdownLi, MarkdownTaskCheckbox } from './markdown-lists';
+import { MarkdownTable, MarkdownThead, MarkdownTh, MarkdownTd, MarkdownTr } from './markdown-table';
 
 // ── Inline code ───────────────────────────────────────────────────────────────
 // Handles only inline `code` spans. Fenced code blocks are handled by the
@@ -55,8 +59,11 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
     <code
       className={cn(
         'aui-md-inline-code',
-        'bg-mf-code-bg text-mf-code-fg',
-        'rounded-sm border border-border px-1.5 py-0.5',
+        // NOTE: design calls for a dedicated warm-brown fg (#7a4d2a) — no such
+        // token exists in globals.css (flagged in area-04-report.md); falls
+        // back to the readable default ink on the correct `mf-raised` bg.
+        'bg-mf-raised text-foreground',
+        'rounded-xs border border-border px-1.5 py-0.5',
         'font-mono text-caption',
         className,
       )}
@@ -64,50 +71,6 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
     >
       {children}
     </code>
-  );
-}
-
-// ── Table components ─────────────────────────────────────────────────────────
-
-function MarkdownTable({ children, ...props }: React.ComponentProps<'table'>) {
-  return (
-    <div className="rounded-md border border-border overflow-hidden my-3">
-      <table className="w-full border-collapse text-body" {...props}>
-        {children}
-      </table>
-    </div>
-  );
-}
-
-function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
-  return (
-    <thead className="bg-mf-content2" {...props}>
-      {children}
-    </thead>
-  );
-}
-
-function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
-  return (
-    <th className="font-sans text-label font-bold text-muted-foreground px-3 py-2 text-left" {...props}>
-      {children}
-    </th>
-  );
-}
-
-function MarkdownTd({ children, ...props }: React.ComponentProps<'td'>) {
-  return (
-    <td className="font-sans text-label text-foreground px-3 py-2 border-t border-border" {...props}>
-      {children}
-    </td>
-  );
-}
-
-function MarkdownTr({ children, ...props }: React.ComponentProps<'tr'>) {
-  return (
-    <tr className="even:bg-mf-content2" {...props}>
-      {children}
-    </tr>
   );
 }
 
@@ -155,8 +118,11 @@ function LinkWithPreview({
     [href, host],
   );
 
+  // Design: a faint border-bottom rule (not a solid text-decoration underline).
+  const LINK_RULE_CLASS = 'aui-md-a text-primary no-underline border-b border-primary/40';
+
   if (!href) {
-    return <a className={cn('aui-md-a text-primary underline underline-offset-2', className)} {...props} />;
+    return <a className={cn(LINK_RULE_CLASS, className)} {...props} />;
   }
 
   return (
@@ -165,11 +131,7 @@ function LinkWithPreview({
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
             <a
-              className={cn(
-                'aui-md-a text-primary underline underline-offset-2',
-                'hover:opacity-80 transition-opacity cursor-pointer',
-                className,
-              )}
+              className={cn(LINK_RULE_CLASS, 'hover:opacity-80 transition-opacity cursor-pointer', className)}
               href={href}
               onClick={handleOpen}
               {...props}
@@ -207,17 +169,19 @@ function LinkWithPreview({
 // ── Component map ─────────────────────────────────────────────────────────────
 
 export const markdownComponents = unstable_memoizeMarkdownComponents({
+  // Design: all heading levels share one flat top margin (mt-0.5); size alone
+  // differentiates level — no per-level margin scale.
   h1: ({ className, ...props }) => (
-    <h1 className={cn('aui-md-h1 text-title font-bold mt-4 mb-2 first:mt-0', className)} {...props} />
+    <h1 className={cn('aui-md-h1 text-title font-bold mt-0.5 mb-2 first:mt-0', className)} {...props} />
   ),
   h2: ({ className, ...props }) => (
-    <h2 className={cn('aui-md-h2 text-heading font-bold mt-3 mb-1.5 first:mt-0', className)} {...props} />
+    <h2 className={cn('aui-md-h2 text-heading font-bold mt-0.5 mb-1.5 first:mt-0', className)} {...props} />
   ),
   h3: ({ className, ...props }) => (
-    <h3 className={cn('aui-md-h3 text-body font-bold mt-2.5 mb-1 first:mt-0', className)} {...props} />
+    <h3 className={cn('aui-md-h3 text-body font-bold mt-0.5 mb-1 first:mt-0', className)} {...props} />
   ),
   h4: ({ className, ...props }) => (
-    <h4 className={cn('aui-md-h4 text-body font-semibold mt-2 mb-1 first:mt-0', className)} {...props} />
+    <h4 className={cn('aui-md-h4 text-body font-semibold mt-0.5 mb-1 first:mt-0', className)} {...props} />
   ),
   p: ({ className, ...props }) => (
     <p className={cn('aui-md-p my-2.5 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
@@ -227,25 +191,16 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
     <blockquote
       className={cn(
         'aui-md-blockquote border-s-[3px] border-primary/40 text-muted-foreground',
-        'my-2.5 ps-3 italic',
+        'my-2.5 ps-3.5 italic',
         className,
       )}
       {...props}
     />
   ),
-  ul: ({ className, ...props }) => (
-    <ul
-      className={cn('aui-md-ul marker:text-muted-foreground my-2 ms-4 list-disc [&>li]:mt-1', className)}
-      {...props}
-    />
-  ),
-  ol: ({ className, ...props }) => (
-    <ol
-      className={cn('aui-md-ol marker:text-muted-foreground my-2 ms-4 list-decimal [&>li]:mt-1', className)}
-      {...props}
-    />
-  ),
-  li: ({ className, ...props }) => <li className={cn('aui-md-li leading-relaxed', className)} {...props} />,
+  ul: MarkdownUl,
+  ol: MarkdownOl,
+  li: MarkdownLi,
+  input: MarkdownTaskCheckbox as FC<React.ComponentProps<'input'>>,
   hr: ({ className, ...props }) => <hr className={cn('aui-md-hr border-border my-0.5', className)} {...props} />,
   table: MarkdownTable,
   thead: MarkdownThead,
@@ -271,6 +226,9 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
 
 const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkAppLinks];
 
+// Design: the whole markdown block sets a uniform tight letter-spacing.
+export const MARKDOWN_ROOT_CLASS = 'aui-md tracking-tight';
+
 // ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
 
 const MarkdownTextImpl: TextMessagePartComponent = () => {
@@ -280,7 +238,7 @@ const MarkdownTextImpl: TextMessagePartComponent = () => {
   return (
     <div data-text-part>
       <MarkdownTextPrimitive
-        className="aui-md"
+        className={MARKDOWN_ROOT_CLASS}
         remarkPlugins={REMARK_PLUGINS}
         urlTransform={urlTransform}
         components={markdownComponents}
