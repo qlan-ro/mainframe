@@ -37,7 +37,14 @@ export function ConnectionOverlay({
     <div
       className="absolute inset-0 z-[11000] flex items-center justify-center"
       style={{
-        background: 'var(--mf-glass)',
+        // Bespoke lower-opacity warm scrim (design 14-windowstates.jsx:145,
+        // rgba(233,231,226,0.62)) — distinct from --mf-glass (the
+        // titlebar/sidebar chrome-glass token, which is the same base hue at
+        // 0.84 alpha). --mf-window (#e9e7e2) is an exact RGB match for the
+        // design value, so we derive the 0.62-alpha scrim from it via
+        // color-mix rather than hardcoding a light-only rgba (keeps the
+        // scrim theme-adaptive across all 6 mf-* theme variants).
+        background: 'color-mix(in srgb, var(--mf-window) 62%, transparent)',
         backdropFilter: 'blur(10px) saturate(120%)',
         WebkitBackdropFilter: 'blur(10px) saturate(120%)',
       }}
@@ -70,7 +77,7 @@ function Card({ title, subtitle, testId }: { title: string; subtitle: string; te
 function Spinner(): React.ReactElement {
   return (
     <div className="relative w-[46px] h-[46px]">
-      <div className="absolute inset-0 rounded-full" style={{ border: '2px solid var(--border)' }} />
+      <div className="absolute inset-0 rounded-full" style={{ border: '2px solid var(--mf-chip)' }} />
       <div
         className="absolute inset-0 rounded-full border-2 border-transparent animate-[tw-spin_0.9s_linear_infinite]"
         style={{

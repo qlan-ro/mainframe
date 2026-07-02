@@ -83,6 +83,17 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
   const chip = CHIP_CONFIG[type];
   const isAuto = type !== 'error';
   const [hover, setHover] = useState(false);
+  // Post-mount RAF-driven entrance: starts hidden/offset, flips to visible on
+  // the next frame so the opacity/transform transition below actually animates.
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf2);
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, []);
 
   // auto-dismiss for non-error toasts; pause while hovered
   useEffect(() => {
@@ -97,6 +108,11 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
       data-testid="toast-root"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      style={{
+        opacity: entered ? 1 : 0,
+        transform: entered ? 'translateY(0)' : 'translateY(4px)',
+        transition: 'opacity 0.24s ease, transform 0.24s var(--ease-signature)',
+      }}
       className={cn(
         'relative w-[332px] flex items-start gap-[10px]',
         'pt-[11px] px-[12px] pb-[12px]',
@@ -118,9 +134,9 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
 
       {/* text column */}
       <div className="flex-1 min-w-0">
-        <div className="text-body font-semibold text-foreground tracking-tight">{title}</div>
+        <div className="text-body font-semibold text-foreground tracking-[-0.1px]">{title}</div>
         {description && (
-          <div className="text-label text-muted-foreground mt-[3px] leading-normal max-h-[88px] overflow-auto [overflow-wrap:anywhere]">
+          <div className="text-label text-muted-foreground mt-[3px] leading-[1.45] max-h-[88px] overflow-auto [overflow-wrap:anywhere]">
             {description}
           </div>
         )}
@@ -164,7 +180,7 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
         className={cn(
           'w-[20px] h-[20px] shrink-0 rounded-[6px] inline-flex items-center justify-center',
           'border-none bg-transparent cursor-pointer',
-          'opacity-40 hover:opacity-85 hover:bg-muted/60 transition-opacity',
+          'opacity-40 hover:opacity-85 hover:bg-accent transition-opacity',
         )}
       >
         <X size={11} aria-hidden />

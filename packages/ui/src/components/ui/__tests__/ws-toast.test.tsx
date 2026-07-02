@@ -145,6 +145,27 @@ describe('WsToastCard', () => {
     expect(container.querySelector('[data-testid="toast-countdown-rail"]')).toBeTruthy();
   });
 
+  it('mounts with the entrance state (hidden) before the post-mount RAF fires', () => {
+    vi.useFakeTimers();
+    render(<WsToastCard id="t1" type="success" title="Done" onDismiss={vi.fn()} />);
+    const root = screen.getByTestId('toast-root');
+    expect(root.style.opacity).toBe('0');
+    vi.useRealTimers();
+  });
+
+  it('transitions to the entered state (visible) using the ease-signature curve after mount', () => {
+    vi.useFakeTimers();
+    render(<WsToastCard id="t1" type="success" title="Done" onDismiss={vi.fn()} />);
+    const root = screen.getByTestId('toast-root');
+    act(() => {
+      // rAF-driven entrance — flush the double-rAF used to trigger the transition
+      vi.runAllTimers();
+    });
+    expect(root.style.opacity).toBe('1');
+    expect(root.style.transition).toContain('var(--ease-signature)');
+    vi.useRealTimers();
+  });
+
   it('error variant: auto-dismiss does not fire after 4200ms', () => {
     vi.useFakeTimers();
     const onDismiss = vi.fn();

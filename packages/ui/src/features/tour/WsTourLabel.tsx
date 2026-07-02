@@ -41,10 +41,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
           <span className="inline-flex w-[20px] h-[20px] rounded-[6px] bg-primary/12 text-primary items-center justify-center">
             <Sparkles size={12} />
           </span>
-          <span
-            className="text-caption font-semibold text-muted-foreground uppercase"
-            style={{ letterSpacing: '0.5px' }}
-          >
+          <span className="text-caption font-semibold text-mf-text-3 uppercase" style={{ letterSpacing: '0.5px' }}>
             Step {idx + 1} of {total}
           </span>
         </div>
@@ -71,7 +68,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
                   width: i === idx ? 16 : 6,
                   height: 6,
                   borderRadius: 4,
-                  background: i === idx ? 'var(--primary)' : 'var(--border)',
+                  background: i === idx ? 'var(--primary)' : 'var(--mf-text-4)',
                 }}
               />
             ))}
@@ -82,7 +79,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
             <button
               data-testid="tour-back-btn"
               onClick={onBack}
-              className="h-[28px] px-[12px] rounded-[8px] border-[0.5px] border-border bg-card text-muted-foreground text-label font-medium"
+              className="h-[28px] px-[12px] rounded-[8px] border-[0.5px] border-border bg-card text-muted-foreground text-label font-[550]"
             >
               Back
             </button>
