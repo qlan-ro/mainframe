@@ -7,13 +7,14 @@
  * Run path: direct run only (no inputs form — WorkflowSummary doesn't yet
  * expose declared inputs; that is deferred to when the daemon adds that field).
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus, Play, Pencil, Calendar, Zap, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkflowsStore } from './use-workflows-store';
 import { useWorkflowsModal } from './use-workflows-modal';
 import * as wfApi from '@/lib/api/workflows';
 import { getRunStatusMeta, formatAgo } from './glyphs';
+import { useProjects } from '@/features/sessions/use-projects';
 import type { WorkflowSummary, WorkflowRunSummary } from '@qlan-ro/mainframe-types';
 
 // ── Trigger kind → icon + default label map ────────────────────────────────────
@@ -62,9 +63,10 @@ interface WfLibraryRowProps {
   wf: WorkflowSummary;
   lastRun: WorkflowRunSummary | undefined;
   port: number;
+  projectName?: string;
 }
 
-function WfLibraryRow({ wf, lastRun, port }: WfLibraryRowProps): React.ReactElement {
+function WfLibraryRow({ wf, lastRun, port, projectName }: WfLibraryRowProps): React.ReactElement {
   const { openRun, openEditor } = useWorkflowsModal();
   const [running, setRunning] = useState(false);
 
@@ -101,7 +103,7 @@ function WfLibraryRow({ wf, lastRun, port }: WfLibraryRowProps): React.ReactElem
               isGlobal ? 'bg-[#7a4d9e]/10 text-[#7a4d9e]' : 'bg-primary/10 text-primary',
             )}
           >
-            {isGlobal ? 'Global' : 'Project'}
+            {isGlobal ? 'Global' : (projectName ?? 'Project')}
           </span>
         </div>
 
@@ -182,6 +184,12 @@ export function WfLibrary({ port }: WfLibraryProps): React.ReactElement {
   const workflows = useWorkflowsStore((s) => s.workflows);
   const runs = useWorkflowsStore((s) => s.runs);
   const [scope, setScope] = useState<ScopeFilter>('all');
+  const { projects } = useProjects();
+
+  const projectNameOf = useMemo(() => {
+    const map = new Map(projects.map((p) => [p.id, p.name]));
+    return (projectId: string): string => map.get(projectId) ?? projectId;
+  }, [projects]);
 
   const shown = workflows.filter((w) => {
     if (scope === 'all') return true;
@@ -229,7 +237,13 @@ export function WfLibrary({ port }: WfLibraryProps): React.ReactElement {
       {/* Rows */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {shown.map((wf) => (
-          <WfLibraryRow key={wf.id} wf={wf} lastRun={getLastRun(wf.id)} port={port} />
+          <WfLibraryRow
+            key={wf.id}
+            wf={wf}
+            lastRun={getLastRun(wf.id)}
+            port={port}
+            projectName={wf.projectId ? projectNameOf(wf.projectId) : undefined}
+          />
         ))}
         {shown.length === 0 && <p className="p-6 text-body text-muted-foreground">No workflows found.</p>}
       </div>

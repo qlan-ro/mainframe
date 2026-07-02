@@ -14,6 +14,15 @@ vi.mock('@/lib/api/workflows', () => ({
   rescanWorkflows: vi.fn(),
 }));
 
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({
+    projects: [{ id: 'proj-123', name: 'my-app' }],
+    loading: false,
+    reloadProjects: vi.fn(),
+    removeProjectFromList: vi.fn(),
+  }),
+}));
+
 import * as wfApi from '@/lib/api/workflows';
 
 import { useWorkflowsStore } from '@/features/workflows/use-workflows-store';
@@ -204,6 +213,15 @@ describe('WfLibrary', () => {
     seedStore([wf]);
     render(<WfLibrary port={31415} />);
     expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Webhook/i);
+  });
+
+  // ── Project scope pill resolves the real project name ──────────────────────
+
+  it('project-scoped row shows the resolved project name, not the literal "Project"', () => {
+    seedStore([projectWf]);
+    render(<WfLibrary port={31415} />);
+    const row = screen.getByTestId(`workflows-library-row-${projectWf.id}`);
+    expect(row.textContent).toContain('my-app');
   });
 
   // ── Global scope pill uses muted purple (#7a4d9e), NOT bright purple-600 ────
