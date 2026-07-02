@@ -6,6 +6,7 @@
  * centered, max-width column. The composer sits in a `ViewportFooter` so its
  * height registers as scroll inset (the last message never hides behind it).
  */
+import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { boundedMessageComponents } from '../messages/bounded-messages';
@@ -61,8 +62,9 @@ function GeneratingIndicator() {
   );
 }
 
-export function ChatThread() {
+export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   useFindHotkey();
+  const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
   return (
     <ComposerEditProvider>
       <SkillsProvider>
@@ -81,6 +83,7 @@ export function ChatThread() {
           >
             <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
               <LoadErrorBanner />
+              {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
               <ChatGateMount />
             </div>
