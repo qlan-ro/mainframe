@@ -114,15 +114,16 @@ interface WfStatusTagProps {
  */
 export function WfStatusTag({ status, kind }: WfStatusTagProps): React.ReactElement {
   const meta = kind === 'run' ? getRunStatusMeta(status) : getStepStatusMeta(status);
-  const isMuted = status === 'cancelled' || status === 'skipped';
 
   return (
     <span
       className={cn(
         'inline-flex items-center gap-[5px] h-[19px] px-[8px] rounded-full',
         'text-micro font-bold uppercase tracking-wide whitespace-nowrap',
-        // Low-opacity background tint derived from the color token (prototype ~0.13)
-        isMuted ? 'bg-muted' : 'bg-current/[0.13]',
+        // Low-opacity background tint derived from the color token (prototype ~0.13).
+        // Skipped/cancelled use `meta.colorClass` (text-mf-text-4/text-mf-text-3), so
+        // this yields a faint tint of THEIR OWN muted color, not a flat bg-muted.
+        'bg-current/[0.13]',
         meta.colorClass,
       )}
     >

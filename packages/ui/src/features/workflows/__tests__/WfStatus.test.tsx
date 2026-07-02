@@ -49,6 +49,13 @@ describe('WfStatusTag (step)', () => {
     render(<WfStatusTag status="waiting" kind="step" />);
     expect(screen.getByText('Waiting')).toBeInTheDocument();
   });
+
+  it('skipped tag uses a color tint, not flat bg-muted', () => {
+    const { container } = render(<WfStatusTag status="skipped" kind="step" />);
+    const tag = container.firstChild as HTMLElement;
+    expect(tag.className).toContain('bg-current/[0.13]');
+    expect(tag.className).not.toContain('bg-muted');
+  });
 });
 
 describe('WfStatusTag (run)', () => {
