@@ -306,3 +306,34 @@ describe('WorktreePopover — trigger shape', () => {
     expect(svg!.getAttribute('height')).toBe('13');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 10. Isolated-state indicator — absolute 5px corner dot (design 03-content.jsx:602),
+//     matching the FeaturesPopover treatment, not an inline Check glyph.
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — isolated-state indicator', () => {
+  it('renders an absolute 5px corner dot when isolated, not a Check icon', () => {
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat);
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    const dot = trigger.querySelector('span[aria-hidden]');
+    expect(dot).not.toBeNull();
+    expect(dot!.className).toContain('absolute');
+    expect(dot!.className).toContain('size-[5px]');
+    expect(dot!.className).toContain('rounded-full');
+
+    // No Check glyph (lucide Check renders a <svg> with a polyline path) inside the trigger
+    const svgs = trigger.querySelectorAll('svg');
+    expect(svgs.length).toBe(1); // only GitFork
+  });
+
+  it('does NOT render the corner dot when not isolated', () => {
+    renderPopover(makeChat());
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    const dot = trigger.querySelector('span[aria-hidden]');
+    expect(dot).toBeNull();
+  });
+});

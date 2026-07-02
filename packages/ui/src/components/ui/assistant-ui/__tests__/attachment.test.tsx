@@ -6,7 +6,7 @@
  * Parity finding 8.1/8.6 (2026-07-02-design-parity-drift-audit.md §8).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -57,5 +57,22 @@ describe('ComposerAddMention — dedicated @ toolbar button', () => {
     renderWithTooltip(<ComposerAddMention />);
     await userEvent.click(screen.getByTestId('composer-add-mention'));
     expect(setTextSpy).toHaveBeenCalledWith('@');
+  });
+
+  it('prevents default on mousedown so the composer textarea never loses focus', () => {
+    renderWithTooltip(<ComposerAddMention />);
+    const btn = screen.getByTestId('composer-add-mention');
+    const event = fireEvent.mouseDown(btn);
+    // fireEvent returns false when preventDefault() was called on the dispatched event
+    expect(event).toBe(false);
+  });
+});
+
+describe('ComposerAddAttachment — focus guard', () => {
+  it('prevents default on mousedown so the composer textarea never loses focus', () => {
+    renderWithTooltip(<ComposerAddAttachment />);
+    const btn = screen.getByTestId('composer-add-attachment');
+    const event = fireEvent.mouseDown(btn);
+    expect(event).toBe(false);
   });
 });

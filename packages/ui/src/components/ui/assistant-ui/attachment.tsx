@@ -182,6 +182,7 @@ export const ComposerAddAttachment: FC = () => {
         variant="ghost"
         size="icon"
         aria-label="Add Attachment"
+        onMouseDown={(e) => e.preventDefault()}
         className="size-[22px] rounded-sm p-1 text-mf-text-3 hover:text-foreground"
       >
         <Paperclip className="size-3 stroke-[1.5px]" />
@@ -211,6 +212,7 @@ export const ComposerAddMention: FC = () => {
       size="icon"
       aria-label="Mention a file or agent"
       onClick={handleClick}
+      onMouseDown={(e) => e.preventDefault()}
       className="size-[22px] rounded-sm p-1 text-mf-text-3 hover:text-foreground"
     >
       <AtSignIcon className="size-3 stroke-[1.5px]" />

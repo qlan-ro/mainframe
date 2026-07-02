@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, GitFork, Loader2 } from 'lucide-react';
+import { AlertTriangle, GitFork, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -160,7 +160,9 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
               ].join(' ')}
             >
               <GitFork size={13} />
-              {isIsolated && <Check size={9} className="shrink-0" aria-hidden />}
+              {isIsolated && (
+                <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-mf-success" aria-hidden />
+              )}
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
