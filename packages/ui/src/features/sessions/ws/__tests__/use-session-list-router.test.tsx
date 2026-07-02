@@ -35,6 +35,7 @@ let filterProjectIdValue: string | null;
 let mainThreadIdValue: string | null;
 let lastSessionIdValue: string | null;
 let setLastSessionIdSpy: ReturnType<typeof vi.fn>;
+let setLastForProjectSpy: ReturnType<typeof vi.fn>;
 let fakeThreadItems: Array<{
   id: string;
   remoteId: string;
@@ -88,7 +89,14 @@ vi.mock('../../../../store/session-filters', () => ({
 
 vi.mock('../../../../store/last-session', () => ({
   useLastSessionStore: Object.assign(vi.fn(), {
-    getState: () => ({ lastSessionId: lastSessionIdValue, setLastSessionId: setLastSessionIdSpy }),
+    getState: () => ({
+      lastSessionId: lastSessionIdValue,
+      setLastSessionId: setLastSessionIdSpy,
+      // Active-thread change persists BOTH the global last session and the
+      // per-project last session (use-session-list-router calls setLastForProject
+      // when the active thread carries a projectId).
+      setLastForProject: setLastForProjectSpy,
+    }),
   }),
 }));
 
@@ -131,6 +139,7 @@ beforeEach(() => {
   mainThreadIdValue = null;
   lastSessionIdValue = null;
   setLastSessionIdSpy = vi.fn();
+  setLastForProjectSpy = vi.fn();
   fakeThreadItems = [];
   factoryCallCount = 0;
 });

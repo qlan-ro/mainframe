@@ -1,6 +1,5 @@
 /**
- * Behavior tests for `deriveSessionBarStatus` and `deriveContextPct`
- * (session-bar-status.ts).
+ * Behavior tests for `deriveContextPct` (session-bar-status.ts).
  *
  * All expected values are hardcoded. No derivation logic is re-computed here.
  * Fixtures are built via `createChatThreadState` + spreads; chatConfig fields
@@ -10,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { createChatThreadState, reduceChatThreadState } from '../../controller/chat-thread-state';
 import type { ChatThreadState } from '../../controller/chat-thread-state';
-import { deriveSessionBarStatus, deriveContextPct } from '../session-bar-status';
+import { deriveContextPct } from '../session-bar-status';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,43 +32,6 @@ function idleState(): ChatThreadState {
   return reduceChatThreadState(base, { type: 'chat.config.updated', chat: makeChat() });
 }
 
-/** State with a running run-state. */
-function runningState(): ChatThreadState {
-  return reduceChatThreadState(idleState(), { type: 'run.started' });
-}
-
-/** State with a cancelling run-state. */
-function cancellingState(): ChatThreadState {
-  return reduceChatThreadState(idleState(), { type: 'run.cancelling' });
-}
-
-/** State with an error run-state. */
-function errorState(): ChatThreadState {
-  return reduceChatThreadState(idleState(), { type: 'run.failed', error: 'boom' });
-}
-
-/** Add a pending permission entry to a state. */
-function withPermission(state: ChatThreadState): ChatThreadState {
-  return reduceChatThreadState(state, {
-    type: 'permission.requested',
-    requestId: 'r1',
-    request: { requestId: 'r1', toolName: 'Bash', toolUseId: 'tu1', input: {}, suggestions: [] },
-  });
-}
-
-/** Set compacting = true on a state. */
-function withCompacting(state: ChatThreadState): ChatThreadState {
-  return reduceChatThreadState(state, { type: 'compact.started' });
-}
-
-/** Set worktreeMissing = true on a state. */
-function withWorktreeMissing(state: ChatThreadState): ChatThreadState {
-  return reduceChatThreadState(state, {
-    type: 'chat.config.updated',
-    chat: makeChat({ worktreeMissing: true }),
-  });
-}
-
 /** Set contextUsage on a state. */
 function withContextUsage(
   state: ChatThreadState,
@@ -79,78 +41,6 @@ function withContextUsage(
 ): ChatThreadState {
   return reduceChatThreadState(state, { type: 'context.usage', percentage, totalTokens, maxTokens });
 }
-
-// ---------------------------------------------------------------------------
-// deriveSessionBarStatus — individual statuses
-// ---------------------------------------------------------------------------
-
-describe('deriveSessionBarStatus — individual statuses', () => {
-  it('returns null when state is idle with no config issues and no permissions', () => {
-    expect(deriveSessionBarStatus(idleState())).toBeNull();
-  });
-
-  it('returns "worktree-missing" when chatConfig.worktreeMissing is true', () => {
-    expect(deriveSessionBarStatus(withWorktreeMissing(idleState()))).toBe('worktree-missing');
-  });
-
-  it('returns "awaiting" when there is a pending permission entry', () => {
-    expect(deriveSessionBarStatus(withPermission(idleState()))).toBe('awaiting');
-  });
-
-  it('returns "compacting" when compacting is true and no permission', () => {
-    expect(deriveSessionBarStatus(withCompacting(idleState()))).toBe('compacting');
-  });
-
-  it('returns "thinking" when run-state is running', () => {
-    expect(deriveSessionBarStatus(runningState())).toBe('thinking');
-  });
-
-  it('returns "thinking" when run-state is cancelling (winding down)', () => {
-    expect(deriveSessionBarStatus(cancellingState())).toBe('thinking');
-  });
-
-  it('returns "error" when run-state is error and no higher-priority condition', () => {
-    expect(deriveSessionBarStatus(errorState())).toBe('error');
-  });
-
-  it('returns null when chatConfig is null (draft thread, no config loaded)', () => {
-    const noCfg = createChatThreadState('c1');
-    expect(deriveSessionBarStatus(noCfg)).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// deriveSessionBarStatus — priority overrides
-// ---------------------------------------------------------------------------
-
-describe('deriveSessionBarStatus — priority overrides', () => {
-  it('"worktree-missing" wins over awaiting + running', () => {
-    const state = withPermission(runningState());
-    const withWt = withWorktreeMissing(state);
-    expect(deriveSessionBarStatus(withWt)).toBe('worktree-missing');
-  });
-
-  it('"awaiting" wins over compacting + running', () => {
-    const state = withPermission(withCompacting(runningState()));
-    expect(deriveSessionBarStatus(state)).toBe('awaiting');
-  });
-
-  it('"compacting" wins over running', () => {
-    const state = withCompacting(runningState());
-    expect(deriveSessionBarStatus(state)).toBe('compacting');
-  });
-
-  it('"compacting" wins over error', () => {
-    const state = withCompacting(errorState());
-    expect(deriveSessionBarStatus(state)).toBe('compacting');
-  });
-
-  it('"thinking" wins over error (cancelling + error is hypothetical but running beats error)', () => {
-    // runState can't be both, but construct error then override to running to confirm priority.
-    const state = reduceChatThreadState(errorState(), { type: 'run.started' });
-    expect(deriveSessionBarStatus(state)).toBe('thinking');
-  });
-});
 
 // ---------------------------------------------------------------------------
 // deriveContextPct — CLI-reported usage

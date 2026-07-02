@@ -17,6 +17,8 @@
  *   - Inline images → thumbnail row (regular image parts)
  *   - Attachments   → UserAttachments: file pills + clickable capture-image
  *     tiles with their selector context (native message.attachments)
+ *   - Implementing plan → PlanBubble, when the daemon sent a clear-context
+ *     `Implement the following plan:` turn (see plan-message.ts)
  *
  * @mention inline rendering uses the native `createDirectiveText` pattern from
  * @assistant-ui/react via our `mainframeUserFormatter` (see user-directives.ts).
@@ -24,9 +26,6 @@
  * `command.name`, we render the pill before the text body. If no metadata exists
  * but the text itself starts with `/command`, the formatter will emit a command
  * chip — so both paths produce a chip, just at different levels.
- *
- * Deferred (TODO-leaf — do NOT build here):
- *   - PLAN_PREFIX "Implementing plan" card
  */
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
@@ -47,6 +46,8 @@ import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
 import { ReviewCommentCard } from './ReviewCommentCard';
+import { PlanBubble } from './PlanBubble';
+import { parsePlanUserMessage } from './plan-message';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -222,13 +223,16 @@ function UserMessageImpl() {
     };
   }
 
-  // TODO(leaf): PLAN_PREFIX card ("Implementing plan") — deferred to plan-card leaf
-
   // Diff-review sends: the file card IS the message (the projection dropped the
   // raw text), so it takes the bubble's place rather than stacking beside one.
   const reviewCard = meta.reviewComment ? <ReviewCommentCard review={meta.reviewComment} /> : null;
 
-  const body = slashProps ? (
+  // Clear-context "Implementing plan" turn: the daemon prefixes the plan with
+  // `Implement the following plan:` — render the PlanBubble in place of the
+  // plain bubble (never a command/review turn, never queued).
+  const planBody = !slashProps && !meta.reviewComment ? parsePlanUserMessage(cleanText) : null;
+
+  const body = planBody ? null : slashProps ? (
     <ReadMoreBubble>
       <SlashPill kind={slashProps.kind} name={slashProps.name} />
       {slashProps.userText}
@@ -275,6 +279,8 @@ function UserMessageImpl() {
             {body}
           </QueuedUserTurn>
         )
+      ) : planBody ? (
+        <PlanBubble plan={planBody} />
       ) : (
         <>
           {body && <CoolCard>{body}</CoolCard>}

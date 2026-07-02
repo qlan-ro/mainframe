@@ -24,6 +24,8 @@
  *  MD — captures array (length > 0) → capture context renders; no crash.
  *  MD — plain message (no captures) → no capture row; UserAttachments always
  *       present.
+ *  PB — a clear-context "Implement the following plan:" message renders the
+ *       shared PlanBubble instead of the plain cool-card body.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -371,5 +373,46 @@ describe('UserMessage — find DOM hook', () => {
     __messageFixture = makeFixture({ mainframe: undefined });
     renderUserMessage();
     expect(screen.getByTestId('chat-user-message')).toHaveAttribute('data-message-id', 'msg-test');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — PB: clear-context plan message renders the shared PlanBubble
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — PB: clear-context plan message', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __skillsFixture = [];
+  });
+
+  it('renders the PlanBubble for a plan-prefixed message', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-plan-bubble')).toBeInTheDocument();
+    expect(screen.getByText('Implementing plan')).toBeInTheDocument();
+    expect(screen.getByText('Dummy Plan')).toBeInTheDocument();
+  });
+
+  it('does not render the plain cool-card body for a plan-prefixed message', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.queryByText('Implement the following plan:')).not.toBeInTheDocument();
+  });
+
+  it('renders the plain cool-card body (not the PlanBubble) for a normal message', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'Just a regular message' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.getByText('Just a regular message')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-bubble')).not.toBeInTheDocument();
   });
 });

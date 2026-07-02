@@ -39,7 +39,7 @@ export interface ProviderModelSelectProps {
 }
 
 /** A small dot color per known provider; neutral fallback for anything else.
- *  Exported for ChatSessionBar so the bar and the picker always agree. */
+ *  Exported for ChatSessionInline so the header chip and the picker always agree. */
 const PROVIDER_DOT: Record<string, string> = {
   claude: 'bg-orange-500',
   codex: 'bg-emerald-500',
@@ -166,7 +166,9 @@ export function ProviderModelSelect({
               )}
             >
               <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
-              <span className="truncate font-medium">{triggerLabel}</span>
+              <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
+                {triggerLabel}
+              </span>
               <ChevronDown size={9} className="flex-shrink-0 opacity-60" />
             </button>
           </PopoverTrigger>

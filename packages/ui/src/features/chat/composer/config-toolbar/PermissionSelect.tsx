@@ -50,7 +50,7 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               aria-label={`Permission mode: ${currentLabel}`}
               className={[
                 'flex h-[20px] shrink-0 items-center justify-center gap-[5px] px-[6px]',
-                '@[480px]:justify-start @[480px]:pl-[8px] @[480px]:pr-[7px]',
+                '@[560px]:justify-start @[560px]:pl-[8px] @[560px]:pr-[7px]',
                 'rounded-[11px] border-[0.5px] border-border text-caption',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
@@ -60,8 +60,8 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               ].join(' ')}
             >
               <Shield size={11} className="shrink-0" />
-              <span className="hidden @[480px]:inline truncate text-caption font-medium">{currentLabel}</span>
-              <ChevronDown size={9} className="hidden @[480px]:inline shrink-0 opacity-60" />
+              <span className="hidden @[560px]:inline truncate text-caption font-medium">{currentLabel}</span>
+              <ChevronDown size={9} className="hidden @[560px]:inline shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

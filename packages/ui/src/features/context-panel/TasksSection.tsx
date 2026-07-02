@@ -3,7 +3,7 @@ import type { TodoItem } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { ContextSection } from './ContextSection';
 
-/** Context-tab Tasks group: completion bar above the per-chat TodoWrite rows. */
+/** Context-tab Tasks group: completion bar inline in the section header, then the per-chat TodoWrite rows. */
 export function TasksSection({ todos }: { todos: readonly TodoItem[] }): React.ReactElement {
   const total = todos.length;
   const completed = todos.filter((t) => t.status === 'completed').length;
@@ -11,19 +11,25 @@ export function TasksSection({ todos }: { todos: readonly TodoItem[] }): React.R
 
   return (
     <div data-testid="context-tasks-section">
-      <ContextSection icon={CircleDashed} title="Tasks" count={total} defaultOpen>
-        <div className="mb-2 flex items-center gap-2 px-[14px]">
-          <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-mf-chip">
-            <div
-              data-testid="context-tasks-progress-fill"
-              className="h-full rounded-full bg-mf-success transition-all duration-300"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span className="shrink-0 font-mono text-micro tabular-nums text-mf-text-3">
-            {completed}/{total}
-          </span>
-        </div>
+      <ContextSection
+        icon={CircleDashed}
+        title="Tasks"
+        defaultOpen
+        trailing={
+          <>
+            <span className="inline-block h-[4px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-mf-chip">
+              <span
+                data-testid="context-tasks-progress-fill"
+                className="block h-full rounded-[3px] bg-mf-success transition-all duration-300"
+                style={{ width: `${pct}%` }}
+              />
+            </span>
+            <span className="shrink-0 font-mono text-micro tabular-nums text-mf-text-3">
+              {completed}/{total}
+            </span>
+          </>
+        }
+      >
         <div>
           {todos.map((todo) => {
             const done = todo.status === 'completed';

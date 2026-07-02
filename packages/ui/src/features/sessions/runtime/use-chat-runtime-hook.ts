@@ -20,12 +20,17 @@ import { useDaemonPort } from './daemon-port-context';
 import { useChatThreadRuntime } from '../../chat/runtime/use-chat-thread-runtime';
 
 export function useChatRuntimeHook(): AssistantRuntime {
-  const item = useAuiState((s) => s.threadListItem);
-  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  const chatId = useAuiState((s) => s.threadListItem.id);
+  // Subscribe to the DERIVED active boolean, not the raw mainThreadId. aui keeps
+  // every visited thread's subtree mounted, so a raw `mainThreadId` subscription
+  // re-runs this hook (and re-renders that subtree) in EVERY warm thread on each
+  // switch — cost grows with session count. Selecting the boolean means only the
+  // two threads whose active-ness actually flips re-render.
+  const isActive = useAuiState(
+    (s) => s.threads.mainThreadId === s.threadListItem.id && s.threadListItem.remoteId != null,
+  );
   const port = useDaemonPort();
 
-  const chatId = item.id;
-  const isActive = mainThreadId === item.id && item.remoteId != null;
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
 
   return useChatThreadRuntime(controller, port, { active: isActive });

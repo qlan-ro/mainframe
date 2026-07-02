@@ -168,3 +168,71 @@ describe('projectChatThreadMessages — streaming assistant status', () => {
     expect(() => projectChatThreadRepository(state)).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 4: per-message conversion memoization — convertMessage's result is
+// cached by DisplayMessage object identity so an unrelated state update does
+// not reconvert every historical message. Only a DisplayMessage whose object
+// identity actually changed should produce a new converted object; every
+// other message must keep the SAME converted object reference across two
+// projections of otherwise-identical state.
+// ---------------------------------------------------------------------------
+
+describe('projectChatThreadMessages — per-message conversion memoization', () => {
+  it('returns referentially-identical converted messages when projected twice from equal, unchanged state', () => {
+    const state = stateWithMessages(
+      [
+        makeDisplayMessage('u1', 'user', 'hi'),
+        makeDisplayMessage('a1', 'assistant', 'first turn answer'),
+        makeDisplayMessage('u2', 'user', 'follow up'),
+      ],
+      false,
+    );
+
+    const first = projectChatThreadMessages(state);
+    const second = projectChatThreadMessages(state);
+
+    expect(first).toHaveLength(3);
+    expect(second).toHaveLength(3);
+    expect(second[0]).toBe(first[0]);
+    expect(second[1]).toBe(first[1]);
+    expect(second[2]).toBe(first[2]);
+  });
+
+  it('reconverts only the message whose DisplayMessage object identity changed; others keep identity', () => {
+    const state = stateWithMessages(
+      [
+        makeDisplayMessage('u1', 'user', 'hi'),
+        makeDisplayMessage('a1', 'assistant', 'first turn answer'),
+        makeDisplayMessage('u2', 'user', 'follow up'),
+      ],
+      false,
+    );
+
+    const first = projectChatThreadMessages(state);
+
+    // Simulate a reducer upsert: only messagesById['a1'] gets a NEW DisplayMessage
+    // object (edited/updated content); 'u1' and 'u2' keep their original object
+    // references — this mirrors the real `{ ...messagesById, [id]: newMsg }` upsert.
+    const updatedState = {
+      ...state,
+      messagesById: {
+        ...state.messagesById,
+        a1: makeDisplayMessage('a1', 'assistant', 'first turn answer — revised'),
+      },
+    };
+
+    const second = projectChatThreadMessages(updatedState);
+
+    expect(second).toHaveLength(3);
+    // Unchanged messages (same DisplayMessage object) keep their converted identity.
+    expect(second[0]).toBe(first[0]);
+    expect(second[2]).toBe(first[2]);
+    // The changed message (new DisplayMessage object) must be a NEW converted object
+    // reflecting the new content, not the stale cached one.
+    expect(second[1]).not.toBe(first[1]);
+    expect(second[1]).toEqual(
+      expect.objectContaining({ id: 'a1', content: [{ type: 'text', text: 'first turn answer — revised' }] }),
+    );
+  });
+});

@@ -41,8 +41,15 @@ export function ProjectFilterPillBar({
   const [expanded, setExpanded] = useState(false);
   const totalAttn = Object.values(attentionCounts).reduce((a, b) => a + b, 0);
 
-  const signature = `${filterProjectId ?? ''}|${projects
-    .map((p) => `${p.id}:${attentionCounts[p.id] ?? 0}`)
+  // Re-measure only on width-affecting changes: the project set, whether each
+  // pill shows a badge at all (0↔non-0), whether the "All" pill shows its total
+  // badge, and the add-project affordance. The EXACT count and the active
+  // styling don't change a pill's width, so excluding them keeps a plain pill
+  // click (which only flips active state / re-tallies counts) off the measuring
+  // path — previously every click and every unread tick forced a full re-measure.
+  const allBadge = filterProjectId != null && totalAttn > 0;
+  const signature = `${allBadge ? 'A' : ''}|${projects
+    .map((p) => `${p.id}:${(attentionCounts[p.id] ?? 0) > 0 ? '1' : '0'}`)
     .join(',')}|${onAddProject != null ? 'add' : ''}`;
   const { containerRef, visibleCount, measuring } = useRowOverflow({
     itemCount: projects.length,

@@ -3,13 +3,16 @@
 /**
  * PlanCard — display card for the 'ExitPlanMode' tool.
  *
- * Shows an "Updated plan" card revealing the plan text.
- * - Expanded by default when a plan result is present (the plan is important
- *   context worth showing, not a chip to click open); still collapsible.
- *   No result = disabled/non-expandable.
- * - Body: <pre> of the plan text result
- * - This is the DISPLAY-only card; the interactive plan-approval card
- *   (permission gate) is a separate leaf built elsewhere.
+ * Two renders:
+ * - **Approved (no-clear-context)** → the CLI result announces "User has
+ *   approved your plan …" and echoes the plan. Render the PlanBubble
+ *   ("Implementing plan" / Approved), matching the clear-context user turn
+ *   (see plan-message.ts). This is the shared approved-plan treatment.
+ * - **Otherwise** → an "Updated plan" collapsible revealing the raw plan text
+ *   (expanded by default when a result is present; disabled when empty). Also
+ *   covers non-approval results (e.g. the "not in plan mode" error).
+ *
+ * The interactive plan-approval card (permission gate) is a separate leaf.
  */
 
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -17,6 +20,8 @@ import { FileText } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { StatusDot, stripErrorXml } from '../shared';
+import { PlanBubble } from '../../messages/PlanBubble';
+import { parseApprovedPlanResult } from '../../messages/plan-message';
 
 // ── PlanCard ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +31,13 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
   const rawResultText = typeof result === 'string' ? result : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
   const hasResult = Boolean(resultText);
+
+  // Approved plan → the shared "Implementing plan" bubble (parity with the
+  // clear-context user turn). Non-approval results fall through to the card.
+  const approvedPlan = parseApprovedPlanResult(resultText);
+  if (approvedPlan) {
+    return <PlanBubble plan={approvedPlan} />;
+  }
 
   return (
     <Collapsible data-testid="chat-plan-card" defaultOpen={hasResult} disabled={!hasResult}>

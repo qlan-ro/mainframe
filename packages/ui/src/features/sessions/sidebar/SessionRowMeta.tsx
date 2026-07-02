@@ -1,18 +1,16 @@
 /**
- * SessionRowMeta — per-project chip + worktree pill + PR pill + AnswerPill
- * (waiting treatment) + tag-dot cluster for session rows.
+ * SessionRowMeta — per-project chip + worktree pill + PR pill + tag-dot
+ * cluster for session rows.
  *
  * Matches the artboard SessionRowDense meta row: it deliberately does NOT show
  * the adapter (claude/codex) name. Kept separate so SessionRow stays under 300
- * lines. AnswerPill lives here (not in SessionRow) so all waiting-state UI is
- * co-located in the meta row.
+ * lines. Session status lives entirely in the row's leading StatusDot (2026-07-02
+ * density pass) — no text pill here, so worktree + PR keep the room.
  */
 
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import { TAG_DOT_STYLE } from '../tags/tag-colors';
-import type { SessionBadge } from '../view-model/session-status';
-import { AnswerPill } from './SessionRow';
 import { projectColor } from './project-color';
 import { Hint } from '@/components/ui/hint';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
@@ -21,7 +19,6 @@ interface SessionRowMetaProps {
   worktreePath?: string;
   worktreeMissing: boolean;
   detectedPrs: DetectedPr[];
-  badge?: SessionBadge;
   tags?: string[];
   colorOf?: (name: string) => TagColor;
   /** Project id — drives the chip's identity color (deterministic per project). */
@@ -39,7 +36,6 @@ export function SessionRowMeta({
   worktreePath,
   worktreeMissing,
   detectedPrs,
-  badge,
   tags,
   colorOf,
   projectId,
@@ -108,7 +104,6 @@ export function SessionRowMeta({
           #{pr.number}
         </a>
       ))}
-      {badge != null && <AnswerPill badge={badge} />}
       <div className="flex-1" />
       {visibleTags.length > 0 && colorOf != null && (
         <Hint label={tags?.join(' · ')}>

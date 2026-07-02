@@ -24,7 +24,7 @@
  *     committing new title calls itemRuntime.rename spy once with "New name".
  *  7. Right-click → click sessions-ctx-archive → itemRuntime.archive spy called once.
  *  8. sessions-row-relative-time renders non-empty text for updatedAt=1749284160000.
- *  9. (replaced) StatusDot/AnswerPill badge presentation tests.
+ *  9. StatusDot badge presentation + tooltip-label coverage (AnswerPill removed).
  */
 import { isValidElement } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -136,7 +136,7 @@ vi.mock('@/lib/api/chats', () => ({
 // Import the component AFTER all mocks are registered
 // ---------------------------------------------------------------------------
 
-const { SessionRow, StatusDot, AnswerPill } = await import('../SessionRow');
+const { SessionRow, StatusDot } = await import('../SessionRow');
 
 // ---------------------------------------------------------------------------
 // Shared fixture builder
@@ -296,57 +296,98 @@ describe('SessionRow — relative time renders non-empty text', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Badge presentation — StatusDot + AnswerPill standalone unit tests
+// 9. Badge presentation — StatusDot standalone unit tests (AnswerPill removed;
+//    StatusDot is now the single status indicator and carries a Hint tooltip).
 // ---------------------------------------------------------------------------
 
 describe('session row badge presentation', () => {
-  it('waiting + unread → amber ping-halo dot + Answer ready pill', () => {
-    render(
-      <>
-        <StatusDot badge={{ base: 'waiting', unread: true }} />
-        <AnswerPill badge={{ base: 'waiting', unread: true }} />
-      </>,
-    );
+  it('waiting + unread → amber ping-halo dot, no answer pill anywhere', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
     const dot = screen.getByTestId('sessions-row-status-dot');
     // The dot uses a ping-halo structure: the outer container has a child
     // span with the amber color and animate-ping (the halo beacon).
     const halo = dot.querySelector('.bg-mf-warning');
     expect(halo).toBeTruthy();
-    expect(screen.getByText('Answer ready')).toBeTruthy();
-  });
-  it('waiting + seen → Your turn pill', () => {
-    render(<AnswerPill badge={{ base: 'waiting', unread: false }} />);
-    expect(screen.getByText('Your turn')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
+    expect(screen.queryByText('Answer ready')).toBeNull();
   });
   it('idle + unread → accent-tinted dot, no pill', () => {
-    render(
-      <>
-        <StatusDot badge={{ base: 'idle', unread: true }} />
-        <AnswerPill badge={{ base: 'idle', unread: true }} />
-      </>,
-    );
+    render(<StatusDot badge={{ base: 'idle', unread: true }} />);
     expect(screen.getByTestId('sessions-row-status-dot').className).toContain('bg-primary');
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
     expect(screen.queryByText('Answer ready')).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 9b. AnswerPill visible in full row render when hasPending=true (via SessionRowMeta)
+// 9a. StatusDot tooltip labels (Hint) — one assertion per badge state, hardcoded
+// labels per the spec: worktree-missing → "Worktree missing", working →
+// "Working", waiting+unread → "Answer ready", waiting (seen) → "Your turn",
+// idle+unread → "New activity", idle → "Idle".
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — answer pill visible when hasPending=true', () => {
-  it('renders sessions-row-answer-pill with text "Your turn" when hasPending=true and not unread', () => {
-    __isUnread = false;
-    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.textContent).toBe('Your turn');
+describe('StatusDot — Hint tooltip labels per badge state', () => {
+  it('shows "Worktree missing" on hover when badge.base=worktree-missing', async () => {
+    const user = userEvent.setup();
+    render(<StatusDot badge={{ base: 'worktree-missing', unread: false }} />);
+    await user.hover(screen.getByTestId('sessions-row-status-dot'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Worktree missing');
   });
 
-  it('renders sessions-row-answer-pill with text "Answer ready" when hasPending=true and unread', () => {
+  it('shows "Working" on hover when badge.base=working', async () => {
+    const user = userEvent.setup();
+    render(<StatusDot badge={{ base: 'working', unread: false }} />);
+    await user.hover(screen.getByTestId('sessions-row-status-dot'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Working');
+  });
+
+  it('shows "Answer ready" on hover when badge.base=waiting and unread=true', async () => {
+    const user = userEvent.setup();
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
+    await user.hover(screen.getByTestId('sessions-row-status-dot'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Answer ready');
+  });
+
+  it('shows "Your turn" on hover when badge.base=waiting and unread=false', async () => {
+    const user = userEvent.setup();
+    render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
+    await user.hover(screen.getByTestId('sessions-row-status-dot'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Your turn');
+  });
+
+  it('shows "New activity" on hover when badge.base=idle and unread=true', async () => {
+    const user = userEvent.setup();
+    render(<StatusDot badge={{ base: 'idle', unread: true }} />);
+    await user.hover(screen.getByTestId('sessions-row-status-dot'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('New activity');
+  });
+
+  it('shows "Idle" on hover when badge.base=idle and unread=false', async () => {
+    const user = userEvent.setup();
+    render(<StatusDot badge={{ base: 'idle', unread: false }} />);
+    await user.hover(screen.getByTestId('sessions-row-status-dot'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Idle');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9b. Answer pill is fully removed from the full row render (was: visible when
+// hasPending=true via SessionRowMeta). Only the status dot remains.
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — answer pill is absent; status dot is the sole indicator', () => {
+  it('does not render sessions-row-answer-pill when hasPending=true and not unread; status dot is present', () => {
+    __isUnread = false;
+    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
+    expect(screen.getByTestId('sessions-row-status-dot')).toBeTruthy();
+  });
+
+  it('does not render sessions-row-answer-pill when hasPending=true and unread; status dot is present', () => {
     __isUnread = true;
     render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.textContent).toBe('Answer ready');
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
+    expect(screen.getByTestId('sessions-row-status-dot')).toBeTruthy();
   });
 
   it('does not render sessions-row-answer-pill when status is idle', () => {
@@ -403,41 +444,24 @@ describe('SessionRow — exposes data-chat-id on the row', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 14. AnswerPill design-parity (artboard Phase-3 majors)
+// 14. StatusDot is the SOLE status indicator now — AnswerPill no longer exists
+// as an exported component (verified indirectly: it is not imported above, and
+// no sessions-row-answer-pill testid appears anywhere in this suite).
 // ---------------------------------------------------------------------------
 
-describe('AnswerPill design-parity', () => {
-  it('"Answer ready" pill uses solid amber fill (bg-mf-warning) with white text', () => {
-    render(<AnswerPill badge={{ base: 'waiting', unread: true }} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.className).toContain('bg-mf-warning');
-    expect(pill.className).toContain('text-white');
-  });
-
-  it('"Answer ready" pill uses rounded-[5px] (not rounded-full)', () => {
-    render(<AnswerPill badge={{ base: 'waiting', unread: true }} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.className).toContain('rounded-[5px]');
-    expect(pill.className).not.toContain('rounded-full');
-  });
-
-  it('"Your turn" pill uses rounded-[5px] (not rounded-full)', () => {
-    render(<AnswerPill badge={{ base: 'waiting', unread: false }} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.className).toContain('rounded-[5px]');
-    expect(pill.className).not.toContain('rounded-full');
-  });
-
-  it('"Your turn" pill uses amber shadow ring (not generic border)', () => {
-    render(<AnswerPill badge={{ base: 'waiting', unread: false }} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.className).toContain('shadow-[inset');
-    expect(pill.className).not.toContain('border:0.5px_solid_var(--border)');
+describe('StatusDot is the only status indicator (AnswerPill removed)', () => {
+  it('renders no sessions-row-answer-pill for a waiting+unread badge rendered standalone', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 15. StatusDot waiting-unread ping-halo (artboard Phase-3 majors)
+// 15. StatusDot waiting-unread ping-halo + visual deltas (artboard Phase-3 majors)
+//
+// Visual deltas per spec:
+//  - waiting-seen dot becomes 9px (`size-[9px]`).
+//  - waiting-unread inner dot gains a 2px 18%-amber ring shadow class.
 // ---------------------------------------------------------------------------
 
 describe('StatusDot waiting-unread ping-halo', () => {
@@ -453,6 +477,22 @@ describe('StatusDot waiting-unread ping-halo', () => {
     render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
     const dot = screen.getByTestId('sessions-row-status-dot');
     expect(dot.querySelector('.animate-ping')).toBeNull();
+  });
+
+  it('waiting + seen status dot uses size-[9px] (not the default size-2)', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('size-[9px]');
+  });
+
+  it('waiting + unread inner dot carries a 2px 18%-amber ring shadow class', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    // Inner solid dot is a sibling of the ping halo — hardcoded shadow spec:
+    // 2px spread, 18% amber mix.
+    const inner = dot.querySelector('.bg-mf-warning:not(.animate-ping)');
+    expect(inner).toBeTruthy();
+    expect(inner?.className).toContain('shadow-[0_0_0_2px_color-mix(in_srgb,var(--mf-warning)_18%,transparent)]');
   });
 });
 

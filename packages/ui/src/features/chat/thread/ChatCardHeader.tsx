@@ -13,6 +13,7 @@ import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-c
 import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { Hint } from '@/components/ui/hint';
+import { ChatSessionInline } from './ChatSessionInline';
 
 // 24×24 header buttons (hdrBtn in artboard), distinct from the 22×22 SurfaceTabStrip actions.
 const HDR_BTN =
@@ -43,19 +44,10 @@ export function ChatCardHeader() {
     >
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
-      <span className="min-w-0 flex-1 truncate text-caption font-semibold">{title}</span>
-      {prs.map((pr) => (
-        <Hint key={`${pr.owner}/${pr.repo}/${pr.number}`} label={`${pr.owner}/${pr.repo} #${pr.number}`}>
-          <button
-            data-testid={`chat-header-pr-${pr.number}`}
-            type="button"
-            onClick={() => void host.shell.openExternal(pr.url)}
-            className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
-          >
-            <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}
-          </button>
-        </Hint>
-      ))}
+      <span className="min-w-0 flex-initial truncate text-caption font-semibold">{title}</span>
+      <ChatSessionInline part="model" />
+      <span className="flex-1" />
+      <ChatSessionInline part="status" />
       <Hint label="Review changes (⌘⇧R)">
         <button
           data-testid="chat-header-review"
@@ -68,6 +60,18 @@ export function ChatCardHeader() {
           Review
         </button>
       </Hint>
+      {prs.map((pr) => (
+        <Hint key={`${pr.owner}/${pr.repo}/${pr.number}`} label={`${pr.owner}/${pr.repo} #${pr.number}`}>
+          <button
+            data-testid={`chat-header-pr-${pr.number}`}
+            type="button"
+            onClick={() => void host.shell.openExternal(pr.url)}
+            className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
+          >
+            <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}
+          </button>
+        </Hint>
+      ))}
       {splitAvailable && (
         <>
           <Hint label="Split right">

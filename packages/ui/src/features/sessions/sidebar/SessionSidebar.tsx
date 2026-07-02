@@ -12,19 +12,19 @@
  * (shown only in "All" view, i.e. when no project filter is active).
  *
  * Data:
- *   - useAssistantRuntime().threads for the native thread list (mapped via threadListStateToSessionItems)
+ *   - useAssistantRuntime().threads for the native thread list (mapped via regularThreadItemsToSessionItems)
  *   - useProjects() for the project set (filter pills + per-row chip name)
  *   - useSessionFilters() for project/tag/synthetic filter state + sortMode
  *   - useUnreadStore() for attention counts
  *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
  *   - arrangeSessions / applySessionFilters / attentionCount (pure VMs)
  */
-import { useCallback, useMemo } from 'react';
-import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
+import { memo, useCallback, useMemo } from 'react';
+import { ThreadListPrimitive, useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { ChevronDown, PlusIcon } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
-import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
+import { regularThreadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
 import { attentionCount } from '../view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '../view-model/project-activity';
@@ -34,7 +34,7 @@ import { useUnreadStore } from '@/store/unread-store';
 import { useLastSessionStore } from '@/store/last-session';
 import { useProjects } from '../use-projects';
 import { useAddProject } from '../use-add-project';
-import { SessionGroup } from './SessionGroup';
+import { SessionListVirtuoso } from './SessionListVirtuoso';
 import { SessionRow } from './SessionRow';
 import { SessionSortMenu } from './SessionSortMenu';
 import { SessionsMoreMenu } from './SessionsMoreMenu';
@@ -100,10 +100,20 @@ function buildAttentionMap(
   return map;
 }
 
-export function SessionSidebar() {
+function SessionSidebarImpl() {
   const runtime = useAssistantRuntime();
-  const threadListRuntime = runtime.threads;
-  const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
+  // Reactive + memoized. Subscribe to the stable store-scope threadItems array and
+  // project ONCE (memoized on it). Previously this read `runtime.threads.getState()`
+  // imperatively on every render — a fresh array each time, which defeated every
+  // downstream useMemo (filter/group/attention) AND left the list non-reactive
+  // (it only refreshed when a parent re-rendered). Mirrors useSessionListRouter.
+  const threadItems = useAuiState((s) => s.threads.threadItems);
+  // Regular-only: the store-scope `threadItems` includes archived sessions
+  // (aui keeps them in the same map, splitting only the id buckets), so project
+  // through the regular filter — the archived list has its own dialog. Feeds the
+  // list AND every aggregate below (attention counts, project sort), which must
+  // all be over the visible set.
+  const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
   const { projects, reloadProjects, removeProjectFromList } = useProjects();
@@ -186,33 +196,37 @@ export function SessionSidebar() {
         onAddProject={() => void handleAddProject()}
       />
 
-      <div
-        className="mf-thin-scrollbar overscroll-contain min-h-0 flex-1 overflow-y-auto py-0.5"
-        data-testid="sessions-list-scroll"
-      >
-        {filteredItems.length === 0 ? (
+      {filteredItems.length === 0 ? (
+        <div
+          className="mf-thin-scrollbar overscroll-contain min-h-0 flex-1 overflow-y-auto py-0.5"
+          data-testid="sessions-list-scroll"
+        >
           <EmptyState hasFilters={hasFilters} />
-        ) : (
-          groups.map((group) => (
-            <SessionGroup
-              key={group.label}
-              group={group}
-              showProject={showProject}
-              renderItem={(item, flags) => (
-                <SessionRow
-                  key={item.id}
-                  item={item}
-                  colorOf={registry.colorOf}
-                  inPinnedGroup={flags.inPinnedGroup}
-                  projectName={flags.showProject ? projectNameOf(item.custom.projectId) : undefined}
-                />
-              )}
+        </div>
+      ) : (
+        <SessionListVirtuoso
+          groups={groups}
+          showProject={showProject}
+          renderItem={(item, flags) => (
+            <SessionRow
+              key={item.id}
+              item={item}
+              colorOf={registry.colorOf}
+              inPinnedGroup={flags.inPinnedGroup}
+              projectName={flags.showProject ? projectNameOf(item.custom.projectId) : undefined}
             />
-          ))
-        )}
-      </div>
+          )}
+        />
+      )}
 
       <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
     </>
   );
 }
+
+// Memoized: SessionSidebar takes no props, so it re-renders only from its OWN
+// reactive subscriptions (threadItems / filters / projects), NOT every time the
+// parent RuntimeBody re-renders — which happens on every sidebar-resize pixel and
+// every session switch. Without this boundary those parent re-renders would re-run
+// the whole session-list render + all SessionRows each frame.
+export const SessionSidebar = memo(SessionSidebarImpl);

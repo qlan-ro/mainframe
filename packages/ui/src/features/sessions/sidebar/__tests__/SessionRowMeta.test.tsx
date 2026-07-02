@@ -12,12 +12,12 @@
  *  - detectedPrs=[{ number: 42, url: "https://github.com/org/r/pull/42" }] →
  *    data-testid="sessions-row-meta-pr" renders text "#42".
  *  - detectedPrs=[] and no worktreePath → neither worktree nor PR elements appear.
- *  - badge.base='waiting' + unread → AnswerPill "Answer ready"; seen → "Your turn".
+ *  - the `badge` prop is REMOVED — SessionRowMeta never renders an answer pill;
+ *    status is now conveyed solely by SessionRow's StatusDot + its Hint tooltip.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SessionRowMeta } from '../SessionRowMeta';
-import type { SessionBadge } from '../../view-model/session-status';
 
 // ---------------------------------------------------------------------------
 // 1. Adapter label is removed (artboard meta row omits it)
@@ -113,33 +113,32 @@ describe('SessionRowMeta — empty state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. AnswerPill renders via badge prop (replaces old "Needs input" label)
+// 6. Answer pill is fully removed — the `badge` prop no longer exists on
+// SessionRowMeta, so no answer pill is ever rendered by this component.
 // ---------------------------------------------------------------------------
 
-describe('SessionRowMeta — AnswerPill via badge prop', () => {
-  const waitingUnread: SessionBadge = { base: 'waiting', unread: true };
-  const waitingSeen: SessionBadge = { base: 'waiting', unread: false };
-  const idleBadge: SessionBadge = { base: 'idle', unread: false };
-
-  it('renders sessions-row-answer-pill with "Answer ready" when badge.base=waiting and unread=true', () => {
-    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} badge={waitingUnread} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.textContent).toBe('Answer ready');
-  });
-
-  it('renders sessions-row-answer-pill with "Your turn" when badge.base=waiting and unread=false', () => {
-    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} badge={waitingSeen} />);
-    const pill = screen.getByTestId('sessions-row-answer-pill');
-    expect(pill.textContent).toBe('Your turn');
-  });
-
-  it('does not render sessions-row-answer-pill when badge.base is idle', () => {
-    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} badge={idleBadge} />);
+describe('SessionRowMeta — answer pill removed', () => {
+  it('does not render sessions-row-answer-pill (badge prop no longer accepted)', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} />);
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
   });
 
-  it('does not render sessions-row-answer-pill when badge is omitted', () => {
-    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} />);
+  it('still renders worktree/PR/tags/project chip content without a badge prop', () => {
+    render(
+      <SessionRowMeta
+        worktreePath="/repos/mf/.git/worktrees/feat-x"
+        worktreeMissing={false}
+        detectedPrs={[{ number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' }]}
+        tags={['alpha']}
+        colorOf={() => 'blue'}
+        projectId="p1"
+        projectName="mainframe"
+      />,
+    );
+    expect(screen.getByTestId('sessions-row-meta-worktree')).toBeTruthy();
+    expect(screen.getByTestId('sessions-row-meta-pr')).toBeTruthy();
+    expect(screen.getByTestId('sessions-row-meta-tag-dots')).toBeTruthy();
+    expect(screen.getByTestId('sessions-row-meta-project')).toBeTruthy();
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
   });
 });

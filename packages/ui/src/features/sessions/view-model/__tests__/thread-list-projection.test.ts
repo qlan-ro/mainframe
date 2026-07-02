@@ -12,7 +12,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { SessionCustom, ThreadListEntry, ThreadListRecordState } from '../chat-to-thread-custom';
-import { threadItemsToSessionItems, threadListStateToSessionItems } from '../chat-to-thread-custom';
+import {
+  threadItemsToSessionItems,
+  threadListStateToSessionItems,
+  regularThreadItemsToSessionItems,
+} from '../chat-to-thread-custom';
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -210,5 +214,49 @@ describe('projection drops the custom-less new/draft thread', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.id).toBe('chat-real');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. regularThreadItemsToSessionItems — excludes archived entries (the
+//    archived-leak fix). The store-scope threadItems array carries BOTH regular
+//    and archived threads; this projection is the sidebar/visible-list source
+//    and must drop archived ones, unlike threadItemsToSessionItems which keeps
+//    the full set for callers that need archived visibility.
+// ---------------------------------------------------------------------------
+
+describe('regularThreadItemsToSessionItems — excludes archived entries', () => {
+  it('returns only the regular entries from a mix of regular and archived', () => {
+    const regular = makeEntry('chat-regular');
+    const archived = makeEntry('chat-archived', { status: 'archived' });
+
+    const result = regularThreadItemsToSessionItems([regular, archived]);
+
+    expect(result.map((i) => i.id)).toEqual(['chat-regular']);
+    expect(result.every((i) => i.status === 'regular')).toBe(true);
+  });
+
+  it('drops the custom-less new/draft entry same as threadItemsToSessionItems', () => {
+    const draft = makeEntry('__LOCALID_x', { status: 'new', custom: undefined });
+    const real = makeEntry('chat-real');
+
+    const result = regularThreadItemsToSessionItems([draft, real]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-real');
+  });
+
+  it('returns an all-regular array unchanged in order', () => {
+    const a = makeEntry('a');
+    const b = makeEntry('b');
+    const c = makeEntry('c');
+
+    const result = regularThreadItemsToSessionItems([a, b, c]);
+
+    expect(result.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('maps an empty array to an empty list', () => {
+    expect(regularThreadItemsToSessionItems([])).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
@@ -33,7 +33,7 @@ interface Props {
   port: number;
 }
 
-export function SurfaceHost({ port }: Props) {
+function SurfaceHostImpl({ port }: Props) {
   const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
@@ -122,3 +122,8 @@ export function SurfaceHost({ port }: Props) {
     </div>
   );
 }
+
+// Memoized: `port` is stable, so SurfaceHost (and the mounted surfaces beneath it)
+// re-render only on their OWN store subscriptions (layout/theme), NOT every time the
+// parent RuntimeBody re-renders on a sidebar-resize pixel or a session switch.
+export const SurfaceHost = memo(SurfaceHostImpl);

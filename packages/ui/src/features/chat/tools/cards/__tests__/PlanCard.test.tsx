@@ -16,6 +16,9 @@
  *  - error state (isError=true + string result): card renders (border tokens
  *    are CSS-only, verified via absence of animate-pulse)
  *  - XML sentinel stripping in the plan body
+ *  - approved-plan branch: an approved ExitPlanMode result renders the shared
+ *    PlanBubble instead of the raw "Updated plan" card; a non-approval result
+ *    still falls through to the raw card
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -177,5 +180,25 @@ describe('PlanCard', () => {
   it('renders without crashing when isError=true and result is a plain string', () => {
     renderCard(makePart({ result: 'error text', isError: true }));
     expect(screen.getByTestId('chat-plan-card')).toBeInTheDocument();
+  });
+
+  // --- Approved-plan branch dispatch ---
+
+  it('renders the PlanBubble (not the raw card) for an approved-plan result', () => {
+    const result =
+      'User has approved your plan. You can now start coding.\n\n' +
+      'Your plan has been saved to: /tmp/p.md\n\n' +
+      '## Approved Plan (edited by user):\n' +
+      '# Real Plan\n## Steps\nStep one';
+    renderCard(makePart({ result, isError: false }));
+    expect(screen.getByTestId('chat-plan-bubble')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-card')).not.toBeInTheDocument();
+  });
+
+  it('renders the raw "Updated plan" card (not the PlanBubble) for a non-approval result', () => {
+    const result = 'You are not in plan mode. To enter plan mode, call the EnterPlanMode tool first.';
+    renderCard(makePart({ result, isError: false }));
+    expect(screen.getByTestId('chat-plan-label')).toHaveTextContent('Updated plan');
+    expect(screen.queryByTestId('chat-plan-bubble')).not.toBeInTheDocument();
   });
 });

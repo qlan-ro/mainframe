@@ -15,8 +15,30 @@
  */
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
+import type { DisplayMessage } from '@qlan-ro/mainframe-types';
 import { convertMessage } from '../view-model/convert-message';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
+
+/**
+ * Per-message conversion cache, keyed by DisplayMessage object identity.
+ *
+ * The reducer's upsert (`{ ...messagesById, [id]: newMsg }`) only replaces the
+ * ONE changed message's object; every other DisplayMessage keeps its reference
+ * across state updates. convertMessage is pure on its input, so a WeakMap keyed
+ * on that object lets a streamed delta reconvert only the single changed message
+ * instead of re-running convertMessage (markdown/tool mapping) over the whole
+ * history on every event — turning an O(N²)-per-turn reprojection into O(N).
+ * WeakMap so evicted messages are GC'd with no manual bookkeeping.
+ */
+const convertCache = new WeakMap<DisplayMessage, ThreadMessage>();
+
+function convertMessageCached(message: DisplayMessage): ThreadMessage {
+  const hit = convertCache.get(message);
+  if (hit) return hit;
+  const converted = convertMessage(message) as ThreadMessageLike as ThreadMessage;
+  convertCache.set(message, converted);
+  return converted;
+}
 
 // ---------------------------------------------------------------------------
 // Pending message projection
@@ -67,7 +89,7 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
   const serverMessages: ThreadMessage[] = state.messageOrder
     .map((id) => state.messagesById[id])
     .filter((msg): msg is NonNullable<typeof msg> => msg != null)
-    .map((msg) => convertMessage(msg) as ThreadMessageLike as ThreadMessage);
+    .map(convertMessageCached);
 
   // Streaming "typing" reveal: while a run is active, mark the TAIL assistant
   // message `running` so assistant-ui's default useSmooth (in MarkdownTextPrimitive)

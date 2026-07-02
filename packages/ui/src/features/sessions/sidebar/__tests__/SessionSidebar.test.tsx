@@ -64,8 +64,14 @@ vi.mock('@assistant-ui/react', () => ({
         return { threadIds, threadItems, mainThreadId: '', newThreadId: __newThreadId };
       },
       getItemById: (_id: string) => ({ rename: vi.fn(), archive: vi.fn() }),
+      switchToThread: vi.fn(),
     },
   }),
+  // SessionSidebar now subscribes reactively via useAuiState((s) => s.threads.threadItems)
+  // instead of an imperative getState() read. The store-scope threadItems array is the
+  // ordered ThreadListEntry[] the projection consumes.
+  useAuiState: (selector: (s: { threads: { threadItems: unknown; mainThreadId: string } }) => unknown) =>
+    selector({ threads: { threadItems: __threads, mainThreadId: '' } }),
   // Faithful `asChild` repro: the real primitive is a Radix Slot that clones its
   // single child and injects onClick onto it — composing the caller's onClick
   // BEFORE its own switchToNewThread (composeEventHandlers), then the switch itself
@@ -141,18 +147,28 @@ vi.mock('@/layout/SidebarFooter', () => ({
 // Stub child components to minimise dependency pull-in
 // ---------------------------------------------------------------------------
 
-vi.mock('../SessionGroup', () => ({
-  SessionGroup: ({
-    group,
+// SessionSidebar now renders the list through SessionListVirtuoso (react-virtuoso
+// windowing) instead of mapping SessionGroup. Virtuoso renders nothing under jsdom
+// (no layout), so mock it to a plain synchronous passthrough that renders every
+// group header + item — this keeps these tests focused on the sidebar's
+// grouping/filter/prop-passing logic, not the windowing engine (covered by
+// SessionListVirtuoso's own test).
+vi.mock('../SessionListVirtuoso', () => ({
+  SessionListVirtuoso: ({
+    groups,
     showProject,
     renderItem,
   }: {
-    group: { label: string; items: SessionItem[] };
+    groups: { label: string; items: SessionItem[] }[];
     showProject: boolean;
     renderItem: (i: SessionItem, flags: { inPinnedGroup: boolean; showProject: boolean }) => React.ReactNode;
   }) => (
-    <div data-testid={`sessions-group-${group.label}`}>
-      {group.items.map((item) => renderItem(item, { inPinnedGroup: group.label === 'Pinned', showProject }))}
+    <div data-testid="sessions-list-scroll">
+      {groups.map((group) => (
+        <div key={group.label} data-testid={`sessions-group-${group.label}`}>
+          {group.items.map((item) => renderItem(item, { inPinnedGroup: group.label === 'Pinned', showProject }))}
+        </div>
+      ))}
     </div>
   ),
 }));
@@ -471,6 +487,27 @@ describe('SessionSidebar — per-row project chip follows the filter state', () 
     __threads = [makeThread('c1', { projectId: 'p1', updatedAt: Date.now() })];
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-row').getAttribute('data-project-name')).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Archived sessions are excluded from the visible list (archived-leak fix).
+//     The store-scope threadItems array carries BOTH regular and archived
+//     threads; SessionSidebar must project through the regular-only seam so an
+//     archived entry never renders as a sessions-row.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — archived sessions are excluded from the list', () => {
+  it('renders exactly 1 sessions-row for one regular + one archived thread', () => {
+    __projects = [makeProject('p1', 'mainframe')];
+    __threads = [
+      makeThread('c1', { projectId: 'p1', updatedAt: Date.now() }),
+      { ...makeThread('c2', { projectId: 'p1', updatedAt: Date.now() }), status: 'archived' },
+    ];
+    render(<SessionSidebar />);
+    const rows = screen.getAllByTestId('sessions-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.getAttribute('data-id')).toBe('c1');
   });
 });
 

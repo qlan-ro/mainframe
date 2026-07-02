@@ -56,7 +56,9 @@
       "preview": false,
       "env": {
         "VITE_PORT": "${VITE_PORT:-5174}",
-        "DAEMON_PORT": "${DAEMON_PORT:-31415}",
+        "DAEMON_PORT": "31415",
+        "VITE_DAEMON_HTTP_PORT": "31415",
+        "VITE_DAEMON_WS_PORT": "31415",
         "MAINFRAME_EXTERNAL_DAEMON": "1",
         "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe}"
       }

@@ -159,9 +159,32 @@ function threadEntryToSessionItem(entry: SessionThreadEntry): SessionItem {
  * Project an already-ordered array of thread entries (the store-scope
  * `s.threads.threadItems`) to SessionItem[]. Drops the custom-less new/draft
  * thread before mapping.
+ *
+ * NOTE: the store-scope `s.threads.threadItems` is the FULL thread map — it
+ * contains BOTH regular and archived threads (aui splits them only into the
+ * `threadIds` / `archivedThreadIds` id buckets, never in `threadItems`). So this
+ * projection includes archived sessions; callers that want the visible list
+ * (which must exclude archived) use `regularThreadItemsToSessionItems` instead.
+ * Callers that need archived visibility (e.g. the archived-active fallback in
+ * use-session-list-router) keep using this one.
  */
 export function threadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
   return entries.filter(hasSessionCustom).map(threadEntryToSessionItem);
+}
+
+/**
+ * Regular (non-archived) sessions only — the source for the sidebar list and any
+ * project/attention aggregation over the visible set. Archived sessions live in
+ * the ArchivedSessionsDialog, never the main list; including them here is the
+ * archived-leak bug that surfaces when projecting the full store-scope
+ * `threadItems` array (which the legacy `threadListStateToSessionItems` avoided
+ * by walking the regular-only `threadIds` bucket).
+ */
+export function regularThreadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
+  return entries
+    .filter(hasSessionCustom)
+    .filter((entry) => entry.status !== 'archived')
+    .map(threadEntryToSessionItem);
 }
 
 /**

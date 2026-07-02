@@ -10,7 +10,7 @@
  * Responsive: @max-[300px] hides time; @max-[220px] hides meta row.
  */
 import type { MouseEvent } from 'react';
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import {
   ThreadListItemPrimitive,
   ThreadListItemRuntimeProvider,
@@ -39,11 +39,24 @@ function dotClass(badge: SessionBadge): string {
     case 'working':
       return 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin';
     case 'waiting':
-      return badge.unread
-        ? 'size-2 bg-mf-warning shadow-[0_0_0_3px_color-mix(in_srgb,var(--mf-warning)_35%,transparent)] animate-pulse'
-        : 'size-2 bg-mf-warning';
+      // waiting+unread is the ping-halo beacon rendered separately in StatusDot.
+      return 'size-[9px] bg-mf-warning';
     case 'idle':
       return badge.unread ? 'size-1.5 bg-primary' : 'size-1.5 bg-mf-text-4 opacity-50';
+  }
+}
+
+/** The dot is the row's ONLY status indicator (no text pill) — the tooltip carries the label. */
+function dotLabel(badge: SessionBadge): string {
+  switch (badge.base) {
+    case 'worktree-missing':
+      return 'Worktree missing';
+    case 'working':
+      return 'Working';
+    case 'waiting':
+      return badge.unread ? 'Answer ready' : 'Your turn';
+    case 'idle':
+      return badge.unread ? 'New activity' : 'Idle';
   }
 }
 
@@ -55,44 +68,27 @@ export function StatusDot({ badge }: { badge: SessionBadge }) {
     // A separate absolute element expands outward and fades (animate-ping),
     // while the inner dot stays solid and non-animated.
     return (
-      <span
-        data-testid="sessions-row-status-dot"
-        aria-label={badge.base}
-        className="relative inline-flex size-2.5 flex-shrink-0 items-center justify-center"
-      >
-        <span className="absolute size-full animate-ping rounded-full bg-mf-warning opacity-75" />
-        <span className="relative size-[9px] rounded-full bg-mf-warning" />
-      </span>
+      <Hint label={dotLabel(badge)}>
+        <span
+          data-testid="sessions-row-status-dot"
+          aria-label={badge.base}
+          className="relative inline-flex size-2.5 flex-shrink-0 items-center justify-center"
+        >
+          <span className="absolute size-full animate-ping rounded-full bg-mf-warning opacity-75" />
+          <span className="relative size-[9px] rounded-full bg-mf-warning shadow-[0_0_0_2px_color-mix(in_srgb,var(--mf-warning)_18%,transparent)]" />
+        </span>
+      </Hint>
     );
   }
 
   return (
-    <span
-      data-testid="sessions-row-status-dot"
-      aria-label={badge.base}
-      className={`inline-block flex-shrink-0 rounded-full ${dotClass(badge)}`}
-    />
-  );
-}
-
-export function AnswerPill({ badge }: { badge: SessionBadge }) {
-  if (badge.base !== 'waiting') return null;
-  return badge.unread ? (
-    // Solid amber fill with white text — artboard lines 508-509.
-    <span
-      data-testid="sessions-row-answer-pill"
-      className="inline-flex h-[16px] items-center rounded-[5px] bg-mf-warning px-[7px] text-micro font-semibold text-white"
-    >
-      Answer ready
-    </span>
-  ) : (
-    // 45%-opacity amber inset ring — artboard line 510.
-    <span
-      data-testid="sessions-row-answer-pill"
-      className="inline-flex h-[16px] items-center rounded-[5px] px-[7px] text-micro font-medium text-mf-warning shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--mf-warning)_45%,transparent)]"
-    >
-      Your turn
-    </span>
+    <Hint label={dotLabel(badge)}>
+      <span
+        data-testid="sessions-row-status-dot"
+        aria-label={badge.base}
+        className={`inline-block flex-shrink-0 rounded-full ${dotClass(badge)}`}
+      />
+    </Hint>
   );
 }
 
@@ -292,7 +288,6 @@ function SessionRowInner({
                   worktreePath={custom.worktreePath}
                   worktreeMissing={custom.worktreeMissing}
                   detectedPrs={custom.detectedPrs}
-                  badge={badge}
                   tags={custom.tags}
                   colorOf={colorOf}
                   projectId={projectName != null ? custom.projectId : undefined}
@@ -315,7 +310,7 @@ function SessionRowInner({
  * race. We read getState().threadItems (a plain Record) first; only if the id
  * is present do we call getItemById to get the live runtime binding.
  */
-export function SessionRow({
+function SessionRowResolver({
   item,
   colorOf = DEFAULT_COLOR_OF,
   inPinnedGroup = false,
@@ -339,3 +334,9 @@ export function SessionRow({
     </ThreadListItemRuntimeProvider>
   );
 }
+
+// Memoized: on a filter-pill switch the surviving rows receive referentially
+// stable props (item objects come from the threadItems-memoized allItems, colorOf
+// is a useCallback, projectName is a string), so memo short-circuits their
+// re-render — only the rows entering/leaving the filtered set mount/unmount.
+export const SessionRow = memo(SessionRowResolver);

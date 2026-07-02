@@ -1,5 +1,5 @@
 /**
- * Render tests for ChatSessionBar.
+ * Render tests for ChatSessionInline.
  *
  * Strategy:
  *  - Mock `useChatExtras` (from ../runtime/use-chat-thread-runtime) to inject
@@ -17,10 +17,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Module mocks (hoisted — must be before the component import)
 // ---------------------------------------------------------------------------
 
-// Paths are relative to the test file (in thread/__tests__/).
-// The component (thread/ChatSessionBar.tsx) imports `../runtime/...` and
-// `../composer/...`, which resolve to `chat/runtime/...` and `chat/composer/...`.
-// From this test file (thread/__tests__/) the same modules are two levels up.
+// Paths are relative to the test file (in thread/__tests__/). The component
+// (thread/ChatSessionInline.tsx) imports `../runtime/...` and `../composer/...`,
+// which resolve to `chat/runtime/...` and `chat/composer/...`. From this test
+// file (thread/__tests__/) the same modules are two levels up.
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   useChatExtras: vi.fn(),
 }));
@@ -38,7 +38,7 @@ vi.mock('../../composer/config-toolbar/ProviderModelSelect', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { ChatSessionBar } from '../ChatSessionBar';
+import { ChatSessionInline } from '../ChatSessionInline';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { useAdapters } from '../../composer/config-toolbar/use-composer-tuning';
 import { createChatThreadState, reduceChatThreadState } from '../../controller/chat-thread-state';
@@ -49,7 +49,7 @@ import type { Chat, AdapterInfo } from '@qlan-ro/mainframe-types';
 // Fixtures
 // ---------------------------------------------------------------------------
 
-/** Minimal Chat fixture — only fields ChatSessionBar reads. */
+/** Minimal Chat fixture — only fields ChatSessionInline reads. */
 function makeChat(overrides: Partial<Chat> = {}): Chat {
   return {
     id: 'c1',
@@ -94,81 +94,98 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1. Renders nothing when extras or chatConfig is absent
+// 1. Renders nothing when chat config hasn't loaded
 // ---------------------------------------------------------------------------
 
-describe('ChatSessionBar — renders nothing when state is absent', () => {
-  it('renders nothing when useChatExtras returns undefined', () => {
+describe('ChatSessionInline — renders nothing when config is absent', () => {
+  it('renders nothing (model part) when useChatExtras returns undefined', () => {
     vi.mocked(useChatExtras).mockReturnValue(undefined);
 
-    render(<ChatSessionBar />);
+    const { container } = render(<ChatSessionInline part="model" />);
 
-    expect(screen.queryByTestId('chat-session-bar')).toBeNull();
+    expect(container.firstChild).toBeNull();
   });
 
-  it('renders nothing when extras.state.chatConfig is null', () => {
+  it('renders nothing (status part) when extras.state.chatConfig is null', () => {
     vi.mocked(useChatExtras).mockReturnValue(
       makeExtras(createChatThreadState('c1')) as ReturnType<typeof useChatExtras>,
     );
 
-    render(<ChatSessionBar />);
+    const { container } = render(<ChatSessionInline part="status" />);
 
-    expect(screen.queryByTestId('chat-session-bar')).toBeNull();
+    expect(container.firstChild).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Adapter and model labels
+// 2. Model part
 // ---------------------------------------------------------------------------
 
-describe('ChatSessionBar — adapter and model labels', () => {
-  it('shows the adapter name "Claude" from the adapters registry', () => {
-    render(<ChatSessionBar />);
-
-    expect(screen.getByTestId('chat-session-bar-adapter').textContent).toBe('Claude');
-  });
-
+describe('ChatSessionInline — model part', () => {
   it('shows the model label "Sonnet 4.6" from the adapters registry', () => {
-    render(<ChatSessionBar />);
+    render(<ChatSessionInline part="model" />);
 
-    expect(screen.getByTestId('chat-session-bar-model').textContent).toBe('Sonnet 4.6');
+    expect(screen.getByTestId('chat-header-model').textContent).toBe('Sonnet 4.6');
   });
 
-  it('falls back to chat.adapterId when the adapter is not found in the registry', () => {
+  it('falls back to chat.model when the model is not found in the adapter registry', () => {
     vi.mocked(useAdapters).mockReturnValue([]);
 
-    render(<ChatSessionBar />);
+    render(<ChatSessionInline part="model" />);
 
-    expect(screen.getByTestId('chat-session-bar-adapter').textContent).toBe('claude');
+    expect(screen.getByTestId('chat-header-model').textContent).toBe('sonnet-4-6');
   });
 
-  it('renders the root chat-session-bar element', () => {
-    render(<ChatSessionBar />);
+  it('does not render the adapter name text "Claude"', () => {
+    render(<ChatSessionInline part="model" />);
 
-    expect(screen.getByTestId('chat-session-bar')).toBeInTheDocument();
+    expect(screen.queryByText('Claude')).toBeNull();
+  });
+
+  it('does not render a "·" separator', () => {
+    render(<ChatSessionInline part="model" />);
+
+    expect(screen.queryByText('·')).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Context percentage display
+// 3. Status part — context percentage
 // ---------------------------------------------------------------------------
 
-describe('ChatSessionBar — context percentage', () => {
-  it('shows "38%" when contextUsage.percentage is 38', () => {
+describe('ChatSessionInline — status part context percentage', () => {
+  it('shows "42%" when contextUsage.percentage is 42', () => {
     const state = reduceChatThreadState(stateWithChat(makeChat()), {
       type: 'context.usage',
-      percentage: 38,
-      totalTokens: 76_000,
+      percentage: 42,
+      totalTokens: 84_000,
       maxTokens: 200_000,
     });
     vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
 
-    render(<ChatSessionBar />);
+    render(<ChatSessionInline part="status" />);
 
-    expect(screen.getByTestId('chat-session-bar-context-pct').textContent).toBe('38%');
+    expect(screen.getByTestId('chat-header-context-pct').textContent).toBe('42%');
   });
 
-  it('context-pct element is absent when there is no contextUsage and no contextWindow on the model', () => {
+  it('renders 8 meter segments', () => {
+    const state = reduceChatThreadState(stateWithChat(makeChat()), {
+      type: 'context.usage',
+      percentage: 42,
+      totalTokens: 84_000,
+      maxTokens: 200_000,
+    });
+    vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
+
+    render(<ChatSessionInline part="status" />);
+
+    // Segments are the 3px-wide bars inside the meter (Hint-wrapped, so not
+    // direct children of the container) — count them by their width class.
+    const meter = screen.getByTestId('chat-header-context');
+    expect(meter.querySelectorAll('.w-\\[3px\\]').length).toBe(8);
+  });
+
+  it('renders nothing when pct is null (no contextUsage and no contextWindow)', () => {
     const adapterNoWindow: AdapterInfo = {
       id: 'claude',
       name: 'Claude',
@@ -176,60 +193,59 @@ describe('ChatSessionBar — context percentage', () => {
       installed: true,
     } as unknown as AdapterInfo;
     vi.mocked(useAdapters).mockReturnValue([adapterNoWindow]);
-    // contextUsage is null in the base state from stateWithChat(makeChat())
-    // lastContextTokensInput is 0, so fallback would still be 0% — but no contextWindow → null
     vi.mocked(useChatExtras).mockReturnValue(makeExtras(stateWithChat(makeChat())) as ReturnType<typeof useChatExtras>);
 
-    render(<ChatSessionBar />);
+    const { container } = render(<ChatSessionInline part="status" />);
 
-    expect(screen.queryByTestId('chat-session-bar-context-pct')).toBeNull();
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByTestId('chat-header-context')).toBeNull();
+    expect(screen.queryByTestId('chat-header-context-pct')).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. Status indicator text
+// 4. Status part — no status text
 // ---------------------------------------------------------------------------
 
-describe('ChatSessionBar — status indicator text', () => {
-  it('shows "Awaiting" when there is a pending permission entry', () => {
-    const state = reduceChatThreadState(stateWithChat(makeChat()), {
-      type: 'permission.requested',
-      requestId: 'r1',
-      request: { requestId: 'r1', toolName: 'Bash', toolUseId: 'tu1', input: {}, suggestions: [] },
-    });
+describe('ChatSessionInline — status part has no status text', () => {
+  it('does not render "Thinking" when run state is running', () => {
+    const state = reduceChatThreadState(
+      reduceChatThreadState(stateWithChat(makeChat()), {
+        type: 'context.usage',
+        percentage: 42,
+        totalTokens: 84_000,
+        maxTokens: 200_000,
+      }),
+      { type: 'run.started' },
+    );
     vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
 
-    render(<ChatSessionBar />);
+    render(<ChatSessionInline part="status" />);
 
-    const statusContainer = screen.getByTestId('chat-session-bar-status');
-    expect(statusContainer.textContent).toContain('Awaiting');
+    expect(screen.queryByText('Thinking')).toBeNull();
+    expect(screen.queryByText('Awaiting')).toBeNull();
+    expect(screen.queryByText('Compacting')).toBeNull();
+    expect(screen.queryByText('Error')).toBeNull();
   });
 
-  it('shows "Compacting" when compacting is true', () => {
-    const state = reduceChatThreadState(stateWithChat(makeChat()), { type: 'compact.started' });
+  it('does not render any status word anywhere in the status part output', () => {
+    const state = reduceChatThreadState(
+      reduceChatThreadState(stateWithChat(makeChat()), {
+        type: 'context.usage',
+        percentage: 42,
+        totalTokens: 84_000,
+        maxTokens: 200_000,
+      }),
+      { type: 'run.started' },
+    );
     vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
 
-    render(<ChatSessionBar />);
+    const { container } = render(<ChatSessionInline part="status" />);
 
-    const statusContainer = screen.getByTestId('chat-session-bar-status');
-    expect(statusContainer.textContent).toContain('Compacting');
-  });
-
-  it('shows "Thinking" when run-state is running', () => {
-    const state = reduceChatThreadState(stateWithChat(makeChat()), { type: 'run.started' });
-    vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
-
-    render(<ChatSessionBar />);
-
-    const statusContainer = screen.getByTestId('chat-session-bar-status');
-    expect(statusContainer.textContent).toContain('Thinking');
-  });
-
-  it('shows no status text when idle with no conditions', () => {
-    // Default state from beforeEach: idle, no permissions, not compacting.
-    render(<ChatSessionBar />);
-
-    const statusContainer = screen.getByTestId('chat-session-bar-status');
-    expect(statusContainer.textContent?.trim()).toBe('');
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('Thinking');
+    expect(text).not.toContain('Awaiting');
+    expect(text).not.toContain('Compacting');
+    expect(text).not.toContain('Error');
   });
 });
