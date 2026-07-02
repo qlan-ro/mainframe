@@ -79,7 +79,7 @@ function WfCompositeHead({ node, summary, right }: WfCompositeHeadProps): React.
   return (
     <div className="flex min-w-0 items-center gap-[9px]">
       <WfKindChip kind={node.kind} />
-      <span className="overflow-hidden text-ellipsis whitespace-nowrap text-body font-bold text-foreground">
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap text-body font-bold tracking-[-0.1px] text-foreground">
         {title}
       </span>
       {summary && <span className="whitespace-nowrap text-caption text-mf-text-3">{summary}</span>}

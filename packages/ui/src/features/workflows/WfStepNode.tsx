@@ -14,7 +14,7 @@
  * arbitrary `[Npx]` classes — integer Tailwind steps render compressed here.
  */
 import React, { useState } from 'react';
-import { RotateCw, TriangleAlert, ExternalLink, ChevronDown } from 'lucide-react';
+import { RotateCw, TriangleAlert, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WfKindChip, WfStatusTag, WfStatusPip } from './WfStatus';
 import { getKindMeta } from './glyphs';
@@ -163,7 +163,7 @@ export function WfStepNode({ node, onOpenChat }: WfStepNodeProps): React.ReactEl
               {/* Title */}
               <span
                 className={cn(
-                  'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-body font-semibold',
+                  'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-body font-semibold tracking-[-0.1px]',
                   isMuted ? 'text-mf-text-3' : 'text-foreground',
                 )}
               >
@@ -230,12 +230,13 @@ export function WfStepNode({ node, onOpenChat }: WfStepNodeProps): React.ReactEl
                   onOpenChat(node.chatId!);
                 }}
                 className={cn(
-                  'inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-background px-[9px] py-1.5',
+                  'inline-flex w-fit items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[9px] pr-[11px] py-1.5',
                   'text-caption font-semibold text-primary transition-colors hover:bg-accent',
                 )}
               >
-                <ExternalLink size={12} aria-hidden />
+                <MessageSquare size={12} aria-hidden />
                 Open agent chat
+                <ChevronRight size={9} aria-hidden />
               </button>
             )}
           </div>

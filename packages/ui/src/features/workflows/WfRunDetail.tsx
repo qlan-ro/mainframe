@@ -109,7 +109,7 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
       {/* ── Header ── */}
-      <div className="flex shrink-0 flex-col border-b border-border px-[18px] pb-[13px] pt-[14px]">
+      <div className="flex shrink-0 flex-col border-b-[0.5px] border-border px-[18px] pb-[13px] pt-[14px]">
         {/* Back row */}
         <div className="flex items-center gap-[10px]">
           <button
@@ -216,7 +216,7 @@ export function WfRunDetail({ port }: WfRunDetailProps): React.ReactElement | nu
 
       {/* ── Produced-outputs footer ── */}
       {outputEntries != null && outputEntries.length > 0 && (
-        <div className="shrink-0 border-t border-border bg-mf-content2 px-[18px] pb-[13px] pt-[11px]">
+        <div className="shrink-0 border-t-[0.5px] border-border bg-mf-content2 px-[18px] pb-[13px] pt-[11px]">
           {/* Header row: green CircleDot + title + "returned to…" subtitle */}
           <div className="mb-[8px] flex items-center gap-[7px]">
             <CircleDot size={12} className="shrink-0 text-mf-success" aria-hidden />
