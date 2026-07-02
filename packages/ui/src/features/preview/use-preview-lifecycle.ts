@@ -7,6 +7,13 @@ interface PreviewLifecycleProps {
   status: LaunchProcessStatus | null;
   port: number | null;
   /**
+   * The fully-resolved webview URL — `http://localhost:${port}` on a local
+   * daemon, the Cloudflare tunnel URL on a remote one; null while a remote
+   * tunnel is still pending. The hook does not derive this from `port`
+   * itself; the caller resolves locality and injects it.
+   */
+  resolvedUrl: string | null;
+  /**
    * The precise inner frame the webview should cover (e.g. the phone frame in
    * MOBILE mode, or the inner overlay div in DESKTOP mode). When present, mount()
    * anchors the native webview to this element so refit() reads its rect — restoring
@@ -25,6 +32,7 @@ interface PreviewLifecycleProps {
 export function usePreviewLifecycle({
   status,
   port,
+  resolvedUrl,
   anchorRef,
   containerRef,
   projectId,
@@ -32,12 +40,14 @@ export function usePreviewLifecycle({
 }: PreviewLifecycleProps): {
   processStopped: boolean;
   handle: PreviewHandle | null;
+  pendingTunnel: boolean;
 } {
   const host = useHost();
   const [handle, setHandle] = useState<PreviewHandle | null>(null);
   const handleRef = useRef<PreviewHandle | null>(null);
   const prevStatusRef = useRef<LaunchProcessStatus | null>(null);
   const [processStopped, setProcessStopped] = useState(false);
+  const [pendingTunnel, setPendingTunnel] = useState(false);
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
@@ -55,20 +65,27 @@ export function usePreviewLifecycle({
     if (status !== 'running' || port === null) return;
     setProcessStopped(false);
 
-    const url = `http://localhost:${port}`;
+    // No resolved URL yet (remote tunnel still coming up) — do not mount; the
+    // body renders the pending state until the URL arrives (WS event or seed).
+    if (resolvedUrl === null) {
+      setPendingTunnel(true);
+      return;
+    }
+    setPendingTunnel(false);
+
     if (!handleRef.current) {
       // Prefer the anchor (phone-frame in mobile, inner overlay in desktop) so
       // the native webview's initial rect and subsequent refit() calls track the
       // precise frame — matching pre-Task-7 anchorRef ?? containerRef semantics.
       const mountEl = anchorRef.current ?? containerRef.current;
       if (!mountEl) return;
-      const h = host.preview.mount(mountEl, url, { projectId, device });
+      const h = host.preview.mount(mountEl, resolvedUrl, { projectId, device });
       handleRef.current = h;
       setHandle(h);
     } else {
-      void handleRef.current.navigate(url).catch((e) => console.warn('[preview] lifecycle navigate', e));
+      void handleRef.current.navigate(resolvedUrl).catch((e) => console.warn('[preview] lifecycle navigate', e));
     }
-  }, [status, port, anchorRef, containerRef, projectId, device, host]);
+  }, [status, port, resolvedUrl, anchorRef, containerRef, projectId, device, host]);
 
   useEffect(() => {
     return () => {
@@ -77,5 +94,5 @@ export function usePreviewLifecycle({
     };
   }, []);
 
-  return { processStopped, handle };
+  return { processStopped, handle, pendingTunnel };
 }

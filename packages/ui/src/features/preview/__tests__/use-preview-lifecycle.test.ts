@@ -46,6 +46,7 @@ it('does NOT mount before status is running (port-readiness gating)', () => {
       usePreviewLifecycle({
         status: 'starting',
         port: null,
+        resolvedUrl: null,
         anchorRef,
         containerRef,
         projectId: 'p1',
@@ -61,19 +62,20 @@ it('mounts using the container as fallback when anchorRef is null (desktop)', as
   const containerEl = document.createElement('div');
   const containerRef = { current: containerEl };
   const { rerender } = renderHook(
-    (props: { status: string; port: number | null }) =>
+    (props: { status: string; port: number | null; resolvedUrl: string | null }) =>
       usePreviewLifecycle({
         status: props.status as Parameters<typeof usePreviewLifecycle>[0]['status'],
         port: props.port,
+        resolvedUrl: props.resolvedUrl,
         anchorRef,
         containerRef,
         projectId: 'p1',
         device: 'desktop',
       }),
-    { initialProps: { status: 'starting', port: null as number | null }, wrapper },
+    { initialProps: { status: 'starting', port: null as number | null, resolvedUrl: null as string | null }, wrapper },
   );
   await act(async () => {
-    rerender({ status: 'running', port: 3000 });
+    rerender({ status: 'running', port: 3000, resolvedUrl: 'http://localhost:3000' });
   });
   expect(fakeHost.preview.mount).toHaveBeenCalledWith(
     containerEl,
@@ -88,19 +90,20 @@ it('mounts using the anchor element when present (mobile parity)', async () => {
   const anchorRef = { current: anchorEl };
   const containerRef = { current: document.createElement('div') };
   const { rerender } = renderHook(
-    (props: { status: string; port: number | null }) =>
+    (props: { status: string; port: number | null; resolvedUrl: string | null }) =>
       usePreviewLifecycle({
         status: props.status as Parameters<typeof usePreviewLifecycle>[0]['status'],
         port: props.port,
+        resolvedUrl: props.resolvedUrl,
         anchorRef,
         containerRef,
         projectId: 'p1',
         device: 'mobile',
       }),
-    { initialProps: { status: 'starting', port: null as number | null }, wrapper },
+    { initialProps: { status: 'starting', port: null as number | null, resolvedUrl: null as string | null }, wrapper },
   );
   await act(async () => {
-    rerender({ status: 'running', port: 3000 });
+    rerender({ status: 'running', port: 3000, resolvedUrl: 'http://localhost:3000' });
   });
   // Mount must use the anchor (phone-frame element), not the container
   expect(fakeHost.preview.mount).toHaveBeenCalledTimes(1);
@@ -120,6 +123,7 @@ it('destroys on unmount', async () => {
       usePreviewLifecycle({
         status: 'running',
         port: 3000,
+        resolvedUrl: 'http://localhost:3000',
         anchorRef,
         containerRef,
         projectId: 'p1',
@@ -136,21 +140,73 @@ it('calls handle.destroy when status transitions from running to stopped', async
   const anchorRef = { current: null };
   const containerRef = { current: document.createElement('div') };
   const { rerender } = renderHook(
-    (props: { status: string; port: number | null }) =>
+    (props: { status: string; port: number | null; resolvedUrl: string | null }) =>
       usePreviewLifecycle({
         status: props.status as Parameters<typeof usePreviewLifecycle>[0]['status'],
         port: props.port,
+        resolvedUrl: props.resolvedUrl,
         anchorRef,
         containerRef,
         projectId: 'p1',
         device: 'desktop',
       }),
-    { initialProps: { status: 'running', port: 3000 as number | null }, wrapper },
+    {
+      initialProps: { status: 'running', port: 3000 as number | null, resolvedUrl: 'http://localhost:3000' as string | null },
+      wrapper,
+    },
   );
   await act(async () => {});
   vi.mocked(fakeHandle.destroy).mockReset();
   await act(async () => {
-    rerender({ status: 'stopped', port: null });
+    rerender({ status: 'stopped', port: null, resolvedUrl: null });
   });
   expect(fakeHandle.destroy).toHaveBeenCalled();
+});
+
+it('does NOT mount when running but resolvedUrl is null (tunnel pending) and reports pendingTunnel', async () => {
+  const anchorRef = { current: null };
+  const containerRef = { current: document.createElement('div') };
+  const { result } = renderHook(
+    () =>
+      usePreviewLifecycle({
+        status: 'running',
+        port: 3000,
+        resolvedUrl: null,
+        anchorRef,
+        containerRef,
+        projectId: 'p1',
+        device: 'desktop',
+      }),
+    { wrapper },
+  );
+  await act(async () => {});
+  expect(fakeHost.preview.mount).not.toHaveBeenCalled();
+  expect(result.current.pendingTunnel).toBe(true);
+});
+
+it('mounts to the tunnel url when resolvedUrl is a remote URL', async () => {
+  const anchorRef = { current: null };
+  const containerEl = document.createElement('div');
+  const containerRef = { current: containerEl };
+  const { rerender } = renderHook(
+    (props: { resolvedUrl: string | null }) =>
+      usePreviewLifecycle({
+        status: 'running',
+        port: 3000,
+        resolvedUrl: props.resolvedUrl,
+        anchorRef,
+        containerRef,
+        projectId: 'p1',
+        device: 'desktop',
+      }),
+    { initialProps: { resolvedUrl: null as string | null }, wrapper },
+  );
+  await act(async () => {
+    rerender({ resolvedUrl: 'https://xyz.trycloudflare.com' });
+  });
+  expect(fakeHost.preview.mount).toHaveBeenCalledWith(
+    containerEl,
+    'https://xyz.trycloudflare.com',
+    expect.objectContaining({ projectId: 'p1' }),
+  );
 });
