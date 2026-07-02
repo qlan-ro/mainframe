@@ -1,6 +1,6 @@
 // packages/core/src/workflows/projection/run-tree.ts
 import type { WorkflowDef, StepDef } from '../dsl/types.js';
-import type { StepRunRecord, StepStatus } from '../store/types.js';
+import type { StepRunRecord } from '../store/types.js';
 import { stepKind } from '../dsl/types.js';
 
 export interface RunTreeNode {
