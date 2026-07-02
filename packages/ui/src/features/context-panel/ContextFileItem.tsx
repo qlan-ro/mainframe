@@ -16,6 +16,14 @@ const BADGE_COLOR_CLASS: Record<string, string> = {
   skill: 'text-mf-accent-violet',
 };
 
+/** Per-badge-type background tint: same hue as BADGE_COLOR_CLASS at 20% opacity. */
+const BADGE_BG_CLASS: Record<string, string> = {
+  '@': 'bg-primary/[0.20]',
+  auto: 'bg-mf-text-3/[0.20]',
+  plan: 'bg-mf-accent-amber/[0.20]',
+  skill: 'bg-mf-accent-violet/[0.20]',
+};
+
 /**
  * A context file row: icon + basename + optional badge, full path in a tooltip.
  * Click opens the file via the surface-intent bus (mirrors desktop's
@@ -24,6 +32,7 @@ const BADGE_COLOR_CLASS: Record<string, string> = {
 export function ContextFileItem({ path, displayName, badge }: ContextFileItemProps) {
   const fileName = displayName ?? path.split('/').pop() ?? path;
   const badgeColorClass = badge ? (BADGE_COLOR_CLASS[badge] ?? 'text-mf-text-3') : '';
+  const badgeBgClass = badge ? (BADGE_BG_CLASS[badge] ?? 'bg-mf-text-3/[0.20]') : '';
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -38,7 +47,7 @@ export function ContextFileItem({ path, displayName, badge }: ContextFileItemPro
           <span className="flex-1 truncate">{fileName}</span>
           {badge && (
             <span
-              className={`shrink-0 rounded-[4px] bg-mf-chip px-1.5 font-mono text-micro font-semibold uppercase ${badgeColorClass}`}
+              className={`shrink-0 rounded-[4px] px-1.5 font-mono text-micro font-semibold uppercase ${badgeColorClass} ${badgeBgClass}`}
             >
               {badge}
             </span>
