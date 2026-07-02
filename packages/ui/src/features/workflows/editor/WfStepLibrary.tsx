@@ -12,7 +12,7 @@
  */
 import { X, Layers, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getKindMeta, KIND_META } from '../glyphs';
+import { getKindMetaByModel } from '../glyphs';
 import type { WfStep } from './yaml-serialize';
 
 // ── Doc metadata ──────────────────────────────────────────────────────────────
@@ -116,8 +116,9 @@ interface WfStepTypeCardProps {
 
 function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.ReactElement {
   const doc = KIND_DOC[kind];
-  // 'service' maps to 'connector' in KIND_META; fall back gracefully
-  const meta = KIND_META[kind] ?? KIND_META['connector'] ?? getKindMeta(kind);
+  // WfStepLibrary passes MODEL kinds (branch/loop/subflow/service); resolve
+  // through the alias table to the canonical KIND_META key.
+  const meta = getKindMetaByModel(kind);
   const Icon = meta.Icon;
   const isControl = doc?.flow === 'control';
 
@@ -148,20 +149,23 @@ function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.Re
       {/* Header row */}
       <div className="flex items-center gap-[9px]">
         <span
-          className={cn('inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md', 'bg-muted')}
+          className={cn(
+            'inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md',
+            'bg-current/[0.13]',
+            meta.colorClass,
+          )}
         >
           <Icon size={16} className={meta.colorClass} aria-hidden />
         </span>
-        <span className="flex-1 text-[0.9375rem] font-bold leading-tight tracking-[-0.01em] text-foreground">
+        <span className="flex-1 text-body font-bold leading-tight tracking-[-0.01em] text-foreground">
           {meta.label}
         </span>
         <span
           className={cn(
             'inline-flex h-[18px] items-center rounded-full px-2',
             'text-micro font-bold uppercase tracking-wide',
-            isControl ? '' : 'bg-muted text-mf-text-3',
+            isControl ? 'bg-mf-accent-violet/[0.12] text-[#7a4d9e]' : 'bg-muted text-mf-text-3',
           )}
-          style={isControl ? { background: 'rgba(91,38,154,0.12)', color: '#7a4d9e' } : undefined}
         >
           {isControl ? 'Control flow' : 'Leaf'}
         </span>
@@ -217,14 +221,14 @@ export function WfStepLibrary({ onAdd, onClose }: WfStepLibraryProps): React.Rea
       <div className="flex shrink-0 items-center gap-[10px] border-b border-border px-[16px] py-[13px]">
         <Layers size={15} className="text-primary" aria-hidden />
         <div className="flex-1">
-          <div className="text-[0.9375rem] font-bold leading-tight tracking-[-0.02em] text-foreground">Step types</div>
+          <div className="text-heading font-bold leading-tight tracking-[-0.02em] text-foreground">Step types</div>
           <div className="text-caption text-mf-text-3">Pick a step to add to the workflow</div>
         </div>
         <button
           type="button"
           aria-label="Close step library"
           onClick={onClose}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
+          className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
         >
           <X size={15} aria-hidden />
         </button>

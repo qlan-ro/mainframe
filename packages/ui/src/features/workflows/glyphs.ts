@@ -88,6 +88,31 @@ export function getKindMeta(kind: string): KindMeta {
   return KIND_META[kind] ?? DEFAULT_KIND_META;
 }
 
+/**
+ * Maps a WfStep model kind (as used by WfStepLibrary / the editor) to its
+ * canonical KIND_META key (as used by RunTreeNode / WfKindChip / WfStepNode).
+ * The model and canonical vocabularies diverge for the control-flow kinds:
+ * model `branch`/`loop`/`subflow` correspond to canonical `choose`/`foreach`/`call`,
+ * and model `service` corresponds to canonical `connector`.
+ */
+export const KIND_ALIAS: Record<string, string> = {
+  service: 'connector',
+  branch: 'choose',
+  loop: 'foreach',
+  subflow: 'call',
+};
+
+/**
+ * Resolves kind metadata from a WfStep MODEL kind (e.g. 'branch', 'loop',
+ * 'subflow', 'service') by translating it through KIND_ALIAS to the
+ * canonical KIND_META key. Use this in WfStepLibrary; callers that already
+ * hold a canonical kind (from RunTreeNode) should keep using getKindMeta.
+ */
+export function getKindMetaByModel(modelKind: string): KindMeta {
+  const canonicalKind = KIND_ALIAS[modelKind] ?? modelKind;
+  return KIND_META[canonicalKind] ?? DEFAULT_KIND_META;
+}
+
 // ── Status metadata ────────────────────────────────────────────────────────────
 
 export interface StatusMeta {

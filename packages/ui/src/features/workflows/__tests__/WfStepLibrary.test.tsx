@@ -145,4 +145,17 @@ describe('WfStepLibrary', () => {
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('branch card shows the Branch label and GitBranch icon meta, not Service/Plug', () => {
+    render(<WfStepLibrary onAdd={vi.fn()} onClose={vi.fn()} />);
+    const card = screen.getByTestId('workflows-steplib-branch');
+    expect(card.textContent).toContain('Branch');
+    expect(card.textContent).not.toContain('Service');
+  });
+
+  it('loop card shows Loop, subflow card shows Sub-workflow', () => {
+    render(<WfStepLibrary onAdd={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('workflows-steplib-loop').textContent).toContain('Loop');
+    expect(screen.getByTestId('workflows-steplib-subflow').textContent).toContain('Sub-workflow');
+  });
 });
