@@ -67,7 +67,7 @@ function UrlRow({ url }: { url: string }) {
 
 function SummaryBody({ text }: { text: string }) {
   return (
-    <p data-testid="web-fetch-card-summary" className="px-3 pb-2 pt-1.5 text-label text-mf-text-2 leading-normal">
+    <p data-testid="web-fetch-card-summary" className="px-3 pb-2 pt-1.5 text-label text-muted-foreground leading-normal">
       {text}
     </p>
   );
