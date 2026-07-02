@@ -194,14 +194,14 @@ export function DirectoryPickerModal() {
             data-testid="directory-picker-selected-path"
             className="max-w-[270px] truncate font-mono text-caption text-mf-text-3"
           >
-            {selectedPath ?? ''}
+            {selectedPath ?? '~'}
           </span>
           <div className="flex items-center gap-[8px]">
             <button
               type="button"
               data-testid="directory-picker-cancel"
               onClick={handleCancel}
-              className="rounded-md bg-mf-chip px-[13px] py-[7px] text-label font-medium text-mf-text-2 hover:bg-accent hover:text-accent-foreground"
+              className="rounded-md bg-mf-chip px-[13px] py-[7px] text-label font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Cancel
             </button>

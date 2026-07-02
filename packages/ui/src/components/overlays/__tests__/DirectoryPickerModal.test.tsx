@@ -527,3 +527,41 @@ describe('DirectoryPickerModal — header/footer padding + inline close', () => 
     expect(useDirectoryPicker.getState().pending).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 13. Review-fix pass — phantom token + footer placeholder (area-3 follow-up)
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — review-fix: footer placeholder + real tokens', () => {
+  it('shows the "~" placeholder in the footer path readout before any selection', async () => {
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    // Before any row is selected, the footer must show the same placeholder
+    // as the header crumb ("~"), not a blank string.
+    expect(screen.getByTestId('directory-picker-selected-path').textContent).toBe('~');
+  });
+
+  it('never uses the phantom text-mf-text-2 class on the Cancel button', async () => {
+    mockBrowse.mockResolvedValue([]);
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-cancel')).not.toBeNull();
+    });
+
+    const cancel = screen.getByTestId('directory-picker-cancel');
+    expect(cancel.className).not.toContain('text-mf-text-2');
+    expect(cancel.className).toContain('text-muted-foreground');
+  });
+});

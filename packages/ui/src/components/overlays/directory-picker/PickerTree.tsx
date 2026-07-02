@@ -79,15 +79,15 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
       className={`flex w-full items-center gap-1.5 rounded-sm px-[10px] py-[5px] text-left text-body tracking-[-0.1px] outline-none ${
         isSelected
           ? 'bg-mf-selection font-semibold text-foreground'
-          : 'font-medium text-mf-text-2 hover:bg-accent hover:text-accent-foreground'
+          : 'font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground'
       }`}
       style={{ paddingLeft: `${rowIndent(depth)}px` }}
     >
       {isDirectory ? (
         expanded ? (
-          <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
+          <ChevronDownIcon className="size-3 shrink-0 text-mf-text-3" />
         ) : (
-          <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground" />
+          <ChevronRightIcon className="size-3 shrink-0 text-mf-text-3" />
         )
       ) : (
         <span className="size-3 shrink-0" />
@@ -96,6 +96,9 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         <FolderIcon
           className="size-3.5 shrink-0 text-primary"
           fill={folderState ? 'currentColor' : 'none'}
+          // Approximates the artboard's solid `folder.fill` glyph (16-dirpicker.jsx)
+          // — lucide has no filled FolderIcon variant. 0.2 is a hand-picked
+          // opacity, not a design token; revisit if a filled icon set lands.
           fillOpacity={folderState ? 0.2 : undefined}
         />
       ) : (
@@ -167,7 +170,7 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
           {isLoadingChildren && (
             <p
               data-testid={`directory-picker-node-loading-${node.entry.path}`}
-              className="animate-pulse px-[10px] py-1 text-caption text-mf-text-4"
+              className="animate-pulse px-[10px] py-[4px] text-caption text-mf-text-4"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Loading…
@@ -176,7 +179,7 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
           {isEmpty && (
             <p
               data-testid={`directory-picker-node-empty-${node.entry.path}`}
-              className="px-[10px] py-1 text-caption text-mf-text-4"
+              className="px-[10px] py-[4px] text-caption text-mf-text-4"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Empty
