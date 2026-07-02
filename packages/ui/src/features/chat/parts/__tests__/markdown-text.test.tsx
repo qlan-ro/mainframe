@@ -396,6 +396,45 @@ describe('markdownComponents list markers', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Regression: MarkdownLi must use normal block flow, not `flex`, so mixed
+// inline children (text + <code> chips + <strong> + links) wrap and flow as
+// text instead of being laid out as separate flex items side by side.
+// See docs/design-reference/prototype/08-markdown.jsx:135-153.
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents list item flow (regression: no flex on li)', () => {
+  it('MarkdownLi does not use flex layout classes', () => {
+    const { container } = render(<Li>item</Li>);
+    const li = container.querySelector('li');
+    expect(li!.className).not.toContain('flex');
+    expect(li!.className).not.toContain('items-baseline');
+  });
+
+  it('renders mixed inline children (text + code + text) inside a single flow container, not separate flex items', () => {
+    const { container } = render(
+      <ul>
+        <Li>
+          before text <code>inline code</code> after text
+        </Li>
+      </ul>,
+    );
+    const li = container.querySelector('li')!;
+    expect(li.className).not.toContain('flex');
+    // All children remain direct content of the single <li> flow container —
+    // no wrapping flex-item divs were introduced around the inline runs.
+    expect(li.textContent).toBe('before text inline code after text');
+    expect(li.querySelector('code')).not.toBeNull();
+  });
+
+  it('MarkdownLi uses a hung-marker gutter (relative + pl-[22px]) instead of a flex gap', () => {
+    const { container } = render(<Li>item</Li>);
+    const li = container.querySelector('li');
+    expect(li!.className).toContain('relative');
+    expect(li!.className).toContain('pl-[22px]');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Inline code chip — warm-brown token, xs radius (not the code-block tokens).
 // ---------------------------------------------------------------------------
 
