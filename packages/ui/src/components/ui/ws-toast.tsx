@@ -88,11 +88,14 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
   const [entered, setEntered] = useState(false);
 
   useEffect(() => {
+    let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
-      const raf2 = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf2);
+      raf2 = requestAnimationFrame(() => setEntered(true));
     });
-    return () => cancelAnimationFrame(raf1);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, []);
 
   // auto-dismiss for non-error toasts; pause while hovered

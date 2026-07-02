@@ -187,4 +187,49 @@ describe('WsToastCard', () => {
     expect(onDismiss).toHaveBeenCalledWith('t1');
     vi.useRealTimers();
   });
+
+  it('cancels both scheduled animation frames on unmount before they fire, so no state update happens after unmount', () => {
+    // Mock rAF/cAF so we control exactly when each queued callback runs,
+    // and can prove both frame ids get cancelled on unmount.
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let nextId = 1;
+    const cancelled = new Set<number>();
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      const id = nextId++;
+      callbacks.set(id, cb);
+      return id;
+    });
+    const cafSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id: number) => {
+      cancelled.add(id);
+      callbacks.delete(id);
+    });
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { unmount } = render(<WsToastCard id="t1" type="success" title="Done" onDismiss={vi.fn()} />);
+
+    // Flush only the first rAF (raf1), which schedules the second (raf2) but
+    // does not run it yet — this is the exact unmount race window.
+    const raf1Id = 1;
+    const raf1Cb = callbacks.get(raf1Id);
+    expect(raf1Cb).toBeDefined();
+    raf1Cb?.(0);
+    expect(callbacks.has(2)).toBe(true); // raf2 was scheduled by raf1's callback
+
+    unmount();
+
+    // Both frame ids must have been cancelled by the effect cleanup.
+    expect(cafSpy).toHaveBeenCalledWith(raf1Id);
+    expect(cafSpy).toHaveBeenCalledWith(2);
+    expect(cancelled.has(2)).toBe(true);
+
+    // Since raf2 was cancelled (removed from the pending map), "flushing"
+    // frames post-unmount is a no-op — proving setEntered can't fire on the
+    // unmounted component. No React act()-outside-warning / console.error.
+    for (const cb of callbacks.values()) cb(0);
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    rafSpy.mockRestore();
+    cafSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
 });
