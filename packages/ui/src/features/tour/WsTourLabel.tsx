@@ -79,7 +79,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
             <button
               data-testid="tour-back-btn"
               onClick={onBack}
-              className="h-[28px] px-[12px] rounded-[8px] border-[0.5px] border-border bg-card text-muted-foreground text-label font-[550]"
+              className="h-[28px] px-[12px] rounded-[8px] border-[0.5px] border-border bg-card text-muted-foreground text-label font-medium"
             >
               Back
             </button>

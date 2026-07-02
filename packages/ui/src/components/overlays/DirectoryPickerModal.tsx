@@ -149,7 +149,7 @@ export function DirectoryPickerModal() {
         className="max-w-[480px] p-0 gap-0 flex flex-col max-h-[70vh]"
       >
         <DialogHeader className="flex-row items-center justify-between gap-2 border-b border-border px-[16px] py-[13px] shrink-0">
-          <DialogTitle className="text-heading font-bold tracking-[-0.2px]">
+          <DialogTitle className="text-heading font-bold">
             {pending?.mode === 'file' ? 'Select File' : 'Select Project Directory'}
           </DialogTitle>
           <DialogClose

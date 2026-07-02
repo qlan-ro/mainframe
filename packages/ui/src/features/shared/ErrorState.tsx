@@ -76,7 +76,7 @@ export function ErrorState({ error, onRetry, embedded = false }: ErrorStateProps
             className={[
               'h-[28px] px-[12px] rounded-[8px]',
               'border-[0.5px] border-border bg-background',
-              'text-muted-foreground text-label font-[550]',
+              'text-muted-foreground text-label font-medium',
               'cursor-pointer',
             ].join(' ')}
           >
@@ -89,7 +89,7 @@ export function ErrorState({ error, onRetry, embedded = false }: ErrorStateProps
             className={[
               'h-[28px] px-[12px] rounded-[8px]',
               'border-[0.5px] border-border bg-background',
-              'text-muted-foreground text-label font-[550]',
+              'text-muted-foreground text-label font-medium',
               'cursor-pointer',
             ].join(' ')}
           >
