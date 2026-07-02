@@ -25,14 +25,14 @@ const COMMENT_BUBBLE_STYLE = {
   boxShadow: 'var(--mf-shadow-user-card)',
 } as const;
 
-function CommentSection({ item }: { item: ReviewCommentItem }) {
+function CommentSection({ item, id }: { item: ReviewCommentItem; id: string }) {
   const lines = item.code ? item.code.split('\n') : [];
   return (
     <div data-testid={`chat-user-review-comment-L${item.start}`} className="flex flex-col gap-1.5 px-3 py-2.5">
       <span className="font-mono text-micro text-mf-text-4">{rangeLabel({ start: item.start, end: item.end })}</span>
       {lines.length > 0 && (
         <div className="select-text rounded-md border-[0.5px] border-border bg-mf-raised py-1">
-          <SnippetBlock lines={lines} start={item.start} />
+          <SnippetBlock id={id} lines={lines} start={item.start} />
         </div>
       )}
       {/* The comment reads as a small user bubble inside the file card. */}
@@ -70,9 +70,15 @@ export function ReviewCommentCard({ review }: { review: ReviewComment }) {
       </div>
       {/* No /opacity modifier on token colors (CLAUDE.md token trap). */}
       <div className="divide-y divide-border">
-        {review.comments.map((item, i) => (
-          <CommentSection key={`${item.start}-${i}`} item={item} />
-        ))}
+        {review.comments.map((item, i) => {
+          // start+end identifies a comment's line range; it's the only field
+          // the producer guarantees (see parse-review-comment.ts) and two
+          // comments can't share a range in practice, so it's stable across
+          // re-renders. Index is only a last-resort disambiguator, not the
+          // primary key, per the project's "no array-index domain ids" rule.
+          const sectionId = `L${item.start}-${item.end ?? item.start}-${i}`;
+          return <CommentSection key={sectionId} item={item} id={sectionId} />;
+        })}
       </div>
     </div>
   );

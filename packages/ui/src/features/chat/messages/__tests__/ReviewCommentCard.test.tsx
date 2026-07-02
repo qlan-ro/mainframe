@@ -145,7 +145,7 @@ describe('ReviewCommentCard — long snippet clamp (7.8)', () => {
 
   it('renders the "Show all 10 lines" expander for a 10-line snippet', () => {
     render(<ReviewCommentCard review={longReview} />);
-    expect(screen.getByTestId('chat-user-snippet-expand')).toHaveTextContent('Show all 10 lines');
+    expect(screen.getByTestId(/^chat-user-snippet-expand-/)).toHaveTextContent('Show all 10 lines');
   });
 
   it('does not render an expander for a short (<=7 line) snippet', () => {
@@ -154,6 +154,37 @@ describe('ReviewCommentCard — long snippet clamp (7.8)', () => {
       comments: [{ start: 1, code: 'a\nb\nc', body: 'ok' }],
     };
     render(<ReviewCommentCard review={shortReview} />);
-    expect(screen.queryByTestId('chat-user-snippet-expand')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/^chat-user-snippet-expand-/)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RC5 — multiple long snippets: unique per-comment testids (7.8 duplicate-id fix)
+// ---------------------------------------------------------------------------
+
+describe('ReviewCommentCard — multiple long snippets: unique testids', () => {
+  const longLines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n');
+  const multiLongReview: ReviewComment = {
+    file: '/project/big.ts',
+    comments: [
+      { start: 1, code: longLines, body: 'first' },
+      { start: 20, code: longLines, body: 'second' },
+    ],
+  };
+
+  it('renders two distinct expand toggles, not a duplicate testid', () => {
+    render(<ReviewCommentCard review={multiLongReview} />);
+    const toggles = screen.getAllByTestId(/^chat-user-snippet-expand-/);
+    expect(toggles).toHaveLength(2);
+    const ids = toggles.map((el) => el.getAttribute('data-testid'));
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it('renders two distinct scroll containers, not a duplicate testid', () => {
+    render(<ReviewCommentCard review={multiLongReview} />);
+    const scrollAreas = screen.getAllByTestId(/^chat-user-snippet-scroll-/);
+    expect(scrollAreas).toHaveLength(2);
+    const ids = scrollAreas.map((el) => el.getAttribute('data-testid'));
+    expect(new Set(ids).size).toBe(2);
   });
 });
