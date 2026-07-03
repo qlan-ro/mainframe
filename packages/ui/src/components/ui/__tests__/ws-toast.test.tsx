@@ -188,6 +188,66 @@ describe('WsToastCard', () => {
     vi.useRealTimers();
   });
 
+  describe('permission variant', () => {
+    it('renders the status chip with a shield icon', () => {
+      const { container } = render(
+        <WsToastCard id="t1" type="permission" title="Workspace not trusted" onDismiss={vi.fn()} />,
+      );
+      const chip = screen.getByTestId('toast-status-chip');
+      expect(chip.querySelector('svg.lucide-shield-alert')).toBeTruthy();
+      expect(container.querySelector('[data-testid="toast-status-chip"]')?.className).toContain('bg-mf-warning-tint');
+    });
+
+    it('is persistent — renders no countdown rail', () => {
+      const { container } = render(
+        <WsToastCard id="t1" type="permission" title="Workspace not trusted" onDismiss={vi.fn()} />,
+      );
+      expect(container.querySelector('[data-testid="toast-countdown-rail"]')).toBeNull();
+    });
+
+    it('does not auto-dismiss after 4200ms', () => {
+      vi.useFakeTimers();
+      const onDismiss = vi.fn();
+      render(<WsToastCard id="t1" type="permission" title="Workspace not trusted" onDismiss={onDismiss} />);
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(onDismiss).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('renders a long description via the ReadMore toggle rather than a fixed scroll box', () => {
+      const longDescription = 'x'.repeat(700);
+      render(
+        <WsToastCard
+          id="t1"
+          type="permission"
+          title="Workspace not trusted"
+          description={longDescription}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId('toast-readmore-toggle')).toBeTruthy();
+    });
+
+    it('renders the Trust action via data-testid="toast-action"', () => {
+      const onClick = vi.fn();
+      render(
+        <WsToastCard
+          id="t1"
+          type="permission"
+          title="Workspace not trusted"
+          action={{ label: 'Trust', onClick }}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const button = screen.getByTestId('toast-action');
+      expect(button).toHaveTextContent('Trust');
+      fireEvent.click(button);
+      expect(onClick).toHaveBeenCalled();
+    });
+  });
+
   it('cancels both scheduled animation frames on unmount before they fire, so no state update happens after unmount', () => {
     // Mock rAF/cAF so we control exactly when each queued callback runs,
     // and can prove both frame ids get cancelled on unmount.
