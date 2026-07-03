@@ -47,11 +47,20 @@ vi.mock('../CmDiffEditor', () => ({
   },
 }));
 
-// ── Mock DiffHeader ───────────────────────────────────────────────────────────
+// ── Mock DiffHeader (capture props, incl. filePath — D-reveal wiring) ────────
+type DiffHeaderProps = {
+  fileName: string;
+  changeCount: number;
+  filePath?: string;
+  onPrev: () => void;
+  onNext: () => void;
+};
+const capturedDiffHeaderProps: DiffHeaderProps[] = [];
 vi.mock('../DiffHeader', () => ({
-  DiffHeader: ({ fileName }: { fileName: string; changeCount: number; onPrev: () => void; onNext: () => void }) => (
-    <div data-testid="diff-header-mock">{fileName}</div>
-  ),
+  DiffHeader: (props: DiffHeaderProps) => {
+    capturedDiffHeaderProps.push(props);
+    return <div data-testid="diff-header-mock">{props.fileName}</div>;
+  },
 }));
 
 // ── Mock diff-nav ─────────────────────────────────────────────────────────────
@@ -65,6 +74,7 @@ import { DiffTab } from '../DiffTab';
 
 beforeEach(() => {
   capturedDiffProps.length = 0;
+  capturedDiffHeaderProps.length = 0;
   vi.clearAllMocks();
   activeIdentity.projectId = 'proj-1';
   activeIdentity.chatId = 'chat-1';
@@ -132,6 +142,25 @@ describe('DiffTab — path-only diff (D2)', () => {
 
     await screen.findByText(/No diff available/);
     expect(capturedDiffProps.length).toBe(0);
+  });
+});
+
+describe('DiffTab — reveal wiring', () => {
+  it('passes the tab path through to DiffHeader as filePath (enables the Reveal button)', async () => {
+    mockGetWorkingDiff.mockResolvedValue({
+      original: 'before',
+      modified: 'after',
+      diff: '',
+      source: 'git',
+    });
+
+    render(<DiffTab path="src/index.ts" />);
+
+    await waitFor(() => {
+      const last = capturedDiffHeaderProps[capturedDiffHeaderProps.length - 1];
+      expect(last).toBeDefined();
+      expect(last?.filePath).toBe('src/index.ts');
+    });
   });
 });
 

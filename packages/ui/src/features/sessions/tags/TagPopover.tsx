@@ -202,7 +202,9 @@ export function TagPopover({
             }}
           />
           {lower.length > 0 && nameError !== null && (
-            <div className="text-caption text-destructive px-2 py-1">{tagNameErrorMessage(nameError)}</div>
+            <div data-testid="sessions-tag-popover-name-error" className="text-caption text-destructive px-2 py-1">
+              {tagNameErrorMessage(nameError)}
+            </div>
           )}
           {error && (
             <div data-testid="sessions-tag-popover-error" className="text-caption text-destructive px-2 py-1">

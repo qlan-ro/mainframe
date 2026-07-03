@@ -114,7 +114,13 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
 
   return (
     <div data-testid="diff-tab" className="flex h-full flex-col overflow-hidden">
-      <DiffHeader fileName={fileName} changeCount={changeCount} onPrev={prevChange} onNext={nextChange} />
+      <DiffHeader
+        fileName={fileName}
+        changeCount={changeCount}
+        filePath={path}
+        onPrev={prevChange}
+        onNext={nextChange}
+      />
       <CmDiffEditor
         key={`${original}\x00${modified}`}
         original={original}

@@ -50,14 +50,18 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
       </div>
 
       {phase === 'reachable' && (
-        <NoticeCard kind="success">Daemon reachable{version != null && ` — v${version}`}</NoticeCard>
+        <NoticeCard kind="success" testId="daemon-add-reachable">
+          Daemon reachable{version != null && ` — v${version}`}
+        </NoticeCard>
       )}
       {phase === 'unreachable' && (
         <NoticeCard
           kind="error"
+          testId="daemon-add-unreachable"
           action={
             <button
               type="button"
+              data-testid="daemon-add-retry"
               onClick={onVerify}
               className="text-caption font-semibold text-primary hover:underline"
             >

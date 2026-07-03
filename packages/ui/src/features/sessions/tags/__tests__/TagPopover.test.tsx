@@ -280,6 +280,17 @@ describe('TagPopover — reserved mf: prefix shows error and suppresses create',
     expect(screen.getByText('Tag names may not use the mf: prefix')).toBeTruthy();
     expect(screen.queryByTestId('sessions-tag-popover-create')).toBeNull();
   });
+
+  it('renders the validation message under a stable data-testid', async () => {
+    renderPopover({});
+    const search = screen.getByTestId('sessions-tag-popover-search');
+
+    await userEvent.type(search, 'mf:system');
+
+    expect(screen.getByTestId('sessions-tag-popover-name-error')).toHaveTextContent(
+      'Tag names may not use the mf: prefix',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

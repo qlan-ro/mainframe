@@ -149,7 +149,11 @@ export function QueuedUserTurn({
   const handleEdit = useCallback(() => startEdit({ messageId, content }), [startEdit, messageId, content]);
 
   return (
-    <div data-testid="chat-queued-message" className="group/queued flex w-full flex-col items-end gap-[5px]">
+    <div
+      data-testid="chat-queued-message"
+      data-queued-id={messageId}
+      className="group/queued flex w-full flex-col items-end gap-[5px]"
+    >
       {/* Design 7.6: gap 8 between the Edit/Cancel action group and the bubble. */}
       <div className="flex items-center gap-4">
         <div

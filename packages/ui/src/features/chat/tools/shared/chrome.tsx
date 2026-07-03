@@ -39,15 +39,16 @@ import { cn } from '@/lib/utils';
  * "Running"/"Failed"/"Done" word was redundant).
  */
 export function StatusDot({ result, isError }: { result: unknown; isError: boolean | undefined }) {
+  const status = result === undefined ? 'pending' : isError ? 'error' : 'success';
   const dotClass =
-    result === undefined
+    status === 'pending'
       ? 'bg-muted-foreground opacity-40 animate-pulse'
-      : isError
+      : status === 'error'
         ? 'bg-destructive'
         : 'bg-mf-success';
   return (
     <span className="inline-flex items-center shrink-0">
-      <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+      <span data-testid="tool-card-status-dot" data-status={status} className={`w-2 h-2 rounded-full ${dotClass}`} />
     </span>
   );
 }

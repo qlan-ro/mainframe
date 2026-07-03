@@ -88,9 +88,21 @@ export function MarkerPill({
 // ── MarkerBody ────────────────────────────────────────────────────────────────
 
 /** Disclosure body shown below a marker pill when expanded. */
-export function MarkerBody({ children }: { children: React.ReactNode }) {
+export function MarkerBody({
+  children,
+  testId = 'marker-body',
+}: {
+  children: React.ReactNode;
+  /** data-testid override — pass a card-specific id when multiple marker bodies can be on screen at once. */
+  testId?: string;
+}) {
   return (
-    <div className="w-full rounded-lg border border-border bg-mf-content2 px-3 py-2.5 overflow-hidden">{children}</div>
+    <div
+      data-testid={testId}
+      className="w-full rounded-lg border border-border bg-mf-content2 px-3 py-2.5 overflow-hidden"
+    >
+      {children}
+    </div>
   );
 }
 

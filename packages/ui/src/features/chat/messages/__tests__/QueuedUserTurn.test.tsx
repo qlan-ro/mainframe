@@ -91,6 +91,19 @@ describe('QueuedUserTurn — P1: single item (default position/total)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Q1 — root carries a per-message data-queued-id (every queued turn otherwise
+// shares the same chat-queued-message testid, so tests must disambiguate by
+// content instead of a stable id)
+// ---------------------------------------------------------------------------
+
+describe('QueuedUserTurn — Q1: root data-queued-id', () => {
+  it('sets data-queued-id to the messageId on the chat-queued-message root', () => {
+    renderQueued({ content: 'hello world' });
+    expect(screen.getByTestId('chat-queued-message')).toHaveAttribute('data-queued-id', 'm1');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // P2 — first of multiple: "sends next"
 // ---------------------------------------------------------------------------
 

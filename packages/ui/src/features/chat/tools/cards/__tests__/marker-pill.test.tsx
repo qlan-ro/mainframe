@@ -148,6 +148,17 @@ describe('MarkerBody', () => {
     );
     expect(screen.getByTestId('body-child')).toBeInTheDocument();
   });
+
+  it('carries a default data-testid so the disclosure can be asserted without a class selector', () => {
+    render(<MarkerBody>body text</MarkerBody>);
+    expect(screen.getByTestId('marker-body')).toBeInTheDocument();
+  });
+
+  it('accepts a testId override for per-card disambiguation', () => {
+    render(<MarkerBody testId="chat-skill-loaded-body">body text</MarkerBody>);
+    expect(screen.getByTestId('chat-skill-loaded-body')).toBeInTheDocument();
+    expect(screen.queryByTestId('marker-body')).not.toBeInTheDocument();
+  });
 });
 
 // ── MarkerCapsLabel ───────────────────────────────────────────────────────────

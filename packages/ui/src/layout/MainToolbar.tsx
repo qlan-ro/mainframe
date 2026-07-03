@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, GitBranch, Moon, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { getGitBranch } from '@/lib/api/git';
 import { BranchPopover } from '../features/git/BranchPopover';
 import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
@@ -54,6 +55,26 @@ export function MainToolbar({
   const toggleInspector = useUiPrefs((s) => s.toggleInspector);
   const geo = windowStyleGeometry(windowStyle);
 
+  // BranchPopover writes (checkout/merge/rebase/rename/delete/new-branch) don't
+  // update the persisted `chat.branchName` the label prop derives from — no
+  // git-write route broadcasts `chat.updated`. Re-read the live current branch
+  // straight from git on `onBranchChanged` so the chip never goes stale; reset
+  // whenever the identity itself changes (chat switch) so a stale override from
+  // a previous chat can never leak.
+  const [liveBranch, setLiveBranch] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setLiveBranch(undefined);
+  }, [chatId, branchName]);
+  const handleBranchChanged = useCallback(() => {
+    if (!projectId) return;
+    getGitBranch(port, projectId, chatId)
+      .then(({ branch }) => setLiveBranch(branch ?? undefined))
+      .catch((err: unknown) => {
+        console.warn('[MainToolbar] failed to refresh branch after popover write', err);
+      });
+  }, [port, projectId, chatId]);
+  const displayBranch = liveBranch ?? branchName;
+
   return (
     <div
       data-testid="main-toolbar"
@@ -74,16 +95,17 @@ export function MainToolbar({
         )}
         <span className="flex min-w-0 items-center gap-[5px] text-body font-semibold tracking-tight text-foreground">
           <span className="truncate">{projectName}</span>
-          {branchName && (
+          {displayBranch && (
             <>
               <span className="font-normal text-mf-text-4">|</span>
-              {branchName && projectId ? (
+              {displayBranch && projectId ? (
                 <BranchPopover
                   port={port}
                   projectId={projectId}
                   chatId={chatId}
                   open={branchOpen}
                   onOpenChange={setBranchOpen}
+                  onBranchChanged={handleBranchChanged}
                 >
                   <Hint label="Switch branch">
                     <button
@@ -98,7 +120,7 @@ export function MainToolbar({
                       )}
                     >
                       <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                      <span className="truncate">{branchName}</span>
+                      <span className="truncate">{displayBranch}</span>
                       <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
                     </button>
                   </Hint>
@@ -112,7 +134,7 @@ export function MainToolbar({
                     className="inline-flex h-[22px] min-w-0 max-w-[230px] cursor-not-allowed items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal text-muted-foreground opacity-80"
                   >
                     <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                    <span className="truncate">{branchName}</span>
+                    <span className="truncate">{displayBranch}</span>
                     <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
                   </button>
                 </Hint>

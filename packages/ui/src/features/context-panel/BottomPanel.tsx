@@ -27,7 +27,7 @@ export function BottomPanel() {
   ];
 
   return (
-    <div className="flex shrink-0 flex-col" style={{ height }}>
+    <div data-testid="sidebar-bottom-panel" className="flex shrink-0 flex-col" style={{ height }}>
       <div className="shrink-0 pb-[5px] pl-[8px] pr-[8px] pt-[6px]">
         <div
           data-testid="sidebar-bottom-tab-track"
@@ -50,9 +50,7 @@ export function BottomPanel() {
               >
                 <Icon size={11} className={active ? 'text-primary' : 'text-muted-foreground'} aria-hidden />
                 <span>{t.label}</span>
-                <span
-                  className={`text-micro font-semibold ${active ? 'text-primary' : 'text-mf-text-4'}`}
-                >
+                <span className={`text-micro font-semibold ${active ? 'text-primary' : 'text-mf-text-4'}`}>
                   {t.count}
                 </span>
               </button>

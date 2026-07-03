@@ -48,4 +48,12 @@ describe('BottomPanel', () => {
     expect(screen.getByTestId('skills-body')).toBeInTheDocument();
     expect(useUiPrefs.getState().bottomPanelTab).toBe('skills');
   });
+
+  it('the root div carries a stable testid and owns the persisted height (resize target)', () => {
+    useUiPrefs.setState({ bottomPanelTab: 'context', bottomPanelHeight: 240 });
+    render(<BottomPanel />);
+    const root = screen.getByTestId('sidebar-bottom-panel');
+    expect(root).toBeInTheDocument();
+    expect(root.style.height).toBe('240px');
+  });
 });
