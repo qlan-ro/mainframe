@@ -39,18 +39,74 @@ export function buildMockPlugin(): void {
   );
 }
 
+async function isDaemonReachable(): Promise<boolean> {
+  try {
+    const res = await fetch(`${DAEMON_BASE}/api/projects`, { signal: AbortSignal.timeout(1_000) });
+    return res.ok;
+  } catch {
+    return false; /* connection refused / timeout = port is free, which is what we want */
+  }
+}
+
+/**
+ * Best-effort reap of a stale e2e daemon left squatting on our port by a prior Playwright run
+ * that timed out mid-describe (a timed-out worker is discarded without running `afterAll`, so
+ * `stopDaemon` — and the SIGTERM it sends — never fires; see batch4-fixes-report.md). Left
+ * unreaped, the zombie holds `DAEMON_PORT` for the rest of the process, and every later
+ * describe's `assertPortFree()` fails instantly, cascading through the whole remaining run.
+ *
+ * Deliberately conservative: only ever kills a process whose full command line is unmistakably
+ * OUR daemon entrypoint (`node .../core/dist/index.js`). Anything else on the port — a
+ * developer's real Mainframe instance, an unrelated process — is left alone and still fails loud
+ * via the `assertPortFree` error below. Returns true if it killed something worth re-checking for.
+ */
+function reapStaleE2eDaemon(): boolean {
+  let pids: string[];
+  try {
+    pids = execFileSync('lsof', ['-ti', `tcp:${DAEMON_PORT}`], { encoding: 'utf8' })
+      .split('\n')
+      .map((p) => p.trim())
+      .filter(Boolean);
+  } catch {
+    return false; // lsof found nothing bound to the port (or isn't on PATH) — nothing to reap
+  }
+
+  let killedAny = false;
+  for (const pid of pids) {
+    let cmdline: string;
+    try {
+      cmdline = execFileSync('ps', ['-p', pid, '-o', 'command='], { encoding: 'utf8' }).trim();
+    } catch {
+      continue; // process exited between lsof and ps — nothing left to kill
+    }
+    if (!cmdline.includes('node') || !cmdline.includes(path.join('core', 'dist', 'index.js'))) {
+      continue; // not our daemon entrypoint — never kill an unrecognized process
+    }
+    try {
+      process.kill(Number(pid), 'SIGKILL');
+      killedAny = true;
+    } catch {
+      // already exited — fine, that's the outcome we wanted anyway
+    }
+  }
+  return killedAny;
+}
+
 /**
  * Fail fast if something is already answering on our port. Without this, a foreign daemon
  * (e.g. a dev Mainframe) would absorb the bind and the suite would run against — and pollute —
  * real data. See git history: this exact footgun registered junk projects in a real instance.
+ *
+ * Before failing, make one attempt to reap a stale *e2e* daemon (see `reapStaleE2eDaemon`) —
+ * this is the common case when a previous run timed out mid-test. A daemon left by a clean
+ * developer session, or anything not matching our entrypoint, is never touched and still throws.
  */
 export async function assertPortFree(): Promise<void> {
-  let reachable = false;
-  try {
-    const res = await fetch(`${DAEMON_BASE}/api/projects`, { signal: AbortSignal.timeout(1_000) });
-    reachable = res.ok;
-  } catch {
-    reachable = false; /* connection refused / timeout = port is free, which is what we want */
+  let reachable = await isDaemonReachable();
+  if (reachable && reapStaleE2eDaemon()) {
+    // Give the OS a moment to release the socket after SIGKILL, then re-check once.
+    await new Promise((r) => setTimeout(r, 500));
+    reachable = await isDaemonReachable();
   }
   if (reachable) {
     throw new Error(
