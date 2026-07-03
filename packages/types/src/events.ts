@@ -67,6 +67,7 @@ export type DaemonEvent =
   | { type: 'adapter.models.updated'; adapterId: string; models: import('./adapter.js').AdapterModel[] }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }
+  | { type: 'chat.trustRequired'; chatId: string; projectPath: string }
   | {
       type: 'tunnel:status';
       state: 'starting' | 'ready' | 'dns_verified' | 'error' | 'stopped';

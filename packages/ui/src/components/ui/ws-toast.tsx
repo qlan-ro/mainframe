@@ -10,12 +10,13 @@
  * Not in the Lucide set; ported from WsInfoGlyph in the prototype.
  */
 import { useEffect, useState } from 'react';
-import { Check, TriangleAlert, X } from 'lucide-react';
+import { Check, ShieldAlert, TriangleAlert, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ReadMore } from './read-more';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info';
+export type ToastType = 'success' | 'error' | 'warning' | 'info' | 'permission';
 
 export interface WsToastAction {
   label: string;
@@ -42,6 +43,7 @@ const CHIP_CONFIG: Record<ToastType, { bg: string; ink: string }> = {
   error: { bg: 'bg-mf-destructive-tint', ink: 'text-destructive' },
   warning: { bg: 'bg-mf-warning-tint', ink: 'text-mf-warning' },
   info: { bg: 'bg-primary/10', ink: 'text-primary' },
+  permission: { bg: 'bg-mf-warning-tint', ink: 'text-mf-warning' },
 };
 
 // ─── WsInfoGlyph ─────────────────────────────────────────────────────────────
@@ -71,6 +73,7 @@ function WsInfoGlyph({ size = 14 }: { size?: number }) {
 function ChipIcon({ type }: { type: ToastType }) {
   if (type === 'info') return <WsInfoGlyph size={14} />;
   if (type === 'success') return <Check size={14} aria-hidden />;
+  if (type === 'permission') return <ShieldAlert size={14} aria-hidden />;
   // error and warning both use TriangleAlert
   return <TriangleAlert size={14} aria-hidden />;
 }
@@ -81,7 +84,7 @@ const AUTO_DISMISS_MS = 4200;
 
 export function WsToastCard({ id, type, title, description, action, chatId, onOpenSession, onDismiss }: WsToastProps) {
   const chip = CHIP_CONFIG[type];
-  const isAuto = type !== 'error';
+  const isAuto = type !== 'error' && type !== 'permission';
   const [hover, setHover] = useState(false);
   // Post-mount RAF-driven entrance: starts hidden/offset, flips to visible on
   // the next frame so the opacity/transform transition below actually animates.
@@ -139,9 +142,15 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
       <div className="flex-1 min-w-0">
         <div className="text-body font-semibold text-foreground tracking-tight">{title}</div>
         {description && (
-          <div className="text-label text-muted-foreground mt-[3px] leading-normal max-h-[88px] overflow-auto [overflow-wrap:anywhere]">
+          <ReadMore
+            measureText={description}
+            threshold={160}
+            clampLines={3}
+            contentClassName="text-label text-muted-foreground mt-[3px] leading-normal [overflow-wrap:anywhere]"
+            testId="toast-readmore-toggle"
+          >
             {description}
-          </div>
+          </ReadMore>
         )}
         {action && (
           <button

@@ -33,10 +33,20 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(_session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
+// The CLI prints this to stderr but keeps running — it is advisory, not fatal.
+// Require both tokens so a genuine fatal error that happens to mention "has
+// not been trusted" isn't misclassified as the advisory.
+const TRUST_NOT_TRUSTED = /has not been trusted/i;
+const TRUST_PERMISSIONS = /permissions\.allow|hasTrustDialogAccepted/i;
+
+export function handleStderr(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
+  if (TRUST_NOT_TRUSTED.test(message) && TRUST_PERMISSIONS.test(message)) {
+    sink.onTrustRequired?.(session.projectPath);
+    return;
+  }
   sink.onError(new Error(message));
 }
 

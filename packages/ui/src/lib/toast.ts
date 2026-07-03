@@ -30,7 +30,7 @@ export interface MfToastInput extends MfToastOptions {
 
 function fire(input: MfToastInput) {
   const { type, title, description, chatId, action } = input;
-  const duration = type === 'error' ? Infinity : AUTO_DISMISS_MS;
+  const duration = type === 'error' || type === 'permission' ? Infinity : AUTO_DISMISS_MS;
 
   toast.custom(
     (id) =>
@@ -64,4 +64,8 @@ function info(title: string, opts?: MfToastOptions) {
   fire({ type: 'info', title, ...opts });
 }
 
-export const mfToast = Object.assign(fire, { success, error, warning, info });
+function permission(title: string, opts?: MfToastOptions) {
+  fire({ type: 'permission', title, ...opts });
+}
+
+export const mfToast = Object.assign(fire, { success, error, warning, info, permission });

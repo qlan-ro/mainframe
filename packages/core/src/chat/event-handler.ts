@@ -540,5 +540,9 @@ function buildSessionSink(
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
     },
+
+    onTrustRequired(projectPath: string) {
+      emitEvent({ type: 'chat.trustRequired', chatId, projectPath });
+    },
   };
 }

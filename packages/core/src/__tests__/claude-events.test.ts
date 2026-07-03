@@ -27,6 +27,7 @@ function createSink(): SessionSink {
     onCliMessage: vi.fn(),
     onSkillLoaded: vi.fn(),
     onSubagentChild: vi.fn(),
+    onTrustRequired: vi.fn(),
   };
 }
 
@@ -611,6 +612,41 @@ describe('handleStderr', () => {
 
     handleStderr(session, Buffer.from('   \n'), sink);
     expect(sink.onError).not.toHaveBeenCalled();
+  });
+
+  it('routes the untrusted-workspace advisory to onTrustRequired, not onError', () => {
+    const sink = createSink();
+    const session = { projectPath: '/home/me/proj' } as unknown as ClaudeSession;
+    handleStderr(
+      session,
+      Buffer.from(
+        'Ignoring 4 permissions.allow entries from .claude/settings.local.json: ' +
+          'this workspace has not been trusted. Run Claude Code interactively here once...',
+      ),
+      sink,
+    );
+    expect(sink.onTrustRequired).toHaveBeenCalledWith('/home/me/proj');
+    expect(sink.onError).not.toHaveBeenCalled();
+  });
+
+  it('still routes genuine stderr to onError', () => {
+    const sink = createSink();
+    const session = { projectPath: '/p' } as unknown as ClaudeSession;
+    handleStderr(session, Buffer.from('TypeError: boom'), sink);
+    expect(sink.onError).toHaveBeenCalledTimes(1);
+    expect(sink.onTrustRequired).not.toHaveBeenCalled();
+  });
+
+  it('routes a fatal error merely containing "has not been trusted" to onError, not onTrustRequired', () => {
+    const sink = createSink();
+    const session = { projectPath: '/p' } as unknown as ClaudeSession;
+    handleStderr(
+      session,
+      Buffer.from('FatalError: this workspace has not been trusted and the process crashed unexpectedly'),
+      sink,
+    );
+    expect(sink.onError).toHaveBeenCalledTimes(1);
+    expect(sink.onTrustRequired).not.toHaveBeenCalled();
   });
 });
 

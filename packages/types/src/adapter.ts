@@ -140,6 +140,8 @@ export interface SessionSink {
    * does not match any known tool_use block.
    */
   onSubagentChild(parentToolUseId: string, blocks: import('./chat.js').MessageContent[]): void;
+  /** Non-fatal: the CLI reported the workspace is untrusted (advisory, run continues). */
+  onTrustRequired?(projectPath: string): void;
 }
 
 export interface AdapterSession {
