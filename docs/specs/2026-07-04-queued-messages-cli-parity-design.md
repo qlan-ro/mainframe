@@ -80,13 +80,19 @@ Revive `ClaudeSession.cancelQueuedMessage(uuid)`: send
   assign a fresh uuid, re-send, update the ref, emit `message.queued.snapshot`.
   On lost race: silently discard the edit — the original went through.
 
-### Reload fidelity: unwrap the queued wrapper
+### Reload fidelity: surface `queued_command` attachment entries
 
-Mid-turn-drained messages persist to JSONL as
-`<system-reminder>The user sent a new message while you were working:\n<text>\n\nIMPORTANT: …</system-reminder>`.
-`convertUserEntry` in `history.ts` detects exactly this shape and extracts the
-original text. The regex is pinned against a real JSONL fixture captured by the
-step-0 probe. Other wrapper origins (task-notification, channel) are untouched.
+**Corrected by the step-0 probe (CLI 2.1.198):** on the stream-json path the
+CLI persists a mid-turn-drained message as a structured JSONL entry —
+`{type: 'attachment', attachment: {type: 'queued_command', prompt, source_uuid,
+commandMode: 'prompt'}}` — not as `<system-reminder>` text. The system-reminder
+wrapper exists only in the API message the model sees, never in JSONL.
+`convertHistoryEntry` previously returned `null` for attachment entries, which
+is why processed queued messages vanished from reloaded history. The fix
+converts `commandMode: 'prompt'` entries into user messages at their JSONL
+position (= consumption point); other command modes stay hidden. The test
+fixture is a real captured entry, tracked under the history tests
+(`docs/adapters/` is local-private and stays untracked).
 Between-turn batches stay one merged bubble on reload (unsplittable).
 
 ### Step 0: live probe (gate)
