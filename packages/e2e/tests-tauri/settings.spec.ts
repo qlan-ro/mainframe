@@ -116,11 +116,19 @@ test.describe('§settings', () => {
 
   test('all five tabs render their pane; there is no keybindings tab', async () => {
     const { page } = app;
+    // Open the dialog ONCE, then navigate tabs in place. The previous version
+    // called `openTab()` (which itself calls `openSettings()`) on every loop
+    // iteration — after the first tab, the dialog is already open and its
+    // scrim backdrop (`fixed inset-0 z-50 ...`) covers `sidebar-settings-button`,
+    // so the re-click never lands and the test hangs to the 120s timeout. Real
+    // usage never re-opens an already-open dialog; every other test in this file
+    // calls `openTab`/`openSettings` exactly once per test, which is why this was
+    // the only one affected.
     await openSettings(page);
     const tabs: SettingsTab[] = ['general', 'providers', 'notifications', 'remote-access', 'about'];
     for (const tab of tabs) {
-      await openTab(page, tab);
-      await expect(page.getByTestId(`settings-pane-${tab}`)).toBeVisible();
+      if (tab !== 'general') await page.getByTestId(`settings-nav-${tab}`).click();
+      await expect(page.getByTestId(`settings-pane-${tab}`)).toBeVisible({ timeout: 10_000 });
     }
     await expect(page.getByTestId('settings-nav-keybindings')).toHaveCount(0);
     await closeSettings(page);
@@ -271,14 +279,29 @@ test.describe('§settings', () => {
     await openProviderPane(page, 'claude');
 
     await page.getByTestId('settings-claude-model-dropdown-trigger').click();
-    await page.getByTestId('settings-claude-model-option-claude-opus-4-6').click();
-    await expect(page.getByTestId('settings-claude-model-dropdown-trigger')).toContainText('Opus 4.6');
+    // The daemon probes the REAL `claude` CLI on PATH at startup
+    // (packages/core/.../claude/probe-models.ts) and, when it responds within
+    // the probe timeout, REPLACES the static CLAUDE_MODELS fallback with the
+    // live-installed catalog — confirmed live in this environment (Claude Code
+    // 2.1.198 returns default/opus[1m]/claude-fable-5[1m]/sonnet/haiku, not the
+    // hardcoded claude-opus-4-6/claude-sonnet-4-6/… ids the plan assumed). The
+    // label text differs between sources too ("Opus 4.6 (1M context)" statically
+    // vs whatever the installed CLI reports), but `id: 'opus[1m]'` is present in
+    // BOTH catalogs (packages/core/src/plugins/builtin/claude/adapter.ts
+    // CLAUDE_MODELS), so pick it by id and assert whatever label actually
+    // renders persists, rather than hardcoding a label tied to one source.
+    const option = page.getByTestId('settings-claude-model-option-opus[1m]');
+    await expect(option).toBeVisible({ timeout: 5_000 });
+    const label = (await option.textContent())?.trim();
+    expect(label).toBeTruthy();
+    await option.click();
+
+    const trigger = page.getByTestId('settings-claude-model-dropdown-trigger');
+    await expect(trigger).toContainText(label!);
 
     await closeSettings(page);
     await openProviderPane(page, 'claude');
-    await expect(page.getByTestId('settings-claude-model-dropdown-trigger')).toContainText('Opus 4.6', {
-      timeout: 5_000,
-    });
+    await expect(trigger).toContainText(label!, { timeout: 5_000 });
     await closeSettings(page);
   });
 
