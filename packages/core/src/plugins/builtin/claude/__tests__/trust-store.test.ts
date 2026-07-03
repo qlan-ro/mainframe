@@ -32,4 +32,12 @@ describe('writeWorkspaceTrust', () => {
     const cfg = JSON.parse(readFileSync(p, 'utf8'));
     expect(cfg.projects['/home/me/proj'].hasTrustDialogAccepted).toBe(true);
   });
+
+  it('rejects and leaves the file unchanged when the existing file is corrupt', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trust-'));
+    const p = join(dir, '.claude.json');
+    writeFileSync(p, '{ not json');
+    await expect(writeWorkspaceTrust('/home/me/proj', p)).rejects.toThrow();
+    expect(readFileSync(p, 'utf8')).toBe('{ not json');
+  });
 });
