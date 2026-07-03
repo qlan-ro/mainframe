@@ -33,10 +33,17 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(_session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
+// The CLI prints this to stderr but keeps running — it is advisory, not fatal.
+const TRUST_ADVISORY = /has not been trusted/i;
+
+export function handleStderr(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
+  if (TRUST_ADVISORY.test(message)) {
+    sink.onTrustRequired?.(session.projectPath);
+    return;
+  }
   sink.onError(new Error(message));
 }
 
