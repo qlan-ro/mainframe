@@ -14,6 +14,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { DaemonTarget } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon, setActiveDaemon, subscribeActiveDaemon } from '@/lib/daemon/active-daemon';
+import { setLastDaemonId } from '@/lib/daemon/last-daemon';
 import { disposeDaemonSession } from '@/lib/daemon/dispose-daemon-session';
 import { daemonWs } from '@/lib/daemon/ws-client';
 import { rebindLspToActiveDaemon } from '@/lib/lsp';
@@ -57,6 +58,10 @@ export function ActiveDaemonProvider({ children, initialTarget }: ActiveDaemonPr
   const switchTo = useCallback(async (t: DaemonTarget): Promise<void> => {
     disposeDaemonSession();
     setActiveDaemon(t);
+    // Remember the user's choice so the next launch reconnects to it. Persisted
+    // only on an explicit switch — the boot-time local seed does NOT go through
+    // switchTo, so it can't clobber a saved remote before restore runs.
+    setLastDaemonId(t.id);
     resetDaemonScopedStores();
     try {
       const port = derivePort(t);
