@@ -2,6 +2,8 @@
 
 Mainframe uses a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to expose the daemon over the internet — required for the mobile companion app and any remote access. The tunnel creates a secure outbound connection from your machine to Cloudflare's edge, so you don't need to open ports or configure a firewall.
 
+> This guide covers only the tunnel. For installing and running the daemon itself (prerequisites, the systemd service), see **[Running the Daemon](./running-the-daemon.md)**.
+
 ## Prerequisites
 
 Install `cloudflared` on the machine running the daemon:
