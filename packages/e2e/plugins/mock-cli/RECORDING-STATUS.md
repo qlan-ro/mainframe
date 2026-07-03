@@ -1,5 +1,66 @@
 # Mock-CLI recording status & findings
 
+## 2026-07-03 — app-tauri hand-authored recordings + skills/agents/categories support
+
+Branch `feat/app-tauri-wt`. Infra pass for the `packages/e2e/tests-tauri/*.spec.ts` wishlist
+(`.superpowers/sdd/reports/{tool-cards,gates,transcript,sidebar-chrome,context-panel}-report.md`).
+These recordings are **hand-authored** (not captured from a real `E2E_MODE=record` run against the
+live CLI) — they were written directly against the NDJSON schema `session.ts`/`fixture.ts` read, then
+validated by driving `MockCliAdapter`/`ReplaySession` through each fixture's exact `in`-marker
+sequence with a fake sink (confirms full drain, zero `onError`/desync), and — for the two recordings
+that depend on the new `getToolCategories()` seam below — by running the recording's reconstructed
+`ChatMessage[]` through core's real `prepareMessagesForClient()` to confirm the intended
+`task_progress`/`task_group` display shape actually materializes. Full detail in
+`.superpowers/sdd/reports/recordings-author-report.md`.
+
+New recordings (`packages/e2e/fixtures/recordings/`):
+
+| Key | Exercises |
+|---|---|
+| `ask-question-multi.0` | `AskUserQuestion` with 2 questions, second `multiSelect:true` (3 options) |
+| `permissions-no-suggestions.0` | A `Bash` permission request with `suggestions: []` |
+| `permissions-stacked.0` | Two `onPermission` events back-to-back before any response (one assistant turn calling `Write` then `Bash`) |
+| `task-progress.0` | `TaskCreate`×3 / `TaskUpdate`×3 — final state covers all 3 statuses (pending/in_progress/completed) simultaneously |
+| `task-subagent.0` | `Task` tool_use + `onSubagentChild` nested `Bash` call/result tagged `parentToolUseId` |
+| `web-fetch.0` | `WebFetch` (url + summary result) |
+| `mcp-tool.0` | `mcp__linear__get_issue` — one success call, one erroring call |
+| `unregistered-tool.0` | A tool name (`CustomAnalyticsReport`) not in `TOOL_REGISTRY`, for `ToolFallback` |
+| `compaction.0` | `onCompactStart` → `onCompact` (bare `type:'compaction'` system message) |
+
+### Plugin changes (`packages/e2e/plugins/mock-cli/src/`)
+
+- **`adapter.ts` — `getToolCategories()` added.** Without it, `prepareMessagesForClient` skips ALL
+  tool grouping unconditionally (`if (categories) …` in `display-pipeline.ts`) — so `_task_progress`
+  (`task-progress` card), `_task_group` (subagent transcript nesting), and consecutive-explore
+  grouping were structurally unreachable under mock-cli, no matter what a recording replayed. Mirrors
+  the real `claude` adapter's `explore`/`progress`/`subagent` sets exactly
+  (`packages/core/src/plugins/builtin/claude/adapter.ts`). **`hidden` is deliberately left empty**
+  (a conscious divergence from Claude, not an oversight): Claude hides `AskUserQuestion` raw tool
+  cards, but `tool-cards.spec.ts`'s already-committed "AskUserQuestion display card" test relies on
+  today's uncategorized (visible) mock behavior — mirroring `hidden` verbatim would silently break it.
+  Verified no regression: ran every pre-existing committed recording through
+  `prepareMessagesForClient(messages, categories)` — zero unexpected `tool_group` entries, and
+  `AskUserQuestion` stays `category !== 'hidden'` everywhere it appears (see the report for the
+  script output).
+- **`skills.ts` (new) + `adapter.ts` — `listSkills`/`listAgents` added.** The daemon's
+  `GET /api/adapters/:adapterId/skills|agents` routes 404 with "Adapter not found or does not support
+  skills/agents" whenever `adapter.listSkills`/`listAgents` is undefined
+  (`packages/core/src/server/routes/{skills,agents}.ts`) — both are optional `Adapter` interface
+  members (`packages/types/src/adapter.ts`), a genuine seam `MockCliAdapter` simply didn't implement.
+  `skills.ts` scans **only** `<projectPath>/.claude/skills/*/SKILL.md` and
+  `<projectPath>/.claude/agents/*.md` (no homedir scan, for e2e-project hermeticity) — read-only
+  (list, not create/update/delete; nothing in the current wishlist needs write support). This unlocks
+  seeding `.claude/skills|agents` in a hand-built e2e temp project to populate the Skills/Agents
+  panels under `mock-cli`, previously impossible per `context-panel-report.md`'s finding.
+
+Rebuilt via `pnpm build:mock` (`esbuild plugins/mock-cli/src/index.ts --bundle --platform=node
+--format=cjs --outfile=plugins/mock-cli/index.js`) and sanity-loaded (`require(...).activate` is a
+function). `cd packages/e2e && npx tsc --noEmit` (excludes `plugins/mock-cli`, which has its own
+bundler-resolution tsconfig) and the plugin's own `tsc --noEmit -p plugins/mock-cli/tsconfig.json`
+both pass clean.
+
+---
+
 _Branch `feat/e2e-record-all` (stacks on the mock-cli mechanism PR #363). This is the result of the
 "record fixtures for all AI specs so the suite runs under `E2E_MODE=mock`" effort._
 
