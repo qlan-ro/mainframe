@@ -98,10 +98,10 @@ test.describe('§ADR stress matrix — combined run', () => {
     await expect(page.locator('[data-testid="chat-permission-gate"]')).toHaveCount(0);
 
     // ── Phase 3: reconnect MID-STREAM (checklist 1, 2, 12, 13, 14) ──
-    // Leave the Task card OPEN and park a composer draft — both must survive the re-seed.
-    await composer(page).type('draft that must survive the re-seed');
-
+    // Leave the Task card OPEN, then park a composer draft AFTER the send (sendMessage fills
+    // and submits, which clears the input) — the mid-stream draft must survive the re-seed.
     await sendMessage(page, 'Stream a long twelve-part answer');
+    await composer(page).type('draft that must survive the re-seed');
     await expect(page.getByText('Stream chunk 3 of 12', { exact: false })).toBeVisible({ timeout: 30_000 });
 
     // Scroll up so we are NOT at-bottom, then sever mid-stream.
@@ -146,7 +146,13 @@ test.describe('§ADR stress matrix — combined run', () => {
     await expect(thread.userMessages().filter({ hasText: 'Dedup probe message' })).toHaveCount(1);
 
     // ── Final ledger: full-transcript integrity + bounded re-seeds (checklist 1, 15) ──
-    await expect(thread.userMessages()).toHaveCount(6);
+    // 6 top-level sends. The subagent's prompt also renders as a `chat-user-message` — but
+    // NESTED inside the Task card (part of the subagent transcript), so it is excluded here
+    // and asserted in its place explicitly.
+    await expect(page.locator('[data-testid="chat-user-message"]:not([data-testid="chat-task-card"] *)')).toHaveCount(
+      6,
+    );
+    await expect(taskCard.locator('[data-testid="chat-user-message"]')).toHaveCount(1);
     for (const text of ['Reply one', 'Reply two', 'Reply three', 'SUBAGENT-DONE', 'STREAM-COMPLETE', 'DEDUP-ACK']) {
       await expect(page.getByText(text, { exact: false })).toHaveCount(1);
     }
