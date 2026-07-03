@@ -6,11 +6,13 @@ Mainframe uses a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflar
 
 ## Prerequisites
 
-Install `cloudflared` on the machine running the daemon:
+Whether you need to install `cloudflared` depends on how you run the daemon:
 
-- **macOS:** `brew install cloudflared`
-- **Linux:** see [Cloudflare downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
-- **Windows:** download from the same page
+- **Standalone daemon** (installed via `install.sh`): nothing to install — `cloudflared` ships inside the release tarball and the daemon finds it automatically.
+- **Desktop app**: install `cloudflared` on the machine yourself:
+  - **macOS:** `brew install cloudflared`
+  - **Linux:** see [Cloudflare downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+  - **Windows:** download from the same page
 
 ## Option 1: Let the daemon manage the tunnel
 

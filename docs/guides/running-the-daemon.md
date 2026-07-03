@@ -2,7 +2,9 @@
 
 The Mainframe daemon is a background service that manages agent CLIs (Claude, Codex) and serves the desktop and mobile apps over HTTP/WebSocket. This guide covers running it on a server or always-on machine — installing prerequisites, installing the daemon, and keeping it running as a service.
 
-> For exposing the daemon to the mobile app or remote clients, see **[Cloudflare Tunnel Setup](./cloudflare-tunnel.md)** — this guide links to it rather than repeating tunnel configuration.
+A server daemon set up this way can be driven by any client: the mobile app, your own API integrations, or the desktop app — which can pair with it as a **remote daemon** (daemon picker → *Add remote daemon*) and switch between it and the local one.
+
+> For exposing the daemon to the mobile app or remote clients, see **[Cloudflare Tunnel Setup](./cloudflare-tunnel.md)** — this guide links to it rather than repeating tunnel configuration. Remote-daemon pairing from the desktop app needs a **named** tunnel (quick-tunnel URLs rotate on restart).
 
 ## System requirements
 
