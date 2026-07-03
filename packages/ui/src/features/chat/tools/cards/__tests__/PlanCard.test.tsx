@@ -139,6 +139,37 @@ describe('PlanCard', () => {
     expect(screen.getByTestId('chat-plan-body')).toBeInTheDocument();
   });
 
+  it('auto-opens the body when a pending card transitions to having a result on rerender', () => {
+    // Regression test: ExitPlanMode is not in the Claude adapter's `hidden` tool
+    // category, so this card can mount PENDING and receive its result on a later
+    // rerender of the SAME instance. `defaultOpen` only applies at mount.
+    const { rerender } = renderCard(makePart({ result: undefined }));
+    expect(screen.queryByTestId('chat-plan-body')).not.toBeInTheDocument();
+
+    rerender(
+      <TooltipProvider>
+        <PlanCard {...makePart({ result: 'Step 1: implement\nStep 2: test', isError: false })} />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('chat-plan-body')).toBeInTheDocument();
+  });
+
+  it('does not force the body back open after the user manually collapses an already-resulted card', () => {
+    const resultProps = makePart({ result: 'Step 1: implement', isError: false });
+    const { rerender } = renderCard(resultProps);
+    fireEvent.click(screen.getByTestId('chat-plan-trigger'));
+    expect(screen.queryByTestId('chat-plan-body')).not.toBeInTheDocument();
+
+    rerender(
+      <TooltipProvider>
+        <PlanCard {...resultProps} />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByTestId('chat-plan-body')).not.toBeInTheDocument();
+  });
+
   // --- XML sentinel stripping ---
 
   it('strips <tool_use_error> sentinel tags from the plan body text', () => {

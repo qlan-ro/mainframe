@@ -349,6 +349,53 @@ describe('AskUserQuestionCard', () => {
     expect(screen.getByTestId('chat-ask-body')).toBeInTheDocument();
   });
 
+  it('auto-opens the body when a pending card transitions to answered on rerender', () => {
+    // Regression test: some adapters (e.g. the mock CLI, per getToolCategories()) don't
+    // categorize a pending AskUserQuestion tool-call as 'hidden', so this card can mount
+    // PENDING first and receive the answer on a later rerender of the SAME instance.
+    // `defaultOpen` only applies at mount, so the fix must react to the transition.
+    const { rerender } = renderCard(makePart({ args: SINGLE_QUESTION_ARGS, result: undefined }));
+    expect(screen.queryByTestId('chat-ask-body')).not.toBeInTheDocument();
+
+    rerender(
+      <TooltipProvider>
+        <AskUserQuestionCard
+          {...makePart({
+            args: SINGLE_QUESTION_ARGS,
+            result: {
+              askUserQuestion: [{ question: 'Which framework should we use?', answer: ['React'] }],
+            },
+            isError: false,
+          })}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('chat-ask-body')).toBeInTheDocument();
+  });
+
+  it('does not force the body back open after the user manually collapses an already-answered card', () => {
+    const answeredProps = makePart({
+      args: SINGLE_QUESTION_ARGS,
+      result: {
+        askUserQuestion: [{ question: 'Which framework should we use?', answer: ['React'] }],
+      },
+      isError: false,
+    });
+    const { rerender } = renderCard(answeredProps);
+    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    expect(screen.queryByTestId('chat-ask-body')).not.toBeInTheDocument();
+
+    // Rerender with the same (still-answered) props — the manual collapse must stick.
+    rerender(
+      <TooltipProvider>
+        <AskUserQuestionCard {...answeredProps} />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByTestId('chat-ask-body')).not.toBeInTheDocument();
+  });
+
   it('hides then shows the body on two consecutive trigger clicks (answered card starts open)', () => {
     renderCard(
       makePart({

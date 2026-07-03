@@ -245,30 +245,17 @@ test.describe('§tool-cards — AskUserQuestion display (ask-question)', () => {
     await expect(askCard.getByTestId('chat-ask-header')).toContainText('Next Step');
     await expect(askCard.getByTestId('chat-ask-header')).toContainText('Work on index.ts');
 
-    // TODO(bug): AskUserQuestionCard.tsx renders `<Collapsible defaultOpen={answered} ...>`
-    // (packages/ui/src/features/chat/tools/cards/AskUserQuestionCard.tsx:129). Live-verified via a
-    // temporary diagnostic (click + state dump, run twice, reproducible both times): the card
-    // mounts with `data-state="closed"` / `aria-expanded="false"` even though `hasBody` is true
-    // (trigger NOT disabled) and `askUserQuestion[0]` is populated (the header already shows the
-    // inline short-answer text, which requires a parsed answer) — contradicting the code comment's
-    // "Card is already expanded (defaultOpen = answered)" assumption. One manual click on the
-    // trigger reveals the body immediately (data-state flips to "open", chat-ask-body mounts),
-    // proving the content and the parse are both fine — only the initial open state is wrong.
-    // NOTE for the fix owner: this is surprising for an UNCONTROLLED Radix Collapsible, since
-    // `defaultOpen` normally only misbehaves across a pending→answered re-render of the SAME
-    // instance (Radix ignores `defaultOpen` on updates) — but AskUserQuestion tool-call parts are
-    // filtered to the 'hidden' category while pending (isHiddenToolPart in
-    // packages/core/src/messages/tool-categorization.ts) and excluded from rendering
-    // (map-assistant-blocks.ts), so this component should only ever mount FRESH with
-    // answered=true already. Worth re-checking whether that hidden-while-pending filtering is
-    // actually reaching this card in the live/mock-cli path, or whether `defaultOpen` is broken
-    // for a different reason. The header assertions above (the actual "selected-answer pill",
-    // `shortAnswerText`, which lives in the trigger row, not the body) cover the passing half of
-    // this scenario. Not touchable from e2e.
-    test.skip(
-      true,
-      'TODO(bug): chat-ask-body never auto-opens post-answer despite defaultOpen={answered} and a populated answer — see comment above',
-    );
+    // FIXED: AskUserQuestionCard now derives its open state via
+    // useAutoOpenOnTransition (packages/ui/src/features/chat/tools/cards/use-auto-open-on-transition.ts)
+    // instead of an uncontrolled `defaultOpen`. This mock-cli path mounts the card PENDING first
+    // (getToolCategories() here doesn't hide AskUserQuestion while pending, unlike the real Claude
+    // adapter), so the answer arrives on a rerender of the SAME instance — `defaultOpen` only seeds
+    // the initial mount and never re-fires, which is what caused the body to stay closed. The hook
+    // watches the pending→answered transition on that instance and forces `open` to true exactly
+    // once, while still honoring a manual collapse afterward.
+    const body = askCard.getByTestId('chat-ask-body');
+    await expect(body).toBeVisible({ timeout: 5_000 });
+    await expect(body).toContainText('Would you like to start working on the index.ts file');
   });
 });
 

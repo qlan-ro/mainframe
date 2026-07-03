@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { StatusDot, stripErrorXml } from '../shared';
 import { PlanBubble } from '../../messages/PlanBubble';
 import { parseApprovedPlanResult } from '../../messages/plan-message';
+import { useAutoOpenOnTransition } from './use-auto-open-on-transition';
 
 // ── PlanCard ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,9 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
   const rawResultText = typeof result === 'string' ? result : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
   const hasResult = Boolean(resultText);
+  // Hook must run unconditionally (before the approved-plan early return below)
+  // to satisfy the rules of hooks across renders.
+  const [open, setOpen] = useAutoOpenOnTransition(hasResult);
 
   // Approved plan → the shared "Implementing plan" bubble (parity with the
   // clear-context user turn). Non-approval results fall through to the card.
@@ -40,7 +44,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
   }
 
   return (
-    <Collapsible data-testid="chat-plan-card" defaultOpen={hasResult} disabled={!hasResult}>
+    <Collapsible data-testid="chat-plan-card" open={open} onOpenChange={setOpen} disabled={!hasResult}>
       <div
         className={cn(
           'rounded-lg border border-border bg-card overflow-hidden',

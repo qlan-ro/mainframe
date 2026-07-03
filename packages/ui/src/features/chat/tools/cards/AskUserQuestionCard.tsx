@@ -21,6 +21,7 @@ import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { StatusDot } from '../shared';
+import { useAutoOpenOnTransition } from './use-auto-open-on-transition';
 
 // ── Question type (local — matches args.questions[] shape) ────────────────────
 
@@ -124,9 +125,10 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
   const shortAnswerText = answered && questions.length === 1 && firstAnswer ? firstAnswer.answer.join(', ') : undefined;
 
   const hasBody = answered ? askUserQuestion.length > 0 : questions.length > 0;
+  const [open, setOpen] = useAutoOpenOnTransition(answered);
 
   return (
-    <Collapsible data-testid="chat-ask-card" defaultOpen={answered} disabled={!hasBody}>
+    <Collapsible data-testid="chat-ask-card" open={open} onOpenChange={setOpen} disabled={!hasBody}>
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         {/* Header trigger */}
         <CollapsibleTrigger
