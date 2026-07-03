@@ -16,7 +16,7 @@ describe('mfToast.permission', () => {
 
   it('renders a persistent (Infinity) permission toast', () => {
     mfToast.permission('Workspace not trusted', { description: 'why' });
-    const opts = (toast.custom as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    const opts = (toast.custom as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1];
     expect(opts.duration).toBe(Infinity);
   });
 });

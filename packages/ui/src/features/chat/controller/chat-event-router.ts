@@ -10,6 +10,7 @@
  */
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { mfToast } from '@/lib/toast';
+import { trustWorkspace } from '@/lib/api/chats';
 import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
 import { handleDaemonEvent } from './handle-daemon-event';
 import { reconcilePendings } from './chat-reconcile';
@@ -45,6 +46,18 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
     mfToast.error("Couldn't cancel the queued message", {
       description: 'It will still be sent when the current run finishes.',
     });
+  }
+
+  // Non-fatal: the CLI reported the workspace is untrusted. Surface an actionable
+  // permission toast (NOT a run failure) whose Trust action fixes it server-side.
+  if (event.type === 'chat.trustRequired' && event.chatId === chatId) {
+    mfToast.permission('Workspace not trusted', {
+      description:
+        `Claude ignored the permission rules in ${event.projectPath} because the workspace ` +
+        `isn't trusted yet. Trust it to apply them and silence this notice.`,
+      action: { label: 'Trust', onClick: () => void trustWorkspace(0, chatId) },
+    });
+    return;
   }
 
   // A daemon run error (e.g. the CLI process failed to start) otherwise only
