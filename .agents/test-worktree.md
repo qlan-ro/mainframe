@@ -7,9 +7,34 @@ dispatches the `prepare-worktree` subagent for environment setup). See
 
 ## App Type
 
-`electron-desktop`
+Dual-shell monorepo: one shared React renderer (`packages/ui`), two desktop
+shells. Two testable **Targets** — pick one per run (user's ask → diff paths →
+default).
 
-The app is an Electron shell hosting a Vite-built renderer, backed by a local Node daemon.
+### Target: tauri (default)
+
+- Type: `tauri-desktop` — Tauri 2 shell (`packages/app-tauri/src-tauri`),
+  spawns the daemon itself.
+- Engine: `tauri-mcp` (the WKWebView has no CDP). Dev builds compile the
+  bridge in (`pnpm tauri:dev` → `cargo tauri dev --features mcp-bridge`).
+- Launch (inline):
+  `cd packages/app-tauri && pnpm tauri:dev > /tmp/mf-tauri-dev.log 2>&1 &`
+  (background; first run compiles Rust — allow up to 10 minutes).
+- Wait-for-Ready: Vite responds at `http://localhost:${VITE_PORT:-5174}`
+  (use `localhost`, NOT `127.0.0.1` — Vite binds IPv6 `::1`), then the app
+  appears in the bridge's `list_devices`. On timeout read
+  `/tmp/mf-tauri-dev.log`.
+- Diff paths: `packages/app-tauri/`, `packages/ui/`.
+- Gotcha: dev launch configs may pin `DAEMON_PORT=31500` and
+  `MAINFRAME_DATA_DIR=~/.mainframe_dev` — a separate daemon from the
+  production one on 31415.
+
+### Target: electron
+
+- Type: `electron-desktop` — Electron shell hosting the Vite-built renderer,
+  backed by the local Node daemon. Everything below (Environment, Cleanup,
+  Launch script, Wait-for-Ready, Engines) belongs to this target.
+- Diff paths: `packages/app-electron/`, `packages/ui/`.
 
 ## Protected Ports
 

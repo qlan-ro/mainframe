@@ -3,68 +3,53 @@
 AI-native development environment for orchestrating agents.
 
 # Workflow
+
 - Before any new bug/feature work, pull latest main and start a new branch on it
 - Before any work, check needed skills to guide your development see [Skills](#skills)
-- For Claude CLI behavior, check the global `~/.claude/CLAUDE.md` first for source-level references. Protocol docs are in `docs/adapters/claude/`: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md), [COMPACTION](docs/adapters/claude/COMPACTION.md), [INTERRUPT](docs/adapters/claude/INTERRUPT.md), [CONTEXT_USAGE](docs/adapters/claude/CONTEXT_USAGE.md), [MODELS](docs/adapters/claude/MODELS.md), [TODOS](docs/adapters/claude/TODOS.md), [PR_TRACKING](docs/adapters/claude/PR_TRACKING.md)
+- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs are in `docs/adapters/claude/`: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md), [COMPACTION](docs/adapters/claude/COMPACTION.md), [INTERRUPT](docs/adapters/claude/INTERRUPT.md), [CONTEXT_USAGE](docs/adapters/claude/CONTEXT_USAGE.md), [MODELS](docs/adapters/claude/MODELS.md), [TODOS](docs/adapters/claude/TODOS.md), [PR_TRACKING](docs/adapters/claude/PR_TRACKING.md)
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
 - For git workflow and commit practices, see [Git](#git)
 
 ## Tech Stack
 
-- Language: TypeScript (strict mode, NodeNext modules)
-- Runtime: Node.js 20+
-- Package Manager: pnpm workspaces
+- Language: TypeScript (strict mode, NodeNext modules) + Rust (Tauri shell, `packages/app-tauri/src-tauri`)
+- Runtime: Node.js 20+ (daemon); Tauri 2 + Electron desktop shells
+- Package Manager: pnpm workspaces (+ Cargo for the Rust shell)
 - Database: SQLite (better-sqlite3)
-- Desktop: Electron + React
+- UI: React + Tailwind v4 in `packages/ui`, shared by the Tauri and Electron shells
 
 ## Commands
 
 - `pnpm install` — Install dependencies
 - `pnpm build` — Build all packages
-- `pnpm --filter @qlan-ro/mainframe-core build` — Build a specific package
-- `pnpm test` — Run all tests
-- `pnpm --filter @qlan-ro/mainframe-core test` — Test a specific package
+- `pnpm --filter @qlan-ro/mainframe-types build` — Rebuild shared types after changing them
+- `pnpm --filter @qlan-ro/mainframe-ui test` — Test a specific package
+- `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` — Single test file (preferred; large multi-suite runs hit cross-file `React.act` failures)
+- `pnpm --filter @qlan-ro/mainframe-ui typecheck` — Typecheck the UI. Core/types have no `typecheck` script; use `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`
+- `pnpm dev:desktop` — Dev stack: core daemon + Vite + Electron
+- `pnpm tauri:dev` (from `packages/app-tauri`) — Tauri dev app; run in background with output to a log file
+- `cargo check` (from `packages/app-tauri/src-tauri`) — Fast Rust validation
+- `pnpm test:e2e` — Playwright E2E suite
+- `pnpm changeset` — Required before committing (see [Git](#git))
 
 ## Architecture
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
-- **Monorepo Structure**: Uses pnpm workspaces with three main packages:
-  - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
-  - `@qlan-ro/mainframe-core`: The background Daemon (Node.js). Responsible for process management, session lifecycle, and metadata storage.
-  - `@qlan-ro/mainframe-app-electron`: The Frontend (Electron/React). Provides the user interface for chatting and workspace orchestration.
-- **Facilitator Model**: The app manages CLI agent processes (like Claude CLI) via a structured JSON-RPC-like interface over stdio. It respects existing `~/.agents/` configurations and `CLAUDE.md` files in target projects.
-- **Data Flow**: User Input (Desktop) → ChatManager (Daemon) → CLI Adapter (Process Stdin) → Agent Logic → NDJSON Events (Process Stdout) → Daemon Event Stream → UI Update (WebSocket).
-- **Metadata Storage**: Uses SQLite (`better-sqlite3`) for project tracking and chat metadata (costs, tokens, session IDs). Message history is NOT duplicated; it is replayed by the CLI agents using `--resume` flags.
-
-```mermaid
-graph TD
-    DesktopApp[Desktop App - Electron/React]
-    Daemon[Daemon - Node.js/Express/WS]
-    SQLite[(SQLite DB - Metadata)]
-    AgentProcess[Agent CLI Process - Claude/etc.]
-
-    DesktopApp -- HTTP/WS --> Daemon
-    Daemon -- read/write --> SQLite
-    Daemon -- child_process (stdin/stdout) --> AgentProcess
-    AgentProcess -- NDJSON streaming --> Daemon
-```
-
-### Protocol References
-
-- [`PROTOCOL_REVERSED.md`](docs/adapters/claude/PROTOCOL_REVERSED.md)
-- [`COMPACTION.md`](docs/adapters/claude/COMPACTION.md)
-- [`INTERRUPT.md`](docs/adapters/claude/INTERRUPT.md)
-- [`CONTEXT_USAGE.md`](docs/adapters/claude/CONTEXT_USAGE.md)
-- [`MODELS.md`](docs/adapters/claude/MODELS.md)
-- [`TODOS.md`](docs/adapters/claude/TODOS.md)
-- [`PR_TRACKING.md`](docs/adapters/claude/PR_TRACKING.md)
+- **Monorepo Structure**: pnpm workspaces with seven packages:
+    - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
+    - `@qlan-ro/mainframe-core`: The background Daemon (Node.js). Process management, session lifecycle, metadata storage.
+    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by both desktop shells.
+    - `@qlan-ro/mainframe-app-tauri`: Tauri 2 desktop shell (Rust in `src-tauri/`). Ships the daemon as a bundled Node sidecar.
+    - `@qlan-ro/mainframe-app-electron`: Electron desktop shell (legacy, being replaced by app-tauri).
+    - `@qlan-ro/mainframe-e2e`: Playwright end-to-end suite.
+    - `@qlan-ro/mainframe-mobile`: Git submodule (separate repo — cross-cutting changes need their own PR there; don't bump the pointer in feature PRs).
+- **Metadata Storage**: SQLite (`better-sqlite3`) for project tracking and chat metadata. Message history is NOT duplicated; CLI agents replay it via `--resume`.
 
 ## Terminology
 
-- **AgentAdapter** — A CLI tool integration (Claude, Gemini, Codex, OpenCode). The daemon spawns these as child processes. Interface: `AgentAdapter` in `packages/types/src/adapter.ts`.
-- **Agent / Subagent** — A task worker spawned _within_ a session by the AI (e.g., Claude's Task tool dispatching parallel subagents). Not the CLI adapters. The left panel "Agents" tab tracks these.
+**AgentAdapter** = a CLI tool integration (Claude, Gemini, Codex, OpenCode) the daemon spawns as a child process — interface in `packages/types/src/adapter.ts`. **Agent/Subagent** = a task worker spawned _within_ a session by the AI (the left-panel "Agents" tab), not a CLI adapter.
 
 ## Skills
 
@@ -77,75 +62,38 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 | Multi-step implementation task, or after brainstorming approval | `writing-plans` |
 | Writing implementation code for any feature or bugfix | `test-driven-development` |
 | About to claim work is done, commit, or open a PR | `verification-before-completion` |
-| TS type errors, complex generics, or type architecture decisions | `typescript-expert` |
-| Node.js architectural decisions or server-side patterns | `nodejs-best-practices` |
-| Writing or reviewing React components, data fetching, or render perf | `vercel-react-best-practices` |
-| Building UI components, pages, or making visual design decisions | `frontend-design`, `ui-ux-pro-max` |
-| System architecture, integration patterns, or cross-package design | `senior-architect` |
+| Building UI components, pages, or making visual design decisions | `ui-ux-pro-max` |
 | Writing docs, commits, PRs, error messages, or UI copy | `writing-clearly-and-concisely` |
-| Creating READMEs, changelogs, ADRs, or structured docs | `documentation-templates` |
+
+Domain skills (typescript-expert, nodejs-best-practices, vercel-react-best-practices, senior-architect, code-audit) are preloaded by the roster agents in `~/.claude/agents/` — delegate to core-dev/ui-dev/planner/test-writer/quality-reviewer instead of invoking them inline.
 
 ## Git
-
-Git workflow and commit practices.
 
 - **Never commit to `main`.** Always work on a feature or fix branch. Run `git branch --show-current` before any commit or reset to confirm you are not on `main`.
 - **Check branch before destructive git ops.** Before `reset`, `rebase`, or `push --force`, verify the current branch with `git status` or `git branch`.
 - **Never discard unstaged changes you didn't create.** They may be in-progress work from another session. When committing, stage only your own files by name. Do not `git checkout --`, `git restore`, or `git stash` other people's changes.
 - **Changesets required.** Every PR must include a changeset file. Run `pnpm changeset` before committing, pick the affected packages and bump type (patch/minor/major). For PRs that don't need a changelog entry (CI, docs typos), run `pnpm changeset --empty`. The pre-push hook and CI will reject without one.
 
-## Code Style
-
-- **Comments**: Omit notes about removed or missing features. Focus on *why*, not *what*.
-- **Strict TypeScript**: Uses strict mode with `NodeNext` module resolution and `noUncheckedIndexedAccess`.
-- **Adapter-Provider Decoupling**: New agents must implement the `AgentAdapter` interface in `packages/types/src/adapter.ts`.
-- **Stateless UI**: The desktop app is a "thin" client; business logic and pure functions belong in `@qlan-ro/mainframe-core`, not `@qlan-ro/mainframe-app-electron`.
-
 ## Code Rules
 
-These rules exist because every one was violated before and required cleanup. Follow them on every change.
+Each rule exists because a violation required cleanup.
 
-### Security
-- **No shell interpolation.** Use `execFile`/`execGit` with array args. Never `execSync` with template strings.
-- **Validate all paths.** Use `resolveAndValidatePath()` (realpath + prefix check) before any file access from user input.
-- **Validate user-provided names.** Skills, agents, and similar identifiers must match `^[a-zA-Z0-9_-]+$` via Zod schemas.
-- **Zod on every endpoint.** All new API routes and WebSocket messages must validate input with Zod schemas.
-
-### File & Function Size
-- **Max 300 lines per file.** If a file exceeds this, decompose before merging.
-- **Max 50 lines per function.** Extract helpers or split into sub-functions.
-- **Decompose, don't grow.** When adding to a large file, check its size first. Prefer extracting a new module over appending.
-
-### Error Handling & Logging
-- **No silent catches.** Every `catch` block must log with context using `logger.warn`/`logger.error` (pino). The only exception is a `catch` with an explicit `/* new file */` or `/* expected */` comment explaining why silence is intentional.
-- **No `console.log`/`console.error` in core.** Use the structured `pino` logger with child loggers (`createChildLogger`).
-- **No `.catch(() => {})`.** Always log the error, even in fire-and-forget chains. Use `console.warn` with a tag in desktop code.
-
-### Async I/O
-- **No sync I/O in server code.** Use `node:fs/promises` (`readFile`, `readdir`, `stat`) and async `execGit`. Sync calls block the event loop.
-- **No `execFileSync` in route handlers.** Use the promisified `execGit` helper.
-
-### Architecture & Types
-- **Single canonical type.** Never duplicate a type across packages. Define once in `@qlan-ro/mainframe-types`, import everywhere.
-- **Workspace deps only.** Desktop must depend on core via `workspace:*` in `package.json`. Never alias core source paths directly.
-- **Pure logic in core.** Message parsing, status derivation, and data transforms belong in `@qlan-ro/mainframe-core`, not in React components.
-
-### Testing
-- **New public methods need tests.** Route handlers, DB methods, and core logic must have corresponding test files.
-- **Coverage thresholds enforced.** `vitest.config.ts` defines minimum coverage. Don't lower thresholds to pass CI.
-
-### Performance
-- **Lazy-load heavy components.** Large editors and visualizations must use `React.lazy()` with `Suspense`.
-- **Cascade deletes.** When deleting parent entities (projects, chats), delete child records in a transaction.
-
-### Hygiene
-- **No `@ts-ignore`.** Use `@ts-expect-error` with a reason comment.
-- **Remove unused deps and dead code.** Don't leave commented-out code, unused exports, or orphaned files.
-- **Extract shared patterns.** If 3+ components duplicate logic, extract a shared helper or component.
+- **No shell interpolation** — `execFile`/`execGit` with array args; never `execSync` with template strings.
+- **Validate input** — `resolveAndValidatePath()` for user-supplied paths; identifiers match `^[a-zA-Z0-9_-]+$`; Zod on every endpoint and WS message.
+- **Max 300 lines/file, 50/function** — decompose before merging.
+- **No silent catches; no console.* in core** — every catch logs via pino (`createChildLogger`); desktop fire-and-forget uses tagged `console.warn`; intentional silence needs an `/* expected */` comment.
+- **No sync I/O in the daemon** — `node:fs/promises` + async `execGit`; sync calls block the event loop.
+- **Single canonical type** — define once in `@qlan-ro/mainframe-types`; desktop depends on core via `workspace:*`; pure logic (parsing, status derivation, transforms) lives in core, not React.
+- **Tests required** — new routes/DB methods/core logic get test files; don't lower coverage thresholds; parse JSON columns via `safeJsonArray`, never bare `JSON.parse`.
+- **`data-testid` on every interactive element** — `<surface>-<element>` kebab-case, keyed by domain id not array index; `ui/` primitives stay passthrough.
+- **Lazy-load heavy components** — editors/visualizations via `React.lazy` + `Suspense`.
+- **Hygiene** — no `@ts-ignore` (use `@ts-expect-error` + reason); comments say *why*, not *what*; remove dead code; extract shared helpers at 3+ duplications.
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Daemon HTTP server port | 31415 |
+| `DAEMON_PORT` | Daemon HTTP + WebSocket port | 31415 |
+| `VITE_PORT` | Vite dev server port | 5173 |
+| `MAINFRAME_DATA_DIR` | Data directory | `~/.mainframe` |
 | `LOG_LEVEL` | Logging verbosity | info |

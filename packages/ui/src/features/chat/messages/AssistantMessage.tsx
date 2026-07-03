@@ -16,12 +16,7 @@ import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
 import { MarkdownText } from '../parts/markdown-text';
-import {
-  ReasoningRoot,
-  ReasoningTrigger,
-  ReasoningContent,
-  ReasoningText,
-} from '@/components/ui/assistant-ui/reasoning';
+import { ReasoningGroup } from './ReasoningGroup';
 import { MessageToolLeaf, MessageToolGroup } from '../tools/tool-dispatch';
 import { ZoomableImage } from '../parts/ZoomableImage';
 import { MessageActionBar } from './MessageActionBar';
@@ -69,15 +64,7 @@ export function AssistantMessage() {
           // GroupPart nodes carry `indices`; leaf parts do not.
           if ('indices' in part) {
             if (part.type === 'group-reasoning') {
-              const running = part.status?.type === 'running';
-              return (
-                <ReasoningRoot defaultOpen={running} variant="ghost">
-                  <ReasoningTrigger active={running} />
-                  <ReasoningContent aria-busy={running}>
-                    <ReasoningText>{children}</ReasoningText>
-                  </ReasoningContent>
-                </ReasoningRoot>
-              );
+              return <ReasoningGroup running={part.status?.type === 'running'}>{children}</ReasoningGroup>;
             }
             // group-tool-<groupId>: the summary was derived in the projection.
             const groupId = parseToolGroupKey(part.type) ?? '';

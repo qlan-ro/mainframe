@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useDirectoryPicker } from '@/features/files/use-directory-picker';
+import { useRecentDirectories } from '@/store/recent-directories';
 
 // ---------------------------------------------------------------------------
 // Mock browseFilesystem
@@ -49,6 +50,7 @@ const { DirectoryPickerModal } = await import('../DirectoryPickerModal');
 beforeEach(() => {
   mockBrowse.mockReset();
   useDirectoryPicker.setState({ pending: null });
+  useRecentDirectories.setState({ paths: [] });
 });
 
 afterEach(() => {
@@ -315,7 +317,7 @@ describe('DirectoryPickerModal — footer parity', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 10. Home-crumb — fixed home label, not the live selection (3.3)
+// 10. Home-crumb — the crumb reflects the browse ROOT, not the selection (3.3)
 // ---------------------------------------------------------------------------
 
 describe('DirectoryPickerModal — home crumb', () => {
@@ -332,7 +334,7 @@ describe('DirectoryPickerModal — home crumb', () => {
 
     await userEvent.click(screen.getByTestId('directory-picker-row-/Users/me/proj'));
 
-    expect(screen.getByTestId('directory-picker-crumb').textContent).toBe('~');
+    expect((screen.getByTestId('directory-picker-path-input') as HTMLInputElement).value).toBe('~');
   });
 });
 
@@ -563,5 +565,157 @@ describe('DirectoryPickerModal — review-fix: footer placeholder + real tokens'
     const cancel = screen.getByTestId('directory-picker-cancel');
     expect(cancel.className).not.toContain('text-mf-text-2');
     expect(cancel.className).toContain('text-muted-foreground');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. Path-crumb navigation — typing an absolute path re-seeds the tree there
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — path-crumb navigation', () => {
+  it('typing an absolute path and pressing Enter re-seeds the tree at that path', async () => {
+    mockBrowse.mockImplementation((_port: number, path: string) => {
+      if (path === '~') {
+        return Promise.resolve([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+      }
+      if (path === '/Users/me/other') {
+        return Promise.resolve([{ name: 'thing', path: '/Users/me/other/thing', type: 'directory' }]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    const input = screen.getByTestId('directory-picker-path-input') as HTMLInputElement;
+    await userEvent.clear(input);
+    await userEvent.type(input, '/Users/me/other{Enter}');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/other/thing')).not.toBeNull();
+    });
+
+    expect(mockBrowse).toHaveBeenCalledWith(31415, '/Users/me/other', { includeFiles: false });
+    expect((screen.getByTestId('directory-picker-path-input') as HTMLInputElement).value).toBe('/Users/me/other');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. Path-crumb navigation error — bad path shows the error, not stale rows
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — path-crumb navigation error', () => {
+  it('shows an error and no rows for the bad path when the browse rejects', async () => {
+    mockBrowse.mockImplementation((_port: number, path: string) => {
+      if (path === '~') {
+        return Promise.resolve([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+      }
+      if (path === '/nope/bad') {
+        return Promise.reject(new Error('ENOENT'));
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    const input = screen.getByTestId('directory-picker-path-input') as HTMLInputElement;
+    await userEvent.clear(input);
+    await userEvent.type(input, '/nope/bad{Enter}');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-error')).not.toBeNull();
+    });
+
+    expect(screen.queryByTestId('directory-picker-row-/nope/bad')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. Recent directories — shown at home, one-click pick, hidden elsewhere
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — recent directories', () => {
+  it('shows the Recent section at the home root and picking a row resolves + records it', async () => {
+    useRecentDirectories.setState({ paths: ['/Users/me/alpha', '/Users/me/beta'] });
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+
+    render(<DirectoryPickerModal />);
+    let picked: Promise<string | null>;
+    act(() => {
+      picked = useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-recent')).not.toBeNull();
+    });
+
+    const row = screen.getByTestId('directory-picker-recent-/Users/me/alpha');
+    expect(row).not.toBeNull();
+
+    await userEvent.click(row);
+
+    await expect(picked!).resolves.toBe('/Users/me/alpha');
+    expect(useRecentDirectories.getState().paths[0]).toBe('/Users/me/alpha');
+  });
+
+  it('hides the Recent section in file mode', async () => {
+    useRecentDirectories.setState({ paths: ['/Users/me/alpha', '/Users/me/beta'] });
+    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'file' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    expect(screen.queryByTestId('directory-picker-recent')).toBeNull();
+  });
+
+  it('hides the Recent section after navigating away from home', async () => {
+    useRecentDirectories.setState({ paths: ['/Users/me/alpha', '/Users/me/beta'] });
+    mockBrowse.mockImplementation((_port: number, path: string) => {
+      if (path === '~') {
+        return Promise.resolve([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
+      }
+      if (path === '/Users/me/other') {
+        return Promise.resolve([{ name: 'thing', path: '/Users/me/other/thing', type: 'directory' }]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-recent')).not.toBeNull();
+    });
+
+    const input = screen.getByTestId('directory-picker-path-input') as HTMLInputElement;
+    await userEvent.clear(input);
+    await userEvent.type(input, '/Users/me/other{Enter}');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/other/thing')).not.toBeNull();
+    });
+
+    expect(screen.queryByTestId('directory-picker-recent')).toBeNull();
   });
 });

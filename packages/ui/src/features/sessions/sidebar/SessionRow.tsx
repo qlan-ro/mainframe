@@ -32,6 +32,14 @@ import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { Hint } from '@/components/ui/hint';
 
+/**
+ * The dot is the row's ONLY status indicator (no text pill). Four states:
+ *   - working  → a spinning progress circle
+ *   - waiting  → a PULSING coloured beacon ("your turn" — rendered in StatusDot)
+ *   - idle+unread → a solid (non-pulsing) coloured dot (an unread response)
+ *   - idle       → a muted, uncoloured dot
+ * (worktree-missing keeps its own destructive dot, outside the four-state set.)
+ */
 function dotClass(badge: SessionBadge): string {
   switch (badge.base) {
     case 'worktree-missing':
@@ -39,7 +47,7 @@ function dotClass(badge: SessionBadge): string {
     case 'working':
       return 'size-[8px] border-[1.5px] border-primary border-t-transparent animate-spin';
     case 'waiting':
-      // waiting+unread is the ping-halo beacon rendered separately in StatusDot.
+      // Unreachable — the pulsing beacon is rendered separately in StatusDot.
       return 'size-[9px] bg-mf-warning';
     case 'idle':
       return badge.unread ? 'size-1.5 bg-primary' : 'size-1.5 bg-mf-text-4 opacity-50';
@@ -54,19 +62,17 @@ function dotLabel(badge: SessionBadge): string {
     case 'working':
       return 'Working';
     case 'waiting':
-      return badge.unread ? 'Answer ready' : 'Your turn';
+      return 'Your turn';
     case 'idle':
-      return badge.unread ? 'New activity' : 'Idle';
+      return badge.unread ? 'Unread response' : 'Idle';
   }
 }
 
 export function StatusDot({ badge }: { badge: SessionBadge }) {
-  const isWaitingUnread = badge.base === 'waiting' && badge.unread;
-
-  if (isWaitingUnread) {
-    // Expanding ping-halo beacon — matches artboard StatusDot lines 379-390.
-    // A separate absolute element expands outward and fades (animate-ping),
-    // while the inner dot stays solid and non-animated.
+  if (badge.base === 'waiting') {
+    // "Your turn" → a pulsing coloured beacon: an expanding ping ring behind a
+    // solid inner dot (artboard StatusDot lines 379-390). All waiting sessions
+    // pulse, read or unread — being waiting IS the call to respond.
     return (
       <Hint label={dotLabel(badge)}>
         <span

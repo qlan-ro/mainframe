@@ -125,7 +125,6 @@ const AttachmentRemove: FC = () => {
 const AttachmentUI: FC = () => {
   const aui = useAui();
   const isComposer = aui.attachment.source !== 'message';
-  const isImage = useAuiState((s) => s.attachment.type === 'image');
   const typeLabel = useAuiState((s) => {
     const type = s.attachment.type;
     if (type === 'image') return 'Image';
@@ -136,7 +135,7 @@ const AttachmentUI: FC = () => {
 
   return (
     <Tooltip>
-      <AttachmentPrimitive.Root className={cn('relative', isImage && 'only:*:first:size-24')}>
+      <AttachmentPrimitive.Root className="relative">
         <AttachmentPreviewDialog>
           <TooltipTrigger asChild>
             <div

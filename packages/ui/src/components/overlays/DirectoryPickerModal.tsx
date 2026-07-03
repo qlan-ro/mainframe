@@ -1,140 +1,47 @@
 /**
  * DirectoryPickerModal — daemon-backed directory/file picker.
  *
- * Tree state is a FLAT map (path → FlatNode) with a rootPaths ordering array,
- * so expand and patch are O(1) keyed updates — no recursive deep clone.
- * Seed effect uses a cancelled flag (ReviewPanel pattern) to guard stale root
- * browses. Child-expand errors set a per-node loadError flag rendered inline.
- *
- * Row/state rendering lives in ./directory-picker/PickerTree.tsx (kept
- * separate to hold both files under the 300-line limit).
+ * Browse/tree/selection logic lives in ./directory-picker/use-picker-tree.ts.
+ * On top of the baseline tree (artboard 16-dirpicker.jsx) this adds the UX pass:
+ *   - an editable path crumb (PathCrumbInput) → type/paste any absolute path,
+ *     reaching roots outside `~`;
+ *   - a "Recent" section (RecentDirs + store/recent-directories) at the home
+ *     landing for one-click re-pick of a recently-chosen project directory.
  */
-import { useEffect, useState } from 'react';
-import { FolderIcon, XIcon } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useDirectoryPicker } from '@/features/files/use-directory-picker';
-import { browseFilesystem } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { type FlatNode, type FlatTree, EMPTY_TREE, buildTree, FlatTreeView } from './directory-picker/PickerTree';
-
-// ---------------------------------------------------------------------------
-// Main modal component
-// ---------------------------------------------------------------------------
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { XIcon } from 'lucide-react';
+import { useRecentDirectories } from '@/store/recent-directories';
+import { FlatTreeView } from './directory-picker/PickerTree';
+import { usePickerTree, HOME_PATH } from './directory-picker/use-picker-tree';
+import { PathCrumbInput } from './directory-picker/PathCrumbInput';
+import { RecentDirs } from './directory-picker/RecentDirs';
 
 export function DirectoryPickerModal() {
   const pending = useDirectoryPicker((s) => s.pending);
   const resolve = useDirectoryPicker((s) => s.resolve);
   const port = useDaemonPort();
 
-  const [tree, setTree] = useState<FlatTree>(EMPTY_TREE);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<'file' | 'directory' | null>(null);
-  const [rootError, setRootError] = useState<string | null>(null);
-  // Distinguishes "browse in flight" from "browse returned an empty list" — an
-  // empty directory (e.g. a fresh remote home) must show an empty state, not a
-  // perpetual "Loading…" (both have rootPaths.length === 0).
-  const [loading, setLoading] = useState(false);
+  const recents = useRecentDirectories((s) => s.paths);
+  const addRecent = useRecentDirectories((s) => s.addRecent);
 
-  // Seed the tree whenever pending changes (open, close, or reopen).
-  // The cancelled flag mirrors the ReviewPanel pattern: the effect cleanup
-  // marks any in-flight root browse as stale so it cannot overwrite the tree
-  // after a second pickDirectory supersedes the first.
-  useEffect(() => {
-    // Always reset UI state on any pending transition
-    setTree(EMPTY_TREE);
-    setSelectedPath(null);
-    setSelectedType(null);
-    setRootError(null);
-    setLoading(false);
+  const { tree, rootPath, selectedPath, selectedType, rootError, loading, navigate, toggle, select } = usePickerTree(
+    port,
+    pending,
+  );
 
-    if (!pending) return;
-
-    let cancelled = false;
-    setLoading(true);
-    const includeFiles = pending.mode === 'file';
-    browseFilesystem(port, '~', { includeFiles })
-      .then((entries) => {
-        if (cancelled) return;
-        setLoading(false);
-        setTree(buildTree(entries, 0));
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setLoading(false);
-        console.warn('[directory-picker] browse failed', err);
-        setRootError('Failed to load directory. Please try again.');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pending, port]);
-
-  function handleSelect(node: FlatNode) {
-    setSelectedPath(node.entry.path);
-    setSelectedType(node.entry.type);
-  }
-
-  function handleToggle(node: FlatNode) {
-    const path = node.entry.path;
-
-    // Optimistically flip the expanded flag (O(1) patch)
-    setTree((prev) => {
-      const existing = prev.nodes.get(path);
-      if (!existing) return prev;
-      const next = new Map(prev.nodes);
-      next.set(path, { ...existing, expanded: !existing.expanded });
-      return { ...prev, nodes: next };
-    });
-
-    // Lazy-load children on first expand (children not yet fetched)
-    const current = tree.nodes.get(path);
-    if (!current || current.expanded || current.childrenPaths !== null) return;
-
-    const includeFiles = pending?.mode === 'file';
-    browseFilesystem(port, path, { includeFiles })
-      .then((entries) => {
-        setTree((prev) => {
-          const target = prev.nodes.get(path);
-          if (!target) return prev;
-          const childrenPaths = entries.map((e) => e.path);
-          const next = new Map(prev.nodes);
-          for (const e of entries) {
-            next.set(e.path, {
-              entry: e,
-              childrenPaths: null,
-              expanded: false,
-              loadError: false,
-              depth: target.depth + 1,
-            });
-          }
-          next.set(path, { ...target, childrenPaths, loadError: false });
-          return { ...prev, nodes: next };
-        });
-      })
-      .catch((err) => {
-        console.warn('[directory-picker] child browse failed', err);
-        setTree((prev) => {
-          const target = prev.nodes.get(path);
-          if (!target) return prev;
-          const next = new Map(prev.nodes);
-          // Keep the node expanded; show an error row beneath it
-          next.set(path, { ...target, childrenPaths: [], loadError: true });
-          return { ...prev, nodes: next };
-        });
-      });
-  }
-
+  const isDirectoryMode = pending?.mode !== 'file';
   const canConfirm =
-    selectedPath !== null && (pending?.mode === 'directory' ? selectedType === 'directory' : selectedType === 'file');
+    selectedPath !== null && (isDirectoryMode ? selectedType === 'directory' : selectedType === 'file');
 
-  function handleConfirm() {
-    if (canConfirm && selectedPath) resolve(selectedPath);
+  function confirm(path: string) {
+    if (isDirectoryMode) addRecent(path);
+    resolve(path);
   }
 
-  function handleCancel() {
-    resolve(null);
-  }
+  // A previously-picked directory is known-good — resolve it in one click.
+  const showRecent = isDirectoryMode && rootPath === HOME_PATH && !loading && !rootError && recents.length > 0;
 
   return (
     <Dialog
@@ -146,11 +53,11 @@ export function DirectoryPickerModal() {
       <DialogContent
         hideClose
         data-testid="directory-picker"
-        className="max-w-[480px] p-0 gap-0 flex flex-col max-h-[70vh]"
+        className="flex max-h-[70vh] max-w-[480px] flex-col gap-0 p-0"
       >
         <DialogHeader className="flex-row items-center justify-between gap-2 border-b border-border px-[16px] py-[13px] shrink-0">
           <DialogTitle className="text-heading font-bold">
-            {pending?.mode === 'file' ? 'Select File' : 'Select Project Directory'}
+            {isDirectoryMode ? 'Select Project Directory' : 'Select File'}
           </DialogTitle>
           <DialogClose
             data-testid="directory-picker-close"
@@ -162,15 +69,15 @@ export function DirectoryPickerModal() {
           </DialogClose>
         </DialogHeader>
 
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3.5 py-[7px] font-mono text-caption text-mf-text-3">
-          <FolderIcon className="size-[12px] shrink-0 text-mf-text-4" fill="currentColor" />
-          <span className="truncate" data-testid="directory-picker-crumb">
-            ~
-          </span>
-        </div>
+        <PathCrumbInput value={rootPath} onNavigate={navigate} />
 
         <div className="min-h-[300px] flex-1 overflow-y-auto">
-          {rootError && <p className="px-4 py-4 text-caption text-destructive">{rootError}</p>}
+          {showRecent && <RecentDirs paths={recents} onPick={confirm} />}
+          {rootError && (
+            <p data-testid="directory-picker-error" className="px-4 py-4 text-caption text-destructive">
+              {rootError}
+            </p>
+          )}
           {!rootError && loading && (
             <p data-testid="directory-picker-loading" className="px-4 py-[32px] text-center text-body text-mf-text-3">
               Loading…
@@ -185,7 +92,7 @@ export function DirectoryPickerModal() {
             </p>
           )}
           {tree.rootPaths.length > 0 && (
-            <FlatTreeView tree={tree} selectedPath={selectedPath} onSelect={handleSelect} onToggle={handleToggle} />
+            <FlatTreeView tree={tree} selectedPath={selectedPath} onSelect={select} onToggle={toggle} />
           )}
         </div>
 
@@ -194,13 +101,13 @@ export function DirectoryPickerModal() {
             data-testid="directory-picker-selected-path"
             className="max-w-[270px] truncate font-mono text-caption text-mf-text-3"
           >
-            {selectedPath ?? '~'}
+            {selectedPath ?? rootPath}
           </span>
           <div className="flex items-center gap-[8px]">
             <button
               type="button"
               data-testid="directory-picker-cancel"
-              onClick={handleCancel}
+              onClick={() => resolve(null)}
               className="rounded-md bg-mf-chip px-[13px] py-[7px] text-label font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Cancel
@@ -208,9 +115,9 @@ export function DirectoryPickerModal() {
             <button
               type="button"
               data-testid="directory-picker-confirm"
-              onClick={handleConfirm}
+              onClick={() => canConfirm && selectedPath && confirm(selectedPath)}
               disabled={!canConfirm}
-              className="rounded-md bg-primary px-[15px] py-[7px] text-label font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-md bg-primary px-[15px] py-[7px] text-label font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Select
             </button>

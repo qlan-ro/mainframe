@@ -311,19 +311,35 @@ describe('session row badge presentation', () => {
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
     expect(screen.queryByText('Answer ready')).toBeNull();
   });
-  it('idle + unread → accent-tinted dot, no pill', () => {
+  it('idle + unread → accent-tinted, non-pulsing dot, no pill', () => {
     render(<StatusDot badge={{ base: 'idle', unread: true }} />);
-    expect(screen.getByTestId('sessions-row-status-dot').className).toContain('bg-primary');
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('bg-primary');
+    expect(dot.querySelector('.animate-ping')).toBeNull();
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
     expect(screen.queryByText('Answer ready')).toBeNull();
+  });
+  it('idle + read → muted dot (bg-mf-text-4, opacity-50), no pill', () => {
+    render(<StatusDot badge={{ base: 'idle', unread: false }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('bg-mf-text-4');
+    expect(dot.className).toContain('opacity-50');
+    expect(dot.querySelector('.animate-ping')).toBeNull();
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
+  });
+  it('working → spinning progress ring (animate-spin, border-primary)', () => {
+    render(<StatusDot badge={{ base: 'working', unread: false }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('animate-spin');
+    expect(dot.className).toContain('border-primary');
   });
 });
 
 // ---------------------------------------------------------------------------
 // 9a. StatusDot tooltip labels (Hint) — one assertion per badge state, hardcoded
 // labels per the spec: worktree-missing → "Worktree missing", working →
-// "Working", waiting+unread → "Answer ready", waiting (seen) → "Your turn",
-// idle+unread → "New activity", idle → "Idle".
+// "Working", waiting (both unread=true and unread=false) → "Your turn",
+// idle+unread → "Unread response", idle → "Idle".
 // ---------------------------------------------------------------------------
 
 describe('StatusDot — Hint tooltip labels per badge state', () => {
@@ -341,11 +357,11 @@ describe('StatusDot — Hint tooltip labels per badge state', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('Working');
   });
 
-  it('shows "Answer ready" on hover when badge.base=waiting and unread=true', async () => {
+  it('shows "Your turn" on hover when badge.base=waiting and unread=true', async () => {
     const user = userEvent.setup();
     render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
     await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Answer ready');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Your turn');
   });
 
   it('shows "Your turn" on hover when badge.base=waiting and unread=false', async () => {
@@ -355,11 +371,11 @@ describe('StatusDot — Hint tooltip labels per badge state', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('Your turn');
   });
 
-  it('shows "New activity" on hover when badge.base=idle and unread=true', async () => {
+  it('shows "Unread response" on hover when badge.base=idle and unread=true', async () => {
     const user = userEvent.setup();
     render(<StatusDot badge={{ base: 'idle', unread: true }} />);
     await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('New activity');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Unread response');
   });
 
   it('shows "Idle" on hover when badge.base=idle and unread=false', async () => {
@@ -457,14 +473,16 @@ describe('StatusDot is the only status indicator (AnswerPill removed)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 15. StatusDot waiting-unread ping-halo + visual deltas (artboard Phase-3 majors)
+// 15. StatusDot waiting ping-halo beacon (artboard Phase-3 majors, reworked for
+// the four-state rework: BOTH unread=true and unread=false waiting sessions now
+// pulse — being "waiting" IS the call to respond, read or not.
 //
 // Visual deltas per spec:
-//  - waiting-seen dot becomes 9px (`size-[9px]`).
+//  - waiting beacon wrapper is `size-2.5`; the inner solid dot is `size-[9px]`.
 //  - waiting-unread inner dot gains a 2px 18%-amber ring shadow class.
 // ---------------------------------------------------------------------------
 
-describe('StatusDot waiting-unread ping-halo', () => {
+describe('StatusDot waiting ping-halo beacon', () => {
   it('waiting + unread status dot renders a child halo span with animate-ping class', () => {
     render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
     const dot = screen.getByTestId('sessions-row-status-dot');
@@ -473,16 +491,19 @@ describe('StatusDot waiting-unread ping-halo', () => {
     expect(halo).toBeTruthy();
   });
 
-  it('waiting + seen status dot does NOT render animate-ping halo', () => {
+  it('waiting + seen status dot DOES render the animate-ping halo (both unread states pulse)', () => {
     render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.querySelector('.animate-ping')).toBeNull();
+    expect(dot.querySelector('.animate-ping')).toBeTruthy();
   });
 
-  it('waiting + seen status dot uses size-[9px] (not the default size-2)', () => {
+  it('waiting + seen status dot beacon: wrapper is size-2.5, inner solid dot is size-[9px]', () => {
     render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('size-[9px]');
+    expect(dot.className).toContain('size-2.5');
+    const inner = dot.querySelector('.bg-mf-warning:not(.animate-ping)');
+    expect(inner).toBeTruthy();
+    expect(inner?.className).toContain('size-[9px]');
   });
 
   it('waiting + unread inner dot carries a 2px 18%-amber ring shadow class', () => {
