@@ -214,6 +214,38 @@ test.describe('§transcript — code block', () => {
   });
 });
 
+// ─── §11 Transcript — compaction pill (compaction) ─────────────────────────────
+
+test.describe('§transcript — compaction pill', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'compaction' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('system message renders the compaction pill after a compaction event', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Summarize our conversation so far and keep going');
+
+    // The recording's onCompactStart/onCompact fire before the next assistant reply — the
+    // resulting bare {type:'compaction'} system message sets isCompacted, so CompactionPill
+    // renders instead of the plain-text SystemTextPill branch.
+    const pill = page.getByTestId('chat-compaction-pill').first();
+    await pill.waitFor({ timeout: 45_000 });
+    await expect(pill).toContainText('Context compacted');
+
+    await waitForIdle(page, 60_000);
+  });
+});
+
 // ─── §11 Transcript — not reachable in mock mode ───────────────────────────────
 
 test.describe('§transcript — no fixture / not deterministically reachable', () => {
@@ -232,11 +264,6 @@ test.describe('§transcript — no fixture / not deterministically reachable', (
     // replies contain a markdown link (`](http...)`); LinkWithPreview's
     // ContextMenu (chat-link-copy / chat-link-open) needs a recording whose text
     // includes one.
-  });
-
-  test.skip('system message renders the compaction pill after a compaction event', () => {
-    // TODO(recording): CompactionPill renders when a message's content includes a
-    // `type:'compaction'` block; no committed recording emits a compaction event.
   });
 
   test.skip('a failed send shows "Failed to send" + Retry', () => {

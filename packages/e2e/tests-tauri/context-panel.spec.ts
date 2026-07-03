@@ -20,15 +20,12 @@
  *     to return `[]` — modifiedFiles/skillFiles (the 'plan'/'skill' badge
  *     sources for the Session group) never populate either, regardless of what
  *     tool calls a recording replays.
- *   - `MockCliAdapter` has no `listSkills`/`listAgents` — `GET
- *     /api/adapters/mock-cli/skills|agents` 404s ("Adapter not found or does
- *     not support skills"), which `useSidebarSkills`'s catch block turns into
- *     an empty list + `loading:false`. Seeding `.claude/skills/*` in the temp
- *     project has NO effect under mock-cli (only the real `claude` adapter's
- *     `listSkills`/`listAgents` in packages/core/src/plugins/builtin/claude/
- *     skills.ts scan disk) — so the Skills/Agents tabs are DETERMINISTICALLY
- *     empty in this harness. Tests below assert that guaranteed empty state
- *     instead of seeding files that would never be read.
+ * `MockCliAdapter` NOW implements `listSkills`/`listAgents` (project-scope only,
+ * `.claude/skills/<name>/SKILL.md` + `.claude/agents/<name>.md` — see
+ * plugins/mock-cli/src/skills.ts), so seeding those directories in the temp
+ * project IS reflected in the Skills/Agents tabs — see the dedicated describe
+ * below. `useSidebarSkills` keys the fetch off `useActiveIdentity()`'s
+ * `projectPath`/`adapterId`, so a chat must be active first.
  * The only two SessionContext fields NOT wired through the adapter are
  * `mentions` (`POST /api/chats/:id/mentions`, public REST) and `attachments`
  * (`POST /api/chats/:id/attachments`, public REST) — both persist straight to
@@ -59,6 +56,8 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { waitConnected } from '../helpers/tauri/wait.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { mkdirSync, writeFileSync } from 'fs';
+import path from 'path';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
@@ -167,8 +166,8 @@ test.describe('§context-panel — tab switching', () => {
     await skillsTab.click();
     await expect(skillsTab).toHaveClass(/bg-mf-tab-active/);
     await expect(page.getByTestId('sidebar-bottom-tab-context')).not.toHaveClass(/bg-mf-tab-active/);
-    // Guaranteed: MockCliAdapter has no listSkills — GET .../mock-cli/skills 404s,
-    // useSidebarSkills's catch clears the list. See file header for the full trace.
+    // This project seeds no `.claude/skills` dir — MockCliAdapter.listSkills tolerates the
+    // missing dir and resolves []. The seeded-skills case is covered in the describe below.
     await expect(page.getByText('No skills')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('sidebar-context-section-global')).toHaveCount(0);
   });
@@ -186,12 +185,67 @@ test.describe('§context-panel — tab switching', () => {
     await page.getByTestId('sidebar-bottom-tab-context').click();
     await expect(page.getByTestId('sidebar-context-section-global')).toBeVisible({ timeout: 10_000 });
   });
+});
 
-  // TODO(app-tauri): Standalone Skills panel row → open-file click-through is untestable here —
-  // the list is deterministically empty under mock-cli (see file header trace). Would need a
-  // 'claude' (non-mock) adapter chat, which the harness doesn't run live agents against.
-  test.skip('a skill row click opens its SKILL.md in the editor (needs a non-mock claude adapter chat)', async () => {});
-  test.skip('an agent row click opens its agent file in the editor (needs a non-mock claude adapter chat)', async () => {});
+// ─── §context-panel — Skills/Agents rows (seeded .claude/skills|agents) ──────
+
+test.describe('§context-panel — skills and agents rows', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+
+    // MockCliAdapter.listSkills/listAgents scan ONLY `<projectPath>/.claude/{skills,agents}`
+    // (plugins/mock-cli/src/skills.ts) — seed both before selecting the chat that triggers
+    // useSidebarSkills's fetch.
+    const skillDir = path.join(project.projectPath, '.claude', 'skills', 'write-tests');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      path.join(skillDir, 'SKILL.md'),
+      '---\nname: Write Tests\ndescription: Write comprehensive unit tests for a module.\n---\n\n# Write Tests\n',
+    );
+    const agentDir = path.join(project.projectPath, '.claude', 'agents');
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      path.join(agentDir, 'code-reviewer.md'),
+      '# Code Reviewer\n\nReviews code changes for quality issues.\n',
+    );
+
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a skill row click opens its SKILL.md in the editor', async () => {
+    const { page } = app;
+    await page.getByTestId('sidebar-bottom-tab-skills').click();
+
+    const row = page.getByTestId('sidebar-skill-item-mock-cli:project:write-tests');
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row).toContainText('/Write Tests');
+
+    await row.click();
+    const strip = page.getByTestId('files-tab-strip');
+    await expect(strip.getByRole('tab', { selected: true })).toContainText('SKILL.md', { timeout: 10_000 });
+  });
+
+  test('an agent row click opens its agent file in the editor', async () => {
+    const { page } = app;
+    await page.getByTestId('sidebar-bottom-tab-agents').click();
+
+    const row = page.getByTestId('sidebar-agent-item-mock-cli:project:agent:code-reviewer');
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row).toContainText('code-reviewer');
+
+    await row.click();
+    const strip = page.getByTestId('files-tab-strip');
+    await expect(strip.getByRole('tab', { selected: true })).toContainText('code-reviewer.md', { timeout: 10_000 });
+  });
 });
 
 // ─── §context-panel — Tasks section (needs a todos.updated event — unseedable today) ──
@@ -202,8 +256,11 @@ test.describe('§context-panel — tasks section', () => {
   // (packages/core/src/chat/event-handler.ts:484) or a resumeChat reseed of a persisted
   // `chat.todos` column that nothing populates without that same event having fired once. There
   // is no REST route to set chat.todos directly (db/chats.ts updateTodos is private to
-  // lifecycle-manager) and no existing recording drives a TodoWrite call. Needs a purpose-built
-  // recording (e.g. a prompt that calls TodoWrite) before this can be unskipped.
+  // lifecycle-manager). The new `task-progress` recording does NOT help here — it drives
+  // TaskCreate/TaskUpdate (the v2 task-tracking tool family feeding `_TaskProgress`/TaskProgressCard
+  // in the transcript, per tool-cards.spec.ts), a completely different mechanism from the legacy
+  // v1 TodoWrite tool this section reads (see event-handler.ts's separate onTodoUpdate handler).
+  // Needs a purpose-built recording that calls TodoWrite specifically before this can be unskipped.
   test.skip('renders the progress fill and per-todo rows, with completed rows struck through', async () => {});
 });
 

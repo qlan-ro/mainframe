@@ -67,13 +67,39 @@ test.describe('§permission gate details', () => {
     await page.locator('[data-testid="chat-permission-deny"]').click();
     await waitForIdle(page, 60_000);
   });
+});
 
-  // TODO(recording): needs `permissions-no-suggestions` — a recorded onPermission with
-  // suggestions:[] (e.g. a tool request that isn't eligible for a persistent-permission
-  // suggestion). Every existing permission recording (permissions-interactive, plan-approval)
-  // carries non-empty suggestions, so the "always-allow absent" branch has no fixture today.
-  test.skip('always-allow is absent when the request carries no suggestions', async () => {
-    // TODO(recording): needs permissions-no-suggestions
+// ─── Permission gate — always-allow absent without suggestions ──────────────
+
+test.describe('§permission gate no suggestions', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-no-suggestions' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('always-allow is absent when the request carries no suggestions', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Run `whoami` to check the current user');
+    const gate = page.locator('[data-testid="chat-permission-gate"]');
+    await gate.waitFor({ timeout: 45_000 });
+
+    // Recording's onPermission carries suggestions:[] — ActionFooter's `hasSuggestions` gate.
+    await expect(page.locator('[data-testid="chat-permission-always-allow"]')).toBeHidden();
+    // The rest of the footer still renders — this is a targeted absence, not a broken gate.
+    await expect(page.locator('[data-testid="chat-permission-allow-once"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chat-permission-deny"]')).toBeVisible();
+
+    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await waitForIdle(page, 60_000);
   });
 });
 
@@ -116,20 +142,71 @@ test.describe('§ask-question wizard extras', () => {
     await page.locator('[data-testid="chat-question-skip"]').click();
     await waitForIdle(page, 60_000);
   });
+});
 
-  // TODO(recording): needs `ask-question-multi` — a recorded AskUserQuestion input.questions
-  // with 2+ entries (so `chat-question-next`/`-back` and the "N of M" counter badge render;
-  // today's only ask-question recording carries a single question).
-  test.skip('multi-question wizard: Next/Back paginate and the "N of M" counter updates', async () => {
-    // TODO(recording): needs ask-question-multi
+// ─── Ask-question wizard — multi-question pagination + multi-select ─────────
+
+test.describe('§ask-question wizard multi-question', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'ask-question-multi' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'yolo');
   });
 
-  // TODO(recording): needs a question with multiSelect:true (can be folded into
-  // ask-question-multi above, or a dedicated single-question multiSelect recording) — today's
-  // only recording has multiSelect:false, so OptionRow always renders the radio indicator, never
-  // the Checkbox branch.
-  test.skip('multi-select question renders checkboxes and allows toggling more than one option', async () => {
-    // TODO(recording): needs ask-question-multiselect
+  test.afterAll(async () => {
+    await closeTauriApp(app);
+    cleanupTauriProject(project);
+  });
+
+  // The recording's single AskUserQuestion carries both a single-select Q1 ("Auth method") and a
+  // multiSelect Q2 ("Target environments") on one gate instance, so pagination and the multiSelect
+  // Checkbox branch are two facets of the same continuous wizard flow — asserted together here
+  // rather than split across two sessions (only one ask-question-multi recording exists).
+  test('Next/Back paginate with a "N of M" counter; the multi-select question renders checkboxes and allows toggling more than one option', async () => {
+    const { page } = app;
+    await sendMessage(
+      page,
+      'Use AskUserQuestion to ask two questions: single-select auth method, then multi-select target environments',
+    );
+
+    const gate = page.locator('[data-testid="chat-question-gate"]');
+    await gate.waitFor({ timeout: 60_000 });
+    await expect(gate).toContainText('1 of 2');
+
+    // Q1 is single-select: Next is disabled until an option is chosen.
+    const next = page.locator('[data-testid="chat-question-next"]');
+    await expect(next).toBeDisabled();
+    await page.locator('[data-testid="chat-question-option-0-API key"]').click();
+    await expect(next).toBeEnabled();
+
+    await next.click();
+    await expect(gate).toContainText('2 of 2');
+    await expect(page.locator('[data-testid="chat-question-back"]')).toBeVisible();
+
+    // Q2 is multiSelect — OptionRow renders a Checkbox (role=checkbox), not the radio indicator.
+    const staging = page.locator('[data-testid="chat-question-option-1-Staging"]');
+    const production = page.locator('[data-testid="chat-question-option-1-Production"]');
+    await expect(staging.getByRole('checkbox')).toBeVisible();
+
+    await staging.click();
+    await expect(staging.getByRole('checkbox')).toHaveAttribute('data-state', 'checked');
+    await production.click();
+    // Toggling a second option does not clear the first (multiSelect, unlike the Q1 radio branch).
+    await expect(staging.getByRole('checkbox')).toHaveAttribute('data-state', 'checked');
+    await expect(production.getByRole('checkbox')).toHaveAttribute('data-state', 'checked');
+
+    // Back returns to Q1 with its selection preserved.
+    await page.locator('[data-testid="chat-question-back"]').click();
+    await expect(gate).toContainText('1 of 2');
+    await expect(next).toBeEnabled();
+
+    await next.click();
+    await expect(gate).toContainText('2 of 2');
+    await page.locator('[data-testid="chat-question-submit"]').click();
+    await waitForIdle(page, 60_000);
   });
 });
 
@@ -180,18 +257,46 @@ test.describe('§plan gate exec-mode', () => {
   });
 });
 
-// ─── Gate queue — one-gate-at-a-time (live-only, no recording) ───────────────
+// ─── Gate queue — one-gate-at-a-time ──────────────────────────────────────────
 
-test.describe('§gate queue-front (needs stacked recording)', () => {
-  // TODO(recording): needs `permissions-stacked` — two onPermission `out` events fired back to
-  // back with no `in` marker (i.e. no respondToPermission) between them, reproducing the CLI
-  // firing multiple control_requests per API turn (see memory
-  // permission-queue-multi-control-request). No existing recording stacks control_requests —
-  // verified by scanning every fixture in packages/e2e/fixtures/recordings/ for two consecutive
-  // `out`/`onPermission` events uninterrupted by an `in` marker; none do. select-front.ts's
-  // askedAt-ascending queue-front behavior (ChatGateMount renders only the earliest-asked entry)
-  // needs that shape to exercise.
-  test.skip('only the earliest-asked gate mounts when the CLI stacks multiple control_requests', async () => {
-    // TODO(recording): needs permissions-stacked
+test.describe('§gate queue-front', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-stacked' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // The daemon architecturally serializes stacked control_requests to the client — it never
+  // delivers two simultaneously (permission-manager enqueues the 2nd server-side and only emits
+  // its `permission.requested` after the 1st is resolved). So the observable, reachable behavior
+  // per select-front.ts's queue-front design is: exactly one gate is mounted at a time, tool 1's
+  // gate resolves first, then tool 2's gate appears — in recorded order. That is what this test
+  // asserts (see .superpowers/sdd/reports/recordings-author-report.md's permissions-stacked notes
+  // for why literal DOM-level simultaneity isn't a reachable state to assert).
+  test('only one gate is mounted at a time; tool 1 resolves before tool 2 appears, in recorded order', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Write /tmp/mf-e2e-stacked.txt then run `ls -la /tmp` to confirm it');
+
+    const gate = page.locator('[data-testid="chat-permission-gate"]');
+    await gate.waitFor({ timeout: 45_000 });
+    await expect(gate).toContainText('Write');
+    await expect(gate).toHaveCount(1);
+
+    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+
+    // Tool 2's gate only mounts after tool 1's is answered — same testid, new content.
+    await expect(gate).toContainText('Bash', { timeout: 10_000 });
+    await expect(gate).toHaveCount(1);
+
+    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await waitForIdle(page, 60_000);
   });
 });

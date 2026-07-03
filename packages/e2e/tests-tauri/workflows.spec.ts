@@ -5,37 +5,24 @@
  * modal" scenario is already covered by sidebar-chrome.spec.ts ("workflows button
  * opens the workflows modal") — not re-asserted here, only used as a precondition.
  *
- * REAL BUGS FOUND while writing this spec (confirmed via a direct
- * parseWorkflowYaml() repro against packages/core, not a test artifact):
+ * Fixed since the previous pass: `editor/yaml-serialize.ts`'s `serializeWorkflow()`
+ * no longer emits a top-level `scope:` line (was colliding with the daemon's
+ * `.strict()` `workflowSchema`, which has no `scope` field) — a builder-built
+ * document now parses and can reach a savable state. `WorkflowEditor.tsx`'s
+ * `scheduleValidation` also now sets `validationError` (surfaced via the
+ * `workflows-editor-validation-error` testid in `WfEditorChrome.tsx`) on a
+ * thrown `validateYaml()` request instead of silently swallowing it — see the
+ * "Editor" describe below for both the success path and the validation-error
+ * path (an invalid `name:`, which the daemon rejects at parse time — a 400 —
+ * distinct from `verifyWorkflow`'s semantic errors, which return 200 with a
+ * `{valid:false, errors:[...]}` body rendered in the normal footer instead).
  *
- *   1. `editor/yaml-serialize.ts` `serializeWorkflow()` unconditionally emits a
- *      top-level `scope: <global|project>` line. `packages/core/src/workflows/dsl/schema.ts`
- *      `workflowSchema` is `.strict()` and has NO `scope` field — the daemon's
- *      `parseWorkflowYaml` throws `WorkflowParseError: Unrecognized key: "scope"`
- *      for EVERY builder-produced document, valid or not. Confirmed live via
- *      `page.waitForResponse` on `POST /api/workflows/validate` (see the
- *      "Editor" describe below) — the daemon really does return HTTP 400 with
- *      that exact message today.
- *   2. That 400 is silently swallowed: `WorkflowEditor.tsx`'s `scheduleValidation`
- *      does `wfApi.validateYaml(...).then(setValidation).catch(err => console.warn(...))`
- *      — on a thrown `request()` error (any non-2xx), `setValidation` is never
- *      called, so `validation` stays `null` forever and the footer is stuck at
- *      "Validating…" instead of surfacing the real error. Combined with #1, the
- *      visual builder can currently never reach a savable state for a NEW
- *      workflow — Create stays disabled with no visible explanation.
- *   3. `deriveIdFromYaml()` in `WorkflowEditor.tsx` hardcodes the `global:` id
- *      prefix for every new workflow regardless of `model.scope` — even a
- *      "This project" draft would (if #1/#2 were fixed) save under the global
- *      workflows dir, not the project's `.mainframe/workflows`.
- *
- * Because of #1/#2, the "save → library row appears" scenario is NOT reachable
- * through the visual builder today. To still exercise the real daemon
- * write→rescan→list contract (the part of spec #30 that IS working), the "Runs"
- * and "Needs you" describes below seed workflows directly via `PUT /api/workflows/:id`
- * with hand-written schema-valid YAML (bypassing the broken serializer only,
- * never bypassing daemon validation) — the same REST path `wfApi.putWorkflow`
- * uses. Both seeded workflows use step kinds that never spawn an agent or chat
- * (`set`, `question`) so runs are safe to execute for real inside the suite.
+ * The "Runs" and "Needs you" describes below still seed workflows directly via
+ * `PUT /api/workflows/:id` with hand-written YAML (the same REST path
+ * `wfApi.putWorkflow` uses) rather than the builder — this keeps those describes
+ * independent of the Editor describe's builder-interaction sequencing, and lets
+ * both seeded workflows use step kinds that never spawn an agent or chat (`set`,
+ * `question`) so runs are safe to execute for real inside the suite.
  *
  * Testid reference (verified against packages/ui/src/features/workflows/):
  *   sidebar-workflows-button          — layout/SidebarHeader.tsx (dispatches mf:open-workflows)
@@ -268,34 +255,59 @@ test.describe('§workflows Editor', () => {
     await expect(yamlPane).not.toHaveValue(/schedule:/);
   });
 
-  test("the daemon rejects the serializer's top-level scope key — validation never resolves and Create stays disabled", async () => {
+  test('a builder-built workflow with a name and one step becomes savable and appears in the library', async () => {
     const { page } = app;
-    // Continues the same open editor from the previous test (same page, same describe —
-    // matches the sequential-state pattern used by directory-picker.spec.ts).
-    const responsePromise = page.waitForResponse(
-      (res) => res.url().includes('/api/workflows/validate') && res.request().method() === 'POST',
-      { timeout: 10_000 },
-    );
-    // Force one more debounced validate cycle.
-    await page.getByTestId('workflows-builder-description').fill('Ships the thing, definitely');
-    const response = await responsePromise;
+    // Fresh editor session — the previous test's draft carries an unresolved output
+    // placeholder (`${ ... }`), which `verifyWorkflow` correctly flags as invalid; start
+    // a minimal draft that's actually schema-valid instead of fighting that leftover state.
+    await page.getByTestId('workflows-editor-cancel').click();
+    await expect(page.getByTestId('workflows-editor')).toHaveCount(0, { timeout: 5_000 });
+    await page.getByTestId('workflows-library-new').click();
+    await expect(page.getByTestId('workflows-editor')).toBeVisible({ timeout: 10_000 });
 
-    expect(response.status()).toBe(400);
-    const body = (await response.json()) as { error?: string };
-    expect(body.error).toContain('Unrecognized key: "scope"');
+    await page.getByTestId('workflows-builder-name').fill('My Safe Flow');
+    // Explicit global scope: this describe never activates a session, so
+    // useActiveIdentity().projectId is unset regardless — deriveWorkflowId's own
+    // documented fallback would resolve 'project' scope to 'global:' anyway; picking
+    // it explicitly keeps the expected row id self-evident from the test.
+    await page.getByTestId('workflows-builder-scope-global').click();
+    await page.getByTestId('workflows-builder-add-step').click();
+    await expect(page.getByTestId('workflows-steplib')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('workflows-steplib-set').click();
 
-    // Switch to builder-only mode so the YAML pane's OWN "Validating…" header chip
-    // doesn't collide with the footer's — the footer is the one under test.
-    await page.getByTestId('workflows-editor-mode-builder').click();
-    await expect(page.getByText('Validating…')).toBeVisible();
+    const saveButton = page.getByTestId('workflows-editor-save');
+    await expect(saveButton).toBeEnabled({ timeout: 10_000 });
+    await expect(page.getByTestId('workflows-editor-validation-error')).toHaveCount(0);
+
+    await saveButton.click();
+    await expect(page.getByTestId('workflows-editor')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId('workflows-library')).toBeVisible();
+    await expect(page.getByTestId('workflows-library-row-global:my-safe-flow')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('an invalid `name:` fails schema parsing and surfaces via workflows-editor-validation-error', async () => {
+    const { page } = app;
+    await page.getByTestId('workflows-library-new').click();
+    await expect(page.getByTestId('workflows-editor')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('workflows-editor-mode-yaml').click();
+
+    // idSchema (packages/core/src/workflows/dsl/schema.ts) is `/^[a-zA-Z0-9_-]+$/` — a
+    // name with spaces/punctuation fails schema parsing (a 400 from POST /validate),
+    // distinct from a semantic error like the dangling-reference case below (which
+    // parses fine and returns 200 with `{valid:false, errors:[...]}`).
+    const yamlPane = page.getByTestId('workflows-editor-yaml');
+    const invalidNameYaml =
+      'version: 1\nname: "not a valid name!"\nsteps:\n  - id: set_value\n    set: { message: "hi" }\n';
+    await yamlPane.fill(invalidNameYaml);
+
+    const errorFooter = page.getByTestId('workflows-editor-validation-error');
+    await expect(errorFooter).toBeVisible({ timeout: 10_000 });
+    await expect(errorFooter).toContainText('name');
     await expect(page.getByTestId('workflows-editor-save')).toBeDisabled();
   });
 
   test('a dangling output reference in YAML mode surfaces a real validation error and blocks save', async () => {
     const { page } = app;
-    // Fresh editor session — avoids the scope-key bug entirely by hand-writing
-    // schema-valid (no top-level `scope:`) YAML directly into the textarea, the
-    // same way a user could paste/edit YAML by hand.
     await page.getByTestId('workflows-editor-cancel').click();
     await expect(page.getByTestId('workflows-editor')).toHaveCount(0, { timeout: 5_000 });
     await page.getByTestId('workflows-library-new').click();

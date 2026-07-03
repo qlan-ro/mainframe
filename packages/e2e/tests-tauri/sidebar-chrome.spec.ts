@@ -26,6 +26,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 
 /** BottomPanel's root <div style={{height}}> has no testid; walk up from the tab-track
  *  testid anchor (its grandparent) to read the panel's live height via bounding box. */
@@ -116,13 +117,17 @@ test.describe('§sidebar-chrome', () => {
     await expect(page.getByTestId('sidebar-footer-count-waiting')).toHaveCount(0);
   });
 
-  // TODO(recording): working/waiting footer-count chips need a live agent turn. mock-cli caps
-  // each replayed event's delay at 120ms (ReplaySession.MAX_DELAY_MS, plugins/mock-cli/src/session.ts),
-  // so the `messaging` recording's 'working' displayStatus window collapses to well under a second
-  // end-to-end — not a window we can assert against race-free. 'waiting' would need a
-  // permission-gate recording plus coordinating the gate reply on top of that. Skipping rather
-  // than asserting a state we can't reliably observe; unskip with a purpose-built slow fixture.
-  test.skip('footer working/waiting count chips appear during an agent turn', async () => {});
+  // TODO(recording): the 'working' footer-count chip needs a live agent turn caught mid-stream.
+  // mock-cli caps each replayed event's delay at 120ms (ReplaySession.MAX_DELAY_MS,
+  // plugins/mock-cli/src/session.ts), so any recording's 'working' displayStatus window collapses
+  // to well under a second end-to-end — not a window we can assert against race-free. Unlike
+  // 'waiting' (see the describe below — a pending permission gate is a STABLE displayStatus that
+  // persists until answered, chat-manager.ts:777's `hasPending ? 'waiting' : …` takes precedence
+  // over 'working'), there's no daemon-side state that holds 'working' open deterministically.
+  // Skipping rather than asserting a state we can't reliably observe; unskip with a purpose-built
+  // slow fixture (e.g. a tool call recording with a long inter-event delay once MAX_DELAY_MS is
+  // made configurable, or a live 'working'-holding daemon hook).
+  test.skip('footer working count chip appears during an agent turn', async () => {});
 
   test('dragging the resize handle up grows the bottom panel', async () => {
     const { page } = app;
@@ -154,5 +159,42 @@ test.describe('§sidebar-chrome', () => {
 
     await expect(page.getByTestId('sessions-sidebar')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('show-sidebar-button')).toHaveCount(0, { timeout: 5_000 });
+  });
+});
+
+// ─── §sidebar-chrome — waiting count (a held permission gate is a stable state) ─
+
+test.describe('§sidebar-chrome — footer waiting count', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-interactive' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('the waiting count chip appears while a permission gate is pending and matches the pending count', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
+
+    // A pending permission gate holds the chat's displayStatus at 'waiting'
+    // (chat-manager.ts: `hasPending ? 'waiting' : …` takes precedence over 'working') until
+    // answered — unlike 'working', this is a stable, race-free window to assert against.
+    await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
+
+    const waitingChip = page.getByTestId('sidebar-footer-count-waiting');
+    await expect(waitingChip).toBeVisible({ timeout: 10_000 });
+    await expect(waitingChip).toHaveText('1');
+    await expect(page.getByTestId('sidebar-footer-count-working')).toHaveCount(0);
+
+    await page.getByTestId('chat-permission-deny').click();
+    await waitForIdle(page, 60_000);
+    await expect(waitingChip).toHaveCount(0, { timeout: 10_000 });
   });
 });

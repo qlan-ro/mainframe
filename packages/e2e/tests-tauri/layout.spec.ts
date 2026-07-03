@@ -32,12 +32,9 @@
  *                                     elementFromPoint, so it's the correct anchor for
  *                                     both "where is this pane" and "where do I drop").
  *
- * KNOWN GAP found during research (see the last describe block): `useLayoutStore
- * .setActiveSession` — the hook that would key layout/run state by chat id — is never
- * called from application runtime code (grepped `packages/ui/src`; only
- * `store/__tests__/layout*.test.ts` call it). Per-session persistence is implemented at
- * the store layer but not wired to real session switching, so that scenario is written
- * but `test.skip`-ped with a TODO rather than faked.
+ * Per-session layout persistence: `useLayoutStore.setActiveSession` is wired from
+ * `useSessionListRouter` (called with `active.remoteId` on every session switch,
+ * skipped for the `__LOCALID_*` draft) — see the last describe block.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -390,18 +387,6 @@ test.describe('§20 layout — per-session layout persistence', () => {
   });
 
   test('arranging a layout in session A does not leak into session B, and A is restored on return', async () => {
-    test.skip(
-      true,
-      'TODO(app-tauri): useLayoutStore.setActiveSession is never called from application runtime ' +
-        'code — grepped packages/ui/src for `.setActiveSession(`; the only call sites are ' +
-        'store/__tests__/layout*.test.ts. The per-session `sessions` Map + zustand persist wiring in ' +
-        'store/layout.ts / store/layout-persist.ts exist at the store layer but nothing keys the live ' +
-        'layout/run state by chat id on session switch, so this scenario cannot pass yet: switching ' +
-        'chats currently leaves the SAME global layout visible in every session. Unskip once a wiring ' +
-        'hook (e.g. in useSessionListRouter, on mainThreadId/remoteId change) calls ' +
-        'useLayoutStore.getState().setActiveSession(remoteId).',
-    );
-
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 

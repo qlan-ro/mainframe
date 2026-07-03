@@ -19,15 +19,19 @@
  *   plan-approval.0/.1               → Read, Write, Edit, ExitPlanMode
  *   ask-question.0                   → AskUserQuestion
  *   chat-status.0                    → Skill (SlashCommandCard) + onSkillLoaded (SkillLoadedCard)
+ *   task-subagent.0                  → Task (nested onSubagentChild transcript)
+ *   task-progress.0                  → TaskCreate/TaskUpdate (_TaskProgress reduction)
+ *   web-fetch.0                      → WebFetch
+ *   mcp-tool.0                       → mcp__linear__get_issue (done + error)
+ *   unregistered-tool.0              → CustomAnalyticsReport (ToolFallback)
  *   app-restart.0, composer-attachments.0, context-picker.0, image-lightbox.0,
  *   multi-chat.0/.1                  → no tool calls
  *
- * No recording exercises: Task (subagent), _TaskProgress, WebFetch/WebSearch,
- * an mcp__* tool, Schedule/Cron/Monitor, EnterWorktree/ExitWorktree, a
- * truncated (>threshold) tool result, two consecutive explore-family tool
- * calls (ToolGroup), a Bash call with a trailing `exit N` line, or an
- * unregistered tool name (ToolFallback). Those families are `test.skip`ped
- * below with a precise recording wishlist in the report.
+ * No recording exercises: WebSearch, Schedule/Cron/Monitor, EnterWorktree/
+ * ExitWorktree, a truncated (>threshold) tool result, two consecutive
+ * explore-family tool calls (ToolGroup), or a Bash call with a trailing
+ * `exit N` line. Those families are `test.skip`ped below with a precise
+ * recording wishlist in the report.
  *
  * Testid reference (verified against source; all asserted below):
  *   chat-bash-card / -trigger / -command / -description / -bash-output
@@ -38,6 +42,11 @@
  *   chat-plan-bubble (approved) ; chat-plan-card / -label / -body (not approved)
  *   chat-slash-command-row (Skill tool call)
  *   chat-skill-loaded-pill ; chat-system-message (onSkillLoaded system message)
+ *   chat-task-card / -toggle / -agent / -description (Task subagent card)
+ *   chat-task-progress-card / -toggle / -item-{status} (TaskProgress card)
+ *   web-fetch-card-root / -trigger / -url / -summary
+ *   chat-mcp-pill ; marker-body (MCP tool pill)
+ *   chat-tool-fallback-card / -trigger / -args / -result (ToolFallback)
  * Not testid-covered: StatusDot (no data-testid on the tri-state dot in any card — see report).
  */
 
@@ -362,34 +371,199 @@ test.describe('§tool-cards — Skill + SkillLoaded (chat-status)', () => {
   });
 });
 
+// ─── Task subagent card (nested transcript) — task-subagent ──────────────────
+
+test.describe('§tool-cards — Task subagent (task-subagent)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'task-subagent' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('collapsed by default with agent name/description; expanding renders the nested subagent transcript', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Delegate finding the greeting export to a subagent');
+
+    const card = page.getByTestId('chat-task-card').first();
+    await card.waitFor({ timeout: 60_000 });
+    await expect(card.getByTestId('chat-task-agent')).toHaveText('general-purpose');
+    await expect(card.getByTestId('chat-task-description')).toContainText('Find the greeting export');
+
+    // Nested transcript isn't mounted until expanded (Radix Collapsible unmounts closed content).
+    await expect(card.getByTestId('chat-bash-card')).toHaveCount(0);
+    await expect(card).toHaveAttribute('data-state', 'closed');
+
+    await card.getByTestId('chat-task-toggle').click();
+    await expect(card).toHaveAttribute('data-state', 'open');
+
+    // The recorded onSubagentChild carries a nested Bash call (search) rendered via the same
+    // tool-card registry the main thread uses.
+    const nestedBash = card.getByTestId('chat-bash-card').first();
+    await expect(nestedBash).toBeVisible({ timeout: 5_000 });
+    await expect(nestedBash.getByTestId('chat-bash-command')).toContainText('export const greeting');
+  });
+});
+
+// ─── TaskProgress card (TaskCreate/TaskUpdate reduction) — task-progress ──────
+
+test.describe('§tool-cards — TaskProgress (task-progress)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'task-progress' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('default-open card shows rows reduced to their latest status', async () => {
+    const { page } = app;
+    await sendMessage(
+      page,
+      'Track three tasks: add a login form, write its tests, update the docs. Use TaskCreate/TaskUpdate to track progress.',
+    );
+
+    const card = page.getByTestId('chat-task-progress-card').first();
+    await card.waitFor({ timeout: 60_000 });
+    // Default open — rows are mounted without a trigger click.
+    await expect(card).toHaveAttribute('data-state', 'open');
+    await expect(card.getByTestId('chat-task-progress-toggle')).toContainText('(3)');
+
+    // Recording: task 1 → in_progress → completed; task 2 → in_progress; task 3 never updated.
+    const completed = card.getByTestId('chat-task-progress-item-completed');
+    await expect(completed).toContainText('Add login form');
+    const inProgress = card.getByTestId('chat-task-progress-item-in_progress');
+    await expect(inProgress).toContainText('Write login form tests');
+    const pending = card.getByTestId('chat-task-progress-item-pending');
+    await expect(pending).toContainText('Update login form docs');
+  });
+});
+
+// ─── WebFetch card — web-fetch ────────────────────────────────────────────────
+
+test.describe('§tool-cards — WebFetch (web-fetch)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'web-fetch' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('collapsed by default; expanding shows the fetched url and a summary body', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Fetch https://example.com/docs and summarize it');
+
+    const card = page.getByTestId('web-fetch-card-root').first();
+    await card.waitFor({ timeout: 60_000 });
+    await expect(card).toHaveAttribute('data-state', 'closed');
+    await expect(card.getByTestId('web-fetch-card-url')).toHaveCount(0);
+
+    await card.getByTestId('web-fetch-card-trigger').click();
+    await expect(card).toHaveAttribute('data-state', 'open');
+    await expect(card.getByTestId('web-fetch-card-url')).toHaveText('https://example.com/docs');
+    await expect(card.getByTestId('web-fetch-card-summary')).toContainText('REST API');
+  });
+});
+
+// ─── MCP tool pill — mcp-tool ──────────────────────────────────────────────────
+
+test.describe('§tool-cards — MCP pill (mcp-tool)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'mcp-tool' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('done pill is expandable to ARGUMENTS/RESULT; the errored second call renders the failed variant', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Use the linear MCP server to look up issue MF-42');
+
+    const pills = page.getByTestId('chat-mcp-pill');
+    const donePill = pills.nth(0);
+    await donePill.waitFor({ timeout: 60_000 });
+    await expect(donePill).toContainText('Linear executed');
+    await expect(donePill).toContainText('get_issue');
+
+    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+    await donePill.click();
+    const body = page.getByTestId('marker-body');
+    await expect(body).toBeVisible({ timeout: 5_000 });
+    await expect(body).toContainText('MF-42');
+    await expect(body).toContainText('In Progress');
+
+    // Second call errors — its pill renders the failed variant and is not expandable.
+    const errorPill = pills.nth(1);
+    await expect(errorPill).toBeVisible({ timeout: 10_000 });
+    await expect(errorPill).toContainText('Linear failed:');
+    await expect(errorPill).toContainText('get_issue');
+    await expect(errorPill).toBeDisabled();
+  });
+});
+
+// ─── ToolFallback card for an unregistered tool name — unregistered-tool ──────
+
+test.describe('§tool-cards — ToolFallback (unregistered-tool)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'unregistered-tool' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a tool name absent from TOOL_REGISTRY falls through to the generic card', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Use the custom analytics tool to report a build event');
+
+    const card = page.getByTestId('chat-tool-fallback-card').first();
+    await card.waitFor({ timeout: 60_000 });
+    await expect(card.getByTestId('chat-tool-fallback-trigger')).toContainText('CustomAnalyticsReport');
+
+    await expect(card.getByTestId('chat-tool-fallback-args')).toHaveCount(0);
+    await card.getByTestId('chat-tool-fallback-trigger').click();
+
+    await expect(card.getByTestId('chat-tool-fallback-args')).toContainText('build_completed');
+    await expect(card.getByTestId('chat-tool-fallback-result')).toContainText('Event recorded');
+  });
+});
+
 // ─── Card families with no recording today ────────────────────────────────────
 
 test.describe('§tool-cards — families needing a recording', () => {
-  test.skip('Task subagent card (agent name, nested transcript expands)', async () => {
-    // TODO(recording): needs `task-subagent` — a Task tool_use (subagent_type/model/description/
-    // prompt) whose onToolResult/onMessage stream carries a nested subagent transcript (so
-    // part.messages is non-empty and SubagentTranscript has something to render). No existing
-    // recording invokes the Task tool (grepped every fixtures/recordings/*.ndjson for
-    // "name":"Task").
-  });
-
-  test.skip('TaskProgress card (rows by status, default-open, updates on TodoWrite/TaskCreate+TaskUpdate)', async () => {
-    // TODO(recording): needs `task-progress` — a TaskCreate/TaskUpdate stream (pending →
-    // in_progress → completed) so TaskProgressCard's per-status rows (chat-task-progress-item-*)
-    // all render at least once. No existing recording calls TaskCreate/TaskUpdate/TodoWrite.
-  });
-
-  test.skip('WebFetch / WebSearch card (url opens external, summary body)', async () => {
-    // TODO(recording): needs `web-fetch` — a WebFetch (url + result text) and/or WebSearch (query)
-    // tool call. No existing recording calls WebFetch or WebSearch.
-  });
-
-  test.skip('MCP tool pill (pending → done, expandable args/result, error variant)', async () => {
-    // TODO(recording): needs `mcp-tool` — an `mcp__<server>__<tool>` call with a done result (for
-    // the expandable ARGUMENTS/RESULT body) and ideally a second call that errors. No existing
-    // recording calls an mcp__* tool name.
-  });
-
   test.skip('Schedule/Cron/Monitor pills (all 5 kinds)', async () => {
     // TODO(recording): needs `schedule-pills` — ScheduleWakeup, CronCreate, CronDelete, CronList
     // (with >=1 job, for the expandable job-list body), and Monitor calls. No existing recording
@@ -423,12 +597,5 @@ test.describe('§tool-cards — families needing a recording', () => {
     // "exit N" line (both N=0 and N!=0 variants), and/or an isError:true Bash result, to exercise
     // BashCard's ExitLine color branch and cardStyle's destructive border. messaging/thread's `ls -la`
     // result has no trailing exit line and isError:false.
-  });
-
-  test.skip('ToolFallback card for an unregistered tool name', async () => {
-    // TODO(recording): needs `unregistered-tool` — any tool_use whose name isn't a TOOL_REGISTRY key
-    // (e.g. a synthetic "CustomThing"). Every tool name across the committed recordings (Bash, Write,
-    // Read, Edit, ExitPlanMode, AskUserQuestion, Skill) is registered, so ToolFallback
-    // (chat-tool-fallback-card/-trigger) is never reached by an agent-turn recording today.
   });
 });
