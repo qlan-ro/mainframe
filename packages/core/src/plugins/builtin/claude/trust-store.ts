@@ -1,4 +1,5 @@
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { readFile, writeFile, rename, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createChildLogger } from '../../../logger.js';
@@ -26,8 +27,16 @@ export async function writeWorkspaceTrust(
   projects[projectPath] = { ...(projects[projectPath] ?? {}), hasTrustDialogAccepted: true };
   config.projects = projects;
 
-  const tmp = `${claudeJsonPath}.tmp-${process.pid}`;
-  await writeFile(tmp, JSON.stringify(config, null, 2));
-  await rename(tmp, claudeJsonPath);
-  log.info({ projectPath }, 'workspace trusted');
+  // Unique per call (not just per process) so two concurrent trust writes
+  // never share a tmp file and clobber or steal each other's rename.
+  const tmp = `${claudeJsonPath}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    await writeFile(tmp, JSON.stringify(config, null, 2));
+    await rename(tmp, claudeJsonPath);
+    log.info({ projectPath }, 'workspace trusted');
+  } finally {
+    // No-op once the rename above has succeeded; only cleans up an orphan
+    // left behind when writeFile/rename throws partway through.
+    await rm(tmp, { force: true });
+  }
 }

@@ -1,8 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeWorkspaceTrust } from '../trust-store.js';
+
+// Partial mock that delegates to the real implementation by default; individual
+// tests override `writeFile`/`rename` to observe tmp-path uniqueness and cleanup.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    writeFile: vi.fn(actual.writeFile),
+    rename: vi.fn(actual.rename),
+  };
+});
 
 describe('writeWorkspaceTrust', () => {
   it('creates the file and marks the project trusted when it is missing', async () => {
@@ -39,5 +51,30 @@ describe('writeWorkspaceTrust', () => {
     writeFileSync(p, '{ not json');
     await expect(writeWorkspaceTrust('/home/me/proj', p)).rejects.toThrow();
     expect(readFileSync(p, 'utf8')).toBe('{ not json');
+  });
+
+  it('uses a unique tmp path for every call, so concurrent writes cannot collide', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trust-'));
+    const p = join(dir, '.claude.json');
+    const writeFileMock = vi.mocked(fsPromises.writeFile);
+    writeFileMock.mockClear();
+
+    await Promise.all([writeWorkspaceTrust('/proj-a', p), writeWorkspaceTrust('/proj-b', p)]);
+
+    const tmpPaths = writeFileMock.mock.calls.map(([path]) => String(path));
+    expect(tmpPaths).toHaveLength(2);
+    expect(new Set(tmpPaths).size).toBe(2);
+  });
+
+  it('removes the orphaned tmp file when the write fails partway through', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trust-'));
+    const p = join(dir, '.claude.json');
+    const renameMock = vi.mocked(fsPromises.rename);
+    renameMock.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(writeWorkspaceTrust('/home/me/proj', p)).rejects.toThrow('boom');
+
+    const leftoverTmp = readdirSync(dir).filter((f) => f.includes('.tmp-'));
+    expect(leftoverTmp).toEqual([]);
   });
 });

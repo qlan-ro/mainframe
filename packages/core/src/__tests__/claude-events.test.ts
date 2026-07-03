@@ -636,6 +636,18 @@ describe('handleStderr', () => {
     expect(sink.onError).toHaveBeenCalledTimes(1);
     expect(sink.onTrustRequired).not.toHaveBeenCalled();
   });
+
+  it('routes a fatal error merely containing "has not been trusted" to onError, not onTrustRequired', () => {
+    const sink = createSink();
+    const session = { projectPath: '/p' } as unknown as ClaudeSession;
+    handleStderr(
+      session,
+      Buffer.from('FatalError: this workspace has not been trusted and the process crashed unexpectedly'),
+      sink,
+    );
+    expect(sink.onError).toHaveBeenCalledTimes(1);
+    expect(sink.onTrustRequired).not.toHaveBeenCalled();
+  });
 });
 
 describe('handleStdout — subagent result isolation (#141)', () => {
