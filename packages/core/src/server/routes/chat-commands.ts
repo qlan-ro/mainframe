@@ -68,6 +68,7 @@ export function chatCommandRoutes(ctx: RouteContext): Router {
 
   command('/api/chats/:id/interrupt', 'post', (id) => ctx.chats.interruptChat(id), 'interrupt');
   command('/api/chats/:id/resume', 'post', (id) => ctx.chats.resumeChat(id), 'resume');
+  command('/api/chats/:id/trust-workspace', 'post', (id) => ctx.chats.trustWorkspace(id), 'trust-workspace');
 
   // queue-edit validates body inline so we can return 400 on bad input (not 500)
   router.patch('/api/chats/:id/queue/:messageId', async (req: Request, res: Response) => {

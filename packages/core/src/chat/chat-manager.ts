@@ -35,6 +35,7 @@ import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
 import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
+import { writeWorkspaceTrust } from '../plugins/builtin/claude/trust-store.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -200,6 +201,15 @@ export class ChatManager {
 
   async resumeChat(chatId: string): Promise<void> {
     return this.lifecycle.resumeChat(chatId);
+  }
+
+  /** Trust the chat's workspace in ~/.claude.json (path derived server-side from the chat). */
+  async trustWorkspace(chatId: string): Promise<void> {
+    const chat = this.db.chats.get(chatId);
+    if (!chat) throw new Error(`Chat ${chatId} not found`);
+    const project = this.db.projects.get(chat.projectId);
+    if (!project) throw new Error(`Project ${chat.projectId} not found`);
+    await writeWorkspaceTrust(chat.worktreePath ?? project.path);
   }
 
   async updateChatConfig(
