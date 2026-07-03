@@ -222,7 +222,13 @@ test.describe('§review-panel — comment to chat', () => {
     await page.getByTestId('review-file-row-index.ts').click();
     const diffRoot = page.getByTestId('editor-diff');
     const modifiedPane = diffRoot.locator('.cm-content').nth(1);
-    await expect(modifiedPane.locator('.cm-line')).toHaveCount(2, { timeout: 10_000 });
+    // 3, not 2: `dirtyRepo()`'s `appendFileSync` writes a trailing '\n' after the
+    // 2nd (real) line — same on-disk-hygiene pattern documented in
+    // editor-diff.spec.ts ("the file is written with a trailing '\n' ... which
+    // CM6 shows as an Nth extra empty line"). CM6 renders that trailing newline
+    // as a 3rd, empty `.cm-line`. Fixed after a live failing run confirmed
+    // "Received: 3" reproducibly (not flaky — every retry agreed).
+    await expect(modifiedPane.locator('.cm-line')).toHaveCount(3, { timeout: 10_000 });
 
     // Line 2 is the appended line (`export const farewell = "bye";` — see dirtyRepo()).
     await modifiedPane.locator('.cm-line').nth(1).click();

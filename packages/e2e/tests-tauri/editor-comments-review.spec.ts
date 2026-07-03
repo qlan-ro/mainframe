@@ -38,12 +38,31 @@
  * `CmEditorWithComments.tsx` and the widget's Cancel button using `onClose`,
  * not `onDelete`), not a workaround — tests assert it as-is and flag it in
  * the report as a UX quirk worth a design decision, not "fixed" here.
+ * CORRECTION: it goes one step further than the marker alone — `text` is a
+ * fully-controlled prop (`InlineCommentWidget.tsx`'s `onChange` fires
+ * `onTextChange` on every keystroke → `useInlineComments.editComment`
+ * commits it immediately, `use-inline-comments.ts:57-59`). There is no
+ * separate "draft" buffer anywhere in this data model, so Cancel/Escape don't
+ * discard typed TEXT either, only close the widget — reopening the same
+ * anchor shows whatever was typed, not empty. The original Cancel/Escape
+ * tests below asserted an empty textarea on reopen; fixed to assert the real
+ * behavior (text persists) after live verification against source + a failing
+ * run.
  *
  * Testid reference (verified against packages/ui/src):
  *   main-toolbar-inspector        — reveals the Inspector (file tree)
  *   file-tree / file-tree-row-<path> — tree root / row (opens the file)
  *   editor-tab / editor-code       — EditorTab root / CmEditor host
- *   editor-comment-widget          — InlineCommentWidget root (portal host has the same testid; scoped via page.getByTestId, always exactly one open at a time in these tests)
+ *   editor-comment-widget          — InlineCommentWidget root. NOTE: the CM6 decoration
+ *     host div (`comment-gutter-state.ts`'s `CommentBlockWidget`, class
+ *     `cm-comment-widget-host`) ALSO carries this exact testid, and the React portal
+ *     content renders nested inside it — so `getByTestId('editor-comment-widget')` is a
+ *     Playwright strict-mode violation (2 elements) whenever the widget is open, not "one
+ *     open at a time" as originally assumed here. Verified live (both elements confirmed
+ *     in the strict-mode error dump: host has class `cm-comment-widget-host`, content has
+ *     the widget's real layout classes). Not touchable from this spec (packages/ui);
+ *     tests below disambiguate with `:not(.cm-comment-widget-host)` to target the actual
+ *     widget content root.
  *   editor-comment-widget-snippet  — quoted code preview inside the widget
  *   editor-comment-widget-input    — the comment textarea
  *   editor-comment-widget-save     — "Add context" (save) button
@@ -107,9 +126,25 @@ function writeFixture(dir: string): void {
   writeFileSync(path.join(dir, 'readme.txt'), 'Project notes.\nSecond line.\n');
 }
 
+// The CM6 decoration host and the React portal content nested inside it share the
+// exact same testid (see file-level docstring) — this excludes the host so callers
+// get the single actual widget-content element, not a strict-mode-violating pair.
+function widgetLocator(page: TauriAppFixture['page']) {
+  return page.locator('[data-testid="editor-comment-widget"]:not(.cm-comment-widget-host)');
+}
+
 async function openInspectorAndFile(app: TauriAppFixture, fileName: string): Promise<void> {
   const { page } = app;
-  await page.getByTestId('main-toolbar-inspector').click();
+  // `main-toolbar-inspector` is a TOGGLE (MainToolbar.tsx: `aria-pressed`,
+  // `onClick={toggleInspector}`), not an idempotent "open" action. This spec
+  // calls this helper more than once against the same long-lived page/app —
+  // by the second call the Inspector is already open (from the first call),
+  // so an unconditional click would CLOSE it instead. Only click when it's
+  // not already pressed.
+  const inspectorToggle = page.getByTestId('main-toolbar-inspector');
+  if ((await inspectorToggle.getAttribute('aria-pressed')) !== 'true') {
+    await inspectorToggle.click();
+  }
   await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
   await page.getByTestId(`file-tree-row-${fileName}`).click();
   await page.getByTestId('editor-code').waitFor({ timeout: 10_000 });
@@ -142,7 +177,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     // Line 2 ("  return a + b;") — index 1, 0-based, matching document order.
     await editorCode.locator('.cm-comment-gutter-add').nth(1).click();
 
-    const widget = page.getByTestId('editor-comment-widget');
+    const widget = widgetLocator(page);
     await expect(widget).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('editor-comment-widget-snippet')).toContainText('return a + b;');
     await expect(page.getByTestId('editor-comment-widget-input')).toHaveValue('');
@@ -153,7 +188,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await page.getByTestId('editor-comment-widget-input').fill('Should this handle negative numbers?');
     await page.getByTestId('editor-comment-widget-save').click();
 
-    await expect(page.getByTestId('editor-comment-widget')).toHaveCount(0);
+    await expect(widgetLocator(page)).toHaveCount(0);
     const editorCode = page.getByTestId('editor-code');
     await expect(editorCode.locator('.cm-comment-gutter-marker')).toHaveCount(1);
   });
@@ -163,7 +198,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     const editorCode = page.getByTestId('editor-code');
     await editorCode.locator('.cm-comment-gutter-marker').nth(0).click();
 
-    const widget = page.getByTestId('editor-comment-widget');
+    const widget = widgetLocator(page);
     await expect(widget).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('editor-comment-widget-input')).toHaveValue('Should this handle negative numbers?');
 
@@ -172,12 +207,22 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await expect(widget).toHaveCount(0);
   });
 
-  test('Cancel discards a typed draft on a new comment, but the ● marker still persists (anchor was already created on gutter-click)', async () => {
+  // CORRECTION (re-verified against source, contradicts the original title):
+  // `InlineCommentWidget`'s `text` prop is fully controlled — every keystroke
+  // calls `onTextChange` → `useInlineComments.editComment(id, text)`
+  // (use-inline-comments.ts:57-59), which commits straight into the comment's
+  // stored `text` immediately. There is no separate "draft" buffer and no
+  // reset-to-empty anywhere in `onClose`'s wiring (Cancel and the header X both
+  // just call `onClose`, per InlineCommentWidget.tsx:110/147) — so Cancel does
+  // NOT discard typed text, only closes the widget. Reopening the SAME anchor
+  // shows the typed text still there. Renamed + fixed to assert the real,
+  // verified behavior instead of the incorrect original assumption.
+  test('Cancel closes the widget without saving as a distinct action, but typed text is NOT discarded — the anchor keeps it (no draft buffer exists)', async () => {
     const { page } = app;
     const editorCode = page.getByTestId('editor-code');
     // Remaining add-buttons are for lines [1,3,4,5,6,7] in order — index 1 is line 3 ("}").
     await editorCode.locator('.cm-comment-gutter-add').nth(1).click();
-    const widget = page.getByTestId('editor-comment-widget');
+    const widget = widgetLocator(page);
     await expect(widget).toBeVisible({ timeout: 5_000 });
 
     await page.getByTestId('editor-comment-widget-input').fill('temp draft — should not be saved');
@@ -188,17 +233,17 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await expect(editorCode.locator('.cm-comment-gutter-marker')).toHaveCount(2);
     await editorCode.locator('.cm-comment-gutter-marker').nth(1).click();
     await expect(widget).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('editor-comment-widget-input')).toHaveValue('');
+    await expect(page.getByTestId('editor-comment-widget-input')).toHaveValue('temp draft — should not be saved');
     await page.getByTestId('editor-comment-widget-close').click();
     await expect(widget).toHaveCount(0);
   });
 
-  test('Escape discards a typed draft the same way Cancel does', async () => {
+  test('Escape behaves the same way Cancel does — closes without saving, keeps the typed text', async () => {
     const { page } = app;
     const editorCode = page.getByTestId('editor-code');
     // Remaining add-buttons are for lines [1,4,5,6,7] in order — index 3 is line 6 ("  return a - b;").
     await editorCode.locator('.cm-comment-gutter-add').nth(3).click();
-    const widget = page.getByTestId('editor-comment-widget');
+    const widget = widgetLocator(page);
     await expect(widget).toBeVisible({ timeout: 5_000 });
 
     await page.getByTestId('editor-comment-widget-input').fill('temp escape draft — should not be saved');
@@ -209,14 +254,20 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await expect(editorCode.locator('.cm-comment-gutter-marker')).toHaveCount(3);
     await editorCode.locator('.cm-comment-gutter-marker').nth(2).click();
     await expect(widget).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('editor-comment-widget-input')).toHaveValue('');
+    await expect(page.getByTestId('editor-comment-widget-input')).toHaveValue(
+      'temp escape draft — should not be saved',
+    );
     await page.getByTestId('editor-comment-widget-close').click();
     await expect(widget).toHaveCount(0);
   });
 
   test('the submit-review bar shows the total comment count and enables submit once any comment has text', async () => {
     const { page } = app;
-    // 3 comments total (line 2 has text, lines 3 and 6 are empty drafts) → filledCount 1.
+    // 3 comments total, all with text (the two "cancelled" drafts above kept
+    // their typed text — see the correction note on the Cancel/Escape tests).
+    // "Submit review (N)" always shows the TOTAL count (CmEditorWithComments.tsx
+    // `count={comments.length}`), not the filled count — `filledCount` only
+    // gates the enabled/disabled state.
     const bar = page.getByTestId('editor-submit-review');
     await expect(bar).toBeVisible();
     await expect(bar).toContainText('3 agent notes');
@@ -239,11 +290,19 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     expect(clipboardText).toContain('export function add');
   });
 
-  test('right-click → Copy Reference writes "path:line" to the clipboard', async () => {
+  test('right-click → Copy Reference writes "path:line (word)" to the clipboard', async () => {
     const { page } = app;
     const line2 = page.getByTestId('editor-code').locator('.cm-line').nth(1);
-    // Home lands the cursor at column 0 (before the leading whitespace) — no
-    // word touches that boundary, so the reference has no "(word)" suffix.
+    // CORRECTION (verified against the installed @codemirror/commands source,
+    // node_modules/@codemirror/commands/dist/index.js's `moveByLineBoundary`):
+    // CM6's default Home binding (`cursorLineBoundaryBackward`) is "smart
+    // home" — on an indented line it moves to the END of the leading
+    // whitespace (right before the first word), not literal column 0. Line 2
+    // is "  return a + b;", so Home lands the cursor directly adjacent to
+    // "return", and `EditorState.wordAt` (used by EditorContextMenu's Copy
+    // Reference handler) correctly picks it up — the "(word)" suffix is
+    // expected, not a bug. The original test asserted no suffix; fixed after
+    // a live failing run + source read disproved that assumption.
     await line2.click();
     await page.keyboard.press('Home');
     await line2.click({ button: 'right' });
@@ -252,7 +311,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await page.getByTestId('editor-context-menu-copy-ref').click();
 
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-    expect(clipboardText).toBe('review.ts:2');
+    expect(clipboardText).toBe('review.ts:2 (return)');
   });
 
   test('right-click → Add Agent Context sets the composer quote to the same "path:line" reference', async () => {
