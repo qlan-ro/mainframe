@@ -159,11 +159,13 @@ export function FindInPathModal() {
   }, [port, projectId, chatId, debounced, scope, includeIgnored]);
 
   function handleSelect(result: SearchContentResult) {
+    // result.line/result.column are 1-based (daemon search.ts). The
+    // open-file intent's RevealTarget contract is 0-based (store/editor.ts).
     emitSurfaceIntent({
       type: 'open-file',
       path: result.file,
-      line: result.line,
-      character: result.column,
+      line: result.line - 1,
+      character: result.column - 1,
     });
     setFindInPath(null);
   }

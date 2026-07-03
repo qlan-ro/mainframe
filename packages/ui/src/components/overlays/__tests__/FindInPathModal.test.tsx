@@ -6,7 +6,9 @@
  *  - findInPath set → find-in-path-input present.
  *  - Query length 1 → shows hint, does NOT call searchContent.
  *  - Query ≥2 → calls searchContent and renders find-in-path-result-* rows.
- *  - Clicking a result → emits open-file with { path, line, character }.
+ *  - Clicking a result → emits open-file with { path, line, character } converted
+ *    from the daemon's 1-based search coordinates to the 0-based RevealTarget
+ *    contract (see store/editor.ts RevealTarget doc comments).
  *  - find-in-path-include-ignored renders only when scopeType === 'directory'.
  *  - Error from searchContent → renders inline error (no silent catch).
  */
@@ -163,7 +165,8 @@ describe('FindInPathModal — query ≥2 calls searchContent and shows rows', ()
 // ---------------------------------------------------------------------------
 
 describe('FindInPathModal — clicking a result emits open-file with line and character', () => {
-  it('emits open-file with line and character on result click', async () => {
+  it('emits open-file with 0-based line/character converted from the 1-based search result', async () => {
+    // Daemon search.ts returns 1-based line/column (line: 10, column: 4).
     mockSearchContent.mockResolvedValue([{ file: 'src/a.ts', line: 10, column: 4, text: 'foo' }]);
 
     render(<FindInPathModal />);
@@ -181,11 +184,13 @@ describe('FindInPathModal — clicking a result emits open-file with line and ch
 
     await userEvent.click(screen.getByTestId('find-in-path-result-src/a.ts:10:4'));
 
+    // RevealTarget (store/editor.ts) is documented 0-based, so the 1-based
+    // search result must be converted: line 10 → 9, column 4 → 3.
     expect(mockEmit).toHaveBeenCalledWith({
       type: 'open-file',
       path: 'src/a.ts',
-      line: 10,
-      character: 4,
+      line: 9,
+      character: 3,
     });
     // Modal closes
     expect(useOverlaysStore.getState().findInPath).toBeNull();
