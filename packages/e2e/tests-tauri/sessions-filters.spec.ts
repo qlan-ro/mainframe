@@ -32,13 +32,39 @@
  *   toast-root                        — WsToastCard root (remove-project confirmation)
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
 const TAG_NAME = 'e2e-filter';
+
+/**
+ * Expand the project-pill bar's "+N more" overflow toggle if it's collapsed.
+ * The sidebar is a fixed 280px wide (SidebarShell.tsx SIDEBAR_EXPANDED_WIDTH)
+ * and ProjectFilterPillBar's useRowOverflow measures real available width —
+ * two `mf-e2e-<hex>`-named project pills genuinely don't fit next to "All" +
+ * "Add project" at that width (verified live: visibleCount resolves to 0), so
+ * every per-project-pill interaction in this file needs the overflow open
+ * first. `expanded` is local React state, so it resets on every full page
+ * reload too. Idempotent — a no-op once already expanded.
+ */
+async function expandProjectPills(page: Page): Promise<void> {
+  const more = page.getByTestId('sessions-projects-more');
+  if (!(await more.isVisible().catch(() => false))) return;
+  if ((await more.getAttribute('aria-expanded')) === 'true') return;
+  await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  // Expanding wraps the row onto a second line (flex-wrap) — a project pill
+  // can reflow to land exactly under the still-stationary cursor (the click
+  // above never moved the mouse), which the browser treats as a fresh hover
+  // and opens that pill's tooltip. Park the cursor away from the row so a
+  // later `pillWrap.hover()` isn't racing an unrelated tooltip's close
+  // animation (Radix keeps `TooltipContent` mounted, and thus still
+  // `visible`-matchable, through the fade-out).
+  await page.mouse.move(0, 0);
+}
 
 // ─── §sessions-filters Project pill bar + tag filter bar + sort menu ─────────
 
@@ -68,6 +94,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   test('"All" pill is selected by default and shows every session', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
 
     await expect(page.getByTestId('sessions-filter-pill-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(sidebar.projectFilterPill(projectA.projectId)).toHaveAttribute('aria-pressed', 'false');
@@ -78,6 +105,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   test("clicking a project pill filters the list AND activates that project's session", async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
 
     await sidebar.projectFilterPill(projectA.projectId).click();
 
@@ -93,6 +121,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   test('clicking the active project pill again clears the filter but keeps the active session', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
 
     await sidebar.projectFilterPill(projectA.projectId).click();
 
@@ -109,6 +138,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   test('selecting a different project pill switches the active session; "All" resets the filter', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
 
     await sidebar.projectFilterPill(projectB.projectId).click();
     const rowB = sidebar.row(chatIdB);
@@ -126,27 +156,36 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   test('right-click hint dismiss persists across reload', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
     const pillWrap = page.getByTestId(`sessions-filter-pill-${projectA.projectId}-wrap`);
 
     await pillWrap.hover();
-    const dismissBtn = page.getByTestId('sessions-pill-hint-dismiss');
+    // Radix `TooltipContent` renders `children` TWICE — the real interactive
+    // popper content, plus an SR-only `VisuallyHidden` accessibility echo
+    // (`@radix-ui/react-tooltip` TooltipContentImpl) carrying the identical
+    // subtree, so an interactive/testid-bearing child like our dismiss button
+    // always resolves to 2 DOM matches. The real (clickable) copy renders
+    // first in `TooltipContentImpl`'s children array — `.first()` targets it.
+    const dismissBtn = page.getByTestId('sessions-pill-hint-dismiss').first();
     await expect(dismissBtn).toBeVisible({ timeout: 10_000 });
     await dismissBtn.click();
 
     await page.reload();
     await waitConnected(page);
+    await expandProjectPills(page);
 
     await sidebar.projectFilterPill(projectA.projectId).waitFor({ timeout: 10_000 });
     await page.getByTestId(`sessions-filter-pill-${projectA.projectId}-wrap`).hover();
     // Dismissed hints render the bare child — the tooltip infrastructure (and
-    // its dismiss button) is never mounted, so this is a structural absence,
-    // not a timing race.
+    // its dismiss button, both DOM copies) is never mounted, so this is a
+    // structural absence, not a timing race.
     await expect(page.getByTestId('sessions-pill-hint-dismiss')).toHaveCount(0);
   });
 
   test('right-click menu shows Rename disabled and Remove enabled', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
 
     await sidebar.projectFilterPill(projectA.projectId).click({ button: 'right' });
 
@@ -271,6 +310,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   test('right-click Remove Project removes it after confirm, with a toast', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
 
     page.once('dialog', (dialog) => {
       void dialog.accept();

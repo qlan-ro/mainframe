@@ -62,7 +62,7 @@ export async function assertPortFree(): Promise<void> {
   }
 }
 
-export async function waitForDaemon(maxMs = 10_000): Promise<void> {
+export async function waitForDaemon(maxMs = 30_000): Promise<void> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
     try {

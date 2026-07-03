@@ -82,9 +82,10 @@ test.describe('§files-tree — no project', () => {
     const { page } = app;
     await ensureFilesSurfaceOn(page);
     await page.getByTestId('files-tab-strip-add').click();
-    const dialog = page.getByTestId('file-picker-dialog');
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('file-picker-no-project')).toBeVisible();
+    // No `projectId` → FilePickerDialog renders the no-project empty state
+    // directly (no `file-picker-dialog` wrapper — that testid only exists on
+    // `PickerBody`, which is skipped when there's no active project).
+    await expect(page.getByTestId('file-picker-no-project')).toBeVisible({ timeout: 5_000 });
     await page.keyboard.press('Escape');
   });
 });

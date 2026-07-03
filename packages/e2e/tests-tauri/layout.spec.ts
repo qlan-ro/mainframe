@@ -135,8 +135,13 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
     // litCount=3 here, so hiding Chat (via its header control) is allowed.
     await page.getByTestId('chat-header-hide').click();
     await expect(page.getByTestId('chat-header')).toHaveCount(0);
-    // litCount=2 now, so closing Run is allowed too.
-    await page.getByTestId('run-surface-close').click();
+    // litCount=2 now, so closing Run is allowed too. Run has never had a tab
+    // opened in it (no launch/terminal in this describe block), so it renders
+    // the empty `run-surface-picker` (layout/surfaces/RunSurface.tsx `hasContent`
+    // gate) rather than a `RunTabStrip` — `run-surface-close` only exists once
+    // Run has content, so the reachable close path here is the rail toggle
+    // (same `toggleSurface('run')` action as the tab-strip close button).
+    await page.getByTestId('surface-rail-run').click();
     await expect(page.getByTestId('run-surface')).toHaveCount(0);
 
     // Files is now the ONLY lit surface — its rail button and its own close button
@@ -334,7 +339,13 @@ test.describe('§20 layout — drag: Files-tab-to-Run and escape-cancel', () => 
     await expect(page.getByTestId('drop-zone-right')).toBeVisible({ timeout: 3_000 });
     await page.mouse.up();
 
-    await expect(page.locator('[data-testid^="run-pane-"]')).toHaveCount(2, { timeout: 5_000 });
+    // `[data-testid^="run-pane-"]` also matches the secondary pane's own
+    // `run-pane-close-<paneId>` un-split button (RunTabStrip.tsx) — the pane
+    // id itself is `pane-<hex>` (genId('pane') in store/run-pane.ts), so only
+    // the root divs (`run-pane-pane-<hex>`) share the tighter prefix below.
+    // Verified live: a correct 2-pane split produced 3 matches on the looser
+    // selector (2 roots + 1 close button) before this fix.
+    await expect(page.locator('[data-testid^="run-pane-pane-"]')).toHaveCount(2, { timeout: 5_000 });
     await expect(page.getByTestId('files-surface-picker')).toBeVisible({ timeout: 5_000 });
   });
 
