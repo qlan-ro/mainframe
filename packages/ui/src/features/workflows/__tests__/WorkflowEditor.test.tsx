@@ -24,6 +24,16 @@ vi.mock('@/lib/api/workflows', () => ({
   listRuns: vi.fn().mockResolvedValue([]),
 }));
 
+// deriveWorkflowId's 'project' scope resolves the active session's project id
+// via useActiveIdentity (see wf-slug.ts) — mock it so tests can control it
+// without an AssistantRuntimeProvider wrapper.
+const { mockUseActiveIdentity } = vi.hoisted(() => ({
+  mockUseActiveIdentity: vi.fn(() => ({ projectId: undefined as string | undefined })),
+}));
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: mockUseActiveIdentity,
+}));
+
 import * as wfApi from '@/lib/api/workflows';
 import { useWorkflowsModal } from '@/features/workflows/use-workflows-modal';
 import { useWorkflowsStore } from '@/features/workflows/use-workflows-store';
@@ -82,6 +92,8 @@ describe('WorkflowEditor', () => {
     vi.mocked(wfApi.validateYaml).mockResolvedValue({ valid: true, errors: [] });
     vi.mocked(wfApi.putWorkflow).mockResolvedValue(MOCK_SUMMARY);
     vi.mocked(wfApi.getWorkflowSource).mockResolvedValue({ summary: MOCK_SUMMARY, yaml: VALID_YAML });
+    // clearAllMocks doesn't undo a prior mockReturnValue — reset explicitly per test.
+    mockUseActiveIdentity.mockReturnValue({ projectId: undefined });
   });
 
   afterEach(() => {
@@ -150,6 +162,54 @@ describe('WorkflowEditor', () => {
     });
     expect(wfApi.putWorkflow).toHaveBeenCalledWith(PORT, expect.stringContaining('greet'), VALID_YAML);
     expect(useWorkflowsModal.getState().editorTarget).toBeNull();
+  });
+
+  it('a validateYaml failure surfaces an inline destructive error instead of hanging on "Validating…"', async () => {
+    vi.mocked(wfApi.validateYaml).mockRejectedValue(new Error('Unrecognized key: "scope"'));
+    renderEditor({ mode: 'new' });
+    const textarea = screen.getByTestId('workflows-editor-yaml');
+    fireEvent.change(textarea, { target: { value: VALID_YAML } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(screen.getByTestId('workflows-editor-validation-error')).toHaveTextContent('Unrecognized key: "scope"');
+    expect(screen.getByTestId('workflows-editor-save')).toBeDisabled();
+  });
+
+  it('a project-scoped draft derives its id from the active session project', async () => {
+    mockUseActiveIdentity.mockReturnValue({ projectId: 'proj-abc' });
+    renderEditor({ mode: 'new' });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'My Automation' } });
+    fireEvent.click(screen.getByTestId('workflows-builder-scope-project'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    const saveBtn = screen.getByTestId('workflows-editor-save');
+    expect(saveBtn).not.toBeDisabled();
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(wfApi.putWorkflow).toHaveBeenCalledWith(PORT, 'proj-abc:my-automation', expect.any(String));
+  });
+
+  it('a global-scoped draft always uses the global: prefix even with an active project', async () => {
+    mockUseActiveIdentity.mockReturnValue({ projectId: 'proj-abc' });
+    renderEditor({ mode: 'new' });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'My Automation' } });
+    fireEvent.click(screen.getByTestId('workflows-builder-scope-global'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('workflows-editor-save'));
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(wfApi.putWorkflow).toHaveBeenCalledWith(PORT, 'global:my-automation', expect.any(String));
   });
 
   it('mode toggle buttons render for builder/split/yaml', () => {

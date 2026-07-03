@@ -180,7 +180,11 @@ export function serializeWorkflow(d: WfDraft): string {
   if (d.description) {
     lines.push(`description: ${JSON.stringify(d.description)}`);
   }
-  lines.push(`scope: ${d.scope || 'global'}`);
+  // `d.scope` drives the `<scope>:<name>` id used to PUT the workflow (and
+  // therefore which directory it's written to) — see deriveWorkflowId in
+  // wf-slug.ts. It is NOT part of the YAML document: packages/core's
+  // workflowSchema is `.strict()` with no `scope` field, so emitting one here
+  // makes every builder-produced document fail parseWorkflowYaml.
 
   const trig = (d.triggers ?? []).filter((t) => t.kind === 'schedule' || t.kind === 'event');
   if (trig.length > 0) {

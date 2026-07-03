@@ -14,25 +14,20 @@
  * from the `name:` line in the YAML.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Zap, SlidersHorizontal, Columns2, Code, Check, TriangleAlert, X } from 'lucide-react';
+import { Zap, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as wfApi from '@/lib/api/workflows';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useWorkflowsModal, type WfEditorTarget } from '../use-workflows-modal';
 import { useWorkflowsStore } from '../use-workflows-store';
 import { WfYamlPane } from './WfYamlPane';
 import { WfBuilderPane } from './WfBuilderPane';
 import { serializeWorkflow, blankDraft } from './yaml-serialize';
 import type { WfDraft } from './yaml-serialize';
-import { slug, deriveNameFromYaml } from './wf-slug';
+import { slug, deriveNameFromYaml, deriveWorkflowId } from './wf-slug';
+import { ModeToggle, ValidationFooter, type EditorMode, type ValidationResult } from './WfEditorChrome';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type EditorMode = 'builder' | 'split' | 'yaml';
-
-interface ValidationResult {
-  valid: boolean;
-  errors: Array<{ message: string }>;
-}
 
 interface WorkflowEditorProps {
   port: number;
@@ -41,88 +36,7 @@ interface WorkflowEditorProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Derive an id from a new workflow's YAML by reading the `name:` line. */
-function deriveIdFromYaml(yaml: string): string {
-  return `global:${slug(deriveNameFromYaml(yaml))}`;
-}
-
 const DEBOUNCE_MS = 400;
-
-// ── Mode toggle bar ───────────────────────────────────────────────────────────
-
-const MODES: Array<{ id: EditorMode; label: string; Icon: typeof SlidersHorizontal }> = [
-  { id: 'builder', label: 'Builder', Icon: SlidersHorizontal },
-  { id: 'split', label: 'Split', Icon: Columns2 },
-  { id: 'yaml', label: 'YAML', Icon: Code },
-];
-
-function ModeToggle({ mode, setMode }: { mode: EditorMode; setMode: (m: EditorMode) => void }) {
-  return (
-    <div className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">
-      {MODES.map(({ id, label, Icon }) => {
-        const on = mode === id;
-        return (
-          <button
-            key={id}
-            data-testid={`workflows-editor-mode-${id}`}
-            type="button"
-            onClick={() => setMode(id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-label font-medium',
-              on ? 'bg-card font-semibold text-foreground shadow-sm' : 'text-mf-text-3 hover:text-foreground',
-            )}
-          >
-            <Icon size={12} className={on ? 'text-primary' : 'text-mf-text-3'} aria-hidden />
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Validation footer ─────────────────────────────────────────────────────────
-
-function ValidationFooter({ validation, isNew }: { validation: ValidationResult | null; isNew: boolean }) {
-  if (!validation) {
-    return (
-      <div className="flex min-h-[40px] flex-shrink-0 items-center gap-2.5 border-t border-border bg-mf-content2 px-[16px] py-2">
-        <span className="text-caption text-muted-foreground">Validating…</span>
-      </div>
-    );
-  }
-  const { valid, errors } = validation;
-  return (
-    <div className="flex min-h-[40px] flex-shrink-0 items-center gap-2.5 border-t border-border bg-mf-content2 px-[16px] py-2">
-      {valid ? (
-        <span className="inline-flex items-center gap-1.5 text-label font-semibold text-mf-success">
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-mf-success">
-            <Check size={10} className="text-white" aria-hidden />
-          </span>
-          Valid · ready to {isNew ? 'create' : 'save'}
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-label font-semibold text-destructive">
-          <TriangleAlert size={14} aria-hidden />
-          {errors.length} {errors.length === 1 ? 'issue' : 'issues'} to fix
-        </span>
-      )}
-      {errors.length > 0 && (
-        <>
-          <div className="mx-1 h-4 w-px bg-border" />
-          <div className="flex flex-1 items-center gap-3.5 overflow-x-auto">
-            {errors.map((err, i) => (
-              <span key={i} className="inline-flex flex-shrink-0 items-center gap-1.5 text-caption text-destructive">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden />
-                {err.message}
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -134,10 +48,14 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   // New workflows default to split view (builder + YAML); edit mode is YAML-only.
   const [mode, setMode] = useState<EditorMode>(isNew ? 'split' : 'yaml');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { closeEditor } = useWorkflowsModal();
   const loadAll = useWorkflowsStore((s) => s.loadAll);
+  // "This project" scope has no project picker in the builder — it resolves
+  // to the active session's project (see deriveWorkflowId in wf-slug.ts).
+  const { projectId: activeProjectId } = useActiveIdentity();
 
   const filename = `${slug(isNew ? model.name : deriveNameFromYaml(yaml)) || 'workflow'}.yaml`;
 
@@ -167,9 +85,16 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
           .validateYaml(port, value)
           .then((result) => {
             setValidation(result);
+            setValidationError(null);
           })
           .catch((err: unknown) => {
+            // The request itself failed (network error, or the daemon rejected
+            // it outright — e.g. a 400 for a malformed document). Surface it
+            // instead of leaving `validation` null forever (stuck "Validating…").
+            const message = err instanceof Error ? err.message : String(err);
             console.warn('[WorkflowEditor] validateYaml error:', err);
+            setValidation(null);
+            setValidationError(message);
           });
       }, DEBOUNCE_MS);
     },
@@ -180,6 +105,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
     (value: string) => {
       setYaml(value);
       setValidation(null); // reset until new validation arrives
+      setValidationError(null);
       scheduleValidation(value);
     },
     [scheduleValidation],
@@ -192,6 +118,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       const nextYaml = serializeWorkflow(nextModel);
       setYaml(nextYaml);
       setValidation(null);
+      setValidationError(null);
       scheduleValidation(nextYaml);
     },
     [scheduleValidation],
@@ -199,7 +126,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
 
   const handleSave = useCallback(async () => {
     if (!validation?.valid || saving) return;
-    const id = target.mode === 'edit' ? target.workflowId : deriveIdFromYaml(yaml);
+    const id = target.mode === 'edit' ? target.workflowId : deriveWorkflowId(yaml, model.scope, activeProjectId);
     setSaving(true);
     try {
       await wfApi.putWorkflow(port, id, yaml);
@@ -210,7 +137,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
     } finally {
       setSaving(false);
     }
-  }, [validation, saving, target, yaml, port, closeEditor, loadAll]);
+  }, [validation, saving, target, yaml, model.scope, activeProjectId, port, closeEditor, loadAll]);
 
   return (
     <div data-testid="workflows-editor" className="flex h-full min-h-0 flex-col bg-mf-window font-sans">
@@ -278,7 +205,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       </div>
 
       {/* validation footer */}
-      <ValidationFooter validation={validation} isNew={isNew} />
+      <ValidationFooter validation={validation} validationError={validationError} isNew={isNew} />
     </div>
   );
 }

@@ -76,10 +76,24 @@ describe('serializeWorkflow', () => {
     expect(lines[0]).toBe('version: 1');
   });
 
-  it('emits canonical name and scope lines', () => {
+  it('emits the canonical name line', () => {
     const yaml = serializeWorkflow(KID_HEALTH);
     expect(yaml).toContain('name: daily-kid-health-log');
-    expect(yaml).toContain('scope: global');
+  });
+
+  // packages/core's workflowSchema is `.strict()` and has no `scope` field —
+  // a top-level `scope:` line makes every builder-produced document fail
+  // parseWorkflowYaml with "Unrecognized key: scope". Scope lives in the
+  // `<scope>:<name>` id used for the PUT route / on-disk directory, not in
+  // the YAML document itself (see WorkflowEditor's deriveWorkflowId).
+  it('never emits a top-level scope key regardless of draft.scope (global)', () => {
+    const yaml = serializeWorkflow(KID_HEALTH);
+    expect(yaml).not.toMatch(/^scope:/m);
+  });
+
+  it('never emits a top-level scope key regardless of draft.scope (project)', () => {
+    const yaml = serializeWorkflow({ ...KID_HEALTH, scope: 'project' });
+    expect(yaml).not.toMatch(/^scope:/m);
   });
 
   it('slugifies the name so it matches the daemon idSchema (alnum/dash/underscore only)', () => {

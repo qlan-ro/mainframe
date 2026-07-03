@@ -23,3 +23,22 @@ export function deriveNameFromYaml(yaml: string): string {
   const raw = m?.[1] ?? '';
   return raw.trim().replace(/^["']|["']$/g, '');
 }
+
+/**
+ * Derive a new workflow's daemon-facing id (`<scope>:<name>`) from its YAML
+ * `name:` line and the builder's chosen scope.
+ *
+ * `packages/core/src/server/routes/workflows.ts` `resolveWorkflowDir` reads
+ * scope from this id prefix (not from the YAML body): `'global'` writes to
+ * `<dataDir>/workflows`, anything else is looked up as a project id and
+ * writes to `<project.path>/.mainframe/workflows`. The builder has no
+ * project picker, so `'project'` scope resolves to the active session's
+ * project id (the same source `useActiveIdentity` feeds elsewhere in the
+ * shell); with no active project known, it falls back to `global:` rather
+ * than emitting an id that can never resolve to a directory.
+ */
+export function deriveWorkflowId(yaml: string, scope: 'global' | 'project', projectId?: string): string {
+  const name = slug(deriveNameFromYaml(yaml));
+  if (scope === 'project' && projectId) return `${projectId}:${name}`;
+  return `global:${name}`;
+}
