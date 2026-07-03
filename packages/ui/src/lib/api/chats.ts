@@ -56,6 +56,10 @@ export const setChatTuning = (port: number, chatId: string, tuning: SessionTunin
 export const resumeChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/resume`);
 
+/** Mark the chat's workspace trusted in ~/.claude.json (silences the untrusted-workspace advisory). */
+export const trustWorkspace = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/trust-workspace`);
+
 export const interruptChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/interrupt`);
 
