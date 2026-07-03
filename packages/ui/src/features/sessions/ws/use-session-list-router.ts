@@ -121,6 +121,14 @@ export function useSessionListRouter(): void {
       if (active.custom?.projectId != null) {
         useLastSessionStore.getState().setLastForProject(active.custom.projectId, active.remoteId);
       }
+
+      // Follow the active session with its remembered workspace layout (surface
+      // placement + Run panes), keyed by the stable daemon chat id — same key as
+      // pruneSessions above. Skip while on the __LOCALID_* draft: it has no
+      // remoteId (no backing chat yet), so there's nothing to key a workspace
+      // off; the previously active session's layout stays on screen until a
+      // real session is activated.
+      useLayoutStore.getState().setActiveSession(active.remoteId);
     }
 
     const { filterProjectId, setFilterProjectId } = useSessionFilters.getState();

@@ -15,10 +15,14 @@
  *  - archived-active → calls switchToThread with most-recently-updated non-archived thread id
  *  - archived-active with no other thread → does NOT call switchToThread
  *  - unmount → calls router.dispose() exactly once
+ *  - active thread change → restores that session's persisted workspace layout
+ *  - activating a never-visited session → seeds it with INITIAL_LAYOUT
+ *  - activating the __LOCALID_* draft thread → does not touch the layout store
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
+import { useLayoutStore } from '../../../../store/layout';
 
 // ---------------------------------------------------------------------------
 // Spy declarations — module-scope lets reset in beforeEach
@@ -142,6 +146,9 @@ beforeEach(() => {
   setLastForProjectSpy = vi.fn();
   fakeThreadItems = [];
   factoryCallCount = 0;
+
+  // Real store (not mocked in this file) — reset to a clean slate each test.
+  useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
 });
 
 // ---------------------------------------------------------------------------
@@ -543,5 +550,59 @@ describe('useSessionListRouter — onMarkUnread for active thread is a no-op', (
 
     expect(markUnreadSpy).toHaveBeenCalledTimes(1);
     expect(markUnreadSpy).toHaveBeenCalledWith('chat-B');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 20. Active thread change wires the per-session workspace layout store
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — active thread change wires per-session layout', () => {
+  it('restores a previously customized layout when switching back to a visited session', () => {
+    // Prime chat-old's persisted workspace with a non-default layout (files split in).
+    useLayoutStore.getState().setActiveSession('chat-old');
+    useLayoutStore.getState().toggleSurface('files');
+    expect(useLayoutStore.getState().layout.top).toContain('files');
+
+    // Switch away, as if the user opened a different session.
+    useLayoutStore.getState().setActiveSession('chat-other');
+    expect(useLayoutStore.getState().layout.top).not.toContain('files');
+
+    // Now render the hook as if the app activated chat-old again — the hook's
+    // wiring (not a direct store call) must restore chat-old's saved layout.
+    mainThreadIdValue = 'chat-old';
+    fakeThreadItems = [{ id: 'chat-old', remoteId: 'chat-old', custom: { projectId: 'p1', updatedAt: 1000 } }];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(useLayoutStore.getState().activeSessionId).toBe('chat-old');
+    expect(useLayoutStore.getState().layout.top).toContain('files');
+  });
+
+  it('seeds a never-visited session with the default (INITIAL_LAYOUT) workspace', () => {
+    mainThreadIdValue = 'chat-brand-new';
+    fakeThreadItems = [
+      { id: 'chat-brand-new', remoteId: 'chat-brand-new', custom: { projectId: 'p1', updatedAt: 1000 } },
+    ];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(useLayoutStore.getState().activeSessionId).toBe('chat-brand-new');
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+    expect(useLayoutStore.getState().layout.bottom).toBeNull();
+  });
+
+  it('does not touch the layout store while the active thread is the __LOCALID_* draft', () => {
+    // Prime an active real session first (as if the user was on chat-prior).
+    useLayoutStore.getState().setActiveSession('chat-prior');
+
+    // The draft thread has no `custom`, so it is filtered out of `items` entirely —
+    // there is no remoteId to key a workspace off of. Ephemeral: skip the switch.
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(useLayoutStore.getState().activeSessionId).toBe('chat-prior');
   });
 });
