@@ -30,19 +30,11 @@
  *   files-tab-strip                 — Files surface tab strip (role="tab" pills)
  *   viewer-shell-status             — footer status string ("Ln x, Col y" for code files)
  *
- * KNOWN BUG found while tracing expected cursor coordinates (flagged in the spec
- * report, not fixed here — out of scope for a test-only change): FindInPathModal's
- * `handleSelect` emits `open-file` with `line: result.line, character: result.column`
- * straight from the daemon's search hit, which is **1-based** (`search.ts`:
- * `line: i + 1, column: col + 1`). But `store/editor.ts`'s `RevealTarget` is
- * documented **0-based** ("LSP lines are 0-based"), and `CmEditor.tsx`'s
- * `revealPosition` does `doc.line(line + 1)` expecting a 0-based input (matching
- * every other `open-file` caller: `navigation.ts`, `EditorContextMenu.tsx`,
- * `use-spotlight-results.ts` all pass 0-based LSP coordinates). The net effect:
- * clicking a find-in-path result lands the cursor one line below and one column
- * right of the actual match. The cursor-position assertions below pin this
- * CURRENT (buggy) output, traced by hand from source — not a guess — so a fix
- * shows up as a clear test diff rather than a silent pass either way.
+ * Cursor-position assertions expect the true 1-based match position rendered in
+ * the footer: FindInPathModal converts the daemon's 1-based search hits to the
+ * 0-based `open-file` reveal contract at the emit site (an off-by-one there was
+ * found by this spec and fixed in `fix(ui): find-in-path passes 0-based reveal
+ * coordinates`).
  */
 import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'fs';
@@ -217,9 +209,7 @@ test.describe('§find-in-path', () => {
     const strip = page.getByTestId('files-tab-strip');
     await expect(strip.getByRole('tab', { selected: true })).toContainText('alpha.ts', { timeout: 10_000 });
 
-    // See the KNOWN BUG note at the top of this file: the actual match is line 3,
-    // column 7 — the current code lands one line below and one column right.
-    await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 4, Col 8', { timeout: 5_000 });
+    await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 3, Col 7', { timeout: 5_000 });
   });
 
   test('Enter opens the active result via the keyboard', async () => {
@@ -239,9 +229,7 @@ test.describe('§find-in-path', () => {
     const strip = page.getByTestId('files-tab-strip');
     await expect(strip.getByRole('tab', { selected: true })).toContainText('gamma.ts', { timeout: 10_000 });
 
-    // Same off-by-one traced independently for a second fixture: the actual match
-    // is line 2, column 7 — lands on line 3, column 8.
-    await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 3, Col 8', { timeout: 5_000 });
+    await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 2, Col 7', { timeout: 5_000 });
   });
 
   test('Escape closes the dialog', async () => {
