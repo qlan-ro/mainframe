@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { getHost } from '../lib/host';
-import { setActiveDaemon } from '../lib/daemon/active-daemon';
+import { getActiveDaemon, setActiveDaemon } from '../lib/daemon/active-daemon';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -24,17 +24,14 @@ export function healthUrl(port: number): string {
   return `http://127.0.0.1:${port}/health`;
 }
 
-/** Calls the unauthenticated /health liveness endpoint. */
-async function checkHealth(port: number): Promise<boolean> {
+/** Calls an unauthenticated /health liveness endpoint (any daemon base URL). */
+async function checkHealthUrl(url: string): Promise<boolean> {
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
-    // The daemon registers /health (not /api/health). Auth middleware
-    // explicitly bypasses this path (middleware/auth.ts line 25).
-    // IPv4 loopback (see healthUrl) — daemon binds 127.0.0.1 only.
-    const res = await fetch(healthUrl(port), {
-      signal: controller.signal,
-    });
+    // The daemon registers /health (not /api/health) and the auth middleware
+    // bypasses it, so no token is needed for local or remote.
+    const res = await fetch(url, { signal: controller.signal });
     clearTimeout(id);
     return res.ok;
   } catch {
@@ -78,7 +75,13 @@ export function useConnectionState(): {
         pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
         return;
       }
-      const healthy = await checkHealth(currentPort);
+      // Before the local target is seeded, probe localhost to establish boot
+      // readiness. Once an active daemon exists, probe IT (local OR remote) so
+      // the connection state reflects the daemon the app is actually talking to
+      // — a failing remote must flip to 'disconnected', not stay green because
+      // the local sidecar is still healthy.
+      const healthTarget = seededRef.current ? `${getActiveDaemon().baseUrl}/health` : healthUrl(currentPort);
+      const healthy = await checkHealthUrl(healthTarget);
       if (cancelled) return;
       setState(healthy ? 'connected' : 'disconnected');
       if (healthy) {
