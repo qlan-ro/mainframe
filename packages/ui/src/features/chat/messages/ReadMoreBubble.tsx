@@ -34,6 +34,7 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
       fadeColor="var(--mf-um-fade)"
       fadeOffsetClass="bottom-6"
       contentClassName="aui-md text-body leading-loose tracking-tight"
+      contentProps={{ 'data-text-part': '' }}
       className={className}
       testId="chat-user-readmore-toggle"
     >

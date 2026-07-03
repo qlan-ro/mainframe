@@ -6,7 +6,7 @@
  * pass the plain-text length source separately from the rendered `children`.
  * A `ui/` primitive — must not import from `features/`.
  */
-import { useState, type ReactNode, type CSSProperties } from 'react';
+import { useState, type ReactNode, type CSSProperties, type HTMLAttributes } from 'react';
 import { ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +22,13 @@ export interface ReadMoreProps {
   contentClassName?: string;
   className?: string;
   testId: string;
+  /**
+   * Extra props spread onto the content div, before `data-clamp`/`className`/`style`
+   * (so those still win on conflict). Lets feature callers attach their own DOM
+   * anchors (e.g. `data-text-part` for in-chat Find) without ReadMore itself
+   * hardcoding a features-specific attribute.
+   */
+  contentProps?: HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, string>;
 }
 
 export function ReadMore({
@@ -34,6 +41,7 @@ export function ReadMore({
   contentClassName,
   className,
   testId,
+  contentProps,
 }: ReadMoreProps) {
   const [expanded, setExpanded] = useState(false);
   const needsToggle = measureText.length > threshold;
@@ -45,7 +53,7 @@ export function ReadMore({
 
   return (
     <div className={cn('relative flex flex-col gap-[5px]', className)}>
-      <div data-clamp={needsToggle ? '' : undefined} className={contentClassName} style={clampStyle}>
+      <div {...contentProps} data-clamp={needsToggle ? '' : undefined} className={contentClassName} style={clampStyle}>
         {children}
       </div>
 
