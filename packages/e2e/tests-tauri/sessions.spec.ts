@@ -321,9 +321,21 @@ test.describe('§35 External session import', () => {
       gitBranch: 'feat/auth-tests',
     });
 
-    // Trigger the daemon's external-session scan for the project.
+    // Trigger the daemon's external-session scan for the project, then poll the
+    // same endpoint until it reports both seeded sessions — the scan enriches
+    // each candidate file (stat + JSONL parse) and can take a moment past the
+    // first response, so a fixed sleep here is a flake vector.
     await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
-    await app.page.waitForTimeout(1000);
+    await expect
+      .poll(
+        async () => {
+          const res = await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+          const body = await res.json();
+          return body.data?.total ?? 0;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(2);
   });
 
   test.afterAll(async () => {
