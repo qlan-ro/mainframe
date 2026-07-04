@@ -10,6 +10,10 @@ type TerminalUpdate = {
 
 const TERMINAL = new Set<BackgroundTaskStatus>(['completed', 'failed', 'stopped']);
 
+interface AdoptOptions {
+  emit?: boolean;
+}
+
 export class BackgroundTaskTracker {
   private readonly emitter = new EventEmitter();
   private readonly byChat = new Map<string, Map<string, BackgroundTask>>();
@@ -58,14 +62,17 @@ export class BackgroundTaskTracker {
   }
 
   /**
-   * Insert a fully-formed task from reconciliation. Bypasses event emission;
-   * caller is responsible for any UI notification. Replaces any existing entry
+   * Insert a fully-formed task from reconciliation. Replaces any existing entry
    * with the same id.
    */
-  adopt(chatId: string, task: BackgroundTask): void {
+  adopt(chatId: string, task: BackgroundTask, options: AdoptOptions = {}): void {
     const chat = this.byChat.get(chatId) ?? new Map<string, BackgroundTask>();
     chat.set(task.id, task);
     this.byChat.set(chatId, chat);
+    if (options.emit === true) {
+      const event = task.status === 'running' ? 'background_task.started' : 'background_task.ended';
+      this.emitter.emit(event, chatId, task);
+    }
   }
 
   get(chatId: string, taskId: string): BackgroundTask | null {

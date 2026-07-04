@@ -369,8 +369,13 @@ function buildSessionSink(
       const notifyConfig = readNotificationConfig(db);
       if (isError) {
         if (!wasInterrupted) {
+          const detail = typeof data.result === 'string' ? data.result.trim() : '';
+          log.warn(
+            { chatId, subtype: data.subtype, reason: detail || null },
+            'session ended unexpectedly — emitting error message',
+          );
           const message = messages.createTransientMessage(chatId, 'error', [
-            { type: 'error', message: 'Session ended unexpectedly' },
+            { type: 'error', message: detail || 'Session ended unexpectedly' },
           ]);
           messages.append(chatId, message);
           emitEvent({ type: 'message.added', chatId, message });

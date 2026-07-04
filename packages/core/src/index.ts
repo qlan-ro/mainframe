@@ -149,7 +149,6 @@ async function main(): Promise<void> {
     workflows,
   });
 
-  await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
 
   await server.start(config.port);
@@ -164,6 +163,10 @@ async function main(): Promise<void> {
 
   await workflows.start().catch((err) => {
     logger.error({ err }, 'WorkflowService failed to start — continuing without workflows');
+  });
+
+  reconcileBackgroundTasks({ tracker: backgroundTasks, db }).catch((err) => {
+    logger.warn({ err }, 'Background task reconciliation failed');
   });
 
   // Probe adapters for dynamic model lists (non-blocking)
