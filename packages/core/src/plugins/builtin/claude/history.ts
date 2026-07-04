@@ -108,6 +108,37 @@ export function extractToolResultContent(content: unknown): string {
   return JSON.stringify(content ?? '');
 }
 
+/**
+ * Extract text/image content blocks from a raw user-role block array (JSONL
+ * `message.content` or a queued-command `prompt`). The two call sites differ
+ * on empty text: history replay keeps empty text blocks and drops CLI
+ * interrupt markers (`skipInterrupted`), while queued-command prompts drop
+ * empty/whitespace-only text and never carry an interrupt marker.
+ */
+function extractUserContentBlocks(
+  blocks: Array<Record<string, unknown>>,
+  opts: { skipInterrupted?: boolean } = {},
+): MessageContent[] {
+  const result: MessageContent[] = [];
+  for (const block of blocks) {
+    if (block.type === 'text') {
+      const text = block.text as string | undefined;
+      if (opts.skipInterrupted) {
+        const t = text || '';
+        if (!t.startsWith('[Request interrupted')) result.push({ type: 'text', text: t });
+      } else if (typeof text === 'string' && text.trim()) {
+        result.push({ type: 'text', text });
+      }
+    } else if (block.type === 'image') {
+      const source = block.source as Record<string, unknown> | undefined;
+      if (source?.type === 'base64') {
+        result.push({ type: 'image', mediaType: source.media_type as string, data: source.data as string });
+      }
+    }
+  }
+  return result;
+}
+
 export function buildToolResultBlocks(
   message: Record<string, unknown>,
   tur: Record<string, unknown> | undefined,
@@ -161,19 +192,9 @@ function convertUserEntry(
     // Text and image blocks are intentionally only in history:
     // live stream doesn't re-emit them because sendMessage() already created
     // the user ChatMessage and tool results come via a separate tool_result entry.
-    for (const block of rawContent) {
-      if (block.type === 'text') {
-        const text = block.text || '';
-        if (!text.startsWith('[Request interrupted')) {
-          contentBlocks.push({ type: 'text', text });
-        }
-      } else if (block.type === 'image') {
-        const source = block.source as Record<string, unknown> | undefined;
-        if (source?.type === 'base64') {
-          contentBlocks.push({ type: 'image', mediaType: source.media_type as string, data: source.data as string });
-        }
-      }
-    }
+    contentBlocks.push(
+      ...extractUserContentBlocks(rawContent as Array<Record<string, unknown>>, { skipInterrupted: true }),
+    );
   }
 
   if (contentBlocks.length === 0) return null;
@@ -255,16 +276,7 @@ function convertQueuedCommandEntry(entry: Record<string, unknown>, chatId: strin
   if (typeof prompt === 'string') {
     if (prompt.trim()) contentBlocks.push({ type: 'text', text: prompt });
   } else if (Array.isArray(prompt)) {
-    for (const block of prompt as Array<Record<string, unknown>>) {
-      if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
-        contentBlocks.push({ type: 'text', text: block.text });
-      } else if (block.type === 'image') {
-        const source = block.source as Record<string, unknown> | undefined;
-        if (source?.type === 'base64') {
-          contentBlocks.push({ type: 'image', mediaType: source.media_type as string, data: source.data as string });
-        }
-      }
-    }
+    contentBlocks.push(...extractUserContentBlocks(prompt as Array<Record<string, unknown>>));
   }
   if (contentBlocks.length === 0) return null;
 

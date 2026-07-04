@@ -1543,7 +1543,6 @@ Events are broadcast to clients subscribed to the relevant chat:
 { "type": "message.queued", "chatId": "chat_xyz", "ref": { /* QueuedMessageRef */ } }
 { "type": "message.queued.processed", "chatId": "chat_xyz", "uuid": "queued_01" }
 { "type": "message.queued.cancelled", "chatId": "chat_xyz", "uuid": "queued_01" }
-{ "type": "message.queued.cancel_failed", "chatId": "chat_xyz", "uuid": "queued_01" }
 { "type": "message.queued.cleared", "chatId": "chat_xyz" }
 { "type": "message.queued.snapshot", "chatId": "chat_xyz", "refs": [ /* QueuedMessageRef[] */ ] }
 

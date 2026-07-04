@@ -315,8 +315,8 @@ export class ChatManager {
     // per-message replay ack (Claude CLI stream-json). Adapters that consume
     // sendMessage synchronously (Codex turn/start, Claude SDK streamFollowUp)
     // never call `sink.onQueuedProcessed`, so leaving them on the queued path
-    // would strand `queuedRefs` and pin `processState='working'` forever via
-    // the new `getQueuedCount` gate in onResult.
+    // would strand `queuedRefs` and pin `processState='working'` forever —
+    // onResult keeps processState at 'working' as long as queuedRefs remain.
     const adapterAcksReplay = postStart.session.supportsReplayAck === true;
     const isQueued = adapterAcksReplay && postStart.chat.processState === 'working';
     const transientMetadata: Record<string, unknown> = {};

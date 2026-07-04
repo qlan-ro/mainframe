@@ -2,7 +2,6 @@
 "@qlan-ro/mainframe-app-tauri": patch
 ---
 
-Add toast infrastructure (sonner) and surface queued-cancel failures. A `<Toaster />`
-(themed to warm-chrome) is mounted at the app root; the controller raises a toast when
-the daemon reports `message.queued.cancel_failed` (the message stays queued, which
-previously had no user feedback). Unblocks the deferred composer rejection-toaster too.
+Add toast infrastructure (sonner). A `<Toaster />` (themed to warm-chrome) is mounted at
+the app root, giving the controller a way to surface transient errors — such as a failed
+agent run — as toasts. Unblocks the deferred composer rejection-toaster too.
