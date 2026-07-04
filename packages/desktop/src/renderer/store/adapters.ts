@@ -10,8 +10,6 @@ interface AdaptersState {
   updateAdapterModels: (adapterId: string, models: AdapterModel[], modelsRevision: number) => void;
   /** Drop the revision baseline (accept-anything) but KEEP models visible. Used on reconnect. */
   resetRevisionBaseline: () => void;
-  /** Hard clear — visible blank. Reserved for a genuine daemon switch (desktop has one daemon). */
-  resetAdapters: () => void;
 }
 
 /** Merge an HTTP snapshot: identity/meta always refresh; models apply only-if-newer. */
@@ -70,5 +68,4 @@ export const useAdaptersStore = create<AdaptersState>((set) => ({
   // applies even if it ties the stored revision (a restarted same-port daemon reuses revision 2).
   resetRevisionBaseline: () =>
     set((state) => ({ adapters: state.adapters.map((a) => ({ ...a, modelsRevision: undefined })) })),
-  resetAdapters: () => set({ adapters: [] }),
 }));

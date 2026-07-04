@@ -15,7 +15,7 @@ const info = (id: string, rev: number, models: any[], installed = true): Adapter
 });
 
 describe('desktop adapters store', () => {
-  beforeEach(() => useAdaptersStore.getState().resetAdapters());
+  beforeEach(() => useAdaptersStore.setState({ adapters: [] }));
 
   it('setAdapters refreshes identity but keeps newer models', () => {
     useAdaptersStore.getState().updateAdapterModels('claude', [{ id: 'live', label: 'L' }], 5); // partial, rev5
@@ -39,11 +39,5 @@ describe('desktop adapters store', () => {
     expect(mid.modelsRevision).toBeUndefined(); // baseline dropped
     useAdaptersStore.getState().setAdapters([info('claude', 2, [{ id: 'b', label: 'B' }])]); // tied rev 2
     expect(useAdaptersStore.getState().adapters.find((x) => x.id === 'claude')!.models[0]!.id).toBe('b');
-  });
-
-  it('resetAdapters clears the store (daemon switch only)', () => {
-    useAdaptersStore.getState().setAdapters([info('claude', 1, [])]);
-    useAdaptersStore.getState().resetAdapters();
-    expect(useAdaptersStore.getState().adapters).toHaveLength(0);
   });
 });
