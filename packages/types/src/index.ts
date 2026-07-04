@@ -11,6 +11,7 @@ export * from './settings.js';
 export * from './command.js';
 export * from './launch.js';
 export * from './search.js';
+export * from './task-progress.js';
 export * from './lsp.js';
 export * from './git.js';
 export * from './suggestion.js';

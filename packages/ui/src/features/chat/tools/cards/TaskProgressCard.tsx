@@ -12,11 +12,16 @@
  *   TaskCreate args:  { subject }; result contains "Task #<id>" as a bare
  *     string or a daemon `ToolCallResult` `{ content, isError }`
  *   TaskUpdate args:  { taskId, status?, subject?, activeForm? }
+ *
+ * Renames apply from their turn onward — earlier cards keep the pre-rename
+ * subject (each card is a point-in-time snapshot; retroactive renaming is
+ * intentionally not done).
  */
 
 import { useMemo } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Check } from 'lucide-react';
+import { extractTaskId } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -32,26 +37,19 @@ interface TaskState {
 
 // ── Task reduction logic ──────────────────────────────────────────────────────
 
-const TASK_ID_RE = /Task #(\d+)/;
-
-/** Plain text of a task tool result — bare string or daemon ToolCallResult `{ content }`. */
-function taskResultText(result: unknown): string {
-  if (typeof result === 'string') return result;
-  if (result && typeof result === 'object') {
-    const content = (result as { content?: unknown }).content;
-    if (typeof content === 'string') return content;
-  }
-  return '';
-}
-
 function reduceTaskItems(items: TaskProgressItem[]): TaskState[] {
   const list: TaskState[] = [];
   const map = new Map<string, TaskState>();
+  // Monotonic counter (mirrors the core backfill's scope.nextId) — a
+  // result-less streaming create falls back to this instead of `map.size + 1`,
+  // which would collide with a real numeric id already in the map.
+  let nextId = 1;
 
   for (const item of items) {
     if (item.toolName === 'TaskCreate') {
-      const match = TASK_ID_RE.exec(taskResultText(item.result));
-      const id = match ? (match[1] ?? String(map.size + 1)) : String(map.size + 1);
+      const extracted = extractTaskId(item.result);
+      const id = extracted ?? String(nextId);
+      nextId = Math.max(nextId, Number(id)) + 1;
       const subject = (item.args['subject'] as string | undefined) ?? `Task #${id}`;
       const task: TaskState = { id, subject, status: 'pending' };
       map.set(id, task);

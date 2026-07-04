@@ -1,8 +1,7 @@
-import type { DisplayMessage, DisplayContent, ToolCallResult } from '@qlan-ro/mainframe-types';
+import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
+import { extractTaskId } from '@qlan-ro/mainframe-types';
 
 type ProgressItem = Extract<DisplayContent, { type: 'task_progress' }>['items'][number];
-
-const TASK_ID_RE = /Task #(\d+)/;
 
 /**
  * Mutable walk state for one task-id namespace. The main thread is one scope;
@@ -14,16 +13,6 @@ interface SubjectScope {
   nextId: number;
   /** taskId → latest known subject (creates + explicit renames). */
   subjects: Map<string, string>;
-}
-
-/** Extract the plain text of a task tool result (bare string or ToolCallResult). */
-function resultText(result: unknown): string {
-  if (typeof result === 'string') return result;
-  if (result && typeof result === 'object') {
-    const content = (result as ToolCallResult).content;
-    if (typeof content === 'string') return content;
-  }
-  return '';
 }
 
 /**
@@ -38,6 +27,9 @@ function resultText(result: unknown): string {
  * lack one. Pure and order-preserving; untouched messages pass by reference.
  * TaskCreates dropped by history compaction/truncation degrade to the UI's
  * `Task #N` id fallback for their updates — no worse than pre-backfill.
+ * Renames apply from their turn onward — earlier cards keep the pre-rename
+ * subject (each card is a point-in-time snapshot; retroactive renaming is
+ * intentionally not done).
  */
 export function backfillTaskSubjects(messages: DisplayMessage[]): DisplayMessage[] {
   const scope: SubjectScope = { nextId: 1, subjects: new Map() };
@@ -74,8 +66,7 @@ function backfillBlocks(blocks: DisplayContent[], scope: SubjectScope): DisplayC
 
 function backfillItem(item: ProgressItem, scope: SubjectScope): ProgressItem {
   if (item.name === 'TaskCreate') {
-    const match = TASK_ID_RE.exec(resultText(item.result));
-    const id = match?.[1] ?? String(scope.nextId);
+    const id = extractTaskId(item.result) ?? String(scope.nextId);
     scope.nextId = Math.max(scope.nextId, Number(id)) + 1;
     const subject = item.input['subject'];
     if (typeof subject === 'string' && subject) scope.subjects.set(id, subject);
