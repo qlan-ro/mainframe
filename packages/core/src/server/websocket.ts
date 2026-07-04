@@ -10,6 +10,8 @@ import type { DevicesRepository } from '../db/devices.js';
 import { LspConnectionHandler, parseLspUpgradePath } from '../lsp/index.js';
 import type { FileWatcherService } from '../files/file-watcher.js';
 import { WsFileWatch, resolveSubscribePath } from './ws-file-watch.js';
+import type { AdapterRegistry } from '../adapters/index.js';
+import { buildConnectReplayEvents } from './adapter-replay.js';
 
 const log = createChildLogger('ws');
 
@@ -38,6 +40,7 @@ export class WebSocketManager {
     private lspHandler?: LspConnectionHandler,
     private fileWatcher?: FileWatcherService,
     private devicesRepo?: DevicesRepository,
+    private adapters?: AdapterRegistry,
   ) {
     this.wss = new WebSocketServer({ noServer: true });
     this.setupUpgradeAuth(server);
@@ -98,6 +101,12 @@ export class WebSocketManager {
 
       const ready: DaemonEvent = { type: 'connection.ready', clientId: client.id };
       ws.send(JSON.stringify(ready));
+
+      if (this.adapters) {
+        for (const event of buildConnectReplayEvents(this.adapters.getSnapshots())) {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
+        }
+      }
 
       ws.on('message', async (data) => {
         try {
