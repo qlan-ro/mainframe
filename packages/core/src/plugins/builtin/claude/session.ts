@@ -20,6 +20,7 @@ import type {
   ResolvedTuning,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr } from './events.js';
+import { ControlRequestChannel } from './session-control.js';
 import { tuningToFlagSettings } from './tuning.js';
 import type { DetectedPrCore } from './pr-detection.js';
 import { ClaudeTaskEvents } from './task-events.js';
@@ -73,10 +74,6 @@ export interface ClaudeSessionState {
   pid: number;
   activeTasks: Map<string, { type: string; command?: string }>;
   interruptTimer: ReturnType<typeof setTimeout> | null;
-  /** Pending cancel_async_message callbacks keyed by request_id */
-  pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
-  /** Pending stop_task callbacks keyed by request_id */
-  pendingStopTaskCallbacks: Map<string, (result: { ok: boolean; error?: string }) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
   /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
@@ -111,6 +108,11 @@ export function promoteToLocalSettings(updates: ControlUpdate[]): ControlUpdate[
   return updates.map((u) => (u.destination === 'session' ? { ...u, destination: 'localSettings' as const } : u));
 }
 
+/** set_model/apply_flag_settings/stop_task signal success/failure via the OUTER envelope's `subtype`. */
+function isTerminalControlResponse(raw: Record<string, unknown> | undefined): boolean {
+  return raw?.subtype === 'success' || raw?.subtype === 'error';
+}
+
 export class ClaudeSession implements AdapterSession {
   readonly id: string;
   readonly adapterId = 'claude';
@@ -119,6 +121,10 @@ export class ClaudeSession implements AdapterSession {
 
   /** Mutable internal state — readable by claude-events.ts and tests. */
   readonly state: ClaudeSessionState;
+
+  /** Correlation channel for control_request/control_response round-trips. PUBLIC — events.ts
+   *  routes responses into it. Assigned in the constructor body, after `this.id` is set. */
+  readonly control!: ControlRequestChannel;
 
   /** Last non-plan permission mode seen at spawn time. Used by setPlanMode(off)
    *  to restore the original mode when plan is toggled off. */
@@ -136,6 +142,7 @@ export class ClaudeSession implements AdapterSession {
     backgroundTasks: BackgroundTaskTracker = new BackgroundTaskTracker(),
   ) {
     this.id = nanoid();
+    this.control = new ControlRequestChannel(log, this.id);
     this.projectPath = options.projectPath;
     this.resumeSessionId = options.chatId;
     this.onExit = onExit;
@@ -149,8 +156,6 @@ export class ClaudeSession implements AdapterSession {
       pid: 0,
       activeTasks: new Map(),
       interruptTimer: null,
-      pendingCancelCallbacks: new Map(),
-      pendingStopTaskCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
       toolUseRegistry: new Map(),
@@ -263,6 +268,7 @@ export class ClaudeSession implements AdapterSession {
     });
     child.on('close', (code: number | null) => {
       this.state.child = null;
+      this.control.drainAllAsFailed(); // no in-flight sendAwaiting caller should hang past process death
       activeSink.onExit(code);
       this.onExit?.();
     });
@@ -293,6 +299,7 @@ export class ClaudeSession implements AdapterSession {
     child.kill('SIGTERM');
     await Promise.race([exited, timeout]);
     this.state.child = null;
+    this.control.drainAllAsFailed();
     log.debug({ sessionId: this.id }, 'claude session killed');
   }
 
@@ -302,9 +309,7 @@ export class ClaudeSession implements AdapterSession {
    * can correlate by it. Fire-and-forget callers ignore the return.
    */
   private sendControlRequest(stdin: ChildProcess['stdin'], request: Record<string, unknown>): string {
-    const requestId = nanoid();
-    stdin?.write(JSON.stringify({ type: 'control_request', request_id: requestId, request }) + '\n');
-    return requestId;
+    return this.control.send(stdin, request);
   }
 
   async interrupt(): Promise<void> {
@@ -367,16 +372,29 @@ export class ClaudeSession implements AdapterSession {
     this.sendControlRequest(child.stdin, { subtype: 'set_permission_mode', mode: cliMode });
   }
 
+  /** Awaits a terminal control_response (see isTerminalControlResponse) so callers never persist a rejected/timed-out change. */
+  private awaitTerminal(stdin: ChildProcess['stdin'], request: Record<string, unknown>, label: string) {
+    return this.control.sendAwaiting(stdin, request, { label, isTerminal: isTerminalControlResponse });
+  }
+
   async setModel(model: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
-    this.sendControlRequest(child.stdin, { subtype: 'set_model', model });
+    const raw = await this.awaitTerminal(child.stdin, { subtype: 'set_model', model }, 'set_model');
+    if (raw?.subtype !== 'success') throw new Error(`set_model failed: ${(raw?.error as string) ?? 'timeout'}`);
   }
 
   async applyTuning(tuning: ResolvedTuning): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
-    this.sendControlRequest(child.stdin, { subtype: 'apply_flag_settings', settings: tuningToFlagSettings(tuning) });
+    const settings = tuningToFlagSettings(tuning);
+    const raw = await this.awaitTerminal(
+      child.stdin,
+      { subtype: 'apply_flag_settings', settings },
+      'apply_flag_settings',
+    );
+    if (raw?.subtype !== 'success')
+      throw new Error(`apply_flag_settings failed: ${(raw?.error as string) ?? 'timeout'}`);
   }
 
   async sendCommand(command: string, args = ''): Promise<void> {
@@ -475,49 +493,36 @@ export class ClaudeSession implements AdapterSession {
     stdin.write(json + '\n');
   }
 
+  /** The cancelled boolean lives nested at `response.response.cancelled`, not on the outer envelope. */
   async cancelQueuedMessage(uuid: string): Promise<boolean> {
     const stdin = this.state.child?.stdin;
     if (!stdin || stdin.destroyed) {
       log.warn({ sessionId: this.id, uuid }, 'cancelQueuedMessage: stdin unavailable');
       return false;
     }
-    const requestId = this.sendControlRequest(stdin, { subtype: 'cancel_async_message', message_uuid: uuid });
-    log.info({ sessionId: this.id, uuid, requestId }, 'sent cancel_async_message');
-
-    // Wait for the CLI's control_response with the actual cancelled boolean
-    return new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.state.pendingCancelCallbacks.delete(requestId);
-        log.warn({ sessionId: this.id, uuid, requestId }, 'cancel_async_message timed out');
-        resolve(false);
-      }, 5000);
-      this.state.pendingCancelCallbacks.set(requestId, (cancelled) => {
-        clearTimeout(timeout);
-        resolve(cancelled);
-      });
-    });
+    const raw = await this.control.sendAwaiting(
+      stdin,
+      { subtype: 'cancel_async_message', message_uuid: uuid },
+      {
+        label: 'cancel_async_message',
+        isTerminal: (r) => typeof (r?.response as Record<string, unknown> | undefined)?.cancelled === 'boolean',
+      },
+    );
+    const cancelled = (raw?.response as Record<string, unknown> | undefined)?.cancelled;
+    return typeof cancelled === 'boolean' ? cancelled : false;
   }
 
+  /** stop_task's nested `response.response` is always `{}`; the outer envelope's `subtype` is the only success/failure signal. */
   async stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
     const stdin = this.state.child?.stdin;
     if (!stdin || stdin.destroyed) {
       log.warn({ sessionId: this.id, taskId }, 'stopBackgroundTask: stdin unavailable');
       return { ok: false, error: 'stdin unavailable' };
     }
-    const requestId = this.sendControlRequest(stdin, { subtype: 'stop_task', task_id: taskId });
-    log.info({ sessionId: this.id, taskId, requestId }, 'sent stop_task');
-
-    return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.state.pendingStopTaskCallbacks.delete(requestId);
-        log.warn({ sessionId: this.id, taskId, requestId }, 'stop_task timed out');
-        resolve({ ok: false, error: 'timeout' });
-      }, 5000);
-      this.state.pendingStopTaskCallbacks.set(requestId, (result) => {
-        clearTimeout(timeout);
-        resolve(result);
-      });
-    });
+    const raw = await this.awaitTerminal(stdin, { subtype: 'stop_task', task_id: taskId }, 'stop_task');
+    if (raw?.subtype === 'success') return { ok: true };
+    const err = raw?.error ?? (raw?.response as Record<string, unknown> | undefined)?.error;
+    return { ok: false, error: typeof err === 'string' ? err : 'timeout' };
   }
 
   getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {
