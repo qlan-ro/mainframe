@@ -104,6 +104,14 @@ The dev daemon (`tsx watch`) auto-restarts on file changes. Trigger the action i
 
 **Remove all debug logging before committing.**
 
+## Queued-Message Persistence (probe-verified, CLI 2.1.198, 2026-07-04)
+
+Live probe (`packages/core/scripts/queue-probe.mjs` in the app-tauri worktree; findings in `docs/adapters/claude/QUEUE.md`, local-only):
+
+- **Mid-turn drain + per-uuid `isReplay` acks + mid-run `cancel_async_message` all WORK** on the stream-json + `--replay-user-messages` path. The old "cancel always failed" belief is dead.
+- **JSONL shape surprise**: a mid-turn-drained message persists as a structured `{type:'attachment', attachment:{type:'queued_command', prompt, source_uuid, commandMode:'prompt'}}` entry — NOT as the `<system-reminder>The user sent a new message while you were working…` text (that wrapper exists only in the API message built at query time; the leaked source reads misleadingly here). Parsers that only convert `user`/`assistant` entries silently DROP drained queued messages on reload.
+- Probe gotchas: the CLI emits `system:init` only AFTER the first stdin write (waiting for init before writing = deadlock), and may emit a second `init` mid-session (guard one-shot handlers; first-occurrence-wins for observations).
+
 ## Common Pitfalls
 
 - **Logging at debug/trace level**: Dev daemon default is INFO. Use `log.warn` for temporary debug output.
