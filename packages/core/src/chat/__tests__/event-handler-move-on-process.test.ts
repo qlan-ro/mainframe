@@ -73,4 +73,20 @@ describe('move-on-process — onResult orphan-reconcile path', () => {
     expect(messages.get('c1')!.find((m) => m.id === 'q')!.metadata?.queued).toBeUndefined();
     expect(active.chat.processState).toBe('idle'); // no refs remain
   });
+
+  it('moves ALL orphan queued messages to the end (multi-orphan, one turn)', () => {
+    const messages = new MessageCache();
+    messages.append('c1', umsg('q1', { queued: true, uuid: 'u1' }));
+    messages.append('c1', umsg('q2', { queued: true, uuid: 'u2' }));
+    messages.append('c1', umsg('assistant-reply'));
+    const refs: QueuedMessageRef[] = [];
+    const events: DaemonEvent[] = [];
+    const { handler } = makeHandler(messages, refs, events);
+    const sink = handler.buildSink('c1', vi.fn().mockResolvedValue(undefined));
+    sink.onResult?.({ total_cost_usd: 0, subtype: 'success', is_error: false } as SessionResult);
+    expect(messages.get('c1')!.map((m) => m.id)).toEqual(['assistant-reply', 'q1', 'q2']);
+    expect(messages.get('c1')!.find((m) => m.id === 'q2')!.metadata?.queued).toBeUndefined();
+    const processed = events.filter((e) => e.type === 'message.queued.processed').map((e) => (e as any).uuid);
+    expect(processed).toEqual(expect.arrayContaining(['u1', 'u2']));
+  });
 });

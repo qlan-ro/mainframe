@@ -297,7 +297,10 @@ function buildSessionSink(
       const cachedQueuedUuids = new Set<string>();
       let displayChanged = false;
 
-      for (const m of cached) {
+      // Iterate a snapshot: moveToEnd splices+pushes on the live `cached` array,
+      // and mutating an array mid-for-of shifts the iterator, silently skipping
+      // whichever orphan lands in the vacated slot.
+      for (const m of [...cached]) {
         const u = m.metadata?.uuid;
         if (m.metadata?.queued && typeof u === 'string') {
           cachedQueuedUuids.add(u);
