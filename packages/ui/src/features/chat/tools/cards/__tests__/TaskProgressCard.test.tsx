@@ -417,4 +417,54 @@ describe('TaskProgressCard — daemon-shaped ToolCallResult objects', () => {
     );
     expect(screen.getByTestId('chat-task-progress-item-in_progress')).toHaveTextContent('Task #7');
   });
+
+  it('does not let a result-less streaming create collide with a real numeric id already in the map', () => {
+    // Two real creates (ids 2 and 3) are already known, then a create whose
+    // result hasn't arrived yet (streaming) falls back to a positional id.
+    // The old `String(map.size + 1)` fallback produces "3" here — colliding
+    // with the real id-3 task and overwriting it in the reduction map.
+    const items: TaskProgressItem[] = [
+      {
+        toolCallId: 'c2',
+        toolName: 'TaskCreate',
+        args: { subject: 'Task two' },
+        result: { content: 'Task #2 created successfully: Task two', isError: false },
+        isError: false,
+      },
+      {
+        toolCallId: 'c3',
+        toolName: 'TaskCreate',
+        args: { subject: 'Task three' },
+        result: { content: 'Task #3 created successfully: Task three', isError: false },
+        isError: false,
+      },
+      {
+        toolCallId: 'c-streaming',
+        toolName: 'TaskCreate',
+        args: { subject: 'Streaming task' },
+        result: undefined,
+        isError: false,
+      },
+      {
+        toolCallId: 'u3',
+        toolName: 'TaskUpdate',
+        args: { taskId: '3', status: 'completed' },
+        result: { content: 'Updated task #3 status', isError: false },
+        isError: false,
+      },
+    ];
+    render(
+      <Wrap>
+        <TaskProgressCard {...tp({ items })} />
+      </Wrap>,
+    );
+    expect(screen.getByText('(3)')).toBeInTheDocument();
+    expect(screen.getByText('Task two')).toBeInTheDocument();
+    expect(screen.getByText('Task three')).toBeInTheDocument();
+    expect(screen.getByText('Streaming task')).toBeInTheDocument();
+    // The update targets the real id-3 task, not the streaming placeholder.
+    const completed = screen.getAllByTestId('chat-task-progress-item-completed');
+    expect(completed).toHaveLength(1);
+    expect(completed[0]).toHaveTextContent('Task three');
+  });
 });

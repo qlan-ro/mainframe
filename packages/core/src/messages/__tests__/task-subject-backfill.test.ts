@@ -141,6 +141,22 @@ describe('backfillTaskSubjects', () => {
     expect(messages).toEqual(snapshot);
   });
 
+  it('coerces a numeric taskId on TaskUpdate.input to match the string-keyed create', () => {
+    const numericUpdate: ProgressItem = {
+      id: 'toolu_update_3_numeric',
+      name: 'TaskUpdate',
+      input: { taskId: 3, status: 'completed' },
+      category: 'progress',
+      result: { content: 'Updated task #3 status', isError: false },
+    };
+    const messages = [
+      assistantMsg('m1', [createItem('3', 'Numeric taskId task')]),
+      assistantMsg('m2', [numericUpdate]),
+    ];
+    const out = backfillTaskSubjects(messages);
+    expect(progressItems(out[1]!)[0]!.input['subject']).toBe('Numeric taskId task');
+  });
+
   it('passes non-assistant and non-task messages through untouched', () => {
     const user: DisplayMessage = {
       id: 'u1',
