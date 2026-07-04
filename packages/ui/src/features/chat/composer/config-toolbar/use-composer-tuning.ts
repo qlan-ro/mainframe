@@ -4,15 +4,17 @@
  * Composer tuning hooks — data layer for EffortPicker + FeaturesPopover.
  *
  * Three independent concerns:
- *   useAdapters         — fetches the adapter registry once on mount (model catalog).
+ *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
+ *                         catalog store, seeded/kept fresh at the app root (adapters-seed).
  *   useProviderDefaults — fetches provider settings once on mount; returns the
  *                         requested adapter's ProviderConfig (a structural TuningDefaults,
  *                         D-D) for effort/feature inheritance. Plain React state, no zustand.
  *   useComposerTuning   — fetches the current chat, resolves the model, and
  *                         exposes setEffort/setFeature with optimistic updates.
  *
- * No hook here uses Zustand. They hold plain React state to avoid the
- * getSnapshot-loop trap that affects external-store selectors.
+ * useProviderDefaults/useComposerTuning hold plain React state (not aui external-store
+ * selectors) to avoid the getSnapshot-loop trap. useAdapters is a zustand store selector,
+ * which is safe here — it selects a stable reference, not a fresh snapshot per render.
  *
  * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
  * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
