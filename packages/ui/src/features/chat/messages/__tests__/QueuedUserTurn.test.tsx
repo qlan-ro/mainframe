@@ -1,6 +1,6 @@
 /**
- * QueuedUserTurn — behavior tests for FIFO position labels, sending state,
- * and QueuedAction hover-border + slide-in animation.
+ * QueuedUserTurn — behavior tests for FIFO position labels and QueuedAction
+ * hover-border + slide-in animation.
  *
  * Strategy:
  *  - Mock runtime hooks (useChatExtras / useComposerEdit) so the component
@@ -13,8 +13,7 @@
  *  P3 — position=2, total=3          → "2nd in line"
  *  P4 — position=3, total=3          → "3rd in line"
  *  P5 — position=4, total=4          → "4th in line"
- *  S1 — sending=false (default)      → dashed border class present, opacity-[0.82]
- *  S2 — sending=true                 → border-solid class (no dashed), 'Sending now…', no opacity-[0.82]
+ *  S1 — bubble ghost treatment       → dashed border class present, opacity-[0.82]
  *  A1 — QueuedAction has ghost border classes (border + border-transparent + hover:border-border)
  *  A2 — actions container has translate-x slide-in classes
  */
@@ -56,24 +55,15 @@ function renderQueued({
   content = 'hello world',
   position,
   total,
-  sending,
   extrasSlot,
 }: {
   content?: string;
   position?: number;
   total?: number;
-  sending?: boolean;
   extrasSlot?: ReactNode;
 } = {}) {
   return render(
-    <QueuedUserTurn
-      messageId="m1"
-      content={content}
-      position={position}
-      total={total}
-      sending={sending}
-      extrasSlot={extrasSlot}
-    >
+    <QueuedUserTurn messageId="m1" content={content} position={position} total={total} extrasSlot={extrasSlot}>
       {content}
     </QueuedUserTurn>,
   );
@@ -148,39 +138,16 @@ describe('QueuedUserTurn — P5: fourth in queue uses "th" suffix', () => {
 });
 
 // ---------------------------------------------------------------------------
-// S1 — default (sending=false): dashed border + opacity
+// S1 — bubble ghost treatment: dashed border + opacity
 // ---------------------------------------------------------------------------
 
-describe('QueuedUserTurn — S1: default non-sending state', () => {
+describe('QueuedUserTurn — S1: bubble ghost treatment', () => {
   it('bubble div has border-dashed class and opacity-[0.82]', () => {
-    const { container } = renderQueued({ sending: false });
+    const { container } = renderQueued();
     // Find the bubble: it's the div with border-dashed
     const bubble = container.querySelector('.border-dashed');
     expect(bubble).toBeInTheDocument();
     expect(bubble!.className).toContain('opacity-[0.82]');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// S2 — sending=true: solid border, 'Sending now…', no opacity dim
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — S2: sending state', () => {
-  it('renders "Sending now…" in the meta footer', () => {
-    renderQueued({ sending: true });
-    expect(screen.getByText(/Sending now…/)).toBeInTheDocument();
-  });
-
-  it('bubble does NOT have border-dashed when sending=true', () => {
-    const { container } = renderQueued({ sending: true });
-    expect(container.querySelector('.border-dashed')).not.toBeInTheDocument();
-  });
-
-  it('bubble does NOT have opacity-[0.82] when sending=true', () => {
-    const { container } = renderQueued({ sending: true });
-    const bubble = container.querySelector('.border-mf-um-edge');
-    expect(bubble).toBeInTheDocument();
-    expect(bubble!.className).not.toContain('opacity-[0.82]');
   });
 });
 

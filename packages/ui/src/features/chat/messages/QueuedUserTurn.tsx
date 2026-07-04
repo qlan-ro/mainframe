@@ -14,8 +14,6 @@
  * the next turn boundary — the copy must not claim it "sends after the run":
  *   position<=1 (head)   → "Queued · Claude will pick this up shortly"
  *   position>1           → "Queued · {ordinal(position)} in line"
- *
- * sending=true → solid border, opacity 1, "Sending now…" label.
  */
 import { useCallback, type ReactNode } from 'react';
 import { PencilIcon, XIcon } from 'lucide-react';
@@ -66,30 +64,15 @@ function QueuedAction({ icon: Icon, label, onClick, danger, testid }: QueuedActi
 
 // ── QueuedMeta ────────────────────────────────────────────────────────────────
 
-function QueuedMeta({
-  position = 1,
-  total = 1,
-  sending = false,
-}: {
-  position?: number;
-  total?: number;
-  sending?: boolean;
-}) {
+function QueuedMeta({ position = 1, total = 1 }: { position?: number; total?: number }) {
   const isHead = position <= 1;
   const isMulti = total > 1;
 
-  let label: string;
-  if (sending) {
-    label = 'Sending now…';
-  } else if (isHead) {
-    label = 'Queued · Claude will pick this up shortly';
-  } else {
-    label = `Queued · ${ordinal(position)} in line`;
-  }
+  const label = isHead ? 'Queued · Claude will pick this up shortly' : `Queued · ${ordinal(position)} in line`;
 
   // Non-head items use a steady amber dot (no spin); head/single uses the spinner.
-  const showSpinner = isHead || !isMulti || sending;
-  const dimmed = isMulti && !isHead && !sending;
+  const showSpinner = isHead || !isMulti;
+  const dimmed = isMulti && !isHead;
 
   return (
     <span
@@ -120,7 +103,6 @@ export function QueuedUserTurn({
   extrasSlot,
   position,
   total,
-  sending,
 }: {
   messageId: string;
   content: string;
@@ -132,8 +114,6 @@ export function QueuedUserTurn({
   position?: number;
   /** Total number of items in the queue. Default 1. */
   total?: number;
-  /** True while the item is actively being transmitted (transient). */
-  sending?: boolean;
 }) {
   const extras = useChatExtras();
   const { startEdit } = useComposerEdit();
@@ -176,7 +156,7 @@ export function QueuedUserTurn({
             className={cn(
               'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-loose tracking-tight text-mf-um-ink',
               'transition-[opacity,border-color] duration-200 ease-in-out',
-              sending ? 'border-solid border-mf-um-edge' : 'border-dashed border-mf-um-dash opacity-[0.82]',
+              'border-dashed border-mf-um-dash opacity-[0.82]',
             )}
           >
             {children}
@@ -184,7 +164,7 @@ export function QueuedUserTurn({
         )}
       </div>
       {extrasSlot && <div className="flex flex-col items-end gap-2 opacity-[0.9]">{extrasSlot}</div>}
-      <QueuedMeta position={position} total={total} sending={sending} />
+      <QueuedMeta position={position} total={total} />
     </div>
   );
 }
