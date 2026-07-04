@@ -6,6 +6,7 @@ const addChat = vi.fn();
 const openChatTab = vi.fn();
 const updateTabLabel = vi.fn();
 const getClientId = vi.fn<() => string | undefined>();
+const updateAdapterModels = vi.fn();
 
 vi.mock('../store/chats', () => ({
   useChatsStore: {
@@ -65,7 +66,7 @@ vi.mock('../store/sandbox', () => ({
 }));
 
 vi.mock('../store/adapters', () => ({
-  useAdaptersStore: { getState: () => ({ updateAdapterModels: vi.fn() }) },
+  useAdaptersStore: { getState: () => ({ updateAdapterModels }) },
 }));
 
 vi.mock('./logger', () => ({
@@ -122,5 +123,14 @@ describe('routeEvent — chat.created is pure list-sync (WS8)', () => {
     expect(addChat).toHaveBeenCalledWith(baseChat);
     expect(setActiveChat).not.toHaveBeenCalled();
     expect(openChatTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('routeEvent — adapter.models.updated forwards the revision', () => {
+  it('passes adapterId, models, and modelsRevision to the store', () => {
+    const models = [{ id: 'm1', label: 'M1' }];
+    const event: DaemonEvent = { type: 'adapter.models.updated', adapterId: 'claude', models, modelsRevision: 4 };
+    routeEvent(event);
+    expect(updateAdapterModels).toHaveBeenCalledWith('claude', models, 4);
   });
 });

@@ -24,7 +24,6 @@ const log = createLogger('renderer:init');
 export function useAppInit(): void {
   const { setProjects, setLoading, setError } = useProjectsStore();
   const loadProviders = useSettingsStore((s) => s.loadProviders);
-  const setAdapters = useAdaptersStore((s) => s.setAdapters);
 
   useEffect(() => {
     // One-time cleanup of removed localStorage keys from unified session view migration
@@ -38,16 +37,24 @@ export function useAppInit(): void {
 
     const loadData = async () => {
       setLoading(true);
+
+      // Drop the revision baseline (not the models) BEFORE fetching, so a reconnect ACCEPTS
+      // the restarted daemon's snapshot even at a tied revision, while keeping last-known
+      // models on screen — no blank model-picker flash on every reconnect blip. Apply the
+      // adapters snapshot as it settles rather than gating it behind the batched fetch below.
+      useAdaptersStore.getState().resetRevisionBaseline();
+      getAdapters()
+        .then((list) => useAdaptersStore.getState().setAdapters(list))
+        .catch((err) => log.warn('adapter fetch failed', { err: String(err) }));
+
       try {
-        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult, tagsResult] =
-          await Promise.allSettled([
-            getProjects(),
-            getAdapters(),
-            getProviderSettings(),
-            getPlugins(),
-            getAllChats(),
-            useTagsStore.getState().refreshRegistry(),
-          ]);
+        const [projectsResult, providerResult, pluginsResult, chatsResult, tagsResult] = await Promise.allSettled([
+          getProjects(),
+          getProviderSettings(),
+          getPlugins(),
+          getAllChats(),
+          useTagsStore.getState().refreshRegistry(),
+        ]);
 
         if (projectsResult.status === 'fulfilled') {
           // Don't wipe a populated list with a transient empty result. On reconnect this fetch can
@@ -59,12 +66,6 @@ export function useAppInit(): void {
           }
         } else {
           throw projectsResult.reason;
-        }
-
-        if (adaptersResult.status === 'fulfilled') {
-          setAdapters(adaptersResult.value);
-        } else {
-          log.warn('adapter fetch failed', { err: String(adaptersResult.reason) });
         }
 
         if (providerResult.status === 'fulfilled') {
@@ -156,7 +157,7 @@ export function useAppInit(): void {
       unsubConnection();
       daemonClient.disconnect();
     };
-  }, [setProjects, setLoading, setError, loadProviders, setAdapters]);
+  }, [setProjects, setLoading, setError, loadProviders]);
 }
 
 export function useProject(projectId: string | null) {

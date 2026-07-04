@@ -227,8 +227,12 @@ export function routeEvent(event: DaemonEvent): void {
       chats.setQueuedMessages(event.chatId, event.refs);
       break;
     case 'adapter.models.updated':
-      log.info('event:adapter.models.updated', { adapterId: event.adapterId, count: event.models.length });
-      useAdaptersStore.getState().updateAdapterModels(event.adapterId, event.models);
+      log.info('event:adapter.models.updated', {
+        adapterId: event.adapterId,
+        count: event.models.length,
+        modelsRevision: event.modelsRevision,
+      });
+      useAdaptersStore.getState().updateAdapterModels(event.adapterId, event.models, event.modelsRevision);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });
