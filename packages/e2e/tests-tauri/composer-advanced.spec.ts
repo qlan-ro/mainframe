@@ -444,7 +444,7 @@ test.describe('§composer worktree setup', () => {
   });
 });
 
-// ─── Mid-run queue (edit / cancel / flush-on-run-end) ──────────────────────────────────────────
+// ─── Mid-run queue (edit / cancel / CLI-side consumption) ──────────────────────────────────────
 
 test.describe('§composer queue', () => {
   let app: TauriAppFixture;
@@ -477,7 +477,7 @@ test.describe('§composer queue', () => {
 
     const queued = page.getByTestId('chat-queued-message').filter({ hasText: 'First queued note' });
     await expect(queued).toBeVisible({ timeout: 10_000 });
-    await expect(queued).toContainText('Queued · sends after the current run');
+    await expect(queued).toContainText('Queued · Claude will pick this up shortly');
   });
 
   test('hover Edit swaps the composer into edit mode; Esc cancels without changes', async () => {
@@ -527,21 +527,25 @@ test.describe('§composer queue', () => {
     const first = page.getByTestId('chat-queued-message').filter({ hasText: 'Edited queued note' });
     const second = page.getByTestId('chat-queued-message').filter({ hasText: 'Second queued note' });
     await expect(second).toBeVisible({ timeout: 10_000 });
-    await expect(first).toContainText('Queued · sends next, after the current run');
-    await expect(second).toContainText('2nd to send');
+    await expect(first).toContainText('Queued · Claude will pick this up shortly');
+    await expect(second).toContainText('2nd in line');
 
     await second.hover();
     await second.getByTestId('chat-queued-cancel').click();
     await expect(second).toHaveCount(0, { timeout: 5_000 });
     // Back to a single queued item — singular FIFO label.
-    await expect(first).toContainText('Queued · sends after the current run');
+    await expect(first).toContainText('Queued · Claude will pick this up shortly');
   });
 
-  test('the queued message flushes and sends once the run ends', async () => {
+  test('the queued message is consumed by the CLI once the run ends', async () => {
     test.skip(true, 'TODO(bug/infra): browser-crash cluster — see comment above the §composer worktree setup describe');
     const { page } = app;
-    // Deny the pending gate — ends the recorded interaction (onToolResult/onResult), which
-    // triggers ChatManager.flushNextQueued and sends "Edited queued note" for real.
+    // Deny the pending gate — ends the recorded interaction (onToolResult/onResult). The
+    // message was already forwarded to the CLI's own queue; here it's consumed as the
+    // follow-up turn at run end (mid-turn pickup is covered daemon-side, not via this
+    // recording). Consumption relocates the bubble to a real user message and clears the
+    // queued badge. Daemon-level queue mechanics: chat-manager-cli-queue.test.ts,
+    // event-handler-move-on-process.test.ts (both in packages/core/src/chat/__tests__/).
     await page.getByTestId('chat-permission-deny').click();
 
     await expect(page.getByTestId('chat-queued-message')).toHaveCount(0, { timeout: 45_000 });

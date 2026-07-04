@@ -9,10 +9,11 @@
  *  - Cancel → DELETE the queued message (it never sends).
  *  - Edit   → load it into the composer's edit mode (text stays editable there).
  *
- * Position / total props power the FIFO label:
- *   position=1, total=1  → "Queued · sends after the current run"
- *   position=1, total>1  → "Queued · sends next, after the current run"
- *   position>1           → "Queued · {ordinal(position)} to send"
+ * Position / total props power the FIFO label. The message is already sent to
+ * the CLI, which holds it in its own queue and may pick it up mid-turn or at
+ * the next turn boundary — the copy must not claim it "sends after the run":
+ *   position<=1 (head)   → "Queued · Claude will pick this up shortly"
+ *   position>1           → "Queued · {ordinal(position)} in line"
  *
  * sending=true → solid border, opacity 1, "Sending now…" label.
  */
@@ -80,12 +81,10 @@ function QueuedMeta({
   let label: string;
   if (sending) {
     label = 'Sending now…';
-  } else if (!isMulti) {
-    label = 'Queued · sends after the current run';
   } else if (isHead) {
-    label = 'Queued · sends next, after the current run';
+    label = 'Queued · Claude will pick this up shortly';
   } else {
-    label = `Queued · ${ordinal(position)} to send`;
+    label = `Queued · ${ordinal(position)} in line`;
   }
 
   // Non-head items use a steady amber dot (no spin); head/single uses the spinner.

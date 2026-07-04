@@ -8,11 +8,11 @@
  *  - All expected class names are hardcoded — no component logic is recomputed.
  *
  * Behaviors covered:
- *  P1 — position=1, total=1 (default) → "sends after the current run"
- *  P2 — position=1, total=3          → "sends next, after the current run"
- *  P3 — position=2, total=3          → "2nd to send"
- *  P4 — position=3, total=3          → "3rd to send"
- *  P5 — position=4, total=4          → "4th to send"
+ *  P1 — position=1, total=1 (default) → "Claude will pick this up shortly"
+ *  P2 — position=1, total=3          → "Claude will pick this up shortly"
+ *  P3 — position=2, total=3          → "2nd in line"
+ *  P4 — position=3, total=3          → "3rd in line"
+ *  P5 — position=4, total=4          → "4th in line"
  *  S1 — sending=false (default)      → dashed border class present, opacity-[0.82]
  *  S2 — sending=true                 → border-solid class (no dashed), 'Sending now…', no opacity-[0.82]
  *  A1 — QueuedAction has ghost border classes (border + border-transparent + hover:border-border)
@@ -86,7 +86,7 @@ function renderQueued({
 describe('QueuedUserTurn — P1: single item (default position/total)', () => {
   it('renders the generic queued label', () => {
     renderQueued();
-    expect(screen.getByText(/sends after the current run/)).toBeInTheDocument();
+    expect(screen.getByText(/Claude will pick this up shortly/)).toBeInTheDocument();
   });
 });
 
@@ -108,9 +108,9 @@ describe('QueuedUserTurn — Q1: root data-queued-id', () => {
 // ---------------------------------------------------------------------------
 
 describe('QueuedUserTurn — P2: head of multi-item queue', () => {
-  it('renders "sends next, after the current run" for position=1 total=3', () => {
+  it('renders "Claude will pick this up shortly" for position=1 total=3', () => {
     renderQueued({ position: 1, total: 3 });
-    expect(screen.getByText(/sends next, after the current run/)).toBeInTheDocument();
+    expect(screen.getByText(/Claude will pick this up shortly/)).toBeInTheDocument();
   });
 });
 
@@ -119,9 +119,9 @@ describe('QueuedUserTurn — P2: head of multi-item queue', () => {
 // ---------------------------------------------------------------------------
 
 describe('QueuedUserTurn — P3: second in queue', () => {
-  it('renders "2nd to send" for position=2 total=3', () => {
+  it('renders "2nd in line" for position=2 total=3', () => {
     renderQueued({ position: 2, total: 3 });
-    expect(screen.getByText(/2nd to send/)).toBeInTheDocument();
+    expect(screen.getByText(/2nd in line/)).toBeInTheDocument();
   });
 });
 
@@ -130,9 +130,9 @@ describe('QueuedUserTurn — P3: second in queue', () => {
 // ---------------------------------------------------------------------------
 
 describe('QueuedUserTurn — P4: third in queue', () => {
-  it('renders "3rd to send" for position=3 total=3', () => {
+  it('renders "3rd in line" for position=3 total=3', () => {
     renderQueued({ position: 3, total: 3 });
-    expect(screen.getByText(/3rd to send/)).toBeInTheDocument();
+    expect(screen.getByText(/3rd in line/)).toBeInTheDocument();
   });
 });
 
@@ -141,9 +141,9 @@ describe('QueuedUserTurn — P4: third in queue', () => {
 // ---------------------------------------------------------------------------
 
 describe('QueuedUserTurn — P5: fourth in queue uses "th" suffix', () => {
-  it('renders "4th to send" for position=4 total=4', () => {
+  it('renders "4th in line" for position=4 total=4', () => {
     renderQueued({ position: 4, total: 4 });
-    expect(screen.getByText(/4th to send/)).toBeInTheDocument();
+    expect(screen.getByText(/4th in line/)).toBeInTheDocument();
   });
 });
 
