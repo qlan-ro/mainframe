@@ -372,29 +372,29 @@ export class ClaudeSession implements AdapterSession {
     this.sendControlRequest(child.stdin, { subtype: 'set_permission_mode', mode: cliMode });
   }
 
-  /** Awaits a terminal control_response (see isTerminalControlResponse) so callers never persist a rejected/timed-out change. */
-  private awaitTerminal(stdin: ChildProcess['stdin'], request: Record<string, unknown>, label: string) {
+  /** Awaits a terminal control_response so a rejected/timed-out change is never persisted as if it had succeeded. */
+  private awaitTerminal(stdin: ChildProcess['stdin'], request: Record<string, unknown>) {
+    const label = String(request.subtype);
     return this.control.sendAwaiting(stdin, request, { label, isTerminal: isTerminalControlResponse });
+  }
+
+  private failIfNotTerminal(raw: Record<string, unknown> | undefined, label: string): void {
+    if (raw?.subtype !== 'success') throw new Error(`${label} failed: ${(raw?.error as string) ?? 'timeout'}`);
   }
 
   async setModel(model: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
-    const raw = await this.awaitTerminal(child.stdin, { subtype: 'set_model', model }, 'set_model');
-    if (raw?.subtype !== 'success') throw new Error(`set_model failed: ${(raw?.error as string) ?? 'timeout'}`);
+    const raw = await this.awaitTerminal(child.stdin, { subtype: 'set_model', model });
+    this.failIfNotTerminal(raw, 'set_model');
   }
 
   async applyTuning(tuning: ResolvedTuning): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const settings = tuningToFlagSettings(tuning);
-    const raw = await this.awaitTerminal(
-      child.stdin,
-      { subtype: 'apply_flag_settings', settings },
-      'apply_flag_settings',
-    );
-    if (raw?.subtype !== 'success')
-      throw new Error(`apply_flag_settings failed: ${(raw?.error as string) ?? 'timeout'}`);
+    const raw = await this.awaitTerminal(child.stdin, { subtype: 'apply_flag_settings', settings });
+    this.failIfNotTerminal(raw, 'apply_flag_settings');
   }
 
   async sendCommand(command: string, args = ''): Promise<void> {
@@ -519,7 +519,7 @@ export class ClaudeSession implements AdapterSession {
       log.warn({ sessionId: this.id, taskId }, 'stopBackgroundTask: stdin unavailable');
       return { ok: false, error: 'stdin unavailable' };
     }
-    const raw = await this.awaitTerminal(stdin, { subtype: 'stop_task', task_id: taskId }, 'stop_task');
+    const raw = await this.awaitTerminal(stdin, { subtype: 'stop_task', task_id: taskId });
     if (raw?.subtype === 'success') return { ok: true };
     const err = raw?.error ?? (raw?.response as Record<string, unknown> | undefined)?.error;
     return { ok: false, error: typeof err === 'string' ? err : 'timeout' };
