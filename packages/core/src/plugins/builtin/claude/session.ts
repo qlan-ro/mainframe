@@ -108,12 +108,11 @@ export function promoteToLocalSettings(updates: ControlUpdate[]): ControlUpdate[
   return updates.map((u) => (u.destination === 'session' ? { ...u, destination: 'localSettings' as const } : u));
 }
 
-/** set_model/apply_flag_settings/stop_task signal success/failure via the OUTER envelope's `subtype`. */
+// Envelope-shape helpers: set_model/apply_flag_settings/stop_task signal success/failure via the
+// OUTER `subtype`; cancel_async_message's only real signal is the NESTED `response.cancelled`.
 function isTerminalCtrl(raw: Record<string, unknown> | undefined): boolean {
   return raw?.subtype === 'success' || raw?.subtype === 'error';
 }
-
-/** cancel_async_message's only real signal is the nested `response.response.cancelled` boolean. */
 function hasCancelledFlag(raw: Record<string, unknown> | undefined): boolean {
   return typeof (raw?.response as Record<string, unknown> | undefined)?.cancelled === 'boolean';
 }
@@ -501,14 +500,8 @@ export class ClaudeSession implements AdapterSession {
       log.warn({ sessionId: this.id, uuid }, 'cancelQueuedMessage: stdin unavailable');
       return false;
     }
-    const raw = await this.control.sendAwaiting(
-      stdin,
-      { subtype: 'cancel_async_message', message_uuid: uuid },
-      {
-        label: 'cancel_async_message',
-        isTerminal: hasCancelledFlag,
-      },
-    );
+    const opts = { label: 'cancel_async_message', isTerminal: hasCancelledFlag };
+    const raw = await this.control.sendAwaiting(stdin, { subtype: 'cancel_async_message', message_uuid: uuid }, opts);
     const cancelled = (raw?.response as Record<string, unknown> | undefined)?.cancelled;
     return typeof cancelled === 'boolean' ? cancelled : false;
   }
