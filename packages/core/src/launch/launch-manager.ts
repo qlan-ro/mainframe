@@ -65,7 +65,17 @@ function cleanEnv(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v == null) continue;
+    if (k === 'MAINFRAME_ORIG_PATH') continue;
     if (isAllowedEnvVar(k)) result[k] = v;
+  }
+  // The standalone launcher prepends its bundled-node bin dir to PATH so the
+  // daemon itself can find its bundled Node/cloudflared. That prefix must never
+  // reach user launch processes, or they resolve `node`/`npm` to Mainframe's
+  // internal single-file Node (which ships without npm) instead of the user's
+  // real toolchain. MAINFRAME_ORIG_PATH carries the pristine, pre-prefix PATH.
+  const origPath = process.env.MAINFRAME_ORIG_PATH;
+  if (origPath) {
+    result.PATH = origPath;
   }
   return result;
 }

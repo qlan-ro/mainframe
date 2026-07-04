@@ -62,6 +62,7 @@ cat > "${DIST_DIR}/bin/mainframe-daemon" << 'WRAPPER'
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
+export MAINFRAME_ORIG_PATH="${PATH}"
 export PATH="${SCRIPT_DIR}:${PATH}"
 exec "${SCRIPT_DIR}/node" "${BASE_DIR}/lib/daemon.cjs" "$@"
 WRAPPER
