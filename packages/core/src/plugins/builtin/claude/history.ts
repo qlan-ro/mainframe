@@ -238,8 +238,50 @@ function convertAssistantEntry(
   };
 }
 
+/**
+ * A queued message the CLI drained mid-turn persists to JSONL as a structured
+ * `attachment` entry (type queued_command), NOT as a user entry — verified
+ * against CLI 2.1.198 on the stream-json + --replay-user-messages path
+ * (docs/adapters/claude/QUEUE.md, local capture 2026-07-04). Converting it
+ * here is what keeps mid-turn-drained messages visible after reload, at their
+ * consumption point.
+ */
+function convertQueuedCommandEntry(entry: Record<string, unknown>, chatId: string): ChatMessage | null {
+  const attachment = entry.attachment as Record<string, unknown> | undefined;
+  if (attachment?.type !== 'queued_command' || attachment.commandMode !== 'prompt') return null;
+
+  const prompt = attachment.prompt;
+  const contentBlocks: MessageContent[] = [];
+  if (typeof prompt === 'string') {
+    if (prompt.trim()) contentBlocks.push({ type: 'text', text: prompt });
+  } else if (Array.isArray(prompt)) {
+    for (const block of prompt as Array<Record<string, unknown>>) {
+      if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+        contentBlocks.push({ type: 'text', text: block.text });
+      } else if (block.type === 'image') {
+        const source = block.source as Record<string, unknown> | undefined;
+        if (source?.type === 'base64') {
+          contentBlocks.push({ type: 'image', mediaType: source.media_type as string, data: source.data as string });
+        }
+      }
+    }
+  }
+  if (contentBlocks.length === 0) return null;
+
+  return {
+    id: (entry.uuid as string) || nanoid(),
+    chatId,
+    type: 'user',
+    content: contentBlocks,
+    timestamp: (entry.timestamp as string) || (attachment.timestamp as string) || new Date().toISOString(),
+    metadata: { source: 'history' },
+  };
+}
+
 export function convertHistoryEntry(entry: Record<string, unknown>, chatId: string): ChatMessage | null {
   const type = entry.type as string;
+
+  if (type === 'attachment') return convertQueuedCommandEntry(entry, chatId);
 
   if (type === 'system' && entry.subtype === 'compact_boundary') {
     return {
