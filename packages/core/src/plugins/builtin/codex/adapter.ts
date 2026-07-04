@@ -65,6 +65,10 @@ export class CodexAdapter implements Adapter {
     });
   }
 
+  getFallbackModels(): AdapterModel[] {
+    return [];
+  }
+
   async listModels(): Promise<AdapterModel[]> {
     if (this.cachedModels) return this.cachedModels;
     let client: JsonRpcClient | null = null;
