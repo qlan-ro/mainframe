@@ -109,7 +109,7 @@ export function promoteToLocalSettings(updates: ControlUpdate[]): ControlUpdate[
 }
 
 /** set_model/apply_flag_settings/stop_task signal success/failure via the OUTER envelope's `subtype`. */
-function isTerminalControlResponse(raw: Record<string, unknown> | undefined): boolean {
+function isTerminalCtrl(raw: Record<string, unknown> | undefined): boolean {
   return raw?.subtype === 'success' || raw?.subtype === 'error';
 }
 
@@ -377,27 +377,25 @@ export class ClaudeSession implements AdapterSession {
   }
 
   private awaitTerminal(stdin: ChildProcess['stdin'], request: Record<string, unknown>) {
-    const label = String(request.subtype);
-    return this.control.sendAwaiting(stdin, request, { label, isTerminal: isTerminalControlResponse });
+    return this.control.sendAwaiting(stdin, request, { label: String(request.subtype), isTerminal: isTerminalCtrl });
   }
 
-  private failIfNotTerminal(raw: Record<string, unknown> | undefined, label: string): void {
-    if (raw?.subtype !== 'success') throw new Error(`${label} failed: ${(raw?.error as string) ?? 'timeout'}`);
+  private async requireSuccess(stdin: ChildProcess['stdin'], request: Record<string, unknown>): Promise<void> {
+    const raw = await this.awaitTerminal(stdin, request);
+    if (raw?.subtype === 'success') return;
+    throw new Error(`${request.subtype} failed: ${(raw?.error as string) ?? 'timeout'}`);
   }
 
   async setModel(model: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
-    const raw = await this.awaitTerminal(child.stdin, { subtype: 'set_model', model });
-    this.failIfNotTerminal(raw, 'set_model');
+    await this.requireSuccess(child.stdin, { subtype: 'set_model', model });
   }
 
   async applyTuning(tuning: ResolvedTuning): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
-    const settings = tuningToFlagSettings(tuning);
-    const raw = await this.awaitTerminal(child.stdin, { subtype: 'apply_flag_settings', settings });
-    this.failIfNotTerminal(raw, 'apply_flag_settings');
+    await this.requireSuccess(child.stdin, { subtype: 'apply_flag_settings', settings: tuningToFlagSettings(tuning) });
   }
 
   async sendCommand(command: string, args = ''): Promise<void> {
