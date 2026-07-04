@@ -337,3 +337,84 @@ describe('TaskProgressCard — TaskUpdate for unknown taskId', () => {
     expect(screen.getByText('Task #99')).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// daemon-shaped ToolCallResult objects — real id extraction + subject backfill
+// ---------------------------------------------------------------------------
+
+describe('TaskProgressCard — daemon-shaped ToolCallResult objects', () => {
+  it('extracts real task ids from object results so updates attach to the right task', () => {
+    // Creates get CLI ids 9 and 10 (object results); the update targets #10.
+    const items: TaskProgressItem[] = [
+      {
+        toolCallId: 'c9',
+        toolName: 'TaskCreate',
+        args: { subject: 'Task 3: silent reconcile' },
+        result: { content: 'Task #9 created successfully: Task 3: silent reconcile', isError: false },
+        isError: false,
+      },
+      {
+        toolCallId: 'c10',
+        toolName: 'TaskCreate',
+        args: { subject: 'Task 4: history unwrap' },
+        result: { content: 'Task #10 created successfully: Task 4: history unwrap', isError: false },
+        isError: false,
+      },
+      {
+        toolCallId: 'u10',
+        toolName: 'TaskUpdate',
+        args: { taskId: '10', status: 'completed' },
+        result: { content: 'Updated task #10 status', isError: false },
+        isError: false,
+      },
+    ];
+    render(
+      <Wrap>
+        <TaskProgressCard {...tp({ items })} />
+      </Wrap>,
+    );
+    // Exactly one completed row, and it is "Task 4: history unwrap" — NOT "Task 3" (positional-id collision).
+    const completed = screen.getAllByTestId('chat-task-progress-item-completed');
+    expect(completed).toHaveLength(1);
+    expect(completed[0]).toHaveTextContent('Task 4: history unwrap');
+    expect(screen.getByTestId('chat-task-progress-item-pending')).toHaveTextContent('Task 3: silent reconcile');
+    expect(screen.queryByText('Task #10')).not.toBeInTheDocument();
+  });
+
+  it('renders the daemon-backfilled subject for an orphan TaskUpdate (create in an earlier message)', () => {
+    const items: TaskProgressItem[] = [
+      {
+        toolCallId: 'u9',
+        toolName: 'TaskUpdate',
+        args: { taskId: '9', status: 'completed', subject: 'Task 3: silent reconcile' },
+        result: { content: 'Updated task #9 status', isError: false },
+        isError: false,
+      },
+    ];
+    render(
+      <Wrap>
+        <TaskProgressCard {...tp({ items })} />
+      </Wrap>,
+    );
+    expect(screen.getByTestId('chat-task-progress-item-completed')).toHaveTextContent('Task 3: silent reconcile');
+    expect(screen.queryByText('Task #9')).not.toBeInTheDocument();
+  });
+
+  it('falls back to Task #<id> only when no subject is available anywhere', () => {
+    const items: TaskProgressItem[] = [
+      {
+        toolCallId: 'u7',
+        toolName: 'TaskUpdate',
+        args: { taskId: '7', status: 'in_progress' },
+        result: { content: 'Updated task #7 status', isError: false },
+        isError: false,
+      },
+    ];
+    render(
+      <Wrap>
+        <TaskProgressCard {...tp({ items })} />
+      </Wrap>,
+    );
+    expect(screen.getByTestId('chat-task-progress-item-in_progress')).toHaveTextContent('Task #7');
+  });
+});
