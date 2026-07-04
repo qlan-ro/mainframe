@@ -113,6 +113,11 @@ function isTerminalControlResponse(raw: Record<string, unknown> | undefined): bo
   return raw?.subtype === 'success' || raw?.subtype === 'error';
 }
 
+/** cancel_async_message's only real signal is the nested `response.response.cancelled` boolean. */
+function hasCancelledFlag(raw: Record<string, unknown> | undefined): boolean {
+  return typeof (raw?.response as Record<string, unknown> | undefined)?.cancelled === 'boolean';
+}
+
 export class ClaudeSession implements AdapterSession {
   readonly id: string;
   readonly adapterId = 'claude';
@@ -505,7 +510,7 @@ export class ClaudeSession implements AdapterSession {
       { subtype: 'cancel_async_message', message_uuid: uuid },
       {
         label: 'cancel_async_message',
-        isTerminal: (r) => typeof (r?.response as Record<string, unknown> | undefined)?.cancelled === 'boolean',
+        isTerminal: hasCancelledFlag,
       },
     );
     const cancelled = (raw?.response as Record<string, unknown> | undefined)?.cancelled;
