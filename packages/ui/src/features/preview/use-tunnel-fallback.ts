@@ -52,7 +52,7 @@ export function useTunnelFallback({
     }
     if (tunnelFailed && !toastedRef.current) {
       toastedRef.current = true;
-      mfToast.error(`Preview tunnel unavailable — showing process logs. ${tunnelError ?? 'timed out'}`);
+      mfToast.error(`Preview tunnel unavailable — ${tunnelError ?? 'timed out'}`);
     }
   }, [tunnelFailed, tunnelError, status]);
 

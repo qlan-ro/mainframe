@@ -81,10 +81,9 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 function renderInstance() {
-  return render(
-    <PreviewInstance tabId="t1" config="web" visible scopeKey={SCOPE} port={3000} projectId="proj" />,
-    { wrapper },
-  );
+  return render(<PreviewInstance tabId="t1" config="web" visible scopeKey={SCOPE} port={3000} projectId="proj" />, {
+    wrapper,
+  });
 }
 
 describe('PreviewInstance — remote tunnel resolution', () => {
@@ -113,20 +112,33 @@ describe('PreviewInstance — remote tunnel resolution', () => {
       ),
     );
     expect(screen.queryByTestId('preview-tunnel-pending')).toBeNull();
-    expect(screen.queryByTestId('preview-tunnel-failed')).toBeNull();
+    expect(screen.queryByTestId('preview-body-tunnel-failed')).toBeNull();
   });
 
-  it('renders the console-fallback state and toasts exactly once on tunnel failure', async () => {
+  it('renders the in-body tunnel-failed card and toasts exactly once on tunnel failure', async () => {
     vi.mocked(useDaemonIsLocal).mockReturnValue(false);
     useSandboxStore.getState().setProcessStatus(SCOPE, 'web', 'running');
     useSandboxStore.getState().setTunnelError(SCOPE, 'web', 'cloudflared missing');
 
     renderInstance();
 
-    expect(await screen.findByTestId('preview-tunnel-failed')).toBeInTheDocument();
+    expect(await screen.findByTestId('preview-body-tunnel-failed')).toBeInTheDocument();
+    expect(screen.getByText('cloudflared missing')).toBeInTheDocument();
     expect(fakeHost.preview.mount).not.toHaveBeenCalled();
     await waitFor(() => expect(mfToast.error).toHaveBeenCalledTimes(1));
     expect(mfToast.error).toHaveBeenCalledWith(expect.stringContaining('cloudflared missing'));
+  });
+
+  it('keeps the console drawer (not the full-pane console) on tunnel failure', async () => {
+    vi.mocked(useDaemonIsLocal).mockReturnValue(false);
+    useSandboxStore.getState().setProcessStatus(SCOPE, 'web', 'running');
+    useSandboxStore.getState().setTunnelError(SCOPE, 'web', 'cloudflared missing');
+
+    renderInstance();
+
+    expect(await screen.findByTestId('preview-body-tunnel-failed')).toBeInTheDocument();
+    expect(screen.getByTestId('run-console-drawer')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-console-pane')).toBeNull();
   });
 
   it('is unchanged on a local daemon (mounts localhost, no pending/failed state)', async () => {
@@ -143,6 +155,6 @@ describe('PreviewInstance — remote tunnel resolution', () => {
       ),
     );
     expect(screen.queryByTestId('preview-tunnel-pending')).toBeNull();
-    expect(screen.queryByTestId('preview-tunnel-failed')).toBeNull();
+    expect(screen.queryByTestId('preview-body-tunnel-failed')).toBeNull();
   });
 });

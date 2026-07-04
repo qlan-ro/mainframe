@@ -155,22 +155,18 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
         handle={handle}
       />
       <div ref={containerRef} className="relative min-h-0 flex-1">
-        {tunnelFailed ? (
-          <div data-testid="preview-tunnel-failed" className="absolute inset-0">
-            <ConsolePane scopeKey={scopeKey ?? ''} processName={config ?? ''} variant="full" />
-          </div>
-        ) : (
-          <PreviewBodyState
-            status={status}
-            configName={config}
-            port={port}
-            device={device}
-            inspectActive={inspectActive}
-            anchorRef={anchorRef}
-            onStart={handleStart}
-            tunnelPending={pendingTunnel}
-          />
-        )}
+        <PreviewBodyState
+          status={status}
+          configName={config}
+          port={port}
+          device={device}
+          inspectActive={inspectActive}
+          anchorRef={anchorRef}
+          onStart={handleStart}
+          tunnelPending={pendingTunnel}
+          tunnelFailed={tunnelFailed}
+          tunnelError={tunnelError}
+        />
         {annotationBackdrop && (
           <img
             data-testid="preview-annotation-backdrop"
@@ -180,7 +176,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
           />
         )}
       </div>
-      {config && !tunnelFailed && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
+      {config && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
 
       {annotationPopoverOpen && (
         <CaptureAnnotationPopover
