@@ -425,7 +425,7 @@ export class ChatManager {
     logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
   }
 
-  /** Return all queued refs for a chat. */
+  /** Return all queued refs for a chat, oldest-first. */
   getQueuedForChat(chatId: string): QueuedMessageRef[] {
     return [...this.queuedRefs.values()].filter((r) => r.chatId === chatId);
   }

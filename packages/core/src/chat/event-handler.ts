@@ -280,13 +280,17 @@ function buildSessionSink(
       // the AI finishes a turn, not only when the user sends a message.
       const now = new Date().toISOString();
 
-      // Reconcile cached metadata.queued ↔ daemon chatQueues on every result.
-      // isReplay acks can arrive out of order; cached messages may still carry
-      // metadata.queued even after the daemon dequeued them. Recompute here:
+      // Reconcile cached metadata.queued ↔ chat-manager queuedRefs. The CLI's
+      // isReplay acks can race with our queuedRefs.set (the daemon registers
+      // the ref AFTER awaiting stdin.write; the CLI may already have ack'd),
+      // and renderer-side `queuedMessages` can drift from the daemon when
+      // events arrive out of order. We recompute the canonical state here on
+      // every result event:
       //   1. cached msg has metadata.queued but no matching ref → orphan flag.
       //      Strip the flag + emit message.queued.processed for the renderer.
       //   2. ref has no matching cached msg → orphan ref. Drop it + ack.
-      //   3. Emit a queued.snapshot so the renderer's composer stays in sync.
+      //   3. Emit a queued.snapshot afterwards so the renderer's composer
+      //      converges on whatever refs the daemon believes are still live.
       const refsBefore = getQueuedRefs(chatId);
       const refUuids = new Set(refsBefore.map((r) => r.uuid));
       const cached = messages.get(chatId) ?? [];
