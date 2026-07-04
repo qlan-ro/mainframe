@@ -161,6 +161,10 @@ export class ChatThreadController {
     }
     this.remoteIdSet = true;
     this.daemonId = remoteId;
+    // Flip the public state snapshot's chatId too — every extras.state.chatId
+    // reader (composer tuning, the diff-expand fetch, the @-file search scope)
+    // must stop targeting the dead __LOCALID_* id from this point on.
+    this.dispatch({ type: 'chat.id.adopted', chatId: remoteId });
     // Now a real daemon chat — seed history once so a switch-back has the transcript.
     // Deduped by load()'s loadPromise guard (the first send's load() won't refetch).
     void this.load().catch((err: unknown) => console.warn('[chat-controller] post-adopt load failed', err));
