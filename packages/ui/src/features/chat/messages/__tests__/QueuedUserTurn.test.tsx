@@ -104,7 +104,7 @@ describe('QueuedUserTurn — Q1: root data-queued-id', () => {
 });
 
 // ---------------------------------------------------------------------------
-// P2 — first of multiple: "sends next"
+// P2 — first of multiple: head-of-queue copy
 // ---------------------------------------------------------------------------
 
 describe('QueuedUserTurn — P2: head of multi-item queue', () => {

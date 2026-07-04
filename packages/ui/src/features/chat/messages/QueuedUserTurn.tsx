@@ -126,7 +126,7 @@ export function QueuedUserTurn({
   content: string;
   children: ReactNode;
   /** Attachments / capture context rows — rendered with the bubble, above the
-   *  "Queued · sends after…" meta footer (artboard "Queued + attachment"). */
+   *  queued meta footer (artboard "Queued + attachment"). */
   extrasSlot?: ReactNode;
   /** 1-based position of this item in the FIFO queue. Default 1. */
   position?: number;

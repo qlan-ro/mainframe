@@ -3,7 +3,7 @@
  * total from the controller's live `interactions.queued` snapshot (design
  * 7.2: UMQueuedStack position/total → QueuedMeta's ordinal labels).
  *
- * Ordering is by `timestamp` ascending (oldest = position 1 = sends next).
+ * Ordering is by `timestamp` ascending (oldest = position 1 = consumed next by the CLI).
  * A messageId absent from the queue (already sent / cancelled) degrades to
  * the single-item default so callers never crash on a stale render.
  */

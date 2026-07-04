@@ -551,7 +551,7 @@ test.describe('§composer queue', () => {
     await expect(page.getByTestId('chat-queued-message')).toHaveCount(0, { timeout: 45_000 });
     await expect(page.getByTestId('chat-user-message').filter({ hasText: 'Edited queued note' })).toBeVisible();
 
-    // The flushed send is a real new turn (interaction #2 in the recording) — it hits another
+    // The consumed queued message starts a real new turn (interaction #2 in the recording) — it hits another
     // Write permission gate. Answer it so the mock session ends cleanly.
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
     await page.getByTestId('chat-permission-deny').click();
