@@ -72,7 +72,7 @@ export const interruptChat = (port: number, chatId: string): Promise<void> =>
 export const editQueuedMessage = (port: number, chatId: string, messageId: string, content: string): Promise<void> =>
   requestEmpty('PATCH', `${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`, { content });
 
-/** Cancel (remove) a queued message before it sends. */
+/** Cancel a queued message before the CLI consumes it (races consumption; a lost race is silent). */
 export const cancelQueuedMessage = (port: number, chatId: string, messageId: string): Promise<void> =>
   requestEmpty('DELETE', `${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`);
 
