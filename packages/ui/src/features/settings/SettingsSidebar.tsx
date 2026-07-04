@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { getAdapters } from '@/lib/api/adapters';
-import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import { useAdapters } from '@/store/adapters';
 import { useSettingsStore } from '../../store/settings';
 import { providerDot } from '../chat/composer/config-toolbar/ProviderModelSelect';
 import { SETTINGS_TABS } from './settings-tabs';
@@ -39,15 +37,9 @@ function SettingsNavItem({ id: _id, label, icon: Icon, active, onClick, testId }
   );
 }
 
-function ProviderSubItems({ port, activeProvider }: { port: number; activeProvider: string | null }) {
-  const [adapters, setAdapters] = useState<AdapterInfo[]>([]);
+function ProviderSubItems({ activeProvider }: { activeProvider: string | null }) {
+  const adapters = useAdapters();
   const setSelectedProvider = useSettingsStore((s) => s.setSelectedProvider);
-
-  useEffect(() => {
-    getAdapters(port)
-      .then(setAdapters)
-      .catch((err: unknown) => console.warn('[settings/SettingsSidebar]', err));
-  }, [port]);
 
   return (
     <div className="flex flex-col gap-px py-px">
@@ -83,7 +75,7 @@ function ProviderSubItems({ port, activeProvider }: { port: number; activeProvid
   );
 }
 
-export function SettingsSidebar({ port }: { port: number }) {
+export function SettingsSidebar() {
   const activeTab = useSettingsStore((s) => s.activeTab);
   const selectedProvider = useSettingsStore((s) => s.selectedProvider);
   const setActiveTab = useSettingsStore((s) => s.setActiveTab);
@@ -101,7 +93,7 @@ export function SettingsSidebar({ port }: { port: number }) {
             testId={`settings-nav-${tab.id}`}
           />
           {tab.id === 'providers' && activeTab === 'providers' && (
-            <ProviderSubItems port={port} activeProvider={selectedProvider} />
+            <ProviderSubItems activeProvider={selectedProvider} />
           )}
         </div>
       ))}

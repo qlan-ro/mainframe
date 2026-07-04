@@ -31,7 +31,6 @@ import type {
   ProviderConfig,
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
-import { getAdapters } from '@/lib/api/adapters';
 import { getProviderSettings } from '@/lib/api/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
@@ -39,39 +38,12 @@ import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 
 // ---------------------------------------------------------------------------
-// useAdapters
+// useAdapters — the shared store selector (seeded/kept fresh at the app root;
+// see @/store/adapters + @/store/adapters-seed). Re-exported here so existing
+// importers (SettingsSidebar, ProvidersPane, ChatSessionInline) keep working.
 // ---------------------------------------------------------------------------
 
-/**
- * Fetches the full adapter registry once on mount and holds it in state.
- * Returns an empty array while loading or on error (logged via console.warn).
- */
-export function useAdapters(): AdapterInfo[] {
-  const extras = useChatExtras();
-  const port = extras?.port;
-  const [adapters, setAdapters] = useState<AdapterInfo[]>([]);
-
-  useEffect(() => {
-    if (port == null) return;
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await getAdapters(port!);
-        if (!cancelled) setAdapters(data);
-      } catch (err) {
-        console.warn('[composer/useAdapters] failed to load adapters', err);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [port]);
-
-  return adapters;
-}
+export { useAdapters } from '@/store/adapters';
 
 // ---------------------------------------------------------------------------
 // useProviderDefaults
