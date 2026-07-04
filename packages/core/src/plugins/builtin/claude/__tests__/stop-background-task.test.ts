@@ -13,7 +13,6 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
     const result = await session.stopBackgroundTask('task-1');
 
     expect(result).toEqual({ ok: false, error: 'stdin unavailable' });
-    expect(session.state.pendingStopTaskCallbacks.size).toBe(0);
   });
 
   it('returns stdin-unavailable when stdin is destroyed', async () => {
@@ -23,10 +22,9 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
     const result = await session.stopBackgroundTask('task-2');
 
     expect(result).toEqual({ ok: false, error: 'stdin unavailable' });
-    expect(session.state.pendingStopTaskCallbacks.size).toBe(0);
   });
 
-  it('resolves timeout after 5s when no callback arrives', async () => {
+  it('resolves timeout after 5s when no response arrives', async () => {
     vi.useFakeTimers();
     const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const fakeStdin = { destroyed: false, write: vi.fn() };
@@ -34,40 +32,43 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
 
     const pending = session.stopBackgroundTask('task-3');
 
-    // Callback registered, not yet resolved
-    await Promise.resolve();
-    expect(session.state.pendingStopTaskCallbacks.size).toBe(1);
-
     await vi.advanceTimersByTimeAsync(5001);
     const result = await pending;
 
     expect(result).toEqual({ ok: false, error: 'timeout' });
-    expect(session.state.pendingStopTaskCallbacks.size).toBe(0);
   });
 
-  it('resolves with ok:true when the pending callback is invoked', async () => {
+  // Live-verified against CLI 2.1.198 (2026-07-05): stop_task's success/failure signal is the
+  // OUTER envelope's subtype — the nested `response.response` is always `{}`, even for a real
+  // task that was genuinely killed. See session.ts's isTerminalControlResponse / stopBackgroundTask.
+  it('resolves with ok:true when control.resolve() delivers a success envelope', async () => {
     const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const fakeStdin = { destroyed: false, write: vi.fn() };
     session.state.child = { stdin: fakeStdin } as any;
 
     const pending = session.stopBackgroundTask('task-4');
-
-    // Let the Promise executor run and register the callback
     await Promise.resolve();
 
-    const entries = [...session.state.pendingStopTaskCallbacks.entries()];
-    const entry = entries[0];
-    expect(entry).toBeDefined();
-    const [requestId, callback] = entry!;
-    expect(requestId).toBeTruthy();
-
-    // Simulate the event router (Task 4) invoking the callback.
-    // The implementation clears the entry via clearTimeout but does not
-    // explicitly delete it from the map — only the timeout path does that.
-    callback({ ok: true });
+    const requestId = JSON.parse(fakeStdin.write.mock.calls[0]![0]).request_id;
+    expect(session.control.resolve(requestId, { request_id: requestId, subtype: 'success', response: {} })).toBe(true);
 
     const result = await pending;
     expect(result).toEqual({ ok: true });
+  });
+
+  it('resolves with ok:false + the CLI error message on an error envelope', async () => {
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
+    const fakeStdin = { destroyed: false, write: vi.fn() };
+    session.state.child = { stdin: fakeStdin } as any;
+
+    const pending = session.stopBackgroundTask('task-4b');
+    await Promise.resolve();
+
+    const requestId = JSON.parse(fakeStdin.write.mock.calls[0]![0]).request_id;
+    session.control.resolve(requestId, { request_id: requestId, subtype: 'error', error: 'no such task' });
+
+    const result = await pending;
+    expect(result).toEqual({ ok: false, error: 'no such task' });
   });
 
   it('writes a JSON stop_task control_request to stdin', async () => {
@@ -90,9 +91,8 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
     expect(parsed.request.subtype).toBe('stop_task');
     expect(parsed.request.task_id).toBe('task-5');
 
-    // Clean up: invoke the pending callback so the promise settles
-    const cbEntry = [...session.state.pendingStopTaskCallbacks.entries()][0];
-    cbEntry![1]({ ok: true });
+    // Clean up: resolve so the promise settles
+    session.control.resolve(parsed.request_id, { request_id: parsed.request_id, subtype: 'success', response: {} });
     await pending;
   });
 });
