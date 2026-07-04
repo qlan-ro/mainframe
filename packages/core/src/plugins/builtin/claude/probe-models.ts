@@ -11,6 +11,8 @@ interface CliModelInfo {
   value: string;
   displayName: string;
   description?: string;
+  /** The concrete model id an alias (e.g. "default") currently resolves to. Per-entry, not payload-level. */
+  resolvedModel?: string;
   supportedEffortLevels?: import('@qlan-ro/mainframe-types').EffortLevel[];
   supportsAdaptiveThinking?: boolean;
   supportsFastMode?: boolean;
@@ -47,10 +49,36 @@ export function mapModelInfo(info: CliModelInfo): AdapterModel {
   return model;
 }
 
-export function probeModels(executable: string): Promise<AdapterModel[] | null> {
+export interface ProbeResult {
+  models: AdapterModel[];
+  resolvedModel?: string;
+}
+
+/**
+ * Parse the (possibly double-wrapped) `initialize` control_response.
+ *
+ * Live-verified against CLI 2.1.198 (2026-07-04): `resolvedModel` is NOT a sibling of the
+ * top-level `models` array as originally assumed — each model entry carries its own
+ * `resolvedModel`, e.g. `{ value: 'default', resolvedModel: 'claude-opus-4-8[1m]', ... }`.
+ * We only need the "default" entry's, since that's the alias id whose real window
+ * `enrichWithContextWindow` must infer.
+ */
+export function extractProbePayload(event: Record<string, unknown>): ProbeResult | null {
+  if (event.type !== 'control_response') return null;
+  const response = event.response as Record<string, unknown> | undefined;
+  const payload = ((response?.response as Record<string, unknown>) ?? response) as Record<string, unknown> | undefined;
+  const rawModels = payload?.models;
+  if (!Array.isArray(rawModels)) return null;
+  const models = (rawModels as CliModelInfo[]).map(mapModelInfo);
+  const defaultEntry = (rawModels as CliModelInfo[]).find((m) => m.value === 'default');
+  const resolvedModel = typeof defaultEntry?.resolvedModel === 'string' ? defaultEntry.resolvedModel : undefined;
+  return { models, resolvedModel };
+}
+
+export function probeModels(executable: string): Promise<ProbeResult | null> {
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (result: AdapterModel[] | null) => {
+    const finish = (result: ProbeResult | null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -110,15 +138,10 @@ export function probeModels(executable: string): Promise<AdapterModel[] | null> 
         if (!line) continue;
         try {
           const event = JSON.parse(line);
-          if (event.type === 'control_response') {
-            // Claude CLI wraps the initialize payload under response.response when subtype === 'success'.
-            const payload = event.response?.response ?? event.response;
-            const rawModels = payload?.models;
-            if (Array.isArray(rawModels)) {
-              const models = (rawModels as CliModelInfo[]).map(mapModelInfo);
-              log.info({ count: models.length }, 'probe received models');
-              finish(models);
-            }
+          const parsed = extractProbePayload(event);
+          if (parsed) {
+            log.info({ count: parsed.models.length }, 'probe received models');
+            finish(parsed);
           }
         } catch {
           /* expected: CLI emits non-JSON lines (progress indicators, hook events, etc.) */
