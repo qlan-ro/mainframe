@@ -56,8 +56,12 @@ vi.mock('../../lib/daemon/ws-client', () => ({
     onEvent: vi.fn(() => () => {}),
     subscribe: vi.fn(),
     send: vi.fn(),
+    subscribeConnection: vi.fn(() => () => {}),
+    connected: true,
   },
 }));
+
+vi.mock('@/lib/api/adapters', () => ({ getAdapters: vi.fn(() => Promise.resolve([])) }));
 
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@assistant-ui/react');

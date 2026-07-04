@@ -13,6 +13,8 @@ import { useEffect } from 'react';
 import { useConnectionState } from './useConnectionState';
 import { daemonWs } from '../lib/daemon/ws-client';
 import { installSessionTodosSubscriber } from '@/store/session-todos';
+import { installAdapterModelsSubscriber } from '@/store/adapters';
+import { seedAdaptersFor } from '@/store/adapters-seed';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
@@ -49,6 +51,24 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   // REMOTE disconnects are handled by DaemonFooterStatus → DaemonUnreachableBody.
   const showReconnectOverlay = target.kind === 'local' && state !== 'connected';
 
+  // Daemon switch / first port: reset baseline + reseed.
+  useEffect(() => {
+    if (activePort <= 0) return;
+    seedAdaptersFor(activePort);
+  }, [activePort]);
+
+  // Transparent reconnect (same-port daemon restart): reseed off the WS reconnect signal —
+  // the exact analogue of desktop's loadData-on-subscribeConnection. The [activePort] effect
+  // ALONE misses this because useConnectionState's port is set once and never reset on
+  // disconnect, and disposeDaemonSession only runs on a user-initiated switch.
+  useEffect(
+    () =>
+      daemonWs.subscribeConnection(() => {
+        if (daemonWs.connected && activePort > 0) seedAdaptersFor(activePort);
+      }),
+    [activePort],
+  );
+
   return (
     <DaemonPortProvider port={activePort}>
       <AppShell key={target.id} port={activePort} />
@@ -75,6 +95,10 @@ export function App() {
   // Always-on session-todos subscriber (per-chat TodoWrite list → Context tab).
   // Mounted once so the daemon's resumeChat `todos.updated` seed is never missed.
   useEffect(() => installSessionTodosSubscriber(), []);
+
+  // Always-on adapter-catalog subscriber (adapter.models.updated). Mounted once at the
+  // app root so a warm-mount thread updates when the daemon's post-backfill probe fires.
+  useEffect(() => installAdapterModelsSubscriber(), []);
 
   return (
     <MfErrorBoundary>

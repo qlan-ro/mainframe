@@ -57,6 +57,7 @@ export class DaemonWsClient {
     };
 
     socket.onmessage = (ev) => {
+      if (socket !== this.ws) return; // stale socket after reconnect
       let parsed: unknown;
       try {
         parsed = JSON.parse(ev.data as string);
