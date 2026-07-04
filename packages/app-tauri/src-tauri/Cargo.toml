@@ -1,6 +1,6 @@
 [package]
 name = "app-tauri"
-version = "0.1.0"
+version = "2.0.0"
 description = "Mainframe Tauri shell — window lifecycle, sidecar supervision, and IPC bridge"
 authors = ["Mainframe Contributors"]
 edition = "2021"
