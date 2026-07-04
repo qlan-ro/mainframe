@@ -57,7 +57,6 @@ export type DaemonEvent =
   | { type: 'message.queued'; chatId: string; ref: QueuedMessageRef }
   | { type: 'message.queued.processed'; chatId: string; uuid: string }
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
-  | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
   | { type: 'message.queued.cleared'; chatId: string }
   | { type: 'message.queued.snapshot'; chatId: string; refs: QueuedMessageRef[] }
   | { type: 'chat.notification'; chatId: string; title: string; body: string; level: 'success' | 'error' }

@@ -40,14 +40,6 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
     host.dispatch({ type: 'chat.config.updated', chat: event.chat });
   }
 
-  // A queued-message cancel the daemon couldn't honor leaves the message
-  // queued — surface it (the reducer keeps state, so there's no other signal).
-  if (event.type === 'message.queued.cancel_failed' && event.chatId === chatId) {
-    mfToast.error("Couldn't cancel the queued message", {
-      description: 'It will still be sent when the current run finishes.',
-    });
-  }
-
   // Non-fatal: the CLI reported the workspace is untrusted. Surface an actionable
   // permission toast (NOT a run failure) whose Trust action fixes it server-side.
   if (event.type === 'chat.trustRequired' && event.chatId === chatId) {

@@ -66,3 +66,35 @@ describe('ChatManager — CLI-owned queue (origin/main parity)', () => {
     expect(events.some((e) => e.type === 'message.queued.cancelled' && (e as any).uuid === ref.uuid)).toBe(true);
   });
 });
+
+describe('ChatManager — silent reconcile on lost race', () => {
+  it('cancel lost race emits nothing and keeps the ref', async () => {
+    const events: DaemonEvent[] = [];
+    const mgr = await makeManager((e) => events.push(e));
+    seed(mgr, vi.fn().mockResolvedValue(false)); // CLI already consumed it
+    await mgr.sendMessage('c1', 'racey');
+    const ref = mgr.getQueuedForChat('c1')[0];
+    events.length = 0;
+
+    await mgr.cancelQueuedMessage('c1', ref.messageId);
+
+    expect(mgr.getQueuedForChat('c1')).toHaveLength(1);
+    expect(events).toHaveLength(0);
+  });
+
+  it('edit lost race silently discards the edit (no re-send, no events)', async () => {
+    const events: DaemonEvent[] = [];
+    const mgr = await makeManager((e) => events.push(e));
+    const active = seed(mgr, vi.fn().mockResolvedValue(false));
+    await mgr.sendMessage('c1', 'original');
+    const ref = mgr.getQueuedForChat('c1')[0];
+    active.session.sendMessage.mockClear();
+    events.length = 0;
+
+    await mgr.editQueuedMessage('c1', ref.messageId, 'edited');
+
+    expect(active.session.sendMessage).not.toHaveBeenCalled();
+    expect(events).toHaveLength(0);
+    expect(mgr.getQueuedForChat('c1')).toHaveLength(1);
+  });
+});

@@ -92,10 +92,6 @@ export function handleDaemonEvent(
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'queued.snapshot', refs: event.refs } };
 
-    case 'message.queued.cancel_failed':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'queued.cancel_failed', uuid: event.uuid } };
-
     case 'chat.contextUsage':
       if (event.chatId !== chatId) return { kind: 'noop' };
       return {

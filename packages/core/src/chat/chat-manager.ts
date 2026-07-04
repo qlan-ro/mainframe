@@ -384,8 +384,9 @@ export class ChatManager {
 
     const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
     if (!cancelled) {
-      logger.info({ chatId, uuid: ref.uuid }, 'edit failed: message already dequeued by CLI');
-      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
+      // Lost race: the original already went through. Silently discard the edit —
+      // the imminent isReplay ack relocates the original bubble and clears the banner.
+      logger.info({ chatId, uuid: ref.uuid }, 'edit lost race: original already dequeued by CLI');
       return;
     }
 
@@ -406,8 +407,9 @@ export class ChatManager {
 
     const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
     if (!cancelled) {
-      logger.info({ chatId, uuid: ref.uuid }, 'cancel failed: message already dequeued by CLI');
-      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
+      // Lost race: the CLI already consumed the message. Stay silent — the
+      // imminent ack moves the bubble and clears the banner.
+      logger.info({ chatId, uuid: ref.uuid }, 'cancel lost race: message already dequeued by CLI');
       return;
     }
 
