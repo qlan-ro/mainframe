@@ -304,6 +304,7 @@ function buildSessionSink(
           if (!refUuids.has(u)) {
             delete (m.metadata as Record<string, unknown>).queued;
             delete (m.metadata as Record<string, unknown>).uuid;
+            messages.moveToEnd(chatId, m.id);
             displayChanged = true;
             log.warn({ chatId, uuid: u }, 'onResult: orphan metadata.queued (no matching ref) — clearing');
             emitEvent({ type: 'message.queued.processed', chatId, uuid: u });
@@ -399,13 +400,16 @@ function buildSessionSink(
     },
 
     onQueuedProcessed(uuid: string) {
-      log.debug({ chatId, uuid }, 'onQueuedProcessed: removing queued flag from message');
+      log.debug({ chatId, uuid }, 'onQueuedProcessed: moving queued message to end + clearing flag');
       const msgs = messages.get(chatId);
       const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
       if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
-        log.debug({ chatId, uuid, messageId: msg.id }, 'onQueuedProcessed: queued flag removed, emitting display');
+        // Move on process: the ack fires when the CLI injects this message into
+        // context, so relocating it to the end matches the JSONL consumption
+        // point. Reloads no longer reshuffle order.
+        messages.moveToEnd(chatId, msg.id);
         emitDisplay();
       } else {
         log.warn({ chatId, uuid }, 'onQueuedProcessed: message not found in cache or already processed');
