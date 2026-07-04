@@ -104,6 +104,24 @@ The dev daemon (`tsx watch`) auto-restarts on file changes. Trigger the action i
 
 **Remove all debug logging before committing.**
 
+## Message Queue in stream-json Mode (verified in leaked source, 2026-06-12)
+
+The CLI **fully owns the message queue** in `--input-format stream-json` mode. Source: `src/utils/messageQueueManager.ts` + `src/cli/print.ts` + `src/query.ts` in the leaked tree.
+
+- **Two concurrent loops**: the stdin reader (`for await (message of structuredIO.structuredInput)`) runs independently of the turn runner (`run()`). User messages arriving mid-turn are read immediately, deduped by `uuid` (both against session JSONL history and a runtime Set), then `enqueue()`d into a module-level priority queue. `run()` has a mutex (`if (running) return`) — a busy turn leaves the message queued. This supersedes the v2.1.85 "single blocked loop" picture in cli-binary-internals.md.
+- **Priorities**: `'now' > 'next' > 'later'`, FIFO within a level. User messages default to `'next'`; system notifications to `'later'`. **The incoming stream-json user message accepts a `priority` field** (print.ts forwards `message.priority`). A `'now'` message triggers `abortController.abort('interrupt')` via a queue subscriber — interrupt-and-inject in a single stdin write.
+- **Mid-turn drain**: between tool-use iterations *within* a turn, query.ts snapshots queued commands at priority ≥ `'next'` (≥ `'later'` if the Sleep tool just ran) and injects them as **attachments into the current turn** — the model can see a queued message without waiting for the next turn. Slash commands are excluded from mid-turn drain.
+- **Between-turn batching**: `drainCommandQueue` in print.ts greedily merges consecutive `prompt`-mode commands into ONE follow-up turn (`joinPromptValues`), keeping the last uuid; with `--replay-user-messages` it emits `isReplay: true` user events for every merged uuid so per-message acks still arrive.
+- **Cancellation**: `control_request {subtype: "cancel_async_message", message_uuid}` removes a still-queued message; the `control_response` carries a boolean (false = already dequeued/consumed). Mainframe's daemon already uses this (`session.cancelQueuedMessage`).
+- **Mainframe has TWO queue implementations** (verified 2026-07-04): legacy `main` forwards straight to stdin and mirrors CLI state via `queuedRefs`; current `feat/app-tauri-wt` (2026-06-27 refactor) holds messages in the daemon (`ChatManager.chatQueues`) and flushes ONE per run-end — the CLI never sees them mid-run, so mid-turn drain and batching are bypassed. `cancel_async_message` IS implemented in the CLI (`print.ts:3011`, `dequeueAllMatching` by uuid) — the refactor's "never implemented" rationale was wrong; see memory `daemon-owns-queued-messages`.
+
+### Queued messages are NOT durable (verified 2026-06-12)
+
+- A queued-but-not-yet-drained message exists **only in the CLI's memory**. The CLI logs `{type:"queue-operation", operation:"enqueue", content}` lines into the session JSONL (`sessionStorage.insertQueueOperation`), but these are **diagnostics only**: `--resume` explicitly filters them out (`QueryEngine.ts:441` "getLastSessionLog filters those out") and nothing re-enqueues them. CLI exit ⇒ undelivered queued messages are permanently lost.
+- On the Mainframe side the queued bubble is a `createTransientMessage` (in-memory MessageCache, never in SQLite) and `queuedRefs` is an in-memory Map — both vanish on daemon restart / history reload from JSONL. Net effect: **reload drops queued messages from the UI and they will never be processed**. No reconciliation/re-send exists.
+- A queued message that WAS drained **mid-turn** is persisted as a normal user JSONL entry whose text is `<system-reminder>The user sent a new message while you were working:\n<original>\n\nIMPORTANT: ...</system-reminder>` (`wrapCommandText` + `wrapMessagesInSystemReminder`), with `uuid = source_uuid` and **no isMeta** in current source (older CLIs hardcoded `isMeta:true`, which Mainframe's `history.ts` isMeta filter would drop). So on reload it reappears as the wrapped text, not the clean original.
+- Queued messages drained **between turns** are batched (`joinPromptValues`) — JSONL gets ONE merged user entry, so N queued bubbles collapse into one on reload.
+
 ## Common Pitfalls
 
 - **Logging at debug/trace level**: Dev daemon default is INFO. Use `log.warn` for temporary debug output.
