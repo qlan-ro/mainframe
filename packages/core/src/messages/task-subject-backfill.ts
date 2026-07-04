@@ -36,6 +36,8 @@ function resultText(result: unknown): string {
  * order, records taskId → subject from TaskCreate results ("Task #N created
  * successfully: …"), and injects `subject` into later TaskUpdate inputs that
  * lack one. Pure and order-preserving; untouched messages pass by reference.
+ * TaskCreates dropped by history compaction/truncation degrade to the UI's
+ * `Task #N` id fallback for their updates — no worse than pre-backfill.
  */
 export function backfillTaskSubjects(messages: DisplayMessage[]): DisplayMessage[] {
   const scope: SubjectScope = { nextId: 1, subjects: new Map() };
