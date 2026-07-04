@@ -3,7 +3,8 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { buildToolResultBlocks, loadHistory } from '../plugins/builtin/claude/history.js';
+import { loadHistory } from '../plugins/builtin/claude/history.js';
+import { buildToolResultBlocks } from '../plugins/builtin/claude/history-tool-result.js';
 
 // Real CLI capture excerpt (docs/adapters/claude/QUEUE.md probe) covering a
 // mid-turn-drained queued message: initial user turn, the queued_command

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { convertHistoryEntry } from '../history.js';
+import { convertHistoryEntry } from '../history-converters.js';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/queued-command-attachment.jsonl');
 

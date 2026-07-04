@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { extractToolResultContent } from '../plugins/builtin/claude/history.js';
+import { extractToolResultContent } from '../plugins/builtin/claude/history-tool-result.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('jsonl-tool-result');

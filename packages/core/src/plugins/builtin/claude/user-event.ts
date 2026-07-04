@@ -2,7 +2,7 @@ import path from 'node:path';
 import { resolveSkillPath, resolveExistingSkillPath, readSkillContent } from './skill-path.js';
 import type { MessageContent, SessionSink } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
-import { buildToolResultBlocks, extractToolResultContent } from './history.js';
+import { buildToolResultBlocks, extractToolResultContent } from './history-tool-result.js';
 import { shouldScanToolResultForPr, extractPrFromToolResult } from './pr-detection.js';
 import { createChildLogger } from '../../../logger.js';
 
