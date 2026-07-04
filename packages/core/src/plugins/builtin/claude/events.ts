@@ -127,9 +127,18 @@ export function handleControlResponseEvent(
     sink.onContextUsage(usage);
   }
 
-  // Route stop_task responses to pending callbacks
+  // Route cancel_async_message responses to pending callbacks
   const requestId = (response.request_id as string) || undefined;
   const innerResponse = response.response as Record<string, unknown> | undefined;
+  if (requestId && innerResponse && typeof innerResponse.cancelled === 'boolean') {
+    const callback = session.state.pendingCancelCallbacks.get(requestId);
+    if (callback) {
+      session.state.pendingCancelCallbacks.delete(requestId);
+      callback(innerResponse.cancelled);
+    }
+  }
+
+  // Route stop_task responses to pending callbacks (mirrors cancel above)
   if (requestId && innerResponse && typeof innerResponse.subtype === 'string') {
     const stopCb = session.state.pendingStopTaskCallbacks.get(requestId);
     if (stopCb) {

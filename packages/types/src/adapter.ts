@@ -179,6 +179,7 @@ export interface AdapterSession {
   setPermissionMode(mode: ExecutionMode): Promise<void>;
   setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
+  cancelQueuedMessage(uuid: string): Promise<boolean>;
   getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles(): Promise<string[]>;

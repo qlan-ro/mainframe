@@ -253,6 +253,10 @@ export class CodexSession implements AdapterSession {
     this.status = 'running';
   }
 
+  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
+    return false;
+  }
+
   async kill(): Promise<void> {
     const client = this.client;
     if (!client) return;
