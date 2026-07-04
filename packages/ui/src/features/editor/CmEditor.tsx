@@ -17,7 +17,8 @@ import { EditorView, keymap } from '@codemirror/view';
 import type { LangPackId } from '@/lib/editor/file-types';
 import { applyValueUpdate, externalValueUpdate } from '@/lib/editor/apply-value-update';
 import { useEditorStore } from '@/store/editor';
-import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
+import { useTheme } from '@/store/theme';
+import { buildBaseExtensions, createEditorCompartments, makeWarmTheme, resolveLanguage } from './cm-setup';
 import { createNavigationKeymap } from './lsp/navigation';
 
 /** Scroll a line/character position into view and place the cursor there. */
@@ -83,6 +84,10 @@ export function CmEditor({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
+  // Drives the theme compartment's CM6 `dark` flag; re-renders on a mode flip so
+  // the sync effect below reconfigures the live view.
+  const mode = useTheme((s) => s.mode);
+
   // Per-instance compartments — created once on first render, never replaced.
   // Must be per-instance: sharing Compartment objects across EditorViews causes
   // reconfigure() to target the wrong state tree.
@@ -105,8 +110,10 @@ export function CmEditor({
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const { lang, readOnly: roComp, extra } = compartmentsRef.current;
+    const { lang, readOnly: roComp, theme: themeComp, extra } = compartmentsRef.current;
     const savedState = useEditorStore.getState().getViewState(path);
+    // Initial dark flag from the store (kept in sync by the effect below).
+    const initialDark = useTheme.getState().mode === 'dark';
 
     const saveKeymap = keymap.of([
       {
@@ -126,6 +133,7 @@ export function CmEditor({
       doc: value,
       extensions: [
         ...buildBaseExtensions(),
+        themeComp.of(makeWarmTheme(initialDark)),
         lang.of(resolveLanguage(language)),
         roComp.of(EditorState.readOnly.of(readOnly)),
         EditorView.updateListener.of((update) => {
@@ -232,6 +240,18 @@ export function CmEditor({
     const { extra } = compartmentsRef.current;
     view.dispatch({ effects: extra.reconfigure(extraExtensions ?? []) });
   }, [extraExtensions]);
+
+  // ── Sync light↔dark mode changes ─────────────────────────────────────────
+  // Rebuild the base theme with the correct CM6 `dark` flag when the app mode
+  // flips while this editor is mounted. Colors already track the CSS vars; this
+  // fixes only the internal dark-flag defaults (unfocused selection, cursor).
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const { theme: themeComp } = compartmentsRef.current;
+    view.dispatch({ effects: themeComp.reconfigure(makeWarmTheme(mode === 'dark')) });
+  }, [mode]);
 
   return <div ref={hostRef} data-testid="editor-code" className="mf-editor-selectable h-full" />;
 }

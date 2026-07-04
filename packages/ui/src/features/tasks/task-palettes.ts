@@ -3,15 +3,13 @@
  *
  * Returns Tailwind utility class strings for status, type, and priority.
  *
- * typeTint/priorityTint/priorityDotClass are bespoke hex tints ported
- * verbatim from the design's TD_TYPE/TD_PRI palettes (12-todos.jsx:12-27,
- * finding 9.3) — arbitrary-value Tailwind classes (`bg-[#hex]/NN`), the
- * established pattern for one-off design hex in this codebase (see
- * WfLibrary.tsx `bg-[#7a4d9e]/10`). `feature` and chip-backed entries
- * (documentation/wont_fix/invalid/low) map to real theme tokens
- * (`bg-primary`, `bg-mf-chip`) rather than inventing new CSS vars.
- * statusTint/statusDotColor have no design ground truth (not defined in
- * 12-todos.jsx) and keep generic Tailwind swatches.
+ * typeTint/priorityTint/priorityDotClass map to semantic theme tokens
+ * (`--mf-task-type-*` / `--mf-priority-*`, defined once in globals.css from
+ * the design's TD_TYPE/TD_PRI palettes, 12-todos.jsx:12-27). `feature` and
+ * chip-backed entries (documentation/wont_fix/invalid/low) reuse existing
+ * tokens (`bg-primary`, `bg-mf-chip`). statusTint/statusDotColor have no
+ * design ground truth (not defined in 12-todos.jsx) and keep generic Tailwind
+ * swatches.
  */
 import type { TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
 
@@ -39,19 +37,19 @@ export function statusTint(status: TodoStatus): string {
 export function typeTint(type: TodoType): string {
   switch (type) {
     case 'bug':
-      return 'bg-[#c4302b]/10 text-[#c4302b]';
+      return 'bg-mf-task-type-bug/10 text-mf-task-type-bug';
     case 'feature':
       return 'bg-primary/10 text-primary';
     case 'enhancement':
-      return 'bg-[#7b3ff2]/10 text-[#7b3ff2]';
+      return 'bg-mf-task-type-enhancement/10 text-mf-task-type-enhancement';
     case 'documentation':
       return 'bg-mf-chip text-muted-foreground';
     case 'question':
-      return 'bg-[#b9770e]/[0.12] text-[#b9770e]';
+      return 'bg-mf-task-type-question/[0.12] text-mf-task-type-question';
     case 'wont_fix':
       return 'bg-mf-chip text-mf-text-3';
     case 'duplicate':
-      return 'bg-[#c2540a]/10 text-[#c2540a]';
+      return 'bg-mf-task-type-duplicate/10 text-mf-task-type-duplicate';
     case 'invalid':
       return 'bg-mf-chip text-mf-text-3';
     default:
@@ -66,11 +64,11 @@ export function typeTint(type: TodoType): string {
 export function priorityTint(priority: TodoPriority): string {
   switch (priority) {
     case 'critical':
-      return 'bg-[#c4302b]/10 text-[#c4302b]';
+      return 'bg-mf-priority-critical/10 text-mf-priority-critical';
     case 'high':
-      return 'bg-[#c2540a]/10 text-[#c2540a]';
+      return 'bg-mf-priority-high/10 text-mf-priority-high';
     case 'medium':
-      return 'bg-[#b9770e]/[0.12] text-[#a76d0c]';
+      return 'bg-mf-priority-medium/[0.12] text-mf-priority-medium';
     case 'low':
       return 'bg-mf-chip text-mf-text-3';
     default:
@@ -80,20 +78,20 @@ export function priorityTint(priority: TodoPriority): string {
 
 /**
  * Leading dot color class for a priority pill.
- * Matches the prototype TdPill dot palette:
+ * Matches the prototype TdPill dot palette (--mf-priority-*-dot tokens):
  * critical=#c4302b, high=#e8730f, medium=#e0a019, low=#c4c2bd
  */
 export function priorityDotClass(priority: TodoPriority): string {
   switch (priority) {
     case 'critical':
-      return 'bg-[#c4302b]';
+      return 'bg-mf-priority-critical-dot';
     case 'high':
-      return 'bg-[#e8730f]';
+      return 'bg-mf-priority-high-dot';
     case 'medium':
-      return 'bg-[#e0a019]';
+      return 'bg-mf-priority-medium-dot';
     case 'low':
     default:
-      return 'bg-[#c4c2bd]';
+      return 'bg-mf-priority-low-dot';
   }
 }
 

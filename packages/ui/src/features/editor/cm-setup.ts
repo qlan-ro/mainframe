@@ -3,9 +3,12 @@
  *
  * Returns:
  *   - Static extensions: line numbers, active-line highlight, history, keymaps,
- *     warm-chrome theme, syntax highlight style.
- *   - Two reconfigurable Compartments so CmEditor can hot-swap language packs
- *     and toggle read-only without destroying the view.
+ *     syntax highlight style. The warm-chrome base theme is NOT static — it is
+ *     injected via the `theme` Compartment so its CM6 `dark` flag can be
+ *     reconfigured live on a light↔dark mode change (colors already track the
+ *     CSS vars; only the internal `dark` flag needed a hot-swap seam).
+ *   - Reconfigurable Compartments (language, read-only, theme, extra) so callers
+ *     can hot-swap without destroying the view.
  *   - resolveLanguage() — maps a LangPackId to the matching @codemirror/lang-*
  *     Extension; shared by CmEditor and CmDiffEditor.
  */
@@ -129,22 +132,13 @@ const CM6_THEME_SPEC = {
  * Build the warm-chrome CM6 base theme with a mode-aware `dark` flag.
  *
  * Pass `isDark = true` for dark color schemes so CM6's internal defaults
- * (unfocused selection tint, cursor visibility) match the scheme. Callers
- * that don't track the theme can use the exported `warmTheme` singleton which
- * reads `document.documentElement.classList.contains('dark')` at module load.
+ * (unfocused selection tint, cursor visibility) match the scheme. Callers feed
+ * this into the per-instance `theme` Compartment and reconfigure it when the
+ * app's light↔dark mode changes.
  */
 export function makeWarmTheme(isDark: boolean): ReturnType<typeof EditorView.theme> {
   return EditorView.theme(CM6_THEME_SPEC, { dark: isDark });
 }
-
-/**
- * Default warm-chrome theme instance. Reads the document's `dark` class at
- * module evaluation time so the CM6 dark flag matches the app's initial scheme.
- * This covers the common case; hot-swap on scheme change uses a Compartment.
- */
-export const warmTheme = makeWarmTheme(
-  typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
-);
 
 // ── Per-instance compartments ────────────────────────────────────────────────
 
@@ -162,6 +156,12 @@ export function createEditorCompartments() {
     lang: new Compartment(),
     /** Toggle read-only at runtime via `.reconfigure`. */
     readOnly: new Compartment(),
+    /**
+     * Holds the warm-chrome base theme. Reconfigured with a fresh
+     * `makeWarmTheme(isDark)` when the app's light↔dark mode flips, so the CM6
+     * `dark` flag stays correct on a live scheme change.
+     */
+    theme: new Compartment(),
     /** Reconfigurable slot for caller-supplied extra extensions (e.g. LSP). */
     extra: new Compartment(),
   };
@@ -172,9 +172,10 @@ export function createEditorCompartments() {
 /**
  * Build the base extension set for a CmEditor instance.
  *
- * Language and read-only are **not** included here — they are injected as
- * compartment-wrapped extensions by CmEditor directly so it can reconfigure
- * them on prop changes without rebuilding the whole state.
+ * Language, read-only, and the base **theme** are **not** included here — they
+ * are injected as compartment-wrapped extensions by the caller so it can
+ * reconfigure them (language pack, read-only, dark flag) without rebuilding the
+ * whole state.
  */
 export function buildBaseExtensions(): Extension[] {
   return [
@@ -191,7 +192,6 @@ export function buildBaseExtensions(): Extension[] {
     history(),
     EditorState.allowMultipleSelections.of(true),
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    warmTheme,
     syntaxHighlighting(warmHighlight, { fallback: true }),
   ];
 }

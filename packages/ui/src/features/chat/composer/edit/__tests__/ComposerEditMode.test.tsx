@@ -42,3 +42,12 @@ describe('ComposerEditMode — muted toolbar desaturates as well as dims', () =>
     expect(wrapper.className).toContain('pointer-events-none');
   });
 });
+
+describe('ComposerEditMode — amber edit-ring glow', () => {
+  it('card uses the --mf-shadow-edit-ring token, not a plain shadow-sm', () => {
+    render(<ComposerEditMode edit={EDIT} onDone={vi.fn()} />);
+    const card = screen.getByTestId('chat-composer-edit');
+    expect(card.className).toContain('shadow-[var(--mf-shadow-edit-ring)]');
+    expect(card.className).not.toContain('shadow-sm');
+  });
+});

@@ -1,15 +1,16 @@
 /**
- * cm-setup.ts — structural tests for makeWarmTheme and warmTheme exports.
+ * cm-setup.ts — structural tests for makeWarmTheme and the editor compartments.
  *
- * We cannot introspect CM6's internal `dark` flag from the outside, so these
- * tests verify the public contract: makeWarmTheme is exported, it accepts a
- * boolean, and it returns an Extension-shaped value (non-null object / array).
- * The behavior change (dark flag now matches the app scheme instead of always
- * being `true`) is covered by the code change and by the fact that CM6's
- * unfocused-selection defaults now differ between light and dark schemes.
+ * We cannot introspect CM6's internal `dark` flag from a bare Extension, so
+ * these tests verify the public contract: makeWarmTheme is exported, accepts a
+ * boolean, and returns an Extension-shaped value; and createEditorCompartments
+ * exposes the reconfigurable slots (including the new `theme` slot the editor
+ * uses to hot-swap the dark flag on a mode change). The live reconfigure
+ * behavior is covered by CmEditor.test.tsx via the EditorView.darkTheme facet.
  */
 import { describe, expect, it } from 'vitest';
-import { makeWarmTheme, warmTheme } from '../cm-setup';
+import { Compartment } from '@codemirror/state';
+import { makeWarmTheme, createEditorCompartments } from '../cm-setup';
 
 describe('makeWarmTheme', () => {
   it('is exported as a function', () => {
@@ -34,15 +35,18 @@ describe('makeWarmTheme', () => {
   });
 });
 
-describe('warmTheme (default singleton)', () => {
-  it('is exported as a non-null extension', () => {
-    expect(warmTheme).toBeTruthy();
+describe('createEditorCompartments', () => {
+  it('exposes lang, readOnly, theme, and extra Compartments', () => {
+    const c = createEditorCompartments();
+    expect(c.lang).toBeInstanceOf(Compartment);
+    expect(c.readOnly).toBeInstanceOf(Compartment);
+    expect(c.theme).toBeInstanceOf(Compartment);
+    expect(c.extra).toBeInstanceOf(Compartment);
   });
 
-  it('is the result of makeWarmTheme (same type)', () => {
-    // warmTheme should be the same shape as makeWarmTheme produces
-    const fromFactory = makeWarmTheme(false);
-    // Both should be the same type (CM6 StyleModule-wrapped Extension)
-    expect(typeof warmTheme).toBe(typeof fromFactory);
+  it('returns a fresh set each call (per-instance, never shared)', () => {
+    const a = createEditorCompartments();
+    const b = createEditorCompartments();
+    expect(a.theme).not.toBe(b.theme);
   });
 });

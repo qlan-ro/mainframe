@@ -184,15 +184,15 @@ describe('TaskListRow — priority pill leading dot', () => {
     expect(screen.getByTestId('tasks-priority-dot-1')).toBeTruthy();
   });
 
-  it('critical priority dot uses the design hex #c4302b', () => {
+  it('critical priority dot uses the priority-critical-dot token', () => {
     renderRow({ todo: OPEN_TODO }); // OPEN_TODO has priority=critical
     const dot = screen.getByTestId('tasks-priority-dot-1');
-    expect(dot.className).toContain('bg-[#c4302b]');
+    expect(dot.className).toContain('bg-mf-priority-critical-dot');
   });
 
-  it('medium priority dot uses the design hex #e0a019', () => {
+  it('medium priority dot uses the priority-medium-dot token', () => {
     renderRow({ todo: DONE_TODO }); // DONE_TODO has priority=medium
     const dot = screen.getByTestId('tasks-priority-dot-3');
-    expect(dot.className).toContain('bg-[#e0a019]');
+    expect(dot.className).toContain('bg-mf-priority-medium-dot');
   });
 });

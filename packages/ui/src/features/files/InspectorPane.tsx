@@ -43,7 +43,7 @@ export function InspectorPane({ port }: { port: number }) {
   return (
     <aside
       data-testid="inspector-pane"
-      className={cn('flex w-[280px] flex-shrink-0 flex-col overflow-hidden font-sans text-foreground', geo.sidebar)}
+      className={cn('flex w-[280px] flex-shrink-0 flex-col overflow-hidden font-sans text-foreground', geo.inspector)}
     >
       {/* Files / Changes tabs */}
       <div className="flex-shrink-0 pt-[10px] px-[12px] pb-[8px]">
