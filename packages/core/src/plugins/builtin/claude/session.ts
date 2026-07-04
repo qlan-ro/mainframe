@@ -127,8 +127,7 @@ export class ClaudeSession implements AdapterSession {
   /** Mutable internal state — readable by claude-events.ts and tests. */
   readonly state: ClaudeSessionState;
 
-  /** Correlation channel for control_request/control_response round-trips. PUBLIC — events.ts
-   *  routes responses into it. Assigned in the constructor body, after `this.id` is set. */
+  /** control_request/control_response channel; PUBLIC (events.ts routes into it); set in the constructor body. */
   readonly control!: ControlRequestChannel;
 
   /** Last non-plan permission mode seen at spawn time. Used by setPlanMode(off)
@@ -377,7 +376,6 @@ export class ClaudeSession implements AdapterSession {
     this.sendControlRequest(child.stdin, { subtype: 'set_permission_mode', mode: cliMode });
   }
 
-  /** Awaits a terminal control_response so a rejected/timed-out change is never persisted as if it had succeeded. */
   private awaitTerminal(stdin: ChildProcess['stdin'], request: Record<string, unknown>) {
     const label = String(request.subtype);
     return this.control.sendAwaiting(stdin, request, { label, isTerminal: isTerminalControlResponse });
