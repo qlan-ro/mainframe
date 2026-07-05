@@ -1,0 +1,8 @@
+{"dir":"in","method":"sendMessage","args":["Track two todos: write the README, then run the test suite"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-todo-write-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll track those two tasks."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onTodoUpdate","args":[[{"content":"Write the README","status":"completed","activeForm":"Writing the README"},{"content":"Run the test suite","status":"in_progress","activeForm":"Running the test suite"}]],"delayMs":60}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_todo_1","name":"TodoWrite","input":{"todos":[{"content":"Write the README","status":"completed","activeForm":"Writing the README"},{"content":"Run the test suite","status":"in_progress","activeForm":"Running the test suite"}]},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":61}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_todo_1","content":"Todos have been modified successfully. Continue tracking your progress with the TodoWrite tool.","isError":false}]],"delayMs":100}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"README is done; the test suite is running now."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":140}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01,"usage":{"input_tokens":20,"output_tokens":16},"subtype":"success","is_error":false}],"delayMs":180}
