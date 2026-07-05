@@ -177,6 +177,21 @@ export function CmDiffEditor({
     });
 
     mergeViewRef.current = mv;
+    // @codemirror/merge forces each pane's own `.cm-scroller` to
+    // `height: auto !important; overflow-y: visible !important` (so the two
+    // panes stay vertically aligned) and instead expects the CONSUMER to size
+    // `.cm-mergeView` — the addon's own top-level wrapper (`mv.dom`) — with a
+    // real height, so ITS `overflow-y: auto` (already set by the addon's base
+    // theme) becomes the actual scroll boundary. This can't be done via an
+    // EditorView.theme() extension: theme selectors without `&` are scoped as
+    // *descendants* of that pane's own `.cm-editor` root, and `.cm-mergeView`
+    // is an ANCESTOR of both panes, not a descendant of either. Without this,
+    // every ancestor up to our own outer host reports
+    // `scrollHeight === clientHeight` (nothing to scroll), so CM6's own
+    // scrollRectIntoView walk (used by nextChange()/prevChange()) skips
+    // `.cm-mergeView` entirely and lands on the outer host's much less
+    // precise fallback — the far-apart-chunk scroll bug.
+    mv.dom.style.height = '100%';
     // Register the live MergeView so nextChange()/prevChange() can navigate.
     // The mv object itself is long-lived; diff-nav reads mv.chunks at call time,
     // so registering once at mount is sufficient.
@@ -242,5 +257,9 @@ export function CmDiffEditor({
     mv.b.dispatch({ effects: bTheme.reconfigure(themeExt) });
   }, [mode]);
 
-  return <div ref={hostRef} data-testid="editor-diff" className="mf-editor-selectable h-full overflow-auto" />;
+  // No `overflow-auto` here: `.cm-mergeView` (sized above) is the intended
+  // scroll container. A second scrollable ancestor around it is exactly the
+  // nested-scroll-container bug this component fixed — keep `overflow-hidden`
+  // only as a clip guard, not a competing scroll boundary.
+  return <div ref={hostRef} data-testid="editor-diff" className="mf-editor-selectable h-full overflow-hidden" />;
 }

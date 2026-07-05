@@ -78,6 +78,14 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   // Read from store state (not subscribed via selector — we want the live value).
   const isDirty = useEditorStore((s) => s.getBuffer(path)?.dirty ?? false);
 
+  // Live buffer value, kept current by every CM6 keystroke via handleChange's
+  // setBuffer call. MarkdownEditorTab's Preview mode renders from whatever
+  // `value` it's given, so this — not the load-only `loadState.value` below —
+  // must be its source of truth, or Source edits never show up after
+  // switching back to Preview. Falls back to the just-loaded value before the
+  // buffer exists (e.g. the very first render after load resolves).
+  const liveBufferValue = useEditorStore((s) => s.getBuffer(path)?.value);
+
   // Callback for silent reload (disk change with clean buffer): updates loadState
   // value so React reflects the new content even without an EditorView.
   const handleSilentReload = useCallback(
@@ -226,7 +234,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
         renderCode={() =>
           language === 'markdown' ? (
             <MarkdownEditorTab
-              value={loadState.value}
+              value={liveBufferValue ?? loadState.value}
               path={path}
               onChange={handleChange}
               onSave={handleSave}

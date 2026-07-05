@@ -78,6 +78,41 @@ describe('CmDiffEditor', () => {
     expect(lineNumberGutters.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('gives .cm-mergeView its own bounded height instead of relying on the outer host to scroll', () => {
+    // Regression guard: @codemirror/merge's own CSS forces `.cm-scroller` to
+    // `height: auto !important; overflow-y: visible !important` (so the two
+    // panes stay vertically aligned) and expects the CONSUMER to size
+    // `.cm-mergeView` itself with a real height so ITS `overflow-y: auto`
+    // (already set by the addon) becomes the actual scroll boundary — see the
+    // addon's own doc comment: "Style them (.cm-mergeView) with a height and
+    // overflow: auto to make them scrollable." Without this, every ancestor
+    // up to our own outer host reports scrollHeight === clientHeight, so
+    // CM6's scrollRectIntoView walk skips `.cm-mergeView` entirely and lands
+    // on the outer host's much less precise fallback — the far-apart-chunk
+    // scroll bug from editor-diff.spec.ts.
+    render(
+      <CmDiffEditor
+        original={'a\n'.repeat(50)}
+        modified={'b\n'.repeat(50)}
+        language="plaintext"
+        path="/test/scroll-height.txt"
+      />,
+    );
+    const root = screen.getByTestId('editor-diff');
+    const mergeViewEl = root.querySelector('.cm-mergeView') as HTMLElement | null;
+    expect(mergeViewEl).toBeTruthy();
+    expect(mergeViewEl?.style.height).toBe('100%');
+  });
+
+  it('does not layer a redundant overflow-auto container around the MergeView host', () => {
+    // The outer host must not compete with `.cm-mergeView` as a second
+    // scrollable ancestor — see the test above for why that breaks CM6's own
+    // chunk-navigation scroll math.
+    render(<CmDiffEditor original="a\n" modified="b\n" language="plaintext" path="/test/no-double-scroll.txt" />);
+    const root = screen.getByTestId('editor-diff');
+    expect(root.classList.contains('overflow-auto')).toBe(false);
+  });
+
   it('modified pane is read-only when readOnly=true — b pane EditorState.readOnly is set', () => {
     // We can't easily query aria-readonly inside jsdom for MergeView
     // (CM6 sets it on .cm-content, but MergeView's internal mount timing differs from

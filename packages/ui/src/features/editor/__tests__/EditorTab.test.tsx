@@ -46,14 +46,21 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => activeIdentityState,
 }));
 vi.mock('@/lib/editor/file-types', () => ({
-  inferLanguage: () => 'javascript',
+  // Markdown paths route through MarkdownEditorTab; everything else stays on
+  // the plain CmEditorWithComments path exercised by the rest of this file.
+  inferLanguage: (path: string) => (path.endsWith('.md') ? 'markdown' : 'javascript'),
 }));
 // Controls whether getBuffer returns a dirty buffer (for D4 dirty-buffer tests).
 let mockBufferDirty = false;
+// Overrides getBuffer's return value outright (for the markdown live-value test,
+// where the buffer's live content must differ from both the loaded value and
+// the fixed 'dirty content' shape above).
+let mockBufferOverride: { value: string; dirty: boolean } | null = null;
 
 const editorState = {
   setBuffer: vi.fn(),
-  getBuffer: (_path: string) => (mockBufferDirty ? { value: 'dirty content', dirty: true } : null),
+  getBuffer: (_path: string) =>
+    mockBufferOverride ?? (mockBufferDirty ? { value: 'dirty content', dirty: true } : null),
   clearBuffer: vi.fn(),
 };
 
@@ -100,8 +107,14 @@ vi.mock('../CmEditor', () => ({
   CmEditor: () => <div data-testid="cm-editor-inner-mock" />,
 }));
 
+type MarkdownEditorTabProps = ComponentProps<typeof import('../MarkdownEditorTab').MarkdownEditorTab>;
+const capturedMarkdownProps: MarkdownEditorTabProps[] = [];
+
 vi.mock('../MarkdownEditorTab', () => ({
-  MarkdownEditorTab: () => <div data-testid="markdown-editor-mock" />,
+  MarkdownEditorTab: (props: MarkdownEditorTabProps) => {
+    capturedMarkdownProps.push(props);
+    return <div data-testid="markdown-editor-mock" />;
+  },
 }));
 
 // ── WS client mock (D4) ──────────────────────────────────────────────────────
@@ -212,6 +225,8 @@ import { FakeHostBridge } from '@/lib/host/fake-adapter';
 beforeEach(async () => {
   setHostForTesting(new FakeHostBridge({ fs: { readFile: 'content' } }));
   capturedCmEditorProps.length = 0;
+  capturedMarkdownProps.length = 0;
+  mockBufferOverride = null;
   vi.mocked(saveProjectFile).mockClear();
   // Reset identity to no-project default so existing tests are unaffected.
   activeIdentityState.projectId = undefined;
@@ -417,6 +432,35 @@ describe('EditorTab — ViewerShell chrome (C5)', () => {
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     // onCursorChange must be a function so the status bar can update on cursor moves.
     expect(typeof lastProps?.onCursorChange).toBe('function');
+  });
+});
+
+describe('EditorTab — markdown Preview reflects live Source edits (bug fix)', () => {
+  it('passes the live editor-store buffer value to MarkdownEditorTab, not the stale loaded value', async () => {
+    const { rerender } = render(<EditorTab tabId="tab-md-live" path="/project/notes.md" />);
+    await screen.findByTestId('markdown-editor-mock');
+    // Sanity: the freshly loaded value made it through on first render.
+    expect(capturedMarkdownProps[capturedMarkdownProps.length - 1]?.value).toBe('content');
+
+    // Simulate handleChange() writing a keystroke to the live editor-store
+    // buffer (setBuffer) — exactly what every CM6 keystroke does today —
+    // WITHOUT EditorTab's own loadState ever being told about it.
+    mockBufferOverride = { value: 'edited content', dirty: true };
+    rerender(<EditorTab tabId="tab-md-live" path="/project/notes.md" />);
+
+    const lastProps = capturedMarkdownProps[capturedMarkdownProps.length - 1];
+    expect(lastProps?.value).toBe('edited content');
+  });
+
+  it('falls back to the freshly loaded value when no live buffer exists yet', async () => {
+    // Default beforeEach state: mockBufferOverride is null, mockBufferDirty is
+    // false, so getBuffer returns undefined/null and EditorTab must fall back
+    // to the value it just loaded.
+    render(<EditorTab tabId="tab-md-fallback" path="/project/readme.md" />);
+    await screen.findByTestId('markdown-editor-mock');
+
+    const lastProps = capturedMarkdownProps[capturedMarkdownProps.length - 1];
+    expect(lastProps?.value).toBe('content');
   });
 });
 
