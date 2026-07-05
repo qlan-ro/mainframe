@@ -8,7 +8,7 @@
  * the draft (picker pick, pill-active "+", or auto-config) and disappears the
  * instant it's discarded or committed — no imperative getState() polling.
  */
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { draftRowVisible, type DraftRowModel } from '../new-thread/draft-row';
@@ -43,14 +43,32 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
   // clears it in the same tick, so `hasDraft` is already false by the time this
   // effect would otherwise fire. `mainThreadId` is falsy at boot (before any
   // thread is selected) — treat that as "not navigated" rather than "other".
+  //
+  // `mainThreadId !== newThreadId` alone is NOT sufficient: SessionsNewButton's
+  // pick() (pill-active New) synchronously arms the draft — setDraftConfig(nid,
+  // ...) — then calls `runtime.threads.switchToNewThread()`, which awaits an aui
+  // hook task before mainThreadId catches up to newThreadId. That produces a
+  // real render where hasDraft just became true but mainThreadId still points at
+  // whatever session was active BEFORE New was clicked — mismatched, but because
+  // the handoff hasn't landed yet, not because the user navigated away. Gate on
+  // having genuinely been selected first (mainThreadId === newThreadId on some
+  // earlier render) so only a real navigate-away — selected, then switched to
+  // something else — fires the discard.
   const hasDraft = draftCfg != null;
+  const wasSelectedRef = useRef(false);
   useEffect(() => {
-    if (!hasDraft) return;
-    if (newThreadId == null) return;
-    if (!mainThreadId) return;
-    if (mainThreadId === newThreadId) return;
+    if (!hasDraft || newThreadId == null) {
+      wasSelectedRef.current = false;
+      return;
+    }
+    if (mainThreadId === newThreadId) {
+      wasSelectedRef.current = true;
+      return;
+    }
+    if (!wasSelectedRef.current) return; // pending create→switch handoff, not a navigate-away
     resetNewThreadDraft(newThreadId);
     useDraftReturnTarget.getState().clear();
+    wasSelectedRef.current = false;
   }, [mainThreadId, newThreadId, hasDraft]);
 
   const onSelect = useCallback(() => {

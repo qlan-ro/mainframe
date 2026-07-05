@@ -1,12 +1,21 @@
 /**
  * Fetches and manages the tag registry for a given daemon port.
  *
+ * Backed by a shared, module-level zustand store keyed by port — every
+ * consumer calling `useTagRegistry(port)` for the same port reads and writes
+ * the SAME cache. This matters because SessionSidebar (row tag dots) and
+ * TagPopoverHost (the recolor panel) each mount their own instance of this
+ * hook; before this store existed, they held independent `useState` caches
+ * with no cross-invalidation, so recoloring a tag via the popover never
+ * repainted the row dot (bug: tag recolor doesn't repaint row dots live).
+ *
  * create/update/remove each refresh the registry afterwards. `colorOf`
  * returns a best-effort color for a tag name with a safe 'blue' default so
  * callers never need to guard for undefined. Backed by the Phase 1 tags API
  * client — never re-create that client here.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { create } from 'zustand';
 import type { Tag, TagColor } from '@qlan-ro/mainframe-types';
 import { listTags, createTag, updateTag, deleteTag } from '../../../lib/api/tags';
 
@@ -22,21 +31,44 @@ export interface TagRegistry {
 
 const DEFAULT_COLOR: TagColor = 'blue';
 
-export function useTagRegistry(port: number): TagRegistry {
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
+// Stable identity for "no tags fetched yet for this port" — a fresh `[]`
+// literal in the selector below would change reference on every call and
+// loop useSyncExternalStore (zustand) forever re-rendering.
+const EMPTY_TAGS: Tag[] = [];
 
-  const refresh = useCallback(async (): Promise<void> => {
+interface TagRegistryStoreState {
+  tagsByPort: Record<number, Tag[]>;
+  loadingByPort: Record<number, boolean>;
+  refresh: (port: number) => Promise<void>;
+}
+
+/** Shared cache — see the module doc comment above for why this must NOT be
+ *  per-component local state. Exported so tests can reset it between cases. */
+export const useTagRegistryStore = create<TagRegistryStoreState>((set) => ({
+  tagsByPort: {},
+  loadingByPort: {},
+  refresh: async (port: number): Promise<void> => {
+    set((s) => ({ loadingByPort: { ...s.loadingByPort, [port]: true } }));
     try {
       const result = await listTags(port);
-      setTags(result);
+      set((s) => ({ tagsByPort: { ...s.tagsByPort, [port]: result } }));
     } catch (err) {
       console.warn('[tag-registry] refresh failed', err);
     } finally {
-      setLoading(false);
+      set((s) => ({ loadingByPort: { ...s.loadingByPort, [port]: false } }));
     }
-  }, [port]);
+  },
+}));
 
+export function useTagRegistry(port: number): TagRegistry {
+  const tags = useTagRegistryStore((s) => s.tagsByPort[port] ?? EMPTY_TAGS);
+  const loading = useTagRegistryStore((s) => s.loadingByPort[port] ?? true);
+  const storeRefresh = useTagRegistryStore((s) => s.refresh);
+
+  const refresh = useCallback((): Promise<void> => storeRefresh(port), [storeRefresh, port]);
+
+  // `refresh` is stable per port (useCallback over the stable store method + port),
+  // so this re-fetches only when the port changes, not on every render.
   useEffect(() => {
     void refresh();
   }, [refresh]);

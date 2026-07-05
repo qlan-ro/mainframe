@@ -612,3 +612,40 @@ describe('SessionRow — Tags context-menu action passes right-click coords to u
     expect(target?.anchorRect?.top).toBe(80);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 18. Regression (bug b): right-click "Tags" never opened the popover because
+// the context-menu onTags callback ran handleTags synchronously inside Radix's
+// ContextMenuItem.onSelect — Radix closes the menu on select, and opening a
+// popover in that same tick gets swallowed. The sibling onRename prop (a few
+// lines above) already works around this exact class of bug by deferring its
+// state update with queueMicrotask; onTags must do the same.
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — Tags context-menu action defers via queueMicrotask (mirrors onRename)', () => {
+  afterEach(() => {
+    useTagPopoverTarget.getState().close();
+  });
+
+  it('does not open the tag popover synchronously within the click dispatch (deferred past the microtask, like onRename)', () => {
+    render(<SessionRow item={makeItem()} />);
+
+    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+    fireEvent.click(screen.getByTestId('sessions-ctx-tags'));
+
+    // Right after the (fully synchronous) click dispatch returns, the popover
+    // target must still be unset — proves the handler is scheduled via
+    // queueMicrotask rather than invoked inline inside Radix's onSelect.
+    expect(useTagPopoverTarget.getState().target).toBeNull();
+  });
+
+  it('opens the tag popover once microtasks flush', async () => {
+    render(<SessionRow item={makeItem()} />);
+
+    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+    fireEvent.click(screen.getByTestId('sessions-ctx-tags'));
+    await Promise.resolve();
+
+    expect(useTagPopoverTarget.getState().target).not.toBeNull();
+  });
+});

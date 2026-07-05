@@ -231,8 +231,13 @@ function SessionRowInner({
         queueMicrotask(() => setIsRenaming(true));
       }}
       onTags={() => {
-        const p = contextMenuPoint.current;
-        handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
+        // Deferred like the sibling onRename prop above: Radix closes the
+        // context menu on select, and opening the tag popover synchronously
+        // in that same tick gets swallowed by that close.
+        queueMicrotask(() => {
+          const p = contextMenuPoint.current;
+          handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
+        });
       }}
       onArchive={() => void itemRuntime.archive()}
       claudeSessionId={custom.claudeSessionId}

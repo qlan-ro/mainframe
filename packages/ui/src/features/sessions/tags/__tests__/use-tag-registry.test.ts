@@ -32,7 +32,7 @@ vi.mock('@/lib/api/tags', () => ({
 // ---------------------------------------------------------------------------
 
 import { listTags, createTag, updateTag, deleteTag } from '@/lib/api/tags';
-import { useTagRegistry } from '../use-tag-registry';
+import { useTagRegistry, useTagRegistryStore } from '../use-tag-registry';
 
 const mockListTags = vi.mocked(listTags);
 const mockCreateTag = vi.mocked(createTag);
@@ -48,9 +48,14 @@ const ALPHA_TAG = { name: 'alpha', color: 'blue' as const, createdAt: '2026-01-0
 // ---------------------------------------------------------------------------
 // Reset mocks between cases
 // ---------------------------------------------------------------------------
+//
+// The registry cache is now a module-level shared store (see the "shared
+// registry" describe below) so every consumer sees the same tags — reset it
+// between tests or state leaks across cases sharing port 31415.
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useTagRegistryStore.setState({ tagsByPort: {}, loadingByPort: {} });
 });
 
 // ---------------------------------------------------------------------------
@@ -259,5 +264,39 @@ describe('useTagRegistry — colorOf returns color from registry or default "blu
     });
 
     expect(result.current.colorOf('missing')).toBe('blue');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Regression (bug c): SessionSidebar and TagPopoverHost each mount their own
+// useTagRegistry(port) instance. A recolor applied through one instance (the
+// popover host) must repaint colorOf on the OTHER, independently-mounted
+// instance (the sidebar's row dots) — they previously held separate useState
+// caches with no shared invalidation, so a recolor never reached the row dot.
+// ---------------------------------------------------------------------------
+
+describe('useTagRegistry — shared registry across independently-mounted consumers (bug c: tag recolor sync)', () => {
+  it('a recolor applied via one instance is visible through colorOf on a second instance for the same port', async () => {
+    mockListTags.mockResolvedValueOnce([ALPHA_TAG]);
+    const sidebar = renderHook(() => useTagRegistry(31415));
+    await waitFor(() => expect(sidebar.result.current.loading).toBe(false));
+    expect(sidebar.result.current.colorOf('alpha')).toBe('blue');
+
+    // A second, independently-mounted consumer for the SAME port — mirrors
+    // SessionSidebar + TagPopoverHost each calling useTagRegistry(port).
+    mockListTags.mockResolvedValueOnce([ALPHA_TAG]);
+    const popoverHost = renderHook(() => useTagRegistry(31415));
+    await waitFor(() => expect(popoverHost.result.current.loading).toBe(false));
+
+    // Recolor via the popover-host instance only — the sidebar instance never
+    // calls update() or refresh() itself.
+    const recolored = { ...ALPHA_TAG, color: 'green' as const };
+    mockUpdateTag.mockResolvedValue(recolored);
+    mockListTags.mockResolvedValueOnce([recolored]);
+    await act(async () => {
+      await popoverHost.result.current.update('alpha', { color: 'green' });
+    });
+
+    expect(sidebar.result.current.colorOf('alpha')).toBe('green');
   });
 });

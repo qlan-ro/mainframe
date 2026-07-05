@@ -108,3 +108,48 @@ describe('useDraftRow — no-op at boot before a main thread is selected', () =>
     expect(getDraftConfig('__LOCALID_draft')).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression (bug z): SessionsNewButton.pick() race with switchToNewThread()
+//
+// pick() synchronously does setDraftConfig(nid, {...}) THEN
+// `void runtime.threads.switchToNewThread()` — an aui call that awaits an
+// internal hook task before mainThreadId catches up to newThreadId. That
+// means there is a REAL render where hasDraft is newly true but mainThreadId
+// still points at whatever session was active before New was clicked (an
+// EXISTING chat, not the new draft slot) — i.e. mainThreadId !== newThreadId,
+// exactly the shape the discard-on-navigate-away effect was watching for.
+// The effect must NOT fire here: mainThreadId was never pointing at this
+// draft to begin with, so this isn't "navigated away", it's "hasn't arrived
+// yet". Only firing after having genuinely been selected (mainThreadId ===
+// newThreadId at some prior render) distinguishes the two.
+// ---------------------------------------------------------------------------
+
+describe('useDraftRow — regression: pending create-to-switch handoff is not mistaken for navigation-away', () => {
+  it('does not reset a freshly-armed draft while mainThreadId still points at the previously-active session', () => {
+    // Before New is clicked: an existing chat is active, and aui's preallocated
+    // new-thread slot is a different, not-yet-selected id.
+    fakeAuiState = { threads: { mainThreadId: 'chat-existing', newThreadId: '__LOCALID_pending' } };
+
+    const { rerender } = renderHook(() => useDraftRow([], null));
+    expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
+
+    // pick() fires: setDraftConfig lands synchronously, but
+    // switchToNewThread() hasn't resolved yet — mainThreadId is UNCHANGED.
+    setDraftConfig('__LOCALID_pending', { projectId: 'proj-a', adapterId: 'claude' });
+    rerender();
+
+    expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
+    expect(getDraftConfig('__LOCALID_pending')).toBeDefined();
+
+    // switchToNewThread() resolves — mainThreadId catches up to the draft.
+    fakeAuiState = { threads: { mainThreadId: '__LOCALID_pending', newThreadId: '__LOCALID_pending' } };
+    rerender();
+    expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
+
+    // NOW a genuine navigation away must still discard it.
+    fakeAuiState = { threads: { mainThreadId: 'chat-other', newThreadId: '__LOCALID_pending' } };
+    rerender();
+    expect(mockResetNewThreadDraft).toHaveBeenCalledWith('__LOCALID_pending');
+  });
+});
