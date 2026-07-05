@@ -200,6 +200,43 @@ describe('DaemonWsClient — H4: envelope guard on receive', () => {
 });
 
 // ---------------------------------------------------------------------------
+// H6 — stale-socket guard: a superseded socket's late frames are dropped
+// ---------------------------------------------------------------------------
+
+describe('DaemonWsClient — H6: stale-socket guard after reconnect', () => {
+  it('drops a frame delivered by the old socket after reconnect, and delivers frames on the new socket', () => {
+    const client = new DaemonWsClient();
+    client.setPort(31415);
+    client.connect();
+
+    const oldSocket = lastSocket();
+    openSocket(oldSocket);
+
+    const handler = vi.fn();
+    client.onEvent(handler as (e: DaemonEvent) => void);
+
+    // Simulate a reconnect: the old socket goes away (closed) and a fresh
+    // connect() call creates a new socket instance. `this.ws` now points at
+    // the new socket, so the old socket's closure captured a `socket` that no
+    // longer matches `this.ws`.
+    oldSocket.readyState = FakeWebSocket.CLOSED;
+    client.connect();
+    const newSocket = lastSocket();
+    expect(newSocket).not.toBe(oldSocket);
+    openSocket(newSocket);
+
+    // A late frame arrives via the OLD socket's onmessage — must be dropped.
+    oldSocket.onmessage?.({ data: JSON.stringify({ type: 'chat.updated', chat: { id: 'stale' } }) });
+    expect(handler).not.toHaveBeenCalled();
+
+    // A frame on the NEW (current) socket must still be delivered normally.
+    newSocket.onmessage?.({ data: JSON.stringify({ type: 'chat.updated', chat: { id: 'fresh' } }) });
+    expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledWith({ type: 'chat.updated', chat: { id: 'fresh' } });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // H5 — file-watch: subscribeFile / unsubscribeFile / onFileChange
 // ---------------------------------------------------------------------------
 

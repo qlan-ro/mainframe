@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../../../lib/utils';
 import { useSettingsStore } from '../../../../store/settings';
-import { getAdapters } from '../../../../lib/api/adapters';
+import { useAdapters } from '../../../../store/adapters';
 import { providerDot } from '../../../chat/composer/config-toolbar/ProviderModelSelect';
 import { ProviderConfigForm } from './ProviderConfigForm';
 
@@ -39,13 +38,7 @@ function ProviderHeader({ adapter }: { adapter: AdapterInfo }) {
  *  finds the matching AdapterInfo, and renders the form. */
 export function ProvidersPane({ port }: ProvidersPaneProps) {
   const selectedProvider = useSettingsStore((s) => s.selectedProvider);
-  const [adapters, setAdapters] = useState<AdapterInfo[]>([]);
-
-  useEffect(() => {
-    getAdapters(port)
-      .then(setAdapters)
-      .catch((err: unknown) => console.warn('[settings/ProvidersPane] failed to load adapters', err));
-  }, [port]);
+  const adapters = useAdapters();
 
   const adapter = adapters.find((a) => a.id === selectedProvider);
 

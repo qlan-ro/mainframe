@@ -4,15 +4,17 @@
  * Composer tuning hooks — data layer for EffortPicker + FeaturesPopover.
  *
  * Three independent concerns:
- *   useAdapters         — fetches the adapter registry once on mount (model catalog).
+ *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
+ *                         catalog store, seeded/kept fresh at the app root (adapters-seed).
  *   useProviderDefaults — fetches provider settings once on mount; returns the
  *                         requested adapter's ProviderConfig (a structural TuningDefaults,
  *                         D-D) for effort/feature inheritance. Plain React state, no zustand.
  *   useComposerTuning   — fetches the current chat, resolves the model, and
  *                         exposes setEffort/setFeature with optimistic updates.
  *
- * No hook here uses Zustand. They hold plain React state to avoid the
- * getSnapshot-loop trap that affects external-store selectors.
+ * useProviderDefaults/useComposerTuning hold plain React state (not aui external-store
+ * selectors) to avoid the getSnapshot-loop trap. useAdapters is a zustand store selector,
+ * which is safe here — it selects a stable reference, not a fresh snapshot per render.
  *
  * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
  * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
@@ -31,7 +33,6 @@ import type {
   ProviderConfig,
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
-import { getAdapters } from '@/lib/api/adapters';
 import { getProviderSettings } from '@/lib/api/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
@@ -39,39 +40,12 @@ import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 
 // ---------------------------------------------------------------------------
-// useAdapters
+// useAdapters — the shared store selector (seeded/kept fresh at the app root;
+// see @/store/adapters + @/store/adapters-seed). Re-exported here so existing
+// importers (SettingsSidebar, ProvidersPane, ChatSessionInline) keep working.
 // ---------------------------------------------------------------------------
 
-/**
- * Fetches the full adapter registry once on mount and holds it in state.
- * Returns an empty array while loading or on error (logged via console.warn).
- */
-export function useAdapters(): AdapterInfo[] {
-  const extras = useChatExtras();
-  const port = extras?.port;
-  const [adapters, setAdapters] = useState<AdapterInfo[]>([]);
-
-  useEffect(() => {
-    if (port == null) return;
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await getAdapters(port!);
-        if (!cancelled) setAdapters(data);
-      } catch (err) {
-        console.warn('[composer/useAdapters] failed to load adapters', err);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [port]);
-
-  return adapters;
-}
+export { useAdapters } from '@/store/adapters';
 
 // ---------------------------------------------------------------------------
 // useProviderDefaults

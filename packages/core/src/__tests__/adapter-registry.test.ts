@@ -9,6 +9,7 @@ function createMockAdapter(models: AdapterModel[]): Adapter {
     name: 'Mock Adapter',
     isInstalled: vi.fn().mockResolvedValue(true),
     getVersion: vi.fn().mockResolvedValue('1.0.0'),
+    getFallbackModels: () => models,
     listModels: vi.fn().mockResolvedValue(models),
     spawn: vi.fn(),
     kill: vi.fn(),
@@ -71,57 +72,12 @@ describe('AdapterRegistry', () => {
     const registry = new AdapterRegistry();
     const mockModels: AdapterModel[] = [{ id: 'mock-fast', label: 'Mock Fast', contextWindow: 128_000 }];
     registry.register(createMockAdapter(mockModels));
+    registry.seedStaticSnapshots();
 
     const list = await registry.list();
     const mock = list.find((item) => item.id === 'mock');
 
     expect(mock).toBeDefined();
     expect(mock?.models).toEqual(mockModels);
-  });
-});
-
-describe('AdapterRegistry.probeAllModels', () => {
-  it('calls probeModels on adapters that support it and emits event', async () => {
-    const probedModels: AdapterModel[] = [{ id: 'probed-model', label: 'Probed' }];
-    const adapter = createMockAdapter([{ id: 'fallback', label: 'Fallback' }]);
-    (adapter as any).probeModels = vi.fn().mockResolvedValue(probedModels);
-
-    const registry = new AdapterRegistry();
-    registry.register(adapter);
-
-    const events: any[] = [];
-    await registry.probeAllModels((event) => events.push(event));
-
-    expect((adapter as any).probeModels).toHaveBeenCalled();
-    expect(events).toHaveLength(1);
-    expect(events[0]).toEqual({
-      type: 'adapter.models.updated',
-      adapterId: 'mock',
-      models: probedModels,
-    });
-  });
-
-  it('skips adapters without probeModels', async () => {
-    const adapter = createMockAdapter([]);
-    const registry = new AdapterRegistry();
-    registry.register(adapter);
-
-    const events: any[] = [];
-    await registry.probeAllModels((event) => events.push(event));
-
-    expect(events).toHaveLength(0);
-  });
-
-  it('handles probe failure gracefully', async () => {
-    const adapter = createMockAdapter([]);
-    (adapter as any).probeModels = vi.fn().mockResolvedValue(null);
-
-    const registry = new AdapterRegistry();
-    registry.register(adapter);
-
-    const events: any[] = [];
-    await registry.probeAllModels((event) => events.push(event));
-
-    expect(events).toHaveLength(0);
   });
 });

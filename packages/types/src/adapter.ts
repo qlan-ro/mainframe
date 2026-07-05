@@ -199,6 +199,10 @@ export interface AdapterInfo {
   installed: boolean;
   version?: string;
   models: AdapterModel[];
+  /** Monotonic per-adapter counter, bumped on every models change. Absent on legacy/mobile payloads. */
+  modelsRevision?: number;
+  /** Provenance of `models`: 'probed' = live CLI catalog, 'fallback' = static list. Absent on legacy payloads. */
+  catalogSource?: 'probed' | 'fallback';
   capabilities: {
     planMode: boolean;
   };
@@ -317,7 +321,9 @@ export interface Adapter {
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
-  probeModels?(): Promise<AdapterModel[] | null>;
+  probeModels?(executablePath?: string): Promise<AdapterModel[] | null>;
+  /** Synchronous static fallback catalog for instant, spawn-free startup seeding. */
+  getFallbackModels?(): AdapterModel[];
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;

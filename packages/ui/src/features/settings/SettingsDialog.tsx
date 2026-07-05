@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getProviderSettings, getGeneralSettings } from '@/lib/api/settings';
+import { refreshAdapters } from '@/store/adapters-seed';
 import { useSettingsStore } from '../../store/settings';
 import { SettingsSidebar } from './SettingsSidebar';
 import { SettingsContent } from './SettingsContent';
@@ -59,6 +60,15 @@ export function SettingsDialog({ port }: { port: number }) {
     };
   }, [isOpen, port, loadProviders, loadGeneral, setLoading]);
 
+  // Refetch the adapter catalog whenever Settings opens — restores the per-mount
+  // resilience lost by reading from the shared store instead of fetching locally.
+  // refreshAdapters (NOT seedAdaptersFor): the connection identity hasn't changed here,
+  // so the revision baseline must stay intact or a stale same-socket WS event could pass
+  // the only-if-newer guard during the fetch window.
+  useEffect(() => {
+    if (isOpen) refreshAdapters(port);
+  }, [isOpen, port]);
+
   return (
     <DialogPrimitive.Root
       open={isOpen}
@@ -79,7 +89,7 @@ export function SettingsDialog({ port }: { port: number }) {
             <SettingsDialogCloseBtn />
           </header>
           <div className="flex min-h-0 flex-1">
-            <SettingsSidebar port={port} />
+            <SettingsSidebar />
             <ScrollArea className="flex-1">
               <div className="px-[26px] pb-[32px] pt-[22px]">
                 <SettingsContent port={port} />

@@ -16,11 +16,13 @@ describe('ClaudeAdapter.probeModels — contextWindow enrichment', () => {
   });
 
   it('preserves contextWindow from the static catalog for known model IDs', async () => {
-    mockedProbe.mockResolvedValueOnce([
-      { id: 'default', label: 'Default', isDefault: true, description: 'Opus 4.7 with 1M context · Most capable' },
-      { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-      { id: 'sonnet[1m]', label: 'Sonnet 4.6 (1M context)' },
-    ] satisfies AdapterModel[]);
+    mockedProbe.mockResolvedValueOnce({
+      models: [
+        { id: 'default', label: 'Default', isDefault: true, description: 'Opus 4.7 with 1M context · Most capable' },
+        { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+        { id: 'sonnet[1m]', label: 'Sonnet 4.6 (1M context)' },
+      ] satisfies AdapterModel[],
+    });
 
     const adapter = new ClaudeAdapter();
     const probed = await adapter.probeModels();
@@ -33,10 +35,12 @@ describe('ClaudeAdapter.probeModels — contextWindow enrichment', () => {
   });
 
   it('falls back to description sniff for unknown IDs', async () => {
-    mockedProbe.mockResolvedValueOnce([
-      { id: 'claude-future-1m', label: 'Future 1M', description: 'Future model with 1M context' },
-      { id: 'claude-future-small', label: 'Future Small', description: 'Faster everyday model' },
-    ] satisfies AdapterModel[]);
+    mockedProbe.mockResolvedValueOnce({
+      models: [
+        { id: 'claude-future-1m', label: 'Future 1M', description: 'Future model with 1M context' },
+        { id: 'claude-future-small', label: 'Future Small', description: 'Faster everyday model' },
+      ] satisfies AdapterModel[],
+    });
 
     const adapter = new ClaudeAdapter();
     const probed = await adapter.probeModels();
@@ -46,9 +50,9 @@ describe('ClaudeAdapter.probeModels — contextWindow enrichment', () => {
   });
 
   it('respects an explicit contextWindow on the probed entry', async () => {
-    mockedProbe.mockResolvedValueOnce([
-      { id: 'claude-custom', label: 'Custom', contextWindow: 500_000 },
-    ] satisfies AdapterModel[]);
+    mockedProbe.mockResolvedValueOnce({
+      models: [{ id: 'claude-custom', label: 'Custom', contextWindow: 500_000 }] satisfies AdapterModel[],
+    });
 
     const adapter = new ClaudeAdapter();
     const probed = await adapter.probeModels();
@@ -56,11 +60,24 @@ describe('ClaudeAdapter.probeModels — contextWindow enrichment', () => {
   });
 
   it('listModels() returns enriched dynamic models after probe', async () => {
-    mockedProbe.mockResolvedValueOnce([{ id: 'default', label: 'Default', isDefault: true }] satisfies AdapterModel[]);
+    mockedProbe.mockResolvedValueOnce({
+      models: [{ id: 'default', label: 'Default', isDefault: true }] satisfies AdapterModel[],
+    });
 
     const adapter = new ClaudeAdapter();
     await adapter.probeModels();
     const listed = await adapter.listModels();
     expect(listed[0]?.contextWindow).toBe(1_000_000);
+  });
+
+  it("stamps the 'default' entry's window from resolvedModel when it has no description hint", async () => {
+    mockedProbe.mockResolvedValueOnce({
+      models: [{ id: 'default', label: 'Default', isDefault: true }] satisfies AdapterModel[],
+      resolvedModel: 'claude-fable-5[1m]',
+    });
+
+    const adapter = new ClaudeAdapter();
+    const probed = await adapter.probeModels();
+    expect(probed![0]?.contextWindow).toBe(1_000_000);
   });
 });

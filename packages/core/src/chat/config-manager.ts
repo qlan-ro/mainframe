@@ -4,6 +4,9 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { createWorktree, removeWorktree, moveSessionFiles, getClaudeProjectDir } from '../workspace/index.js';
 import type { ActiveChat } from './types.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('config-manager');
 
 export interface ConfigManagerDeps {
   adapters: AdapterRegistry;
@@ -73,27 +76,46 @@ export class ChatConfigManager {
     if (!adapterChanged && !modelChanged && !modeChanged && !planModeChanged) return;
 
     if (active.session?.isSpawned && !adapterChanged) {
-      if (modelChanged) await active.session.setModel(model!);
-      if (modeChanged) await active.session.setPermissionMode(permissionMode!);
-      if (planModeChanged) await active.session.setPlanMode(planMode!);
+      // Each setting is applied and persisted INDEPENDENTLY: a rejected/timed-out setModel()
+      // (which now awaits and throws — see session.ts) must not skip setPermissionMode or
+      // setPlanMode, and must not 500 the whole request. Only settings the CLI actually
+      // accepted get written to the DB.
+      const session = active.session;
       const updates: Partial<Chat> = {};
       if (modelChanged) {
-        updates.model = model;
-        active.chat.model = model;
+        try {
+          await session.setModel(model!);
+          updates.model = model;
+          active.chat.model = model;
+        } catch (err) {
+          log.warn({ err, chatId }, 'setModel rejected; not persisting model');
+        }
       }
       if (modeChanged) {
-        updates.permissionMode = permissionMode;
-        active.chat.permissionMode = permissionMode;
+        try {
+          await session.setPermissionMode(permissionMode!);
+          updates.permissionMode = permissionMode;
+          active.chat.permissionMode = permissionMode;
+        } catch (err) {
+          log.warn({ err, chatId }, 'setPermissionMode rejected; not persisting permissionMode');
+        }
       }
       if (planModeChanged) {
-        updates.planMode = planMode;
-        active.chat.planMode = planMode;
+        try {
+          await session.setPlanMode(planMode!);
+          updates.planMode = planMode;
+          active.chat.planMode = planMode;
+        } catch (err) {
+          log.warn({ err, chatId }, 'setPlanMode rejected; not persisting planMode');
+        }
       }
-      this.deps.db.chats.update(chatId, updates);
-      // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model
-      // that doesn't support them). Re-resolve against the new model and re-apply.
-      if (modelChanged) await this.deps.applyTuning(chatId);
-      this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+      if (Object.keys(updates).length > 0) {
+        this.deps.db.chats.update(chatId, updates);
+        // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model
+        // that doesn't support them). Re-resolve against the new model and re-apply.
+        if (updates.model !== undefined) await this.deps.applyTuning(chatId);
+        this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+      }
       return;
     }
 

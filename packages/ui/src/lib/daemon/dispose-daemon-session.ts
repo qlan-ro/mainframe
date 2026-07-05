@@ -3,6 +3,8 @@ import { chatControllerRegistry } from '../../features/sessions/runtime/chat-con
 import { killAndDisposeCachedTerminals } from '../../store/terminal-cleanup';
 import { useLayoutStore } from '../../store/layout';
 import { terminalIdsInRun } from '../../store/run-pane';
+import { resetAdapters } from '../../store/adapters';
+import { invalidateSeedFetches } from '../../store/adapters-seed';
 
 /**
  * Bounded teardown of out-of-React singletons and live OS handles.
@@ -29,5 +31,12 @@ export function disposeDaemonSession(): void {
     killAndDisposeCachedTerminals(terminalIdsInRun(run));
   } catch (err) {
     console.warn('[disposeDaemonSession] killAndDisposeCachedTerminals failed', err);
+  }
+
+  try {
+    resetAdapters();
+    invalidateSeedFetches();
+  } catch (err) {
+    console.warn('[disposeDaemonSession] adapters reset failed', err);
   }
 }
