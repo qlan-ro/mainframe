@@ -12,6 +12,9 @@ interface PreviewBodyStateProps {
   onStart: () => void;
   /** Remote-daemon preview: status is 'running' but the tunnel URL hasn't arrived yet. */
   tunnelPending?: boolean;
+  /** Remote-daemon preview: the Cloudflare tunnel errored out or timed out. Wins over `running`. */
+  tunnelFailed?: boolean;
+  tunnelError?: string | null;
 }
 
 export function PreviewBodyState({
@@ -23,7 +26,29 @@ export function PreviewBodyState({
   anchorRef,
   onStart,
   tunnelPending,
+  tunnelFailed,
+  tunnelError,
 }: PreviewBodyStateProps) {
+  // Checked before `tunnelPending` — `usePreviewLifecycle` reports pending
+  // whenever there's no resolved URL yet, which is also true once the tunnel
+  // has failed. Failure is the more terminal state and wins. Also wins over
+  // `running` — status IS 'running' while the tunnel is down, but the
+  // webview area has nothing to mount without a resolved URL.
+  if (tunnelFailed) {
+    return (
+      <div data-testid="preview-body-tunnel-failed" className="absolute inset-0 grid place-items-center bg-card">
+        <div className="flex max-w-[80%] flex-col items-center gap-2.5 text-center">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-destructive" />
+            <span className="text-body text-muted-foreground">Preview tunnel unavailable</span>
+          </div>
+          {tunnelError && <span className="line-clamp-2 font-mono text-micro text-mf-text-4">{tunnelError}</span>}
+          <span className="text-micro text-mf-text-4">Process logs are in the console below</span>
+        </div>
+      </div>
+    );
+  }
+
   if (tunnelPending) {
     return (
       <div data-testid="preview-tunnel-pending" className="absolute inset-0 grid place-items-center bg-card">

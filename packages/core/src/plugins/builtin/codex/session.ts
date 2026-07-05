@@ -245,12 +245,16 @@ export class CodexSession implements AdapterSession {
       sandboxPolicy: this.mapSandboxPolicy(sandbox),
       collaborationMode: turnCfg.collaborationMode,
       model: this.pendingModel,
-      serviceTier: turnCfg.serviceTier,
+      ...(turnCfg.serviceTier ? { serviceTier: turnCfg.serviceTier } : {}),
       ...(turnCfg.personality ? { personality: turnCfg.personality } : {}),
       ...(turnCfg.summary ? { summary: turnCfg.summary } : {}),
     });
 
     this.status = 'running';
+  }
+
+  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
+    return false;
   }
 
   async kill(): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildToolResultBlocks } from '../plugins/builtin/claude/history.js';
+import { buildToolResultBlocks } from '../plugins/builtin/claude/history-tool-result.js';
 
 describe('buildToolResultBlocks', () => {
   it('extracts text from array content blocks instead of JSON.stringify', () => {

@@ -35,16 +35,15 @@ describe('design token audit', () => {
   // an injected cssText string in a foreign preview document). Exempt both — they are
   // not styling shortcuts.
   //
-  // task-palettes.ts and GateShell.tsx carry bespoke hex tints/rgba shadows ported
-  // verbatim from the vendored design source (12-todos.jsx TD_TYPE/TD_PRI palettes;
-  // the gate-card accent glow), the same "one-off design hex" pattern already
-  // established by WfLibrary.tsx/WfBuilderPane.tsx/WfStepLibrary.tsx/glyphs.ts
-  // (pre-existing offenders below, left failing — see the classification note at
-  // the end of this file).
+  // GateShell.tsx carries a bespoke rgba accent-glow shadow ported verbatim from
+  // the vendored design source (the gate-card accent glow), the same "one-off
+  // design value" pattern already established by WfLibrary.tsx/WfBuilderPane.tsx/
+  // WfStepLibrary.tsx/glyphs.ts (pre-existing offenders below, left failing — see
+  // the classification note at the end of this file). task-palettes.ts used to be
+  // here too but now routes through --mf-task-type-*/--mf-priority-* tokens.
   const COLOR_LITERAL_ALLOWLIST = new Set([
     'features/terminal/terminal-cache.ts',
     'lib/host/electron-preview.ts',
-    'features/tasks/task-palettes.ts',
     'features/chat/gates/shared/GateShell.tsx',
   ]);
 
@@ -59,19 +58,15 @@ describe('design token audit', () => {
     expect(offenders).toEqual([]);
   });
 
-  // These three carry px-precision tracking values / arbitrary text-[] color
-  // utilities lifted verbatim from the vendored design source: tool-group.tsx
-  // and CodeHeader.tsx use inline `letterSpacing` px values (09-toolcards.jsx)
-  // where the em-based tracking-tight/normal/wide scale has no exact px
-  // equivalent at these font sizes; task-palettes.ts uses `text-[#hex]`
-  // arbitrary-value utilities for the ported TD_TYPE/TD_PRI palette tints
-  // (12-todos.jsx), matched by the same `text-\[...\]` pattern as font-size
-  // arbitrary values. Same "one-off design value" pattern as the pre-existing
+  // These two carry px-precision tracking values lifted verbatim from the
+  // vendored design source: tool-group.tsx and CodeHeader.tsx use inline
+  // `letterSpacing` px values (09-toolcards.jsx) where the em-based
+  // tracking-tight/normal/wide scale has no exact px equivalent at these font
+  // sizes. Same "one-off design value" pattern as the pre-existing
   // workflows/daemon offenders below (left failing, not touched here).
   const TYPOGRAPHY_ARBITRARY_ALLOWLIST = new Set([
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
-    'features/tasks/task-palettes.ts',
   ]);
 
   it('uses named typography tokens instead of arbitrary or framework-default values', () => {

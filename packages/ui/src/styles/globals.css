@@ -123,6 +123,24 @@
   --mf-tool-web-tint: rgba(22, 163, 148, 0.11);
   --mf-code-inline-fg: #7a4d2a;
 
+  /* Tasks/Todos semantic tints — design-constant (ported from 12-todos.jsx
+     TD_TYPE/TD_PRI); no scheme override, same convention as the --mf-tool-*
+     tokens above. Priority/type each own a hue; the -dot tokens are the
+     fully-opaque indicator fills (distinct from the tinted pill hues).
+     Status has no design ground truth, so it stays on generic Tailwind
+     swatches in task-palettes.ts rather than inventing tokens. */
+  --mf-task-type-bug: #c4302b;
+  --mf-task-type-enhancement: #7b3ff2;
+  --mf-task-type-question: #b9770e;
+  --mf-task-type-duplicate: #c2540a;
+  --mf-priority-critical: #c4302b;
+  --mf-priority-high: #c2540a;
+  --mf-priority-medium: #a76d0c;
+  --mf-priority-critical-dot: #c4302b;
+  --mf-priority-high-dot: #e8730f;
+  --mf-priority-medium-dot: #e0a019;
+  --mf-priority-low-dot: #c4c2bd;
+
   /* App-only elevation variants (panel shadows not in prototype theme) */
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -133,6 +151,12 @@
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
   --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.06);
   --mf-shadow-keycap: 0 1px 0 rgba(0, 0, 0, 0.03);
+  /* Composer edit-mode amber glow (User Message States artboard `UMEditRing`).
+     Derived from --mf-warning via color-mix so it tracks the per-scheme amber
+     without a separate override in every block (var() resolves against the
+     using element's cascade). */
+  --mf-shadow-edit-ring: 0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
+    0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
 
@@ -738,6 +762,17 @@
   --color-mf-tool-web: var(--mf-tool-web);
   --color-mf-tool-web-tint: var(--mf-tool-web-tint);
   --color-mf-code-inline-fg: var(--mf-code-inline-fg);
+  --color-mf-task-type-bug: var(--mf-task-type-bug);
+  --color-mf-task-type-enhancement: var(--mf-task-type-enhancement);
+  --color-mf-task-type-question: var(--mf-task-type-question);
+  --color-mf-task-type-duplicate: var(--mf-task-type-duplicate);
+  --color-mf-priority-critical: var(--mf-priority-critical);
+  --color-mf-priority-high: var(--mf-priority-high);
+  --color-mf-priority-medium: var(--mf-priority-medium);
+  --color-mf-priority-critical-dot: var(--mf-priority-critical-dot);
+  --color-mf-priority-high-dot: var(--mf-priority-high-dot);
+  --color-mf-priority-medium-dot: var(--mf-priority-medium-dot);
+  --color-mf-priority-low-dot: var(--mf-priority-low-dot);
   --color-mf-code-bg: var(--mf-code-bg);
   --color-mf-code-fg: var(--mf-code-fg);
   --color-mf-code-kw: var(--mf-code-kw);

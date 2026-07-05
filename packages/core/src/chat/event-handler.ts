@@ -63,7 +63,6 @@ export class EventHandler {
     private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
     private onQueuedCleared: (chatId: string) => void = () => {},
     private getQueuedRefs: (chatId: string) => QueuedMessageRef[] = () => [],
-    private flushNextQueued: (chatId: string) => boolean = () => false,
   ) {}
 
   setPushService(service: PushService): void {
@@ -95,7 +94,6 @@ export class EventHandler {
       this.onQueuedProcessed,
       this.onQueuedCleared,
       this.getQueuedRefs,
-      this.flushNextQueued,
       this.pushService,
     );
   }
@@ -126,7 +124,6 @@ function buildSessionSink(
   onQueuedProcessedCb: (chatId: string, uuid: string) => void,
   onQueuedClearedCb: (chatId: string) => void,
   getQueuedRefs: (chatId: string) => QueuedMessageRef[],
-  flushNextQueued: (chatId: string) => boolean,
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -283,26 +280,34 @@ function buildSessionSink(
       // the AI finishes a turn, not only when the user sends a message.
       const now = new Date().toISOString();
 
-      // Reconcile cached metadata.queued ↔ daemon chatQueues on every result.
-      // isReplay acks can arrive out of order; cached messages may still carry
-      // metadata.queued even after the daemon dequeued them. Recompute here:
+      // Reconcile cached metadata.queued ↔ chat-manager queuedRefs. The CLI's
+      // isReplay acks can race with our queuedRefs.set (the daemon registers
+      // the ref AFTER awaiting stdin.write; the CLI may already have ack'd),
+      // and renderer-side `queuedMessages` can drift from the daemon when
+      // events arrive out of order. We recompute the canonical state here on
+      // every result event:
       //   1. cached msg has metadata.queued but no matching ref → orphan flag.
       //      Strip the flag + emit message.queued.processed for the renderer.
       //   2. ref has no matching cached msg → orphan ref. Drop it + ack.
-      //   3. Emit a queued.snapshot so the renderer's composer stays in sync.
+      //   3. Emit a queued.snapshot afterwards so the renderer's composer
+      //      converges on whatever refs the daemon believes are still live.
       const refsBefore = getQueuedRefs(chatId);
       const refUuids = new Set(refsBefore.map((r) => r.uuid));
       const cached = messages.get(chatId) ?? [];
       const cachedQueuedUuids = new Set<string>();
       let displayChanged = false;
 
-      for (const m of cached) {
+      // Iterate a snapshot: moveToEnd splices+pushes on the live `cached` array,
+      // and mutating an array mid-for-of shifts the iterator, silently skipping
+      // whichever orphan lands in the vacated slot.
+      for (const m of [...cached]) {
         const u = m.metadata?.uuid;
         if (m.metadata?.queued && typeof u === 'string') {
           cachedQueuedUuids.add(u);
           if (!refUuids.has(u)) {
             delete (m.metadata as Record<string, unknown>).queued;
             delete (m.metadata as Record<string, unknown>).uuid;
+            messages.moveToEnd(chatId, m.id);
             displayChanged = true;
             log.warn({ chatId, uuid: u }, 'onResult: orphan metadata.queued (no matching ref) — clearing');
             emitEvent({ type: 'message.queued.processed', chatId, uuid: u });
@@ -321,17 +326,19 @@ function buildSessionSink(
 
       if (displayChanged) emitDisplay();
 
-      // Flush the next held queued message to the CLI now that this run has
-      // ended. Each flushed message starts a new run whose own onResult will
-      // flush the next one (FIFO drain across run-ends). Returns true when a
-      // message was popped, false when the queue is empty.
-      const flushed = flushNextQueued(chatId);
-      const nextProcessState: 'idle' | 'working' = flushed ? 'working' : 'idle';
-
-      // Force renderer composer to converge on the daemon's refs. Emit the
-      // snapshot AFTER the flush so it reflects the remaining queue.
+      // Force renderer composer to converge on the daemon's refs. Defends
+      // against any out-of-order delivery / dedupe gap that could leave the
+      // renderer's queuedMessages map with stale entries.
       const refsAfter = getQueuedRefs(chatId);
       emitEvent({ type: 'message.queued.snapshot', chatId, refs: refsAfter });
+
+      // Result events fire per-turn. While queued messages are still pending
+      // we must NOT flip to idle here, or the thinking indicator drops while
+      // the assistant is still streaming the next queued turn. Use the count
+      // AFTER reconciliation so orphan refs don't pin the state to 'working'
+      // when the CLI is genuinely done.
+      const queueRemaining = refsAfter.length;
+      const nextProcessState: 'idle' | 'working' = queueRemaining > 0 ? 'working' : 'idle';
 
       db.chats.update(chatId, {
         totalCost: newCost,
@@ -362,8 +369,13 @@ function buildSessionSink(
       const notifyConfig = readNotificationConfig(db);
       if (isError) {
         if (!wasInterrupted) {
+          const detail = typeof data.result === 'string' ? data.result.trim() : '';
+          log.warn(
+            { chatId, subtype: data.subtype, reason: detail || null },
+            'session ended unexpectedly — emitting error message',
+          );
           const message = messages.createTransientMessage(chatId, 'error', [
-            { type: 'error', message: 'Session ended unexpectedly' },
+            { type: 'error', message: detail || 'Session ended unexpectedly' },
           ]);
           messages.append(chatId, message);
           emitEvent({ type: 'message.added', chatId, message });
@@ -396,13 +408,16 @@ function buildSessionSink(
     },
 
     onQueuedProcessed(uuid: string) {
-      log.debug({ chatId, uuid }, 'onQueuedProcessed: removing queued flag from message');
+      log.debug({ chatId, uuid }, 'onQueuedProcessed: moving queued message to end + clearing flag');
       const msgs = messages.get(chatId);
       const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
       if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
-        log.debug({ chatId, uuid, messageId: msg.id }, 'onQueuedProcessed: queued flag removed, emitting display');
+        // Move on process: the ack fires when the CLI injects this message into
+        // context, so relocating it to the end matches the JSONL consumption
+        // point. Reloads no longer reshuffle order.
+        messages.moveToEnd(chatId, msg.id);
         emitDisplay();
       } else {
         log.warn({ chatId, uuid }, 'onQueuedProcessed: message not found in cache or already processed');

@@ -1,6 +1,6 @@
 /**
- * Behavior tests for `handleDaemonEvent` — queued.snapshot and
- * queued.cancel_failed routing, plus chatId filtering (fix #4).
+ * Behavior tests for `handleDaemonEvent` — queued.snapshot routing, plus
+ * chatId filtering (fix #4).
  *
  * Pure function tests: fixed input events, hardcoded expected HandleResult
  * values. No logic from the implementation is re-derived.
@@ -77,35 +77,6 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
       kind: 'event',
       event: { type: 'queued.snapshot', refs: [] },
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// message.queued.cancel_failed
-// ---------------------------------------------------------------------------
-
-describe('handleDaemonEvent — message.queued.cancel_failed', () => {
-  it('returns queued.cancel_failed event with uuid when chatId matches', () => {
-    const result = handleDaemonEvent(
-      { type: 'message.queued.cancel_failed', chatId: CHAT_ID, uuid: 'msg-uuid-1' },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
-
-    expect(result).toEqual({
-      kind: 'event',
-      event: { type: 'queued.cancel_failed', uuid: 'msg-uuid-1' },
-    });
-  });
-
-  it('returns noop when chatId does not match', () => {
-    const result = handleDaemonEvent(
-      { type: 'message.queued.cancel_failed', chatId: OTHER_CHAT, uuid: 'msg-uuid-1' },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
-
-    expect(result).toEqual({ kind: 'noop' });
   });
 });
 

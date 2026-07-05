@@ -12,6 +12,7 @@ import { runScopeHandlers } from '@codemirror/view';
 import { EditorView } from '@codemirror/view';
 import { CmEditor } from '../CmEditor';
 import { useEditorStore } from '@/store/editor';
+import { useTheme } from '@/store/theme';
 import { jumpHistory } from '../lsp/navigation';
 import * as surfaceIntents from '@/store/surface-intents';
 
@@ -264,6 +265,45 @@ describe('CmEditor', () => {
       );
 
       emitSpy.mockRestore();
+    });
+  });
+
+  describe('live light↔dark hot-swap (theme compartment)', () => {
+    it('reconfigures the CM6 dark flag when the theme store mode flips after mount', () => {
+      // Start in light mode so the initial dark flag is false.
+      act(() => {
+        useTheme.setState({ mode: 'light' });
+      });
+
+      let view: EditorView | null = null;
+      render(
+        <CmEditor
+          value="const x = 1"
+          language="javascript"
+          readOnly={false}
+          onChange={() => undefined}
+          path="/test/theme-swap.ts"
+          onViewReady={(v) => {
+            view = v;
+          }}
+        />,
+      );
+
+      expect(view).not.toBeNull();
+      // EditorView.darkTheme facet reflects the active theme's `dark` flag.
+      expect(view!.state.facet(EditorView.darkTheme)).toBe(false);
+
+      // Flip to dark — the sync effect must reconfigure the theme compartment.
+      act(() => {
+        useTheme.setState({ mode: 'dark' });
+      });
+      expect(view!.state.facet(EditorView.darkTheme)).toBe(true);
+
+      // Flip back to light.
+      act(() => {
+        useTheme.setState({ mode: 'light' });
+      });
+      expect(view!.state.facet(EditorView.darkTheme)).toBe(false);
     });
   });
 

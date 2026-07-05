@@ -48,7 +48,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
   return (
     <div
       data-testid="chat-composer-edit"
-      className="overflow-hidden rounded-xl [border-width:0.5px] border-mf-warning bg-card shadow-sm"
+      className="overflow-hidden rounded-xl [border-width:0.5px] border-mf-warning bg-card shadow-[var(--mf-shadow-edit-ring)]"
     >
       <div className="flex items-center gap-2 bg-mf-warning-tint pl-[9px] pr-[11px] py-[7px]">
         <span className="flex size-[19px] items-center justify-center rounded-md bg-mf-warning-tint text-mf-warning">

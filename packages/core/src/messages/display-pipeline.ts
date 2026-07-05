@@ -7,6 +7,7 @@ import {
   applyToolGrouping,
   withParentId,
 } from './display-helpers.js';
+import { backfillTaskSubjects } from './task-subject-backfill.js';
 
 /**
  * Transforms raw ChatMessage[] into display-ready DisplayMessage[].
@@ -42,7 +43,9 @@ export function prepareMessagesForClient(messages: ChatMessage[], categories?: T
     result.push(display);
   }
 
-  return result;
+  // Cross-message pass: name TaskUpdate items whose TaskCreate lives in an
+  // earlier grouped message (the CLI's update events carry no subject).
+  return backfillTaskSubjects(result);
 }
 
 function convertGroupedToDisplay(

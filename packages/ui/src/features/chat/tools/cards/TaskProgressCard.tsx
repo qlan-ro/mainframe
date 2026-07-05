@@ -9,7 +9,8 @@
  *
  * args shape: { items: TaskProgressItem[] }
  *   TaskProgressItem: { toolName, toolCallId, args, result, isError }
- *   TaskCreate args:  { subject }; result contains "Task #<id>"
+ *   TaskCreate args:  { subject }; result contains "Task #<id>" as a bare
+ *     string or a daemon `ToolCallResult` `{ content, isError }`
  *   TaskUpdate args:  { taskId, status?, subject?, activeForm? }
  */
 
@@ -33,14 +34,23 @@ interface TaskState {
 
 const TASK_ID_RE = /Task #(\d+)/;
 
+/** Plain text of a task tool result — bare string or daemon ToolCallResult `{ content }`. */
+function taskResultText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (result && typeof result === 'object') {
+    const content = (result as { content?: unknown }).content;
+    if (typeof content === 'string') return content;
+  }
+  return '';
+}
+
 function reduceTaskItems(items: TaskProgressItem[]): TaskState[] {
   const list: TaskState[] = [];
   const map = new Map<string, TaskState>();
 
   for (const item of items) {
     if (item.toolName === 'TaskCreate') {
-      const resultStr = typeof item.result === 'string' ? item.result : '';
-      const match = TASK_ID_RE.exec(resultStr);
+      const match = TASK_ID_RE.exec(taskResultText(item.result));
       const id = match ? (match[1] ?? String(map.size + 1)) : String(map.size + 1);
       const subject = (item.args['subject'] as string | undefined) ?? `Task #${id}`;
       const task: TaskState = { id, subject, status: 'pending' };
@@ -54,7 +64,10 @@ function reduceTaskItems(items: TaskProgressItem[]): TaskState[] {
         if (newStatus) existing.status = newStatus;
         if (item.args['subject']) existing.subject = item.args['subject'] as string;
       } else if (taskId) {
-        const task: TaskState = { id: taskId, subject: `Task #${taskId}`, status: newStatus || 'pending' };
+        // Orphan update — its TaskCreate lives in an earlier message. The daemon
+        // backfills the subject into args; fall back to the id only without it.
+        const subject = (item.args['subject'] as string | undefined) ?? `Task #${taskId}`;
+        const task: TaskState = { id: taskId, subject, status: newStatus || 'pending' };
         map.set(taskId, task);
         list.push(task);
       }

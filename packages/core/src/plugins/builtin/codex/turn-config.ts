@@ -9,7 +9,13 @@ export interface CodexProviderTuning {
 
 export interface CodexTurnConfig {
   collaborationMode: CollaborationMode;
-  serviceTier: 'fast' | 'flex';
+  /**
+   * Only set to 'fast' when the (model-clamped) fast toggle is on. Left undefined
+   * otherwise so turn/start omits service_tier and Codex uses the account default.
+   * We never send 'flex': it's rejected by models that don't support it (e.g.
+   * gpt-5.5 → 400 Unsupported service_tier: flex).
+   */
+  serviceTier?: 'fast';
   personality?: string;
   summary?: string;
 }
@@ -36,8 +42,8 @@ export function buildTurnConfig(
         developer_instructions: null,
       },
     },
-    serviceTier: tuning.fast ? 'fast' : 'flex',
   };
+  if (tuning.fast) cfg.serviceTier = 'fast';
   if (codex.personality) cfg.personality = codex.personality;
   if (codex.reasoningSummary) cfg.summary = codex.reasoningSummary;
   return cfg;

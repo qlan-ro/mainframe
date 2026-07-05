@@ -25,6 +25,7 @@ import { DaemonSmallDialog } from './DaemonSmallDialog';
 import { DaemonUnreachableBody } from './DaemonUnreachableBody';
 import { useActiveDaemon } from './active-daemon-context';
 import { useDaemonRegistry } from './use-daemon-registry';
+import { useRestoreLastDaemon } from './use-restore-last-daemon';
 import { parseRemoteUrl } from './pair-daemon';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,8 @@ function targetToMeta(target: import('@qlan-ro/mainframe-types').DaemonTarget): 
 
 export function DaemonFooterStatus() {
   const registry = useDaemonRegistry();
+  // Reconnect to the last-used daemon on boot (once the registry has loaded it).
+  useRestoreLastDaemon(registry);
   const { target: activeTarget } = useActiveDaemon();
   const { state: connState } = useConnectionStatus();
   const [pickerOpen, setPickerOpen] = useState(false);

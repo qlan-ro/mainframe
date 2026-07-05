@@ -1,8 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { buildToolResultBlocks, loadHistory } from '../plugins/builtin/claude/history.js';
+import { loadHistory } from '../plugins/builtin/claude/history.js';
+import { buildToolResultBlocks } from '../plugins/builtin/claude/history-tool-result.js';
+
+// Real CLI capture excerpt (docs/adapters/claude/QUEUE.md probe) covering a
+// mid-turn-drained queued message: initial user turn, the queued_command
+// attachment entry the CLI persists for it, and the assistant reply that
+// follows. See packages/core/src/plugins/builtin/claude/__tests__/fixtures/queued-command-attachment.jsonl.
+const QUEUED_ATTACHMENT_FIXTURE = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../plugins/builtin/claude/__tests__/fixtures/queued-command-attachment.jsonl',
+);
 
 // Stable base directory — vi.mock is hoisted so we can't use beforeEach vars.
 const TEST_BASE = join(tmpdir(), 'mainframe-loadhistory-test');
@@ -950,5 +961,39 @@ describe('loadHistory', () => {
       content: 'Command failed with exit code 1',
       isError: true,
     });
+  });
+
+  it('loads a mid-turn-drained queued message exactly once, as a user message, at its JSONL position', async () => {
+    // Regression tripwire: if a future CLI version starts persisting the
+    // queued input BOTH as this queued_command attachment AND as a separate
+    // type:'user' entry (with a different uuid), loadHistory's uuid-based
+    // dedupe would not catch it and the message would render twice. This
+    // test pins the current single-render, correctly-ordered behavior so
+    // that regression is caught the moment it appears.
+    const fixtureLines = readFileSync(QUEUED_ATTACHMENT_FIXTURE, 'utf-8')
+      .split('\n')
+      .filter((l) => l.trim().length > 0);
+    expect(fixtureLines.length).toBe(3);
+    writeJsonl(SESSION_ID, fixtureLines);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages.map((m) => m.type)).toEqual(['user', 'user', 'assistant']);
+
+    const containsProbe = (m: (typeof messages)[number]) =>
+      m.content.some((b) => b.type === 'text' && b.text.includes('QUEUED-B-SEEN'));
+
+    const initialUserIndex = 0;
+    const assistantIndex = 2;
+    const queuedIndex = messages.findIndex((m, i) => i !== initialUserIndex && m.type === 'user' && containsProbe(m));
+
+    expect(queuedIndex).toBeGreaterThan(initialUserIndex);
+    expect(queuedIndex).toBeLessThan(assistantIndex);
+
+    // Total occurrences of the probe text across user-type messages must be
+    // exactly 1 — the assistant's own reply legitimately echoes the phrase,
+    // but no user-type message should carry it twice.
+    const userProbeOccurrences = messages.filter((m) => m.type === 'user' && containsProbe(m)).length;
+    expect(userProbeOccurrences).toBe(1);
   });
 });

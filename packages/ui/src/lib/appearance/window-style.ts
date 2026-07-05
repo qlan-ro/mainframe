@@ -3,8 +3,13 @@ import type { WindowStyle } from '@/store/theme';
 export interface WindowStyleGeometry {
   /** AppShell RuntimeBody root: window backdrop + padding + inter-panel gap. */
   windowRoot: string;
-  /** SidebarShell outer panel. */
+  /** SidebarShell outer panel (left). */
   sidebar: string;
+  /** Right-side InspectorPane outer panel. Mirrors `sidebar` but, in the split
+   *  style, carries a left hairline instead of the sidebar's right one so the
+   *  divider sits between the workspace and the inspector (not doubled on the
+   *  sidebar side). */
+  inspector: string;
   /** AppShell main-surface pane — a transparent column for the floating styles
    *  (the MainToolbar sits on the window background, NOT inside a white card). */
   pane: string;
@@ -36,6 +41,7 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
     // floating-card inset comes from `workspaceInset` below instead.
     windowRoot: 'bg-mf-window p-0 gap-0',
     sidebar: 'bg-transparent backdrop-blur-0 rounded-none shadow-none',
+    inspector: 'bg-transparent backdrop-blur-0 rounded-none shadow-none',
     // Opaque (same colour as the window backdrop it sits on) so the pane slides
     // as a SOLID cover over the sidebar during a drag-collapse — otherwise the
     // transparent toolbar strip lets the sidebar header icons show through.
@@ -50,6 +56,7 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
   split: {
     windowRoot: 'bg-background p-0 gap-0',
     sidebar: 'bg-transparent backdrop-blur-0 rounded-none shadow-none [border-right:0.5px_solid_var(--border)]',
+    inspector: 'bg-transparent backdrop-blur-0 rounded-none shadow-none [border-left:0.5px_solid_var(--border)]',
     pane: 'rounded-none bg-background shadow-none',
     surface: 'bg-background',
     divider: 'bg-border',
@@ -60,6 +67,8 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
   glass: {
     windowRoot: 'bg-mf-window p-[7px] gap-[7px]',
     sidebar:
+      'bg-mf-glass backdrop-blur-[40px] backdrop-saturate-[1.8] rounded-[13px] shadow-[var(--mf-shadow-panel-soft)]',
+    inspector:
       'bg-mf-glass backdrop-blur-[40px] backdrop-saturate-[1.8] rounded-[13px] shadow-[var(--mf-shadow-panel-soft)]',
     // Opaque (same colour as the window backdrop) so the pane is a SOLID cover
     // over the sidebar during a drag-collapse — see the `unified` note above.

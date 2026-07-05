@@ -19,7 +19,8 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { MergeView } from '@codemirror/merge';
 import type { LangPackId } from '@/lib/editor/file-types';
-import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
+import { useTheme } from '@/store/theme';
+import { buildBaseExtensions, createEditorCompartments, makeWarmTheme, resolveLanguage } from './cm-setup';
 import { setActiveMergeView, clearActiveMergeView } from './diff-nav';
 
 /** Line selection payload reported by onLineSelect. */
@@ -107,6 +108,9 @@ export function CmDiffEditor({
   const onLineSelectRef = useRef(onLineSelect);
   onLineSelectRef.current = onLineSelect;
 
+  // Drives both panes' theme compartment dark flag; re-renders on a mode flip.
+  const mode = useTheme((s) => s.mode);
+
   // Per-pane compartments — one set for a (original), one for b (modified).
   // Each must be a separate instance: sharing Compartments across EditorViews
   // causes reconfigure() to target the wrong state tree.
@@ -118,10 +122,12 @@ export function CmDiffEditor({
   useEffect(() => {
     if (!hostRef.current) return;
 
-    const { lang: aLang, readOnly: aRo } = aCompartmentsRef.current;
-    const { lang: bLang, readOnly: bRo } = bCompartmentsRef.current;
+    const { lang: aLang, readOnly: aRo, theme: aTheme } = aCompartmentsRef.current;
+    const { lang: bLang, readOnly: bRo, theme: bTheme } = bCompartmentsRef.current;
     const langExt = resolveLanguage(language);
     const baseExts = buildBaseExtensions();
+    // Initial dark flag from the store (kept in sync by the effect below).
+    const themeExt = makeWarmTheme(useTheme.getState().mode === 'dark');
 
     // Click handler for the modified (b) pane — installed only when onLineSelect
     // is provided. Uses EditorView.domEventHandlers so it is additive and does
@@ -148,6 +154,7 @@ export function CmDiffEditor({
         doc: original,
         extensions: [
           ...baseExts,
+          aTheme.of(themeExt),
           diffTheme,
           aLang.of(langExt),
           aRo.of(EditorState.readOnly.of(true)), // original is always read-only
@@ -155,7 +162,14 @@ export function CmDiffEditor({
       },
       b: {
         doc: modified,
-        extensions: [...baseExts, diffTheme, bLang.of(langExt), bRo.of(EditorState.readOnly.of(readOnly)), bClickExt],
+        extensions: [
+          ...baseExts,
+          bTheme.of(themeExt),
+          diffTheme,
+          bLang.of(langExt),
+          bRo.of(EditorState.readOnly.of(readOnly)),
+          bClickExt,
+        ],
       },
       parent: hostRef.current,
       highlightChanges: true,
@@ -213,6 +227,20 @@ export function CmDiffEditor({
       effects: bRo.reconfigure(EditorState.readOnly.of(readOnly)),
     });
   }, [readOnly]);
+
+  // ── Sync light↔dark mode changes ─────────────────────────────────────────
+  // Reconfigure both panes' theme compartment so the CM6 `dark` flag tracks a
+  // live mode flip (colors already track the CSS vars).
+
+  useEffect(() => {
+    const mv = mergeViewRef.current;
+    if (!mv) return;
+    const themeExt = makeWarmTheme(mode === 'dark');
+    const { theme: aTheme } = aCompartmentsRef.current;
+    const { theme: bTheme } = bCompartmentsRef.current;
+    mv.a.dispatch({ effects: aTheme.reconfigure(themeExt) });
+    mv.b.dispatch({ effects: bTheme.reconfigure(themeExt) });
+  }, [mode]);
 
   return <div ref={hostRef} data-testid="editor-diff" className="mf-editor-selectable h-full overflow-auto" />;
 }
