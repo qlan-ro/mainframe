@@ -469,17 +469,30 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await page.getByTestId('git-worktree-toggle-wt-delete').click();
     await expect(row).toBeVisible();
 
+    // Assert the daemon's own delete-worktree REST call actually succeeded, not just that
+    // the row disappeared from the (optimistically-updated) sidebar — this is the
+    // observable server-side outcome the row-disappearance is supposed to reflect.
+    const respPromise = page.waitForResponse((r) => r.url().includes('/git/delete-worktree'));
+
     await page.getByTestId('git-worktree-delete-wt-delete').click();
     const confirmDialog = page.getByTestId('git-confirm-dialog');
     await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
     await expect(confirmDialog).toContainText('wt-delete');
     await page.getByTestId('git-confirm-dialog-confirm').click();
 
+    const resp = await respPromise;
+    expect(resp.status()).toBe(200);
+
     await expect(page.getByTestId('git-worktree-row-wt-delete')).toHaveCount(0, { timeout: 15_000 });
     await closeBranchPopover(page);
 
-    expect(existsSync(worktreeDeletePath)).toBe(false);
-    expect(git(project.projectPath, ['worktree', 'list'])).not.toContain('wt-delete');
+    // The daemon's delete-worktree route fully awaits `removeWorktree()` before responding, so
+    // the git-level effects are already committed by the time the 200 above is observed — this
+    // poll is a small safety margin against filesystem-visibility lag, not a real wait.
+    await expect.poll(() => existsSync(worktreeDeletePath), { timeout: 3_000 }).toBe(false);
+    await expect
+      .poll(() => git(project.projectPath, ['worktree', 'list']), { timeout: 3_000 })
+      .not.toContain('wt-delete');
   });
 
   test('quick actions: fetch, update all, and push current complete without error', async () => {
