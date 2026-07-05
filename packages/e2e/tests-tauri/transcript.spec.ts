@@ -140,9 +140,11 @@ test.describe('§transcript — thread turn', () => {
     // MessageTiming.formatMs: "<N>ms" under 1s, else "<N.NN>s".
     await expect(timingPill).toHaveText(/^\d+(\.\d+)?(ms|s)$/);
 
-    // Hovering reveals the tooltip's "Total" breakdown row.
+    // Hovering reveals the tooltip's "Total" breakdown row. Radix Tooltip
+    // portals content twice (an aria-live announcer copy plus the visible
+    // one) — scope to the first match rather than the ambiguous bare text.
     await timingPill.hover();
-    await expect(page.getByText('Total')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Total').first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('scroll-to-bottom button appears when scrolled up and returns to the tail on click', async () => {
