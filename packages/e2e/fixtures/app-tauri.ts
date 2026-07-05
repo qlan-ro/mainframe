@@ -101,7 +101,13 @@ export async function launchTauriApp(opts?: { recordingKey?: string }): Promise<
   let browser: Browser | undefined;
   try {
     preview = await startPreview();
-    browser = await chromium.launch();
+    // MF_E2E_HEADED=1 shows the browser (optionally MF_E2E_SLOWMO=<ms> to slow actions down
+    // for human watching). The fixture launches Chromium itself, so Playwright's --headed
+    // flag never reaches this call.
+    browser = await chromium.launch({
+      headless: process.env['MF_E2E_HEADED'] !== '1',
+      slowMo: Number(process.env['MF_E2E_SLOWMO']) || 0,
+    });
     const page = await browser.newPage();
     await page.goto(PREVIEW_BASE, { waitUntil: 'domcontentloaded' });
 
