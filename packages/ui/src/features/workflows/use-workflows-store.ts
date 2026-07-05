@@ -58,7 +58,14 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
     try {
       const detail = await wfApi.getRun(port, runId);
       if (seq !== runSeq) return;
+      // Also upsert into `runs` (via patchRun) — otherwise WfRunsList/WfLibrary
+      // only learn about this run's latest status/outputs through the
+      // `workflow.run.updated` WS event, which the RunDetail view doesn't
+      // depend on; a run finishing while its detail is open would show
+      // "succeeded" here but stay stale everywhere else until a manual
+      // reopen (re-triggering loadAll) forced a fresh fetch.
       set({ runDetail: detail });
+      get().patchRun(detail.run);
     } catch (err) {
       if (seq !== runSeq) return;
       set({ error: err instanceof Error ? err.message : 'Failed to load run' });

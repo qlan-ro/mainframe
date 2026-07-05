@@ -54,6 +54,17 @@ export function WorkflowsModalHost({ port }: Props): React.ReactElement {
       <DialogContent
         data-testid="workflows-modal"
         hideClose
+        tabIndex={-1}
+        onOpenAutoFocus={(e) => {
+          // Radix would otherwise autofocus the first tabbable descendant —
+          // the Hint-wrapped close button. Focusing a Tooltip trigger opens
+          // the tooltip (keyboard a11y), which mounts its own dismissable
+          // layer *above* this dialog's, so the first Escape would dismiss
+          // the tooltip instead of the modal. Focus the content container
+          // itself instead; Tab still reaches every control normally.
+          e.preventDefault();
+          (e.target as HTMLElement).focus();
+        }}
         onEscapeKeyDown={(e) => {
           if (selectedRunId != null) {
             e.preventDefault();

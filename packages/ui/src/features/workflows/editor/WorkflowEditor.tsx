@@ -44,7 +44,13 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   const isNew = target.mode === 'new';
 
   const [model, setModel] = useState<WfDraft>(blankDraft);
-  const [yaml, setYaml] = useState('');
+  // New drafts start from the builder's blank model, serialized up front —
+  // otherwise the YAML pane renders empty until the user makes a builder
+  // edit, which leaves "New workflow" unsavable (no valid YAML) if the user
+  // opens straight into Split/YAML mode without touching the builder first.
+  // Edit mode has no model yet (server YAML loads async below), so it starts
+  // blank and is populated by the load effect.
+  const [yaml, setYaml] = useState(() => (isNew ? serializeWorkflow(blankDraft()) : ''));
   // New workflows default to split view (builder + YAML); edit mode is YAML-only.
   const [mode, setMode] = useState<EditorMode>(isNew ? 'split' : 'yaml');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -100,6 +106,17 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
     },
     [port],
   );
+
+  // New drafts: validate the initial serialized blank draft immediately, so
+  // "Create" isn't stuck disabled ("Validating…" forever) until the user
+  // edits the builder or the YAML pane. Edit mode's own load effect above
+  // reads server YAML asynchronously and doesn't need this.
+  // Mount-only: run once against the initializer's value. Every later edit
+  // already reschedules validation via handleYamlChange/handleModelChange, so
+  // this intentionally does not depend on `yaml`/`scheduleValidation`.
+  useEffect(() => {
+    if (isNew) scheduleValidation(yaml);
+  }, []);
 
   const handleYamlChange = useCallback(
     (value: string) => {

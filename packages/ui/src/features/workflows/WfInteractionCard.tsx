@@ -127,7 +127,15 @@ export function WfInteractionCard({
           {/* Expanded form */}
           {open && (
             <div className="mt-[13px]">
-              <WfAnswerForm port={port} interaction={interaction} onDone={() => setOpen(false)} />
+              {/* No onDone-triggered auto-collapse: WfAnswerForm calls onDone
+                  synchronously in the same handler that sets its own local
+                  "done"/"already-answered" state. Collapsing here (`setOpen`)
+                  would unmount WfAnswerForm in that same React batch, before
+                  its confirmation view ever renders. The card stays expanded
+                  showing the confirmation; it disappears on its own once the
+                  daemon's `workflow.interaction.resolved` event removes this
+                  interaction from the store. */}
+              <WfAnswerForm port={port} interaction={interaction} />
             </div>
           )}
         </div>

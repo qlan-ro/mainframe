@@ -224,4 +224,20 @@ describe('WorkflowEditor', () => {
     fireEvent.click(screen.getByTestId('workflows-editor-cancel'));
     expect(useWorkflowsModal.getState().editorTarget).toBeNull();
   });
+
+  it('new-mode YAML pane is initialized from the blank draft on first open, not empty', () => {
+    renderEditor({ mode: 'new' });
+    const textarea = screen.getByTestId('workflows-editor-yaml') as HTMLTextAreaElement;
+    expect(textarea.value).not.toBe('');
+    expect(textarea.value).toContain('name: untitled');
+    expect(textarea.value).toContain('steps:');
+  });
+
+  it('new-mode schedules validation for the initial YAML without requiring a user edit first', async () => {
+    renderEditor({ mode: 'new' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(wfApi.validateYaml).toHaveBeenCalledWith(PORT, expect.stringContaining('name: untitled'));
+  });
 });
