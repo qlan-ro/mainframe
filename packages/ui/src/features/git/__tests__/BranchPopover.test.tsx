@@ -401,6 +401,55 @@ describe('BranchPopover — side-by-side submenu', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 12. Trigger tooltip — BranchPopover owns the Hint wrapping via `triggerLabel`,
+// so callers never have to interpose Hint inside `children` themselves.
+//
+// Radix's PopoverTrigger (asChild) clones its `children` element in place,
+// merging in `ref`/`aria-expanded`/`data-state` so Popper can anchor the
+// content to a real DOM node. If a caller instead wraps its trigger button in
+// `Hint` (a plain function component, no forwardRef) BEFORE handing it to
+// BranchPopover as `children`, that clone lands on Hint's props instead of
+// the underlying DOM button — the merged props are silently dropped, the
+// trigger ref stays null, and Popper can never measure a reference element
+// (the content is stuck at its un-positioned placeholder transform). The fix
+// is for BranchPopover to accept the bare trigger as `children` and apply the
+// tooltip itself via a `triggerLabel` prop, wrapping Hint OUTSIDE
+// PopoverTrigger — mirroring the `NewSessionPickerPopover` pattern.
+// ---------------------------------------------------------------------------
+
+describe('BranchPopover — trigger tooltip via triggerLabel (Hint wraps PopoverTrigger)', () => {
+  it('shows the triggerLabel tooltip on hover of the bare trigger child', async () => {
+    const user = userEvent.setup();
+    renderPopover({
+      open: false,
+      triggerLabel: 'Switch branch',
+      children: <button data-testid="branch-trigger-btn">main</button>,
+    });
+
+    const trigger = screen.getByTestId('branch-trigger-btn');
+    await user.hover(trigger);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Switch branch');
+  });
+
+  it('still forwards Radix Popover state (aria-expanded) onto the real trigger button through the Hint wrapper', async () => {
+    // aria-expanded is recomputed from Popover context on every render and set
+    // directly on the real DOM node via the trigger ref; it only reaches the
+    // button if that ref chain (TooltipTrigger asChild -> PopoverTrigger
+    // asChild -> button) stays intact. If BranchPopover wrapped Hint the wrong
+    // way around (inside PopoverTrigger, over the child) this would stay
+    // 'false' regardless of `open`.
+    renderPopover({
+      open: true,
+      triggerLabel: 'Switch branch',
+      children: <button data-testid="branch-trigger-btn">main</button>,
+    });
+
+    const trigger = await screen.findByTestId('branch-trigger-btn');
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 11. Reopen race: a stale response from the FIRST open must not clobber the
 // data from a SECOND, fresher open (reopen-hang regression).
 //

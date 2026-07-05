@@ -9,13 +9,22 @@
  * Branches are loaded LAZILY — only when `open` becomes true. The closed
  * popover never fires git fetches, so AppShell integration tests pass cleanly.
  *
- * Accepts `children` as the popover trigger (PopoverTrigger asChild), matching
- * the TagPopover pattern.
+ * Accepts `children` as the BARE popover trigger (PopoverTrigger asChild),
+ * matching the TagPopover pattern — and an optional `triggerLabel` for a
+ * tooltip. `triggerLabel` wraps `PopoverTrigger` (a real forwardRef Radix
+ * component) in `Hint`, not `children` directly: `Hint` is a plain function
+ * component that doesn't forward arbitrary props/refs, so nesting it inside
+ * `PopoverTrigger asChild` would silently drop the `ref`/`aria-expanded`/
+ * `data-state` Radix's Slot needs to clone onto the real trigger DOM node —
+ * without that ref, Popper has no reference element to anchor the content to,
+ * so it stays at its un-positioned placeholder transform (see the
+ * Hint-inside-asChild-trigger trap in `NewSessionPickerPopover`).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Hint } from '@/components/ui/hint';
 import { sessionCustomOf } from '../sessions/view-model/chat-to-thread-custom';
 import { useBranchActions } from './use-branch-actions';
 import { useWorktreeSession } from './use-worktree-session';
@@ -40,7 +49,10 @@ export interface BranchPopoverProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBranchChanged?: () => void;
-  children?: React.ReactNode;
+  /** Bare trigger element — do NOT pre-wrap in `Hint` (see file header). */
+  children?: React.ReactElement;
+  /** Optional tooltip label for the trigger; wraps `PopoverTrigger` in `Hint`. */
+  triggerLabel?: string;
 }
 
 interface SelectedBranch {
@@ -56,6 +68,7 @@ export function BranchPopover({
   onOpenChange,
   onBranchChanged,
   children,
+  triggerLabel,
 }: BranchPopoverProps) {
   // Resolve adapterId from the active thread's custom — falls back to 'claude'.
   const adapterId = useAuiState((s) => {
@@ -185,9 +198,11 @@ export function BranchPopover({
   // Remote BranchInfo stubs — same mapping as BranchList.tsx.
   const remoteBranchInfos: BranchInfo[] = remoteNames.map((name) => ({ name, current: false }));
 
+  const trigger = children ? <PopoverTrigger asChild>{children}</PopoverTrigger> : null;
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
+      {trigger && (triggerLabel ? <Hint label={triggerLabel}>{trigger}</Hint> : trigger)}
       <PopoverContent
         data-testid="git-branch-popover"
         className="w-auto rounded-none border-0 bg-transparent p-0 shadow-none overflow-visible"

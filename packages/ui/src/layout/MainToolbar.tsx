@@ -106,24 +106,28 @@ export function MainToolbar({
                   open={branchOpen}
                   onOpenChange={setBranchOpen}
                   onBranchChanged={handleBranchChanged}
+                  triggerLabel="Switch branch"
                 >
-                  <Hint label="Switch branch">
-                    <button
-                      data-testid="main-toolbar-branch"
-                      type="button"
-                      onClick={() => setBranchOpen((o) => !o)}
-                      className={cn(
-                        'inline-flex h-[22px] min-w-0 max-w-[230px] cursor-pointer items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal',
-                        branchOpen
-                          ? 'bg-primary/10 border border-primary/40 text-foreground'
-                          : 'text-muted-foreground hover:bg-accent',
-                      )}
-                    >
-                      <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                      <span className="truncate">{displayBranch}</span>
-                      <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
-                    </button>
-                  </Hint>
+                  {/* Bare trigger — BranchPopover wraps this in Hint itself (via
+                      triggerLabel), around PopoverTrigger. Wrapping Hint here would
+                      interpose a non-forwarding component inside PopoverTrigger's
+                      asChild clone, dropping the ref Popper needs to position the
+                      content (see BranchPopover.tsx's file header). */}
+                  <button
+                    data-testid="main-toolbar-branch"
+                    type="button"
+                    onClick={() => setBranchOpen((o) => !o)}
+                    className={cn(
+                      'inline-flex h-[22px] min-w-0 max-w-[230px] cursor-pointer items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal',
+                      branchOpen
+                        ? 'bg-primary/10 border border-primary/40 text-foreground'
+                        : 'text-muted-foreground hover:bg-accent',
+                    )}
+                  >
+                    <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
+                    <span className="truncate">{displayBranch}</span>
+                    <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+                  </button>
                 </BranchPopover>
               ) : (
                 <Hint label="Switch branch — coming with its surface">
