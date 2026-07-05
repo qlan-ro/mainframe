@@ -18,6 +18,9 @@
  *  5. Not a __LOCALID_* id → setDraftConfig not called.
  *  6. itemStatus !== 'new' → setDraftConfig not called.
  *  7. Messages already present (messageCount > 0) → setDraftConfig not called.
+ *  8. Regression (bug: draft discard is a no-op with a pill active): a local id
+ *     just marked "discarded" (useDiscardedDraftStore) must NOT be re-armed even
+ *     though it still looks like a fresh, unconfigured __LOCALID_* thread.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -64,6 +67,7 @@ vi.mock('../../runtime/draft-config', () => ({
 // ---------------------------------------------------------------------------
 
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
+import { useDiscardedDraftStore, markDraftDiscarded } from '../discarded-drafts';
 const { useNewThreadAutoConfig } = await import('../use-new-thread-auto-config');
 
 // ---------------------------------------------------------------------------
@@ -80,6 +84,7 @@ beforeEach(() => {
   };
   // Reset the real ready store.
   useNewThreadReady.setState({ readyIds: new Set<string>() });
+  useDiscardedDraftStore.setState({ ids: new Set<string>() });
 });
 
 // ---------------------------------------------------------------------------
@@ -219,6 +224,28 @@ describe('useNewThreadAutoConfig — thread already has messages', () => {
       thread: { messages: [{ id: 'm1' }] },
     };
     fakeFilterProjectId = 'proj-42';
+
+    renderHook(() => useNewThreadAutoConfig());
+
+    expect(setDraftConfigSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Regression: a just-discarded local id must not be instantly re-armed.
+//
+// Bug: onDiscard resets the draft config + ready flag for the reused
+// __LOCALID_* slot, then asynchronously switches away — but switchToThread
+// hasn't landed yet, so this hook still sees the SAME slot as the active,
+// fresh, unconfigured thread and immediately re-seeds the very draft the user
+// just closed. Only reproducible with a project pill active — in "All" view
+// filterProjectId is null and this hook is already a no-op (case 2 above).
+// ---------------------------------------------------------------------------
+
+describe('useNewThreadAutoConfig — a just-discarded local id is not re-armed', () => {
+  it('does not call setDraftConfig for a local id marked discarded, even though it still looks fresh', () => {
+    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+    markDraftDiscarded('__LOCALID_x');
 
     renderHook(() => useNewThreadAutoConfig());
 

@@ -18,10 +18,11 @@
  *  4. No-op at boot, before any main thread is selected (mainThreadId is the
  *     empty-string boot default, not a real "other" thread) → no reset.
  */
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useDraftConfigStore, setDraftConfig, getDraftConfig } from '../../runtime/draft-config';
 import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
+import { useDiscardedDraftStore, isDraftDiscarded } from '../../new-thread/discarded-drafts';
 
 type FakeAuiState = { threads: { mainThreadId: string; newThreadId: string | null } };
 
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useDraftConfigStore.setState({ drafts: new Map() });
   useDraftReturnTarget.setState({ returnThreadId: null });
+  useDiscardedDraftStore.setState({ ids: new Set() });
   switchToThreadSpy.mockReset();
   fakeAuiState = { threads: { mainThreadId: '__LOCALID_draft', newThreadId: '__LOCALID_draft' } };
 });
@@ -151,5 +153,27 @@ describe('useDraftRow — regression: pending create-to-switch handoff is not mi
     fakeAuiState = { threads: { mainThreadId: 'chat-other', newThreadId: '__LOCALID_pending' } };
     rerender();
     expect(mockResetNewThreadDraft).toHaveBeenCalledWith('__LOCALID_pending');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression (bug: draft discard is a no-op with a pill active)
+//
+// onDiscard() must mark the local id as discarded (discarded-drafts.ts) so
+// useNewThreadAutoConfig doesn't instantly re-seed the very draft the user
+// just closed while switchToThread's async handoff away is still in flight.
+// ---------------------------------------------------------------------------
+
+describe('useDraftRow — onDiscard marks the local id as discarded', () => {
+  it('leaves the local id marked discarded after the ✕ handler runs', () => {
+    setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
+    expect(isDraftDiscarded('__LOCALID_draft')).toBe(false);
+
+    const { result } = renderHook(() => useDraftRow([], 'proj-a'));
+    act(() => {
+      result.current.onDiscard();
+    });
+
+    expect(isDraftDiscarded('__LOCALID_draft')).toBe(true);
   });
 });

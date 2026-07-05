@@ -15,6 +15,7 @@ import { draftRowVisible, type DraftRowModel } from '../new-thread/draft-row';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
 import { useDraftConfigStore } from '../runtime/draft-config';
 import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
+import { markDraftDiscarded } from '../new-thread/discarded-drafts';
 
 export interface DraftRowState {
   model: DraftRowModel | null;
@@ -78,6 +79,13 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
   const onDiscard = useCallback(() => {
     if (newThreadId == null) return;
     resetNewThreadDraft(newThreadId);
+    // switchToThread below is async (an aui hook task) — mainThreadId doesn't
+    // catch up until it resolves. Until then this slot still looks like a
+    // fresh, unconfigured __LOCALID_* thread to useNewThreadAutoConfig, which
+    // would otherwise instantly re-seed the very draft just discarded when a
+    // project pill is active. Mark it discarded to suppress that re-arm; the
+    // marker is cleared by resetNewThreadDraft on the next genuine New action.
+    markDraftDiscarded(newThreadId);
     const { returnThreadId, clear } = useDraftReturnTarget.getState();
     const target = returnThreadId ?? allItems[0]?.id ?? null;
     if (target != null) runtime.threads.switchToThread(target);

@@ -231,13 +231,19 @@ function SessionRowInner({
         queueMicrotask(() => setIsRenaming(true));
       }}
       onTags={() => {
-        // Deferred like the sibling onRename prop above: Radix closes the
-        // context menu on select, and opening the tag popover synchronously
-        // in that same tick gets swallowed by that close.
-        queueMicrotask(() => {
+        // Radix's ContextMenu is a MODAL layer: closing it on select restores
+        // focus to the trigger via a requestAnimationFrame-scheduled callback
+        // (its FocusScope handing focus back), which always runs AFTER the
+        // microtask queue drains. A queueMicrotask-deferred open lets our
+        // popover grab focus first, then loses it to that rAF right
+        // afterwards — its own FocusScope reads that as "focus moved
+        // outside" and dismisses the popover immediately (flash-open then
+        // close). setTimeout (a macrotask) reliably runs after that
+        // rAF-scheduled restore, so the popover keeps focus.
+        setTimeout(() => {
           const p = contextMenuPoint.current;
           handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
-        });
+        }, 0);
       }}
       onArchive={() => void itemRuntime.archive()}
       claudeSessionId={custom.claudeSessionId}

@@ -12,11 +12,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
+import { markDraftDiscarded, isDraftDiscarded, useDiscardedDraftStore } from '../discarded-drafts';
 import { resetNewThreadDraft } from '../reset-new-thread-draft';
 
 beforeEach(() => {
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
+  useDiscardedDraftStore.setState({ ids: new Set() });
 });
 
 describe('resetNewThreadDraft', () => {
@@ -44,5 +46,20 @@ describe('resetNewThreadDraft', () => {
   it('is a no-op for an empty slot (undefined / null id)', () => {
     expect(() => resetNewThreadDraft(undefined)).not.toThrow();
     expect(() => resetNewThreadDraft(null)).not.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: resetNewThreadDraft is the canonical "start a fresh New
+  // action" reset point (pill-active "+", the project picker's pick(), and
+  // ⌘N all call it) — it must also clear the discarded-draft suppression
+  // marker so a recycled localId's genuinely new New arms normally again.
+  // -------------------------------------------------------------------------
+  it('clears the discarded-draft marker for the given local id', () => {
+    markDraftDiscarded('__LOCALID_1');
+    expect(isDraftDiscarded('__LOCALID_1')).toBe(true);
+
+    resetNewThreadDraft('__LOCALID_1');
+
+    expect(isDraftDiscarded('__LOCALID_1')).toBe(false);
   });
 });

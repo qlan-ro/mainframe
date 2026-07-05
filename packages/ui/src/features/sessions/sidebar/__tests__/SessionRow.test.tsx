@@ -614,37 +614,61 @@ describe('SessionRow — Tags context-menu action passes right-click coords to u
 });
 
 // ---------------------------------------------------------------------------
-// 18. Regression (bug b): right-click "Tags" never opened the popover because
-// the context-menu onTags callback ran handleTags synchronously inside Radix's
-// ContextMenuItem.onSelect — Radix closes the menu on select, and opening a
-// popover in that same tick gets swallowed. The sibling onRename prop (a few
-// lines above) already works around this exact class of bug by deferring its
-// state update with queueMicrotask; onTags must do the same.
+// 18. Regression (bug b): right-click "Tags" never opened the popover live.
+//
+// A first attempt deferred the store update with `queueMicrotask` (mirroring
+// onRename). That is provably insufficient: Radix's ContextMenu is a MODAL
+// DismissableLayer (`@radix-ui/react-menu`, `modal=true` by default). Closing
+// it on select schedules a focus-restoration callback (its FocusScope hands
+// focus back to the trigger) via `requestAnimationFrame` — which always runs
+// AFTER the microtask queue drains. A `queueMicrotask`-deferred open lets our
+// popover grab focus (it autofocuses its search input) BEFORE that rAF fires;
+// when the rAF then steals focus back to the row, our popover's own
+// FocusScope reads that as "focus moved outside" and dismisses itself. Net
+// effect live: the popover flashes open and instantly closes.
+//
+// The fix must defer past a macrotask (`setTimeout`), which reliably runs
+// after that rAF-scheduled focus restoration. This test proves the mechanism
+// directly: with fake timers, a microtask-only flush must NOT be enough to
+// open the popover; only flushing a macrotask does.
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — Tags context-menu action defers via queueMicrotask (mirrors onRename)', () => {
-  afterEach(() => {
-    useTagPopoverTarget.getState().close();
+describe('SessionRow — Tags context-menu action defers past a macrotask (not just a microtask)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
   });
 
-  it('does not open the tag popover synchronously within the click dispatch (deferred past the microtask, like onRename)', () => {
+  afterEach(() => {
+    useTagPopoverTarget.getState().close();
+    vi.useRealTimers();
+  });
+
+  it('does not open the tag popover synchronously within the click dispatch', () => {
     render(<SessionRow item={makeItem()} />);
 
     fireEvent.contextMenu(screen.getByTestId('sessions-row'));
     fireEvent.click(screen.getByTestId('sessions-ctx-tags'));
 
-    // Right after the (fully synchronous) click dispatch returns, the popover
-    // target must still be unset — proves the handler is scheduled via
-    // queueMicrotask rather than invoked inline inside Radix's onSelect.
     expect(useTagPopoverTarget.getState().target).toBeNull();
   });
 
-  it('opens the tag popover once microtasks flush', async () => {
+  it('does NOT open merely from flushing the microtask queue (a microtask alone is not a safe-enough defer)', async () => {
     render(<SessionRow item={makeItem()} />);
 
     fireEvent.contextMenu(screen.getByTestId('sessions-row'));
     fireEvent.click(screen.getByTestId('sessions-ctx-tags'));
     await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useTagPopoverTarget.getState().target).toBeNull();
+  });
+
+  it('opens the tag popover once the deferred macrotask runs', async () => {
+    render(<SessionRow item={makeItem()} />);
+
+    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+    fireEvent.click(screen.getByTestId('sessions-ctx-tags'));
+    await vi.runAllTimersAsync();
 
     expect(useTagPopoverTarget.getState().target).not.toBeNull();
   });

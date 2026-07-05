@@ -13,6 +13,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { getDraftConfig, setDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { isDraftDiscarded } from './discarded-drafts';
 
 /** Default adapter for a project-scoped new thread (matches desktop startChat). */
 const DEFAULT_ADAPTER_ID = 'claude';
@@ -27,7 +28,11 @@ export function useNewThreadAutoConfig(): void {
   useEffect(() => {
     if (localId == null || filterProjectId == null) return;
     const isNewLocal = localId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
-    if (!isNewLocal || isReady || getDraftConfig(localId)) return;
+    // A just-discarded draft (✕) still looks fresh here — its draft-config and
+    // ready flag were just cleared, and switchToThread(target) away from it
+    // hasn't landed yet. Without this guard we'd instantly re-seed the exact
+    // draft the user just closed (see discarded-drafts.ts).
+    if (!isNewLocal || isReady || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
     // No permissionMode: chat creation omits it so the daemon applies the user's
     // provider defaultMode (matching desktop). A deliberate pick sets it later.
     setDraftConfig(localId, { projectId: filterProjectId, adapterId: DEFAULT_ADAPTER_ID });

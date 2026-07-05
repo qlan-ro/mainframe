@@ -14,12 +14,19 @@
  * Calling this at the start of each New action resets the slot so the draft always
  * reflects the CURRENT context. No-op when the slot is empty (undefined/null) — a
  * committed thread has already had its draft cleared by the coordinator.
+ *
+ * Also clears the discarded-draft suppression marker (see discarded-drafts.ts):
+ * this function IS the canonical "start a fresh New action" reset point, so a
+ * genuinely new New for a recycled localId must arm normally, not stay
+ * suppressed from a previous discard on that same slot.
  */
 import { clearDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { clearDraftDiscarded } from './discarded-drafts';
 
 export function resetNewThreadDraft(newThreadId: string | null | undefined): void {
   if (!newThreadId) return;
   clearDraftConfig(newThreadId);
   useNewThreadReady.getState().clearReady(newThreadId);
+  clearDraftDiscarded(newThreadId);
 }
