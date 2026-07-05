@@ -593,41 +593,219 @@ test.describe('§tool-cards — ToolFallback (unregistered-tool)', () => {
   });
 });
 
-// ─── Card families with no recording today ────────────────────────────────────
+// ─── Schedule/Cron/Monitor pills — schedule-pills ─────────────────────────────
 
-test.describe('§tool-cards — families needing a recording', () => {
-  test.skip('Schedule/Cron/Monitor pills (all 5 kinds)', async () => {
-    // TODO(recording): needs `schedule-pills` — ScheduleWakeup, CronCreate, CronDelete, CronList
-    // (with >=1 job, for the expandable job-list body), and Monitor calls. No existing recording
-    // calls any of these tool names.
+test.describe('§tool-cards — Schedule/Cron/Monitor pills (schedule-pills)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'schedule-pills' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
 
-  test.skip('EnterWorktree / ExitWorktree pills', async () => {
-    // TODO(recording): needs `worktree-pills` — an EnterWorktree call (name/worktreePath in the
-    // result) and an ExitWorktree call (action: keep vs remove). No existing recording calls
-    // either tool name.
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
   });
 
-  test.skip('ToolResultExpand "Show full output" for a truncated tool result', async () => {
-    // TODO(recording): needs any tool call (Bash/Read/Grep are simplest) whose result carries
-    // `{truncated: true, fullBytes: N}` — i.e. an output large enough for the daemon to truncate.
-    // Every existing recording's tool output is small (a handful of lines), so isTruncatedResult()
-    // is false everywhere; ToolResultExpand's toggle/collapse/fetch-error states are unreached.
+  test('Schedule/Cron/Monitor pills (all 5 kinds)', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Schedule a wakeup, create a cron job, list schedules, delete one, and monitor the build');
+
+    const wakeupPill = page.getByTestId('chat-schedule-schedulewakeup-pill');
+    await wakeupPill.waitFor({ timeout: 60_000 });
+    // formatDelay(5400) = "90m"; ScheduleWakeup is never expandable.
+    await expect(wakeupPill).toContainText('Will resume in');
+    await expect(wakeupPill).toContainText('90m');
+    await expect(wakeupPill).toBeDisabled();
+
+    const cronCreatePill = page.getByTestId('chat-schedule-croncreate-pill');
+    await expect(cronCreatePill).toContainText('Scheduled:');
+    await expect(cronCreatePill).toContainText('every day at 9:00 AM');
+    await expect(cronCreatePill).toContainText('recurring');
+    await expect(cronCreatePill).toBeDisabled();
+
+    // CronList is expandable — 1 job in the body.
+    const cronListPill = page.getByTestId('chat-schedule-cronlist-pill');
+    await expect(cronListPill).toContainText('Listed');
+    await expect(cronListPill).toContainText('1 scheduled job');
+    await cronListPill.click();
+    const cronListBody = page.getByTestId('marker-body');
+    await expect(cronListBody).toBeVisible({ timeout: 5_000 });
+    await expect(cronListBody).toContainText('cron-1');
+    await expect(cronListBody).toContainText('every day at 9:00 AM');
+    await expect(cronListBody).toContainText('Send the weekly report');
+    await cronListPill.click();
+    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+
+    const cronDeletePill = page.getByTestId('chat-schedule-crondelete-pill');
+    await expect(cronDeletePill).toContainText('Removed schedule');
+    await expect(cronDeletePill).toContainText('cron-1');
+    await expect(cronDeletePill).toBeDisabled();
+
+    // Monitor is expandable — raw result text in the body.
+    const monitorPill = page.getByTestId('chat-schedule-monitor-pill');
+    await expect(monitorPill).toContainText('Stopped monitoring:');
+    await expect(monitorPill).toContainText('Watch the build');
+    await monitorPill.click();
+    const monitorBody = page.getByTestId('marker-body');
+    await expect(monitorBody).toBeVisible({ timeout: 5_000 });
+    await expect(monitorBody).toContainText('Build succeeded in 42s');
+  });
+});
+
+// ─── EnterWorktree / ExitWorktree pills — worktree-pills ──────────────────────
+
+test.describe('§tool-cards — EnterWorktree / ExitWorktree pills (worktree-pills)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'worktree-pills' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
 
-  test.skip('ToolGroup — consecutive explore-family tool calls collapse under one header', async () => {
-    // TODO(recording): needs `tool-group` — 2+ consecutive Read/Glob/Grep/LS calls in one assistant
-    // turn with no non-explore tool call between them, so the daemon's tool_group encoding fires
-    // (see group-parts.ts: "a LONE explore tool ... has no recorded groupId"). changes-tab/
-    // context-tab each call exactly one Read before an Edit — not consecutive explore tools, so no
-    // grouping occurs today. Also needs the group to still be RUNNING at some point during replay to
-    // exercise ToolGroupTrigger's aria-busy state.
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
   });
 
-  test.skip('Bash card exit-code coloring (ExitLine green/red) and error-bordered card', async () => {
-    // TODO(recording): needs `bash-exit-code` — a Bash call whose result ends with a trailing
-    // "exit N" line (both N=0 and N!=0 variants), and/or an isError:true Bash result, to exercise
-    // BashCard's ExitLine color branch and cardStyle's destructive border. messaging/thread's `ls -la`
-    // result has no trailing exit line and isError:false.
+  test('EnterWorktree / ExitWorktree pills', async () => {
+    const { page } = app;
+    await sendMessage(
+      page,
+      'Enter a worktree for feature-x, exit keeping it, enter one for feature-y, then exit removing it',
+    );
+
+    const enterPills = page.getByTestId('chat-worktree-enter-pill');
+    const exitPills = page.getByTestId('chat-worktree-exit-pill');
+    await enterPills.nth(1).waitFor({ timeout: 60_000 });
+
+    await expect(enterPills.nth(0)).toContainText('Entered worktree:');
+    await expect(enterPills.nth(0)).toContainText('feature-x');
+    await expect(exitPills.nth(0)).toHaveText(/Exited worktree \(kept\)/);
+
+    await expect(enterPills.nth(1)).toContainText('Entered worktree:');
+    await expect(enterPills.nth(1)).toContainText('feature-y');
+    await expect(exitPills.nth(1)).toHaveText(/Removed worktree/);
+
+    // Non-expandable — no disclosure body on any of the 4 pills.
+    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+  });
+});
+
+// ─── ToolResultExpand "Show full output" — tool-result-truncated ──────────────
+
+test.describe('§tool-cards — ToolResultExpand (tool-result-truncated)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'tool-result-truncated' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('ToolResultExpand "Show full output" for a truncated tool result', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Print the contents of build.log');
+
+    const card = page.getByTestId('chat-bash-card').first();
+    await card.waitFor({ timeout: 60_000 });
+    await card.getByTestId('chat-bash-trigger').click();
+
+    // truncateToolContent kicks in above its 32KB threshold — the recorded
+    // result is 51191 bytes, so fmtBytes rounds to "50 KB".
+    const toggle = card.getByTestId('tool-result-expand-toggle');
+    await expect(toggle).toBeVisible({ timeout: 5_000 });
+    await expect(toggle).toContainText('Show full output');
+    await expect(toggle).toContainText('50 KB');
+    await expect(card.getByTestId('chat-bash-output')).toHaveCount(0);
+  });
+});
+
+// ─── ToolGroup — consecutive explore-family tool calls — tool-group ───────────
+
+test.describe('§tool-cards — ToolGroup (tool-group)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'tool-group' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('ToolGroup — consecutive explore-family tool calls collapse under one header', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Find where greeting is defined and used');
+
+    const group = page.getByTestId('chat-tool-group').first();
+    await group.waitFor({ timeout: 60_000 });
+
+    const toggle = group.getByTestId('chat-tool-group-toggle');
+    await expect(toggle.getByTestId('tool-group-trigger-label')).toHaveText('Read 1 file · Searched 1 pattern');
+    await expect(toggle.getByTestId('tool-group-trigger-count')).toHaveText('2 calls');
+
+    // defaultOpen — the grouped Read + Grep cards are already mounted.
+    await expect(group.getByTestId('read-card-root')).toBeVisible();
+    await expect(group.getByTestId('search-card-root')).toBeVisible();
+  });
+});
+
+// ─── Bash card exit-code coloring — bash-exit-code ────────────────────────────
+
+test.describe('§tool-cards — Bash exit-code coloring (bash-exit-code)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'bash-exit-code' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('Bash card exit-code coloring (ExitLine green/red) and error-bordered card', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Run the test suite, then run a bad command');
+
+    const cards = page.getByTestId('chat-bash-card');
+    const testCard = cards.nth(0);
+    await testCard.waitFor({ timeout: 60_000 });
+    await testCard.getByTestId('chat-bash-trigger').click();
+    const testOutput = testCard.getByTestId('chat-bash-output');
+    await expect(testOutput).toBeVisible({ timeout: 5_000 });
+    await expect(testOutput).toContainText('exit 0');
+    await expect(testOutput.locator('span', { hasText: 'exit 0' })).toHaveClass(/text-mf-term-green/);
+
+    const buildCard = cards.nth(1);
+    await buildCard.waitFor({ timeout: 10_000 });
+    await buildCard.getByTestId('chat-bash-trigger').click();
+    const buildOutput = buildCard.getByTestId('chat-bash-output');
+    await expect(buildOutput).toBeVisible({ timeout: 5_000 });
+    await expect(buildOutput).toContainText('exit 127');
+    await expect(buildOutput.locator('span', { hasText: 'exit 127' })).toHaveClass(/text-destructive/);
+
+    // cardStyle's destructive border lives on the trigger's immediate parent
+    // (the styled wrapper div), not the outer `chat-bash-card` testid element.
+    await expect(buildCard.getByTestId('chat-bash-trigger').locator('..')).toHaveClass(/border-destructive/);
   });
 });

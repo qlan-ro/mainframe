@@ -84,34 +84,25 @@ test.describe('§sidebar-chrome', () => {
     const { page } = app;
     await page.getByTestId('sidebar-workflows-button').click();
     await expect(page.getByTestId('workflows-modal')).toBeVisible({ timeout: 10_000 });
-    // Close via the real close button, not Escape — see the TODO(bug) test below
-    // for why a single Escape press doesn't close this dialog.
     await page.getByTestId('workflows-close').click();
     await expect(page.getByTestId('workflows-modal')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  // TODO(bug): a single Escape press does not close the workflows modal. Triaged
-  // live via `document.activeElement` + a console listener: Radix Dialog's
-  // default `onOpenAutoFocus` moves keyboard focus to the first focusable
-  // element inside DialogContent, which is the `workflows-close` button
-  // (WorkflowsView.tsx) — and that button is wrapped in the shared `Hint`
-  // tooltip primitive. Radix Tooltip shows on focus (not just hover), so
-  // opening the modal ALSO opens a stray "Close" tooltip on top of it
-  // (confirmed: `data-state="instant-open"` on the button right after open).
-  // Radix's dismissable-layer stack closes only the TOPMOST layer on Escape —
-  // the tooltip is on top, so the first Escape dismisses the tooltip
-  // (`data-state` flips to "closed") and the dialog stays open; a second
-  // Escape would be needed to actually close it. This isn't specific to
-  // Workflows — any dialog whose first focusable element is a Hint-wrapped
-  // icon button (see the `app-tauri-hint-tooltip-primitive` pattern) inherits
-  // the same "Escape closes the tooltip, not the dialog" first-press bug. See
-  // packages/ui/src/features/workflows/WorkflowsView.tsx `workflows-close` +
-  // packages/ui/src/components/ui/hint.tsx.
-  test('TODO(bug): Escape closes the workflows modal on the first press', () => {
-    test.skip(
-      true,
-      "TODO(bug): first Escape dismisses the auto-focused close button's Hint tooltip, not the dialog — see comment above",
-    );
+  // Previously: a single Escape press didn't close the workflows modal —
+  // Radix Dialog's default `onOpenAutoFocus` moved keyboard focus to the
+  // Hint-wrapped `workflows-close` button, whose Tooltip opened on focus and
+  // mounted its own dismissable layer *above* the dialog's, so the first
+  // Escape dismissed the tooltip instead. Fixed by the product-bug-fix
+  // campaign — `WorkflowsModalHost`'s `onOpenAutoFocus` now focuses the
+  // dialog content itself instead of letting Radix autofocus the close
+  // button.
+  test('Escape closes the workflows modal on the first press', async () => {
+    const { page } = app;
+    await page.getByTestId('sidebar-workflows-button').click();
+    await expect(page.getByTestId('workflows-modal')).toBeVisible({ timeout: 10_000 });
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('workflows-modal')).toHaveCount(0, { timeout: 5_000 });
   });
 
   // TODO(recording): the pending-dot (SidebarHeader.tsx WorkflowsBtn, `pending > 0` from

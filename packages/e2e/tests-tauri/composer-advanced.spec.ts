@@ -70,43 +70,24 @@ test.describe('§composer mention trigger (@)', () => {
     await expect(item).toContainText('index.ts');
   });
 
+  // Previously: `mentionDirectiveFormatter`'s non-directory branch appended its
+  // own trailing space on top of the native trigger's auto-appended closing
+  // space, producing a double space (`"@index.ts  "`). Fixed by the
+  // product-bug-fix campaign — the formatter now serializes with NO trailing
+  // space, leaving the single native-inserted space.
   test('picking a file inserts the mention token and closes the popover', async () => {
-    // TODO(bug): live-verified double trailing space. `Unstable_TriggerPopover`'s native
-    // insertion ALWAYS appends its own closing space on accept (documented in
-    // packages/ui/src/features/chat/composer/triggers/ComposerTriggers.tsx:138 — "The native
-    // popover always appends a closing space on accept"), and `mentionDirectiveFormatter`'s
-    // non-directory branch (directive-formatter.ts:23) ALSO appends its own trailing space
-    // (`@${item.id} `) — the two compose into TWO trailing spaces. Observed live:
-    // `chat-composer-input` value is `"@index.ts  "` (two spaces), not the intended
-    // `"@index.ts "` (one space, per the same file's own doc comment: "Files and agents
-    // serialize to `@<id> ` (trailing space closes the token)"). Real product bug in
-    // ComposerTriggers.tsx/directive-formatter.ts (not `packages/ui`-touchable from here).
-    // Un-skip once the native-vs-formatter closing-space double-append is fixed.
-    test.skip(true, 'TODO(bug): mention/skill trigger insertion appends a double trailing space — see comment above');
-
     const { page } = app;
     await page.getByTestId('composer-file-item-index.ts').click();
     await expect(page.getByTestId('chat-composer-input')).toHaveValue('@index.ts ');
     await expect(page.getByTestId('composer-trigger-popover')).toHaveCount(0);
   });
 
+  // Previously: the `dropDirectoryClosingSpace` strip ran before the native
+  // trigger's own closing-space append landed (an ordering bug), so
+  // `chat-composer-input` kept one trailing space instead of zero. Fixed by
+  // the product-bug-fix campaign; the directory token now stays open with no
+  // trailing space.
   test('picking a directory keeps the token open for drill-down', async () => {
-    // TODO(bug): live-verified — same double-closing-space bug as the file-pick test above,
-    // but from the OTHER side: `mentionDirectiveFormatter`'s directory branch intentionally
-    // emits NO trailing space (`@${item.id}/`) and relies on `keepDirectoryTokenOpen` →
-    // `dropDirectoryClosingSpace` (ComposerTriggers.tsx:142-148) to strip the native trigger's
-    // auto-appended closing space back off. Observed live: the strip does not take effect —
-    // `chat-composer-input` value is `"@notes/ "` (one trailing space), not the intended
-    // `"@notes/"` (zero trailing spaces, needed to keep the `@` token open for drill-down).
-    // Likely an ordering bug: the `onInserted` callback (which calls `dropDirectoryClosingSpace`)
-    // appears to run before the native popover's own closing-space append lands, so the
-    // `text.endsWith(directive + ' ')` check misses it. Real product bug (not
-    // `packages/ui`-touchable from here). Un-skip once the ordering is fixed.
-    test.skip(
-      true,
-      'TODO(bug): directory-pick closing-space strip does not take effect (ordering) — see comment above',
-    );
-
     const { page } = app;
     await clearComposer(page);
     // "./" enters project-tree mode at the root (classifyMention: dir="." → tree, not fs).
@@ -190,19 +171,11 @@ test.describe('§composer skill trigger (/)', () => {
     await closeTauriApp(app);
   });
 
+  // Previously: `literalDirectiveFormatter` appended its own trailing space on
+  // top of the native trigger's auto-appended closing space, producing a
+  // double space (`"/greet-user  "`). Fixed by the product-bug-fix campaign —
+  // the formatter now serializes with NO trailing space.
   test('typing / lists the project skill; picking it inserts the literal /skill token', async () => {
-    // TODO(bug): live-verified — same double-closing-space bug as the `@` mention-pick tests
-    // (see the two skips in "§composer mention trigger (@)" above), reproduced independently
-    // here in a totally separate describe/chat (own project, own `claude`-adapter chat, no
-    // shared state with the `@` describe). `literalDirectiveFormatter` (directive-formatter.ts:
-    // 8-13, used for `/`) appends its own trailing space (`${prefix}${item.id} `) on top of the
-    // native `Unstable_TriggerPopover`'s own auto-appended closing space. Observed live:
-    // `chat-composer-input` value is `"/greet-user  "` (two spaces), not the intended
-    // `"/greet-user "` (one space). Confirms the bug is in the shared native-trigger +
-    // `literalDirectiveFormatter`/`mentionDirectiveFormatter` machinery, not describe-1-specific
-    // state. Real product bug (not `packages/ui`-touchable from here). Un-skip once fixed.
-    test.skip(true, 'TODO(bug): skill trigger insertion appends a double trailing space — see comment above');
-
     const { page } = app;
     await page.getByTestId('chat-composer-input').fill('/');
     const item = page.getByTestId('composer-skill-item-greet-user');
@@ -269,7 +242,7 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     // `beforeAll` above) and is unaffected, so it stays active.
     test.skip(
       true,
-      'TODO(investigate): chat-selection-toolbar never appears after programmatic selection + synthetic mouseup — see comment above',
+      'TODO(investigate): chat-selection-toolbar never appears after programmatic selection + synthetic mouseup — needs live-instrumented repro',
     );
 
     const { page } = app;

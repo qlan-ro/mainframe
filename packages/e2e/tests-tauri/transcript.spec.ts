@@ -125,25 +125,24 @@ test.describe('§transcript — thread turn', () => {
     await expect(timestamp).toHaveText(/^\d{1,2}:\d{2}\s?(AM|PM)$/i);
   });
 
+  // Previously: MessageTiming.tsx reads `useMessageTiming()?.totalStreamTime`,
+  // sourced from a `system`-type message's `metadata.turnDurationMs`, but
+  // nothing in packages/core ever wrote that field — `chat-message-timing`
+  // could never render. Fixed by the product-bug-fix campaign:
+  // `event-handler.ts`'s `onResult` now computes `turnDurationMs` from
+  // `active.turnStartedAt` and emits a transient system message carrying it,
+  // which `groupMessages` merges onto the preceding assistant message.
   test('assistant message action bar: timing pill shows total duration on hover', async () => {
-    // TODO(bug): MessageTiming.tsx (packages/ui/src/features/chat/messages/MessageTiming.tsx)
-    // reads `useMessageTiming()?.totalStreamTime`, sourced from a `system`-type message's
-    // `metadata.turnDurationMs` (packages/core/src/messages/message-grouping.ts:19-24, merged onto
-    // the preceding message). Root-caused live + via grep: NOTHING in packages/core/src ever WRITES
-    // `metadata.turnDurationMs` on any message — `turnDurationMs` only appears as a consumer (this
-    // merge) and in unit-test fixtures (message-grouping.test.ts / display-pipeline.test.ts), never
-    // as a producer in the real event-handling pipeline (event-handler.ts's `onResult`, or anywhere
-    // else). It isn't even declared in `@qlan-ro/mainframe-types`. So `chat-message-timing` can
-    // never render — confirmed live twice against the `thread` recording (assistant message with a
-    // real Bash-tool turn): the element is absent, `useMessageTiming()` always returns undefined.
-    // This is a dead/never-wired display feature, not a mock-cli or recording gap. (Originally
-    // discovered as a 3-test cascade — this assertion throwing left the shared page in a state that
-    // made the next two tests, scroll-to-bottom and find-in-chat, fail too; isolating it here as its
-    // own test fixed both without any changes to them.) Not touchable from e2e.
-    test.skip(
-      true,
-      'TODO(bug): chat-message-timing never renders — metadata.turnDurationMs is read/tested but never produced by the daemon (see comment above)',
-    );
+    const { page } = app;
+    const lastAssistant = page.getByTestId('chat-assistant-message').last();
+    const timingPill = lastAssistant.getByTestId('chat-message-timing');
+    await expect(timingPill).toBeVisible({ timeout: 10_000 });
+    // MessageTiming.formatMs: "<N>ms" under 1s, else "<N.NN>s".
+    await expect(timingPill).toHaveText(/^\d+(\.\d+)?(ms|s)$/);
+
+    // Hovering reveals the tooltip's "Total" breakdown row.
+    await timingPill.hover();
+    await expect(page.getByText('Total')).toBeVisible({ timeout: 5_000 });
   });
 
   test('scroll-to-bottom button appears when scrolled up and returns to the tail on click', async () => {

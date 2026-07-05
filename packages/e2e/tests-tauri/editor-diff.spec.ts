@@ -169,30 +169,16 @@ test.describe('§editor-diff — Changes panel', () => {
     await expect(reveal).toHaveAttribute('aria-label', 'Reveal in file tree');
   });
 
-  // TODO(bug): the far-apart-chunk scroll-into-view lands short of the target,
-  // reproducibly. Root-caused via live instrumentation (2 independent isolated
-  // reruns, identical numbers both times): `editor-diff` (CmDiffEditor.tsx:217)
-  // renders `<div data-testid="editor-diff" className="mf-editor-selectable
-  // h-full overflow-auto" />` as the MergeView's mount host — an OUTER scroll
-  // container layered on top of CM6's own internal `.cm-scroller`, which CM6
-  // assumes IS the sole scrollable viewport for its `scrollIntoView: true`
-  // transaction-effect math (diff-nav.ts's `nextChange`/`prevChange`). Measured
-  // live after the 2nd `nextBtn` click: the modified pane's `.cm-scroller` had
-  // `scrollHeight === clientHeight` (6744 === 6744) — i.e. NOT virtualized/
-  // clipped at all, so it never scrolls (`scrollTop` stayed 0) — while the OUTER
-  // `editor-diff` host (the one that's actually clipped: `clientHeight` 591 of
-  // `scrollHeight` 6744) ended up scrolled via the browser's native
-  // `Element.scrollIntoView()` DOM fallback bubbling past the non-scrolling
-  // `.cm-scroller` to the next real scrollable ancestor — but that fallback only
-  // guarantees "nearest edge", not the same chunk-aware target CM6 computes for
-  // its own scrollDOM. Landed `hostScrollTop` 5967 of a 6153 max — short of the
-  // BOTTOM_MARKER line (~6575 of 6744), about one line-height short of actually
-  // bringing it into view (`toBeInViewport` → ratio 0). The `prev`/`next` click
-  // handlers and chunk math themselves are correct (confirmed: `nextChange`
-  // correctly finds the chunk strictly after the cursor); the defect is the
-  // redundant outer-scroll wrapper breaking CM6's own precise autoscroll.
-  // Not touchable from this spec (packages/ui/.../CmDiffEditor.tsx).
-  test.skip('prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view', async () => {
+  // Previously: the far-apart-chunk scroll-into-view landed short of the
+  // target — `editor-diff`'s outer host had its own `overflow-auto`, a
+  // redundant scroll container layered on top of `@codemirror/merge`'s own
+  // `.cm-mergeView` wrapper, so CM6's chunk-aware `scrollIntoView` math landed
+  // on the outer host's much less precise native DOM fallback instead. Fixed
+  // by the product-bug-fix campaign: the outer host is now `overflow-hidden`
+  // (not scrollable itself), and `mv.dom` (`.cm-mergeView`) is explicitly
+  // sized to `height: 100%` so it becomes the real scroll boundary CM6
+  // expects.
+  test('prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view', async () => {
     const { page } = app;
     // Continues on the diff tab opened by the first test in this file (same
     // describe, same app/project — matches the ordered-test convention used by

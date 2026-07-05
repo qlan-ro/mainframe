@@ -324,28 +324,16 @@ test.describe('§preview — failed config', () => {
     cleanupTauriProject(project);
   });
 
-  // TODO(bug): `preview-body-failed` never mounts — reproducibly. Live-verified
-  // (fresh screenshot on failure): the daemon DOES fail the spawn correctly and
-  // the user DOES see a real error — an `mfToast.error('Failed to start
-  // "broken"')` toast appears (confirmed in the captured screenshot) — but the
-  // preview body stays on `preview-body-stopped`/the "Run broken" CTA instead
-  // of switching to the dedicated failed-state UI the test expects. Root cause:
-  // the SAME unguarded-stale-REST-overwrite bug already found and skipped in
-  // `run-surface.spec.ts`'s "Stop reverts the toolbar to Start for sleep-long"
-  // (`use-launch-configs.ts`'s mount-time `GET /launch/status` fetch has no
-  // guard against a newer WS `launch.status` update superseding it) — but
-  // triggered a DIFFERENT way here: clicking a run-picker row unmounts
-  // `SurfacePicker` (which owns one `useLaunchActions`/`useLaunchConfigs`
-  // instance, `SurfacePicker.tsx:83`) and mounts `RunTabStrip` (which owns a
-  // SEPARATE instance, `RunTabStrip.tsx:96`) at almost exactly the moment the
-  // daemon's async spawn-error detection (ENOENT) is racing to complete —
-  // `RunTabStrip`'s freshly-mounted hook fires its own `GET /launch/status`,
-  // and if that resolves (with an empty/no-entry snapshot, since the process
-  // hasn't errored yet from the daemon's perspective) AFTER the WS
-  // `launch.status:'failed'` event already landed, it silently overwrites
-  // 'failed' back to no-status ('stopped'). Not touchable from this spec
-  // (packages/ui/.../use-launch-configs.ts).
-  test.skip('a config with a nonexistent executable reaches the failed state', async () => {
+  // Previously: `preview-body-failed` never mounted — the same
+  // unguarded-stale-REST-overwrite bug fixed in run-surface.spec.ts's "Stop
+  // reverts the toolbar to Start for sleep-long" (`use-launch-configs.ts`'s
+  // `GET /launch/status` fetch had no guard against a newer WS
+  // `launch.status` update superseding it), triggered here by
+  // `RunTabStrip` mounting its own fresh `useLaunchConfigs` instance right as
+  // the daemon's async spawn-error (ENOENT) detection was racing to
+  // complete. Fixed by the same `reconcileFetchedStatus` stale-response guard
+  // in the product-bug-fix campaign.
+  test('a config with a nonexistent executable reaches the failed state', async () => {
     const { page } = app;
     await page.getByTestId('surface-rail-run').click();
     await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 10_000 });

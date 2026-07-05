@@ -192,7 +192,16 @@ test.describe('§window-states First-run tour', () => {
     await expect(page.getByTestId('tour-label-card')).toContainText('Start a session');
   });
 
-  test('Next/Back walk all 4 steps, each anchoring a spotlight; Done completes the tour', async () => {
+  // Previously: step 3's ("model") spotlight had no anchor to measure on a
+  // genuinely empty (zero-session) workspace — `composer-model-select`
+  // (`data-tut="model"`) is rendered by `ComposerToolbar`, which still gates
+  // its entire toolbar on a resolved `chat` (`if (!chat) return null`), so the
+  // anchor never mounts on a fresh workspace. Fixed by the product-bug-fix
+  // campaign at the TOUR level (not the toolbar): `TutorialOverlay.remeasure`
+  // now detects an un-anchorable step after its settle window and
+  // auto-skips it in the current direction of travel, so a first-time user
+  // never sees a label card pointing at nothing.
+  test('Next/Back walk the reachable steps, auto-skipping the anchorless model step; Done completes the tour', async () => {
     const { page } = app;
     const label = page.getByTestId('tour-label-card');
     const spotlight = page.getByTestId('tour-spotlight');
@@ -210,43 +219,26 @@ test.describe('§window-states First-run tour', () => {
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-back-btn')).toBeVisible();
 
-    // Step 3/4 — model. TODO(bug): this step's spotlight never has an anchor to
-    // measure on a genuinely empty (zero-session) workspace — exactly the state
-    // the first-run tour auto-opens for. Triaged live: `composer-model-select`
-    // (`data-tut="model"`, ProviderModelSelect.tsx) is rendered by
-    // ComposerToolbar.tsx, which gates its ENTIRE toolbar on a resolved `chat`
-    // (`if (!chat) return null`) from `useComposerTuning`. On a fresh workspace
-    // with no draft/active thread ever selected, that `chat` stays null (context
-    // panel shows "No active chat"), so the model-picker chip — and therefore
-    // the `data-tut="model"` anchor — never mounts. TutorialOverlay's
-    // `remeasure()` (features/tour/TutorialOverlay.tsx) finds no `[data-tut]`
-    // element, sets `rect: null`, and renders no `tour-spotlight` for the whole
-    // step — a first-time user sees the step-3 label card pointing at nothing.
-    // Asserting the verified (if unfortunate) behavior here rather than the
-    // originally-assumed one; step navigation itself still works correctly.
-    // See features/tour/TutorialOverlay.tsx STEPS[2] +
-    // features/chat/composer/config-toolbar/ComposerToolbar.tsx.
+    // Next auto-skips the anchorless step 3 (model) and lands directly on
+    // step 4 (run) — the settle window is ~30ms, so a short poll suffices.
     await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 3 of 4');
-    await expect(label).toContainText('Pick your model');
-    await expect(page.getByTestId('composer-model-select')).toHaveCount(0);
-    await expect(spotlight).toHaveCount(0);
-
-    // Back returns to the composer step.
-    await page.getByTestId('tour-back-btn').click();
-    await expect(label).toContainText('Step 2 of 4');
-    await expect(label).toContainText('Hand work to your agent');
-
-    // Forward again through model → run (last step).
-    await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 3 of 4');
-    await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 4 of 4');
+    await expect(label).toContainText('Step 4 of 4', { timeout: 2_000 });
     await expect(label).toContainText('Run & preview');
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Done');
 
-    // Step dots — 4 total, all present at the last step.
+    // Back from step 4 auto-skips the same anchorless step in the backward
+    // direction, landing back on step 2 (composer).
+    await page.getByTestId('tour-back-btn').click();
+    await expect(label).toContainText('Step 2 of 4', { timeout: 2_000 });
+    await expect(label).toContainText('Hand work to your agent');
+
+    // Forward again lands back on step 4 (last step).
+    await page.getByTestId('tour-next-btn').click();
+    await expect(label).toContainText('Step 4 of 4', { timeout: 2_000 });
+
+    // Step dots — 4 total, all present at the last step (STEPS.length is
+    // unaffected by the auto-skip; it just never lingers on step 3).
     await expect(page.getByTestId('tour-step-dot-0')).toHaveCount(1);
     await expect(page.getByTestId('tour-step-dot-1')).toHaveCount(1);
     await expect(page.getByTestId('tour-step-dot-2')).toHaveCount(1);

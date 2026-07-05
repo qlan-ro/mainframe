@@ -36,7 +36,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
-import { waitConnected } from '../helpers/tauri/wait.js';
+import { sendMessage, waitConnected } from '../helpers/tauri/wait.js';
 
 const TAG_NAME = 'e2e-filter';
 
@@ -76,7 +76,10 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   let chatIdB: string;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp();
+    // recordingKey backs the (background-chat notification) attention-badges
+    // test below; every other test in this describe is REST/UI-only and never
+    // calls sendMessage, so wiring it here doesn't affect them.
+    app = await launchTauriApp({ recordingKey: 'messaging' });
     projectA = await createTauriProject(app.page);
     chatIdA = await createTauriChat(app.page, projectA.projectId, 'default');
     // createTauriProject reloads the page — re-seeds the project list without
@@ -289,14 +292,35 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     );
   });
 
+  // Attention badges are driven by useUnreadStore.markUnread, which is only
+  // called by the session-list-router on a `chat.notification` /
+  // `permission.requested{notify:true}` WS event. Previously that event never
+  // reached the client for a BACKGROUND chat (see the sessions-rows.spec.ts
+  // unread-dot test for the root cause); now that chat.notification is
+  // connection-global, project A's badge lights up while B stays active.
   test('attention badges appear on non-filtered pills', async () => {
-    // Attention badges are driven by useUnreadStore.markUnread, which is only
-    // called by the session-list-router on a `chat.notification` /
-    // `permission.requested{notify:true}` WS event — i.e. a real agent turn.
-    // No existing recording produces that state against a background
-    // (non-active) chat while another chat stays active. Skipping rather than
-    // faking the unread flag from the test.
-    test.skip(true, 'TODO(recording): attention badges need a chat.notification event on a background chat');
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+    await expandProjectPills(page);
+
+    const rowA = sidebar.row(chatIdA);
+    const rowB = sidebar.row(chatIdB);
+    await rowA.click();
+    await expect(rowA).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+
+    await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
+    // Switch to B immediately — A is now the BACKGROUND chat while its
+    // response streams in.
+    await rowB.click();
+    await expect(rowB).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+
+    const badgeA = page.getByTestId(`sessions-filter-pill-attn-${projectA.projectId}`);
+    await expect(badgeA).toBeVisible({ timeout: 45_000 });
+    await expect(badgeA).toHaveText('1');
+
+    // Reselecting A's chat clears the unread flag, and with it the pill badge.
+    await rowA.click();
+    await expect(badgeA).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('synthetic has-pr/has-worktree chips render only in the expanded state', async () => {

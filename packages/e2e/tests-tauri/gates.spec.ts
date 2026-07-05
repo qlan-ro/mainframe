@@ -239,26 +239,13 @@ test.describe('§plan gate exec-mode', () => {
     await closeTauriApp(app);
   });
 
+  // Previously: `chat-plan-running-footer` never mounted — approving a plan
+  // optimistically dropped the gate from the permission queue right away,
+  // unmounting `PlanGate` (and its local `approved` state) before the running
+  // footer could render. Fixed by the product-bug-fix campaign —
+  // `ChatGateMount` now retains the just-approved plan entry (same element
+  // type + position) until the run actually ends.
   test('selecting Unattended + clear-context and approving shows a matching running footer', async () => {
-    // TODO(bug): live-verified twice (two separate runs, no zombie/cascade involved —
-    // `chat-plan-gate`/exec-mode controls/approve click all worked fine, only the POST-approve
-    // footer never appears) — `chat-plan-running-footer` never mounts. Root cause, read in
-    // `PlanGate.tsx` + `chat-thread-controller.ts`: `handleApprove` calls local `setApproved(true)`
-    // (which is what gates the running-footer render) and fires `reply(...)` in the same click
-    // handler; `replyToPermission` (chat-thread-controller.ts:290-296) UNCONDITIONALLY
-    // "optimistically drop[s] the gate" via `dispatch({type:'permission.resolved', requestId})`.
-    // `ChatGateMount` renders `null` once its permission is gone, unmounting `PlanGate` (and its
-    // local `approved` state) before/around the same tick the running footer would render. This
-    // contradicts `packages/ui/CLAUDE.md`'s own stated design ("AskUserQuestion/Plan persist via
-    // the existing tool-result display cards" — i.e. NOT dismiss-on-answer like a plain
-    // Permission gate). `chat.spec.ts`'s own plan-approve happy path never asserts this testid,
-    // so this looks like a real, previously-uncaught gap, not test flakiness. Real product bug
-    // (not `packages/ui`-touchable from here). Un-skip once PlanGate persists post-approval.
-    test.skip(
-      true,
-      'TODO(bug): chat-plan-running-footer never mounts (unmounts with the optimistic gate-drop) — see comment above',
-    );
-
     const { page } = app;
     await sendMessage(page, 'Add `export function greet(name: string) { return "Hello " + name; }` to utils.ts');
     await page.locator('[data-testid="chat-plan-gate"]').waitFor({ timeout: 45_000 });

@@ -51,16 +51,16 @@
  * Every daemon switch in this suite is undone before the describe ends (CAUTION
  * in the dispatch); the final test re-asserts the app is back on the local daemon.
  *
- * KNOWN BUG (triaged live, not fixed here — see the TODO(bug) test below):
- * completing pairing does not auto-switch the active daemon, and the "Paired"
- * confirmation is never visible. `AddRemoteDialog.handleConfirm` calls
- * `registry.switchTo(meta.id)` right after `registry.add(meta, token)`, but
- * `switchTo` is a `useCallback` closed over a stale pre-add `remotes` snapshot
- * (confirmed via `[useDaemonRegistry] switchTo: unknown id …` in the console),
- * and `DaemonFooterStatus` wires both `onDone` and `onClose` to the same
- * `closeDialog` callback, collapsing the documented 800ms "Paired" grace window
- * to zero. The row IS added correctly; only the auto-switch/confirmation UX is
- * broken — this suite works around it by clicking the row a second time.
+ * FIXED BUG (previously triaged live, now fixed — see the "pairing
+ * auto-switches…" test below): completing pairing used to not auto-switch the
+ * active daemon, and the "Paired" confirmation was never visible.
+ * `AddRemoteDialog.handleConfirm`'s `registry.switchTo(meta.id)` closed over a
+ * stale pre-add `remotes` snapshot, and `DaemonFooterStatus` wired both
+ * `onDone` and `onClose` to the same `closeDialog` callback, collapsing the
+ * documented 800ms "Paired" grace window to zero. Both are fixed
+ * (`use-daemon-registry.ts`'s `switchTo` now reads a live module-level
+ * snapshot; `onDone`/`onClose` are separate callbacks) — pairing now switches
+ * on the first click and briefly shows "Paired".
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -71,12 +71,13 @@ import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const LOCAL_HEALTH_URL = `http://127.0.0.1:${DAEMON_PORT}/health`;
 
-/** Suffix-scoped locators — safe because at most one remote daemon ever exists
- *  at a time in this suite, so there is never an id-ambiguity to resolve.
- *  `manageButton`/`renameMenuRow`/`removeMenuRow` are currently only referenced
- *  from the TODO(bug) doc comment on the skipped rename/remove tests below —
- *  kept here (not deleted) so unskipping them is a small diff once the
- *  underlying event-bubbling bug is fixed. */
+/** Suffix-scoped locators — safe because at most one remote daemon exists at a
+ *  time by the point these are used (the auto-switch test below adds and then
+ *  removes its own second remote before any other test runs), so there is
+ *  never an id-ambiguity to resolve. `renameMenuRow`/`removeMenuRow` are safe
+ *  even with 2+ remotes present because Radix Popover only mounts its portalled
+ *  `PopoverContent` (and thus these testids) while open, and only one manage
+ *  popover is ever open at a time. */
 function remoteRow(page: Page) {
   return page.locator('[data-testid^="daemon-row-"]').filter({ has: page.locator('[data-testid$="-manage"]') });
 }
@@ -88,6 +89,13 @@ function renameMenuRow(page: Page) {
 }
 function removeMenuRow(page: Page) {
   return page.locator('[data-testid$="-remove"]');
+}
+/** Scopes a remote row by a substring of its displayed `d.host` text (e.g. a
+ *  port) — needed only while 2 remotes briefly coexist (the auto-switch test's
+ *  own second pairing), where the generic `remoteRow`/`manageButton` helpers
+ *  above would be ambiguous. */
+function daemonRowByHost(page: Page, hostSubstr: string) {
+  return page.locator('[data-testid^="daemon-row-"]').filter({ hasText: hostSubstr });
 }
 
 async function openPicker(page: Page): Promise<void> {
@@ -223,55 +231,109 @@ test.describe('§daemon-picker', () => {
     await expect(confirmButton).toBeEnabled();
     await confirmButton.click();
 
-    // Verified behavior (not the dispatch's assumed one — see the TODO(bug) test
-    // below): AddRemoteDialog wires `onDone` and `onClose` to the SAME
-    // `closeDialog` callback (DaemonFooterStatus.tsx), so `onDone()` closes the
-    // dialog on the same tick confirmPairing resolves — the documented 800ms
-    // "Paired" grace window (AddRemoteDialog.tsx handleConfirm) never has a
-    // chance to render. Assert the dialog closing instead of the transient text.
+    // The dialog now closes only after the 800ms deferred onClose (see the
+    // auto-switch test below for the fix); either way, it's gone by now.
     await expect(page.getByTestId('daemon-add-url')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('daemon-pair-code')).toHaveCount(0, { timeout: 5_000 });
 
-    // The row is added regardless (registry.add is unaffected by the switch bug
-    // below) — label is derived from the host ("127.0.0.1:58202".split('.')[0]
-    // === "127").
+    // The row is added — label is derived from the host
+    // ("127.0.0.1:58202".split('.')[0] === "127"). Pairing also auto-switches
+    // the active daemon now (fixed — see the auto-switch test below), so this
+    // describe no longer ends on local until that test resets it.
     await openPicker(page);
     await expect(remoteRow(page)).toBeVisible({ timeout: 10_000 });
     await expect(remoteRow(page)).toContainText('127');
     await closePicker(page);
   });
 
-  // TODO(bug): pairing does not auto-switch the active daemon to the newly-added
-  // remote, and the "Paired" confirmation is never visible. Two independent bugs
-  // in packages/ui/src/features/daemon/:
-  //  1. AddRemoteDialog.tsx `handleConfirm` calls `registry.add(meta, token)` then
-  //     `registry.switchTo(meta.id)` using the SAME `registry` object captured at
-  //     render time. `switchTo` is a `useCallback` closed over `remotes` (from
-  //     `useDaemonRegistry`'s `useSyncExternalStore` snapshot) — at the moment
-  //     THIS render's `handleConfirm` closure was created, `remotes` was still
-  //     the pre-pairing (empty) list, so `switchTo` can never find the
-  //     just-added meta and silently no-ops (`console.warn('[useDaemonRegistry]
-  //     switchTo: unknown id', id)` + return) — confirmed live via a console
-  //     listener during triage. The daemon stays on 'This Mac'; the user has to
-  //     click the new row again (a fresh registry snapshot by then) to connect.
-  //  2. DaemonFooterStatus.tsx passes `onDone={closeDialog}` AND
-  //     `onClose={closeDialog}` to `<AddRemoteDialog>` — the SAME function. Since
-  //     `handleConfirm` calls `onDone()` synchronously right after
-  //     `setStep1Phase('done')`, the dialog's `open` prop flips to false on the
-  //     same tick, before the documented 800ms deferred-close window
-  //     (`closeTimerRef.current = setTimeout(onClose, 800)`) ever matters — the
-  //     "Paired" button label / notice is never actually visible to a user.
-  // See packages/ui/src/features/daemon/{AddRemoteDialog.tsx,DaemonFooterStatus.tsx,
-  // use-daemon-registry.ts}. Unskip once both are fixed.
-  test.skip('TODO(bug): pairing auto-switches the active daemon and shows a "Paired" confirmation', () => {});
+  // Previously: pairing did not auto-switch the active daemon, and the
+  // "Paired" confirmation was never visible — `switchTo`'s `useCallback`
+  // closed over a stale pre-add `remotes` snapshot, and `onDone`/`onClose`
+  // were wired to the same `closeDialog` callback so the 800ms "Paired" grace
+  // window never rendered. Fixed by the product-bug-fix campaign:
+  // `switchTo` now reads the live `remotesSnapshot` module-level state
+  // (use-daemon-registry.ts), and `onDone` is a separate `handlePairingDone`
+  // callback from `onClose`.
+  test('pairing auto-switches the active daemon and shows a "Paired" confirmation', async () => {
+    const { page } = app;
+
+    // With the fix, "completing pairing adds a remote daemon row" above now ALSO
+    // auto-switches — establish a known starting state (local) so this test's own
+    // auto-switch assertion below is meaningful, not just inherited ambient state.
+    await openPicker(page);
+    await page.getByTestId('daemon-row-local').click();
+    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac', { timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
+
+    const origin = 'http://127.0.0.1:58203';
+    await page.route(`${origin}/health`, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '9.9.9' }) });
+    });
+    await page.route(`${origin}/api/auth/confirm`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { token: 'e2e-fake-token-2', deviceId: 'e2e-fake-device-2' } }),
+      });
+    });
+
+    await openPicker(page);
+    await page.getByTestId('daemon-picker-add').click();
+    await expect(page.getByTestId('daemon-add-url')).toBeVisible();
+
+    await page.getByTestId('daemon-add-url').fill(origin);
+    await page.getByTestId('daemon-add-verify').click();
+    await expect(page.getByTestId('daemon-add-continue')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('daemon-add-continue').click();
+
+    await expect(page.getByTestId('daemon-pair-code')).toBeVisible();
+    await page.getByTestId('daemon-pair-code').locator('input').first().click();
+    await page.keyboard.type('ABC123');
+    await page.getByTestId('daemon-add-device').fill('E2E Auto-switch Device');
+
+    const confirmButton = page.getByTestId('daemon-add-confirm');
+    await expect(confirmButton).toBeEnabled();
+    await confirmButton.click();
+
+    // The confirm button's own label flips to "Paired" (disabled) for the
+    // 800ms deferred-close window (pairing-steps.tsx FooterStep1) — a real
+    // window to observe, not the instant-close before the fix.
+    await expect(confirmButton).toHaveText('Paired', { timeout: 2_000 });
+    await expect(page.getByTestId('daemon-add-url')).toHaveCount(0, { timeout: 5_000 });
+
+    // Pairing itself auto-switches the active daemon — no second click needed
+    // (started this test on local, above; it's since moved off it).
+    await expect(page.getByTestId('daemon-footer-trigger')).not.toContainText('This Mac', { timeout: 10_000 });
+    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
+
+    // Clean up this test's own second remote (switch back to local, then
+    // remove it) so the "exactly one remote" invariant the rest of this suite
+    // relies on (remoteRow/manageButton's suffix-only locators) holds after.
+    await openPicker(page);
+    await page.getByTestId('daemon-row-local').click();
+    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac', { timeout: 10_000 });
+
+    // Row selection doesn't necessarily dismiss the picker — force a known
+    // (closed) state before reopening it for the removal below.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
+    await openPicker(page);
+    const newRow = daemonRowByHost(page, '58203');
+    await newRow.locator('[data-testid$="-manage"]').click();
+    await removeMenuRow(page).click();
+    await page.getByTestId('daemon-remove-confirm').click();
+    await expect(page.getByTestId('daemon-remove-dialog')).toHaveCount(0, { timeout: 5_000 });
+    await expect(newRow).toHaveCount(0, { timeout: 5_000 });
+    await closePicker(page);
+  });
 
   test('unreachable overlay renders when the daemon connection drops, and switch-to-local recovers', async () => {
     const { page } = app;
 
-    // Pairing itself does not switch the active daemon (see the TODO(bug) test
-    // above) — manually switch to the remote row added by the previous test. A
-    // fresh click uses the CURRENT registry snapshot (remotes already includes
-    // the added meta by now), so this switch works correctly.
+    // Manually switch to the remote row added by "completing pairing adds a
+    // remote daemon row" earlier in this describe (the auto-switch test above
+    // added and removed its own separate remote, cleaning up after itself).
     await openPicker(page);
     await remoteRow(page).click();
     await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
@@ -298,35 +360,48 @@ test.describe('§daemon-picker', () => {
     await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
   });
 
-  // TODO(bug): renaming or removing a NON-active remote row is broken. Triaged
-  // live via a console/network listener: clicking "Rename…"/"Remove…" inside
-  // DaemonRowManage's popover ALSO fires the parent DaemonRow's own
-  // `onClick={() => onSwitch(d)}`. `DaemonRowManage`'s `PopoverContent` (Radix)
-  // portals to `document.body`, and `MenuRow` (components/ui/menu.tsx) never
-  // calls `stopPropagation()` — React bubbles portal-child clicks through the
-  // REACT tree (not the DOM tree), so the click reaches DaemonRow's own onClick
-  // too. That silently switches the active daemon to the row being managed,
-  // which (App.tsx `key={target.id}`) remounts the whole daemon-scoped subtree
-  // — including DaemonFooterStatus's own `dialog` state — wiping the
-  // rename/remove dialog the SAME click just opened. Confirmed by watching the
-  // footer flip from 'This Mac' to the remote's label right as the dialog
-  // vanished. Only bites when the managed row isn't already the active one
-  // (renaming/removing the active daemon is a same-id no-op switch, no
-  // remount) — exactly this suite's case. See
-  // packages/ui/src/components/ui/menu.tsx MenuRow +
-  // packages/ui/src/features/daemon/DaemonRow.tsx DaemonRowManage.
+  // Previously: renaming or removing a NON-active remote row was broken —
+  // clicking "Rename…"/"Remove…" inside `DaemonRowManage`'s portalled popover
+  // ALSO fired the parent `DaemonRow`'s own `onClick={() => onSwitch(d)}`
+  // (React bubbles portal-child clicks through the React tree, not the DOM
+  // tree), silently switching the active daemon and remounting the
+  // daemon-scoped subtree mid-dialog. Fixed by the product-bug-fix campaign —
+  // every `MenuRow` inside `DaemonRowManage`'s popover now calls
+  // `e.stopPropagation()` before invoking its handler.
   test('manage menu rename updates the remote row label', async () => {
-    test.skip(
-      true,
-      'TODO(bug): manage-menu click bubbles to the row onClick and switches+remounts — see comment above',
-    );
+    const { page } = app;
+    await openPicker(page);
+    await manageButton(page).click();
+    await renameMenuRow(page).click();
+
+    const dialog = page.getByTestId('daemon-rename-dialog');
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    const input = page.getByTestId('daemon-rename-input');
+    await input.fill('E2E Renamed Remote');
+    await page.getByTestId('daemon-rename-save').click();
+    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+
+    // The row picked up the new label, and the active daemon never switched
+    // away from local (no bubble-through remount).
+    await expect(remoteRow(page)).toContainText('E2E Renamed Remote', { timeout: 5_000 });
+    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+    await closePicker(page);
   });
 
   test('manage menu remove confirms and removes the remote row', async () => {
-    test.skip(
-      true,
-      'TODO(bug): manage-menu click bubbles to the row onClick and switches+remounts — see comment above',
-    );
+    const { page } = app;
+    await openPicker(page);
+    await manageButton(page).click();
+    await removeMenuRow(page).click();
+
+    const dialog = page.getByTestId('daemon-remove-dialog');
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('daemon-remove-confirm').click();
+    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+
+    await expect(page.getByTestId('daemon-picker-empty')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+    await closePicker(page);
   });
 
   test('ends the suite back on the local daemon', async () => {

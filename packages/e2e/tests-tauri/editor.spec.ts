@@ -291,19 +291,11 @@ test.describe('§editor', () => {
     await expect(page.getByTestId('editor-code')).toBeVisible();
   });
 
-  // TODO(bug): edits typed in Source mode do not reflect back in Preview mode.
-  // `EditorTab` (packages/ui/src/features/editor/EditorTab.tsx) passes
-  // `loadState.value` — a React `useState` updated only on initial load, save,
-  // and disk-reload — into `MarkdownEditorTab`'s controlled `value` prop.
-  // `handleChange` (fired on every CM6 keystroke) only writes to the Zustand
-  // `useEditorStore` buffer, never calls `setLoadState`, so the `value` prop
-  // MarkdownPreview renders from is stale until the next load/save/reload.
-  // The CM6 Source view itself looks fine (its internal EditorView state is
-  // independent of the React prop), which is why this only surfaces when
-  // switching back to Preview. Verified live: typed text never appears in
-  // `markdown-preview` after Preview→Edit→type→Preview. Filed, not fixed here
-  // (packages/ui is out of scope for this e2e-fix pass).
-  test.skip('edits typed in Source mode reflect back in Preview mode', async () => {
+  // Previously: edits typed in Source mode did not reflect back in Preview mode
+  // (`EditorTab` passed a stale `loadState.value` into `MarkdownEditorTab`'s
+  // controlled `value` prop, never updated on keystroke). Fixed by the
+  // product-bug-fix campaign; verify the live-edit round trip.
+  test('edits typed in Source mode reflect back in Preview mode', async () => {
     const { page } = app;
     await expect(tabByTitle(page, 'notes.md')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('aria-pressed', 'true');

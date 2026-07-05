@@ -53,7 +53,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { waitConnected } from '../helpers/tauri/wait.js';
+import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { mkdirSync, writeFileSync } from 'fs';
@@ -248,20 +248,50 @@ test.describe('§context-panel — skills and agents rows', () => {
   });
 });
 
-// ─── §context-panel — Tasks section (needs a todos.updated event — unseedable today) ──
+// ─── §context-panel — Tasks section (todo-write) ──────────────────────────────
 
 test.describe('§context-panel — tasks section', () => {
-  // TODO(recording): TasksSection (store/session-todos.ts) is fed exclusively by the daemon's
-  // `todos.updated` WS event, emitted only from a live TodoWrite tool result
-  // (packages/core/src/chat/event-handler.ts:484) or a resumeChat reseed of a persisted
-  // `chat.todos` column that nothing populates without that same event having fired once. There
-  // is no REST route to set chat.todos directly (db/chats.ts updateTodos is private to
-  // lifecycle-manager). The new `task-progress` recording does NOT help here — it drives
-  // TaskCreate/TaskUpdate (the v2 task-tracking tool family feeding `_TaskProgress`/TaskProgressCard
-  // in the transcript, per tool-cards.spec.ts), a completely different mechanism from the legacy
-  // v1 TodoWrite tool this section reads (see event-handler.ts's separate onTodoUpdate handler).
-  // Needs a purpose-built recording that calls TodoWrite specifically before this can be unskipped.
-  test.skip('renders the progress fill and per-todo rows, with completed rows struck through', async () => {});
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'todo-write' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // The recording's TodoWrite call also renders as a visible ToolFallback card
+  // under mock-cli (its `hidden` category set is deliberately empty — see
+  // RECORDING-STATUS.md), but that doesn't affect the Tasks section itself,
+  // which reads only the `todos.updated` store, not message content.
+  test('renders the progress fill and per-todo rows, with completed rows struck through', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Track two todos: write the README, then run the test suite');
+    await waitForIdle(page, 60_000);
+
+    const section = page.getByTestId('context-tasks-section');
+    await expect(section).toBeVisible({ timeout: 15_000 });
+
+    // 1 of 2 todos completed → 50% fill (inline `style={{width: '50%'}}`, not
+    // resolvable via getComputedStyle since it's percentage-based).
+    await expect(section.getByTestId('context-tasks-progress-fill')).toHaveAttribute('style', /width:\s*50%/);
+
+    const doneRow = section.getByTestId('context-task-row-Write the README');
+    await expect(doneRow).toBeVisible();
+    await expect(doneRow).toContainText('Write the README');
+    await expect(doneRow.locator('span').last()).toHaveClass(/line-through/);
+
+    // in_progress rows render their activeForm as the label, not struck through.
+    const inProgressRow = section.getByTestId('context-task-row-Run the test suite');
+    await expect(inProgressRow).toBeVisible();
+    await expect(inProgressRow).toContainText('Running the test suite');
+    await expect(inProgressRow.locator('span').last()).not.toHaveClass(/line-through/);
+  });
 });
 
 // ─── §context-panel — sections, file-open, and attachments (REST-seeded) ─────────
