@@ -9,6 +9,8 @@
  *
  * `/` inserts plain `/skill `; `@` inserts `@<id> ` for files/agents and
  * `@<dir>/` (no space, keeps the token open) for directories — drill-down.
+ * The single trailing space comes from assistant-ui's own native insertion,
+ * not our formatters (see directive-formatter.ts) — never add one there too.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';

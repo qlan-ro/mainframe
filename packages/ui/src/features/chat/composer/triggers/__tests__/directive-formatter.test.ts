@@ -5,28 +5,35 @@ describe('literalDirectiveFormatter', () => {
   describe('with "@" prefix', () => {
     const fmt = literalDirectiveFormatter('@');
 
-    it('serialize inserts prefix + id + trailing space', () => {
+    // The native TriggerSelectionResource.insertDirective (assistant-ui) ALWAYS
+    // appends its own separating space before the text after the cursor (unless
+    // that text already starts with one) — see triggerSelectionResource.js:
+    // `before + directive + (after.startsWith(" ") ? after : " " + after)`.
+    // If serialize() also appended a trailing space, insertion would compose
+    // to a double space ("/skill  "). serialize() must emit NO trailing space
+    // so the native insertion produces exactly one.
+    it('serialize inserts prefix + id with NO trailing space (the native popover adds exactly one)', () => {
       const result = fmt.serialize({ id: 'src/a.ts', type: 'file', label: 'a.ts' });
-      expect(result).toBe('@src/a.ts ');
+      expect(result).toBe('@src/a.ts');
     });
 
     it('serialize works for a nested path', () => {
       const result = fmt.serialize({ id: 'src/lib/api/files.ts', type: 'file', label: 'files.ts' });
-      expect(result).toBe('@src/lib/api/files.ts ');
+      expect(result).toBe('@src/lib/api/files.ts');
     });
   });
 
   describe('with "/" prefix', () => {
     const fmt = literalDirectiveFormatter('/');
 
-    it('serialize inserts prefix + id + trailing space', () => {
+    it('serialize inserts prefix + id with NO trailing space (the native popover adds exactly one)', () => {
       const result = fmt.serialize({ id: 'my-skill', type: 'skill', label: 'My Skill' });
-      expect(result).toBe('/my-skill ');
+      expect(result).toBe('/my-skill');
     });
 
     it('serialize works with a scoped invocation name', () => {
       const result = fmt.serialize({ id: 'plugin:code-review', type: 'skill', label: 'Code Review' });
-      expect(result).toBe('/plugin:code-review ');
+      expect(result).toBe('/plugin:code-review');
     });
   });
 
@@ -59,12 +66,14 @@ describe('mentionDirectiveFormatter', () => {
   const fmt = mentionDirectiveFormatter();
 
   describe('serialize', () => {
-    it('file item → @<id> with trailing space', () => {
-      expect(fmt.serialize({ id: 'src/foo.ts', type: 'file', label: 'foo.ts' })).toBe('@src/foo.ts ');
+    // Same reasoning as literalDirectiveFormatter above: the native trigger
+    // insertion always adds its own single space, so serialize() must not.
+    it('file item → @<id> with NO trailing space (the native popover adds exactly one)', () => {
+      expect(fmt.serialize({ id: 'src/foo.ts', type: 'file', label: 'foo.ts' })).toBe('@src/foo.ts');
     });
 
-    it('agent item → @<id> with trailing space', () => {
-      expect(fmt.serialize({ id: 'agent-name', type: 'agent', label: 'agent-name' })).toBe('@agent-name ');
+    it('agent item → @<id> with NO trailing space (the native popover adds exactly one)', () => {
+      expect(fmt.serialize({ id: 'agent-name', type: 'agent', label: 'agent-name' })).toBe('@agent-name');
     });
 
     it('directory item → @<id>/ with NO trailing space (keeps token open for drill-down)', () => {

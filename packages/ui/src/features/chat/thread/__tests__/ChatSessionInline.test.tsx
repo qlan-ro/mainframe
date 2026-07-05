@@ -142,6 +142,16 @@ describe('ChatSessionInline — model part', () => {
     expect(screen.queryByText('Claude')).toBeNull();
   });
 
+  it("falls back to the adapter's isDefault model label when chat.model is undefined (session inherits the adapter default)", () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeExtras(stateWithChat(makeChat({ model: undefined }))) as ReturnType<typeof useChatExtras>,
+    );
+
+    render(<ChatSessionInline part="model" />);
+
+    expect(screen.getByTestId('chat-header-model').textContent).toBe('Sonnet 4.6');
+  });
+
   it('does not render a "·" separator', () => {
     render(<ChatSessionInline part="model" />);
 

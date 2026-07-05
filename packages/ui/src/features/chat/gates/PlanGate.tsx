@@ -40,6 +40,13 @@ const PLAN_MD_COMPONENTS: Components = {
 export interface PlanGateProps {
   entry: ChatPermissionEntry;
   reply: ReplyFn;
+  /**
+   * Notifies the caller that Approve was clicked, BEFORE `reply()` optimistically
+   * drops this entry from the permission queue — lets `ChatGateMount` retain the
+   * entry and keep the running footer mounted across that drop (see its own doc
+   * comment). No-op if omitted (e.g. in isolated component tests).
+   */
+  onApprove?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +163,7 @@ function ReviseRow({
 // PlanGate
 // ---------------------------------------------------------------------------
 
-export function PlanGate({ entry, reply }: PlanGateProps) {
+export function PlanGate({ entry, reply, onApprove }: PlanGateProps) {
   const [execMode, setExecMode] = useState<ExecutionMode>('default');
   const [clearContext, setClearContext] = useState(false);
   const [revising, setRevising] = useState(false);
@@ -167,6 +174,7 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
 
   const handleApprove = () => {
     setApproved(true);
+    onApprove?.();
     void reply(buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
   };
 

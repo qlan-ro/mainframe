@@ -8,7 +8,7 @@
  * Only renders when useTutorialStore().completed === false.
  * Navigation is purely button-driven (Next/Back/Skip/Done).
  */
-import { useEffect, useState, useCallback, CSSProperties } from 'react';
+import { useEffect, useState, useCallback, useRef, CSSProperties } from 'react';
 import ReactDOM from 'react-dom';
 import { useTutorialStore } from '@/store/tutorial';
 import { WsTourLabel } from './WsTourLabel';
@@ -86,6 +86,9 @@ function WsTourCore() {
   const { step, next, back, skip, complete } = useTutorialStore();
   const [rect, setRect] = useState<TargetRect | null>(null);
   const currentStep = STEPS[step];
+  // Tracks which way the user was navigating, so an un-anchorable step gets
+  // auto-skipped in that same direction rather than always forward.
+  const directionRef = useRef<'forward' | 'backward'>('forward');
 
   const remeasure = useCallback(() => {
     if (!currentStep) {
@@ -104,23 +107,40 @@ function WsTourCore() {
   useEffect(() => {
     remeasure();
     window.addEventListener('resize', remeasure);
-    const id = setTimeout(remeasure, 30);
+    const id = setTimeout(() => {
+      remeasure();
+      // Some steps' anchors are structurally absent for the current workspace
+      // state (e.g. "model" needs a resolved chat, which doesn't exist on a
+      // genuinely empty workspace — not a mount-timing race). Rather than
+      // leaving the label card floating with no spotlight, skip the step
+      // gracefully in the direction of travel.
+      if (currentStep && document.querySelector(`[data-tut="${currentStep.target}"]`) == null) {
+        if (directionRef.current === 'backward') back();
+        else next();
+      }
+    }, 30);
     return () => {
       window.removeEventListener('resize', remeasure);
       clearTimeout(id);
     };
-  }, [remeasure]);
+  }, [remeasure, currentStep, back, next]);
 
   if (!currentStep) return null;
 
   const isLast = step === STEPS.length - 1;
 
   const handleNext = () => {
+    directionRef.current = 'forward';
     if (isLast) {
       complete();
     } else {
       next();
     }
+  };
+
+  const handleBack = () => {
+    directionRef.current = 'backward';
+    back();
   };
 
   const labelStyle = rect ? computeLabelStyle(rect, currentStep.side) : { opacity: 0 };
@@ -160,7 +180,7 @@ function WsTourCore() {
         step={currentStep}
         idx={step}
         total={STEPS.length}
-        onBack={back}
+        onBack={handleBack}
         onNext={handleNext}
         onSkip={skip}
         style={labelStyle}

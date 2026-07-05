@@ -216,4 +216,60 @@ describe('TutorialOverlay', () => {
     expect(screen.getByTestId('tour-spotlight')).toBeTruthy();
     removeAnchor(anchor);
   });
+
+  // ---------------------------------------------------------------------------
+  // Resilient anchors — bug (m): step 3 ("model") never mounts on an empty
+  // workspace (no chat → no composer → no ProviderModelSelect). Rather than
+  // leaving the label card floating with no spotlight, auto-advance past the
+  // un-anchorable step in the direction of travel.
+  // ---------------------------------------------------------------------------
+
+  it('auto-skips FORWARD past a step whose [data-tut] anchor never mounts (e.g. "model" on an empty workspace)', async () => {
+    mockStep = 2; // "model" step — no anchor inserted for it
+    render(<TutorialOverlay />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+    expect(mockNext).toHaveBeenCalledTimes(1);
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('does NOT auto-skip a step whose anchor is present', async () => {
+    mockStep = 1;
+    const anchor = insertAnchor('composer');
+    render(<TutorialOverlay />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    removeAnchor(anchor);
+  });
+
+  it('auto-skips BACKWARD past a step whose anchor never mounts when the user was navigating Back', async () => {
+    // Start on the last step (anchor present) and click Back — this sets the
+    // travel direction to "backward" before the store (mocked here) actually
+    // transitions to the un-anchorable step.
+    mockStep = 3;
+    const user = userEvent.setup();
+    const anchor = insertAnchor('run');
+    const { rerender } = render(<TutorialOverlay />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    await user.click(screen.getByTestId('tour-back-btn'));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    removeAnchor(anchor);
+
+    // Simulate the store having moved back to the un-anchorable "model" step.
+    mockStep = 2;
+    rerender(<TutorialOverlay />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+
+    // The user's own click plus the auto-skip's call: two calls to back(), zero to next().
+    expect(mockBack).toHaveBeenCalledTimes(2);
+    expect(mockNext).not.toHaveBeenCalled();
+  });
 });

@@ -1,13 +1,20 @@
 /**
- * Inserts a picked trigger item as LITERAL text (`<prefix><id> `) and never
+ * Inserts a picked trigger item as LITERAL text (`<prefix><id>`) and never
  * parses chips back out, so the sent message carries plain `/skill` / `@path`
  * text that the CLI/daemon parses — no directive chip round-trip.
+ *
+ * NO trailing space here: assistant-ui's native insertion
+ * (`TriggerSelectionResource.selectItem` → `insertDirective`) always appends
+ * its own single separating space before the text after the cursor (unless
+ * that text already starts with one) — `before + directive + (after.startsWith(" ")
+ * ? after : " " + after)`. Adding a trailing space in serialize() on top of
+ * that composed to a double space (`/skill  ` / `@path  `).
  */
 import type { Unstable_DirectiveFormatter } from '@assistant-ui/react';
 
 export function literalDirectiveFormatter(prefix: string): Unstable_DirectiveFormatter {
   return {
-    serialize: (item) => `${prefix}${item.id} `,
+    serialize: (item) => `${prefix}${item.id}`,
     parse: (text) => [{ kind: 'text', text }],
   };
 }
@@ -15,12 +22,15 @@ export function literalDirectiveFormatter(prefix: string): Unstable_DirectiveFor
 /**
  * `@`-mention formatter. A DIRECTORY serializes to `@<path>/` with NO trailing
  * space, so the `@` trigger token stays active and the popover re-opens listing
- * that directory (drill-down). Files and agents serialize to `@<id> ` (trailing
- * space closes the token). Always inserts literal text — no chips.
+ * that directory (drill-down) — the native insertion still adds its own single
+ * space after it (see `dropDirectoryClosingSpace` below, which removes that one).
+ * Files and agents also serialize with NO trailing space (the native insertion
+ * supplies the single space that closes the token). Always inserts literal
+ * text — no chips.
  */
 export function mentionDirectiveFormatter(): Unstable_DirectiveFormatter {
   return {
-    serialize: (item) => (item.type === 'directory' ? `@${item.id}/` : `@${item.id} `),
+    serialize: (item) => (item.type === 'directory' ? `@${item.id}/` : `@${item.id}`),
     parse: (text) => [{ kind: 'text', text }],
   };
 }

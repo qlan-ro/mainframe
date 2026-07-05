@@ -37,7 +37,13 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
   if (state == null || chat == null) return null;
 
   const adapter = adapters.find((a) => a.id === chat.adapterId) ?? null;
-  const model = adapter?.models.find((m) => m.id === chat.model) ?? null;
+  // chat.model is null when the session inherits the adapter default (see
+  // use-composer-tuning.ts's own resolution) — fall back to the adapter's
+  // isDefault model so the chip still shows a label before any turn.
+  const model =
+    (chat.model != null ? adapter?.models.find((m) => m.id === chat.model) : undefined) ??
+    adapter?.models.find((m) => m.isDefault) ??
+    null;
 
   if (part === 'model') {
     const modelLabel = model?.label ?? chat.model ?? null;
