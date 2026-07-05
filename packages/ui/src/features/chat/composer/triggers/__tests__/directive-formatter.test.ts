@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { literalDirectiveFormatter, mentionDirectiveFormatter } from '../directive-formatter';
+import {
+  literalDirectiveFormatter,
+  mentionDirectiveFormatter,
+  shouldCloseTriggerOnInsert,
+} from '../directive-formatter';
 
 describe('literalDirectiveFormatter', () => {
   describe('with "@" prefix', () => {
@@ -90,5 +94,27 @@ describe('mentionDirectiveFormatter', () => {
     it('returns a single text segment for an empty string', () => {
       expect(fmt.parse('')).toEqual([{ kind: 'text', text: '' }]);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldCloseTriggerOnInsert
+// ---------------------------------------------------------------------------
+
+describe('shouldCloseTriggerOnInsert', () => {
+  it('returns false for a directory item (keeps the token open for drill-down)', () => {
+    expect(shouldCloseTriggerOnInsert({ id: 'src', type: 'directory', label: 'src' })).toBe(false);
+  });
+
+  it('returns true for a file item', () => {
+    expect(shouldCloseTriggerOnInsert({ id: 'src/a.ts', type: 'file', label: 'a.ts' })).toBe(true);
+  });
+
+  it('returns true for an agent item', () => {
+    expect(shouldCloseTriggerOnInsert({ id: 'agent-name', type: 'agent', label: 'agent-name' })).toBe(true);
+  });
+
+  it('returns true for a skill item', () => {
+    expect(shouldCloseTriggerOnInsert({ id: 'my-skill', type: 'skill', label: 'My Skill' })).toBe(true);
   });
 });

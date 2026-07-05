@@ -198,6 +198,56 @@ describe('ChatGateMount', () => {
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
   });
 
+  // --- Regression: the daemon confirms the resumed run asynchronously, so
+  // `isRunning` can still read `false` for one or more renders after the
+  // optimistic queue-drop (front goes undefined) — before it flips true.
+  // Gating the retained render on `approvedPlan != null && isRunning` (the
+  // earlier fix) unmounts ChatGateMount entirely during that window (neither
+  // `front` nor the isRunning-gated fallback holds), and remounting PlanGate
+  // afterwards loses its local `approved` state — the card resets to the
+  // pre-approval ActionRow instead of keeping the running footer. The render
+  // must stay retained on `approvedPlan` alone, independent of `isRunning`.
+
+  it('keeps the plan gate mounted (no reset) when front drops before isRunning has flipped true', () => {
+    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockIsRunning.mockReturnValue(false);
+    const { rerender } = wrap(<ChatGateMount />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    // Optimistic queue-drop lands before the daemon confirms the run resumed.
+    mockFront.mockReturnValue({ front: undefined, reply });
+    mockIsRunning.mockReturnValue(false);
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('chat-plan-gate')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-plan-running-footer')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-approve')).toBeNull();
+
+    // The daemon confirms the run resumed.
+    mockIsRunning.mockReturnValue(true);
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+    expect(screen.getByTestId('chat-plan-running-footer')).toBeInTheDocument();
+
+    // The run ends — now the retained gate is dropped.
+    mockIsRunning.mockReturnValue(false);
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByTestId('chat-plan-running-footer')).toBeNull();
+    expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
+  });
+
   it('does not resurrect the footer for a plan that was rejected, not approved, once front drops', () => {
     mockFront.mockReturnValue({ front: planEntry, reply });
     mockIsRunning.mockReturnValue(true);

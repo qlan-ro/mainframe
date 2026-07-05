@@ -10,7 +10,7 @@
  * ? after : " " + after)`. Adding a trailing space in serialize() on top of
  * that composed to a double space (`/skill  ` / `@path  `).
  */
-import type { Unstable_DirectiveFormatter } from '@assistant-ui/react';
+import type { Unstable_DirectiveFormatter, Unstable_TriggerItem } from '@assistant-ui/react';
 
 export function literalDirectiveFormatter(prefix: string): Unstable_DirectiveFormatter {
   return {
@@ -45,4 +45,16 @@ export function mentionDirectiveFormatter(): Unstable_DirectiveFormatter {
 export function dropDirectoryClosingSpace(text: string, dirId: string): string {
   const directive = `@${dirId}/`;
   return text.endsWith(`${directive} `) ? text.slice(0, -1) : text;
+}
+
+/**
+ * Whether the trigger popover should close after this item is inserted. A
+ * DIRECTORY pick keeps the `@` token open for drill-down (see
+ * `mentionDirectiveFormatter` + `dropDirectoryClosingSpace`); every other item
+ * type (file, agent, skill) closes the popover, matching the library's own
+ * Escape-key `close()` behavior — see `ComposerTriggers.tsx`'s `onInserted`
+ * wiring, which calls the trigger's `close()` only when this returns true.
+ */
+export function shouldCloseTriggerOnInsert(item: Unstable_TriggerItem): boolean {
+  return item.type !== 'directory';
 }

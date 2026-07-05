@@ -23,7 +23,12 @@ import { resolveDraftChatContext } from './resolve-draft-chat-context';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
 import { createMentionCache, buildMentionTriggerAdapter, type MentionCache } from './mention-adapter';
-import { literalDirectiveFormatter, mentionDirectiveFormatter, dropDirectoryClosingSpace } from './directive-formatter';
+import {
+  literalDirectiveFormatter,
+  mentionDirectiveFormatter,
+  dropDirectoryClosingSpace,
+  shouldCloseTriggerOnInsert,
+} from './directive-formatter';
 
 // ---------------------------------------------------------------------------
 // Alias for brevity
@@ -80,6 +85,21 @@ function MentionDriver({ cache }: { cache: MentionCache }) {
     };
   }, [query, cache]);
 
+  return null;
+}
+
+/**
+ * Captures the parent `<TP>`'s scope `close()` into a ref so `onInserted` (a
+ * plain callback, not a hook — it can't call `unstable_useTriggerPopoverScopeContext`
+ * itself) can force-close the popover after a pick. Mirrors the library's own
+ * Escape-key path (`triggerSelectionResource`'s `close()`, which resets the
+ * category nav AND moves the tracked cursor position back to the trigger's
+ * start offset — the same thing `detectTrigger` needs to stop matching).
+ * Rendered as a child of `<TP>` so the scope resolves to that trigger.
+ */
+function TriggerCloseCapture({ closeRef }: { closeRef: { current: (() => void) | null } }) {
+  const { close } = ComposerPrimitive.unstable_useTriggerPopoverScopeContext();
+  closeRef.current = close;
   return null;
 }
 
@@ -144,9 +164,35 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
   const keepDirectoryTokenOpen = (item: Unstable_TriggerItem) => {
     if (item.type !== 'directory') return;
     const composer = aui.composer();
-    const text = composer.getState().text;
+    // `composer.getState()` is a tap-memoized snapshot that only refreshes on
+    // the NEXT render; reading it here — synchronously, in the same tick as the
+    // native insertion's own `setText` call — returns the PRE-insertion text
+    // (a stale read), so the trailing-space strip below silently no-ops and
+    // the space leaks through. `__internal_getRuntime()` reaches the raw
+    // ComposerRuntimeCore, whose `getState()` is always live; it's `?`-typed by
+    // assistant-ui itself (unstable escape hatch) but always present for a
+    // thread composer, so fall back to the (stale-safe) client read if absent.
+    const runtime = composer.__internal_getRuntime?.();
+    const text = runtime ? runtime.getState().text : composer.getState().text;
     const next = dropDirectoryClosingSpace(text, item.id);
     if (next !== text) composer.setText(next);
+  };
+
+  // Force-closes the popover after a non-directory pick (file/agent/skill) —
+  // the native `selectItem` never re-syncs the tracked cursor position after a
+  // MOUSE click (only real typing/onSelect DOM events do), so `detectTrigger`
+  // keeps matching the old token and the popover never closes on its own. Reuse
+  // the library's own Escape-key mechanism (`close()`) instead of reimplementing it.
+  const skillsCloseRef = useRef<(() => void) | null>(null);
+  const mentionCloseRef = useRef<(() => void) | null>(null);
+
+  const onSkillInserted = () => skillsCloseRef.current?.();
+  const onMentionInserted = (item: Unstable_TriggerItem) => {
+    if (shouldCloseTriggerOnInsert(item)) {
+      mentionCloseRef.current?.();
+      return;
+    }
+    keepDirectoryTokenOpen(item);
   };
 
   return (
@@ -154,7 +200,8 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
       {/* `/` skills trigger. PopoverShell renders INSIDE the items render-prop so
           the bordered box only appears when there are results (no empty shell). */}
       <TP char="/" adapter={skillsAdapter}>
-        <TP.Directive formatter={slashFmt} />
+        <TP.Directive formatter={slashFmt} onInserted={onSkillInserted} />
+        <TriggerCloseCapture closeRef={skillsCloseRef} />
         <ComposerPrimitive.Unstable_TriggerPopoverItems>
           {(items) =>
             items.length === 0 ? null : (
@@ -170,7 +217,8 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
 
       {/* `@` mention trigger (agents + files + tree/filesystem drill-down) */}
       <TP char="@" adapter={mentionAdapter}>
-        <TP.Directive formatter={atFmt} onInserted={keepDirectoryTokenOpen} />
+        <TP.Directive formatter={atFmt} onInserted={onMentionInserted} />
+        <TriggerCloseCapture closeRef={mentionCloseRef} />
         <MentionDriver cache={mentionCache} />
         <ComposerPrimitive.Unstable_TriggerPopoverItems>
           {(items) =>
