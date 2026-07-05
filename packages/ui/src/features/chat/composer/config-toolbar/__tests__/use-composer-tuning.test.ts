@@ -517,6 +517,89 @@ describe('useComposerTuning — draft mode: setPlanMode calls patchDraftConfig, 
   });
 });
 
+// ---------------------------------------------------------------------------
+// 10. Regression: post-first-send state — chatId is STILL the stale
+//     __LOCALID_* id (the reducer hadn't flipped it / hasn't landed yet) but
+//     chatConfig is already the real daemon chat. Every setter must PATCH the
+//     REAL daemon id, never the dead local id (the root cause of "model/effort/
+//     plan/permission switching is silently dead for the rest of the session").
+// ---------------------------------------------------------------------------
+
+const REAL_CHAT_ID = 'chat-real-after-adopt';
+
+/** Fake extras mimicking the post-first-send gap: stale local chatId + real chatConfig. */
+function makePostAdoptExtras(chat: Chat = makeChat({ id: REAL_CHAT_ID })) {
+  return {
+    state: { chatId: LOCAL_DRAFT_ID, chatConfig: chat },
+    port: PORT,
+    permissions: {},
+    queued: {},
+    cancel: vi.fn(),
+    replyToPermission: vi.fn(),
+    cancelQueued: vi.fn(),
+    editQueued: vi.fn(),
+  };
+}
+
+describe('useComposerTuning — post-first-send gap: chatId stale, chatConfig real', () => {
+  it('setEffort PATCHes the real daemon id, not the stale __LOCALID_* chatId', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makePostAdoptExtras() as unknown as ReturnType<typeof useChatExtras>);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setEffort('high');
+    });
+
+    expect(vi.mocked(setChatTuning)).toHaveBeenCalledExactlyOnceWith(PORT, REAL_CHAT_ID, { effort: 'high' });
+    expect(patchDraftConfigSpy).not.toHaveBeenCalled();
+  });
+
+  it('setFeature PATCHes the real daemon id', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makePostAdoptExtras() as unknown as ReturnType<typeof useChatExtras>);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setFeature('ultracode', true);
+    });
+
+    expect(vi.mocked(setChatTuning)).toHaveBeenCalledExactlyOnceWith(PORT, REAL_CHAT_ID, { ultracode: true });
+  });
+
+  it('setModel PATCHes the real daemon id via setChatConfig', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makePostAdoptExtras() as unknown as ReturnType<typeof useChatExtras>);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setModel('claude-3-opus');
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, REAL_CHAT_ID, { model: 'claude-3-opus' });
+  });
+
+  it('setAdapter / setPlanMode / setPermissionMode all PATCH the real daemon id', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makePostAdoptExtras() as unknown as ReturnType<typeof useChatExtras>);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setAdapter('gemini');
+    });
+    act(() => {
+      result.current.setPlanMode(true);
+    });
+    act(() => {
+      result.current.setPermissionMode('yolo' as Parameters<typeof result.current.setPermissionMode>[0]);
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(1, PORT, REAL_CHAT_ID, { adapterId: 'gemini' });
+    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(2, PORT, REAL_CHAT_ID, { planMode: true });
+    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(3, PORT, REAL_CHAT_ID, { permissionMode: 'yolo' });
+  });
+});
+
 describe('useComposerTuning — real chat: setters hit REST helpers, not patchDraftConfig', () => {
   it('setEffort calls setChatTuning and patchDraftConfig is not called', () => {
     // chatConfig is a real chat (non-null) → NOT draft mode.

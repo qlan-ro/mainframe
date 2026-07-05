@@ -144,6 +144,12 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const chatId = extras?.state.chatId ?? null;
   const port = extras?.port ?? null;
   const realChat = extras?.state.chatConfig ?? null;
+  // The id every live-path PATCH must target. `chatConfig.id` is always the daemon's
+  // own id — never the __LOCALID_* placeholder — so prefer it over `chatId` whenever
+  // a real chat is known. This covers the controller's `chat.id.adopted` flip AND
+  // guards the (should-be-impossible) gap where chatConfig has arrived but chatId
+  // hasn't flipped yet: a live PATCH must never target a dead local id.
+  const patchChatId = realChat?.id ?? chatId;
 
   // Draft mode: a brand-new __LOCALID_* thread has no daemon chat yet. Bind the
   // toolbar to a Chat synthesized from the in-memory draft and route every setter
@@ -180,13 +186,13 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         patchDraftConfig(chatId, { effort });
         return;
       }
-      if (port == null || !chatId) return;
+      if (port == null || !patchChatId) return;
       const tuning: SessionTuning = { effort };
-      setChatTuning(port, chatId, tuning).catch((err: unknown) =>
+      setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
         console.warn('[composer/useComposerTuning] setEffort failed', { err }),
       );
     },
-    [draftMode, chatId, port],
+    [draftMode, chatId, patchChatId, port],
   );
 
   const setFeature = useCallback(
@@ -195,25 +201,25 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         patchDraftConfig(chatId, { [key]: on });
         return;
       }
-      if (port == null || !chatId) return;
+      if (port == null || !patchChatId) return;
       // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
       const patch: SessionTuning = { [key]: on };
-      setChatTuning(port, chatId, patch).catch((err: unknown) =>
+      setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
         console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
       );
     },
-    [draftMode, chatId, port],
+    [draftMode, chatId, patchChatId, port],
   );
 
   // adapter / model / permission / plan all go through PATCH /config (or the draft).
   const patchConfig = useCallback(
     (patch: ChatConfigPatch, label: string) => {
-      if (port == null || !chatId) return;
-      setChatConfig(port, chatId, patch).catch((err: unknown) =>
+      if (port == null || !patchChatId) return;
+      setChatConfig(port, patchChatId, patch).catch((err: unknown) =>
         console.warn(`[composer/useComposerTuning] ${label} failed`, { err }),
       );
     },
-    [chatId, port],
+    [patchChatId, port],
   );
 
   const setModel = useCallback(

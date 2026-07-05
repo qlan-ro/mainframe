@@ -120,4 +120,15 @@ describe('ChatThreadController.setRemoteId — triggers the initial load', () =>
 
     expect(ctrl.getState().loadState.type).toBe('ready');
   });
+
+  // Regression: state.chatId (the public snapshot read by every extras.state.chatId
+  // consumer — composer tuning, the diff-expand fetch, the @-file search scope) must
+  // flip to the daemon id too, not just the controller's private daemonId field.
+  it('flips state.chatId to the real id synchronously, before the load resolves', () => {
+    const ctrl = new ChatThreadController(LOCAL_ID, PORT, makeFakeWs());
+
+    ctrl.setRemoteId(REMOTE_ID);
+
+    expect(ctrl.getState().chatId).toBe(REMOTE_ID);
+  });
 });

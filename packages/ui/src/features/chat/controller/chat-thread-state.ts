@@ -45,6 +45,13 @@ export type RunState =
   | { type: 'error'; error: unknown };
 
 export interface ChatThreadState {
+  /**
+   * The network id for this chat — starts as the `__LOCALID_*` placeholder for a
+   * thread created this session, then flips to the daemon id via `chat.id.adopted`
+   * once `ChatThreadController.setRemoteId` resolves. Every `extras.state.chatId`
+   * reader (composer tuning PATCHes, the diff-expand fetch, the `@`-file search
+   * scope) depends on this flip to stop targeting a dead local id after adopt.
+   */
   readonly chatId: string;
   readonly loadState: LoadState;
   readonly runState: RunState;
@@ -99,6 +106,7 @@ export type ChatStateEvent =
   | { type: 'local.message.failed'; clientId: string; error: unknown }
   | { type: 'local.message.retrying'; clientId: string }
   | { type: 'chat.config.updated'; chat: Chat }
+  | { type: 'chat.id.adopted'; chatId: string }
   | { type: 'context.usage'; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'compact.started' }
   | { type: 'compact.done' };
@@ -197,6 +205,9 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
 
     case 'run.failed':
       return { ...state, runState: { type: 'error', error: event.error } };
+
+    case 'chat.id.adopted':
+      return state.chatId === event.chatId ? state : { ...state, chatId: event.chatId };
 
     case 'chat.config.updated':
       // chat.updated also fires for cost/token/updatedAt churn during a run.
