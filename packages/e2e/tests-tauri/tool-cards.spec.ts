@@ -794,7 +794,11 @@ test.describe('§tool-cards — Bash exit-code coloring (bash-exit-code)', () =>
     const testOutput = testCard.getByTestId('chat-bash-output');
     await expect(testOutput).toBeVisible({ timeout: 5_000 });
     await expect(testOutput).toContainText('exit 0');
-    await expect(testOutput.locator('span', { hasText: 'exit 0' })).toHaveClass(/text-mf-term-green/);
+    // The outer `<span>` line wrapper (BashCard.tsx) and ExitLine's own inner
+    // colored `<span>` both contain "exit 0" text, so the bare filter matches
+    // both — scope to the innermost (last) match, the one that actually
+    // carries the color class.
+    await expect(testOutput.locator('span', { hasText: 'exit 0' }).last()).toHaveClass(/text-mf-term-green/);
 
     const buildCard = cards.nth(1);
     await buildCard.waitFor({ timeout: 10_000 });
@@ -802,7 +806,8 @@ test.describe('§tool-cards — Bash exit-code coloring (bash-exit-code)', () =>
     const buildOutput = buildCard.getByTestId('chat-bash-output');
     await expect(buildOutput).toBeVisible({ timeout: 5_000 });
     await expect(buildOutput).toContainText('exit 127');
-    await expect(buildOutput.locator('span', { hasText: 'exit 127' })).toHaveClass(/text-destructive/);
+    // Same wrapper/inner-span ambiguity as the "exit 0" case above.
+    await expect(buildOutput.locator('span', { hasText: 'exit 127' }).last()).toHaveClass(/text-destructive/);
 
     // cardStyle's destructive border lives on the trigger's immediate parent
     // (the styled wrapper div), not the outer `chat-bash-card` testid element.
