@@ -12,7 +12,9 @@
  * (modified) EditorView. Chunks are read from `mv.chunks` at call time so
  * there is no need to re-register when the diff recomputes.
  */
-import { MergeView } from '@codemirror/merge';
+import { EditorSelection } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import type { Chunk, MergeView } from '@codemirror/merge';
 
 // ── Singleton ref ────────────────────────────────────────────────────────────
 
@@ -38,6 +40,31 @@ export function clearActiveMergeView(mv: MergeView): void {
 
 // ── Navigation helpers ───────────────────────────────────────────────────────
 
+/**
+ * Move the cursor to a chunk's start and scroll it fully into view on BOTH
+ * axes.
+ *
+ * The transaction-spec shorthand `scrollIntoView: true` collapses any
+ * selection to a single cursor point before computing the scroll rect (see
+ * CodeMirror's own `updateState`), so a target built only from `fromB`
+ * (always column 0 of the chunk's first line) never needs to scroll right —
+ * it always reports the change as "in view" even when the actual changed
+ * text on that line extends past the pane's visible width, leaving it
+ * horizontally clipped. Dispatching `EditorView.scrollIntoView` as an
+ * explicit effect over the chunk's full `fromB..toB` range instead makes
+ * CodeMirror compute the rect from BOTH range endpoints, covering the
+ * chunk's real horizontal (and vertical) extent.
+ */
+function scrollChunkIntoView(b: MergeView['b'], chunk: Chunk): void {
+  b.dispatch({
+    selection: { anchor: chunk.fromB, head: chunk.fromB },
+    effects: EditorView.scrollIntoView(EditorSelection.range(chunk.fromB, chunk.toB), {
+      y: 'nearest',
+      x: 'nearest',
+    }),
+  });
+}
+
 /** Navigate to the next diff chunk; wraps to the first if past the last. */
 export function nextChange(): void {
   if (!activeMergeView) return;
@@ -47,7 +74,7 @@ export function nextChange(): void {
   const pos = b.state.selection.main.anchor;
   const next = chunks.find((c) => c.fromB > pos);
   const target = next ?? chunks[0]!;
-  b.dispatch({ selection: { anchor: target.fromB, head: target.fromB }, scrollIntoView: true });
+  scrollChunkIntoView(b, target);
 }
 
 /**
@@ -67,5 +94,5 @@ export function prevChange(): void {
   const pos = b.state.selection.main.anchor;
   const prev = [...chunks].reverse().find((c) => c.fromB < pos);
   const target = prev ?? chunks[chunks.length - 1]!;
-  b.dispatch({ selection: { anchor: target.fromB, head: target.fromB }, scrollIntoView: true });
+  scrollChunkIntoView(b, target);
 }

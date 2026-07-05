@@ -9,11 +9,36 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { setActiveMergeView, nextChange, prevChange, getActiveChangeCount } from '../diff-nav';
 import { EditorState } from '@codemirror/state';
+import type { StateEffect } from '@codemirror/state';
 import type { MergeView, Chunk } from '@codemirror/merge';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-type DispatchedTx = { scrollIntoView?: boolean; selection?: { anchor: number; head: number } };
+type DispatchedTx = {
+  scrollIntoView?: boolean;
+  selection?: { anchor: number; head: number };
+  effects?: StateEffect<unknown> | readonly StateEffect<unknown>[];
+};
+
+/**
+ * Normalize a transaction's `effects` (single effect | array | undefined) into
+ * a flat array, matching how CodeMirror itself accepts the TransactionSpec.
+ */
+function effectsOf(tx: DispatchedTx): readonly StateEffect<unknown>[] {
+  const { effects } = tx;
+  if (!effects) return [];
+  // `Array.isArray` doesn't narrow a `T | readonly T[]` union cleanly (the
+  // predicate's `any[]` result type isn't assignable back to `readonly T[]`),
+  // so the branches are cast explicitly instead of relying on inference.
+  return Array.isArray(effects) ? (effects as readonly StateEffect<unknown>[]) : [effects as StateEffect<unknown>];
+}
+
+/** Shape of the `ScrollTarget` value carried by a CodeMirror `scrollIntoView` effect. */
+interface ScrollTargetLike {
+  range: { from: number; to: number };
+  x: string;
+  y: string;
+}
 
 /**
  * Build a minimal EditorView-shaped stub for the b pane.
@@ -110,6 +135,51 @@ describe('setActiveMergeView / nextChange / prevChange', () => {
     const bView = mv.b as unknown as ReturnType<typeof makeBViewStub>;
     expect(bView.dispatched.length).toBeGreaterThan(0);
     expect(bView.dispatched[bView.dispatched.length - 1]!.selection?.anchor).toBe(6);
+  });
+
+  it('nextChange scrolls both axes into view — the scroll target spans the chunk’s full fromB..toB range, not just its start column', () => {
+    // Regression test: dispatching only `selection: {anchor: fromB, head: fromB}` with
+    // `scrollIntoView: true` collapses the target to a single point at the chunk's
+    // first column (see CodeMirror's own updateState, which reduces any selection to
+    // a cursor before computing the scroll rect). For a long changed line whose
+    // content extends past that column, the change itself stays horizontally
+    // clipped. The fix must scroll using the chunk's full range so CodeMirror
+    // computes the rect from both endpoints — covering the actual horizontal extent.
+    const doc = 'line1\nline2 is a long changed line\nline3\n';
+    const chunks = [{ fromA: 6, toA: 34, fromB: 6, toB: 34 }];
+    const mv = makeMergeViewStub(doc, chunks, 0);
+    setActiveMergeView(mv);
+
+    nextChange();
+
+    const bView = mv.b as unknown as ReturnType<typeof makeBViewStub>;
+    const lastTx = bView.dispatched[bView.dispatched.length - 1]!;
+    const scrollEffect = effectsOf(lastTx).find((e) => 'value' in e);
+    expect(scrollEffect).toBeTruthy();
+    const target = (scrollEffect as unknown as { value: ScrollTargetLike }).value;
+    expect(target.range.from).toBe(6);
+    expect(target.range.to).toBe(34);
+    expect(target.x).toBe('nearest');
+    expect(target.y).toBe('nearest');
+  });
+
+  it('prevChange scrolls both axes into view — the scroll target spans the chunk’s full fromB..toB range', () => {
+    const doc = 'line1\nline2 is a long changed line\nline3\n';
+    const chunks = [{ fromA: 6, toA: 34, fromB: 6, toB: 34 }];
+    const mv = makeMergeViewStub(doc, chunks, doc.length);
+    setActiveMergeView(mv);
+
+    prevChange();
+
+    const bView = mv.b as unknown as ReturnType<typeof makeBViewStub>;
+    const lastTx = bView.dispatched[bView.dispatched.length - 1]!;
+    const scrollEffect = effectsOf(lastTx).find((e) => 'value' in e);
+    expect(scrollEffect).toBeTruthy();
+    const target = (scrollEffect as unknown as { value: ScrollTargetLike }).value;
+    expect(target.range.from).toBe(6);
+    expect(target.range.to).toBe(34);
+    expect(target.x).toBe('nearest');
+    expect(target.y).toBe('nearest');
   });
 
   it('nextChange wraps to the first chunk when cursor is past all chunks', () => {
