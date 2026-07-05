@@ -275,6 +275,10 @@ export class ChatManager {
     if (!postStart?.session?.isSpawned) throw new Error(`Chat ${chatId} not running`);
     logger.info({ chatId }, 'user message sent');
 
+    // Stamp the turn start now, right before dispatch, so onResult can compute
+    // turnDurationMs for the MessageTiming pill (metadata.turnDurationMs).
+    postStart.turnStartedAt = Date.now();
+
     // Command routing — provider commands go to sendCommand, mainframe commands get wrapped
     if (metadata?.command) {
       const { name, source, args } = metadata.command;

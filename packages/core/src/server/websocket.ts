@@ -17,6 +17,15 @@ const log = createChildLogger('ws');
 
 const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+// Event types delivered to every connected client regardless of per-chat
+// subscription. Both carry a `chatId` for a chat that may not be the active
+// thread (a background chat's task-complete notice or a permission it's
+// waiting on) — the client only keeps a live subscription for the active
+// thread, so gating these the same way as `message.added` silently drops
+// them for any backgrounded chat. The sidebar's unread-dot / attention-badge
+// features need them connection-global.
+const CONNECTION_GLOBAL_EVENT_TYPES = new Set(['chat.notification', 'permission.requested']);
+
 export function isWsAuthRequired(ip: string, secret: string | null): boolean {
   if (!secret) return false;
   return !LOCALHOST_IPS.has(ip);
@@ -215,9 +224,10 @@ export class WebSocketManager {
     }
 
     const payload = JSON.stringify(event);
+    const isConnectionGlobal = CONNECTION_GLOBAL_EVENT_TYPES.has(event.type);
 
     for (const client of this.clients.values()) {
-      if (!chatId || client.subscriptions.has(chatId)) {
+      if (isConnectionGlobal || !chatId || client.subscriptions.has(chatId)) {
         if (client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(payload);
         }

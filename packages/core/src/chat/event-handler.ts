@@ -366,6 +366,19 @@ function buildSessionSink(
       log.debug({ chatId, reason, wasInterrupted, isError }, 'onResult: emitting chat.updated with processState=idle');
       emitEvent({ type: 'chat.updated', chat: active.chat, reason });
 
+      // Turn duration for the MessageTiming pill. `turnStartedAt` is stamped by
+      // ChatManager.sendMessage right before dispatch; emit it as a transient
+      // `system` marker that groupMessages() merges onto the preceding
+      // assistant turn as `metadata.turnDurationMs` and then discards.
+      if (typeof active.turnStartedAt === 'number') {
+        const turnDurationMs = Date.now() - active.turnStartedAt;
+        active.turnStartedAt = undefined;
+        const timingMessage = messages.createTransientMessage(chatId, 'system', [], { turnDurationMs });
+        messages.append(chatId, timingMessage);
+        emitEvent({ type: 'message.added', chatId, message: timingMessage });
+        emitDisplay();
+      }
+
       const notifyConfig = readNotificationConfig(db);
       if (isError) {
         if (!wasInterrupted) {
