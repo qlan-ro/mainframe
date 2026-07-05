@@ -168,3 +168,31 @@ describe('useLaunchActions — handleSelect records under the active scopeKey', 
     expect(useSandboxStore.getState().selectedConfigByScope).toEqual({});
   });
 });
+
+describe('useLaunchActions — refetch after start/stop', () => {
+  // Bug: the Run surface's own launch path (RunTabStrip add-menu, SurfacePicker)
+  // shares this hook but never re-synced with the daemon after starting/stopping
+  // a config — a fast subprocess's buffered output (seedOutputBuffer, only
+  // reachable inside useLaunchConfigs's fetch effect) and a just-stopped
+  // process's terminal status were both invisible until something ELSE
+  // (e.g. reopening the toolbar's launch popover) happened to call refetch().
+  it('handleLaunch calls refetch() after startLaunchConfig resolves', async () => {
+    mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
+    const { useLaunchActions } = await import('../use-launch-actions');
+    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
+    await act(async () => {
+      await result.current.handleLaunch(devServer);
+    });
+    expect(mockRefetch).toHaveBeenCalled();
+  });
+
+  it('handleStop calls refetch() after stopLaunchConfig resolves', async () => {
+    mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
+    const { useLaunchActions } = await import('../use-launch-actions');
+    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
+    await act(async () => {
+      await result.current.handleStop(devServer);
+    });
+    expect(mockRefetch).toHaveBeenCalled();
+  });
+});

@@ -79,9 +79,19 @@ export function useLaunchActions(
       } catch (err) {
         mfToast.error(`Failed to start "${config.name}"`);
         console.warn('[launch] start failed', err);
+      } finally {
+        // Re-sync from the daemon's REST status right after starting. This is
+        // the ONLY code path that seeds a fast/short-lived config's buffered
+        // console output (`useLaunchConfigs`'s `seedOutputBuffer`, which only
+        // runs inside its own fetch effect) — without it, a config launched
+        // from the Run surface's own picker/add-menu (as opposed to reopening
+        // the toolbar's launch popover, which already called refetch()) never
+        // picks up output from a process whose whole lifecycle finished before
+        // any live WS delivery was observed.
+        refetch();
       }
     },
-    [port, projectId, chatId, scopeKey, addRunTab, setSelectedConfig],
+    [port, projectId, chatId, scopeKey, addRunTab, setSelectedConfig, refetch],
   );
 
   const handleStop = useCallback(
@@ -92,9 +102,17 @@ export function useLaunchActions(
       } catch (err) {
         mfToast.error(`Failed to stop "${config.name}"`);
         console.warn('[launch] stop failed', err);
+      } finally {
+        // The daemon's stop route fully awaits the process's actual exit (or
+        // the SIGKILL fallback) before responding, so by the time this promise
+        // settles the daemon is unambiguously in its terminal status — refetch
+        // here re-syncs the toolbar/picker from that authoritative REST read,
+        // independent of whether the push-side `launch.status` WS event was
+        // observed by every mounted consumer of this scope.
+        refetch();
       }
     },
-    [port, projectId, chatId],
+    [port, projectId, chatId, refetch],
   );
 
   return { configs, scopeStatuses, selectedConfigName, handleSelect, handleLaunch, handleStop, refetch };
