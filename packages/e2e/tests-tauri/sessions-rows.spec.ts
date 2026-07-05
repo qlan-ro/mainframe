@@ -126,6 +126,11 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     const renameBtn = rowX.getByTestId('sessions-row-action-rename');
     const archiveBtn = rowX.getByTestId('sessions-row-action-archive');
 
+    // Establish a clean non-hovered baseline first — the previous test's
+    // `rowX.click()` leaves the real mouse cursor positioned over this row,
+    // which keeps it in the CSS :hover state here (live-verified flake: the
+    // very first assertion below saw relTime already hidden).
+    await page.mouse.move(0, 0);
     await expect(relTime).toBeVisible();
     await expect(tagsBtn).toBeHidden();
 
