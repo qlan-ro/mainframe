@@ -1,6 +1,6 @@
 # app-tauri E2E Test Inventory + data-testid Coverage
 
-Generated 2026-07-05 against commit `48cbfecc`.
+Generated 2026-07-05 against commit `47ee674d`.
 
 Built by parsing `packages/e2e/tests-tauri/*.spec.ts` with the TypeScript
 compiler API (AST-level `test.describe`/`test`/`test.skip` extraction, not
@@ -8,11 +8,56 @@ regex-on-lines) and cross-referencing against a `data-testid=` grep of
 `packages/ui/src`. The parsing script was throwaway (`/tmp/e2e-inv/*.js`, not
 committed); this document is the hand-reviewed output.
 
+## Changes since previous inventory (48cbfecc)
+
+This is a regeneration against the current branch tip, after a bug-fix +
+re-unskip campaign (commits `ce7bc74c`..`47ee674d`, 13 commits) landed on top
+of the previous snapshot. Total test count is unchanged (no specs were added or
+removed); the shift is entirely in the active/skip split, plus refined skip
+reasons on a few tests that are still blocked pending further investigation:
+
+| | previous (48cbfecc) | current (47ee674d) | delta |
+|---|---|---|---|
+| Total tests | 422 | 422 | — |
+| Active | 345 | 364 | +19 |
+| Skipped | 77 | 58 | −19 |
+| Describe blocks | 112 | 112 | — |
+
+Per-file skip→active moves:
+
+- `git-branch.spec.ts`: 2 active / 12 skip → **14 active / 0 skip** — the
+  whole file's `git-branch-popover` positioning bug (Hint-wraps-trigger fix,
+  commit `ce7bc74c`) was the single root cause blocking it; now fully
+  unskipped.
+- `composer-advanced.spec.ts`: 5/15 → **8/12** — the mention/skill
+  trigger-popover-reopen bug (commit `f1666315`) fixed 3 of the composer
+  trigger tests; the remaining 12 skips are unrelated (browser-crash cluster,
+  selection-toolbar investigation, quote-composer-only question).
+- `run-surface.spec.ts`: 8/4 → **11/1** — the launch-refetch/stop-start-flip
+  fix (commit `81a5c49c`) unblocked 3 tests; one (echo-once buffered console
+  output via the add-menu launch path) is still open, reason refined to note
+  the round-2 refetch fix didn't cover that path.
+- `sessions-draft.spec.ts`: 9/1 → **10/0** — the draft-discard-with-pill-active
+  fix (commit `3368d065`) closed the file's last skip.
+- `editor-diff.spec.ts`, `gates.spec.ts`, `sessions-tags.spec.ts`: active/skip
+  counts unchanged, but the underlying root-cause comments were refined during
+  the campaign (diff chunk nav now diagnosed as a horizontal-scroll-into-view
+  bug rather than a clipping bug; the plan-gate exec-mode skip now points at
+  the mock-session respawn timing; the tag-popover context-menu skip now notes
+  the `setTimeout(0)` defer from `3368d065` didn't close the race).
+
+Part 2 (data-testid coverage) numbers are unchanged (714 / 528 / 186 / 73.9%)
+except two reference counts that shifted as a side effect of the
+`gates.spec.ts` refinement above (the plan gate exec-mode test's testid list
+dropped `chat-permission-deny`/`chat-permission-gate` in favor of the plan-only
+testids it now actually exercises): `chat-permission-gate` 14 → 13 and
+`chat-permission-deny` 11 → 10.
+
 ## Methodology & known caveats
 
 - **Test inventory (Part 1):** every `test(...)` / `test.skip(...)` call
   nested under a `test.describe(...)` block across all 33 spec files —
-  422 tests total (345 active, 77 skipped) in 112 describe blocks. Skip
+  422 tests total (364 active, 58 skipped) in 112 describe blocks. Skip
   detection covers both the whole-test `test.skip('title', fn)` form (reason
   taken from the in-body comment, since Playwright's own skip modifier
   carries no reason argument) and the conditional `test.skip(true, 'reason')`
@@ -157,8 +202,8 @@ committed); this document is the hand-reviewed output.
 | Test | Status | Description | data-testids |
 |---|---|---|---|
 | typing @ opens the file mention popover and lists a known project file | active | Typing @ opens the file mention popover and lists a known project file. | `chat-composer-input`, `composer-file-item-index.ts` |
-| picking a file inserts the mention token and closes the popover | skip — TODO(bug): composer-trigger-popover never closes after picking a file, even though the mention text inserts correctly — confirmed live via screenshot | Picking a file inserts the mention token and closes the popover. | `chat-composer-input`, `composer-file-item-index.ts`, `composer-trigger-popover` |
-| picking a directory keeps the token open for drill-down | skip — TODO(bug): the composer keeps a trailing space after a directory pick ("@notes/ " not "@notes/") — see the root-cause comment above this test for th... | Picking a directory keeps the token open for drill-down. | `chat-composer-input`, `composer-file-item-notes`, `composer-file-item-notes/todo.md` |
+| picking a file inserts the mention token and closes the popover | active | Picking a file inserts the mention token and closes the popover. | `chat-composer-input`, `composer-file-item-index.ts`, `composer-trigger-popover` |
+| picking a directory keeps the token open for drill-down | active | Picking a directory keeps the token open for drill-down. | `chat-composer-input`, `composer-file-item-notes`, `composer-file-item-notes/todo.md` |
 | Escape closes the trigger popover without clearing the typed text | active | Escape closes the trigger popover without clearing the typed text. | `chat-composer-input`, `composer-file-item-index.ts`, `composer-trigger-popover` |
 | the add-mention toolbar button appends @ to the composer text | skip — TODO(bug): composer text unexpectedly empties in this describe — see comment above | The add-mention toolbar button appends @ to the composer text. | `chat-composer-input`, `composer-add-mention` |
 | a typed mention renders as its own colored node in the highlight overlay | active | A typed mention renders as its own colored node in the highlight overlay. | `chat-composer-input`, `composer-prompt-highlight` |
@@ -167,7 +212,7 @@ committed); this document is the hand-reviewed output.
 
 | Test | Status | Description | data-testids |
 |---|---|---|---|
-| typing / lists the project skill; picking it inserts the literal /skill token | skip — TODO(bug): composer-trigger-popover reopens showing the full unfiltered skill list after picking one, instead of closing — confirmed live via screen... | Typing / lists the project skill; picking it inserts the literal /skill token. | `chat-composer-input`, `composer-skill-item-greet-user`, `composer-trigger-popover` |
+| typing / lists the project skill; picking it inserts the literal /skill token | active | Typing / lists the project skill; picking it inserts the literal /skill token. | `chat-composer-input`, `composer-skill-item-greet-user`, `composer-trigger-popover` |
 
 ### §composer quote + worktree mid-session warning
 
@@ -361,7 +406,7 @@ committed); this document is the hand-reviewed output.
 |---|---|---|---|
 | clicking a changed-file row opens a HEAD-vs-working diff with both panes rendered and the correct chunk count | active | Clicking a changed-file row opens a HEAD-vs-working diff with both panes rendered and the correct chunk count. | `changes-row-tall.ts`, `diff-tab`, `editor-diff` |
 | the reveal button mounts once the diff tab is ready — DiffTab always passes filePath to DiffHeader | active | The reveal button mounts once the diff tab is ready — DiffTab always passes filePath to DiffHeader. | `diff-prev-change`, `diff-reveal` |
-| prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view | skip — TODO(bug): BOTTOM_MARKER is left horizontally clipped by its own pane after nextChange() scrolls — confirmed live via bounding-box measurement (mark... | Prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view. | `diff-next-change`, `diff-prev-change`, `diff-tab`, `editor-diff` |
+| prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view | skip — TODO(bug): horizontal scroll-into-view for a chunk far down a long line never happens (`.cm-scroller.scrollLeft` stays 0) — the marker mounts and sc... | Prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view. | `diff-next-change`, `diff-prev-change`, `diff-tab`, `editor-diff` |
 | the diff tab has no dirty chip and no save path, even after editing the modified pane | active | The diff tab has no dirty chip and no save path, even after editing the modified pane. | `diff-tab`, `editor-diff`, `editor-save-status`, `editor-tab-save-error` |
 | opening a diff for a file that lost its disk copy after appearing as an uncommitted change shows "No diff available" | active | Opening a diff for a file that lost its disk copy after appearing as an uncommitted change shows "No diff available". | `changes-refresh`, `changes-row-orphan.txt`, `changes-status-orphan.txt`, `diff-next-change`, `diff-prev-change`, `diff-reveal`, `diff-tab`, `inspector-tab-changes` |
 
@@ -471,7 +516,7 @@ committed); this document is the hand-reviewed output.
 
 | Test | Status | Description | data-testids |
 |---|---|---|---|
-| selecting Unattended + clear-context and approving shows a matching running footer | skip — TODO(bug): chat-plan-running-footer never appears — the plan card resets to pre-approval defaults instead, confirmed live via screenshot; | Selecting Unattended + clear-context and approving shows a matching running footer. | `chat-permission-deny`, `chat-permission-gate`, `chat-plan-approve`, `chat-plan-clear-context`, `chat-plan-execmode-yolo`, `chat-plan-gate`, `chat-plan-running-footer` |
+| selecting Unattended + clear-context and approving shows a matching running footer | skip — TODO(bug): after approve+clearContext kills and respawns the mock session, the follow-up chat-permission-gate (plan-approval.1.ndjson) never appears... | Selecting Unattended + clear-context and approving shows a matching running footer. | `chat-plan-approve`, `chat-plan-clear-context`, `chat-plan-execmode-yolo`, `chat-plan-gate`, `chat-plan-running-footer` |
 
 ### §gate queue-front
 
@@ -487,18 +532,18 @@ committed); this document is the hand-reviewed output.
 |---|---|---|---|
 | toolbar branch trigger opens the popover; branches lazy-load | active | Toolbar branch trigger opens the popover; branches lazy-load. | `git-branch-list`, `git-branch-row-feature/ff-branch`, `git-branch-row-feature/pull-target`, `git-branch-row-main`, `git-worktree-row-wt-delete`, `git-worktree-row-wt-session` |
 | search filters the branch list by substring | active | Search filters the branch list by substring. | `git-branch-row-feature/conflict-a`, `git-branch-row-feature/conflict-b`, `git-branch-row-feature/ff-branch`, `git-branch-row-main`, `git-branch-search` |
-| new branch dialog creates a branch and checks it out | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | New branch dialog creates a branch and checks it out. | `git-branch-row-feature/e2e-created`, `git-new-branch`, `git-new-branch-create`, `git-new-branch-dialog`, `git-new-branch-name` |
-| branch row submenu: checkout switches the worktree current branch | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: checkout switches the worktree current branch. | `git-submenu-checkout` |
-| branch row submenu: new branch from a selected branch | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: new branch from a selected branch. | `git-new-branch-create`, `git-new-branch-dialog`, `git-new-branch-name`, `git-new-branch-start`, `git-submenu-new-branch-from` |
-| branch row submenu: merge fast-forwards a clean ancestor branch | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: merge fast-forwards a clean ancestor branch. | `git-submenu-merge` |
-| branch row submenu: rename renames a branch | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: rename renames a branch. | `git-branch-row-feature/renamed-branch`, `git-rename-input`, `git-rename-submit`, `git-rename-view`, `git-submenu-rename` |
-| branch row submenu: delete force-deletes a not-yet-merged branch (two-step confirm) | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: delete force-deletes a not-yet-merged branch (two-step confirm). | `git-branch-row-feature/delete-me`, `git-confirm-dialog`, `git-confirm-dialog-confirm`, `git-submenu-delete` |
-| branch row submenu: pull fast-forwards a branch from the bare remote | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: pull fast-forwards a branch from the bare remote. | `git-submenu-pull` |
-| branch row submenu: push sends a local-only commit to the bare remote | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Branch row submenu: push sends a local-only commit to the bare remote. | `git-submenu-push` |
-| conflict view: a genuinely conflicting merge auto-routes to the conflict view; abort recovers | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Conflict view: a genuinely conflicting merge auto-routes to the conflict view; abort recovers. | `git-branch-search`, `git-conflict-abort`, `git-conflict-view`, `git-submenu-checkout`, `git-submenu-merge` |
-| worktree section: toggle collapses/expands rows; delete removes wt-delete | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Worktree section: toggle collapses/expands rows; delete removes wt-delete. | `git-branch-row-feature/worktree-delete`, `git-confirm-dialog`, `git-confirm-dialog-confirm`, `git-worktree-delete-wt-delete`, `git-worktree-row-wt-delete`, `git-worktree-toggle-wt-delete` |
-| quick actions: fetch, update all, and push current complete without error | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Quick actions: fetch, update all, and push current complete without error. | `git-fetch`, `git-push-current`, `git-update-all`, `toast-root` |
-| worktree section: new session on worktree creates a worktree-scoped chat | skip — TODO(bug): git-branch-popover content is never positioned on screen — see the root-cause comment above "new branch dialog creates a branch and check... | Worktree section: new session on worktree creates a worktree-scoped chat. | `git-branch-popover`, `git-worktree-new-session-wt-session`, `main-toolbar-branch`, `sessions-row` |
+| new branch dialog creates a branch and checks it out | active | New branch dialog creates a branch and checks it out. | `git-branch-row-feature/e2e-created`, `git-new-branch`, `git-new-branch-create`, `git-new-branch-dialog`, `git-new-branch-name` |
+| branch row submenu: checkout switches the worktree current branch | active | Branch row submenu: checkout switches the worktree current branch. | `git-submenu-checkout` |
+| branch row submenu: new branch from a selected branch | active | Branch row submenu: new branch from a selected branch. | `git-new-branch-create`, `git-new-branch-dialog`, `git-new-branch-name`, `git-new-branch-start`, `git-submenu-new-branch-from` |
+| branch row submenu: merge fast-forwards a clean ancestor branch | active | Branch row submenu: merge fast-forwards a clean ancestor branch. | `git-submenu-merge` |
+| branch row submenu: rename renames a branch | active | Branch row submenu: rename renames a branch. | `git-branch-row-feature/renamed-branch`, `git-rename-input`, `git-rename-submit`, `git-rename-view`, `git-submenu-rename` |
+| branch row submenu: delete force-deletes a not-yet-merged branch (two-step confirm) | active | Branch row submenu: delete force-deletes a not-yet-merged branch (two-step confirm). | `git-branch-row-feature/delete-me`, `git-confirm-dialog`, `git-confirm-dialog-confirm`, `git-submenu-delete` |
+| branch row submenu: pull fast-forwards a branch from the bare remote | active | Branch row submenu: pull fast-forwards a branch from the bare remote. | `git-submenu-pull` |
+| branch row submenu: push sends a local-only commit to the bare remote | active | Branch row submenu: push sends a local-only commit to the bare remote. | `git-submenu-push` |
+| conflict view: a genuinely conflicting merge auto-routes to the conflict view; abort recovers | active | Conflict view: a genuinely conflicting merge auto-routes to the conflict view; abort recovers. | `git-branch-search`, `git-conflict-abort`, `git-conflict-view`, `git-submenu-checkout`, `git-submenu-merge` |
+| worktree section: toggle collapses/expands rows; delete removes wt-delete | active | Worktree section: toggle collapses/expands rows; delete removes wt-delete. | `git-branch-row-feature/worktree-delete`, `git-confirm-dialog`, `git-confirm-dialog-confirm`, `git-worktree-delete-wt-delete`, `git-worktree-row-wt-delete`, `git-worktree-toggle-wt-delete` |
+| quick actions: fetch, update all, and push current complete without error | active | Quick actions: fetch, update all, and push current complete without error. | `git-fetch`, `git-push-current`, `git-update-all`, `toast-root` |
+| worktree section: new session on worktree creates a worktree-scoped chat | active | Worktree section: new session on worktree creates a worktree-scoped chat. | `git-branch-popover`, `git-worktree-new-session-wt-session`, `main-toolbar-branch`, `sessions-row` |
 
 ## layout.spec.ts
 
@@ -612,10 +657,10 @@ committed); this document is the hand-reviewed output.
 |---|---|---|---|
 | starting a launch config from the picker opens a tab and reaches running status | active | Starting a launch config from the picker opens a tab and reaches running status. | `main-toolbar-launch`, `main-toolbar-launch-stop-sleep-long`, `run-picker-launch-sleep-long`, `run-tab-*` |
 | the per-pane "+" popover lists New terminal and the launch configs; New terminal is a no-op | active | The per-pane "+" popover lists New terminal and the launch configs; New terminal is a no-op. | `run-add-menu-*`, `run-pane-${paneId}`, `run-pane-launch-echo-once-*`, `run-pane-launch-exit-immediately-*`, `run-pane-new-terminal-*`, `run-tab-strip-add-*` |
-| launching echo-once from the add-menu opens a second tab whose console shows its output | skip — TODO(bug): seedOutputBuffer never re-runs for a config started via RunTabStrip/SurfacePicker's handleLaunch (no refetch() call) — only reachable via... | Launching echo-once from the add-menu opens a second tab whose console shows its output. | `run-console-pane`, `run-pane-launch-echo-once-*`, `run-tab-*`, `run-tab-strip-add-*` |
-| tab activate: clicking a pill switches which console is selected | skip — TODO(bug): seedOutputBuffer never re-runs for a config started via RunTabStrip/SurfacePicker's handleLaunch (no refetch() call) — only reachable via... | Tab activate: clicking a pill switches which console is selected. | `run-tab-*` |
-| tab close: closing echo-once removes it, leaving only sleep-long | skip — TODO(bug): seedOutputBuffer never re-runs for a config started via RunTabStrip/SurfacePicker's handleLaunch (no refetch() call) — only reachable via... | Tab close: closing echo-once removes it, leaving only sleep-long. | `run-tab-*`, `run-tab-close-*` |
-| Stop reverts the toolbar to Start for sleep-long | skip — TODO(bug): toolbar launch row never flips to "start" after Stop, even though the daemon REST status is confirmed "stopped" within ms — see the root-... | Stop reverts the toolbar to Start for sleep-long. | `main-toolbar-launch`, `main-toolbar-launch-start-sleep-long`, `main-toolbar-launch-stop-sleep-long`, `run-tab-*` |
+| launching echo-once from the add-menu opens a second tab whose console shows its output | skip — TODO(bug): echo-once buffered console output never appears via the add-menu launch path (still "No output yet." 15s after launch) — round-2 refetch ... | Launching echo-once from the add-menu opens a second tab whose console shows its output. | `run-console-pane`, `run-pane-launch-echo-once-*`, `run-tab-*`, `run-tab-strip-add-*` |
+| tab activate: clicking a pill switches which console is selected | active | Tab activate: clicking a pill switches which console is selected. | `run-tab-*` |
+| tab close: closing echo-once removes it, leaving only sleep-long | active | Tab close: closing echo-once removes it, leaving only sleep-long. | `run-tab-*`, `run-tab-close-*` |
+| Stop reverts the toolbar to Start for sleep-long | active | Stop reverts the toolbar to Start for sleep-long. | `main-toolbar-launch`, `main-toolbar-launch-start-sleep-long`, `main-toolbar-launch-stop-sleep-long`, `run-tab-*` |
 
 ### §21 run-surface — failed launch config
 
@@ -646,7 +691,7 @@ committed); this document is the hand-reviewed output.
 
 | Test | Status | Description | data-testids |
 |---|---|---|---|
-| with a project pill active, New skips the picker and the draft inherits that project | skip — TODO(bug): discard (X) never clears the draft row when a project filter pill is active — confirmed live (DOM count stays 1 after clicking discard) —... | With a project pill active, New skips the picker and the draft inherits that project. | `chat-header-project`, `sessions-draft-row`, `sessions-draft-row-discard`, `sessions-filter-pill-*`, `sessions-new-button`, `sessions-new-picker` |
+| with a project pill active, New skips the picker and the draft inherits that project | active | With a project pill active, New skips the picker and the draft inherits that project. | `chat-header-project`, `sessions-draft-row`, `sessions-draft-row-discard`, `sessions-filter-pill-*`, `sessions-new-button`, `sessions-new-picker` |
 | abandoning a draft in project A does not leak into a second New picking project B | active | Abandoning a draft in project A does not leak into a second New picking project B. | `chat-composer-input`, `chat-composer-send`, `data-chat-id`, `sessions-draft-row`, `sessions-new-button`, `sessions-new-picker`, `sessions-new-picker-project-*`, `sessions-row` |
 
 ### §sessions-draft — WelcomeState suggestions
@@ -738,7 +783,7 @@ committed); this document is the hand-reviewed output.
 | Test | Status | Description | data-testids |
 |---|---|---|---|
 | opens the tag popover from the row hover action | active | Opens the tag popover from the row hover action. | `data-chat-id`, `sessions-row`, `sessions-tag-popover-search` |
-| opens the tag popover from the row context menu | skip — TODO(bug): sessions-tag-popover never opens via the row context-menu path (hover path works) — confirmed live: no DOM node, no console error — see t... | Opens the tag popover from the row context menu. | `data-chat-id`, `sessions-row`, `sessions-tag-popover-search` |
+| opens the tag popover from the row context menu | skip — TODO(bug): Tags row-context-menu action still does not open the popover — setTimeout(0) defer (commit 3368d065) does not close the race against the ... | Opens the tag popover from the row context menu. | `data-chat-id`, `sessions-row`, `sessions-tag-popover-search` |
 | creates a tag via type + Enter and applies it immediately | active | Creates a tag via type + Enter and applies it immediately. | `data-chat-id`, `sessions-row`, `sessions-row-meta-tag-dot-*`, `sessions-tag-filter-*`, `sessions-tag-popover-search`, `sessions-tag-toggle-*` |
 | an applied tag survives a page reload (daemon-persisted) | active | An applied tag survives a page reload (daemon-persisted). | `data-chat-id`, `sessions-row`, `sessions-row-meta-tag-dot-*`, `sessions-tag-toggle-*` |
 | creates a second tag via the create row and applies it | active | Creates a second tag via the create row and applies it. | `data-chat-id`, `sessions-row`, `sessions-row-meta-tag-dot-*`, `sessions-tag-popover-create`, `sessions-tag-popover-search`, `sessions-tag-toggle-*` |
@@ -1119,12 +1164,11 @@ committed); this document is the hand-reviewed output.
 | submitting the answer resolves the interaction and clears the needs-you list | skip — this spec (packages/ui/.../WfAnswerForm.tsx + WfInteractionCard.tsx). | Submitting the answer resolves the interaction and clears the needs-you list. | `workflows-answer-submit`, `workflows-field-answer`, `workflows-interaction-answer-*`, `workflows-needsyou-empty` |
 | the run detail shows the step as Done with the submitted answer after resolution | skip — this run, so this run never resolves to 'succeeded' for THIS test to find). | The run detail shows the step as Done with the submitted answer after resolution. | `workflows-nav-runs`, `workflows-run-row-*`, `workflows-step-steps.0` |
 
-
 # Part 2 — data-testid Coverage
 
 **Universe:** 714 static testids/prefixes found in `packages/ui/src` (excluding `__tests__`). 528 (73.9%) referenced by at least one e2e test; 186 untested. 35 additional prop-forwarded/dynamic testid sites (e.g. `data-testid={testId}`, or fully-parameterized templates like ``${prefix}-${id}`` with no static anchor) were excluded from the universe — they can't be resolved to a literal without tracing every call site.
 
-**Top 10 most-referenced:** `sessions-row` (47), `file-tree-row-*` (32), `files-tab-*` (24), `editor-code` (20), `*-option-*` (19), `*-cancel` (18), `chat-composer-input` (17), `files-tab-strip` (17), `chat-permission-gate` (14), `tasks-list-row-*` (14).
+**Top 10 most-referenced:** `sessions-row` (47), `file-tree-row-*` (32), `files-tab-*` (24), `editor-code` (20), `*-option-*` (19), `*-cancel` (18), `chat-composer-input` (17), `files-tab-strip` (17), `tasks-list-row-*` (14), `chat-permission-gate` (13).
 
 ### Coverage gap map (sorted ascending by test-reference count — untested testids first)
 
@@ -1826,15 +1870,15 @@ committed); this document is the hand-reviewed output.
 | `find-in-path` | packages/ui/src/components/overlays/FindInPathModal.tsx | 9 |
 | `search-palette-input` | packages/ui/src/features/palette/SpotlightPalette.tsx | 9 |
 | `surface-rail-*` | packages/ui/src/layout/SurfaceRail.tsx | 9 |
+| `chat-permission-deny` | packages/ui/src/features/chat/gates/PermissionGate.tsx | 10 |
 | `run-surface` | packages/ui/src/layout/surfaces/RunSurface.tsx | 10 |
 | `sessions-filter-pill-*-wrap` | packages/ui/src/features/sessions/sidebar/ProjectPillContextMenu.tsx | 10 |
 | `*-confirm` | packages/ui/src/components/ui/confirm-dialog.tsx | 11 |
-| `chat-permission-deny` | packages/ui/src/features/chat/gates/PermissionGate.tsx | 11 |
 | `composer-model-select` | packages/ui/src/features/chat/composer/config-toolbar/ProviderModelSelect.tsx | 11 |
 | `directory-picker` | packages/ui/src/components/overlays/DirectoryPickerModal.tsx | 11 |
 | `sessions-filter-pill-*` | packages/ui/src/features/sessions/sidebar/ProjectPillContextMenu.tsx | 11 |
 | `files-surface` | packages/ui/src/layout/surfaces/FilesSurface.tsx | 12 |
-| `chat-permission-gate` | packages/ui/src/features/chat/gates/PermissionGate.tsx | 14 |
+| `chat-permission-gate` | packages/ui/src/features/chat/gates/PermissionGate.tsx | 13 |
 | `tasks-list-row-*` | packages/ui/src/features/tasks/TaskListRow.tsx | 14 |
 | `chat-composer-input` | packages/ui/src/features/chat/composer/Composer.tsx | 17 |
 | `files-tab-strip` | packages/ui/src/layout/FilesTabStrip.tsx | 17 |
