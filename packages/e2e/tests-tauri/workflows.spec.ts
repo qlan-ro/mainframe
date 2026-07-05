@@ -17,6 +17,12 @@
  * distinct from `verifyWorkflow`'s semantic errors, which return 200 with a
  * `{valid:false, errors:[...]}` body rendered in the normal footer instead).
  *
+ * Also fixed since the previous pass (commit 48c89cd3): the YAML pane no
+ * longer renders empty on first open of a new draft — `WorkflowEditor.tsx`
+ * now initializes `yaml` from `serializeWorkflow(blankDraft())` — see "New
+ * workflow opens a blank editor in split mode" below for the updated
+ * assertion.
+ *
  * The "Runs" and "Needs you" describes below still seed workflows directly via
  * `PUT /api/workflows/:id` with hand-written YAML (the same REST path
  * `wfApi.putWorkflow` uses) rather than the builder — this keeps those describes
@@ -163,22 +169,14 @@ test.describe('§workflows Library', () => {
     await expect(page.getByTestId('workflows-editor-yaml')).toBeVisible();
     await expect(page.getByTestId('workflows-builder-name')).toHaveValue('');
     await expect(page.getByTestId('workflows-builder-description')).toHaveValue('');
-    // TODO(bug): the YAML pane is reproducibly EMPTY on first open, not
-    // "name: untitled" as originally asserted here. Root-caused
-    // (WorkflowEditor.tsx): `const [yaml, setYaml] = useState('')` has no
-    // initializer/effect that serializes the initial `model` (`blankDraft()`)
-    // for the `isNew` case — the ONLY effect that calls `setYaml` is gated
-    // `if (target.mode !== 'edit') return;` (WorkflowEditor.tsx:64), a no-op
-    // for new drafts. `yaml` only gets populated once the user triggers a
-    // builder mutation (the model-change handler re-serializes on every
-    // builder edit) — so before any edit, it's stuck at the empty initial
-    // value. Live-verified twice: `Received string: ""`. Fix would be
-    // `useState(() => serializeWorkflow(blankDraft()))` or an equivalent
-    // mount-time effect; not touchable from this spec (packages/ui). Kept the
-    // rest of this test running (not `test.skip`) because "Cancel discards…"
-    // (next test) is ORDER-DEPENDENT on this one leaving the editor open —
-    // skipping the whole test would break that chain for an unrelated reason.
-    await expect(page.getByTestId('workflows-editor-yaml')).toHaveValue('');
+    // Fixed since the previous pass (WorkflowEditor.tsx, commit 48c89cd3): the
+    // YAML pane now initializes from `serializeWorkflow(blankDraft())`
+    // (`useState(() => (isNew ? serializeWorkflow(blankDraft()) : ''))`)
+    // instead of an empty string, so "Create" is savable even before the user
+    // touches the builder. This was previously asserted as an empty string —
+    // stale, now that the underlying bug is fixed. Assert the actual
+    // serialized blank-draft YAML (version + placeholder name + empty steps).
+    await expect(page.getByTestId('workflows-editor-yaml')).toHaveValue('version: 1\nname: untitled\n\nsteps:');
   });
 
   test('Cancel discards the draft and returns to the library with no new row', async () => {
