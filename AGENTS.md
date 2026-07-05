@@ -88,6 +88,7 @@ Each rule exists because a violation required cleanup.
 - **`data-testid` on every interactive element** — `<surface>-<element>` kebab-case, keyed by domain id not array index; `ui/` primitives stay passthrough.
 - **Lazy-load heavy components** — editors/visualizations via `React.lazy` + `Suspense`.
 - **Hygiene** — no `@ts-ignore` (use `@ts-expect-error` + reason); comments say *why*, not *what*; remove dead code; extract shared helpers at 3+ duplications.
+- **No leftovers** — never close a feature with small deferred cleanups (dead code, stale comments); fix them in the same pass. "Deferred" is only for genuinely separate work.
 
 ## Environment Variables
 
