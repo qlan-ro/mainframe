@@ -84,8 +84,8 @@ describe('probeModels', () => {
 
     const result = await promise;
 
-    expect(result).toHaveLength(2);
-    expect(result![0]).toEqual({
+    expect(result!.models).toHaveLength(2);
+    expect(result!.models[0]).toEqual({
       id: 'default',
       label: 'Default - Opus 4.7',
       description: 'Opus 4.7 with 1M context',
@@ -95,7 +95,7 @@ describe('probeModels', () => {
       supportsUltracode: true,
       isDefault: true,
     });
-    expect(result![1]).toEqual({
+    expect(result!.models[1]).toEqual({
       id: 'claude-sonnet-4-6',
       label: 'Sonnet 4.6',
       description: 'Sonnet 4.6 · Best for everyday tasks',
@@ -134,10 +134,12 @@ import { mapModelInfo } from '../plugins/builtin/claude/probe-models.js';
 describe('mapModelInfo capabilities', () => {
   it('maps effort levels, fast, adaptive-thinking, derives ultracode', () => {
     const m = mapModelInfo({
-      value: 'default', displayName: 'Default',
+      value: 'default',
+      displayName: 'Default',
       description: 'Opus 4.8 with 1M context · Most capable',
       supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-      supportsAdaptiveThinking: true, supportsFastMode: true,
+      supportsAdaptiveThinking: true,
+      supportsFastMode: true,
     });
     expect(m.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(m.supportsFast).toBe(true);
@@ -147,8 +149,11 @@ describe('mapModelInfo capabilities', () => {
 
   it('hides ultracode for models without xhigh (Sonnet)', () => {
     const m = mapModelInfo({
-      value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 4.6',
-      supportedEffortLevels: ['low', 'medium', 'high', 'max'], supportsFastMode: true,
+      value: 'sonnet',
+      displayName: 'Sonnet',
+      description: 'Sonnet 4.6',
+      supportedEffortLevels: ['low', 'medium', 'high', 'max'],
+      supportsFastMode: true,
     });
     expect(m.supportsUltracode).toBeUndefined();
   });

@@ -17,7 +17,7 @@ export interface ServerManager {
 export type ServerManagerDeps = Omit<HttpServerDeps, 'lspManager'>;
 
 export function createServerManager(deps: ServerManagerDeps): ServerManager {
-  const { db, chats } = deps;
+  const { db, chats, adapters } = deps;
   const lspRegistry = new LspRegistry();
   const lspManager = new LspManager(lspRegistry);
   const lspHandler = new LspConnectionHandler(lspManager, db);
@@ -31,7 +31,7 @@ export function createServerManager(deps: ServerManagerDeps): ServerManager {
   return {
     async start(port: number): Promise<void> {
       _fileWatcher = new FileWatcherService((event) => _wsManager?.broadcastEvent(event));
-      _wsManager = new WebSocketManager(httpServer, chats, lspHandler, _fileWatcher, db.devices);
+      _wsManager = new WebSocketManager(httpServer, chats, lspHandler, _fileWatcher, db.devices, adapters);
 
       return new Promise((resolve) => {
         httpServer.listen(port, '127.0.0.1', () => {

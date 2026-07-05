@@ -9,6 +9,7 @@ function createMockAdapter(models: AdapterModel[]): Adapter {
     name: 'Mock Adapter',
     isInstalled: vi.fn().mockResolvedValue(true),
     getVersion: vi.fn().mockResolvedValue('1.0.0'),
+    getFallbackModels: () => models,
     listModels: vi.fn().mockResolvedValue(models),
     spawn: vi.fn(),
     kill: vi.fn(),
@@ -71,6 +72,7 @@ describe('AdapterRegistry', () => {
     const registry = new AdapterRegistry();
     const mockModels: AdapterModel[] = [{ id: 'mock-fast', label: 'Mock Fast', contextWindow: 128_000 }];
     registry.register(createMockAdapter(mockModels));
+    registry.seedStaticSnapshots();
 
     const list = await registry.list();
     const mock = list.find((item) => item.id === 'mock');
@@ -78,50 +80,37 @@ describe('AdapterRegistry', () => {
     expect(mock).toBeDefined();
     expect(mock?.models).toEqual(mockModels);
   });
-});
 
-describe('AdapterRegistry.probeAllModels', () => {
-  it('calls probeModels on adapters that support it and emits event', async () => {
-    const probedModels: AdapterModel[] = [{ id: 'probed-model', label: 'Probed' }];
-    const adapter = createMockAdapter([{ id: 'fallback', label: 'Fallback' }]);
-    (adapter as any).probeModels = vi.fn().mockResolvedValue(probedModels);
-
+  // Plugin-provided adapters (e.g. the e2e mock-cli plugin) aren't backed by a real spawnable
+  // CLI binary on PATH — they report their own installed state and model catalog directly.
+  // The refresh must not conclude "not installed" (and skip listModels()) just because a
+  // `<adapterId> --version` spawn ENOENTs; it should fall back to the adapter's own
+  // isInstalled()/getVersion() before giving up.
+  it('falls back to the adapter’s own isInstalled()/listModels() when no CLI binary resolves', async () => {
     const registry = new AdapterRegistry();
+    const models: AdapterModel[] = [{ id: 'plugin-model', label: 'Plugin Model' }];
+    const adapter: Adapter = {
+      id: 'plugin-adapter',
+      name: 'Plugin Adapter',
+      capabilities: { planMode: false },
+      isInstalled: vi.fn().mockResolvedValue(true),
+      getVersion: vi.fn().mockResolvedValue('0.1.0'),
+      listModels: vi.fn().mockResolvedValue(models),
+      killAll: vi.fn(),
+    } as unknown as Adapter;
     registry.register(adapter);
-
-    const events: any[] = [];
-    await registry.probeAllModels((event) => events.push(event));
-
-    expect((adapter as any).probeModels).toHaveBeenCalled();
-    expect(events).toHaveLength(1);
-    expect(events[0]).toEqual({
-      type: 'adapter.models.updated',
-      adapterId: 'mock',
-      models: probedModels,
+    registry.seedStaticSnapshots();
+    registry.configureRefresh({
+      resolveExecutablePath: vi.fn().mockResolvedValue(undefined),
+      run: vi.fn().mockResolvedValue({ ok: false, stdout: '' }), // no `plugin-adapter` binary on PATH
+      emitEvent: vi.fn(),
     });
-  });
+    registry.allowRefresh();
 
-  it('skips adapters without probeModels', async () => {
-    const adapter = createMockAdapter([]);
-    const registry = new AdapterRegistry();
-    registry.register(adapter);
+    await registry.refreshAll();
 
-    const events: any[] = [];
-    await registry.probeAllModels((event) => events.push(event));
-
-    expect(events).toHaveLength(0);
-  });
-
-  it('handles probe failure gracefully', async () => {
-    const adapter = createMockAdapter([]);
-    (adapter as any).probeModels = vi.fn().mockResolvedValue(null);
-
-    const registry = new AdapterRegistry();
-    registry.register(adapter);
-
-    const events: any[] = [];
-    await registry.probeAllModels((event) => events.push(event));
-
-    expect(events).toHaveLength(0);
+    const snapshot = registry.getSnapshots().find((item) => item.id === 'plugin-adapter');
+    expect(snapshot?.installed).toBe(true);
+    expect(snapshot?.models).toEqual(models);
   });
 });

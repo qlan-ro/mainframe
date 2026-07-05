@@ -10,7 +10,7 @@ import { BackgroundTaskTracker } from './background-tasks/tracker.js';
 import { reconcileBackgroundTasks } from './background-tasks/reconcile.js';
 import { startLivenessScheduler } from './background-tasks/liveness.js';
 import { AdapterRegistry } from './adapters/index.js';
-import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
+import { backfillAdapterExecutables, defaultRun, resolveAdapterExecutable } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
@@ -119,6 +119,21 @@ async function main(): Promise<void> {
     wrapClaudeForRecording(adapters);
   }
 
+  // Static, spawn-free seed so GET /api/adapters serves instantly and never blocks on a CLI.
+  // MUST stay static — CodexAdapter.listModels() spawns a 30s-timeout app-server (see codex/adapter.ts).
+  adapters.seedStaticSnapshots();
+
+  // Configure the refresh BEFORE server.start() so no request can trigger an unconfigured probe.
+  // emitEvent late-binds through the broadcastEvent closure (set after server.start()).
+  adapters.configureRefresh({
+    resolveExecutablePath: async (adapterId) => {
+      const resolved = await resolveAdapterExecutable(adapterId, { settings: db.settings, run: defaultRun });
+      return resolved.valid ? resolved.path : undefined;
+    },
+    run: defaultRun,
+    emitEvent: (event) => broadcastEvent(event),
+  });
+
   let daemonTunnelUrl: string | null = null;
 
   const server = createServerManager({
@@ -143,26 +158,26 @@ async function main(): Promise<void> {
     logger.warn({ err }, 'Background task reconciliation failed');
   });
 
-  // Probe adapters for dynamic model lists (non-blocking)
-  adapters
-    .probeAllModels((event) => broadcastEvent(event))
-    .catch((err) => {
-      logger.warn({ err }, 'Model probe failed');
-    });
-
   // Non-blocking: backfill worktree parent relationships for existing projects.
   // Failure here must not prevent the daemon from serving requests.
   backfillWorktreeRelationships(db.projects).catch((err) => {
     logger.warn({ err }, 'Worktree relationship backfill failed');
   });
 
-  // Non-blocking: resolve + persist absolute CLI paths for registered adapters
-  // so spawns are explicit. Failure must not block serving requests.
-  backfillAdapterExecutables(
+  // Resolve + persist absolute CLI paths BEFORE any live refresh so the probe/enrichment
+  // spawn the real executable (not a bare name that ENOENTs under a packaged-app PATH).
+  await backfillAdapterExecutables(
     adapters.getAll().map((a) => a.id),
     { settings: db.settings, run: defaultRun },
   ).catch((err) => {
     logger.warn({ err }, 'Adapter executable backfill failed');
+  });
+
+  // Only now may the refresh run. allowRefresh() is the gate that makes a pre-backfill
+  // probe impossible; refreshAll() enriches installed/version/models per adapter and emits.
+  adapters.allowRefresh();
+  adapters.refreshAll().catch((err) => {
+    logger.warn({ err }, 'Adapter catalog refresh failed');
   });
 
   if (config.tunnel === true) {

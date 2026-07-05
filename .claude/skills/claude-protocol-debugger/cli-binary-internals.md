@@ -352,10 +352,12 @@ do **not** pass `--effort` at spawn (no layer → `effortValue` is the sole sour
 truth, mutable at startup and mid-session). Mixing the flag with `apply_flag_settings`
 breaks mid-session changes.
 
-**Mainframe gap:** `probe-models.ts` reads `supportsEffort` (boolean) but drops
-`supportedEffortLevels`. `ChatEffort` is hardcoded `'low'|'medium'|'high'` and the
-UI `EFFORT_OPTIONS` mirrors it — so `xhigh`/`max` are unreachable, and Sonnet would
-wrongly offer `xhigh` if we naively widened the static list.
+**Mainframe status (since #378):** `probe-models.ts` consumes `supportedEffortLevels` into
+`AdapterModel.supportedEfforts`, and the daemon applies effort at runtime via
+`apply_flag_settings{effortLevel}` — never `--effort` at spawn, so the permission-layer
+masking above never triggers. `clampEffortToSupported()` clamps a requested effort to
+each model's own `supportedEfforts` (falling back to its default), so a model without
+`xhigh` (e.g. Sonnet) is never offered it.
 
 ## Model/Harness Config Flags — full inventory (v2.1.156)
 

@@ -108,13 +108,19 @@ vi.mock('../../store/settings', () => ({
 }));
 
 const mockSetAdapters = vi.fn();
+const mockResetRevisionBaseline = vi.fn();
 vi.mock('../../store/adapters', () => ({
   useAdaptersStore: Object.assign(
     vi.fn((selector: (s: unknown) => unknown) => {
       const state = { setAdapters: mockSetAdapters };
       return selector ? selector(state) : state;
     }),
-    { getState: vi.fn(() => ({ setAdapters: mockSetAdapters })) },
+    {
+      getState: vi.fn(() => ({
+        setAdapters: mockSetAdapters,
+        resetRevisionBaseline: mockResetRevisionBaseline,
+      })),
+    },
   ),
 }));
 

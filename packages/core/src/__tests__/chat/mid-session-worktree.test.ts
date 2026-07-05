@@ -35,6 +35,7 @@ function makeDeps(active: ActiveChat): ConfigManagerDeps {
     startChat: vi.fn(async () => {}),
     stopChat: vi.fn(async () => {}),
     emitEvent: vi.fn(),
+    applyTuning: vi.fn(async () => {}),
   };
 }
 
