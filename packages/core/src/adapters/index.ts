@@ -99,8 +99,16 @@ export class AdapterRegistry {
     const exePath = await deps.resolveExecutablePath(adapterId);
     // One --version spawn covers installed AND version (blocker #6: collapse the double spawn, use the resolved path).
     const ver = await deps.run(exePath ?? adapter.id, ['--version'], { timeoutMs: 5_000 });
-    const installed = ver.ok;
-    const version = ver.ok ? parseVersion(ver.stdout) : undefined;
+    let installed = ver.ok;
+    let version = ver.ok ? parseVersion(ver.stdout) : undefined;
+    // The spawn above assumes the adapter is a literal CLI binary on PATH. Plugin-provided
+    // adapters (e.g. the e2e mock-cli plugin, or any future non-CLI Adapter) have no such
+    // binary and would always ENOENT here — they report their own installed state instead.
+    // Fall back to asking the adapter directly before concluding "not installed".
+    if (!installed) {
+      installed = await adapter.isInstalled();
+      if (installed) version = (await adapter.getVersion()) ?? undefined;
+    }
     // Skip live model discovery for an uninstalled adapter — no point spawning a probe (or Codex's
     // 30s app-server) that will only ENOENT. Keep the fallback snapshot; refresh installed/version only.
     if (!installed) {

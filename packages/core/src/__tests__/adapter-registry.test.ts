@@ -80,4 +80,37 @@ describe('AdapterRegistry', () => {
     expect(mock).toBeDefined();
     expect(mock?.models).toEqual(mockModels);
   });
+
+  // Plugin-provided adapters (e.g. the e2e mock-cli plugin) aren't backed by a real spawnable
+  // CLI binary on PATH — they report their own installed state and model catalog directly.
+  // The refresh must not conclude "not installed" (and skip listModels()) just because a
+  // `<adapterId> --version` spawn ENOENTs; it should fall back to the adapter's own
+  // isInstalled()/getVersion() before giving up.
+  it('falls back to the adapter’s own isInstalled()/listModels() when no CLI binary resolves', async () => {
+    const registry = new AdapterRegistry();
+    const models: AdapterModel[] = [{ id: 'plugin-model', label: 'Plugin Model' }];
+    const adapter: Adapter = {
+      id: 'plugin-adapter',
+      name: 'Plugin Adapter',
+      capabilities: { planMode: false },
+      isInstalled: vi.fn().mockResolvedValue(true),
+      getVersion: vi.fn().mockResolvedValue('0.1.0'),
+      listModels: vi.fn().mockResolvedValue(models),
+      killAll: vi.fn(),
+    } as unknown as Adapter;
+    registry.register(adapter);
+    registry.seedStaticSnapshots();
+    registry.configureRefresh({
+      resolveExecutablePath: vi.fn().mockResolvedValue(undefined),
+      run: vi.fn().mockResolvedValue({ ok: false, stdout: '' }), // no `plugin-adapter` binary on PATH
+      emitEvent: vi.fn(),
+    });
+    registry.allowRefresh();
+
+    await registry.refreshAll();
+
+    const snapshot = registry.getSnapshots().find((item) => item.id === 'plugin-adapter');
+    expect(snapshot?.installed).toBe(true);
+    expect(snapshot?.models).toEqual(models);
+  });
 });
