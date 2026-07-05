@@ -135,7 +135,12 @@ function DaemonRowManage({ id, status, d, onRename, onRepair, onRemove }: Daemon
             data-testid={`daemon-row-${id}-rename`}
             icon={<Pencil size={13} className="shrink-0 text-mf-text-3" aria-hidden />}
             label="Rename…"
-            onClick={() => {
+            onClick={(e) => {
+              // Popover content is portaled to document.body, but React still
+              // bubbles the click through the component (not DOM) tree, so
+              // without this it would also fire the parent DaemonRow's own
+              // onSwitch and remount the daemon-scoped subtree mid-dialog.
+              e.stopPropagation();
               setOpen(false);
               onRename(d);
             }}
@@ -147,7 +152,8 @@ function DaemonRowManage({ id, status, d, onRename, onRepair, onRemove }: Daemon
             icon={<Lock size={13} className="shrink-0 text-mf-text-3" aria-hidden />}
             label="Re-pair…"
             note={status === 'needs-repair' ? 'Token revoked or expired' : undefined}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setOpen(false);
               onRepair(d);
             }}
@@ -160,7 +166,8 @@ function DaemonRowManage({ id, status, d, onRename, onRepair, onRemove }: Daemon
             icon={<Trash2 size={13} className="shrink-0" aria-hidden />}
             label="Remove"
             danger
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setOpen(false);
               onRemove(d);
             }}

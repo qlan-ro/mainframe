@@ -113,7 +113,14 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
       if (id === 'local') {
         resolved = buildLocalTarget(port);
       } else {
-        const meta = remotes.find((m) => m.id === id);
+        // Read the live module-level snapshot, NOT the `remotes` value closed
+        // over by this callback. A caller (e.g. AddRemoteDialog.handleConfirm)
+        // may hold a `switchTo` reference from a render that predates a
+        // just-finished `add()` — that callback's own remotes closure would
+        // never see the daemon add() just persisted. remotesSnapshot is
+        // updated synchronously by loadRemotes() before add()'s awaited
+        // reload() resolves, so it is always current at call time.
+        const meta = remotesSnapshot.find((m) => m.id === id);
         if (meta == null) {
           console.warn('[useDaemonRegistry] switchTo: unknown id', id);
           return;
@@ -122,7 +129,7 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
       }
       await contextSwitchTo(resolved);
     },
-    [port, remotes, contextSwitchTo],
+    [port, contextSwitchTo],
   );
 
   return {

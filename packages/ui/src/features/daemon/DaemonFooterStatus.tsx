@@ -89,6 +89,12 @@ export function DaemonFooterStatus() {
   const handleRepair = useCallback((d: DaemonMeta) => setDialog({ kind: 'repair', target: d }), []);
   const handleRemove = useCallback((d: DaemonMeta) => setDialog({ kind: 'remove', target: d }), []);
   const closeDialog = useCallback(() => setDialog(null), []);
+  // AddRemoteDialog fires onDone the instant pairing succeeds, then defers its
+  // own onClose by ~800ms so the "Paired" notice stays visible. onDone must
+  // NOT also close the dialog here, or that grace window collapses to zero.
+  const handlePairingDone = useCallback(() => {
+    /* no-op: dismissal is owned by the dialog's deferred onClose */
+  }, []);
 
   const handleRenameConfirm = useCallback(
     async (label?: string) => {
@@ -158,7 +164,7 @@ export function DaemonFooterStatus() {
         mode={dialog?.kind === 'repair' ? 'repair' : 'add'}
         target={dialog?.kind === 'repair' ? dialog.target : undefined}
         onClose={closeDialog}
-        onDone={closeDialog}
+        onDone={handlePairingDone}
       />
 
       {(dialog?.kind === 'rename' || dialog?.kind === 'remove') && (

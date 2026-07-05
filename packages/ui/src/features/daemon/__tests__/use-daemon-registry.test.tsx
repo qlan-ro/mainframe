@@ -223,6 +223,36 @@ describe('useDaemonRegistry — switchTo', () => {
     expect(target.baseUrl).toBe('https://studio.example.com');
   });
 
+  it(
+    'a switchTo reference captured BEFORE add() still resolves the newly ' +
+      'added daemon after add() resolves (bug i regression)',
+    async () => {
+      // Reproduces AddRemoteDialog.handleConfirm: the component destructures
+      // `registry` (and therefore `switchTo`) once at render time, then awaits
+      // `add()` before calling the SAME `switchTo` reference. If `switchTo`
+      // closes over the pre-add `remotes` snapshot, it can never find the
+      // daemon that `add()` just persisted.
+      const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+        wrapper: makeWrapper(fakeHost),
+      });
+
+      await act(async () => {});
+
+      const staleAdd = result.current.registry.add;
+      const staleSwitchTo = result.current.registry.switchTo;
+
+      const newMeta: DaemonMeta = { id: 'laptop', kind: 'remote', label: 'Laptop', host: 'laptop.example.com:443' };
+
+      await act(async () => {
+        await staleAdd(newMeta, 'laptop-token');
+        await staleSwitchTo(newMeta.id);
+      });
+
+      expect(result.current.registry.activeId).toBe('laptop');
+      expect(result.current.daemon.target.id).toBe('laptop');
+    },
+  );
+
   it('switchTo("local") switches back to local daemon with null token', async () => {
     const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
       wrapper: makeWrapper(fakeHost),

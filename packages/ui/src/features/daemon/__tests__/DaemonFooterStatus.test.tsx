@@ -8,9 +8,12 @@
  *  3. When the active daemon is a remote and connection state is 'disconnected',
  *     the unreachable overlay renders (data-testid="connection-overlay" via
  *     data-testid="daemon-unreachable") and its switch-to-local routes to local.
+ *  4. Full add-remote flow through the REAL useDaemonRegistry (bug i/j
+ *     regressions): pairing auto-switches the active daemon, and the
+ *     "Paired" grace window stays open until the deferred close fires.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
@@ -20,6 +23,7 @@ import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-cont
 import { ActiveDaemonProvider, useActiveDaemon } from '../active-daemon-context';
 import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
 import { DaemonFooterStatus } from '../DaemonFooterStatus';
+import { verifyDaemon, confirmPairing } from '../pair-daemon';
 
 // ---------------------------------------------------------------------------
 // Mocks — same set as use-daemon-registry.test.tsx
@@ -46,6 +50,14 @@ vi.mock('@/lib/daemon/ws-client', () => ({
     send: vi.fn(),
   },
 }));
+vi.mock('../pair-daemon', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../pair-daemon')>();
+  return {
+    ...original,
+    verifyDaemon: vi.fn(),
+    confirmPairing: vi.fn(),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Fixture data
@@ -249,5 +261,87 @@ describe('DaemonFooterStatus — single overlay regression (I1)', () => {
     // Neither overlay body should come from DaemonFooterStatus when local is active.
     expect(screen.queryByTestId('daemon-unreachable')).not.toBeInTheDocument();
     expect(screen.queryByTestId('connection-overlay')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 4 — full add-remote flow through the REAL registry (bugs i & j)
+// ---------------------------------------------------------------------------
+
+const NEW_REMOTE_URL = 'https://new-server.example.com';
+const NEW_REMOTE_TOKEN = 'jwt-new-server';
+
+async function typeCode(user: ReturnType<typeof userEvent.setup>, code: string) {
+  const codeInput = screen.getByTestId('daemon-pair-code');
+  const boxes = codeInput.querySelectorAll('input');
+  expect(boxes).toHaveLength(6);
+  for (let i = 0; i < code.length; i++) {
+    await user.click(boxes[i]!);
+    await user.keyboard(code[i]!);
+  }
+}
+
+async function openAddDialogAndPair(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId('daemon-footer-trigger'));
+  await user.click(await screen.findByTestId('daemon-picker-add'));
+
+  const urlInput = await screen.findByTestId('daemon-add-url');
+  await user.type(urlInput, NEW_REMOTE_URL);
+  await user.click(screen.getByTestId('daemon-add-verify'));
+  await waitFor(() => screen.getByText(/daemon reachable/i));
+  await user.click(screen.getByTestId('daemon-add-continue'));
+
+  await typeCode(user, 'ABC123');
+  await user.click(screen.getByTestId('daemon-add-confirm'));
+}
+
+describe('DaemonFooterStatus — add-remote flow (bugs i & j)', () => {
+  beforeEach(() => {
+    vi.mocked(verifyDaemon).mockResolvedValue({ ok: true, version: '1.2.3', ms: 10 });
+    vi.mocked(confirmPairing).mockResolvedValue({ token: NEW_REMOTE_TOKEN, deviceId: 'dev-1' });
+  });
+
+  it('auto-switches the active daemon to the newly paired remote (bug i)', async () => {
+    const user = userEvent.setup();
+    const captured: { target: DaemonTarget | null } = { target: null };
+
+    function Spy() {
+      const { target } = useActiveDaemon();
+      captured.target = target;
+      return null;
+    }
+
+    render(
+      <>
+        <DaemonFooterStatus />
+        <Spy />
+      </>,
+      { wrapper: makeWrapper(LOCAL_TARGET, 'connected') },
+    );
+
+    await openAddDialogAndPair(user);
+
+    await waitFor(() => {
+      expect(captured.target?.kind).toBe('remote');
+    });
+    expect(captured.target?.baseUrl).toBe(NEW_REMOTE_URL);
+  });
+
+  it('keeps the "Paired" dialog open through the grace window before closing (bug j)', async () => {
+    const user = userEvent.setup();
+
+    render(<DaemonFooterStatus />, { wrapper: makeWrapper(LOCAL_TARGET, 'connected') });
+
+    await openAddDialogAndPair(user);
+
+    // The moment confirmPairing has resolved, the dialog must still be open —
+    // onDone must NOT collapse the documented ~800ms "Paired" grace window.
+    await waitFor(() => expect(confirmPairing).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('daemon-add-close')).toBeInTheDocument();
+
+    // It must still eventually close once the deferred onClose fires.
+    await waitFor(() => expect(screen.queryByTestId('daemon-add-close')).not.toBeInTheDocument(), {
+      timeout: 2000,
+    });
   });
 });

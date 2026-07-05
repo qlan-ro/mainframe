@@ -6,6 +6,7 @@
  *     active checkmark present, clicking row calls onSwitch.
  *  2. Needs-repair remote: lock indicator visible via dot testid.
  *  3. Local row: shows 'Local' badge, no manage button rendered.
+ *  4. Manage popover menu items (bug k) do not bubble into the row's onSwitch.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -106,5 +107,56 @@ describe('DaemonRow — local row', () => {
     render(<DaemonRow d={REMOTE_META} status="connected" active={false} onSwitch={vi.fn()} />);
 
     expect(screen.getByTestId('daemon-row-studio-1-manage')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 4 — manage popover menu items don't bubble into onSwitch (bug k)
+// ---------------------------------------------------------------------------
+
+describe('DaemonRow — manage menu propagation (bug k)', () => {
+  it('clicking "Rename…" in the manage popover fires onRename but NOT onSwitch', async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    const onRename = vi.fn();
+
+    render(<DaemonRow d={REMOTE_META} status="connected" active={false} onSwitch={onSwitch} onRename={onRename} />);
+
+    await user.click(screen.getByTestId('daemon-row-studio-1-manage'));
+    await user.click(await screen.findByTestId('daemon-row-studio-1-rename'));
+
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onRename).toHaveBeenCalledWith(REMOTE_META);
+    expect(onSwitch).not.toHaveBeenCalled();
+  });
+
+  it('clicking "Remove" in the manage popover fires onRemove but NOT onSwitch', async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    const onRemove = vi.fn();
+
+    render(<DaemonRow d={REMOTE_META} status="connected" active={false} onSwitch={onSwitch} onRemove={onRemove} />);
+
+    await user.click(screen.getByTestId('daemon-row-studio-1-manage'));
+    await user.click(await screen.findByTestId('daemon-row-studio-1-remove'));
+
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith(REMOTE_META);
+    expect(onSwitch).not.toHaveBeenCalled();
+  });
+
+  it('clicking "Re-pair…" in the manage popover fires onRepair but NOT onSwitch', async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    const onRepair = vi.fn();
+
+    render(<DaemonRow d={REMOTE_META} status="needs-repair" active={false} onSwitch={onSwitch} onRepair={onRepair} />);
+
+    await user.click(screen.getByTestId('daemon-row-studio-1-manage'));
+    await user.click(await screen.findByTestId('daemon-row-studio-1-repair'));
+
+    expect(onRepair).toHaveBeenCalledTimes(1);
+    expect(onRepair).toHaveBeenCalledWith(REMOTE_META);
+    expect(onSwitch).not.toHaveBeenCalled();
   });
 });
