@@ -8,7 +8,7 @@
  * attempt returns "not-merged", a second "Force delete?" before retrying.
  * handleDeleteWorktree lives in use-worktree-actions to keep this file < 300 lines.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { mfToast } from '@/lib/toast';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
@@ -68,15 +68,24 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
   const [conflictFiles, setConflictFiles] = useState<GitStatusFile[]>([]);
   const { busy, busyAction, withBusy } = useBranchBusy();
 
+  // Reopen-race guard: close-then-reopen fires a second loadBranches() while
+  // the first is still in flight. A superseded call skips applying its
+  // result, so a late stale response can never overwrite fresher data.
+  const requestIdRef = useRef(0);
+
   const loadBranches = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
     try {
       const [branchData, statusData] = await Promise.all([
         getGitBranches(port, projectId, chatId),
         getGitStatus(port, projectId, chatId),
       ]);
+      if (isStale()) return;
       setBranches(branchData);
       setConflictFiles(statusData.filter((f) => isConflictStatus(f.status)));
     } catch (err) {
+      if (isStale()) return;
       console.warn('[useBranchActions] loadBranches failed', err);
       mfToast.error('Failed to load branches');
     }

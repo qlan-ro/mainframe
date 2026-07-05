@@ -15,6 +15,8 @@
  *  8.  open=true, activeOperation='merge': opens directly into git-conflict-view.
  *  9.  Abort fires handleAbort and goes back to list.
  * 10.  Re-clicking the selected branch row closes the submenu (no back/close control — finding 10.9).
+ * 11.  Reopen race: a stale in-flight load from a closed popover must not clobber a
+ *      fresher reopen's data (reopen-hang regression — batch56 git-branch report).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
@@ -395,5 +397,96 @@ describe('BranchPopover — side-by-side submenu', () => {
       expect(screen.queryByTestId('git-submenu')).toBeNull();
     });
     expect(screen.getByTestId('git-branch-search')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Reopen race: a stale response from the FIRST open must not clobber the
+// data from a SECOND, fresher open (reopen-hang regression).
+//
+// Sequence: open (fetch #1 kicked off, left pending) -> close -> reopen
+// (fetch #2 kicked off, resolves immediately with fresh data) -> fetch #1
+// finally resolves with stale data. Without a request-generation guard,
+// fetch #1's stale `setBranches`/`setConflictFiles` calls land LAST and
+// silently overwrite the freshly-reopened popover's correct state — in the
+// worst case flipping `hasConflict` back on from stale conflict-status data
+// and permanently stranding the reopened popover on the conflict view with
+// no way back except Abort, which reads exactly like a "hang" from the
+// outside (nothing in the list view responds because the list view is gone).
+// ---------------------------------------------------------------------------
+
+describe('BranchPopover — reopen race', () => {
+  it('does not let a stale first-open response overwrite a fresher reopen', async () => {
+    let resolveFirstLoad: (value: typeof BRANCH_LIST) => void = () => {};
+    const firstLoad = new Promise<typeof BRANCH_LIST>((resolve) => {
+      resolveFirstLoad = resolve;
+    });
+
+    const STALE_BRANCHES = {
+      ...BRANCH_LIST,
+      local: [
+        { name: 'main', current: true },
+        { name: 'feat/stale-only', current: false },
+      ],
+    };
+    const FRESH_BRANCHES = {
+      ...BRANCH_LIST,
+      local: [
+        { name: 'main', current: true },
+        { name: 'feat/fresh-only', current: false },
+      ],
+    };
+
+    // First open's getGitBranches call hangs until we resolve it manually below.
+    mockGetGitBranches.mockReturnValueOnce(firstLoad);
+
+    const { rerender } = renderPopover({ open: true });
+
+    // First load is in flight — never resolved yet.
+    await waitFor(() => expect(mockGetGitBranches).toHaveBeenCalledTimes(1));
+
+    // Close before the first load resolves.
+    rerender(
+      <TooltipProvider>
+        <BranchPopover
+          port={PORT}
+          projectId={PROJECT_ID}
+          chatId="chat-1"
+          open={false}
+          onOpenChange={vi.fn()}
+          onBranchChanged={vi.fn()}
+        />
+      </TooltipProvider>,
+    );
+
+    // Reopen — a second, independent getGitBranches call, resolved immediately
+    // with fresh data (distinct from the still-pending first call).
+    mockGetGitBranches.mockResolvedValueOnce(FRESH_BRANCHES);
+    rerender(
+      <TooltipProvider>
+        <BranchPopover
+          port={PORT}
+          projectId={PROJECT_ID}
+          chatId="chat-1"
+          open
+          onOpenChange={vi.fn()}
+          onBranchChanged={vi.fn()}
+        />
+      </TooltipProvider>,
+    );
+
+    await waitFor(() => expect(mockGetGitBranches).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(screen.getByTestId('git-branch-row-feat/fresh-only')).toBeTruthy();
+    });
+
+    // Now let the stale FIRST load finally resolve — it must be ignored.
+    resolveFirstLoad(STALE_BRANCHES);
+
+    // Give the stale promise's .then a tick to (wrongly) apply, if it were going to.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.getByTestId('git-branch-row-feat/fresh-only')).toBeTruthy();
+    expect(screen.queryByTestId('git-branch-row-feat/stale-only')).toBeNull();
   });
 });
