@@ -73,6 +73,25 @@ describe('LaunchManager', () => {
     expect(manager.getStatus('nonexistent')).toBe('stopped');
   });
 
+  it('retains the terminal "failed" status after the process exits (no map-deletion race)', async () => {
+    // Regression: the child's own 'exit' handler used to set the terminal
+    // status AND synchronously delete the `processes` map entry in the same
+    // tick, so getStatus/getAllStatuses could never observe a terminal state —
+    // they'd read the post-delete fallback ('stopped') instead of 'failed'.
+    const config = {
+      name: 'fail-fast',
+      runtimeExecutable: 'node',
+      runtimeArgs: ['-e', 'process.exit(1);'],
+      port: null,
+      url: null,
+      preview: false,
+    };
+    await manager.start(config);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(manager.getStatus('fail-fast')).toBe('failed');
+    expect(manager.getAllStatuses()).toMatchObject({ 'fail-fast': 'failed' });
+  });
+
   it('getStatus returns running while process is alive', async () => {
     const config = {
       name: 'server',

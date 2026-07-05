@@ -236,6 +236,81 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
   });
 });
 
+describe('useLaunchConfigs — stale REST fetch does not clobber a fresher WS update', () => {
+  it('keeps the WS-driven status when a slow REST fetch resolves after it with a stale value', async () => {
+    // Regression: `run-surface.spec.ts`'s "Stop reverts the toolbar" — opening
+    // the toolbar's launch popover triggers `refetch()` (a fresh GET
+    // /launch/status). If a Stop click's WS `launch.status:'stopped'` event
+    // lands while that REST request is still in flight, the request's `.then`
+    // had no guard against being superseded: it would unconditionally
+    // reapply its own (now-stale) 'running' snapshot over the correct
+    // WS-driven 'stopped' value.
+    let resolveStatuses!: (value: {
+      statuses: Record<string, string>;
+      tunnelUrls: Record<string, string>;
+      effectivePath: string;
+    }) => void;
+    vi.mocked(fetchLaunchStatuses).mockReturnValue(
+      new Promise((resolve) => {
+        resolveStatuses = resolve;
+      }),
+    );
+
+    const { useLaunchConfigs } = await import('../use-launch-configs');
+    const scope = buildLaunchScope('proj-B', '/ws/b');
+
+    act(() => {
+      renderHook(() => useLaunchConfigs(31415, 'proj-B', 'chat-1'));
+    });
+
+    // A WS `launch.status` event lands while the REST fetch is still in
+    // flight (mirrors what use-sandbox-ws-router.ts does on a live event).
+    act(() => {
+      useSandboxStore.getState().setProcessStatus(scope, 'dev', 'stopped');
+    });
+
+    // The REST fetch resolves with a STALE snapshot ('running') captured
+    // before the stop happened.
+    await act(async () => {
+      resolveStatuses({ statuses: { dev: 'running' }, tunnelUrls: {}, effectivePath: '/ws/b' });
+      await Promise.resolve();
+    });
+
+    expect(useSandboxStore.getState().processStatuses[scope]?.['dev']).toBe('stopped');
+  });
+
+  it('does not reconcile a run tab from a stale "running" snapshot once WS reports stopped', async () => {
+    let resolveStatuses!: (value: {
+      statuses: Record<string, string>;
+      tunnelUrls: Record<string, string>;
+      effectivePath: string;
+    }) => void;
+    vi.mocked(fetchLaunchStatuses).mockReturnValue(
+      new Promise((resolve) => {
+        resolveStatuses = resolve;
+      }),
+    );
+
+    const { useLaunchConfigs } = await import('../use-launch-configs');
+    const scope = buildLaunchScope('proj-B', '/ws/b');
+
+    act(() => {
+      renderHook(() => useLaunchConfigs(31415, 'proj-B', 'chat-1'));
+    });
+
+    act(() => {
+      useSandboxStore.getState().setProcessStatus(scope, 'dev', 'stopped');
+    });
+
+    await act(async () => {
+      resolveStatuses({ statuses: { dev: 'running' }, tunnelUrls: {}, effectivePath: '/ws/b' });
+      await Promise.resolve();
+    });
+
+    expect(allRunTabs().filter((t) => t.config === 'dev')).toHaveLength(0);
+  });
+});
+
 describe('useLaunchConfigs — tunnel URL seed', () => {
   it('seeds tunnelUrls from the status fetch into the sandbox store', async () => {
     vi.mocked(fetchLaunchStatuses).mockResolvedValue({
@@ -255,5 +330,65 @@ describe('useLaunchConfigs — tunnel URL seed', () => {
       const scope = buildLaunchScope('proj-B', '/ws/b');
       expect(useSandboxStore.getState().tunnelUrls[scope]?.['dev']).toBe('https://dev.trycloudflare.com');
     });
+  });
+});
+
+describe('useLaunchConfigs — output buffer replay seed (echo-once fast-subprocess race)', () => {
+  it('seeds buffered output into logsOutput when no live entries exist yet for that scope+name', async () => {
+    // The daemon's `/launch/status` now returns recent stdout/stderr per
+    // config (LaunchManager.getOutputBuffer) — a durable replay source for a
+    // fast subprocess whose entire lifecycle (spawn → stdout → exit) may have
+    // already finished by the time a console pane's live WS delivery is
+    // observed. This seed only applies when nothing has appeared yet, so it
+    // never duplicates output the live WS event already delivered.
+    vi.mocked(fetchLaunchStatuses).mockResolvedValue({
+      statuses: { dev: 'stopped' },
+      tunnelUrls: {},
+      effectivePath: '/ws/b',
+      outputBuffer: { dev: [{ stream: 'stdout', data: 'hello-from-launch\n' }] },
+    });
+
+    const { useLaunchConfigs } = await import('../use-launch-configs');
+    const scope = buildLaunchScope('proj-B', '/ws/b');
+
+    await act(async () => {
+      renderHook(() => useLaunchConfigs(31415, 'proj-B', 'chat-1'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const entries = useSandboxStore.getState().logsOutput.filter((l) => l.scopeKey === scope && l.name === 'dev');
+      expect(entries).toHaveLength(1);
+    });
+    const entries = useSandboxStore.getState().logsOutput.filter((l) => l.scopeKey === scope && l.name === 'dev');
+    expect(entries[0]!.data).toBe('hello-from-launch\n');
+    expect(entries[0]!.stream).toBe('stdout');
+  });
+
+  it('does not duplicate output already present in logsOutput for that scope+name', async () => {
+    const scope = buildLaunchScope('proj-B', '/ws/b');
+    useSandboxStore.setState({
+      ...CLEAN_SANDBOX,
+      logsOutput: [{ seq: 1, scopeKey: scope, name: 'dev', data: 'hello-from-launch\n', stream: 'stdout' as const }],
+    });
+    vi.mocked(fetchLaunchStatuses).mockResolvedValue({
+      statuses: { dev: 'stopped' },
+      tunnelUrls: {},
+      effectivePath: '/ws/b',
+      outputBuffer: { dev: [{ stream: 'stdout', data: 'hello-from-launch\n' }] },
+    });
+
+    const { useLaunchConfigs } = await import('../use-launch-configs');
+
+    await act(async () => {
+      renderHook(() => useLaunchConfigs(31415, 'proj-B', 'chat-1'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(useSandboxStore.getState().processStatuses[scope]?.['dev']).toBe('stopped');
+    });
+    const entries = useSandboxStore.getState().logsOutput.filter((l) => l.scopeKey === scope && l.name === 'dev');
+    expect(entries).toHaveLength(1);
   });
 });

@@ -13,10 +13,22 @@
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
+export interface LaunchOutputEntry {
+  stream: 'stdout' | 'stderr';
+  data: string;
+}
+
 export interface LaunchStatusData {
   statuses: Record<string, string>;
   tunnelUrls: Record<string, string>;
   effectivePath: string;
+  /**
+   * Recent stdout/stderr per config name, kept by the daemon independent of
+   * live WS delivery (see LaunchManager.getOutputBuffer). Optional so older
+   * daemon builds without this field still parse — treat a missing entry the
+   * same as an empty buffer.
+   */
+  outputBuffer?: Record<string, LaunchOutputEntry[]>;
 }
 
 function chatParam(chatId?: string): string {
