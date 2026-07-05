@@ -246,26 +246,12 @@ test.describe('§plan gate exec-mode', () => {
   // `ChatGateMount` now retains the just-approved plan entry (same element
   // type + position) until the run actually ends.
   //
-  // TODO(bug): re-triaged live — still reproducibly fails; the plan card
-  // resets to its PRE-approval defaults (Interactive selected, "Clear
-  // context" unchecked, "Approve & run" clickable again) instead of ever
-  // showing the running footer — confirmed via screenshot. Likely mechanism
-  // (not applied — packages/ui out of scope): `ChatGateMount.tsx`'s retain
-  // logic has a one-render gap. `handleApprove` (PlanGate.tsx) batches
-  // `setApproved(true)` + the parent's `onApprove()` (`setApprovedPlan(front)`)
-  // with the SAME click's `reply()` call, which optimistically clears `front`
-  // — so on the very next render, `front` is already undefined AND
-  // `isRunning` may not have flipped `true` yet (that requires a WS round
-  // trip). Neither `if (front)` nor `if (approvedPlan != null && isRunning)`
-  // matches for that one render, so `ChatGateMount` returns `null` —
-  // unmounting `PlanGate` — before `isRunning` catches up and remounts a
-  // BRAND NEW instance with fresh (default) local state, defeating the
-  // "same type + position" preservation the fix relies on.
+  // FIXED (commit f1666315): the plan card was resetting to its pre-approval
+  // defaults instead of showing the running footer — a one-render gap where
+  // `ChatGateMount` unmounted `PlanGate` between the optimistic approve and
+  // `isRunning` catching up, losing its local state. `ChatGateMount` now
+  // retains the just-approved plan entry across that gap.
   test('selecting Unattended + clear-context and approving shows a matching running footer', async () => {
-    test.skip(
-      true,
-      'TODO(bug): chat-plan-running-footer never appears — the plan card resets to pre-approval defaults instead, confirmed live via screenshot; see the root-cause comment above this test for the likely one-render unmount gap',
-    );
     const { page } = app;
     await sendMessage(page, 'Add `export function greet(name: string) { return "Hello " + name; }` to utils.ts');
     await page.locator('[data-testid="chat-plan-gate"]').waitFor({ timeout: 45_000 });

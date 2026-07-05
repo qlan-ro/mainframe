@@ -233,28 +233,11 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
   // locator was never actionable and the click hung out the full test
   // timeout. `expandProjectPills` (above) opens the overflow first.
   //
-  // TODO(bug): re-triaged live, a second time — the crash is fixed, and the
-  // core "New skips the picker, inherits the project" behavior IS correct
-  // (fixed the test's own assertion below too: `DraftSessionRow`'s project
-  // chip only renders in "All" view per its own `showProject` doc comment, so
-  // this now asserts on `chat-header-project`, which always renders for a
-  // draft). But the discard (✕) cleanup at the end of this test never
-  // actually clears the draft when a project filter pill is active — live
-  // confirmed, isolated (fresh app, no other state): `sessions-draft-row`
-  // and its own `sessions-draft-row-discard` button both still read a DOM
-  // count of 1 a full second after clicking discard. `useDraftRow.onDiscard`
-  // (use-draft-row.ts) calls `resetNewThreadDraft` unconditionally, so this
-  // isn't an obviously-guarded early return in the source — flagging rather
-  // than guessing further. Skipping the whole test (not just the cleanup)
-  // since it can't complete; skipping leaves the app in the untouched "All"
-  // view state `beforeAll` produced, which the next test already assumes.
-  // Out of scope to fix here (packages/ui: use-draft-row.ts's onDiscard path
-  // under an active project filter).
+  // FIXED (commit 3368d065): discard (✕) never cleared the draft row when a
+  // project filter pill was active. `use-draft-row.ts`'s `onDiscard` now marks
+  // the draft in a discarded-drafts suppression set before resetting, so the
+  // row clears reliably under an active project filter.
   test('with a project pill active, New skips the picker and the draft inherits that project', async () => {
-    test.skip(
-      true,
-      'TODO(bug): discard (X) never clears the draft row when a project filter pill is active — confirmed live (DOM count stays 1 after clicking discard) — see the root-cause comment above this test',
-    );
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     await expandProjectPills(page);

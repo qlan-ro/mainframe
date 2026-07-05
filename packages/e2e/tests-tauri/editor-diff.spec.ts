@@ -179,25 +179,11 @@ test.describe('§editor-diff — Changes panel', () => {
   // sized to `height: 100%` so it becomes the real scroll boundary CM6
   // expects.
   //
-  // TODO(bug): re-triaged live — the fix above resolved VERTICAL scrolling
-  // (confirmed: the pane does scroll down to around line 390), but the
-  // BOTTOM_MARKER span itself is still off-screen HORIZONTALLY, not
-  // vertically. Live-measured bounding boxes: the marker's box was
-  // `{x:1071, width:115.6}` (right edge ~1187) while its own pane's box was
-  // `{x:644, width:338}` (right edge 982) — the marker renders ~90-200px
-  // past its pane's own right edge, clipped by the pane's `overflow-hidden`.
-  // `nextChange()`'s scrollIntoView only accounts for the vertical axis; the
-  // long generated line (`export const line390 = 390; // BOTTOM_MARKER`)
-  // needs a horizontal scroll too, which never happens. This test's own
-  // subsequent test continues on the same diff tab and cascades from
-  // whatever state this one leaves behind, so it's skipped too (see its own
-  // TODO). Out of scope to fix here (packages/ui: the chunk-navigation
-  // scrollIntoView call needs a horizontal axis too).
+  // FIXED (commit 31ac6360): the vertical-scroll fix above landed the pane at
+  // the right line, but BOTTOM_MARKER was still clipped HORIZONTALLY —
+  // `nextChange()`'s scrollIntoView only accounted for the vertical axis. Chunk
+  // navigation now scrolls both axes into view.
   test('prev/next-change buttons navigate chunks, scrolling the far-apart bottom chunk into view', async () => {
-    test.skip(
-      true,
-      'TODO(bug): BOTTOM_MARKER is left horizontally clipped by its own pane after nextChange() scrolls — confirmed live via bounding-box measurement (marker x=1071 vs pane right edge=982) — see the root-cause comment above this test',
-    );
     const { page } = app;
     // Continues on the diff tab opened by the first test in this file (same
     // describe, same app/project — matches the ordered-test convention used by
