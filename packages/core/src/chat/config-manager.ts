@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { AdapterSession, Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { DatabaseManager } from '../db/index.js';
@@ -43,6 +43,105 @@ export class ChatConfigManager {
     }
   }
 
+  /**
+   * Apply one config setting to an already-spawned session and stage it into `updates`/
+   * `active.chat` only if the CLI accepts it. Rejections are logged, not thrown, so sibling
+   * settings in the same request still get their own chance to apply.
+   */
+  private async applyLiveSetting<K extends 'model' | 'permissionMode' | 'planMode'>(
+    chatId: string,
+    active: ActiveChat,
+    updates: Partial<Chat>,
+    key: K,
+    value: Chat[K] | undefined,
+    setter: (value: NonNullable<Chat[K]>) => Promise<void>,
+  ): Promise<void> {
+    if (value === undefined) return;
+    const setterName = `set${key[0]!.toUpperCase()}${key.slice(1)}`;
+    try {
+      await setter(value as NonNullable<Chat[K]>);
+      updates[key] = value;
+      active.chat[key] = value;
+    } catch (err) {
+      log.warn({ err, chatId }, `${setterName} rejected; not persisting ${key}`);
+    }
+  }
+
+  /**
+   * Each setting is applied and persisted INDEPENDENTLY: a rejected/timed-out setModel()
+   * (which now awaits and throws — see session.ts) must not skip setPermissionMode or
+   * setPlanMode, and must not 500 the whole request. Only settings the CLI actually
+   * accepted get written to the DB.
+   */
+  private async applyLiveSessionSettings(
+    chatId: string,
+    active: ActiveChat,
+    session: AdapterSession,
+    changes: { model?: string; permissionMode?: Chat['permissionMode']; planMode?: boolean },
+  ): Promise<void> {
+    const updates: Partial<Chat> = {};
+    await this.applyLiveSetting(chatId, active, updates, 'model', changes.model, (v) => session.setModel(v));
+    await this.applyLiveSetting(chatId, active, updates, 'permissionMode', changes.permissionMode, (v) =>
+      session.setPermissionMode(v),
+    );
+    await this.applyLiveSetting(chatId, active, updates, 'planMode', changes.planMode, (v) => session.setPlanMode(v));
+
+    if (Object.keys(updates).length === 0) return;
+    this.deps.db.chats.update(chatId, updates);
+    // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model that
+    // doesn't support them). Re-resolve against the new model and re-apply.
+    if (updates.model !== undefined) await this.deps.applyTuning(chatId);
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+  }
+
+  /**
+   * Config change that needs a respawn: an adapter switch, or any setting change while no live
+   * session exists yet to apply it to directly. Waits out an in-flight spawn, kills the current
+   * session, persists the new settings, then restarts if a session had been running.
+   */
+  private async respawnWithConfig(
+    chatId: string,
+    active: ActiveChat,
+    changes: { adapterId?: string; model?: string; permissionMode?: Chat['permissionMode']; planMode?: boolean },
+  ): Promise<void> {
+    const inflight = this.deps.startingChats.get(chatId);
+    if (inflight) {
+      try {
+        await inflight;
+      } catch {
+        /* spawn may have failed */
+      }
+    }
+
+    const wasSpawned = active.session?.isSpawned ?? false;
+    if (wasSpawned) {
+      await active.session!.kill();
+      active.session = null;
+    }
+
+    const updates: Partial<Chat> = {};
+    if (changes.adapterId !== undefined) {
+      updates.adapterId = changes.adapterId;
+      active.chat.adapterId = changes.adapterId;
+    }
+    if (changes.model !== undefined) {
+      updates.model = changes.model;
+      active.chat.model = changes.model;
+    }
+    if (changes.permissionMode !== undefined) {
+      updates.permissionMode = changes.permissionMode;
+      active.chat.permissionMode = changes.permissionMode;
+    }
+    if (changes.planMode !== undefined) {
+      updates.planMode = changes.planMode;
+      active.chat.planMode = changes.planMode;
+    }
+
+    this.deps.db.chats.update(chatId, updates);
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+    if (wasSpawned) await this.deps.startChat(chatId);
+  }
+
   /** Persist a worktree path/branch change (undefined clears it) and broadcast it. */
   private applyWorktreeUpdate(
     active: ActiveChat,
@@ -76,87 +175,20 @@ export class ChatConfigManager {
     if (!adapterChanged && !modelChanged && !modeChanged && !planModeChanged) return;
 
     if (active.session?.isSpawned && !adapterChanged) {
-      // Each setting is applied and persisted INDEPENDENTLY: a rejected/timed-out setModel()
-      // (which now awaits and throws — see session.ts) must not skip setPermissionMode or
-      // setPlanMode, and must not 500 the whole request. Only settings the CLI actually
-      // accepted get written to the DB.
-      const session = active.session;
-      const updates: Partial<Chat> = {};
-      if (modelChanged) {
-        try {
-          await session.setModel(model!);
-          updates.model = model;
-          active.chat.model = model;
-        } catch (err) {
-          log.warn({ err, chatId }, 'setModel rejected; not persisting model');
-        }
-      }
-      if (modeChanged) {
-        try {
-          await session.setPermissionMode(permissionMode!);
-          updates.permissionMode = permissionMode;
-          active.chat.permissionMode = permissionMode;
-        } catch (err) {
-          log.warn({ err, chatId }, 'setPermissionMode rejected; not persisting permissionMode');
-        }
-      }
-      if (planModeChanged) {
-        try {
-          await session.setPlanMode(planMode!);
-          updates.planMode = planMode;
-          active.chat.planMode = planMode;
-        } catch (err) {
-          log.warn({ err, chatId }, 'setPlanMode rejected; not persisting planMode');
-        }
-      }
-      if (Object.keys(updates).length > 0) {
-        this.deps.db.chats.update(chatId, updates);
-        // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model
-        // that doesn't support them). Re-resolve against the new model and re-apply.
-        if (updates.model !== undefined) await this.deps.applyTuning(chatId);
-        this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
-      }
+      await this.applyLiveSessionSettings(chatId, active, active.session, {
+        model: modelChanged ? model : undefined,
+        permissionMode: modeChanged ? permissionMode : undefined,
+        planMode: planModeChanged ? planMode : undefined,
+      });
       return;
     }
 
-    const inflight = this.deps.startingChats.get(chatId);
-    if (inflight) {
-      try {
-        await inflight;
-      } catch {
-        /* spawn may have failed */
-      }
-    }
-
-    const wasSpawned = active.session?.isSpawned ?? false;
-    if (wasSpawned) {
-      await active.session!.kill();
-      active.session = null;
-    }
-
-    const updates: Partial<Chat> = {};
-    if (adapterChanged) {
-      updates.adapterId = adapterId;
-      active.chat.adapterId = adapterId!;
-    }
-    if (modelChanged) {
-      updates.model = model;
-      active.chat.model = model;
-    }
-    if (modeChanged) {
-      updates.permissionMode = permissionMode;
-      active.chat.permissionMode = permissionMode;
-    }
-    if (planModeChanged) {
-      updates.planMode = planMode;
-      active.chat.planMode = planMode;
-    }
-
-    this.deps.db.chats.update(chatId, updates);
-    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
-    if (wasSpawned) {
-      await this.deps.startChat(chatId);
-    }
+    await this.respawnWithConfig(chatId, active, {
+      adapterId: adapterChanged ? adapterId : undefined,
+      model: modelChanged ? model : undefined,
+      permissionMode: modeChanged ? permissionMode : undefined,
+      planMode: planModeChanged ? planMode : undefined,
+    });
   }
 
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {

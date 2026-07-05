@@ -99,7 +99,13 @@ describe('AdapterRegistry catalog materialization', () => {
   });
 
   it('skips live discovery for an uninstalled adapter (blocker #9: no wasted 30s Codex spawn)', async () => {
-    const a = fakeAdapter({ probeResult: [{ id: 'live', label: 'Live' }] });
+    // A genuinely-uninstalled CLI adapter fails BOTH the registry's own `--version` spawn AND
+    // its own isInstalled() (which independently re-resolves the same binary) — unlike a
+    // plugin-provided adapter, which has no CLI binary but still reports installed:true itself.
+    const a = fakeAdapter({
+      probeResult: [{ id: 'live', label: 'Live' }],
+      isInstalled: vi.fn().mockResolvedValue(false),
+    });
     const reg = new AdapterRegistry();
     reg.register(a);
     reg.seedStaticSnapshots();
