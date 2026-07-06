@@ -77,7 +77,7 @@ function CodeBox({ idx, ch, invalid, disabled, autoFocus, inputRef, onBoxChange,
       }}
       onKeyDown={(e) => onBoxKeyDown(idx, e)}
       className={cn(
-        'w-[40px] h-[48px] rounded-md border text-center font-mono text-[22px] font-bold',
+        'w-[40px] h-[48px] rounded-md border text-center font-mono text-display font-bold',
         'bg-card text-foreground outline-none transition-colors',
         'focus:border-primary focus:ring-1 focus:ring-primary/20',
         'disabled:opacity-45 disabled:cursor-not-allowed',
@@ -167,7 +167,7 @@ export function PairCodeInput({
       <CodeBox key={0} {...boxProps(0, ref0)} />
       <CodeBox key={1} {...boxProps(1, ref1)} />
       <CodeBox key={2} {...boxProps(2, ref2)} />
-      <span className="select-none text-[18px] font-bold text-muted-foreground">–</span>
+      <span className="select-none text-title font-bold text-muted-foreground">–</span>
       <CodeBox key={3} {...boxProps(3, ref3)} />
       <CodeBox key={4} {...boxProps(4, ref4)} />
       <CodeBox key={5} {...boxProps(5, ref5)} />

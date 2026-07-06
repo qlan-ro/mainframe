@@ -62,7 +62,7 @@ function WfCompositeHead({ node, summary, right }: WfCompositeHeadProps): React.
   return (
     <div className="flex min-w-0 items-center gap-[9px]">
       <WfKindChip kind={node.kind} />
-      <span className="overflow-hidden text-ellipsis whitespace-nowrap text-body font-bold tracking-[-0.1px] text-foreground">
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap text-body font-bold tracking-tight text-foreground">
         {title}
       </span>
       {summary && <span className="whitespace-nowrap text-caption text-mf-text-3">{summary}</span>}
@@ -264,7 +264,7 @@ function WfCallRail({ node, onOpenChat }: CompositeProps): React.ReactElement {
   return (
     <WfCompositeShell node={node} summary={node.summary ?? (node.ref ? '' : 'sub-workflow')} right={right}>
       {steps.length > 0 && (
-        <div className="ml-px border-l-2 border-[#2a6fdb]/30 pl-[6px]">
+        <div className="ml-px border-l-2 border-mf-wf-kind-call/30 pl-[6px]">
           <WfTree nodes={steps} onOpenChat={onOpenChat} />
         </div>
       )}

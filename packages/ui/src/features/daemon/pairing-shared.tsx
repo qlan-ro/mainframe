@@ -25,14 +25,12 @@ export function StepRail({ current }: StepRailProps) {
         return (
           <div key={label} className="flex items-center">
             {i > 0 && (
-              <div
-                className={cn('h-[1.5px] w-[22px] transition-colors', done ? 'bg-mf-success' : 'bg-border')}
-              />
+              <div className={cn('h-[1.5px] w-[22px] transition-colors', done ? 'bg-mf-success' : 'bg-border')} />
             )}
             <div className="flex flex-col items-center gap-[3px]">
               <div
                 className={cn(
-                  'flex size-[18px] items-center justify-center rounded-full text-[10px] font-bold transition-colors',
+                  'flex size-[18px] items-center justify-center rounded-full text-micro font-bold transition-colors',
                   done && 'bg-mf-success text-white',
                   active && 'bg-primary text-primary-foreground',
                   !done && !active && 'bg-mf-chip text-mf-text-3',
@@ -83,7 +81,7 @@ export function NoticeCard({ kind, children, action, testId }: NoticeCardProps) 
       className={cn('flex items-start gap-[7px] rounded-md border px-[10px] py-[8px]', NOTICE_STYLES[kind])}
     >
       {NOTICE_ICON[kind]}
-      <span className="min-w-0 flex-1 text-caption leading-[1.4]">{children}</span>
+      <span className="min-w-0 flex-1 text-caption leading-normal">{children}</span>
       {action != null && <div className="shrink-0">{action}</div>}
     </div>
   );

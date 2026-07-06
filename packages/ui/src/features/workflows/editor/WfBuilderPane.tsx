@@ -32,7 +32,7 @@ function WfbSection({ Icon, title, count, action, children }: WfbSectionProps): 
     <div className="mb-[16px]">
       <div className="mb-[8px] flex items-center gap-[8px]">
         <Icon size={13} className="text-mf-text-3" aria-hidden />
-        <span className="text-micro font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
+        <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">{title}</span>
         {count != null && <span className="font-mono text-micro text-mf-text-3">{count}</span>}
         <span className="flex-1" />
         {action}
@@ -162,7 +162,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
             value={model.name}
             onChange={(e) => patch({ name: e.target.value })}
             placeholder="Workflow name"
-            className="border-none bg-transparent p-0 font-sans text-[22px] font-bold leading-tight tracking-[-0.4px] text-foreground outline-none placeholder:text-muted-foreground"
+            className="border-none bg-transparent p-0 font-sans text-display font-bold leading-tight tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
           />
           <input
             data-testid="workflows-builder-description"
@@ -276,7 +276,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
                 zero steps that container is only tall enough for the row above,
                 which collapses the library's flex-1 card grid to nothing. */}
             {libraryOpen && (
-              <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(22,19,15,0.34)]">
+              <div className="fixed inset-0 z-[70] flex items-center justify-center bg-mf-scrim">
                 <div className="h-[82vh] max-h-[720px] w-[720px] max-w-[92vw] overflow-hidden rounded-xl bg-card shadow-[var(--mf-shadow-pop)]">
                   <WfStepLibrary onAdd={addStep} onClose={() => setLibraryOpen(false)} />
                 </div>

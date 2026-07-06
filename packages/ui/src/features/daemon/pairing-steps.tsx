@@ -43,7 +43,7 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
             <UrlAdornment phase={phase} />
           </div>
         </div>
-        <p className="text-caption text-mf-text-3 leading-[1.4]">
+        <p className="text-caption text-mf-text-3 leading-normal">
           Use the <strong className="font-semibold text-foreground">named tunnel</strong> URL from the server's Remote
           Access settings. Quick tunnels rotate their URL on restart.
         </p>
@@ -112,10 +112,10 @@ export function Step1Body({
       <div className="flex flex-col gap-[4px]">
         <label className="text-label font-semibold text-muted-foreground">Pairing code</label>
         <PairCodeInput value={code} onChange={onCodeChange} invalid={isInvalid} disabled={disabled} autoFocus />
-        <p className="text-caption text-mf-text-3 leading-[1.4]">
+        <p className="text-caption text-mf-text-3 leading-normal">
           On the server, open{' '}
           <strong className="font-semibold text-foreground">Remote Access → Generate pairing code</strong> (or{' '}
-          <code className="font-mono text-[11px]">mainframe-daemon pair</code>). It&apos;s valid for 5 minutes.
+          <code className="font-mono text-caption">mainframe-daemon pair</code>). It&apos;s valid for 5 minutes.
         </p>
       </div>
 

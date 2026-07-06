@@ -112,7 +112,7 @@ export function DaemonPicker({
     <div data-testid="daemon-picker" className="flex w-[324px] flex-col py-[5px]">
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-[10px] pb-[6px] pt-[2px]">
-        <span className="text-micro font-bold uppercase tracking-[0.06em] text-mf-text-3">Daemon</span>
+        <span className="text-micro font-bold uppercase tracking-wide text-mf-text-3">Daemon</span>
         <span className="text-micro text-mf-text-4">One connected at a time</span>
       </div>
 
@@ -135,7 +135,7 @@ export function DaemonPicker({
 
       {/* ── Remote servers section ─────────────────────────────────── */}
       <div className="flex flex-col px-[5px]">
-        <span className="px-[6px] pb-[4px] text-micro font-bold uppercase tracking-[0.06em] text-mf-text-3">
+        <span className="px-[6px] pb-[4px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
           Remote servers
         </span>
 

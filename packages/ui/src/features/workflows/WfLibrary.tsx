@@ -96,12 +96,12 @@ function WfLibraryRow({ wf, lastRun, port, projectName }: WfLibraryRowProps): Re
         {/* Name row */}
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-body font-bold tracking-tight text-foreground">{wf.name}</span>
-          {/* Scope pill — global uses muted #7a4d9e per prototype */}
+          {/* Scope pill — global uses the dedicated mf-wf-violet token per prototype */}
           <span
             className={cn(
               'inline-flex h-[17px] shrink-0 items-center gap-1 rounded-xs px-[7px]',
-              'text-micro font-bold uppercase tracking-[0.3px] whitespace-nowrap',
-              isGlobal ? 'bg-[#7a4d9e]/10 text-[#7a4d9e]' : 'bg-primary/10 text-primary',
+              'text-micro font-bold uppercase tracking-wide whitespace-nowrap',
+              isGlobal ? 'bg-mf-wf-violet/10 text-mf-wf-violet' : 'bg-primary/10 text-primary',
             )}
           >
             {isGlobal ? 'Global' : (projectName ?? 'Project')}
@@ -110,7 +110,7 @@ function WfLibraryRow({ wf, lastRun, port, projectName }: WfLibraryRowProps): Re
 
         {/* Description */}
         {wf.description && (
-          <div className="mt-[3px] max-w-[560px] truncate text-caption leading-[1.45] text-muted-foreground">
+          <div className="mt-[3px] max-w-[560px] truncate text-caption leading-normal text-muted-foreground">
             {wf.description}
           </div>
         )}

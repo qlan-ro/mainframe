@@ -238,7 +238,7 @@ export function DaemonRow({ d, status, active, onSwitch, onRename, onRepair, onR
             </span>
           )}
         </span>
-        {d.host && <span className="truncate font-mono text-[10.5px] text-mf-text-3">{d.host}</span>}
+        {d.host && <span className="truncate font-mono text-micro text-mf-text-3">{d.host}</span>}
       </span>
 
       {/* Right: ConnDot + status word */}

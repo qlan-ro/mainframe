@@ -30,8 +30,9 @@ export interface KindMeta {
  *
  * Colors are the prototype's exact `WF_KIND` hexes. Where a hex matches a real
  * theme token it uses that token (agent→primary, value→muted-foreground #5e5d5a,
- * branch→mf-accent-violet #5b269a); the rest use arbitrary `text-[#hex]` since no
- * named token matches — never eyeballed named-Tailwind approximations.
+ * branch→mf-accent-violet #5b269a); the rest have no matching token, so they
+ * get dedicated `--mf-wf-*` theme tokens (globals.css) instead of raw hex —
+ * never eyeballed named-Tailwind approximations.
  */
 export const KIND_META: Record<string, KindMeta> = {
   agent: {
@@ -43,37 +44,37 @@ export const KIND_META: Record<string, KindMeta> = {
   connector: {
     Icon: Plug,
     label: 'Service',
-    colorClass: 'text-[#7a4d9e]',
+    colorClass: 'text-mf-wf-violet', // dedicated token — no named-Tailwind match
   },
   question: {
     Icon: MessageSquare,
     label: 'Question',
-    colorClass: 'text-[#c2540a]',
+    colorClass: 'text-mf-wf-kind-question', // dedicated token — no named-Tailwind match
   },
   set: {
     Icon: CircleDot,
     label: 'Value',
-    colorClass: 'text-muted-foreground', // #5e5d5a — exact token match
+    colorClass: 'text-muted-foreground', // exact token match
   },
   choose: {
     Icon: GitBranch,
     label: 'Branch',
-    colorClass: 'text-mf-accent-violet', // #5b269a — exact token match
+    colorClass: 'text-mf-accent-violet', // exact token match
   },
   foreach: {
     Icon: RotateCw,
     label: 'Loop',
-    colorClass: 'text-[#1f8a5b]',
+    colorClass: 'text-mf-wf-kind-loop', // dedicated token — no named-Tailwind match
   },
   parallel: {
     Icon: Columns3,
     label: 'Parallel',
-    colorClass: 'text-[#b0560f]',
+    colorClass: 'text-mf-wf-kind-parallel', // dedicated token — no named-Tailwind match
   },
   call: {
     Icon: Layers,
     label: 'Sub-workflow',
-    colorClass: 'text-[#2a6fdb]',
+    colorClass: 'text-mf-wf-kind-call', // dedicated token — no named-Tailwind match
   },
 };
 

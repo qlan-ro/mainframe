@@ -142,9 +142,9 @@ function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.Re
       }}
       className={cn(
         'group flex cursor-pointer flex-col gap-[9px] rounded-lg border bg-card p-[13px]',
-        'shadow-[0_1px_2px_rgba(0,0,0,0.03)]',
+        'shadow-[var(--mf-shadow-card)]',
         'transition-[border-color,box-shadow] duration-[120ms]',
-        'border-border hover:border-primary/50 hover:shadow-[0_4px_14px_rgba(0,0,0,0.07)]',
+        'border-border hover:border-primary/50 hover:shadow-[var(--mf-shadow-card-hover)]',
       )}
     >
       {/* Header row */}
@@ -158,14 +158,12 @@ function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.Re
         >
           <Icon size={16} className={meta.colorClass} aria-hidden />
         </span>
-        <span className="flex-1 text-body font-bold leading-tight tracking-[-0.01em] text-foreground">
-          {meta.label}
-        </span>
+        <span className="flex-1 text-body font-bold leading-tight tracking-tight text-foreground">{meta.label}</span>
         <span
           className={cn(
             'inline-flex h-[18px] items-center rounded-full px-2',
             'text-micro font-bold uppercase tracking-wide',
-            isControl ? 'bg-mf-accent-violet/[0.12] text-[#7a4d9e]' : 'bg-muted text-mf-text-3',
+            isControl ? 'bg-mf-accent-violet/[0.12] text-mf-wf-violet' : 'bg-muted text-mf-text-3',
           )}
         >
           {isControl ? 'Control flow' : 'Leaf'}
@@ -174,18 +172,18 @@ function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.Re
       </div>
 
       {/* Blurb */}
-      <p className="min-h-[2rem] text-caption leading-[1.5] text-muted-foreground">{doc?.blurb ?? ''}</p>
+      <p className="min-h-[2rem] text-caption leading-normal text-muted-foreground">{doc?.blurb ?? ''}</p>
 
       {/* Produces + Config */}
       <div className="flex flex-col gap-[6px] border-t border-border pt-[9px]">
         <div className="flex gap-[7px]">
-          <span className="w-[58px] shrink-0 pt-px text-micro font-bold uppercase tracking-[0.04em] text-mf-text-3">
+          <span className="w-[58px] shrink-0 pt-px text-micro font-bold uppercase tracking-wide text-mf-text-3">
             Produces
           </span>
-          <span className="text-caption leading-[1.45] text-muted-foreground">{doc?.produces ?? ''}</span>
+          <span className="text-caption leading-normal text-muted-foreground">{doc?.produces ?? ''}</span>
         </div>
         <div className="flex gap-[7px]">
-          <span className="w-[58px] shrink-0 pt-[3px] text-micro font-bold uppercase tracking-[0.04em] text-mf-text-3">
+          <span className="w-[58px] shrink-0 pt-[3px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
             Config
           </span>
           <span className="flex flex-wrap gap-[5px]">
@@ -222,7 +220,7 @@ export function WfStepLibrary({ onAdd, onClose }: WfStepLibraryProps): React.Rea
       <div className="flex shrink-0 items-center gap-[10px] border-b border-border px-[16px] py-[13px]">
         <Layers size={15} className="text-primary" aria-hidden />
         <div className="flex-1">
-          <div className="text-heading font-bold leading-tight tracking-[-0.02em] text-foreground">Step types</div>
+          <div className="text-heading font-bold leading-tight tracking-tight text-foreground">Step types</div>
           <div className="text-caption text-mf-text-3">Pick a step to add to the workflow</div>
         </div>
         <Hint label="Close step library">
@@ -242,7 +240,7 @@ export function WfStepLibrary({ onAdd, onClose }: WfStepLibraryProps): React.Rea
         {LIB_GROUPS.map((g) => (
           <div key={g.label} className="mb-[18px]">
             <div className="mb-[10px] flex items-baseline gap-[9px]">
-              <span className="text-micro font-bold uppercase tracking-[0.06em] text-muted-foreground">{g.label}</span>
+              <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">{g.label}</span>
               <span className="text-caption text-mf-text-3">{g.sub}</span>
             </div>
             <div className="grid grid-cols-2 gap-[11px]">

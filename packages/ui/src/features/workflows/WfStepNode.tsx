@@ -52,7 +52,7 @@ interface WfIOProps {
 function WfIO({ label, value, truncated }: WfIOProps): React.ReactElement {
   return (
     <div className="flex flex-col gap-[4px]">
-      <span className="text-micro font-bold uppercase tracking-wider text-mf-text-3">{label}</span>
+      <span className="text-micro font-bold uppercase tracking-wide text-mf-text-3">{label}</span>
       <pre className="overflow-x-auto rounded-md border border-border bg-mf-code-bg px-[10px] py-[8px] font-mono text-caption text-mf-code-fg leading-normal whitespace-pre-wrap break-words">
         {formatJson(value)}
       </pre>
@@ -163,7 +163,7 @@ export function WfStepNode({ node, onOpenChat }: WfStepNodeProps): React.ReactEl
               {/* Title */}
               <span
                 className={cn(
-                  'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-body font-semibold tracking-[-0.1px]',
+                  'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-body font-semibold tracking-tight',
                   isMuted ? 'text-mf-text-3' : 'text-foreground',
                 )}
               >

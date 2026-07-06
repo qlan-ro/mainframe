@@ -141,11 +141,29 @@
   --mf-priority-medium-dot: #e0a019;
   --mf-priority-low-dot: #c4c2bd;
 
+  /* Workflow step-kind glyph colors — design-constant (ported from the
+     WF_KIND table in the workflow-ui prototype); no scheme override, same
+     convention as --mf-task-type-*/--mf-tool-* above. mf-wf-violet is
+     reused verbatim for the "connector" kind glyph, the library's "Global"
+     scope pill, and the step-library "Control flow" badge text — one
+     prototype swatch, three call sites. */
+  --mf-wf-violet: #7a4d9e;
+  --mf-wf-kind-question: #c2540a;
+  --mf-wf-kind-loop: #1f8a5b;
+  --mf-wf-kind-parallel: #b0560f;
+  --mf-wf-kind-call: #2a6fdb;
+
   /* App-only elevation variants (panel shadows not in prototype theme) */
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04);
   --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);
   --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
+  /* Workflow step-type card elevation (rest/hover) — ported verbatim from
+     19-wfeditor.jsx; distinct from mf-shadow-panel-soft/-ambient (those pair
+     a border ring with the tint, these are bare box-shadows on a bordered
+     card). Design-constant, no scheme override. */
+  --mf-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
   --mf-shadow-picker: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
@@ -773,6 +791,11 @@
   --color-mf-priority-high-dot: var(--mf-priority-high-dot);
   --color-mf-priority-medium-dot: var(--mf-priority-medium-dot);
   --color-mf-priority-low-dot: var(--mf-priority-low-dot);
+  --color-mf-wf-violet: var(--mf-wf-violet);
+  --color-mf-wf-kind-question: var(--mf-wf-kind-question);
+  --color-mf-wf-kind-loop: var(--mf-wf-kind-loop);
+  --color-mf-wf-kind-parallel: var(--mf-wf-kind-parallel);
+  --color-mf-wf-kind-call: var(--mf-wf-kind-call);
   --color-mf-code-bg: var(--mf-code-bg);
   --color-mf-code-fg: var(--mf-code-fg);
   --color-mf-code-kw: var(--mf-code-kw);

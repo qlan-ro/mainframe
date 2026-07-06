@@ -203,7 +203,7 @@ export function WfRunsList({ port: _port }: WfRunsListProps): React.ReactElement
           if (items.length === 0) return null;
           return (
             <section key={group.key}>
-              <div className="sticky top-0 z-[1] border-b border-border bg-mf-content2 px-[18px] py-[7px] text-micro font-bold uppercase tracking-[0.6px] text-mf-text-3">
+              <div className="sticky top-0 z-[1] border-b border-border bg-mf-content2 px-[18px] py-[7px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
                 {group.label}
               </div>
               {items.map((run) => {

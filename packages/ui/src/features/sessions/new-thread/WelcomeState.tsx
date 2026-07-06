@@ -55,7 +55,7 @@ export function WelcomeState({ projectId }: { projectId: string }) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-heading text-xl font-semibold text-foreground">What should we take on?</h1>
+          <h1 className="text-title font-semibold text-foreground">What should we take on?</h1>
           <p className="text-body text-muted-foreground">Describe a task, or pick a starting point below.</p>
         </div>
 

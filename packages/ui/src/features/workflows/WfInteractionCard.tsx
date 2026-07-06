@@ -121,7 +121,7 @@ export function WfInteractionCard({
 
           {/* Prompt — the human-readable question text */}
           {interaction.prompt != null && (
-            <div className="mt-[7px] text-label leading-[1.5] text-foreground/70">{interaction.prompt}</div>
+            <div className="mt-[7px] text-label leading-normal text-foreground/70">{interaction.prompt}</div>
           )}
 
           {/* Expanded form */}

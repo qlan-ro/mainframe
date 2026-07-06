@@ -224,7 +224,7 @@ describe('WfLibrary', () => {
     expect(row.textContent).toContain('my-app');
   });
 
-  // ── Global scope pill uses muted purple (#7a4d9e), NOT bright purple-600 ────
+  // ── Global scope pill uses the muted mf-wf-violet token, NOT bright purple-600 ────
 
   it('global scope pill carries the muted purple token, not bright purple-600', () => {
     seedStore([globalWf]);
@@ -235,8 +235,8 @@ describe('WfLibrary', () => {
       (el) => el.textContent?.trim() === 'Global' && el.className.includes('rounded'),
     );
     expect(pill).toBeTruthy();
-    // Must use the muted arbitrary color, not the bright purple-600 tailwind class
+    // Must use the dedicated muted token, not the bright purple-600 tailwind class
     expect(pill?.className).not.toContain('text-purple-600');
-    expect(pill?.className).toContain('#7a4d9e');
+    expect(pill?.className).toContain('text-mf-wf-violet');
   });
 });

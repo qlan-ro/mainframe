@@ -113,7 +113,7 @@ export function WfField({ field, value, onChange }: WfFieldProps): React.ReactEl
         rows={3}
         className={cn(
           'flex w-full rounded-md border-[0.5px] border-input bg-card px-[11px] py-[8px]',
-          'text-body placeholder:text-muted-foreground resize-none leading-[1.5]',
+          'text-body placeholder:text-muted-foreground resize-none leading-normal',
           'focus-visible:outline-none focus-visible:ring-0',
           'transition-colors',
         )}

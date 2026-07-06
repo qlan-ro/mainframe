@@ -24,7 +24,7 @@ export function FirstRunState() {
         <FolderGit2 size={22} />
       </span>
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-heading text-xl font-semibold text-foreground">Welcome to Mainframe</h1>
+        <h1 className="text-title font-semibold text-foreground">Welcome to Mainframe</h1>
         <p className="text-body text-muted-foreground">
           Add a project folder to start orchestrating agents on your codebase.
         </p>

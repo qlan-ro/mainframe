@@ -88,7 +88,7 @@ export function AddRemoteBody({
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <h2 className="text-heading font-bold text-foreground leading-tight">{title}</h2>
-          <p className="text-caption text-muted-foreground leading-[1.4]">
+          <p className="text-caption text-muted-foreground leading-normal">
             Agents and code run on the server; this Mac stays a control surface.
           </p>
         </div>
