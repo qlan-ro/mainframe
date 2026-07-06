@@ -21,19 +21,26 @@ pnpm --filter @qlan-ro/mainframe-types build
 pnpm --filter @qlan-ro/mainframe-core build
 node packages/app-electron/scripts/bundle-daemon.mjs "${DIST_DIR}/lib/daemon.cjs"
 
-# 2. Copy better-sqlite3 native binary for target platform
-SQLITE_PKG="$(node -e "console.log(require('path').dirname(require.resolve('better-sqlite3/package.json')))")"
-PREBUILD_DIR="${SQLITE_PKG}/prebuilds/${OS}-${ARCH}"
-BUILD_DIR="${SQLITE_PKG}/build/Release"
+# 2. Collect the daemon's external runtime packages into a node_modules SIBLING of
+#    daemon.cjs. The daemon is esbuilt with these left external (better-sqlite3 +
+#    its native binary, the LSP servers, ripgrep), so each stays a runtime require()
+#    that Node resolves from node_modules next to daemon.cjs. Same collector backs
+#    the Tauri sidecar bundler. Copying the whole better-sqlite3 package brings its
+#    per-platform prebuild along (the CI runner installed it for this target).
+node scripts/collect-daemon-deps.mjs \
+  packages/core/package.json \
+  "${DIST_DIR}/lib/node_modules" \
+  better-sqlite3 typescript-language-server pyright @vscode/ripgrep
 
-if [ -d "$PREBUILD_DIR" ]; then
-  mkdir -p "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}"
-  cp -r "${PREBUILD_DIR}/." "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}/"
-elif [ -f "${BUILD_DIR}/better_sqlite3.node" ]; then
-  mkdir -p "${DIST_DIR}/lib/build/Release"
-  cp "${BUILD_DIR}/better_sqlite3.node" "${DIST_DIR}/lib/build/Release/"
-else
-  echo "No better-sqlite3 binary found at ${PREBUILD_DIR} or ${BUILD_DIR}" >&2
+SQLITE_DEST="${DIST_DIR}/lib/node_modules/better-sqlite3"
+if [ ! -f "${SQLITE_DEST}/package.json" ]; then
+  echo "better-sqlite3 was not collected into the bundle" >&2
+  exit 1
+fi
+# The JS package resolving is not enough — the daemon crashes at runtime without the
+# compiled native addon. `pnpm install` on this CI runner must have built/fetched it.
+if [ -z "$(find "$SQLITE_DEST" -name '*.node' -print -quit)" ]; then
+  echo "No better-sqlite3 native binary (*.node) in ${SQLITE_DEST}" >&2
   exit 1
 fi
 

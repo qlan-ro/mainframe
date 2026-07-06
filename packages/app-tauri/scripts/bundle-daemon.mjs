@@ -25,10 +25,10 @@
  */
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { collectDaemonDeps } from '../../../scripts/collect-daemon-deps.mjs';
 import { signMachOTree } from './lib/mach-o-sign.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -73,69 +73,18 @@ await build({
 
 console.log('[bundle-daemon] 3/4 collecting runtime deps → resources/daemon/node_modules …');
 // Each EXTERNAL stays a runtime require(), so it must exist in a node_modules
-// SIBLING of daemon.cjs. Seed from the externals and walk each package.json's
-// (optional) dependencies, deref-copying the real (pnpm-symlinked) package dirs
-// into one flat tree — the transitive deps of the LSP servers come along.
-const coreRequire = createRequire(join(repoRoot, 'packages/core/package.json'));
+// SIBLING of daemon.cjs. The shared collector seeds from the externals and walks
+// each package.json's (optional) dependencies, deref-copying the real
+// (pnpm-symlinked) package dirs into one flat tree — the transitive deps of the
+// LSP servers come along. Same logic backs the standalone tarball (build-standalone.sh).
+const copied = collectDaemonDeps({
+  requireBasePkgJson: join(repoRoot, 'packages/core/package.json'),
+  externals: EXTERNAL,
+  destNodeModules: join(daemonDir, 'node_modules'),
+  onWarn: (m) => console.warn(`[bundle-daemon]   ${m}`),
+});
 
-/** Resolve a package's root dir (the dir holding its package.json). */
-function pkgDirOf(name, requireFn) {
-  try {
-    return dirname(requireFn.resolve(`${name}/package.json`));
-  } catch {
-    // Package blocks the ./package.json subpath via exports — resolve an entry
-    // and walk up to the package.json whose "name" matches.
-    let dir = dirname(requireFn.resolve(name));
-    for (;;) {
-      const pj = join(dir, 'package.json');
-      if (existsSync(pj)) {
-        try {
-          if (JSON.parse(readFileSync(pj, 'utf8')).name === name) return dir;
-        } catch {
-          /* keep walking */
-        }
-      }
-      const parent = dirname(dir);
-      if (parent === dir) throw new Error(`cannot locate package root for ${name}`);
-      dir = parent;
-    }
-  }
-}
-
-/** Transitively gather a package + its (optional) deps into `found: name→dir`. */
-function collect(name, requireFn, found) {
-  if (found.has(name)) return;
-  let dir;
-  try {
-    dir = pkgDirOf(name, requireFn);
-  } catch {
-    console.warn(`[bundle-daemon]   skip unresolved dep: ${name}`);
-    return;
-  }
-  found.set(name, dir);
-  let pkg;
-  try {
-    pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  } catch {
-    return;
-  }
-  const next = createRequire(join(dir, 'package.json'));
-  const deps = { ...(pkg.dependencies ?? {}), ...(pkg.optionalDependencies ?? {}) };
-  for (const dep of Object.keys(deps)) collect(dep, next, found);
-}
-
-const found = new Map();
-for (const name of EXTERNAL.filter((e) => e !== '*.node')) collect(name, coreRequire, found);
-
-const destModules = join(daemonDir, 'node_modules');
-rmSync(destModules, { recursive: true, force: true });
-for (const [name, dir] of found) {
-  const dest = join(destModules, name); // scoped names (@vscode/ripgrep) nest correctly
-  mkdirSync(dirname(dest), { recursive: true });
-  cpSync(dir, dest, { recursive: true, dereference: true });
-}
-
-console.log(`[bundle-daemon] done → ${daemonDir} (${found.size} runtime packages)`);
+console.log(`[bundle-daemon] done → ${daemonDir} (${copied.length} runtime packages)`);
 
 console.log('[bundle-daemon] 4/4 codesigning nested Mach-O binaries (macOS release only) …');
 // Covers the daemon's own native addons (better-sqlite3, fsevents, node-pty,

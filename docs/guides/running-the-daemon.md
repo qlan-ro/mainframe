@@ -121,7 +121,7 @@ To reach the daemon from the mobile app or another machine, expose it with a Clo
 ## Troubleshooting
 
 - **`GLIBC_2.28 not found` / `libatomic.so.1: cannot open shared object file`** — see [System requirements](#system-requirements). Old OS or missing `libatomic`.
-- **`Cannot find module 'better-sqlite3'`** — the native module belongs in a `node_modules` next to the bundled daemon. If a release is missing it, install it beside the bundle: `cd ~/.mainframe/bin/lib && npm init -y && npm install better-sqlite3@^12`.
+- **`Cannot find module 'better-sqlite3'`** — releases now bundle a full `node_modules` next to the daemon, so a fresh install shouldn't hit this. If you're on an **older tarball** that predates the fix, either re-run the [install](#2-install-the-daemon) to pull a current release, or install the module beside the bundle as a stopgap: `cd ~/.mainframe/bin/lib && npm init -y && npm install better-sqlite3@^12`.
 - **`claude`/`codex` not found (only under systemd)** — the unit's `PATH` is missing the CLI directory. Add `~/.local/bin`, then `systemctl show mainframe-daemon -p Environment` to confirm.
 - **`--dangerously-skip-permissions cannot be used with root/sudo`** — you're running the daemon as root. Run as a non-root user (recommended), or set `IS_SANDBOX=1` only inside a genuinely contained environment.
 - **Pairing works locally but not remotely** — you need a tunnel; see [step 5](#5-remote-access).
