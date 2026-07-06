@@ -55,6 +55,7 @@ const newThreadClickSpy = vi.fn();
 // assertions see the SAME spy instance — a fresh vi.fn() per call would be
 // unobservable from the test.
 const switchToThreadSpy = vi.fn();
+const switchToNewThreadSpy = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
@@ -70,6 +71,7 @@ vi.mock('@assistant-ui/react', () => ({
       },
       getItemById: (_id: string) => ({ rename: vi.fn(), archive: vi.fn() }),
       switchToThread: switchToThreadSpy,
+      switchToNewThread: switchToNewThreadSpy,
     },
   }),
   // SessionSidebar now subscribes reactively via useAuiState((s) => s.threads.threadItems)
@@ -198,14 +200,21 @@ vi.mock('../SessionSortMenu', () => ({
 
 vi.mock('../ProjectFilterPillBar', () => ({
   ProjectFilterPillBar: ({
+    projects,
     filterProjectId: _fid,
-    onSelect: _onSelect,
+    onSelect,
   }: {
     projects: Project[];
     filterProjectId: string | null;
     attentionCounts: Record<string, number>;
     onSelect: (id: string | null) => void;
-  }) => <div data-testid="sessions-filter-pill-all" aria-pressed={_fid == null ? 'true' : 'false'} />,
+  }) => (
+    <div data-testid="sessions-filter-pill-all" aria-pressed={_fid == null ? 'true' : 'false'}>
+      {projects.map((p) => (
+        <button key={p.id} data-testid={`sessions-filter-pill-${p.id}`} type="button" onClick={() => onSelect(p.id)} />
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('../ArchiveWorktreeDialog', () => ({
@@ -298,6 +307,7 @@ beforeEach(() => {
   setSortModeSpy.mockReset();
   newThreadClickSpy.mockReset();
   switchToThreadSpy.mockReset();
+  switchToNewThreadSpy.mockReset();
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
   useDraftReturnTarget.setState({ returnThreadId: null });
@@ -385,6 +395,39 @@ describe('SessionSidebar — new-button resets a stale reused-slot draft', () =>
     expect(useNewThreadReady.getState().isReady('__LOCALID_reuse')).toBe(false);
     // The switch still fires — the reset composes BEFORE it, not instead of it.
     expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2d. Selecting a project pill activates that project's session, or opens a
+//     new-thread draft when the project is empty — so the chat pane never
+//     strands the previously-selected session from a different project.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — selecting a project pill reconciles the active thread', () => {
+  it('switches to the project session when the project has one', async () => {
+    __projects = [makeProject('p1', 'Alpha'), makeProject('p2', 'Beta')];
+    __threads = [makeThread('t1', { projectId: 'p1' })];
+    render(<SessionSidebar />);
+
+    await userEvent.click(screen.getByTestId('sessions-filter-pill-p1'));
+
+    expect(setFilterProjectIdSpy).toHaveBeenCalledWith('p1');
+    expect(switchToThreadSpy).toHaveBeenCalledWith('t1');
+    expect(switchToNewThreadSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens a new-thread draft when the selected project is empty', async () => {
+    __projects = [makeProject('p1', 'Alpha'), makeProject('p2', 'Beta')];
+    __threads = [makeThread('t1', { projectId: 'p1' })];
+    render(<SessionSidebar />);
+
+    // p2 has no sessions — must not leave p1's session active.
+    await userEvent.click(screen.getByTestId('sessions-filter-pill-p2'));
+
+    expect(setFilterProjectIdSpy).toHaveBeenCalledWith('p2');
+    expect(switchToNewThreadSpy).toHaveBeenCalledTimes(1);
+    expect(switchToThreadSpy).not.toHaveBeenCalled();
   });
 });
 

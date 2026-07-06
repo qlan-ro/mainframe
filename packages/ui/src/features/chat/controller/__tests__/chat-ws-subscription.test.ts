@@ -158,6 +158,7 @@ function makeHost(
     dispatchPermission: dispatchSpy,
     onSubscribeRefresh: subscribeRefreshSpy,
     hasUnreconciledPendings: () => false,
+    isReattach: () => false,
     isDisposed: () => false,
     ...overrides,
   };
@@ -402,6 +403,25 @@ describe('chat-ws-subscription reconnect', () => {
     // and re-seeding reconciles it.
     const fakeWs = makeFakeWs(true);
     const { host, subscribeRefreshSpy } = makeHost(fakeWs, { hasUnreconciledPendings: () => true });
+    const sub = new ChatWsSubscription(host);
+    activeSub = sub;
+
+    sub.attach();
+    fakeWs.pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
+    await flushMicrotasks();
+
+    expect(subscribeRefreshSpy).toHaveBeenCalledOnce();
+  });
+
+  it('calls onSubscribeRefresh after the initial ack when this is a reattach after dormancy', async () => {
+    // Switching away tears down the sub; a backgrounded chat receives nothing while
+    // dormant even though the daemon keeps persisting messages. The reattach ack must
+    // re-seed to catch up — with no pending and no reconnect, isReattach is the signal.
+    const fakeWs = makeFakeWs(true);
+    const { host, subscribeRefreshSpy } = makeHost(fakeWs, {
+      hasUnreconciledPendings: () => false,
+      isReattach: () => true,
+    });
     const sub = new ChatWsSubscription(host);
     activeSub = sub;
 

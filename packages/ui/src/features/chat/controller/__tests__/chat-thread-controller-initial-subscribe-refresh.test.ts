@@ -116,6 +116,45 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
+  it('refreshes history when a warm controller re-attaches, even with no pending send', async () => {
+    // First activation: the chat already holds one message; the mount load() seeds it.
+    vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-1', 'first')]);
+
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+
+    const stop = ctrl.subscribeLive();
+    await ctrl.load();
+    await flushMicrotasks();
+
+    // Initial attach ack: no reconnect, no pending → the first attach must NOT
+    // force a reseed (the streaming-clobber optimization is preserved).
+    pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
+    await flushMicrotasks();
+    expect(ctrl.getState().messageOrder).toEqual(['srv-1']);
+
+    // Switch away — the live sub is torn down (dormancy).
+    stop();
+
+    // While dormant, the daemon appended a message. It is persisted (REST now
+    // returns it) but was never delivered live — the controller had no sub.
+    vi.mocked(getChatMessages).mockResolvedValue([
+      userDisplayMsg('srv-1', 'first'),
+      userDisplayMsg('srv-2', 'arrived while backgrounded'),
+    ]);
+
+    // Switch back — a fresh sub attaches. The user was only reading, so there is
+    // NO unreconciled pending; only the reattach signal can trigger the catch-up.
+    ctrl.subscribeLive();
+    pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
+    await flushMicrotasks();
+
+    // The reattach ack must re-seed history so the missed message appears.
+    expect(ctrl.getState().messageOrder).toEqual(['srv-1', 'srv-2']);
+  });
+});
+
 describe('initial subscribe:ack — recovers a missed handoff event', () => {
   it('refreshes history on the first ack so the optimistic pending is reconciled', async () => {
     // The just-created chat is empty when the first load + send happen.
