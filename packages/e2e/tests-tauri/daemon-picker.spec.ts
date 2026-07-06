@@ -61,6 +61,17 @@
  * (`use-daemon-registry.ts`'s `switchTo` now reads a live module-level
  * snapshot; `onDone`/`onClose` are separate callbacks) — pairing now switches
  * on the first click and briefly shows "Paired".
+ *
+ * FIXED BUGS (see the "pairing auto-switches…" and "manage menu
+ * rename/remove…" tests below): (1) the auto-switch above used to remount
+ * `<AppShell key={target.id}>` synchronously inside `handleConfirm`,
+ * destroying the still-open `AddRemoteDialog` before it reached the "done"
+ * phase — `AddRemoteDialog.handleConfirm` now defers `registry.switchTo()`
+ * until after the dialog's own deferred `onClose`. (2) the picker Popover
+ * (`DaemonFooterStatus.tsx`) used to close itself whenever the nested
+ * rename/remove `DaemonSmallDialog` dismissed (Radix modal-Dialog-vs-Popover
+ * interaction) — `DaemonFooterStatus` now suppresses the Popover's
+ * `onOpenChange(false)` while a dialog is open.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -246,38 +257,16 @@ test.describe('§daemon-picker', () => {
     await closePicker(page);
   });
 
-  // TODO(bug): re-triaged live. The file's original narrative below (kept for
-  // history) was an incomplete diagnosis — `switchTo` DOES now fire (the
-  // remotesSnapshot fix is real and correct), but firing it exposes a SEPARATE,
-  // more fundamental bug: `App.tsx` mounts `<AppShell key={target.id} .../>`, so
-  // the instant `registry.switchTo()` calls `setActiveDaemon(t)`, React
-  // REMOUNTS the entire daemon-scoped subtree — which is where DaemonFooterStatus
-  // / DaemonPicker / AddRemoteDialog themselves live. That destroys the OPEN
-  // AddRemoteDialog (and its `daemon-add-confirm` button) mid-`handleConfirm()`,
-  // BEFORE the handler ever reaches `setStep1Phase('done')` — so the "Paired"
-  // confirmation this test (and the product-bug-fix campaign's own commit
-  // message) describes can never actually render; the button just vanishes.
-  // Live-instrumented with temporary console/request logging (since reverted,
-  // not committed): `getByTestId('daemon-add-confirm')` hangs waiting for an
-  // element that never reappears (proving the dialog was torn down, not just
-  // slow), while the freshly-remounted shell spirals into a permanent
-  // reconnect storm against the synthetic remote (which only serves `/health`
-  // and `/api/auth/confirm` — every other endpoint the remounted AppShell
-  // fetches on boot, plus the WS connection itself, hits real
-  // `ERR_CONNECTION_REFUSED`, repeatedly, since the fixture's `DaemonTarget`
-  // baseUrl is normalized to `https://` (`buildRemoteTarget` in
-  // use-daemon-registry.ts) while only the `http://` pairing endpoints were
-  // mocked — matching real remote-pairing traffic, not a mocking gap). This
-  // cascades into the 3 tests below it (they depend on this test's cleanup —
-  // switch back to local, remove its second remote — which never runs because
-  // the test throws first), so all 4 are skipped together. Out of scope to fix
-  // here (packages/ui: either the dialog needs to survive the remount, or the
-  // remount needs to be deferred until the dialog has closed itself).
-  const pairingAutoSwitchDestroysDialog =
-    'TODO(bug): registry.switchTo -> AppShell key={target.id} remount destroys the open AddRemoteDialog mid-handleConfirm, before it can ever reach the "done"/"Paired" phase — see the root-cause comment above this test for live evidence';
-
+  // FIXED: `registry.switchTo()` used to fire synchronously inside
+  // `handleConfirm`, before the "done"/"Paired" phase rendered. Since
+  // `App.tsx` mounts `<AppShell key={target.id}>`, that switch immediately
+  // remounted the daemon-scoped subtree — which is where this very dialog
+  // lives — destroying it mid-`handleConfirm()` before the "Paired"
+  // confirmation could ever render. `AddRemoteDialog.handleConfirm` now defers
+  // `registry.switchTo()` until the dialog's own 800ms deferred `onClose`
+  // fires, so the remount happens only after the dialog has shown "Paired"
+  // and closed itself.
   test('pairing auto-switches the active daemon and shows a "Paired" confirmation', async () => {
-    test.skip(true, pairingAutoSwitchDestroysDialog);
     const { page } = app;
 
     // With the fix, "completing pairing adds a remote daemon row" above now ALSO
@@ -392,26 +381,17 @@ test.describe('§daemon-picker', () => {
   // every `MenuRow` inside `DaemonRowManage`'s popover now calls
   // `e.stopPropagation()` before invoking its handler.
   //
-  // TODO(bug): re-triaged live — the stopPropagation fix above is real and
-  // correct (no more accidental switch/remount), but a SEPARATE bug remains:
-  // the outer `daemon-picker` Popover (DaemonFooterStatus.tsx) closes itself
-  // once the nested `DaemonSmallDialog` (a modal Radix Dialog, rename/remove
-  // confirm) is dismissed — confirmed live by instrumenting
-  // `getByTestId('daemon-picker').count()` right after the rename dialog
-  // closes: it reads `0`. `DaemonPicker`'s own `onRename`/`onRemove` callbacks
-  // never call `close()` (only `handleSwitch`/`handleAdd` do — see
-  // DaemonPicker.tsx), so this isn't the picker's own logic; it's Radix's
-  // default modal-Dialog-vs-Popover interaction (the Dialog's overlay/outside
-  // interaction closes the ancestor Popover) — needs `modal={false}` or
-  // equivalent tuning on one of the two. This defeats the very point of the
-  // stopPropagation fix above (seeing the updated list without the picker
-  // collapsing). Both "rename" and "remove" hit the identical symptom. Out of
-  // scope to fix here (packages/ui).
-  const managePopoverClosesOnDialog =
-    'TODO(bug): the daemon-picker Popover closes itself once the nested rename/remove DaemonSmallDialog dismisses (confirmed live: picker count is 0 right after) — Radix modal-Dialog-vs-Popover interaction, needs tuning in DaemonFooterStatus.tsx/DaemonSmallDialog.tsx';
-
+  // FIXED: a SEPARATE bug used to remain even after the stopPropagation fix
+  // above — the outer `daemon-picker` Popover (DaemonFooterStatus.tsx) closed
+  // itself once the nested `DaemonSmallDialog` (a modal Radix Dialog,
+  // rename/remove confirm) dismissed. Root cause was Radix's default
+  // modal-Dialog-vs-Popover interaction: dismissing the inner modal Dialog
+  // fires a dismiss-time interaction that the outer Popover's dismissable
+  // layer treats as an outside interaction. Fixed in `DaemonFooterStatus.tsx`
+  // by suppressing the picker Popover's `onOpenChange(false)` while a
+  // rename/remove/add dialog is open; explicit Escape/outside-click still
+  // closes the picker once no dialog is active.
   test('manage menu rename updates the remote row label', async () => {
-    test.skip(true, managePopoverClosesOnDialog);
     const { page } = app;
     await openPicker(page);
     await manageButton(page).click();
@@ -432,7 +412,6 @@ test.describe('§daemon-picker', () => {
   });
 
   test('manage menu remove confirms and removes the remote row', async () => {
-    test.skip(true, managePopoverClosesOnDialog);
     const { page } = app;
     await openPicker(page);
     await manageButton(page).click();
