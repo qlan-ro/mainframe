@@ -10,7 +10,14 @@
     "@qlan-ro/mainframe-ui": "1.0.0"
   },
   "changesets": [
+    "fix-archive-active-fallback",
+    "fix-dormant-chat-reseed",
+    "fix-prepare-release-title",
+    "fix-session-draft-and-md-copy",
+    "fix-standalone-daemon-node-modules",
     "mainframe-2-0",
+    "mainframe-cli-and-update",
+    "release-artifact-naming",
     "release-prerelease-mode"
   ]
 }
