@@ -7,9 +7,12 @@ on:
 
 jobs:
   release:
+    # In changesets pre mode the version PR title gains the pre-tag suffix
+    # ("chore: version packages (rc)"), so match on prefix — this covers the
+    # normal title, every pre-mode tag, and the stable title after `pre exit`.
     if: >-
       github.event.pull_request.merged == true &&
-      github.event.pull_request.title == 'chore: version packages'
+      startsWith(github.event.pull_request.title, 'chore: version packages')
     runs-on: ubuntu-latest
     permissions:
       contents: write
