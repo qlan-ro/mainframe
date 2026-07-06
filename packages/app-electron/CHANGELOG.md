@@ -1,5 +1,13 @@
 # @qlan-ro/mainframe-app-electron
 
+## 2.0.0-rc.1
+
+### Patch Changes
+
+- Updated dependencies [[`9ca92ef`](https://github.com/qlan-ro/mainframe/commit/9ca92ef6fa1823f3466a9402c05152c60541b10f), [`9ca92ef`](https://github.com/qlan-ro/mainframe/commit/9ca92ef6fa1823f3466a9402c05152c60541b10f)]:
+  - @qlan-ro/mainframe-core@2.0.0-rc.1
+  - @qlan-ro/mainframe-types@2.0.0-rc.1
+
 ## 2.0.0-rc.0
 
 ### Major Changes
