@@ -1,0 +1,73 @@
+[package]
+name = "app-tauri"
+version = "2.0.0"
+description = "Mainframe Tauri shell — window lifecycle, sidecar supervision, and IPC bridge"
+authors = ["Mainframe Contributors"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "app_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "app-tauri"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api", "unstable"] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "chrono"] }
+tracing-appender = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dirs = "5"
+which = "6"
+portable-pty = "0.9"
+ureq = { version = "2", default-features = false, features = ["json"] }
+keyring = "3"
+
+# Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
+# DOM inspection, IPC). Optional + behind the non-default `mcp-bridge` feature
+# (enabled by `tauri:dev`), so it is excluded from the release binary entirely.
+tauri-plugin-mcp-bridge = { version = "0.11", optional = true }
+sysinfo = { version = "0.31", default-features = false, features = ["system"] }
+
+[features]
+# Dev-only webview automation (Tauri MCP server). NOT a default feature — enabled
+# by `tauri:dev` (--features mcp-bridge) and omitted by `tauri build`, so the
+# plugin's code is absent from release builds, not merely left unregistered.
+mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
+
+# macOS-only deps for the preview child-webview native snapshot (Task 5).
+# Pin to the same major versions as tauri 2.11.2 itself to avoid duplicate
+# crate copies and type-incompatibility when casting the WKWebView pointer.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["std", "NSError"] }
+objc2-app-kit = { version = "0.3", features = ["std", "NSImage", "NSBitmapImageRep", "NSGraphicsContext"] }
+objc2-web-kit = { version = "0.3", features = ["std", "WKWebView", "WKSnapshotConfiguration", "block2"] }
+block2 = "0.6"
+objc2-core-graphics = { version = "0.3", features = ["std", "CGGeometry", "CGEventTypes"] }
+png = "0.17"
+
+[dev-dependencies]
+filetime = "0.2"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

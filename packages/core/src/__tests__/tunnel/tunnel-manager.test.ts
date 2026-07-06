@@ -1,5 +1,35 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TunnelManager } from '../../tunnel/tunnel-manager.js';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+
+const spawnMock = vi.fn();
+vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+
+// resolve4 rejects forever, simulating DNS that never propagates within the test.
+const resolve4Mock = vi.fn().mockRejectedValue(new Error('ENOTFOUND'));
+vi.mock('node:dns/promises', () => ({
+  Resolver: vi.fn(function MockResolver(this: { setServers: () => void; resolve4: typeof resolve4Mock }) {
+    this.setServers = vi.fn();
+    this.resolve4 = resolve4Mock;
+  }),
+}));
+
+// Imported after the mocks above so TunnelManager picks up the mocked deps.
+const { TunnelManager } = await import('../../tunnel/tunnel-manager.js');
+
+type MockChild = NodeJS.EventEmitter & {
+  stdout: PassThrough;
+  stderr: PassThrough;
+  kill: ReturnType<typeof vi.fn>;
+};
+
+function makeMockChild(): MockChild {
+  const child = new EventEmitter() as MockChild;
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = vi.fn();
+  return child;
+}
 
 describe('TunnelManager.parseUrl', () => {
   it('extracts a trycloudflare URL from a cloudflared log line', () => {
@@ -232,5 +262,46 @@ describe('TunnelManager broadcast callbacks', () => {
   it('works without a broadcast callback (no-op constructor)', () => {
     const manager = new TunnelManager();
     expect(() => manager.stop('nonexistent')).not.toThrow();
+  });
+});
+
+describe('TunnelManager.start timeout interaction with DNS wait', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+    resolve4Mock.mockReset().mockRejectedValue(new Error('ENOTFOUND'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('resolves with the URL instead of killing an already-connected tunnel when DNS propagation outlasts the 45s start timeout', async () => {
+    vi.useFakeTimers();
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+    const broadcast = vi.fn();
+    const manager = new TunnelManager(broadcast);
+
+    const startPromise = manager.start(3000, 'daemon');
+
+    // cloudflared connects quickly (well inside the 45s start budget)
+    child.stdout.emit('data', Buffer.from('https://abc-def.trycloudflare.com\n'));
+    child.stdout.emit('data', Buffer.from('Registered tunnel connection\n'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Past the 45s start timeout: the tunnel is connected, so it must NOT be killed
+    // or rejected — the DNS wait (which has its own 45s timeout) still owns the outcome.
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(child.kill).not.toHaveBeenCalled();
+
+    // Past the DNS wait's own timeout: the grace path resolves with the URL anyway.
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    const url = await startPromise;
+    expect(url).toBe('https://abc-def.trycloudflare.com');
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'tunnel:status', state: 'dns_verified', dnsVerified: false }),
+    );
   });
 });

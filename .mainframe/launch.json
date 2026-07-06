@@ -22,10 +22,10 @@
     {
       "name": "Preview",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev:web"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-ui", "run", "dev"],
       "port": "${VITE_PORT:-5174}",
       "url": null,
-      "preview": true,
+      "preview": false,
       "env": {
         "VITE_PORT": "${VITE_PORT:-5174}",
         "VITE_DAEMON_HTTP_PORT": "${DAEMON_PORT:-31416}",
@@ -34,17 +34,33 @@
       }
     },
     {
-      "name": "Electron App",
+      "name": "Dev Tauri",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev"],
-      "port": null,
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-app-tauri", "run", "tauri:dev"],
+      "port": "${VITE_PORT:-5174}",
       "url": null,
       "preview": false,
       "env": {
         "VITE_PORT": "${VITE_PORT:-5174}",
-        "VITE_DAEMON_HTTP_PORT": "${DAEMON_PORT:-31416}",
-        "VITE_DAEMON_WS_PORT": "${DAEMON_PORT:-31416}",
+        "DAEMON_PORT": "${DAEMON_PORT:-31416}",
+        "MAINFRAME_EXTERNAL_DAEMON": "1",
         "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
+      }
+    },
+    {
+      "name": "Dev Electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:electron"],
+      "port": "${VITE_PORT:-5174}",
+      "url": null,
+      "preview": false,
+      "env": {
+        "VITE_PORT": "${VITE_PORT:-5174}",
+        "DAEMON_PORT": "31415",
+        "VITE_DAEMON_HTTP_PORT": "31415",
+        "VITE_DAEMON_WS_PORT": "31415",
+        "MAINFRAME_EXTERNAL_DAEMON": "1",
+        "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe}"
       }
     },
     {

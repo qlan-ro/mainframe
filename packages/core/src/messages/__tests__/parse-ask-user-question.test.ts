@@ -118,6 +118,47 @@ describe('parseAskUserQuestionResult', () => {
     expect(parseAskUserQuestionResult(`${PREFIX}garbage no quotes${SUFFIX}`)).toEqual([]);
   });
 
+  describe('new CLI wording (Your questions have been answered: …)', () => {
+    const NEW_PREFIX = 'Your questions have been answered: ';
+    const NEW_SUFFIX = '. You can now continue with these answers in mind.';
+
+    it('single question — suffix does not leak into the answer', () => {
+      const s = `${NEW_PREFIX}"What size pizza?"="Small"${NEW_SUFFIX}`;
+      expect(parseAskUserQuestionResult(s, [{ question: 'What size pizza?' }])).toEqual([
+        { question: 'What size pizza?', answer: ['Small'] },
+      ]);
+    });
+
+    it('multiple questions — each answer is isolated', () => {
+      const s = `${NEW_PREFIX}"Q1"="A1", "Q2"="A2"${NEW_SUFFIX}`;
+      expect(
+        parseAskUserQuestionResult(s, [
+          { question: 'Q1', multiSelect: false },
+          { question: 'Q2', multiSelect: false },
+        ]),
+      ).toEqual([
+        { question: 'Q1', answer: ['A1'] },
+        { question: 'Q2', answer: ['A2'] },
+      ]);
+    });
+
+    it('no questions arg (legacy/regex path) — suffix is still stripped', () => {
+      const s = `${NEW_PREFIX}"What size pizza?"="Small"${NEW_SUFFIX}`;
+      expect(parseAskUserQuestionResult(s)).toEqual([{ question: 'What size pizza?', answer: ['Small'] }]);
+    });
+
+    it('old wording still parses correctly (regression guard)', () => {
+      const s = `User has answered your questions: "What size pizza?"="Small". You can now continue with the user's answers in mind.`;
+      expect(parseAskUserQuestionResult(s, [{ question: 'What size pizza?' }])).toEqual([
+        { question: 'What size pizza?', answer: ['Small'] },
+      ]);
+    });
+
+    it('unrecognised prefix returns []', () => {
+      expect(parseAskUserQuestionResult('User skipped the question')).toEqual([]);
+    });
+  });
+
   it('parser output for the canonical CLI string equals the shared fixture', () => {
     const s =
       'User has answered your questions: "Which DB?"="Postgres", "Pick"="Red,Blue" user notes: dense' +

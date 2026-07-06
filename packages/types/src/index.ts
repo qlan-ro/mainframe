@@ -11,11 +11,18 @@ export * from './settings.js';
 export * from './command.js';
 export * from './launch.js';
 export * from './search.js';
+export * from './task-progress.js';
 export * from './lsp.js';
 export * from './git.js';
+export * from './suggestion.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
+export * from './workflow.js';
 export * from './api.js';
+export * from './host/host-contract.js';
+export * from './host/host-bridge.js';
+export * from './host/external-schemes.js';
+export * from './host/daemon-target.js';
 export type {
   PluginCapability,
   PluginManifest,

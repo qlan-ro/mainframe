@@ -7,6 +7,11 @@ import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:external-sessions');
 
+const listQuerySchema = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(0).max(200).default(50),
+});
+
 const importBodySchema = z.object({
   sessionId: z.string().regex(/^[a-zA-Z0-9-]+$/),
   adapterId: z.string().min(1),
@@ -23,10 +28,17 @@ export function externalSessionRoutes(ctx: RouteContext): Router {
     '/api/projects/:projectId/external-sessions',
     asyncHandler(async (req: Request, res: Response) => {
       const projectId = param(req, 'projectId');
+      const parsed = listQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        logger.warn({ projectId, issues: parsed.error.issues }, 'invalid external-sessions query');
+        res.status(400).json({ success: false, error: 'Invalid query params' });
+        return;
+      }
+      const { offset, limit } = parsed.data;
       const service = ctx.chats.getExternalSessionService();
       service.startAutoScan(projectId);
-      const sessions = await service.scan(projectId);
-      res.json({ success: true, data: sessions });
+      const page = await service.scanPage(projectId, offset, limit);
+      res.json({ success: true, data: page });
     }),
   );
 

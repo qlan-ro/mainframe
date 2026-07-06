@@ -1,0 +1,42 @@
+{"dir":"in","method":"sendMessage","args":["Stress turn 1"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-stress-matrix-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Reply one: first stress turn complete."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01,"usage":{"input_tokens":10,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":100}
+{"dir":"in","method":"sendMessage","args":["Stress turn 2"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-stress-matrix-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Reply two: long chat still consistent."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01,"usage":{"input_tokens":10,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":100}
+{"dir":"in","method":"sendMessage","args":["Stress turn 3"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-stress-matrix-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Reply three: base transcript established."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01,"usage":{"input_tokens":10,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":100}
+{"dir":"in","method":"sendMessage","args":["Delegate the greeting search to a subagent"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-stress-matrix-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Delegating to a subagent now."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":50}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_stress_task_1","name":"Task","input":{"subagent_type":"general-purpose","model":"claude-haiku-4-5-20251001","description":"Find the greeting export","prompt":"Search the project for where `greeting` is exported."},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":90}
+{"dir":"out","method":"onPermission","args":[{"requestId":"stress-perm-1","toolName":"Bash","toolUseId":"toolu_stress_task_1_bash","input":{"command":"grep -rn \"export const greeting\" .","description":"Search for the greeting export"},"suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}],"decisionReason":"Command requires approval"}],"delayMs":130}
+{"dir":"in","method":"respondToPermission","args":[{"requestId":"stress-perm-1","toolUseId":"toolu_stress_task_1_bash","toolName":"Bash","behavior":"allow","updatedInput":{"command":"grep -rn \"export const greeting\" .","description":"Search for the greeting export"}}],"delayMs":0}
+{"dir":"out","method":"onSubagentChild","args":["toolu_stress_task_1",[{"type":"tool_use","id":"toolu_stress_task_1_bash","name":"Bash","input":{"command":"grep -rn \"export const greeting\" .","description":"Search for the greeting export"},"parentToolUseId":"toolu_stress_task_1"},{"type":"tool_result","toolUseId":"toolu_stress_task_1_bash","content":"./index.ts:1:export const greeting = \"hello\";","isError":false,"parentToolUseId":"toolu_stress_task_1"},{"type":"text","text":"Found it — `greeting` is exported from `index.ts` line 1.","parentToolUseId":"toolu_stress_task_1"}]],"delayMs":60}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_stress_task_1","content":"Found it — `greeting` is exported from `index.ts` line 1.","isError":false}]],"delayMs":100}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"SUBAGENT-DONE: greeting is exported from index.ts line 1."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":140}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.02,"usage":{"input_tokens":20,"output_tokens":16},"subtype":"success","is_error":false}],"delayMs":180}
+{"dir":"in","method":"sendMessage","args":["Stream a long twelve-part answer"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-stress-matrix-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 1 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":140}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 2 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":260}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 3 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":380}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 4 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":500}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 5 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":620}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 6 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":740}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 7 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":860}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 8 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":980}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 9 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":1100}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 10 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":1220}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 11 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":1340}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 12 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":1460}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"STREAM-COMPLETE: all twelve chunks delivered."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":1580}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.03,"usage":{"input_tokens":30,"output_tokens":24},"subtype":"success","is_error":false}],"delayMs":1620}
+{"dir":"in","method":"sendMessage","args":["Dedup probe message"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-stress-matrix-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"DEDUP-ACK: received exactly one probe."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01,"usage":{"input_tokens":10,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":100}

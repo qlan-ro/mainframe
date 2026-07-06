@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Capabilities for the main Mainframe window — least-privilege.",
+  "platforms": ["macOS", "windows", "linux"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "opener:allow-open-url",
+    "notification:allow-notify",
+    "notification:allow-is-permission-granted",
+    "updater:default",
+    "core:webview:allow-set-webview-zoom"
+  ]
+}

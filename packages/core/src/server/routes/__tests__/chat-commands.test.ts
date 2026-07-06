@@ -11,6 +11,7 @@ function ctxWith(over: Partial<RouteContext['chats']> = {}): RouteContext {
       getChat: vi.fn().mockReturnValue({ id: 'c1', projectId: 'p1', title: 'T2' }),
       interruptChat: vi.fn().mockResolvedValue(undefined),
       resumeChat: vi.fn().mockResolvedValue(undefined),
+      trustWorkspace: vi.fn().mockResolvedValue(undefined),
       editQueuedMessage: vi.fn().mockResolvedValue(undefined),
       cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
       ...over,
@@ -131,6 +132,30 @@ describe('chatCommandRoutes', () => {
     );
     expect(ctx.chats.resumeChat).toHaveBeenCalledWith('c1');
     expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  // POST /api/chats/:id/trust-workspace
+  it('POST /api/chats/:id/trust-workspace → okEmpty', async () => {
+    const ctx = ctxWith();
+    const res = mockRes();
+    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/trust-workspace')(
+      { params: { id: 'c1' }, body: {} },
+      res,
+      vi.fn(),
+    );
+    expect(ctx.chats.trustWorkspace).toHaveBeenCalledWith('c1');
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('POST /api/chats/:id/trust-workspace returns 404 for unknown chat', async () => {
+    const ctx = ctxWith({ getChat: vi.fn().mockReturnValue(null) });
+    const res = mockRes();
+    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/trust-workspace')(
+      { params: { id: 'nope' }, body: {} },
+      res,
+      vi.fn(),
+    );
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 
   // PATCH /api/chats/:id/queue/:messageId

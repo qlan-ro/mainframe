@@ -1,0 +1,137 @@
+import type { RefObject } from 'react';
+import { Play, Loader2 } from 'lucide-react';
+import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
+
+interface PreviewBodyStateProps {
+  status: LaunchProcessStatus | null;
+  configName?: string;
+  port?: number | null;
+  device: 'desktop' | 'mobile';
+  inspectActive: boolean;
+  anchorRef: RefObject<HTMLDivElement | null>;
+  onStart: () => void;
+  /** Remote-daemon preview: status is 'running' but the tunnel URL hasn't arrived yet. */
+  tunnelPending?: boolean;
+  /** Remote-daemon preview: the Cloudflare tunnel errored out or timed out. Wins over `running`. */
+  tunnelFailed?: boolean;
+  tunnelError?: string | null;
+}
+
+export function PreviewBodyState({
+  status,
+  configName,
+  port,
+  device,
+  inspectActive,
+  anchorRef,
+  onStart,
+  tunnelPending,
+  tunnelFailed,
+  tunnelError,
+}: PreviewBodyStateProps) {
+  // Checked before `tunnelPending` — `usePreviewLifecycle` reports pending
+  // whenever there's no resolved URL yet, which is also true once the tunnel
+  // has failed. Failure is the more terminal state and wins. Also wins over
+  // `running` — status IS 'running' while the tunnel is down, but the
+  // webview area has nothing to mount without a resolved URL.
+  if (tunnelFailed) {
+    return (
+      <div data-testid="preview-body-tunnel-failed" className="absolute inset-0 grid place-items-center bg-card">
+        <div className="flex max-w-[80%] flex-col items-center gap-2.5 text-center">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-destructive" />
+            <span className="text-body text-muted-foreground">Preview tunnel unavailable</span>
+          </div>
+          {tunnelError && <span className="line-clamp-2 font-mono text-micro text-mf-text-4">{tunnelError}</span>}
+          <span className="text-micro text-mf-text-4">Process logs are in the console below</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (tunnelPending) {
+    return (
+      <div data-testid="preview-tunnel-pending" className="absolute inset-0 grid place-items-center bg-card">
+        <div className="flex items-center gap-[8px]">
+          <Loader2 size={12} className="animate-spin text-mf-text-3" />
+          <span className="text-label text-mf-text-3">Starting tunnel…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === null || status === 'stopped') {
+    return (
+      <div data-testid="preview-body-stopped" className="absolute inset-0 grid place-items-center bg-card">
+        <button
+          type="button"
+          data-testid="preview-body-cta"
+          onClick={onStart}
+          className="group flex flex-col items-center gap-2.5 px-[26px] py-[20px] rounded-xl border-none bg-transparent cursor-pointer hover:bg-accent transition-colors"
+        >
+          <div className="w-10 h-10 rounded-full border border-border flex items-center justify-center transition-[border-color] duration-[120ms] group-hover:border-mf-success">
+            <Play size={15} className="fill-current text-mf-success" />
+          </div>
+          <span className="text-label text-muted-foreground font-medium tracking-tight">
+            Run {configName || 'server'}
+          </span>
+          <span className="font-mono text-micro text-mf-text-4">launches localhost:{port ?? '…'}</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'starting') {
+    return (
+      <div data-testid="preview-body-starting" className="absolute inset-0 grid place-items-center bg-card">
+        <div className="flex items-center gap-[8px]">
+          <Loader2 size={12} className="animate-spin text-mf-text-3" />
+          <span className="text-label text-mf-text-3">Waiting for localhost:{port ?? '…'}…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'running') {
+    const inspectFrame = inspectActive ? 'outline outline-[2px] outline-primary -outline-offset-2' : '';
+    const inspectBadge = inspectActive ? (
+      <div
+        data-testid="preview-inspect-active-indicator"
+        className="absolute top-[8px] left-[8px] z-10 rounded-[6px] bg-primary px-[7px] py-[2px] font-mono text-micro font-bold text-white"
+      >
+        CLICK AN ELEMENT
+      </div>
+    ) : null;
+    return (
+      <div data-testid="preview-body-running" className="absolute inset-0">
+        {device === 'desktop' ? (
+          <div
+            className={`absolute inset-0 overflow-hidden rounded-md [border:0.5px_solid_var(--border)] ${inspectFrame}`}
+          >
+            <div ref={anchorRef} className="absolute inset-0" />
+            {inspectBadge}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div
+              className={`relative w-[230px] h-[420px] overflow-hidden rounded-[22px] [border:0.5px_solid_var(--border)] [box-shadow:var(--mf-shadow-pop)] ${inspectFrame}`}
+            >
+              <div ref={anchorRef} className="w-full h-full" />
+              {inspectBadge}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // status === 'failed'
+  return (
+    <div data-testid="preview-body-failed" className="absolute inset-0 grid place-items-center bg-card">
+      <div className="flex items-center">
+        <span className="w-2 h-2 rounded-full bg-destructive mr-2" />
+        <span className="text-body text-muted-foreground">Failed to start</span>
+      </div>
+    </div>
+  );
+}

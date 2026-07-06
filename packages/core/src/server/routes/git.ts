@@ -46,6 +46,23 @@ async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): 
   }
 }
 
+/** GET /api/projects/:id/git/working-stat?chatId=X */
+async function handleWorkingStat(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
+  if (!basePath) {
+    fail(res, 404, 'Project not found');
+    return;
+  }
+
+  try {
+    const svc = GitService.forProject(basePath);
+    ok(res, await svc.workingStat());
+  } catch (err) {
+    logger.warn({ err, basePath }, 'Failed to compute working stat');
+    fail(res, 500, (err as Error).message ?? 'Unknown error');
+  }
+}
+
 /** GET /api/projects/:id/git/branch?chatId=X */
 async function handleGitBranch(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
@@ -158,6 +175,10 @@ export function gitRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/projects/:id/git/status',
     asyncHandler((req, res) => handleGitStatus(ctx, req, res)),
+  );
+  router.get(
+    '/api/projects/:id/git/working-stat',
+    asyncHandler((req, res) => handleWorkingStat(ctx, req, res)),
   );
   router.get(
     '/api/projects/:id/git/branch',

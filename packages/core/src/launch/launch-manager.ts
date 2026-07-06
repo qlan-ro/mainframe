@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
+import { LaunchProcessState, type LaunchOutputEntry } from './launch-process-state.js';
 
 const log = createChildLogger('launch');
 
@@ -65,7 +66,17 @@ function cleanEnv(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v == null) continue;
+    if (k === 'MAINFRAME_ORIG_PATH') continue;
     if (isAllowedEnvVar(k)) result[k] = v;
+  }
+  // The standalone launcher prepends its bundled-node bin dir to PATH so the
+  // daemon itself can find its bundled Node/cloudflared. That prefix must never
+  // reach user launch processes, or they resolve `node`/`npm` to Mainframe's
+  // internal single-file Node (which ships without npm) instead of the user's
+  // real toolchain. MAINFRAME_ORIG_PATH carries the pristine, pre-prefix PATH.
+  const origPath = process.env.MAINFRAME_ORIG_PATH;
+  if (origPath) {
+    result.PATH = origPath;
   }
   return result;
 }
@@ -77,6 +88,11 @@ interface ManagedProcess {
 
 export class LaunchManager {
   private processes = new Map<string, ManagedProcess>();
+  // Durable status/output tracking that outlives a `processes` entry being
+  // deleted on exit — see LaunchProcessState's docstring for the races this
+  // closes (a terminal status masked by the delete; a fast subprocess's
+  // output missed by a late-attaching console pane).
+  private state = new LaunchProcessState();
 
   constructor(
     private projectId: string,
@@ -91,6 +107,7 @@ export class LaunchManager {
       return;
     }
 
+    this.state.reset(config.name);
     this.emit({
       type: 'launch.status',
       projectId: this.projectId,
@@ -124,18 +141,21 @@ export class LaunchManager {
     const MAX_STDERR_LINES = 20;
 
     child.stdout?.on('data', (chunk: Buffer) => {
+      const data = chunk.toString('utf-8');
+      this.state.bufferOutput(config.name, 'stdout', data);
       this.emit({
         type: 'launch.output',
         projectId: this.projectId,
         effectivePath: this.projectPath,
         name: config.name,
-        data: chunk.toString('utf-8'),
+        data,
         stream: 'stdout',
       });
     });
 
     child.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf-8');
+      this.state.bufferOutput(config.name, 'stderr', text);
       for (const line of text.split('\n')) {
         if (line.trim()) {
           stderrTail.push(line);
@@ -160,6 +180,7 @@ export class LaunchManager {
       }
       if (managed.status !== 'stopped') {
         managed.status = code === 0 ? 'stopped' : 'failed';
+        this.state.setStatus(config.name, managed.status);
         this.emit({
           type: 'launch.status',
           projectId: this.projectId,
@@ -202,6 +223,7 @@ export class LaunchManager {
           'process error',
         );
         managed.status = 'failed';
+        this.state.setStatus(config.name, 'failed');
         this.processes.delete(config.name);
         this.emit({
           type: 'launch.status',
@@ -235,6 +257,7 @@ export class LaunchManager {
 
     if (managed.status === 'starting') {
       managed.status = 'running';
+      this.state.setStatus(config.name, 'running');
       this.emit({
         type: 'launch.status',
         projectId: this.projectId,
@@ -276,6 +299,7 @@ export class LaunchManager {
     const managed = this.processes.get(name);
     if (!managed) return;
     managed.status = 'stopped';
+    this.state.setStatus(name, 'stopped');
     this.emit({
       type: 'launch.status',
       projectId: this.projectId,
@@ -330,15 +354,16 @@ export class LaunchManager {
   }
 
   getStatus(name: string): LaunchProcessStatus {
-    return this.processes.get(name)?.status ?? 'stopped';
+    return this.state.getStatus(name);
   }
 
   getAllStatuses(): Record<string, LaunchProcessStatus> {
-    const result: Record<string, LaunchProcessStatus> = {};
-    for (const [name, managed] of this.processes) {
-      result[name] = managed.status;
-    }
-    return result;
+    return this.state.getAllStatuses();
+  }
+
+  /** Buffered stdout/stderr for a config, oldest first. */
+  getOutputBuffer(name: string): LaunchOutputEntry[] {
+    return this.state.getOutputBuffer(name);
   }
 
   /** Poll localhost:port until the dev server responds or the process exits. Returns true if timed out. */

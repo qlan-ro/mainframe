@@ -140,6 +140,8 @@ export interface SessionSink {
    * does not match any known tool_use block.
    */
   onSubagentChild(parentToolUseId: string, blocks: import('./chat.js').MessageContent[]): void;
+  /** Non-fatal: the CLI reported the workspace is untrusted (advisory, run continues). */
+  onTrustRequired?(projectPath: string): void;
 }
 
 export interface AdapterSession {
@@ -178,7 +180,6 @@ export interface AdapterSession {
   setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
   cancelQueuedMessage(uuid: string): Promise<boolean>;
-
   getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles(): Promise<string[]>;
@@ -290,12 +291,24 @@ export interface ExternalSession {
   projectPath: string; // Project root the session was attributed to (Mainframe-side)
   cwd?: string; // Working directory the session actually ran in (worktree, subdir, or root)
   firstPrompt?: string; // First user message (truncated)
+  title?: string; // Resolved display title (customTitle > aiTitle > summary > firstPrompt > synthetic)
   summary?: string; // AI-generated summary if available
   messageCount?: number;
   createdAt: string; // ISO-8601
   modifiedAt: string;
   gitBranch?: string;
   model?: string;
+}
+
+/**
+ * A page of importable external sessions.
+ * `total` is the candidate (stat-only) count; `nextOffset` is the offset to
+ * request next, or null when the candidate list is exhausted.
+ */
+export interface ExternalSessionPage {
+  sessions: ExternalSession[];
+  total: number;
+  nextOffset: number | null;
 }
 
 export interface Adapter {
@@ -333,7 +346,11 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
-  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+  listExternalSessions?(
+    projectPath: string,
+    excludeSessionIds: string[],
+    opts?: { offset?: number; limit?: number },
+  ): Promise<ExternalSessionPage>;
 
   /**
    * Factory for an adapter-specific plan-mode action handler.

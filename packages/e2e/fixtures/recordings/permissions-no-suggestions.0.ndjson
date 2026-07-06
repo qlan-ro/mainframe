@@ -1,0 +1,8 @@
+{"dir":"in","method":"sendMessage","args":["Run `whoami` to check the current user"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-perm-nosug-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll run that command."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_nosug_1","name":"Bash","input":{"command":"whoami","description":"Check current user"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":80}
+{"dir":"out","method":"onPermission","args":[{"requestId":"req-nosug-1","toolName":"Bash","toolUseId":"toolu_nosug_1","input":{"command":"whoami","description":"Check current user"},"suggestions":[]}],"delayMs":100}
+{"dir":"in","method":"respondToPermission","args":[{"requestId":"req-nosug-1","toolUseId":"toolu_nosug_1","toolName":"Bash","behavior":"deny"}],"delayMs":900}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_nosug_1","content":"The user doesn't want to proceed with this tool use. The tool use was rejected. STOP what you are doing and wait for the user to tell you how to proceed.","isError":true}]],"delayMs":920}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.008,"usage":{"input_tokens":18,"output_tokens":16},"subtype":"error_during_execution","is_error":true}],"delayMs":960}

@@ -63,7 +63,16 @@ export function launchRoutes(ctx: RouteContext): Router {
         }
       }
 
-      res.json({ success: true, data: { statuses, tunnelUrls, effectivePath: resolved.path } });
+      // Buffered stdout/stderr per config — a durable replay source for a
+      // client whose console mounts (or reconnects) after a fast subprocess
+      // already produced and finished its output, so output emitted before
+      // the client was ready to show it is never permanently lost.
+      const outputBuffer: Record<string, ReturnType<NonNullable<typeof manager>['getOutputBuffer']>> = {};
+      for (const name of Object.keys(statuses)) {
+        outputBuffer[name] = manager?.getOutputBuffer(name) ?? [];
+      }
+
+      res.json({ success: true, data: { statuses, tunnelUrls, effectivePath: resolved.path, outputBuffer } });
     }),
   );
 

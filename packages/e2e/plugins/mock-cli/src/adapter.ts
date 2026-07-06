@@ -1,9 +1,18 @@
 // packages/e2e/plugins/mock-cli/src/adapter.ts
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Adapter, AdapterModel, AdapterSession, SessionOptions } from '@qlan-ro/mainframe-types';
+import type {
+  Adapter,
+  AdapterModel,
+  AdapterSession,
+  AgentConfig,
+  Skill,
+  SessionOptions,
+  ToolCategories,
+} from '@qlan-ro/mainframe-types';
 import { ReplaySession } from './session';
 import { createReplayState, type RecordedEvent } from './fixture';
+import { listSkills as scanSkills, listAgents as scanAgents } from './skills';
 
 function sanitizeKey(key: string): string {
   return key
@@ -58,6 +67,36 @@ export class MockCliAdapter implements Adapter {
     ];
   }
   killAll(): void {}
+
+  /**
+   * Tool categorization so the display pipeline groups explore/progress/subagent tool calls the
+   * same way it does for the real `claude` adapter (`prepareMessagesForClient` no-ops entirely
+   * without this — see packages/core/src/messages/display-pipeline.ts). Mirrors Claude's
+   * `explore`/`progress`/`subagent` sets exactly (packages/core/src/plugins/builtin/claude/
+   * adapter.ts). `hidden` is deliberately left EMPTY rather than mirrored: Claude hides
+   * AskUserQuestion/TodoWrite/EnterPlanMode raw tool cards, but tool-cards.spec.ts's already-
+   * committed "AskUserQuestion display card" test relies on today's uncategorized (visible)
+   * behavior — hiding it here would silently break that test. TaskCreate/TaskUpdate don't need to
+   * be in `hidden` either: groupToolCallParts checks `progress` before `hidden`, so they're
+   * captured into `_task_progress` regardless.
+   */
+  getToolCategories(): ToolCategories {
+    return {
+      explore: new Set(['Read', 'Glob', 'Grep', 'LS']),
+      hidden: new Set(),
+      progress: new Set(['TaskCreate', 'TaskUpdate']),
+      subagent: new Set(['Task', 'Agent']),
+    };
+  }
+
+  /** Project-scope only (no homedir scan) — see skills.ts. Lets a recording/e2e project that
+   *  seeds `.claude/skills|agents` populate the Skills/Agents panels under mock-cli. */
+  async listSkills(projectPath: string): Promise<Skill[]> {
+    return scanSkills(projectPath);
+  }
+  async listAgents(projectPath: string): Promise<AgentConfig[]> {
+    return scanAgents(projectPath);
+  }
 
   createSession(options: SessionOptions): AdapterSession {
     // A history/resume read (getMessagesFromDisk) passes chatId. Reuse the matching cached session,

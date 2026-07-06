@@ -24,7 +24,10 @@ import {
   lspRoutes,
   worktreeRoutes,
   tagRoutes,
+  workflowRoutes,
+  suggestionRoutes,
 } from './routes/index.js';
+import { workflowAdminRoutes } from './routes/workflow-admin.js';
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
 import { deviceRoutes } from './routes/device.js';
@@ -35,6 +38,7 @@ import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { LspManager } from '../lsp/index.js';
 import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
+import type { WorkflowService } from '../workflows/index.js';
 
 const log = createChildLogger('http');
 
@@ -50,6 +54,7 @@ export interface HttpServerDeps {
   port?: number;
   lspManager?: LspManager;
   backgroundTasks?: BackgroundTaskTracker;
+  workflows?: WorkflowService;
 }
 
 export function createHttpServer(deps: HttpServerDeps): { app: Express; pushService: PushService } {
@@ -65,6 +70,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     port,
     lspManager,
     backgroundTasks,
+    workflows,
   } = deps;
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -115,6 +121,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     setTunnelUrl,
     port,
     backgroundTasks,
+    workflows,
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
@@ -126,6 +133,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(fileRoutes(ctx));
   app.use(contentSearchRoutes(ctx));
   app.use(gitRoutes(ctx));
+  app.use(suggestionRoutes(ctx));
   app.use(contextRoutes(ctx));
   app.use(attachmentRoutes(ctx));
   app.use(adapterRoutes(ctx));
@@ -137,6 +145,8 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(externalSessionRoutes(ctx));
   app.use(worktreeRoutes(ctx));
   app.use(tagRoutes(ctx));
+  app.use(workflowRoutes(ctx));
+  app.use(workflowAdminRoutes(ctx));
 
   if (backgroundTasks) {
     app.use(

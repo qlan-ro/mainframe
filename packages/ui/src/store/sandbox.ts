@@ -1,0 +1,152 @@
+/**
+ * Sandbox Zustand store — launch process statuses, log output, and capture queue.
+ *
+ * Ported from packages/app-electron/src/renderer/store/sandbox.ts with two changes:
+ *   1. addCapture enforces a 500-entry cap (desktop is unbounded).
+ *   2. The window.__sandboxStore E2E hook is dropped (use data-testid instead).
+ *
+ * processStatuses is keyed by scopeKey = buildLaunchScope(projectId, effectivePath)
+ * so statuses from different projects / worktrees never bleed together.
+ */
+import { create } from 'zustand';
+import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
+
+const CAPTURE_CAP = 500;
+const LOG_CAP = 500;
+
+let logSeq = 0;
+
+export interface Capture {
+  id: string;
+  type: 'element' | 'screenshot';
+  imageDataUrl: string;
+  selector?: string;
+  annotation?: string;
+}
+
+export interface LogEntry {
+  seq: number;
+  scopeKey: string;
+  name: string;
+  data: string;
+  stream: 'stdout' | 'stderr';
+}
+
+interface SandboxState {
+  captures: Capture[];
+  /** Keyed by scopeKey (= projectId:effectivePath), then by process name. */
+  processStatuses: Record<string, Record<string, LaunchProcessStatus>>;
+  logsOutput: LogEntry[];
+  /**
+   * Selected launch config name, keyed by scopeKey (= projectId:effectivePath)
+   * so a selection never bleeds across projects / worktrees — mirrors
+   * processStatuses. The toolbar picker derives its effective selection from the
+   * active scope's entry, falling back to the first config.
+   */
+  selectedConfigByScope: Record<string, string>;
+  /** Tracks which process was most recently started — used to auto-switch tabs. */
+  lastStartedProcess: string | null;
+  /** Tunnel URL per scope then config name (remote-daemon preview). */
+  tunnelUrls: Record<string, Record<string, string>>;
+  /** Tunnel failure reason per scope then config name. */
+  tunnelErrors: Record<string, Record<string, string>>;
+
+  addCapture: (capture: Omit<Capture, 'id'>) => void;
+  removeCapture: (id: string) => void;
+  clearCaptures: () => void;
+  setProcessStatus: (scopeKey: string, name: string, status: LaunchProcessStatus) => void;
+  appendLog: (scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
+  clearLogs: () => void;
+  clearLogsForProcess: (scopeKey: string, name: string) => void;
+  setSelectedConfig: (scopeKey: string, name: string) => void;
+  setLastStartedProcess: (name: string | null) => void;
+  setTunnelUrl: (scopeKey: string, name: string, url: string) => void;
+  setTunnelError: (scopeKey: string, name: string, error: string) => void;
+  clearTunnel: (scopeKey: string, name: string) => void;
+  seedTunnelUrls: (scopeKey: string, urls: Record<string, string>) => void;
+}
+
+export const useSandboxStore = create<SandboxState>()((set) => ({
+  captures: [],
+  processStatuses: {},
+  logsOutput: [],
+  selectedConfigByScope: {},
+  lastStartedProcess: null,
+  tunnelUrls: {},
+  tunnelErrors: {},
+
+  addCapture: (capture) =>
+    set((state) => ({
+      captures: [...state.captures, { id: crypto.randomUUID(), ...capture }].slice(-CAPTURE_CAP),
+    })),
+
+  removeCapture: (id) => set((state) => ({ captures: state.captures.filter((c) => c.id !== id) })),
+
+  clearCaptures: () => set({ captures: [] }),
+
+  setProcessStatus: (scopeKey, name, status) =>
+    set((state) => ({
+      processStatuses: {
+        ...state.processStatuses,
+        [scopeKey]: { ...(state.processStatuses[scopeKey] ?? {}), [name]: status },
+      },
+    })),
+
+  appendLog: (scopeKey, name, data, stream) =>
+    set((state) => ({
+      logsOutput: [...state.logsOutput, { seq: ++logSeq, scopeKey, name, data, stream }].slice(-LOG_CAP),
+    })),
+
+  clearLogs: () => set({ logsOutput: [] }),
+
+  clearLogsForProcess: (scopeKey, name) =>
+    set((state) => ({
+      logsOutput: state.logsOutput.filter((l) => !(l.scopeKey === scopeKey && l.name === name)),
+    })),
+
+  setSelectedConfig: (scopeKey, name) =>
+    set((state) => ({
+      selectedConfigByScope: { ...state.selectedConfigByScope, [scopeKey]: name },
+    })),
+
+  setLastStartedProcess: (name) => set({ lastStartedProcess: name }),
+
+  setTunnelUrl: (scopeKey, name, url) =>
+    set((state) => ({
+      tunnelUrls: {
+        ...state.tunnelUrls,
+        [scopeKey]: { ...(state.tunnelUrls[scopeKey] ?? {}), [name]: url },
+      },
+    })),
+
+  setTunnelError: (scopeKey, name, error) =>
+    set((state) => ({
+      tunnelErrors: {
+        ...state.tunnelErrors,
+        [scopeKey]: { ...(state.tunnelErrors[scopeKey] ?? {}), [name]: error },
+      },
+    })),
+
+  clearTunnel: (scopeKey, name) =>
+    set((state) => {
+      const nextUrls = { ...(state.tunnelUrls[scopeKey] ?? {}) };
+      const nextErrs = { ...(state.tunnelErrors[scopeKey] ?? {}) };
+      delete nextUrls[name];
+      delete nextErrs[name];
+      return {
+        tunnelUrls: { ...state.tunnelUrls, [scopeKey]: nextUrls },
+        tunnelErrors: { ...state.tunnelErrors, [scopeKey]: nextErrs },
+      };
+    }),
+
+  seedTunnelUrls: (scopeKey, urls) =>
+    set((state) => {
+      const mergedUrls = { ...(state.tunnelUrls[scopeKey] ?? {}), ...urls };
+      const nextErrs = { ...(state.tunnelErrors[scopeKey] ?? {}) };
+      for (const name of Object.keys(urls)) delete nextErrs[name];
+      return {
+        tunnelUrls: { ...state.tunnelUrls, [scopeKey]: mergedUrls },
+        tunnelErrors: { ...state.tunnelErrors, [scopeKey]: nextErrs },
+      };
+    }),
+}));

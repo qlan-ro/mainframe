@@ -1,7 +1,14 @@
 import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
 
-const PREFIX = 'User has answered your questions: ';
-const SUFFIX = ". You can now continue with the user's answers in mind.";
+// The CLI's AskUserQuestion result wording varies across versions — match every
+// known prefix/suffix variant so answers keep parsing. Older builds emit
+// "User has answered your questions: … the user's answers in mind."; newer ones
+// emit "Your questions have been answered: … these answers in mind."
+const PREFIXES = ['User has answered your questions: ', 'Your questions have been answered: '];
+const SUFFIXES = [
+  ". You can now continue with the user's answers in mind.",
+  '. You can now continue with these answers in mind.',
+];
 const PAIR = /"([^"]*)"="([^"]*)"/g;
 
 export interface KnownQuestion {
@@ -11,9 +18,12 @@ export interface KnownQuestion {
 }
 
 function stripBody(content: string): string | undefined {
-  if (typeof content !== 'string' || !content.startsWith(PREFIX)) return undefined;
-  let body = content.slice(PREFIX.length);
-  if (body.endsWith(SUFFIX)) body = body.slice(0, -SUFFIX.length);
+  if (typeof content !== 'string') return undefined;
+  const prefix = PREFIXES.find((p) => content.startsWith(p));
+  if (prefix === undefined) return undefined;
+  let body = content.slice(prefix.length);
+  const suffix = SUFFIXES.find((s) => body.endsWith(s));
+  if (suffix) body = body.slice(0, -suffix.length);
   return body;
 }
 

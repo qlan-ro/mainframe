@@ -10,7 +10,7 @@
     {
       "name": "Desktop App",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev:web"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-app-electron", "run", "dev:web"],
       "port": 5173
     },
     {

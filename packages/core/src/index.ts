@@ -27,6 +27,8 @@ import { logger } from './logger.js';
 import { wrapClaudeForRecording } from './testing/record-wrapper.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 import { backfillWorktreeRelationships } from './workspace/worktree.js';
+import { WorkflowService } from './workflows/index.js';
+import { makeChatManagerPort } from './workflows/agent-port.js';
 
 function enrichPath(): void {
   try {
@@ -74,6 +76,10 @@ async function main(): Promise<void> {
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
   const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event));
+  // No in-memory CLI sessions survive a restart, so reset any persisted
+  // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
+  // otherwise those chats look "running" and new messages queue forever.
+  chats.recoverStaleWorkingState();
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
@@ -90,6 +96,14 @@ async function main(): Promise<void> {
   chats.setStopLaunchProcesses(async (projectId, projectPath) => {
     const manager = launchRegistry.get(projectId, projectPath);
     if (manager) await manager.stopAll();
+  });
+
+  const workflows = new WorkflowService({
+    dataDir: getDataDir(),
+    logger,
+    emitEvent: (event) => broadcastEvent(event),
+    agentPort: makeChatManagerPort(chats, () => db.projects.list()[0]?.id ?? null),
+    listProjects: () => db.projects.list().map((p) => ({ id: p.id, path: p.path })),
   });
 
   // PluginManager owns its own Express Router; no circular dep on the Express app
@@ -147,12 +161,24 @@ async function main(): Promise<void> {
     tunnelManager,
     port: config.port,
     backgroundTasks,
+    workflows,
   });
 
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
 
   await server.start(config.port);
-  broadcastEvent = (event) => server.broadcastEvent(event);
+  // Bind the real WS broadcast AND feed daemon events to the workflow engine.
+  // All event sources (chats, launchRegistry, tunnelManager, backgroundTasks,
+  // pluginManager) use the broadcastEvent closure by reference, so every event
+  // is forwarded here after server.start().
+  broadcastEvent = (event) => {
+    server.broadcastEvent(event);
+    workflows.onDaemonEvent(event);
+  };
+
+  await workflows.start().catch((err) => {
+    logger.error({ err }, 'WorkflowService failed to start — continuing without workflows');
+  });
 
   reconcileBackgroundTasks({ tracker: backgroundTasks, db }).catch((err) => {
     logger.warn({ err }, 'Background task reconciliation failed');
@@ -198,6 +224,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    workflows.stop();
     chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();

@@ -15,6 +15,20 @@ export interface BranchListResult {
   activeOperation?: 'merge' | 'rebase';
 }
 
+/** Addition/deletion counts for a single working-tree file. */
+export interface WorkingStatFile {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
+/** Per-file working-tree stat counts plus repo-wide totals. */
+export interface WorkingStat {
+  files: WorkingStatFile[];
+  totalAdditions: number;
+  totalDeletions: number;
+}
+
 export type FetchResult = {
   status: 'success';
   remote: string;

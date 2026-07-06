@@ -1,4 +1,5 @@
 import { mkdir, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ProjectsRepository } from '../db/projects.js';
 import { createChildLogger } from '../logger.js';
@@ -9,6 +10,17 @@ const log = createChildLogger('worktree-backfill');
 export interface WorktreeEntry {
   path: string;
   branch: string | null;
+}
+
+/**
+ * True when `worktreePath` is a usable git worktree: the directory exists AND
+ * carries a `.git` entry — a file pointer for a linked worktree, a directory
+ * for the main checkout. Guards against orphaned stub dirs left behind when a
+ * worktree is removed: those still pass a bare existence check but hold none of
+ * the repo's files, so any read/diff under them resolves to a dead path.
+ */
+export function isWorktreePresent(worktreePath: string): boolean {
+  return existsSync(worktreePath) && existsSync(path.join(worktreePath, '.git'));
 }
 
 export function parseWorktreeList(output: string): WorktreeEntry[] {

@@ -1,5 +1,149 @@
 # Mock-CLI recording status & findings
 
+## 2026-07-05 — remaining tool-card + todos recordings
+
+Follow-up to the 2026-07-03 pass, closing the rest of `tool-cards.spec.ts`'s "§tool-cards — families
+needing a recording" wishlist plus `context-panel.spec.ts`'s Tasks-section skip. **No mock-cli `src/`
+changes this round** — every recording needed only sink methods/categories the plugin already
+supports (`ScheduleWakeup`/`CronCreate`/`CronDelete`/`CronList`/`Monitor`/`EnterWorktree`/
+`ExitWorktree` are `default`-category tool names dispatched purely by client-side `TOOL_REGISTRY`
+lookup; the truncated-result and tool-group cases are driven by core's existing, adapter-agnostic
+`truncateToolContent`/`groupToolCallParts`; the Tasks-section case is driven by the `onTodoUpdate`
+`SessionSink` method, which `ReplaySession` already replays generically like any other recorded sink
+call). `pnpm build:mock` was **not** re-run — nothing in `plugins/mock-cli/src/` changed.
+
+New recordings (`packages/e2e/fixtures/recordings/`), all hand-authored and validated by driving
+`MockCliAdapter`/`ReplaySession` directly (zero `onError`/desync) plus, for the ones with core-side
+processing, running the reconstructed `ChatMessage[]` through core's real `prepareMessagesForClient()`:
+
+| Key | Exercises | Unlocks (tool-cards.spec.ts unless noted) |
+|---|---|---|
+| `schedule-pills.0` | One call each of `ScheduleWakeup`, `CronCreate`, `CronList` (1 job), `CronDelete`, `Monitor` — all success | "Schedule/Cron/Monitor pills (all 5 kinds)" |
+| `worktree-pills.0` | `EnterWorktree`→`ExitWorktree(action:'keep')`, then a second `EnterWorktree`→`ExitWorktree(action:'remove')` | "EnterWorktree / ExitWorktree pills" |
+| `tool-result-truncated.0` | A `Bash` (`cat build.log`) result whose content is 51191 bytes (>32KB `TRUNCATE_THRESHOLD_BYTES`) — real `truncateToolContent` truncates it, confirmed `truncated:true fullBytes:51191` via `prepareMessagesForClient` | "ToolResultExpand 'Show full output'…" |
+| `tool-group.0` | `Read`(index.ts) then `Grep`(pattern) — 2 consecutive explore-family calls, nothing between — confirmed `type:'tool_group'` with 2 items via `prepareMessagesForClient` | "ToolGroup — consecutive explore-family tool calls collapse…" |
+| `bash-exit-code.0` | Two `Bash` calls: `pnpm test` → `…exit 0`/`isError:false`, `pnpm build:missing` → `…exit 127`/`isError:true` | "Bash card exit-code coloring…" |
+| `todo-write.0` | `onTodoUpdate([...2 TodoItems])` immediately followed by the matching `TodoWrite` tool_use + result (mirrors the real order in `assistant-event.ts`'s `handleAssistantEvent`: `onTodoUpdate` fires while scanning the block, `onMessage` fires once for the whole content array right after) | `context-panel.spec.ts`'s "Tasks section" skip |
+
+### `todo-write` — traced the `todos.updated` mechanism before authoring (per the dispatch's ask)
+
+Read `packages/core/src/plugins/builtin/claude/assistant-event.ts` end to end: for a real `TodoWrite`
+tool_use, `handleAssistantEvent` calls `sink.onTodoUpdate(valid)` directly (not a derived/parsed
+side-channel) while scanning the block, then calls `sink.onMessage(...)` once for the message's whole
+content array. `onTodoUpdate` is an ordinary `SessionSink` method
+(`packages/types/src/adapter.ts:128`) that the daemon's `event-handler.ts` wires straight to
+`db.chats.updateTodos(chatId, todos)` + `emitEvent({type:'todos.updated', chatId, todos})` — this
+handler has no adapter-specific logic; it fires for whichever adapter calls it.
+
+**Conclusion: reachable, and not by faking anything.** `mock-cli`'s `ReplaySession` doesn't parse tool
+content to synthesize sink calls the way the real Claude/Codex adapters do (confirmed: it only ever
+does `sink[ev.method]?.(...ev.args)` on recorded `out` events) — so a mock recording operates one
+abstraction level higher than a raw CLI stream, at the `SessionSink` method boundary, exactly like
+`compaction.0`'s `onCompactStart`/`onCompact` or `task-subagent.0`'s `onSubagentChild` already do.
+Recording `onTodoUpdate` directly is that same, already-established pattern — it drives the *identical*
+production `event-handler.ts` function a live `TodoWrite` call would, not a stand-in. The `TodoWrite`
+tool_use/result pair is included alongside it purely for transcript fidelity (so the recording also
+looks like a real turn), not because it's required to reach `todos.updated`.
+
+One accepted side effect, not fixed here (would risk the same regression class the 2026-07-03 pass
+explicitly avoided): the real Claude adapter's `getToolCategories()` puts `TodoWrite` in `hidden` so
+the raw tool card never renders; `MockCliAdapter`'s `hidden` set is deliberately empty (see below), so
+under mock-cli the `TodoWrite` tool_use renders as a visible `ToolFallback` card (it isn't in
+`TOOL_REGISTRY`) in addition to feeding the Tasks section. This doesn't interfere with the Tasks
+section itself (`context-tasks-section`/`context-task-row-*`), which reads only the `todos.updated`
+store, not message content.
+
+### Validation performed
+
+- `MockCliAdapter`/`ReplaySession` direct drive (all 6 new recordings, via `tsx`): each drains fully
+  with **zero `onError`/desync**, and the sink call sequence matches the intended shape exactly
+  (e.g. `todo-write` → `["onInit","onMessage","onTodoUpdate","onMessage","onToolResult","onMessage","onResult"]`).
+- Core-side shape confirmation via the real `prepareMessagesForClient(messages, categories)`
+  (`packages/core/src/messages/display-pipeline.ts`), reconstructing `ChatMessage[]` from each
+  recording's `onMessage`/`onToolResult` events:
+  - `tool-group` → one `type:'tool_group'` entry containing `Read` + `Grep` (2 items).
+  - `tool-result-truncated` → the `Bash` tool_call's `result` carries `truncated:true,
+    fullBytes:51191`.
+  - `bash-exit-code` → both `Bash` calls present with the expected `isError`/exit-line content.
+  - `schedule-pills`/`worktree-pills`/`todo-write` → all tool names present in the expected order
+    (sanity check; these are `default`-category, no grouping to verify).
+- Regression check: drove every **pre-existing** recording (`app-restart` through `worktree-pills`,
+  30 files) through the same direct `ReplaySession` driver. Two files reported a "FAIL" from that
+  driver — both are **false positives in the throwaway driver itself**, not regressions, and neither
+  recording was touched this round:
+  - `editor-review.0` — its recorded content genuinely *is* an `onError` event (a captured failure
+    scenario, confirmed by reading the file); the driver flags any `onError` sink call as a failure,
+    which is wrong for this fixture specifically.
+  - `plan-approval.0` — has 3 `respondToPermission` in-markers where markers 14/15 are consecutive
+    with no output between them; `ReplaySession.advance()` deliberately coalesces consecutive
+    same-method markers into one call (documented in `session.ts`), but the throwaway driver calls
+    the method once per raw marker in the file, double-firing the coalesced pair and desyncing its
+    own bookkeeping — not a fixture or engine problem.
+  Confirmed no actual regression risk is possible regardless: `git diff --stat
+  packages/e2e/plugins/mock-cli/src` is empty this round — the replay engine and adapter are
+  byte-for-byte unchanged.
+
+## 2026-07-03 — app-tauri hand-authored recordings + skills/agents/categories support
+
+Branch `feat/app-tauri-wt`. Infra pass for the `packages/e2e/tests-tauri/*.spec.ts` wishlist
+(`.superpowers/sdd/reports/{tool-cards,gates,transcript,sidebar-chrome,context-panel}-report.md`).
+These recordings are **hand-authored** (not captured from a real `E2E_MODE=record` run against the
+live CLI) — they were written directly against the NDJSON schema `session.ts`/`fixture.ts` read, then
+validated by driving `MockCliAdapter`/`ReplaySession` through each fixture's exact `in`-marker
+sequence with a fake sink (confirms full drain, zero `onError`/desync), and — for the two recordings
+that depend on the new `getToolCategories()` seam below — by running the recording's reconstructed
+`ChatMessage[]` through core's real `prepareMessagesForClient()` to confirm the intended
+`task_progress`/`task_group` display shape actually materializes. Full detail in
+`.superpowers/sdd/reports/recordings-author-report.md`.
+
+New recordings (`packages/e2e/fixtures/recordings/`):
+
+| Key | Exercises |
+|---|---|
+| `ask-question-multi.0` | `AskUserQuestion` with 2 questions, second `multiSelect:true` (3 options) |
+| `permissions-no-suggestions.0` | A `Bash` permission request with `suggestions: []` |
+| `permissions-stacked.0` | Two `onPermission` events back-to-back before any response (one assistant turn calling `Write` then `Bash`) |
+| `task-progress.0` | `TaskCreate`×3 / `TaskUpdate`×3 — final state covers all 3 statuses (pending/in_progress/completed) simultaneously |
+| `task-subagent.0` | `Task` tool_use + `onSubagentChild` nested `Bash` call/result tagged `parentToolUseId` |
+| `web-fetch.0` | `WebFetch` (url + summary result) |
+| `mcp-tool.0` | `mcp__linear__get_issue` — one success call, one erroring call |
+| `unregistered-tool.0` | A tool name (`CustomAnalyticsReport`) not in `TOOL_REGISTRY`, for `ToolFallback` |
+| `compaction.0` | `onCompactStart` → `onCompact` (bare `type:'compaction'` system message) |
+
+### Plugin changes (`packages/e2e/plugins/mock-cli/src/`)
+
+- **`adapter.ts` — `getToolCategories()` added.** Without it, `prepareMessagesForClient` skips ALL
+  tool grouping unconditionally (`if (categories) …` in `display-pipeline.ts`) — so `_task_progress`
+  (`task-progress` card), `_task_group` (subagent transcript nesting), and consecutive-explore
+  grouping were structurally unreachable under mock-cli, no matter what a recording replayed. Mirrors
+  the real `claude` adapter's `explore`/`progress`/`subagent` sets exactly
+  (`packages/core/src/plugins/builtin/claude/adapter.ts`). **`hidden` is deliberately left empty**
+  (a conscious divergence from Claude, not an oversight): Claude hides `AskUserQuestion` raw tool
+  cards, but `tool-cards.spec.ts`'s already-committed "AskUserQuestion display card" test relies on
+  today's uncategorized (visible) mock behavior — mirroring `hidden` verbatim would silently break it.
+  Verified no regression: ran every pre-existing committed recording through
+  `prepareMessagesForClient(messages, categories)` — zero unexpected `tool_group` entries, and
+  `AskUserQuestion` stays `category !== 'hidden'` everywhere it appears (see the report for the
+  script output).
+- **`skills.ts` (new) + `adapter.ts` — `listSkills`/`listAgents` added.** The daemon's
+  `GET /api/adapters/:adapterId/skills|agents` routes 404 with "Adapter not found or does not support
+  skills/agents" whenever `adapter.listSkills`/`listAgents` is undefined
+  (`packages/core/src/server/routes/{skills,agents}.ts`) — both are optional `Adapter` interface
+  members (`packages/types/src/adapter.ts`), a genuine seam `MockCliAdapter` simply didn't implement.
+  `skills.ts` scans **only** `<projectPath>/.claude/skills/*/SKILL.md` and
+  `<projectPath>/.claude/agents/*.md` (no homedir scan, for e2e-project hermeticity) — read-only
+  (list, not create/update/delete; nothing in the current wishlist needs write support). This unlocks
+  seeding `.claude/skills|agents` in a hand-built e2e temp project to populate the Skills/Agents
+  panels under `mock-cli`, previously impossible per `context-panel-report.md`'s finding.
+
+Rebuilt via `pnpm build:mock` (`esbuild plugins/mock-cli/src/index.ts --bundle --platform=node
+--format=cjs --outfile=plugins/mock-cli/index.js`) and sanity-loaded (`require(...).activate` is a
+function). `cd packages/e2e && npx tsc --noEmit` (excludes `plugins/mock-cli`, which has its own
+bundler-resolution tsconfig) and the plugin's own `tsc --noEmit -p plugins/mock-cli/tsconfig.json`
+both pass clean.
+
+---
+
 _Branch `feat/e2e-record-all` (stacks on the mock-cli mechanism PR #363). This is the result of the
 "record fixtures for all AI specs so the suite runs under `E2E_MODE=mock`" effort._
 

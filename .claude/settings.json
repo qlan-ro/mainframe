@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "added=$(git diff --cached --name-only --diff-filter=A 2>/dev/null | grep -E '^packages/app-tauri/src/(features|surfaces|components)/' | tr '\\n' ' '); if [ -n \"$added\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"New app-tauri component/module staged: %s — before considering it done, review the new code with the /thermo-nuclear-code-quality-review skill AND the design-conformance agent.\"}}' \"$added\"; fi",
+            "timeout": 10,
+            "statusMessage": "Checking new app-tauri components for review…"
+          }
+        ]
+      }
+    ]
+  }
+}

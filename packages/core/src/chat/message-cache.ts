@@ -47,6 +47,17 @@ export class MessageCache {
     return true;
   }
 
+  /** Move a message to the end of the chat's list. Returns true if found and moved. */
+  moveToEnd(chatId: string, messageId: string): boolean {
+    const msgs = this.cache.get(chatId);
+    if (!msgs) return false;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return false;
+    const [msg] = msgs.splice(idx, 1);
+    msgs.push(msg!);
+    return true;
+  }
+
   createTransientMessage(
     chatId: string,
     type: ChatMessage['type'],

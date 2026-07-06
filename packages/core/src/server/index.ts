@@ -20,7 +20,7 @@ export function createServerManager(deps: ServerManagerDeps): ServerManager {
   const { db, chats, adapters } = deps;
   const lspRegistry = new LspRegistry();
   const lspManager = new LspManager(lspRegistry);
-  const lspHandler = new LspConnectionHandler(lspManager, db);
+  const lspHandler = new LspConnectionHandler(lspManager, db, chats);
 
   const { app, pushService } = createHttpServer({ ...deps, lspManager });
   chats.setPushService(pushService);

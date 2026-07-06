@@ -19,7 +19,7 @@ mkdir -p "${DIST_DIR}/bin" "${DIST_DIR}/lib"
 # 1. Bundle daemon
 pnpm --filter @qlan-ro/mainframe-types build
 pnpm --filter @qlan-ro/mainframe-core build
-node packages/desktop/scripts/bundle-daemon.mjs "${DIST_DIR}/lib/daemon.cjs"
+node packages/app-electron/scripts/bundle-daemon.mjs "${DIST_DIR}/lib/daemon.cjs"
 
 # 2. Copy better-sqlite3 native binary for target platform
 SQLITE_PKG="$(node -e "console.log(require('path').dirname(require.resolve('better-sqlite3/package.json')))")"
@@ -62,6 +62,7 @@ cat > "${DIST_DIR}/bin/mainframe-daemon" << 'WRAPPER'
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
+export MAINFRAME_ORIG_PATH="${PATH}"
 export PATH="${SCRIPT_DIR}:${PATH}"
 exec "${SCRIPT_DIR}/node" "${BASE_DIR}/lib/daemon.cjs" "$@"
 WRAPPER

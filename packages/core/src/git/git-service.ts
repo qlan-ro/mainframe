@@ -1,5 +1,5 @@
 import { simpleGit } from 'simple-git';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { createChildLogger } from '../logger.js';
 import { acquireProjectLock } from './project-lock.js';
@@ -15,6 +15,8 @@ import type {
   RebaseResult,
   DeleteBranchResult,
   UpdateAllResult,
+  WorkingStat,
+  WorkingStatFile,
 } from '@qlan-ro/mainframe-types';
 
 const logger = createChildLogger('git-service');
@@ -157,6 +159,67 @@ export class GitService {
   async commit(message: string): Promise<string> {
     const result = await this.git().commit(message);
     return result.commit;
+  }
+
+  /**
+   * Stage every change (tracked edits, new files, and deletions) and commit.
+   * Throws when there is nothing to commit. Used by the Review panel's
+   * "Commit N files" action, which commits the whole working tree at once.
+   */
+  async commitAll(message: string): Promise<string> {
+    await this.git().add(['-A']);
+    const result = await this.git().commit(message);
+    if (!result.commit) throw new Error('Nothing to commit');
+    return result.commit;
+  }
+
+  /**
+   * Per-file addition/deletion counts for the working tree (vs HEAD), plus
+   * totals. Tracked changes come from `git diff --numstat HEAD`; untracked
+   * files are line-counted directly (git omits them from numstat). Binary
+   * files report 0/0. Feeds the Review panel's stat meters and header totals.
+   */
+  async workingStat(): Promise<WorkingStat> {
+    const files: WorkingStatFile[] = [];
+
+    const numstat = await this.git().raw(['diff', '--numstat', 'HEAD']);
+    for (const line of numstat.split('\n').filter(Boolean)) {
+      const [addStr, delStr, ...pathParts] = line.split('\t');
+      const path = pathParts.join('\t');
+      if (!path) continue;
+      files.push({
+        path,
+        additions: addStr === '-' ? 0 : parseInt(addStr ?? '', 10) || 0,
+        deletions: delStr === '-' ? 0 : parseInt(delStr ?? '', 10) || 0,
+      });
+    }
+
+    // Untracked files (`-uall` lists individual files inside new directories).
+    const status = await this.git().raw(['status', '--porcelain', '-uall']);
+    for (const line of status.split('\n').filter(Boolean)) {
+      if (!line.startsWith('??')) continue;
+      const path = line.slice(3);
+      if (!path || path.endsWith('/')) continue;
+      files.push({ path, additions: await this.countUntrackedAdditions(path), deletions: 0 });
+    }
+
+    const totalAdditions = files.reduce((a, f) => a + f.additions, 0);
+    const totalDeletions = files.reduce((a, f) => a + f.deletions, 0);
+    return { files, totalAdditions, totalDeletions };
+  }
+
+  /** Lines in an untracked file; 0 for binary (null-byte) or empty files. */
+  private async countUntrackedAdditions(relPath: string): Promise<number> {
+    try {
+      const buf = await readFile(join(this.projectPath, relPath));
+      if (buf.includes(0)) return 0;
+      const text = buf.toString('utf8');
+      if (text.length === 0) return 0;
+      return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    } catch {
+      /* expected — file may have vanished between status and read */
+      return 0;
+    }
   }
 
   async diff(args: string[]): Promise<string> {

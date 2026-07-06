@@ -22,6 +22,22 @@ import { getProviderConfig } from '../settings/provider-config.js';
 
 const log = createChildLogger('chat:lifecycle');
 
+/**
+ * True when no chat OTHER than `excludeChatId` is still active (non-archived)
+ * and resolves to the same launch scope (`effectivePath = worktreePath ?? projectPath`).
+ * Used to ref-count a scope so archiving the LAST chat on it releases its resources.
+ */
+export function isLastActiveChatForScope(
+  chats: Chat[],
+  projectPath: string,
+  effectivePath: string,
+  excludeChatId: string,
+): boolean {
+  return !chats.some(
+    (c) => c.id !== excludeChatId && c.status !== 'archived' && (c.worktreePath ?? projectPath) === effectivePath,
+  );
+}
+
 export interface LifecycleManagerDeps {
   db: DatabaseManager;
   adapters: AdapterRegistry;
@@ -223,10 +239,28 @@ export class ChatLifecycleManager {
 
     if (active?.session) await active.session.kill();
 
-    if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
-      await this.deps.stopLaunchProcesses?.(chat.projectId, chat.worktreePath);
-      const project = this.deps.db.projects.get(chat.projectId);
-      if (project) await removeWorktree(project.path, chat.worktreePath, chat.branchName);
+    const project = chat ? this.deps.db.projects.get(chat.projectId) : null;
+    const effectivePath = chat?.worktreePath ?? project?.path;
+
+    // Release the launch scope (stop dev servers + tell clients to prune Run
+    // tabs/PTYs) when this is the LAST active chat using it — regardless of
+    // whether the worktree is being deleted, and even if no process was running.
+    if (chat && project && effectivePath) {
+      const lastUser = isLastActiveChatForScope(
+        this.deps.db.chats.list(chat.projectId),
+        project.path,
+        effectivePath,
+        chatId,
+      );
+      if (lastUser) {
+        await this.deps.stopLaunchProcesses?.(chat.projectId, effectivePath);
+        this.deps.emitEvent({ type: 'launch.scopeReleased', projectId: chat.projectId, effectivePath });
+      }
+    }
+
+    // Worktree removal stays gated on the user's deleteWorktree choice.
+    if (deleteWorktree && chat?.worktreePath && chat?.branchName && project) {
+      await removeWorktree(project.path, chat.worktreePath, chat.branchName);
     }
 
     this.deps.activeChats.delete(chatId);
@@ -468,15 +502,17 @@ export class ChatLifecycleManager {
 
     if (chat.adapterId === 'codex' && 'setCodexProviderTuning' in session) {
       const cfg = getProviderConfig(this.deps.db, 'codex');
-      (session as unknown as { setCodexProviderTuning(t: { personality?: string; reasoningSummary?: string }): void })
-        .setCodexProviderTuning({ personality: cfg.personality, reasoningSummary: cfg.reasoningSummary });
+      (
+        session as unknown as { setCodexProviderTuning(t: { personality?: string; reasoningSummary?: string }): void }
+      ).setCodexProviderTuning({ personality: cfg.personality, reasoningSummary: cfg.reasoningSummary });
     }
 
     const sink = this.deps.buildSink(chatId, session.id, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
     const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
-    const tuning = (await resolveTuningForChat({ db: this.deps.db, adapters: this.deps.adapters }, chatId)) ?? undefined;
+    const tuning =
+      (await resolveTuningForChat({ db: this.deps.db, adapters: this.deps.adapters }, chatId)) ?? undefined;
     const processInfo = await session.spawn(
       {
         model: chat.model,

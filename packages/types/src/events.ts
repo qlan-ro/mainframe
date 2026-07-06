@@ -52,11 +52,11 @@ export type DaemonEvent =
   | { type: 'launch.tunnel'; projectId: string; effectivePath: string; name: string; url: string }
   | { type: 'launch.tunnel.failed'; projectId: string; effectivePath: string; name: string; error: string }
   | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
+  | { type: 'launch.scopeReleased'; projectId: string; effectivePath: string }
   | { type: 'sessions.external.count'; projectId: string; count: number }
   | { type: 'message.queued'; chatId: string; ref: QueuedMessageRef }
   | { type: 'message.queued.processed'; chatId: string; uuid: string }
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
-  | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
   | { type: 'message.queued.cleared'; chatId: string }
   | { type: 'message.queued.snapshot'; chatId: string; refs: QueuedMessageRef[] }
   | { type: 'chat.notification'; chatId: string; title: string; body: string; level: 'success' | 'error' }
@@ -71,6 +71,7 @@ export type DaemonEvent =
     }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }
+  | { type: 'chat.trustRequired'; chatId: string; projectPath: string }
   | {
       type: 'tunnel:status';
       state: 'starting' | 'ready' | 'dns_verified' | 'error' | 'stopped';
@@ -84,7 +85,16 @@ export type DaemonEvent =
   | { type: 'subscribe:ack'; chatId: string }
   | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
-  | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask };
+  | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask }
+  | { type: 'workflow.run.updated'; run: import('./workflow.js').WorkflowRunSummary }
+  | {
+      type: 'workflow.step.updated';
+      runId: string;
+      step: Pick<import('./workflow.js').WorkflowStepSummary, 'stepPath' | 'stepId' | 'status' | 'attempt'>;
+    }
+  | { type: 'workflow.interaction.created'; interaction: import('./workflow.js').WorkflowInteractionSummary }
+  | { type: 'workflow.interaction.resolved'; interactionId: string; runId: string }
+  | { type: 'workflow.completed'; workflowId: string; workflowName: string; runId: string; outputs: unknown };
 
 export type ClientEvent =
   | {
@@ -99,5 +109,5 @@ export type ClientEvent =
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }
-  | { type: 'subscribe:file'; path: string }
-  | { type: 'unsubscribe:file'; path: string };
+  | { type: 'subscribe:file'; path: string; projectId?: string; chatId?: string }
+  | { type: 'unsubscribe:file'; path: string; projectId?: string; chatId?: string };

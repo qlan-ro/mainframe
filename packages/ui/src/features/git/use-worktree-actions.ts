@@ -1,0 +1,54 @@
+/**
+ * Worktree action handlers extracted from useBranchActions to keep files
+ * under the 300-line limit.  Composed back in via useBranchActions.
+ *
+ * handleNewSession is NOT here — it needs the sessions runtime (Task B7).
+ */
+import { useCallback } from 'react';
+import { mfToast } from '@/lib/toast';
+import { getProjectWorktrees, deleteWorktree } from '@/lib/api/git';
+import { requestGitConfirm } from './use-git-confirm';
+import { resolveWorktree } from './worktree-resolve';
+import type { BranchBusy } from './use-branch-busy';
+
+export interface WorktreeActionsProps {
+  port: number;
+  projectId: string;
+  loadBranches: () => Promise<void>;
+  withBusy: BranchBusy['withBusy'];
+}
+
+export interface WorktreeActions {
+  handleDeleteWorktree: (worktreeDirName: string, branchName: string | undefined) => Promise<boolean>;
+}
+
+export function useWorktreeActions({ port, projectId, loadBranches, withBusy }: WorktreeActionsProps): WorktreeActions {
+  const handleDeleteWorktree = useCallback(
+    async (worktreeDirName: string, branchName: string | undefined): Promise<boolean> => {
+      const label = branchName
+        ? `worktree '${worktreeDirName}' (branch: ${branchName})`
+        : `worktree '${worktreeDirName}'`;
+      const confirmed = await requestGitConfirm({
+        title: `Delete ${label}?`,
+        body: 'This cannot be undone.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!confirmed) return false;
+      return withBusy(async () => {
+        const worktrees = await getProjectWorktrees(port, projectId);
+        const match = resolveWorktree(worktrees, { dirName: worktreeDirName, branchName });
+        if (!match) {
+          mfToast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
+          return;
+        }
+        await deleteWorktree(port, projectId, match.path, branchName);
+        mfToast.success(`Deleted ${label}`);
+        await loadBranches();
+      }, `deleteWorktree:${worktreeDirName}`);
+    },
+    [port, projectId, loadBranches, withBusy],
+  );
+
+  return { handleDeleteWorktree };
+}

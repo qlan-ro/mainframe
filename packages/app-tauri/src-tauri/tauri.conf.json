@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mainframe",
+  "identifier": "ro.qlan.mainframe",
+  "version": "2.0.0",
+  "build": {
+    "beforeDevCommand": "pnpm --filter @qlan-ro/mainframe-ui dev",
+    "devUrl": "http://localhost:5174",
+    "beforeBuildCommand": "pnpm --filter @qlan-ro/mainframe-ui build && pnpm --filter @qlan-ro/mainframe-app-tauri bundle",
+    "frontendDist": "../../ui/dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mainframe",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 800,
+        "minHeight": 600,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 20, "y": 30 },
+        "backgroundColor": "#e9e7e2"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:31500 ws://127.0.0.1:31500 https: wss:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; object-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    },
+    "macOSPrivateApi": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "exceptionDomain": null,
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "externalBin": ["binaries/node"],
+    "resources": {
+      "resources/daemon": "daemon"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    },
+    "updater": {
+      "endpoints": ["https://github.com/qlan-ro/mainframe/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENDRThEN0Y5QzE2MTBGOTAKUldTUUQySEIrZGZvek0wdEhQNm5ZWTgrL0tYYnE0N2hzUzAreEtOVmpSWGZ1VXpydms3WVFBZ2IK"
+    }
+  }
+}

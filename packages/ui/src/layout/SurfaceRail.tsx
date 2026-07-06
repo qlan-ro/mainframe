@@ -1,0 +1,56 @@
+import type { SurfaceId } from '@/store/layout';
+import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
+import { ChatGlyph, EditorGlyph, PreviewGlyph } from './surface-icons';
+import { Hint } from '@/components/ui/hint';
+
+interface SurfaceDef {
+  id: SurfaceId;
+  label: string;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
+  activeColor: string;
+}
+
+const SURFACES: SurfaceDef[] = [
+  { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
+  { id: 'files', label: 'Editor', Icon: EditorGlyph, activeColor: 'text-mf-surface-files' },
+  { id: 'run', label: 'Preview', Icon: PreviewGlyph, activeColor: 'text-mf-surface-run' },
+];
+
+export function SurfaceRail() {
+  const layout = useLayoutStore((s) => s.layout);
+  const toggleSurface = useLayoutStore((s) => s.toggleSurface);
+
+  return (
+    <div data-testid="surface-rail" className="flex flex-shrink-0 gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
+      {SURFACES.map(({ id, label, Icon, activeColor }) => {
+        const on = layout.top.includes(id) || layout.bottom === id;
+        // Dynamic floor: the single lit surface (whichever it is) can't be toggled off.
+        const isFloor = isSurfaceFloor(layout, id);
+
+        return (
+          <Hint key={id} label={label}>
+            <button
+              data-testid={`surface-rail-${id}`}
+              data-tut={id === 'run' ? 'run' : undefined}
+              type="button"
+              disabled={isFloor}
+              onClick={() => toggleSurface(id)}
+              className={[
+                'inline-flex h-[21px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] border-none p-0',
+                'transition-[background,box-shadow] duration-[120ms] ease',
+                on
+                  ? 'bg-mf-tab-active shadow-[var(--mf-shadow-rail-active)]'
+                  : 'cursor-pointer bg-transparent hover:bg-accent',
+                isFloor ? 'cursor-default opacity-60' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <Icon size={12} className={on ? activeColor : 'text-mf-text-4'} />
+            </button>
+          </Hint>
+        );
+      })}
+    </div>
+  );
+}

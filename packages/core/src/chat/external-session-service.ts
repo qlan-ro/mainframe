@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent, ExternalSession } from '@qlan-ro/mainframe-types';
+import type { Chat, DaemonEvent, ExternalSession, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createChildLogger } from '../logger.js';
@@ -18,29 +18,52 @@ export class ExternalSessionService {
     private emitEvent: (event: DaemonEvent) => void,
   ) {}
 
-  /** Scan for importable external sessions for a project */
-  async scan(projectId: string): Promise<ExternalSession[]> {
+  /** Page of importable external sessions merged and sorted across all adapters for a project. */
+  async scanPage(projectId: string, offset: number, limit: number): Promise<ExternalSessionPage> {
     const project = this.db.projects.get(projectId);
-    if (!project) return [];
+    if (!project) return { sessions: [], total: 0, nextOffset: null };
 
-    const allAdapters = this.adapters.getAll();
-    const allSessions: ExternalSession[] = [];
+    const adapters = this.adapters.getAll().filter((a) => a.listExternalSessions);
+    const excludeIds = this.db.chats.getImportedSessionIds(projectId);
 
-    for (const adapter of allAdapters) {
-      if (!adapter.listExternalSessions) continue;
-      const excludeIds = this.db.chats.getImportedSessionIds(projectId);
-      try {
-        const sessions = await adapter.listExternalSessions(project.path, excludeIds);
-        for (const session of sessions) {
-          session.adapterId = adapter.id;
+    // Count-only: each adapter returns its total without enriching.
+    if (limit <= 0) {
+      let total = 0;
+      for (const adapter of adapters) {
+        try {
+          const page = await adapter.listExternalSessions!(project.path, excludeIds, { offset: 0, limit: 0 });
+          total += page.total;
+        } catch (err) {
+          logger.warn({ err, adapterId: adapter.id, projectId }, 'Failed to count external sessions');
         }
-        allSessions.push(...sessions);
+      }
+      return { sessions: [], total, nextOffset: null };
+    }
+
+    // Over-fetch each adapter's prefix [0, offset+limit), then merge-sort across
+    // adapters by modifiedAt desc and slice the requested page. This is correct
+    // for any number of session-listing adapters (claude + codex today).
+    const prefixLimit = offset + limit;
+    const collected: ExternalSession[] = [];
+    let total = 0;
+    for (const adapter of adapters) {
+      try {
+        const page = await adapter.listExternalSessions!(project.path, excludeIds, { offset: 0, limit: prefixLimit });
+        for (const s of page.sessions) s.adapterId = adapter.id;
+        collected.push(...page.sessions);
+        total += page.total;
       } catch (err) {
         logger.warn({ err, adapterId: adapter.id, projectId }, 'Failed to scan external sessions');
       }
     }
 
-    return allSessions;
+    collected.sort((a, b) => {
+      const d = new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+      return d !== 0 ? d : a.sessionId < b.sessionId ? 1 : -1;
+    });
+    const sessions = collected.slice(offset, offset + limit);
+    const nextOffset = offset + limit < total ? offset + limit : null;
+    return { sessions, total, nextOffset };
   }
 
   /** Import an external session, creating a Mainframe chat for it */
@@ -126,16 +149,14 @@ export class ExternalSessionService {
   }
 
   private async emitCount(projectId: string): Promise<void> {
-    const sessions = await this.scan(projectId);
-    const count = sessions.length;
+    const { total } = await this.scanPage(projectId, 0, 0); // count-only (no enrichment)
     const lastCount = this.lastCounts.get(projectId);
-
-    if (lastCount !== count) {
-      this.lastCounts.set(projectId, count);
+    if (lastCount !== total) {
+      this.lastCounts.set(projectId, total);
       this.emitEvent({
         type: 'sessions.external.count',
         projectId,
-        count,
+        count: total,
       } as DaemonEvent);
     }
   }

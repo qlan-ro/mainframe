@@ -72,6 +72,12 @@ export class TunnelManager {
       let pendingUrl: string | null = isNamed ? (options.url ?? null) : null;
       let registered = false;
 
+      // Guards only the pre-connection phase (cloudflared never spawning, never
+      // printing a URL, never registering). Once the tunnel is established below,
+      // waitForDns takes over — it has its own DNS_TIMEOUT_MS and both of its
+      // branches resolve the promise, so this timeout must be cleared then.
+      // Otherwise it fires 45s after start() regardless of connection time and
+      // kills an already-healthy tunnel out from under the DNS grace path.
       const timeout = setTimeout(() => {
         if (!done) {
           done = true;
@@ -87,6 +93,7 @@ export class TunnelManager {
         const url = pendingUrl;
         const tunnel: ManagedTunnel = { process: child, url, ready: false };
         this.tunnels.set(label, tunnel);
+        clearTimeout(timeout);
         log.info({ label, url, port }, 'tunnel connected, waiting for DNS propagation…');
         this.broadcast({ type: 'tunnel:status', state: 'ready', label, url, dnsVerified: false });
 
@@ -95,7 +102,6 @@ export class TunnelManager {
             if (done) return;
             done = true;
             tunnel.ready = true;
-            clearTimeout(timeout);
             log.info({ label, url }, 'tunnel ready (DNS verified)');
             this.broadcast({ type: 'tunnel:status', state: 'dns_verified', label, url, dnsVerified: true });
             resolve(url);
@@ -104,7 +110,6 @@ export class TunnelManager {
             if (done) return;
             done = true;
             tunnel.ready = true;
-            clearTimeout(timeout);
             log.warn({ label, url }, 'tunnel DNS verification timed out, emitting anyway');
             this.broadcast({ type: 'tunnel:status', state: 'dns_verified', label, url, dnsVerified: false });
             resolve(url);

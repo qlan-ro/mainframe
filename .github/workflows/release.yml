@@ -13,10 +13,11 @@ jobs:
       # Don't cancel the other platforms when one fails — we still want their artifacts.
       fail-fast: false
       matrix:
-        # Pin Windows to 2022: the windows-latest (2025) image breaks pnpm's bundled
-        # node-gyp VS finder (ERR_CHILD_PROCESS_STDIO_MAXBUFFER), failing native builds
-        # (better-sqlite3 / node-pty).
-        os: [macos-latest, windows-2022, ubuntu-latest]
+        # TEMPORARILY macOS-only (2026-07-06): Windows (pnpm-on-PATH in beforeBuildCommand)
+        # and Linux (updater signing-key secret) release legs are disabled while the macOS
+        # signing/notarization path is stabilized. Restore [macos-latest, windows-2022,
+        # ubuntu-latest] once those are fixed.
+        os: [macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -47,7 +48,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Package
-        run: pnpm --filter @qlan-ro/mainframe-desktop exec electron-builder --publish never
+        run: pnpm --filter @qlan-ro/mainframe-app-electron exec electron-builder --publish never
         env:
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
@@ -60,19 +61,21 @@ jobs:
         with:
           name: desktop-${{ matrix.os }}
           path: |
-            packages/desktop/dist/*.dmg
-            packages/desktop/dist/*.exe
-            packages/desktop/dist/*.AppImage
-            packages/desktop/dist/*.deb
-            packages/desktop/dist/*.rpm
-            packages/desktop/dist/*.zip
-            packages/desktop/dist/*.yml
-            packages/desktop/dist/*.yaml
+            packages/app-electron/dist/*.dmg
+            packages/app-electron/dist/*.exe
+            packages/app-electron/dist/*.AppImage
+            packages/app-electron/dist/*.deb
+            packages/app-electron/dist/*.rpm
+            packages/app-electron/dist/*.zip
+            packages/app-electron/dist/*.yml
+            packages/app-electron/dist/*.yaml
 
   build-daemon:
     strategy:
       fail-fast: false
       matrix:
+        # The daemon standalone build stays cross-platform (macOS + Linux) even while
+        # the desktop/Tauri release legs are macOS-only — it has no signing dependency.
         include:
           - os: macos-14
             target_os: darwin
@@ -112,8 +115,107 @@ jobs:
           name: daemon-${{ matrix.target_os }}-${{ matrix.target_arch }}
           path: dist-standalone/*.tar.gz
 
+  # Tauri desktop build (the WebKit/Chromium-neutral renderer under the Tauri shell).
+  # tauri-action runs the app-tauri beforeBuildCommand (ui build + provision-node +
+  # bundle-daemon), then `cargo tauri build`, signs the updater artifacts, and
+  # uploads the installers + a merged multi-platform latest.json to this tag's draft
+  # release (find-or-create — coexists with the `release` job's softprops upload).
+  build-app-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # TEMPORARILY macOS-only (2026-07-06) — see build-desktop note. Windows
+        # (pnpm-on-PATH in the tauri beforeBuildCommand) and Linux (updater signing-key
+        # secret) are disabled until fixed; restore the ubuntu/windows entries then.
+        include:
+          - os: macos-14 # Apple Silicon (arm64)
+          - os: macos-13 # Intel (x86_64)
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/app-tauri/src-tauri
+
+      # Tauri's Linux build needs the system WebKitGTK / GTK stack.
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # node-pty has no Linux prebuild; bundle-daemon ships its built .node, so the
+      # install must compile it (node-gyp is not on the install-script PATH).
+      - name: Install node-gyp
+        run: npm install -g node-gyp
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build the workspace TS the Tauri bundle depends on (types → core → ui).
+      # tauri-action's beforeBuildCommand re-runs the ui build, provisions the Node
+      # sidecar, and bundles the daemon before `cargo tauri build`.
+      - name: Build workspace dependencies
+        run: pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      # Import the Developer ID cert into a keychain BEFORE tauri-action runs.
+      # tauri-action's beforeBuildCommand (`pnpm ... bundle`) codesigns the nested
+      # daemon Mach-O binaries (better-sqlite3/fsevents/node-pty/rg/node) — but Tauri
+      # only imports the cert during its OWN later .app-signing phase, so without this
+      # the bundle-daemon codesign fails with "item could not be found in the keychain".
+      # With the cert already in a keychain here, both our nested signing and Tauri's
+      # .app signing find the identity. We therefore DON'T pass APPLE_CERTIFICATE to
+      # tauri-action below (it would spin up a second keychain → ambiguous identity).
+      - name: Import Apple Developer ID certificate
+        if: runner.os == 'macOS'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CSC_LINK }}
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signature (verified by the in-app updater against the pubkey).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS Developer ID code-signing + notarization. The cert is imported into
+          # the keychain by the "Import Apple Developer ID certificate" step above, so
+          # we deliberately do NOT set APPLE_CERTIFICATE here — Tauri signs the .app
+          # using the identity already in that keychain. APPLE_SIGNING_IDENTITY is the
+          # full identity name (e.g. "Developer ID Application: Name (TEAMID)"); Tauri
+          # needs it explicitly. Empty on non-macOS runners → tauri-action skips signing.
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+        with:
+          projectPath: packages/app-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Mainframe ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+
   release:
-    needs: [build-desktop, build-daemon]
+    needs: [build-desktop, build-daemon, build-app-tauri]
     runs-on: ubuntu-latest
     permissions:
       contents: write

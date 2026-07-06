@@ -37,7 +37,7 @@ describe('getEffectivePath', () => {
 
   it('returns worktreePath when chat has one', () => {
     (ctx.db.projects.get as any).mockReturnValue({ id: 'p1', path: '/my/project' });
-    (ctx.chats.getChat as any).mockReturnValue({ id: 'c1', worktreePath: '/worktree/path' });
+    (ctx.chats.getChat as any).mockReturnValue({ id: 'c1', projectId: 'p1', worktreePath: '/worktree/path' });
 
     const result = getEffectivePath(ctx, 'p1', 'c1');
     expect(result).toBe('/worktree/path');
@@ -45,7 +45,7 @@ describe('getEffectivePath', () => {
 
   it('returns project path when chat has no worktreePath', () => {
     (ctx.db.projects.get as any).mockReturnValue({ id: 'p1', path: '/my/project' });
-    (ctx.chats.getChat as any).mockReturnValue({ id: 'c1', worktreePath: null });
+    (ctx.chats.getChat as any).mockReturnValue({ id: 'c1', projectId: 'p1', worktreePath: null });
 
     const result = getEffectivePath(ctx, 'p1', 'c1');
     expect(result).toBe('/my/project');
@@ -63,9 +63,18 @@ describe('getEffectivePath', () => {
     (ctx.db.projects.get as any).mockReturnValue({ id: 'p1', path: '/my/project' });
     (ctx.chats.getChat as any).mockReturnValue({
       id: 'c1',
+      projectId: 'p1',
       worktreePath: '/deleted/worktree',
       worktreeMissing: true,
     });
+
+    const result = getEffectivePath(ctx, 'p1', 'c1');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when chatId belongs to a different project (cross-project guard)', () => {
+    (ctx.db.projects.get as any).mockReturnValue({ id: 'p1', path: '/my/project' });
+    (ctx.chats.getChat as any).mockReturnValue({ id: 'c1', projectId: 'p2', worktreePath: '/other/worktree' });
 
     const result = getEffectivePath(ctx, 'p1', 'c1');
     expect(result).toBeNull();

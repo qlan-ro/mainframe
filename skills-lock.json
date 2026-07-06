@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "assistant-ui": {
+      "source": "assistant-ui/skills",
+      "sourceType": "github",
+      "skillPath": "assistant-ui/skills/assistant-ui/SKILL.md",
+      "computedHash": "5e342f1cae9193afe989d2244b73f5e1074951adc8cf7014119cedac88747a53"
+    },
+    "radix-ui-design-system": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/radix-ui-design-system/SKILL.md",
+      "computedHash": "4f61669def1dbb117039a07fb22a86cfa397b1518285d5e3d7f06abd09d4dc92"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "8f8bcc9024aa068245fac646d654a18c80280e4b06112ccd3e691a8c96cd66bd"
+    },
+    "tauri-v2": {
+      "source": "nodnarbnitram/claude-code-extensions",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/tauri-v2/SKILL.md",
+      "computedHash": "377c61c46cf48c35b942042bc8abb9a039049a47f37d7f12b4f491d012777490"
+    }
+  }
+}
