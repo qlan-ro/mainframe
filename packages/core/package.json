@@ -17,6 +17,7 @@
     "./messages": "./dist/messages/index.js"
   },
   "bin": {
+    "mainframe": "./dist/index.js",
     "mainframe-daemon": "./dist/index.js"
   },
   "scripts": {

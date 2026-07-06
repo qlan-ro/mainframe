@@ -105,7 +105,7 @@ For servers, headless use, or building on the API:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
-mainframe-daemon
+mainframe
 ```
 
 That's the whole quick start. For running it as a systemd service, prerequisites in detail, and troubleshooting, see **[Running the Daemon](docs/guides/running-the-daemon.md)**. To expose it for remote clients, see **[Cloudflare Tunnel Setup](docs/guides/cloudflare-tunnel.md)**.
@@ -116,7 +116,7 @@ Every client pairs the same way: the daemon shows a short-lived pairing code, yo
 
 | Client | Start pairing in | Get the code from |
 |---|---|---|
-| **Mobile app** — publishing soon; ping me to join TestFlight | Tap **Connect**, scan the QR or type the code | Desktop: **Settings → Devices → Pair New Device**. Headless: `mainframe-daemon pair` |
+| **Mobile app** — publishing soon; ping me to join TestFlight | Tap **Connect**, scan the QR or type the code | Desktop: **Settings → Devices → Pair New Device**. Headless: `mainframe pair` |
 | **Desktop app → remote daemon** *(new)* | Sidebar daemon picker → **Add remote daemon** → paste the daemon's tunnel URL → enter the code | Same as above, on the remote daemon |
 
 Pairing over the internet requires a tunnel on the daemon's machine — and remote daemons need a **named** tunnel (a quick tunnel's URL changes on restart, which breaks the pairing). See the [tunnel guide](docs/guides/cloudflare-tunnel.md).

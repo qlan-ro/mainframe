@@ -65,7 +65,7 @@ export async function runPair(): Promise<void> {
   setTimeout(
     () => {
       clearInterval(pollInterval);
-      console.log('\n  Pairing code expired. Run `mainframe-daemon pair` to try again.\n');
+      console.log('\n  Pairing code expired. Run `mainframe pair` to try again.\n');
       process.exit(1);
     },
     5 * 60 * 1000,

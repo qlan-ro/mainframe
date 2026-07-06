@@ -47,22 +47,24 @@ Sign each CLI into its account once (`claude`, `codex`) before the daemon drives
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
 ```
 
-This downloads a self-contained release tarball to `~/.mainframe/bin` — a bundled Node runtime, `cloudflared`, and the daemon. The launcher is `~/.mainframe/bin/bin/mainframe-daemon`. Add it to your `PATH`:
+This downloads a self-contained release tarball to `~/.mainframe/bin` — a bundled Node runtime, `cloudflared`, and the daemon. The launcher is `~/.mainframe/bin/bin/mainframe`. Add it to your `PATH`:
 
 ```bash
 export PATH="$HOME/.mainframe/bin/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
 ```
 
+> The command is `mainframe`. Older installs exposed it as `mainframe-daemon`; that name still ships as an alias, so existing systemd units keep working after an update.
+
 ## 3. Run it
 
 ```bash
-mainframe-daemon
+mainframe
 ```
 
 The daemon listens on `http://127.0.0.1:31415` by default. To connect the mobile app, generate a pairing code from a second shell (the daemon must already be running):
 
 ```bash
-mainframe-daemon pair
+mainframe pair
 ```
 
 Enter the code in the mobile app. Pairing over the internet requires a tunnel — see [step 5](#5-remote-access).
@@ -77,14 +79,14 @@ Configuration is read from `~/.mainframe/config.json` and these environment vari
 
 ## 4. Run as a service (systemd)
 
-A raw `mainframe-daemon` dies when your SSH session ends. On Linux, run it under systemd so it survives logout and restarts on boot or crash.
+A raw `mainframe` dies when your SSH session ends. On Linux, run it under systemd so it survives logout and restarts on boot or crash.
 
 **Run as a dedicated non-root user.** The daemon drives AI agents that execute shell commands; running them as root gives every command unrestricted power over the host. A normal user also means you don't need the `IS_SANDBOX=1` escape hatch (Claude Code refuses `--dangerously-skip-permissions` as root unless a sandbox is asserted).
 
 The key gotcha: **systemd does not inherit your login `PATH`**, so the unit must list the directory holding `claude`/`codex` (usually `~/.local/bin`) or the daemon can't spawn them.
 
 ```ini
-# /etc/systemd/system/mainframe-daemon.service
+# /etc/systemd/system/mainframe.service
 [Unit]
 Description=Mainframe Daemon
 After=network-online.target
@@ -95,7 +97,7 @@ Type=simple
 User=mainframe
 Environment=HOME=/home/mainframe
 Environment=PATH=/home/mainframe/.local/bin:/home/mainframe/.mainframe/bin/bin:/home/mainframe/.mainframe/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/home/mainframe/.mainframe/bin/bin/mainframe-daemon
+ExecStart=/home/mainframe/.mainframe/bin/bin/mainframe
 Restart=on-failure
 RestartSec=3
 
@@ -105,12 +107,12 @@ WantedBy=multi-user.target
 
 ```bash
 systemctl daemon-reload
-systemctl enable --now mainframe-daemon
-systemctl status mainframe-daemon
-journalctl -u mainframe-daemon -f      # live logs
+systemctl enable --now mainframe
+systemctl status mainframe
+journalctl -u mainframe -f      # live logs
 ```
 
-Note the launcher path is `.mainframe/bin/bin/mainframe-daemon` (nested `bin/bin` — the release tarball's `bin/` extracted under the install dir).
+Note the launcher path is `.mainframe/bin/bin/mainframe` (nested `bin/bin` — the release tarball's `bin/` extracted under the install dir).
 
 ## 5. Remote access
 
@@ -118,10 +120,28 @@ To reach the daemon from the mobile app or another machine, expose it with a Clo
 
 **See [Cloudflare Tunnel Setup](./cloudflare-tunnel.md)** for quick vs. named tunnels, the runtime API, and troubleshooting. To enable it under systemd, add `Environment=TUNNEL=true` (plus `TUNNEL_TOKEN`/`TUNNEL_URL` for a named tunnel) to the unit above.
 
+## Updating
+
+Upgrade in place with the built-in updater. It downloads the latest release tarball for your platform and unpacks it over `~/.mainframe/bin`:
+
+```bash
+mainframe update            # latest stable release
+mainframe update --pre      # include pre-releases (e.g. the current 2.0 rc line)
+mainframe update --version v2.0.0-rc.1   # a specific tag
+```
+
+`update` replaces the on-disk files only — the running daemon keeps serving until you restart it, so finish with:
+
+```bash
+systemctl restart mainframe      # or: kill the foreground process and re-run `mainframe`
+```
+
+Re-running the [install script](#2-install-the-daemon) does the same thing and is the fallback if the daemon is too broken to run `mainframe update`.
+
 ## Troubleshooting
 
 - **`GLIBC_2.28 not found` / `libatomic.so.1: cannot open shared object file`** — see [System requirements](#system-requirements). Old OS or missing `libatomic`.
-- **`Cannot find module 'better-sqlite3'`** — the native module belongs in a `node_modules` next to the bundled daemon. If a release is missing it, install it beside the bundle: `cd ~/.mainframe/bin/lib && npm init -y && npm install better-sqlite3@^12`.
-- **`claude`/`codex` not found (only under systemd)** — the unit's `PATH` is missing the CLI directory. Add `~/.local/bin`, then `systemctl show mainframe-daemon -p Environment` to confirm.
+- **`Cannot find module 'better-sqlite3'`** — releases now bundle a full `node_modules` next to the daemon, so a fresh install shouldn't hit this. If you're on an **older tarball** that predates the fix, either re-run the [install](#2-install-the-daemon) to pull a current release, or install the module beside the bundle as a stopgap: `cd ~/.mainframe/bin/lib && npm init -y && npm install better-sqlite3@^12`.
+- **`claude`/`codex` not found (only under systemd)** — the unit's `PATH` is missing the CLI directory. Add `~/.local/bin`, then `systemctl show mainframe -p Environment` to confirm.
 - **`--dangerously-skip-permissions cannot be used with root/sudo`** — you're running the daemon as root. Run as a non-root user (recommended), or set `IS_SANDBOX=1` only inside a genuinely contained environment.
 - **Pairing works locally but not remotely** — you need a tunnel; see [step 5](#5-remote-access).

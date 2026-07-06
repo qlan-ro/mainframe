@@ -41,7 +41,7 @@ echo "Installing to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR"
 tar -xzf "${TMP_DIR}/${ARTIFACT}" -C "$INSTALL_DIR" --strip-components=1
 
-chmod +x "${INSTALL_DIR}/bin/mainframe-daemon"
+chmod +x "${INSTALL_DIR}/bin/mainframe"
 
 # PATH check
 if ! echo "$PATH" | tr ':' '\n' | grep -q "${INSTALL_DIR}/bin"; then
@@ -53,6 +53,6 @@ if ! echo "$PATH" | tr ':' '\n' | grep -q "${INSTALL_DIR}/bin"; then
 fi
 
 echo ""
-echo "Installed mainframe-daemon to ${INSTALL_DIR}/bin/mainframe-daemon"
-echo "Run 'mainframe-daemon' to start the daemon"
+echo "Installed mainframe to ${INSTALL_DIR}/bin/mainframe"
+echo "Run 'mainframe' to start the daemon, or 'mainframe update' to upgrade later"
 echo ""
