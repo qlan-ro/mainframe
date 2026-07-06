@@ -17,6 +17,11 @@
  * installed them. The sidecar is pinned to the same major (Node 24, .nvmrc), so on
  * the dev/CI host they already match — no rebuild step here. Each CI runner installs
  * for its own platform, so its node_modules carry the right per-platform .node files.
+ *
+ * macOS release builds additionally codesign every nested Mach-O binary (the
+ * .node addons, the provisioned `node`, `rg`) — see scripts/lib/mach-o-sign.mjs
+ * for why this has to happen here (inside `beforeBuildCommand`) rather than as
+ * a separate post-build hook.
  */
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
@@ -24,12 +29,14 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { signMachOTree } from './lib/mach-o-sign.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appTauri = resolve(here, '..'); // packages/app-tauri
 const repoRoot = resolve(appTauri, '../..'); // monorepo root
 const coreEntry = join(repoRoot, 'packages/core/dist/index.js');
 const daemonDir = join(appTauri, 'src-tauri/resources/daemon');
+const binariesDir = join(appTauri, 'src-tauri/binaries'); // provisioned `node-<triple>` (provision-node.mjs)
 const outfile = join(daemonDir, 'daemon.cjs');
 
 // External = anything that must stay a runtime require() resolving from node_modules:
@@ -43,13 +50,13 @@ const EXTERNAL = [
   '*.node',
 ];
 
-console.log('[bundle-daemon] 1/3 building @qlan-ro/mainframe-core …');
+console.log('[bundle-daemon] 1/4 building @qlan-ro/mainframe-core …');
 execFileSync('pnpm', ['--filter', '@qlan-ro/mainframe-core', 'build'], {
   cwd: repoRoot,
   stdio: 'inherit',
 });
 
-console.log('[bundle-daemon] 2/3 esbuild → resources/daemon/daemon.cjs …');
+console.log('[bundle-daemon] 2/4 esbuild → resources/daemon/daemon.cjs …');
 mkdirSync(daemonDir, { recursive: true });
 await build({
   entryPoints: [coreEntry],
@@ -64,7 +71,7 @@ await build({
   logOverride: { 'empty-import-meta': 'silent' },
 });
 
-console.log('[bundle-daemon] 3/3 collecting runtime deps → resources/daemon/node_modules …');
+console.log('[bundle-daemon] 3/4 collecting runtime deps → resources/daemon/node_modules …');
 // Each EXTERNAL stays a runtime require(), so it must exist in a node_modules
 // SIBLING of daemon.cjs. Seed from the externals and walk each package.json's
 // (optional) dependencies, deref-copying the real (pnpm-symlinked) package dirs
@@ -129,3 +136,10 @@ for (const [name, dir] of found) {
 }
 
 console.log(`[bundle-daemon] done → ${daemonDir} (${found.size} runtime packages)`);
+
+console.log('[bundle-daemon] 4/4 codesigning nested Mach-O binaries (macOS release only) …');
+// Covers the daemon's own native addons (better-sqlite3, fsevents, node-pty,
+// @vscode/ripgrep's `rg`) AND the provisioned sidecar `node` binary — both are
+// already on disk by the time this step runs (provision:node → bundle:daemon,
+// see package.json "bundle" script and tauri.conf.json beforeBuildCommand).
+signMachOTree([daemonDir, binariesDir], { label: 'daemon sidecar (daemon/ + binaries/)' });
