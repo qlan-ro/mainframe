@@ -9,6 +9,12 @@
  * plain function component that doesn't forward arbitrary props/refs. Nesting it
  * directly inside `PopoverTrigger asChild` would silently swallow the click/ref
  * Radix needs to open the popover (see the Hint-inside-asChild-trigger trap).
+ *
+ * `open`/`onOpenChange` are optional and lift the open state to a caller-owned
+ * store (see `useNewSessionPickerTarget`) so an entry point OTHER than this
+ * popover's own trigger — the global ⌘N hotkey, the zero-session boot
+ * fallback — can open the SAME anchored popover. Omitted, it falls back to
+ * internal state (uncontrolled — the shape existing callers/tests expect).
  */
 import type { ReactNode } from 'react';
 import { useState } from 'react';
@@ -28,6 +34,9 @@ interface NewSessionPickerPopoverProps {
   /** Optional tooltip label for the trigger (see the file-header note on why this
    * wraps `PopoverTrigger`, not `children`, directly). */
   triggerLabel?: string;
+  /** Controlled open state — see the file-header note. Omit for uncontrolled. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 function countLabel(count: number): string {
@@ -42,8 +51,12 @@ export function NewSessionPickerPopover({
   onAddProject,
   children,
   triggerLabel,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: NewSessionPickerPopoverProps) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChangeProp ?? setOpenState;
   const rowClass =
     'flex w-full items-center gap-[8px] rounded-[6px] px-2 py-1.5 text-left text-body transition-colors hover:bg-accent';
 

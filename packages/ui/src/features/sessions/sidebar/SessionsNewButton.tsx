@@ -24,6 +24,7 @@ import { setDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
 import { NewSessionPickerPopover } from './NewSessionPickerPopover';
+import { useNewSessionPickerTarget } from './use-new-session-picker-target';
 
 const ICON_BTN =
   'inline-flex size-[22px] items-center justify-center rounded-[6px] text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
@@ -69,6 +70,11 @@ export function SessionsNewButton({
     );
   }
 
+  // Lifted so the global ⌘N hotkey and the zero-session boot fallback can open
+  // this SAME anchored popover (see useNewSessionPickerTarget).
+  const pickerOpen = useNewSessionPickerTarget((s) => s.open);
+  const setPickerOpen = useNewSessionPickerTarget((s) => s.setOpen);
+
   const pick = (projectId: string) => {
     const nid = runtime.threads.getState().newThreadId;
     if (nid == null) return;
@@ -86,6 +92,8 @@ export function SessionsNewButton({
       onPick={pick}
       onAddProject={onAddProject}
       triggerLabel="New session"
+      open={pickerOpen}
+      onOpenChange={setPickerOpen}
     >
       <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={ICON_BTN}>
         <PlusIcon className="size-[12px]" />

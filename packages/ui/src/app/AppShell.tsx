@@ -24,7 +24,7 @@ import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useNewChatHotkey } from '../features/sessions/use-new-chat-hotkey';
-import { resetNewThreadDraft } from '../features/sessions/new-thread/reset-new-thread-draft';
+import { useNewChatHotkeyHandler } from '../features/sessions/new-thread/use-new-chat-hotkey-handler';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { activeLaunchScope } from '../lib/launch-scope';
@@ -66,13 +66,12 @@ function RuntimeBody({ port }: { port: number }) {
     return () => setSessionNavigator(null);
   }, [runtime]);
 
-  // Global ⌘N / Ctrl+N → new chat (same path as the sidebar's New button).
-  // Reset the reused newThreadId's stale draft first so it can't leak an abandoned
-  // draft's project into the next New (see resetNewThreadDraft).
-  useNewChatHotkey(() => {
-    resetNewThreadDraft(runtime.threads.getState().newThreadId);
-    void runtime.threads.switchToNewThread();
-  });
+  // Global ⌘N / Ctrl+N → new chat. In "All" view (no project pill active) this
+  // opens the sidebar "+" button's project picker instead of switching straight
+  // to a projectless new thread (see useNewChatHotkeyHandler for the branch and
+  // resolveNewChatHotkeyAction for the seam); a project pill active keeps the
+  // native path (reset the stale draft, switch — auto-config seeds the project).
+  useNewChatHotkey(useNewChatHotkeyHandler(runtime));
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();

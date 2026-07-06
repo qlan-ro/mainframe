@@ -13,16 +13,58 @@
  *   message column; the composer stays live so the first send still flows
  *   through onNew → coordinator → ONE createChat (no chat is created until the
  *   first send, D3).
+ * - Zero-session boot fallback: projects>0, "All" view (no project pill), and
+ *   still on the unresolved boot draft after BOOT_SETTLE_MS → open the shared
+ *   project-picker popover (same one the sidebar "+" button opens) instead of
+ *   leaving a projectless dead-end (no project chip, no file tree, first send
+ *   fails and rolls back). This state can otherwise only arise at boot: every
+ *   other path into a new local thread (the "+" button's pick(), a pill-active
+ *   ⌘N) resolves `draftCfg` before/at activation. The settle window lets
+ *   useSessionListRouter's boot auto-select win the race when real sessions
+ *   exist — see the effect below for how the cancel-on-redirect works.
  * - Everything else (a sent local thread, a pre-existing chat, or a new local
  *   thread with no project resolved yet) shows the plain ChatThread.
  */
+import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useSessionFilters } from '@/store/session-filters';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
+import { useNewSessionPickerTarget } from '../sidebar/use-new-session-picker-target';
+
+/** How long to wait, once we look like the zero-session boot dead-end, before
+ *  forcing the project picker open. Long enough for useSessionListRouter's
+ *  boot auto-select to win the race and redirect away when real sessions
+ *  exist (mirrors useFirstRunTour's SETTLE_MS). */
+const BOOT_SETTLE_MS = 1500;
+
+/** Zero-session boot fallback (see the file-header note). Cancelable: any
+ *  dependency change (e.g. the boot auto-select redirects to a real session,
+ *  or the draft resolves a project) clears the pending timer/opens state
+ *  before it fires. */
+function useZeroSessionBootPicker(args: { isDeadEnd: boolean }): void {
+  const { isDeadEnd } = args;
+  const autoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDeadEnd) {
+      if (autoOpenedRef.current) {
+        autoOpenedRef.current = false;
+        useNewSessionPickerTarget.getState().setOpen(false);
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      autoOpenedRef.current = true;
+      useNewSessionPickerTarget.getState().setOpen(true);
+    }, BOOT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [isDeadEnd]);
+}
 
 export function ChatSurface({ port: _port }: { port: number }) {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
@@ -37,9 +79,14 @@ export function ChatSurface({ port: _port }: { port: number }) {
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const draftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.get(mainThreadId) : undefined));
   const { projects, loading } = useProjects();
+  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
 
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
+
+  useZeroSessionBootPicker({
+    isDeadEnd: isNewLocal && !loading && projects.length > 0 && draftCfg == null && filterProjectId == null,
+  });
 
   if (isNewLocal && !loading && projects.length === 0) {
     return (
