@@ -74,11 +74,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TEMPORARILY macOS-only (2026-07-06) — see build-desktop note. Restore the
-        # ubuntu x64/arm64 daemon targets when Windows/Linux release legs are re-enabled.
+        # The daemon standalone build stays cross-platform (macOS + Linux) even while
+        # the desktop/Tauri release legs are macOS-only — it has no signing dependency.
         include:
           - os: macos-14
             target_os: darwin
+            target_arch: arm64
+          - os: ubuntu-latest
+            target_os: linux
+            target_arch: x64
+          - os: ubuntu-24.04-arm
+            target_os: linux
             target_arch: arm64
 
     runs-on: ${{ matrix.os }}
