@@ -156,6 +156,7 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "artifactName": "${productName}-electron-${version}-macos-${arch}.${ext}",
       "target": [
         "dmg",
         "zip"
@@ -175,11 +176,13 @@
       }
     },
     "win": {
+      "artifactName": "${productName}-electron-${version}-windows-${arch}.${ext}",
       "target": [
         "nsis"
       ]
     },
     "linux": {
+      "artifactName": "${productName}-electron-${version}-linux-${arch}.${ext}",
       "target": [
         "AppImage"
       ],
