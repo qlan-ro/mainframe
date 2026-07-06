@@ -1,5 +1,86 @@
 # Changelog
 
+## 2.0.0-rc.1
+
+
+### Patch Changes
+
+- Updated dependencies [[`9ca92ef`](https://github.com/qlan-ro/mainframe/commit/9ca92ef6fa1823f3466a9402c05152c60541b10f), [`9ca92ef`](https://github.com/qlan-ro/mainframe/commit/9ca92ef6fa1823f3466a9402c05152c60541b10f)]:
+  - @qlan-ro/mainframe-core@2.0.0-rc.1
+  - @qlan-ro/mainframe-types@2.0.0-rc.1
+
+
+### Patch Changes
+
+- Updated dependencies [[`46ff525`](https://github.com/qlan-ro/mainframe/commit/46ff52532fd86a2fcccd982d51935dd9fdd8778d), [`46ff525`](https://github.com/qlan-ro/mainframe/commit/46ff52532fd86a2fcccd982d51935dd9fdd8778d), [`46ff525`](https://github.com/qlan-ro/mainframe/commit/46ff52532fd86a2fcccd982d51935dd9fdd8778d)]:
+  - @qlan-ro/mainframe-ui@2.0.0-rc.1
+
+
+### Minor Changes
+
+- [#405](https://github.com/qlan-ro/mainframe/pull/405) [`9ca92ef`](https://github.com/qlan-ro/mainframe/commit/9ca92ef6fa1823f3466a9402c05152c60541b10f) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Rename the daemon CLI to `mainframe` and add a `mainframe update` command.
+
+  The standalone binary is now `mainframe` (the old `mainframe-daemon` name still
+  ships as an alias, so existing systemd units keep working). `mainframe update`
+  upgrades a standalone install in place: it downloads the matching release tarball
+  for the host platform and unpacks it over `~/.mainframe/bin`. Supports
+  `--pre` (include pre-releases), `--version <tag>`, and `--dir <path>`; the daemon
+  keeps serving until you restart it.
+
+### Patch Changes
+
+- [#405](https://github.com/qlan-ro/mainframe/pull/405) [`9ca92ef`](https://github.com/qlan-ro/mainframe/commit/9ca92ef6fa1823f3466a9402c05152c60541b10f) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the standalone daemon tarball (the `linux`/`darwin` release artifacts installed
+  via `scripts/install.sh`) so it ships a complete `node_modules` sibling to
+  `daemon.cjs`. Previously `build-standalone.sh` only copied better-sqlite3's raw
+  `.node` binary, so the bundled daemon's `require('better-sqlite3')` (and the LSP
+  servers + ripgrep) could not resolve and the daemon failed to start with
+  `Cannot find module 'better-sqlite3'`. The standalone build now uses the same
+  dependency collector as the Tauri sidecar bundler.
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.1
+
+
+### Patch Changes
+
+- [#404](https://github.com/qlan-ro/mainframe/pull/404) [`46ff525`](https://github.com/qlan-ro/mainframe/commit/46ff52532fd86a2fcccd982d51935dd9fdd8778d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix archiving the active session dumping you on the empty new-session screen.
+
+  assistant-ui's remote thread list calls `switchToNewThread()` off the archived
+  thread _before_ marking it archived, so `mainThreadId` becomes a fresh
+  `__LOCALID_*` draft and the existing archived-active fallback (which keyed on the
+  active thread still being archived) never fired. The session router now remembers
+  the last real (non-draft) thread and, when an archive bumps you onto an empty
+  draft, redirects to a fallback session — the last-used one if still live, else
+  the most-recently-updated non-archived session, respecting the active project
+  filter. A deliberate "New" leaves the previous session regular, so it is not
+  redirected.
+
+- [#404](https://github.com/qlan-ro/mainframe/pull/404) [`46ff525`](https://github.com/qlan-ro/mainframe/commit/46ff52532fd86a2fcccd982d51935dd9fdd8778d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix background sessions losing messages while another chat is open.
+
+  A chat's live WS subscription is gated to the active thread, so a backgrounded
+  chat receives no message events while dormant — the daemon still persists them,
+  but the transcript stayed frozen at the pre-dormancy snapshot. On `subscribe:ack`
+  the catch-up re-seed only fired for a socket reconnect or an unreconciled
+  optimistic send, so simply switching back to a chat never healed the gap and the
+  messages that arrived while it was backgrounded stayed invisible until a full
+  reconnect.
+
+  The controller now tracks when a live sub is torn down and treats the next
+  attach as a post-dormancy reattach, re-seeding history from REST on the reattach
+  ack (like a reconnect). Row-level unread notifications were unaffected — they run
+  on a separate always-on session-list subscription — so this only restores the
+  missed transcript content on switch-back.
+
+- [#404](https://github.com/qlan-ro/mainframe/pull/404) [`46ff525`](https://github.com/qlan-ro/mainframe/commit/46ff52532fd86a2fcccd982d51935dd9fdd8778d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix two session/editor UX bugs:
+  - Selecting a project filter with no sessions now opens a new-session draft
+    instead of stranding the previously-selected session from another project.
+  - The Markdown preview is now selectable, so its prose can be copied — the
+    `mf-editor-selectable` opt-in class was referenced by the editor surfaces but
+    never defined in the selection whitelist.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.1
+
+
 ## 1.0.0
 
 
