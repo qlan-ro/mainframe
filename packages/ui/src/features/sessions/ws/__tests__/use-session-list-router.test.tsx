@@ -355,6 +355,57 @@ describe('useSessionListRouter — archived active with no fallback thread', () 
 });
 
 // ---------------------------------------------------------------------------
+// 10a. Archive of the ACTIVE session: aui switchToNewThread()s off it FIRST, so
+//   mainThreadId becomes a fresh __LOCALID_* draft while the session it left is
+//   now archived. The router must redirect to a fallback, not strand the user on
+//   the empty new-thread surface.
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — archiving the active session redirects off the empty draft', () => {
+  it('switches to the most-recent non-archived session after aui bumps to a new draft', () => {
+    // 1) Active on chat-A — establishes it as the last real (non-draft) thread.
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    switchSpy.mockClear();
+
+    // 2) Archive chat-A: mainThreadId becomes a fresh draft; chat-A is now archived.
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-B');
+  });
+
+  it('does NOT redirect when the user deliberately opens a New thread (left session still regular)', () => {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    switchSpy.mockClear();
+
+    // User clicks New → draft, but chat-A stays 'regular' (nothing was archived).
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 11. unmount → dispose() called once
 // ---------------------------------------------------------------------------
 

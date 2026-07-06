@@ -925,8 +925,11 @@ body {
 }
 
 /* Re-enable text selection for actual content: rendered markdown (chat
-   messages — also what select-to-quote selects), form fields, and code. */
+   messages — also what select-to-quote selects), form fields, code, and the
+   editor surfaces (markdown preview, CodeMirror source + diff) that opt in via
+   `.mf-editor-selectable`. */
 .aui-md,
+.mf-editor-selectable,
 input,
 textarea,
 [contenteditable],
