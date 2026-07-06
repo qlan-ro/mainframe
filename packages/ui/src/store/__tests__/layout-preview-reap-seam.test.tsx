@@ -10,10 +10,18 @@ import { it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { HostProvider, setHostForTesting, resetHostForTesting } from '@/lib/host';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
+import { ActiveDaemonProvider } from '@/features/daemon/active-daemon-context';
 import { useLayoutStore } from '../layout';
 import { useSandboxStore } from '../sandbox';
 
-// Stub heavy sub-components so only lifecycle runs
+// Stub out side-effectful modules that ActiveDaemonProvider's switchTo invokes,
+// and heavy sub-components so only PreviewInstance's lifecycle effect runs.
+vi.mock('@/lib/daemon/dispose-daemon-session', () => ({ disposeDaemonSession: vi.fn() }));
+vi.mock('@/lib/daemon/ws-client', () => ({ daemonWs: { setPort: vi.fn(), connect: vi.fn() } }));
+vi.mock('@/lib/lsp', () => ({ rebindLspToActiveDaemon: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/features/daemon/reset-daemon-scoped-stores', () => ({
+  resetDaemonScopedStores: vi.fn(),
+}));
 vi.mock('@/features/preview/PreviewToolbar', () => ({
   PreviewToolbar: () => null,
 }));
@@ -56,11 +64,13 @@ import { PreviewInstance } from '@/features/preview/PreviewInstance';
 // A minimal host subscriber that renders/unmounts PreviewInstance based on a tab list
 function PreviewTabHost({ tabs, host }: { tabs: string[]; host: FakeHostBridge }) {
   return (
-    <HostProvider host={host}>
-      {tabs.map((id) => (
-        <PreviewInstance key={id} tabId={id} config="dev" visible port={3000} projectId="proj-1" />
-      ))}
-    </HostProvider>
+    <ActiveDaemonProvider>
+      <HostProvider host={host}>
+        {tabs.map((id) => (
+          <PreviewInstance key={id} tabId={id} config="dev" visible port={3000} projectId="proj-1" />
+        ))}
+      </HostProvider>
+    </ActiveDaemonProvider>
   );
 }
 

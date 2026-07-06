@@ -68,7 +68,23 @@ vi.mock('@assistant-ui/react', async () => {
   return {
     ...actual,
     AssistantRuntimeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    useAssistantRuntime: () => ({ threads: { reload: vi.fn().mockResolvedValue(undefined), switchToThread: vi.fn() } }),
+    useAssistantRuntime: () => ({
+      threads: {
+        reload: vi.fn().mockResolvedValue(undefined),
+        switchToThread: vi.fn(),
+        switchToNewThread: vi.fn().mockResolvedValue(undefined),
+        getState: () => ({
+          mainThreadId: 'main',
+          newThreadId: '__LOCALID_test',
+          threadIds: [],
+          archivedThreadIds: [],
+          isLoading: false,
+          isLoadingMore: false,
+          hasMore: false,
+          threadItems: {},
+        }),
+      },
+    }),
     useAui: () => ({ composer: () => ({ setText: vi.fn() }) }),
   };
 });

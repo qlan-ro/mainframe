@@ -11,9 +11,11 @@
  * prototype before each test that needs it.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import type { FileTreeEntry } from '@/lib/api/files';
 import { useFilesStore } from '@/store/files';
+import { ActiveDaemonProvider } from '@/features/daemon/active-daemon-context';
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,12 @@ const emitSurfaceIntent = vi.fn();
 
 vi.mock('@/lib/api/files', () => ({ getFileTree: (...a: unknown[]) => getFileTree(...a) }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => emitSurfaceIntent(...a) }));
+vi.mock('@/lib/daemon/dispose-daemon-session', () => ({ disposeDaemonSession: vi.fn() }));
+vi.mock('@/lib/daemon/ws-client', () => ({ daemonWs: { setPort: vi.fn(), connect: vi.fn() } }));
+vi.mock('@/lib/lsp', () => ({ rebindLspToActiveDaemon: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/features/daemon/reset-daemon-scoped-stores', () => ({
+  resetDaemonScopedStores: vi.fn(),
+}));
 
 import { FileTree } from '../FileTree';
 
@@ -29,6 +37,12 @@ import { FileTree } from '../FileTree';
 
 const dir = (name: string, path: string): FileTreeEntry => ({ name, path, type: 'directory' });
 const file = (name: string, path: string): FileTreeEntry => ({ name, path, type: 'file' });
+
+// FileTree renders FileTreeRowMenu, which reads the active daemon via
+// useDaemonIsLocal(). Wrap every render in the provider so that hook resolves.
+function render(ui: ReactElement) {
+  return rtlRender(<ActiveDaemonProvider>{ui}</ActiveDaemonProvider>);
+}
 
 // ── setup ─────────────────────────────────────────────────────────────────────
 
