@@ -38,9 +38,14 @@ export function getEffectivePath(ctx: RouteContext, projectId: string, chatId?: 
   if (!project) return null;
   if (chatId) {
     const chat = ctx.chats.getChat(chatId);
-    if (chat?.worktreePath) {
-      if (chat.worktreeMissing) return null;
-      return chat.worktreePath;
+    if (chat) {
+      // Guard: reject cross-project access — a chatId from project B must not
+      // silently re-base reads/writes under project A's URL.
+      if (chat.projectId !== projectId) return null;
+      if (chat.worktreePath) {
+        if (chat.worktreeMissing) return null;
+        return chat.worktreePath;
+      }
     }
   }
   return project.path;

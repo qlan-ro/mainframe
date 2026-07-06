@@ -1,5 +1,4 @@
 // packages/core/src/plugins/builtin/codex/history.ts
-import { nanoid } from 'nanoid';
 import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 import type { ThreadItem, PatchChangeKind } from './types.js';
 import type { CollabAgentToolCallItem } from './item-types.js';
@@ -20,12 +19,12 @@ export function convertThreadItems(
   for (const item of items) {
     switch (item.type) {
       case 'agentMessage':
-        messages.push(makeMessage(chatId, 'assistant', [{ type: 'text', text: item.text }]));
+        messages.push(makeMessage(item.id, chatId, 'assistant', [{ type: 'text', text: item.text }]));
         break;
 
       case 'reasoning':
         messages.push(
-          makeMessage(chatId, 'assistant', [
+          makeMessage(item.id, chatId, 'assistant', [
             { type: 'thinking', thinking: item.summary.join('\n') || item.content.join('\n') },
           ]),
         );
@@ -33,7 +32,7 @@ export function convertThreadItems(
 
       case 'commandExecution':
         messages.push(
-          makeMessage(chatId, 'assistant', [
+          makeMessage(item.id, chatId, 'assistant', [
             {
               type: 'tool_use',
               id: item.id,
@@ -43,7 +42,7 @@ export function convertThreadItems(
           ]),
         );
         messages.push(
-          makeMessage(chatId, 'tool_result', [
+          makeMessage(`${item.id}:result`, chatId, 'tool_result', [
             {
               type: 'tool_result',
               toolUseId: item.id,
@@ -71,9 +70,11 @@ export function convertThreadItems(
                   ? { move_path: (change.kind as Extract<PatchChangeKind, { type: 'update' }>).move_path }
                   : {}),
               };
-          messages.push(makeMessage(chatId, 'assistant', [{ type: 'tool_use', id: toolId, name: toolName, input }]));
           messages.push(
-            makeMessage(chatId, 'tool_result', [
+            makeMessage(toolId, chatId, 'assistant', [{ type: 'tool_use', id: toolId, name: toolName, input }]),
+          );
+          messages.push(
+            makeMessage(`${toolId}:result`, chatId, 'tool_result', [
               {
                 type: 'tool_result',
                 toolUseId: toolId,
@@ -91,7 +92,7 @@ export function convertThreadItems(
         const server = item.server ?? 'codex';
         const toolName = `mcp__${server}__${item.tool}`;
         messages.push(
-          makeMessage(chatId, 'assistant', [
+          makeMessage(item.id, chatId, 'assistant', [
             {
               type: 'tool_use',
               id: item.id,
@@ -101,7 +102,7 @@ export function convertThreadItems(
           ]),
         );
         messages.push(
-          makeMessage(chatId, 'tool_result', [
+          makeMessage(`${item.id}:result`, chatId, 'tool_result', [
             {
               type: 'tool_result',
               toolUseId: item.id,
@@ -120,7 +121,7 @@ export function convertThreadItems(
         const block = item.content?.find((b) => typeof b.text === 'string' && b.text.length > 0);
         const text = block?.text ?? item.text ?? '';
         if (!text) break;
-        messages.push(makeMessage(chatId, 'user', [{ type: 'text', text }]));
+        messages.push(makeMessage(item.id, chatId, 'user', [{ type: 'text', text }]));
         break;
       }
 
@@ -203,13 +204,13 @@ function emitCollabAgent(
     }
   }
 
-  messages.push(makeMessage(chatId, 'assistant', content));
-  for (const r of childToolResults) {
-    messages.push(makeMessage(chatId, 'tool_result', [r]));
+  messages.push(makeMessage(item.id, chatId, 'assistant', content));
+  for (const [index, r] of childToolResults.entries()) {
+    messages.push(makeMessage(`${item.id}:child:${index}:result`, chatId, 'tool_result', [r]));
   }
   // Close the card with the CollabAgent's own tool_result (sub-agent's final message).
   messages.push(
-    makeMessage(chatId, 'tool_result', [
+    makeMessage(`${item.id}:result`, chatId, 'tool_result', [
       {
         type: 'tool_result',
         toolUseId: item.id,
@@ -221,9 +222,17 @@ function emitCollabAgent(
   if (childId) spawnPrompts.delete(childId);
 }
 
-function makeMessage(chatId: string, type: ChatMessage['type'], content: MessageContent[]): ChatMessage {
+/**
+ * Build a ChatMessage with a CALLER-SUPPLIED deterministic id. The id is derived
+ * from the Codex thread item's stable `id` (+ a slot suffix for items that emit
+ * more than one message), so reconstructing the same items yields the same ids
+ * every turn. That lets the display delta emitter detect appends/updates instead
+ * of re-broadcasting the whole list (a `display.messages.set`) on every turn —
+ * which previously happened because `id: nanoid()` changed the ids each pass.
+ */
+function makeMessage(id: string, chatId: string, type: ChatMessage['type'], content: MessageContent[]): ChatMessage {
   return {
-    id: nanoid(),
+    id,
     chatId,
     type,
     content,
