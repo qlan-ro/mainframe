@@ -28,9 +28,32 @@ import { useUnreadStore } from '../../../store/unread-store';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
 import { useLastSessionStore } from '../../../store/last-session';
+import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { pickInitialSession } from '../view-model/initial-session';
+import { pickArchiveFallback } from '../view-model/session-fallback';
 import { createSessionListRouter } from './session-list-router';
+
+/** Persist the newly-active session (boot restore + per-project + workspace layout). */
+function rememberActiveSession(active: SessionItem | undefined): void {
+  if (active?.remoteId == null) return;
+  useLastSessionStore.getState().setLastSessionId(active.remoteId);
+  if (active.custom?.projectId != null) {
+    useLastSessionStore.getState().setLastForProject(active.custom.projectId, active.remoteId);
+  }
+  // Follow the active session with its remembered workspace layout, keyed by the
+  // stable daemon chat id. Skipped for the __LOCALID_* draft (no remoteId yet).
+  useLayoutStore.getState().setActiveSession(active.remoteId);
+}
+
+/** Clear the project filter when the activated chat belongs to a different project. */
+function clearFilterOnCrossProject(active: SessionItem | undefined): void {
+  const { filterProjectId, setFilterProjectId } = useSessionFilters.getState();
+  const projectId = active?.custom?.projectId;
+  if (filterProjectId != null && projectId != null && projectId !== filterProjectId) {
+    setFilterProjectId(null);
+  }
+}
 
 export function useSessionListRouter(): void {
   const runtime = useAssistantRuntime();
@@ -88,54 +111,54 @@ export function useSessionListRouter(): void {
     };
   }, [runtime]);
 
-  // Active-thread side-effects: unread clear, cross-project filter clear,
-  // archived-active fallback. Guarded so each fires once per active change.
+  // Active-thread side-effects: unread clear, cross-project filter clear, and the
+  // archived-active fallback. `lastActiveRef` dedupes the once-per-activation work;
+  // `prevRealActiveRef` remembers the last non-draft thread so an archive-induced
+  // bump onto an empty draft (redirect) is told apart from a deliberate New (stay).
   const lastActiveRef = useRef<string | null>(null);
+  const prevRealActiveRef = useRef<string | null>(null);
   useEffect(() => {
     if (mainThreadId == null) return;
     const active = items.find((t) => t.id === mainThreadId);
+    const onDraft = active == null || mainThreadId.startsWith('__LOCALID_');
 
-    if (active != null && active.status === 'archived') {
-      // Desktop parity: fall back to the most recently USED session, not the
-      // first in list order. pickInitialSession ranks by custom.updatedAt and
-      // skips archived items (including this one), so it can't re-pick the active.
-      // Respect the active project filter: prefer the newest session within the
-      // filtered project; only when that project has none left widen to all
-      // sessions (the cross-project effect below then clears the empty filter).
-      const { filterProjectId } = useSessionFilters.getState();
-      const inProject = filterProjectId != null ? items.filter((t) => t.custom.projectId === filterProjectId) : items;
-      const fallback = pickInitialSession(inProject) ?? pickInitialSession(items);
-      if (fallback != null) runtime.threads.switchToThread(fallback);
+    // Desktop parity: land on the last-used (else most-recent) non-archived session,
+    // respecting the active project filter. pickArchiveFallback skips archived items.
+    const fallback = (): string | null =>
+      pickArchiveFallback(items, useSessionFilters.getState().filterProjectId, useLastSessionStore.getState().lastSessionId);
+
+    if (onDraft) {
+      // Archive-induced empty state: aui `switchToNewThread()`s off the archived
+      // thread, so we land on a fresh draft rather than staying on the (now
+      // archived) session. If the real thread we just left is now archived, redirect
+      // to a fallback. A deliberate New leaves that thread 'regular', so it stays.
+      const leftItem = items.find((t) => t.id === prevRealActiveRef.current);
+      if (leftItem?.status === 'archived') {
+        const target = fallback();
+        if (target != null) {
+          prevRealActiveRef.current = null;
+          runtime.threads.switchToThread(target);
+        }
+      }
+      return;
+    }
+    if (active == null) return; // unreachable (onDraft covers it) — narrows for TS
+
+    // Defensive: aui usually switches away first, but if the active thread itself
+    // is archived out from under us, fall back the same way.
+    if (active.status === 'archived') {
+      const target = fallback();
+      if (target != null) runtime.threads.switchToThread(target);
       return;
     }
 
+    prevRealActiveRef.current = mainThreadId;
     if (mainThreadId === lastActiveRef.current) return;
     lastActiveRef.current = mainThreadId;
 
     useUnreadStore.getState().clearUnread(mainThreadId);
-
-    // Remember the open session (by stable daemon chat id) so the next boot can
-    // restore it. Skip the new-thread draft, which has no backing chat yet.
-    if (active?.remoteId != null) {
-      useLastSessionStore.getState().setLastSessionId(active.remoteId);
-      if (active.custom?.projectId != null) {
-        useLastSessionStore.getState().setLastForProject(active.custom.projectId, active.remoteId);
-      }
-
-      // Follow the active session with its remembered workspace layout (surface
-      // placement + Run panes), keyed by the stable daemon chat id — same key as
-      // pruneSessions above. Skip while on the __LOCALID_* draft: it has no
-      // remoteId (no backing chat yet), so there's nothing to key a workspace
-      // off; the previously active session's layout stays on screen until a
-      // real session is activated.
-      useLayoutStore.getState().setActiveSession(active.remoteId);
-    }
-
-    const { filterProjectId, setFilterProjectId } = useSessionFilters.getState();
-    const projectId = active?.custom?.projectId;
-    if (filterProjectId != null && projectId != null && projectId !== filterProjectId) {
-      setFilterProjectId(null);
-    }
+    rememberActiveSession(active);
+    clearFilterOnCrossProject(active);
   }, [mainThreadId, items, runtime]);
 
   // Boot auto-select: open a session once the list first loads, so the app doesn't
