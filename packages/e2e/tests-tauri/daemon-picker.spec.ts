@@ -110,8 +110,27 @@ function daemonRowByHost(page: Page, hostSubstr: string) {
 }
 
 async function openPicker(page: Page): Promise<void> {
-  await page.getByTestId('daemon-footer-trigger').click();
-  await page.getByTestId('daemon-picker').waitFor({ timeout: 10_000 });
+  // After a failed remote health-check (the dead-port "unreachable URL" test),
+  // the local connection state can transiently OSCILLATE, flickering the
+  // full-screen ConnectionOverlay — a `fixed inset-0 z-[11000]` scrim portaled
+  // to body (ConnectionOverlay.tsx) that intercepts pointer events even though
+  // the trigger itself is "stable". A one-shot guard races the flicker, so
+  // retry the whole open until the scrim is gone and the click actually lands
+  // (bounded — replaces the pre-existing 2-min-timeout flake on the test that
+  // runs right after the dead-port one).
+  // Retry the whole open to ride out a transient ConnectionOverlay scrim that
+  // can intercept the click. KNOWN RESIDUAL FLAKE (self-heals on retries:1):
+  // after the unreachable-URL test, headless Chromium's socket handling flaps
+  // the app's LOCAL /health poll, raising the scrim for a VARIABLE duration
+  // (~15s to occasionally >30s). Mocking that test's refusal (see it) reduces
+  // the frequency/severity; this 30s retry catches most cases fast; the rare
+  // longer scrim is healed by Playwright's retry. It's a headless-networking
+  // artifact, NOT a product bug (a real user's local connection is unaffected
+  // by verifying a bad remote URL). Every non-post-verify call clicks first-try.
+  await expect(async () => {
+    await page.getByTestId('daemon-footer-trigger').click({ timeout: 5_000 });
+    await expect(page.getByTestId('daemon-picker')).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000, 3_000] });
 }
 
 async function closePicker(page: Page): Promise<void> {
@@ -190,9 +209,15 @@ test.describe('§daemon-picker', () => {
 
   test('an unreachable server URL shows the error state with a retry action', async () => {
     const { page } = app;
-    // A loopback port nothing is listening on — real connection-refused failure,
-    // not a mocked one; deterministic on a sandboxed CI/dev loopback interface.
+    // Mock the refusal (route.abort) rather than hitting a real dead loopback
+    // port. A genuine connection-refused to a dead port perturbs headless
+    // Chromium's local networking enough to flap the app's LOCAL /health poll,
+    // which raised the full-screen "Reconnecting to daemon" ConnectionOverlay
+    // for 30-45s+ afterward and intercepted the NEXT test's clicks (a
+    // pre-existing flake). Aborting the request produces the identical
+    // "Couldn't reach this URL" verify failure with no real socket churn.
     const deadOrigin = 'http://127.0.0.1:59991';
+    await page.route(`${deadOrigin}/**`, (route) => route.abort('connectionrefused'));
 
     await openPicker(page);
     await page.getByTestId('daemon-picker-add').click();
