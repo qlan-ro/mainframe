@@ -221,6 +221,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
     try {
       const { token } = await confirmPairing(targetUrl, trimmedCode, device.trim() || 'This Mac');
 
+      let addedId: string | undefined;
       if (mode === 'add') {
         const host = parseRemoteUrl(targetUrl).host;
         const label = host.split('.')[0] ?? 'New server';
@@ -233,7 +234,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
           paired: 'Just now',
         };
         await registry.add(meta, token);
-        await registry.switchTo(meta.id);
+        addedId = meta.id;
       } else if (target != null) {
         await getHost().daemons.setToken(target.id, token);
       }
@@ -242,9 +243,15 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
       setPairedLabel(mode === 'repair' && target != null ? target.label : undefined);
 
       // Fire onDone immediately; defer close by 800 ms so the "Paired" notice
-      // and button label are visible before the dialog dismisses.
+      // is visible before the dialog dismisses. Defer the auto-switch too:
+      // switching flips `<AppShell key={target.id}>` in App.tsx, remounting
+      // the subtree this dialog lives in — switching eagerly used to tear the
+      // still-open dialog down before it ever reached this "done" phase.
       onDone();
-      closeTimerRef.current = setTimeout(onClose, 800);
+      closeTimerRef.current = setTimeout(() => {
+        onClose();
+        if (addedId != null) void registry.switchTo(addedId);
+      }, 800);
     } catch (err) {
       if (err instanceof PairingError) {
         setStep1Phase(err.kind === 'invalid' ? 'invalid' : 'unreachable');

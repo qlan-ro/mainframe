@@ -117,6 +117,20 @@ export function DaemonFooterStatus() {
     void registry.switchTo('local');
   }, [registry]);
 
+  // Radix's modal Dialog (rename/remove/add), when nested inside the picker
+  // Popover, fires its own dismiss-time focus/pointer interactions on the
+  // Popover's dismissable layer — closing the Popover as a side effect, even
+  // though nothing here ever calls setPickerOpen(false). Suppress that while
+  // a dialog is open (or on this exact render, right as it closes); an
+  // explicit Escape/outside-click with no dialog active still closes it.
+  const handlePickerOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && dialog != null) return;
+      setPickerOpen(open);
+    },
+    [dialog],
+  );
+
   // Unreachable overlay — only when active is REMOTE and WS is disconnected.
   const showUnreachableOverlay = activeMeta.kind === 'remote' && connState === 'disconnected';
 
@@ -126,7 +140,7 @@ export function DaemonFooterStatus() {
 
   return (
     <>
-      <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+      <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"

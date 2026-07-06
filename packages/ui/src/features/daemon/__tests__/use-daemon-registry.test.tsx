@@ -276,3 +276,66 @@ describe('useDaemonRegistry — switchTo', () => {
     expect(target.baseUrl).toBe(`http://127.0.0.1:${TEST_PORT}`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Behavior 4 — switchTo('local') restores the TRUE local port even when
+// `useDaemonPort()` tracks the currently-ACTIVE daemon's port (App.tsx's real
+// wiring: DaemonGatedShell derives its `port` prop from `target.baseUrl`, so
+// it changes to the remote's port while a remote is active — see App.tsx's
+// `DaemonGatedShell`). `makeWrapper` above uses a STATIC port, which masked
+// this: it can't reproduce the bug where `switchTo('local')`, resolving
+// `buildLocalTarget(port)` from the *current* (remote-derived) port instead of
+// the true local sidecar port, permanently corrupts the local entry's host
+// after any remote switch.
+// ---------------------------------------------------------------------------
+
+function DynamicPortFromActiveTarget({ children }: { children: ReactNode }) {
+  const { target } = useActiveDaemon();
+  const url = new URL(target.baseUrl);
+  const activePort = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
+  return <DaemonPortProvider port={activePort}>{children}</DaemonPortProvider>;
+}
+
+function makeDynamicPortWrapper() {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <ActiveDaemonProvider initialTarget={LOCAL_TARGET}>
+        <DynamicPortFromActiveTarget>{children}</DynamicPortFromActiveTarget>
+      </ActiveDaemonProvider>
+    );
+  };
+}
+
+const REMOTE_DEVBOX: DaemonMeta = {
+  id: 'devbox',
+  kind: 'remote',
+  label: 'Devbox',
+  host: 'devbox.example.com:9443',
+};
+
+describe('useDaemonRegistry — switchTo("local") with a dynamic (active-daemon-derived) port provider', () => {
+  it('restores the true local port, not the remote port left behind in context', async () => {
+    await fakeHost.daemons.upsert(REMOTE_DEVBOX);
+    await fakeHost.daemons.setToken(REMOTE_DEVBOX.id, 'devbox-token');
+
+    const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeDynamicPortWrapper(),
+    });
+
+    await act(async () => {});
+    expect(result.current.daemon.target.baseUrl).toBe(`http://127.0.0.1:${TEST_PORT}`);
+
+    await act(async () => {
+      await result.current.registry.switchTo('devbox');
+    });
+    expect(result.current.daemon.target.baseUrl).toBe('https://devbox.example.com:9443');
+
+    await act(async () => {
+      await result.current.registry.switchTo('local');
+    });
+
+    const target = result.current.daemon.target;
+    expect(target.id).toBe('local');
+    expect(target.baseUrl).toBe(`http://127.0.0.1:${TEST_PORT}`);
+  });
+});

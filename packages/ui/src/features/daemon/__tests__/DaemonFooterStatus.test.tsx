@@ -295,6 +295,57 @@ async function openAddDialogAndPair(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByTestId('daemon-add-confirm'));
 }
 
+// ---------------------------------------------------------------------------
+// Behavior 5 — picker popover stays open across a nested rename/remove dialog
+// dismiss (the outer Popover must not close itself when the inner modal
+// Dialog dismisses — Radix modal-Dialog-vs-Popover interaction).
+// ---------------------------------------------------------------------------
+
+describe('DaemonFooterStatus — picker stays open under nested dialogs', () => {
+  it('keeps the picker popover open after renaming a remote via the manage menu', async () => {
+    const user = userEvent.setup();
+
+    render(<DaemonFooterStatus />, { wrapper: makeWrapper(LOCAL_TARGET, 'connected') });
+
+    await user.click(screen.getByTestId('daemon-footer-trigger'));
+    await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}`);
+
+    await user.click(screen.getByTestId(`daemon-row-${REMOTE_STUDIO.id}-manage`));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-rename`));
+
+    const input = await screen.findByTestId('daemon-rename-input');
+    await user.clear(input);
+    await user.type(input, 'Renamed Studio');
+    await user.click(screen.getByTestId('daemon-rename-save'));
+
+    await waitFor(() => expect(screen.queryByTestId('daemon-rename-dialog')).not.toBeInTheDocument());
+
+    // The picker popover itself must still be open, showing the updated row.
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
+    expect(screen.getByTestId(`daemon-row-${REMOTE_STUDIO.id}`)).toHaveTextContent('Renamed Studio');
+  });
+
+  it('keeps the picker popover open after removing a remote via the manage menu', async () => {
+    const user = userEvent.setup();
+
+    render(<DaemonFooterStatus />, { wrapper: makeWrapper(LOCAL_TARGET, 'connected') });
+
+    await user.click(screen.getByTestId('daemon-footer-trigger'));
+    await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}`);
+
+    await user.click(screen.getByTestId(`daemon-row-${REMOTE_STUDIO.id}-manage`));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-remove`));
+
+    await user.click(await screen.findByTestId('daemon-remove-confirm'));
+
+    await waitFor(() => expect(screen.queryByTestId('daemon-remove-dialog')).not.toBeInTheDocument());
+
+    // The picker popover itself must still be open, now showing the empty state.
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('daemon-picker-empty')).toBeInTheDocument();
+  });
+});
+
 describe('DaemonFooterStatus — add-remote flow (bugs i & j)', () => {
   beforeEach(() => {
     vi.mocked(verifyDaemon).mockResolvedValue({ ok: true, version: '1.2.3', ms: 10 });

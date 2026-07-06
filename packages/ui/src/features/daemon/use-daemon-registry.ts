@@ -61,6 +61,17 @@ async function loadRemotes(): Promise<void> {
   }
 }
 
+// `useDaemonPort()` tracks the CURRENTLY ACTIVE daemon's port (App.tsx's
+// `DaemonGatedShell` derives it from `target.baseUrl`), not a fixed "local
+// sidecar" port — it equals the remote's port whenever a remote is active.
+// Cache the true local port here the moment we observe it (the active target
+// really is local), so switchTo('local')/remove()'s local fallback can
+// restore the real sidecar port even after `port` has since been overwritten
+// by a remote switch. Without this, switching to a remote and back corrupts
+// the synthetic "local" entry's host/baseUrl permanently (127.0.0.1:<remote's
+// port>), because `buildLocalTarget` had nothing else to read from.
+let cachedLocalPort: number | null = null;
+
 export function useDaemonRegistry(): UseDaemonRegistryResult {
   const port = useDaemonPort();
   const { target, switchTo: contextSwitchTo } = useActiveDaemon();
@@ -72,7 +83,13 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
     void loadRemotes();
   }, [port]);
 
-  const daemons = useMemo<DaemonMeta[]>(() => [buildSyntheticLocal(port), ...remotes], [port, remotes]);
+  useEffect(() => {
+    if (target.kind === 'local') cachedLocalPort = port;
+  }, [target.kind, port]);
+
+  const localPort = cachedLocalPort ?? port;
+
+  const daemons = useMemo<DaemonMeta[]>(() => [buildSyntheticLocal(localPort), ...remotes], [localPort, remotes]);
 
   const add = useCallback(
     async (meta: DaemonMeta, token: string): Promise<void> => {
@@ -100,18 +117,18 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
     async (id: string): Promise<void> => {
       await getHost().daemons.remove(id);
       if (target.id === id) {
-        await contextSwitchTo(buildLocalTarget(port));
+        await contextSwitchTo(buildLocalTarget(localPort));
       }
       await reload();
     },
-    [target.id, port, contextSwitchTo, reload],
+    [target.id, localPort, contextSwitchTo, reload],
   );
 
   const switchTo = useCallback(
     async (id: string): Promise<void> => {
       let resolved: DaemonTarget;
       if (id === 'local') {
-        resolved = buildLocalTarget(port);
+        resolved = buildLocalTarget(localPort);
       } else {
         // Read the live module-level snapshot, NOT the `remotes` value closed
         // over by this callback. A caller (e.g. AddRemoteDialog.handleConfirm)
@@ -129,7 +146,7 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
       }
       await contextSwitchTo(resolved);
     },
-    [port, contextSwitchTo],
+    [localPort, contextSwitchTo],
   );
 
   return {

@@ -180,6 +180,39 @@ describe('AddRemoteDialog — add-mode happy path', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Behavior 1b — switchTo is deferred until after the dialog's deferred close
+// (fixes AppShell's `key={target.id}` remount destroying the still-open
+// dialog mid-handleConfirm, before it can ever reach the "done"/"Paired"
+// phase — see AddRemoteDialog.tsx handleConfirm).
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — deferred auto-switch (add-mode)', () => {
+  it('does not call registry.switchTo until the dialog has closed', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onDone = vi.fn();
+
+    render(<AddRemoteDialog open mode="add" onClose={onClose} onDone={onDone} />);
+
+    await advanceToStep1(user);
+    await typeCode(user, VALID_CODE);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    // onDone fires immediately on success, while the "Paired" grace window is
+    // showing — switchTo must NOT have fired yet, or the resulting AppShell
+    // remount would tear down this still-open dialog.
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(mockSwitchTo).not.toHaveBeenCalled();
+
+    // Once the deferred close fires, switchTo runs with the newly-added
+    // daemon's id.
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    const addedMeta = mockAdd.mock.calls[0]?.[0] as DaemonMeta;
+    expect(mockSwitchTo).toHaveBeenCalledWith(addedMeta.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Behavior 2 — repair-mode: starts at step 1 with locked URL + setToken
 // ---------------------------------------------------------------------------
 
