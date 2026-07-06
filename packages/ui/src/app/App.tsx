@@ -18,6 +18,7 @@ import { seedAdaptersFor } from '@/store/adapters-seed';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
+import { DaemonDialogHost } from '../features/daemon/DaemonDialogHost';
 import { AppShell } from './AppShell';
 import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatusContext';
 import { ConnectionOverlay } from './ConnectionOverlay';
@@ -37,6 +38,13 @@ import { Toaster } from '@/components/ui/sonner';
  * Post-boot disconnect overlay lives here (not in App) so useActiveDaemon() is
  * in scope. It is suppressed when the active daemon is REMOTE — the remote case
  * is owned by DaemonFooterStatus's DaemonUnreachableBody overlay.
+ *
+ * DaemonDialogHost (the add/repair/rename/remove dialogs) is mounted here as a
+ * SIBLING of `<AppShell key={target.id}>`, genuinely above the keyed subtree —
+ * not inside AppShell's own root, where a switch would remount it. This is
+ * what lets a daemon switch (including AddRemoteDialog's own auto-switch on
+ * successful pairing) remount the shell without destroying an in-flight
+ * dialog. See DaemonDialogHost's module doc.
  */
 function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   const { target } = useActiveDaemon();
@@ -72,6 +80,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   return (
     <DaemonPortProvider port={activePort}>
       <AppShell key={target.id} port={activePort} />
+      <DaemonDialogHost />
       <ConnectionOverlay open={showReconnectOverlay} />
     </DaemonPortProvider>
   );

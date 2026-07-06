@@ -11,6 +11,9 @@
  *  4. Full add-remote flow through the REAL useDaemonRegistry (bug i/j
  *     regressions): pairing auto-switches the active daemon, and the
  *     "Paired" grace window stays open until the deferred close fires.
+ *     Dialog rendering now lives in DaemonDialogHost (hoisted above the daemon
+ *     `key`), so these tests render it alongside DaemonFooterStatus, mirroring
+ *     the App.tsx wiring.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -23,6 +26,8 @@ import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-cont
 import { ActiveDaemonProvider, useActiveDaemon } from '../active-daemon-context';
 import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
 import { DaemonFooterStatus } from '../DaemonFooterStatus';
+import { DaemonDialogHost } from '../DaemonDialogHost';
+import { useDaemonDialogTarget } from '../use-daemon-dialog-target';
 import { verifyDaemon, confirmPairing } from '../pair-daemon';
 
 // ---------------------------------------------------------------------------
@@ -119,6 +124,7 @@ beforeEach(async () => {
   await fakeHost.daemons.upsert(REMOTE_STUDIO);
   await fakeHost.daemons.setToken(REMOTE_STUDIO.id, REMOTE_TOKEN);
   setHostForTesting(fakeHost);
+  useDaemonDialogTarget.getState().close();
 });
 
 afterEach(() => {
@@ -314,6 +320,7 @@ describe('DaemonFooterStatus — add-remote flow (bugs i & j)', () => {
     render(
       <>
         <DaemonFooterStatus />
+        <DaemonDialogHost />
         <Spy />
       </>,
       { wrapper: makeWrapper(LOCAL_TARGET, 'connected') },
@@ -330,7 +337,13 @@ describe('DaemonFooterStatus — add-remote flow (bugs i & j)', () => {
   it('keeps the "Paired" dialog open through the grace window before closing (bug j)', async () => {
     const user = userEvent.setup();
 
-    render(<DaemonFooterStatus />, { wrapper: makeWrapper(LOCAL_TARGET, 'connected') });
+    render(
+      <>
+        <DaemonFooterStatus />
+        <DaemonDialogHost />
+      </>,
+      { wrapper: makeWrapper(LOCAL_TARGET, 'connected') },
+    );
 
     await openAddDialogAndPair(user);
 
@@ -343,5 +356,91 @@ describe('DaemonFooterStatus — add-remote flow (bugs i & j)', () => {
     await waitFor(() => expect(screen.queryByTestId('daemon-add-close')).not.toBeInTheDocument(), {
       timeout: 2000,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bug 2 regression — opening/dismissing the rename/remove dialog must NOT
+// close the picker Popover (DaemonSmallDialog used to be nested under the
+// picker Popover's interaction scope; the dialog is now rendered by
+// DaemonDialogHost, hoisted out of it).
+// ---------------------------------------------------------------------------
+
+describe('DaemonFooterStatus — bug 2 regression: rename dialog does not close the picker', () => {
+  it('opening then dismissing the rename dialog leaves the picker open', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <DaemonFooterStatus />
+        <DaemonDialogHost />
+      </>,
+      { wrapper: makeWrapper(LOCAL_TARGET, 'connected') },
+    );
+
+    await user.click(screen.getByTestId('daemon-footer-trigger'));
+    expect(await screen.findByTestId('daemon-picker')).toBeInTheDocument();
+
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-manage`));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-rename`));
+
+    expect(await screen.findByTestId('daemon-rename-dialog')).toBeInTheDocument();
+    // The rename dialog opening must not have collapsed the picker.
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
+
+    const input = screen.getByTestId('daemon-rename-input');
+    await user.clear(input);
+    await user.type(input, 'Renamed Studio');
+    await user.click(screen.getByTestId('daemon-rename-save'));
+
+    await waitFor(() => expect(screen.queryByTestId('daemon-rename-dialog')).not.toBeInTheDocument());
+    // Dismissing the rename dialog must not have closed the picker either.
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
+  });
+
+  it('cancelling the rename dialog (not confirming it) also leaves the picker open', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <DaemonFooterStatus />
+        <DaemonDialogHost />
+      </>,
+      { wrapper: makeWrapper(LOCAL_TARGET, 'connected') },
+    );
+
+    await user.click(screen.getByTestId('daemon-footer-trigger'));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-manage`));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-rename`));
+    expect(await screen.findByTestId('daemon-rename-dialog')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Cancel'));
+
+    await waitFor(() => expect(screen.queryByTestId('daemon-rename-dialog')).not.toBeInTheDocument());
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
+  });
+
+  it('opening then confirming the remove dialog leaves the picker open', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <DaemonFooterStatus />
+        <DaemonDialogHost />
+      </>,
+      { wrapper: makeWrapper(LOCAL_TARGET, 'connected') },
+    );
+
+    await user.click(screen.getByTestId('daemon-footer-trigger'));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-manage`));
+    await user.click(await screen.findByTestId(`daemon-row-${REMOTE_STUDIO.id}-remove`));
+
+    expect(await screen.findByTestId('daemon-remove-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('daemon-remove-confirm'));
+
+    await waitFor(() => expect(screen.queryByTestId('daemon-remove-dialog')).not.toBeInTheDocument());
+    expect(screen.getByTestId('daemon-picker')).toBeInTheDocument();
   });
 });

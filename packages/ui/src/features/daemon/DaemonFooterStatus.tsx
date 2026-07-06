@@ -1,7 +1,16 @@
 /**
  * DaemonFooterStatus — sidebar footer button that shows the active daemon and
- * opens the DaemonPicker in a Popover. Owns the full dialog + overlay state
- * machine (add/rename/remove/repair dialogs; unreachable overlay).
+ * opens the DaemonPicker in a Popover. Owns the trigger + Popover + unreachable
+ * overlay.
+ *
+ * The daemon-management dialogs (add/repair/rename/remove) are NOT rendered
+ * here — this component lives INSIDE the daemon-scoped `key={target.id}`
+ * subtree, so a daemon switch remounts it. Dialog RENDERING lives in
+ * DaemonDialogHost, mounted as a sibling of the keyed AppShell in
+ * DaemonGatedShell (App.tsx), so an in-flight dialog survives a switch. This
+ * component only dispatches open*() actions on the shared
+ * useDaemonDialogTarget store; see DaemonDialogHost's module doc for the full
+ * story.
  *
  * V1 status model:
  *  - Active daemon: derived from useConnectionStatus().state.
@@ -20,24 +29,12 @@ import { useConnectionStatus } from '@/app/ConnectionStatusContext';
 import { DaemonPicker } from './DaemonPicker';
 import { ConnDot, DaemonGlyph } from './DaemonRow';
 import type { DaemonStatus } from './DaemonRow';
-import { AddRemoteDialog } from './AddRemoteDialog';
-import { DaemonSmallDialog } from './DaemonSmallDialog';
 import { DaemonUnreachableBody } from './DaemonUnreachableBody';
 import { useActiveDaemon } from './active-daemon-context';
 import { useDaemonRegistry } from './use-daemon-registry';
+import { useDaemonDialogTarget } from './use-daemon-dialog-target';
 import { useRestoreLastDaemon } from './use-restore-last-daemon';
 import { parseRemoteUrl } from './pair-daemon';
-
-// ---------------------------------------------------------------------------
-// Dialog state
-// ---------------------------------------------------------------------------
-
-type DialogState =
-  | { kind: 'add' }
-  | { kind: 'repair'; target: DaemonMeta }
-  | { kind: 'rename'; target: DaemonMeta }
-  | { kind: 'remove'; target: DaemonMeta }
-  | null;
 
 // ---------------------------------------------------------------------------
 // Derive a DaemonMeta from the active DaemonTarget when the registry hasn't
@@ -60,7 +57,11 @@ export function DaemonFooterStatus() {
   const { target: activeTarget } = useActiveDaemon();
   const { state: connState } = useConnectionStatus();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const openAddDialog = useDaemonDialogTarget((s) => s.openAdd);
+  const openRenameDialog = useDaemonDialogTarget((s) => s.openRename);
+  const openRepairDialog = useDaemonDialogTarget((s) => s.openRepair);
+  const openRemoveDialog = useDaemonDialogTarget((s) => s.openRemove);
+  const dialogActive = useDaemonDialogTarget((s) => s.dialog != null);
 
   // Prefer the registry entry (has richer metadata); fall back to the target
   // singleton during the async-load gap so the label/kind are never stale.
@@ -84,34 +85,10 @@ export function DaemonFooterStatus() {
     [registry],
   );
 
-  const handleAdd = useCallback(() => setDialog({ kind: 'add' }), []);
-  const handleRename = useCallback((d: DaemonMeta) => setDialog({ kind: 'rename', target: d }), []);
-  const handleRepair = useCallback((d: DaemonMeta) => setDialog({ kind: 'repair', target: d }), []);
-  const handleRemove = useCallback((d: DaemonMeta) => setDialog({ kind: 'remove', target: d }), []);
-  const closeDialog = useCallback(() => setDialog(null), []);
-  // AddRemoteDialog fires onDone the instant pairing succeeds, then defers its
-  // own onClose by ~800ms so the "Paired" notice stays visible. onDone must
-  // NOT also close the dialog here, or that grace window collapses to zero.
-  const handlePairingDone = useCallback(() => {
-    /* no-op: dismissal is owned by the dialog's deferred onClose */
-  }, []);
-
-  const handleRenameConfirm = useCallback(
-    async (label?: string) => {
-      if (dialog?.kind === 'rename' && label != null) {
-        await registry.rename(dialog.target.id, label);
-      }
-      setDialog(null);
-    },
-    [dialog, registry],
-  );
-
-  const handleRemoveConfirm = useCallback(async () => {
-    if (dialog?.kind === 'remove') {
-      await registry.remove(dialog.target.id);
-    }
-    setDialog(null);
-  }, [dialog, registry]);
+  const handleAdd = useCallback(() => openAddDialog(), [openAddDialog]);
+  const handleRename = useCallback((d: DaemonMeta) => openRenameDialog(d), [openRenameDialog]);
+  const handleRepair = useCallback((d: DaemonMeta) => openRepairDialog(d), [openRepairDialog]);
+  const handleRemove = useCallback((d: DaemonMeta) => openRemoveDialog(d), [openRemoveDialog]);
 
   const handleSwitchLocal = useCallback(() => {
     void registry.switchTo('local');
@@ -126,7 +103,18 @@ export function DaemonFooterStatus() {
 
   return (
     <>
-      <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+      <Popover
+        open={pickerOpen}
+        onOpenChange={(next) => {
+          // Bug-2 guard: a rename/remove dialog (rendered by DaemonDialogHost,
+          // hoisted outside this Popover's own portal) can still read as an
+          // outside interaction to Radix when it opens/dismisses. Suppress the
+          // resulting auto-close while a dialog is active; the picker only
+          // closes via an explicit user action (row click / Add / trigger).
+          if (!next && dialogActive) return;
+          setPickerOpen(next);
+        }}
+      >
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -157,27 +145,6 @@ export function DaemonFooterStatus() {
           />
         </PopoverContent>
       </Popover>
-
-      {/* ── Dialogs ────────────────────────────────────────────────── */}
-      <AddRemoteDialog
-        open={dialog?.kind === 'add' || dialog?.kind === 'repair'}
-        mode={dialog?.kind === 'repair' ? 'repair' : 'add'}
-        target={dialog?.kind === 'repair' ? dialog.target : undefined}
-        onClose={closeDialog}
-        onDone={handlePairingDone}
-      />
-
-      {(dialog?.kind === 'rename' || dialog?.kind === 'remove') && (
-        <DaemonSmallDialog
-          open
-          kind={dialog.kind}
-          target={dialog.target}
-          onClose={closeDialog}
-          onConfirm={
-            dialog.kind === 'rename' ? (label) => void handleRenameConfirm(label) : () => void handleRemoveConfirm()
-          }
-        />
-      )}
 
       {/* ── Unreachable overlay ────────────────────────────────────── */}
       <ConnectionOverlay open={showUnreachableOverlay}>
