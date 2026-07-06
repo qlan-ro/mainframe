@@ -9,5 +9,8 @@
     "@qlan-ro/mainframe-types": "1.0.0",
     "@qlan-ro/mainframe-ui": "1.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "mainframe-2-0",
+    "release-prerelease-mode"
+  ]
 }
