@@ -140,6 +140,8 @@ export interface SessionSink {
    * does not match any known tool_use block.
    */
   onSubagentChild(parentToolUseId: string, blocks: import('./chat.js').MessageContent[]): void;
+  /** Non-fatal: the CLI reported the workspace is untrusted (advisory, run continues). */
+  onTrustRequired?(projectPath: string): void;
 }
 
 export interface AdapterSession {
@@ -178,7 +180,6 @@ export interface AdapterSession {
   setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
   cancelQueuedMessage(uuid: string): Promise<boolean>;
-
   getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles(): Promise<string[]>;
@@ -198,6 +199,10 @@ export interface AdapterInfo {
   installed: boolean;
   version?: string;
   models: AdapterModel[];
+  /** Monotonic per-adapter counter, bumped on every models change. Absent on legacy/mobile payloads. */
+  modelsRevision?: number;
+  /** Provenance of `models`: 'probed' = live CLI catalog, 'fallback' = static list. Absent on legacy payloads. */
+  catalogSource?: 'probed' | 'fallback';
   capabilities: {
     planMode: boolean;
   };
@@ -247,7 +252,13 @@ export const TUNABLE_FEATURES = [
 export type FeatureKey = (typeof TUNABLE_FEATURES)[number]['key'];
 
 const EFFORT_RANK: Record<EffortLevel, number> = {
-  none: 0, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6,
+  none: 0,
+  minimal: 1,
+  low: 2,
+  medium: 3,
+  high: 4,
+  xhigh: 5,
+  max: 6,
 };
 
 /**
@@ -268,7 +279,9 @@ export function clampEffortToSupported(
   if (supported.length === 0) return null;
   if (supported.includes(requested)) return requested;
   if (defaultEffort && supported.includes(defaultEffort)) return defaultEffort;
-  const below = supported.filter((e) => EFFORT_RANK[e] <= EFFORT_RANK[requested]).sort((a, b) => EFFORT_RANK[b] - EFFORT_RANK[a]);
+  const below = supported
+    .filter((e) => EFFORT_RANK[e] <= EFFORT_RANK[requested])
+    .sort((a, b) => EFFORT_RANK[b] - EFFORT_RANK[a]);
   return below[0] ?? [...supported].sort((a, b) => EFFORT_RANK[a] - EFFORT_RANK[b])[0] ?? null;
 }
 
@@ -278,12 +291,24 @@ export interface ExternalSession {
   projectPath: string; // Project root the session was attributed to (Mainframe-side)
   cwd?: string; // Working directory the session actually ran in (worktree, subdir, or root)
   firstPrompt?: string; // First user message (truncated)
+  title?: string; // Resolved display title (customTitle > aiTitle > summary > firstPrompt > synthetic)
   summary?: string; // AI-generated summary if available
   messageCount?: number;
   createdAt: string; // ISO-8601
   modifiedAt: string;
   gitBranch?: string;
   model?: string;
+}
+
+/**
+ * A page of importable external sessions.
+ * `total` is the candidate (stat-only) count; `nextOffset` is the offset to
+ * request next, or null when the candidate list is exhausted.
+ */
+export interface ExternalSessionPage {
+  sessions: ExternalSession[];
+  total: number;
+  nextOffset: number | null;
 }
 
 export interface Adapter {
@@ -296,7 +321,9 @@ export interface Adapter {
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
-  probeModels?(): Promise<AdapterModel[] | null>;
+  probeModels?(executablePath?: string): Promise<AdapterModel[] | null>;
+  /** Synchronous static fallback catalog for instant, spawn-free startup seeding. */
+  getFallbackModels?(): AdapterModel[];
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;
@@ -319,7 +346,11 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
-  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+  listExternalSessions?(
+    projectPath: string,
+    excludeSessionIds: string[],
+    opts?: { offset?: number; limit?: number },
+  ): Promise<ExternalSessionPage>;
 
   /**
    * Factory for an adapter-specific plan-mode action handler.

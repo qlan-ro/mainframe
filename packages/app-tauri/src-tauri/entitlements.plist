@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened-runtime entitlements required to notarize a Tauri app that bundles
+    and spawns a Node sidecar (resources/daemon) + third-party native addons
+    (better-sqlite3, node-pty). Mirrors Electron's default signing entitlements.
+
+    These are CODE-SIGNING entitlements, NOT Info.plist usage strings — they grant
+    NO camera/microphone access (that stays gated by the absent NSCamera/Microphone
+    usage descriptions). The deny-by-default media posture is unchanged.
+  -->
+
+  <!-- V8/Node JIT compiles + executes code at runtime. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Load the bundled third-party .node addons (not Developer-ID signed by us). -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

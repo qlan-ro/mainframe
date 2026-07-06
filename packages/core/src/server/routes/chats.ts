@@ -100,10 +100,17 @@ export function chatRoutes(ctx: RouteContext): Router {
     }),
   );
 
+  const PendingPermissionParams = z.object({ id: z.string().min(1) });
+
   router.get(
     '/api/chats/:id/pending-permission',
     asyncHandler(async (req: Request, res: Response) => {
-      const permission = await ctx.chats.getPendingPermission(param(req, 'id'));
+      const parsed = PendingPermissionParams.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: parsed.error.message });
+        return;
+      }
+      const permission = await ctx.chats.getPendingPermission(parsed.data.id);
       res.json({ success: true, data: permission });
     }),
   );
@@ -148,7 +155,10 @@ export function chatRoutes(ctx: RouteContext): Router {
     const chat = ctx.db.chats.get(chatId);
     if (!chat) return null;
     ctx.chats?.syncChatFields?.(chatId, partial);
-    void ctx.chats?.applyTuning?.(chatId); // live apply re-reads + resolves (Phase H); no-op if no method yet
+    void ctx.chats?.applyTuning?.(chatId); // live apply re-reads + resolves; no-op if no live session
+    // Broadcast so server-authoritative clients reflect the new tuning immediately
+    // (the composer effort/feature chip mirrors `chat.updated`, not the PATCH response).
+    ctx.chats?.emitChatUpdated?.(chatId);
     return chat;
   }
 

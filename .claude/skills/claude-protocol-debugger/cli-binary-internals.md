@@ -352,10 +352,12 @@ do **not** pass `--effort` at spawn (no layer → `effortValue` is the sole sour
 truth, mutable at startup and mid-session). Mixing the flag with `apply_flag_settings`
 breaks mid-session changes.
 
-**Mainframe gap:** `probe-models.ts` reads `supportsEffort` (boolean) but drops
-`supportedEffortLevels`. `ChatEffort` is hardcoded `'low'|'medium'|'high'` and the
-UI `EFFORT_OPTIONS` mirrors it — so `xhigh`/`max` are unreachable, and Sonnet would
-wrongly offer `xhigh` if we naively widened the static list.
+**Mainframe status (since #378):** `probe-models.ts` consumes `supportedEffortLevels` into
+`AdapterModel.supportedEfforts`, and the daemon applies effort at runtime via
+`apply_flag_settings{effortLevel}` — never `--effort` at spawn, so the permission-layer
+masking above never triggers. `clampEffortToSupported()` clamps a requested effort to
+each model's own `supportedEfforts` (falling back to its default), so a model without
+`xhigh` (e.g. Sonnet) is never offered it.
 
 ## Model/Harness Config Flags — full inventory (v2.1.156)
 
@@ -408,3 +410,49 @@ binaries. Examples confirmed via binary string-extraction in v2.1.118:
 **Lesson**: when a tool is missing from the leaked source but appears in
 sessions, search the installed binary (`~/.local/share/claude/versions/<v>`)
 with Python `re.finditer` before assuming it's harness-injected.
+
+## Command / Skill / Agent Enumeration (v2.1.198)
+
+Full method + the post-leak inventory it produced live in the (git-excluded) doc
+`docs/adapters/claude/PREBUILT_PROMPTS_CATALOG.md` (§Methodology). Technique + traps:
+
+### Extraction (Python `re.finditer` over bytes decoded `latin-1`)
+
+| What | Pattern | 2.1.198 result |
+|------|---------|----------------|
+| Commands | `[,{]type:"(prompt\|local\|local-jsx)",name:"([\w-]+)"` (type-first; ~25 use `get description(){}` getters) | 90 distinct builtin command names |
+| Agents | `agentType:"([a-z0-9_-]+)"` | 11: Explore, Plan, claude, general-purpose, main, main-session, statusline-setup, subagent, teammate, worker, workflow-subagent |
+| Bundled skills | grep a known skill's description → read the minified registrar (`Qc({name,description,source:"bundled"})` in 2.1.198), enumerate its `name:` args | 25 (registrar name changes per version + is sometimes reused — verify matches) |
+
+### Traps (each produced a wrong draft first)
+
+- **Version drift mid-session.** `2.1.162` (used at the session start) was
+  auto-pruned during the work; only `2.1.196/197/198` remained. Re-resolve `$BIN`
+  every run; a conclusion tied to an exact version expires.
+- **Filename diff over-reports "new".** `ls src/commands/` lists files/dirs, but
+  commands nest/rename: `bridge/index.ts` → `name:'remote-control'`,
+  `terminalSetup/` → `name:'terminal-setup'`, `review.ts` → `ultrareview`,
+  `services/mcp/client.ts` → dynamic `mcp__…`. Diff on `grep -rn "name:'X'" src/`,
+  not filenames. (Raw ls-diff said 32 new; real answer was 27.)
+- **Runtime-served prompts.** `/team-onboarding`'s prompt is GrowthBook-served
+  (`tengu_flint_harbor_prompt`) with a bundled fallback constant (`Puf`, 4677 chars);
+  the binary literal is the *fallback*, not necessarily what runs.
+- **Moved-to-plugin ≠ removed.** `commit`, `security-review`, `pr-comments`,
+  `init-verifiers` are absent from the 90-command builtin scan because they're
+  plugin-provided now; the prompt strings still exist in the binary.
+- **False friends.** `name:"sharp"` is the npm image module (package.json), not a
+  skill. The SEA duplicates each code section at two offsets. Classify from context.
+
+### Post-leak command inventory (in 2.1.198, not in leaked source) — 27
+
+Orchestration/autonomous: `workflows` ("Browse running and completed workflows"),
+`fork`, `background` (alias `bg`), `goal`, `loops`, `daemon`, `stop`, `recap`.
+Setup/util: `autocompact`, `usage-credits` (was `extra-usage`), `update`,
+`setup-bedrock`, `setup-vertex`, `pause-memory` (was `toggle-memory`),
+`reload-skills`, `tui`, `focus`, `scroll-speed`, `powerup`, `wellbeing`, `radio`,
+`pro-trial-expired`, `cd`, `design`, `design-login`, `skill-doctor`.
+Prompt: `team-onboarding`. New agentTypes: only `worker` + `workflow-subagent`
+(others existed in source outside `built-in/`). New bundled skills include
+`memory-types`, `code-review`, `dataviz`, `run`, `run-skill-generator`,
+`design-sync`, `fewer-permission-prompts`, `claude-code-docs`. Removed since leak:
+`lorem-ipsum`, `remember`, `skillify`, `stuck`.

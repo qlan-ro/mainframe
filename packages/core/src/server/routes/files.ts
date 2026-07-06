@@ -249,6 +249,12 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
   }
 }
 
+const WriteFileBody = z.object({
+  chatId: z.string().optional(),
+  path: z.string().min(1),
+  content: z.string(),
+});
+
 /** PUT /api/projects/:id/files — write file content */
 async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(WriteFileBody, req.body);
@@ -281,11 +287,86 @@ async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): 
   }
 }
 
-const WriteFileBody = z.object({
-  chatId: z.string().optional(),
+const ResolvePathQuery = z.object({
   path: z.string().min(1),
-  content: z.string(),
+  chatId: z.string().optional(),
 });
+
+/** GET /api/projects/:id/paths/resolve?path=<relative-or-absolute>&chatId=<optional> */
+async function handleResolvePath(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = validate(ResolvePathQuery, req.query);
+  if (!parsed.success) {
+    fail(res, 400, parsed.error);
+    return;
+  }
+
+  const { path: requestedPath, chatId } = parsed.data;
+  const projectId = param(req, 'id');
+
+  // Distinguish worktree-missing from project-not-found before calling getEffectivePath.
+  const project = ctx.db.projects.get(projectId);
+  if (!project) {
+    fail(res, 404, 'Project not found');
+    return;
+  }
+
+  if (chatId) {
+    const chat = ctx.chats.getChat(chatId);
+    if (chat?.worktreeMissing) {
+      fail(res, 409, 'Worktree missing');
+      return;
+    }
+  }
+
+  const basePath = getEffectivePath(ctx, projectId, chatId);
+  if (!basePath) {
+    fail(res, 404, 'Project not found');
+    return;
+  }
+
+  // Determine baseKind: worktree when basePath differs from project root.
+  const baseKind: 'project' | 'worktree' = basePath !== project.path ? 'worktree' : 'project';
+
+  // resolveAndValidatePath = strict containment inside basePath → contained:true.
+  // resolveReadablePath also accepts ~/.claude fallback → contained:false for that branch.
+  // Neither returns non-null for a truly external path — fall back to raw realpath.
+  let absolute: string;
+  let contained: boolean;
+
+  const strictValidated = resolveAndValidatePath(basePath, requestedPath);
+  if (strictValidated) {
+    absolute = strictValidated;
+    contained = true;
+  } else {
+    const broadValidated = resolveReadablePath(basePath, requestedPath);
+    if (broadValidated) {
+      absolute = broadValidated;
+      contained = false;
+    } else {
+      // Path is outside all known bases — resolve best-effort with realpath.
+      try {
+        absolute = await realpath(path.resolve(basePath, requestedPath));
+      } catch {
+        /* expected: path doesn't exist — use the normalized form */
+        absolute = path.resolve(basePath, requestedPath);
+      }
+      contained = false;
+    }
+  }
+
+  // Resolve basePath to its realpath for a canonical response.
+  let realBase: string;
+  try {
+    realBase = await realpath(basePath);
+  } catch {
+    /* expected: basePath symlink chain broken or race */
+    realBase = basePath;
+  }
+
+  const relative = path.relative(realBase, absolute);
+
+  ok(res, { relative, absolute, baseKind, basePath: realBase, contained });
+}
 
 const ExternalFileQuery = z.object({
   path: z.string().min(1),
@@ -451,6 +532,10 @@ export function fileRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/files/external',
     asyncHandler((req, res) => handleExternalFileContent(ctx, req, res)),
+  );
+  router.get(
+    '/api/projects/:id/paths/resolve',
+    asyncHandler((req, res) => handleResolvePath(ctx, req, res)),
   );
   router.get(
     '/api/projects/:id/tree',

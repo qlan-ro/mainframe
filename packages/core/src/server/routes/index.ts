@@ -17,5 +17,7 @@ export { lspRoutes } from './lsp-routes.js';
 export { worktreeRoutes } from './worktree.js';
 export { deviceRoutes } from './device.js';
 export { tagRoutes } from './tags.js';
+export { workflowRoutes } from './workflows.js';
+export { suggestionRoutes } from './suggestions.js';
 export { asyncHandler } from './async-handler.js';
 export type { RouteContext } from './types.js';

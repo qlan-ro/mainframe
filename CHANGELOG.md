@@ -1,5 +1,92 @@
 # Changelog
 
+## 1.0.0
+
+
+### Major Changes
+
+- [#389](https://github.com/qlan-ro/mainframe/pull/389) [`d1dff85`](https://github.com/qlan-ro/mainframe/commit/d1dff8583876f611e2d9399359b7eeb685e11927) Thanks [@doruchiulan](https://github.com/doruchiulan)! - First stable release: graduate the desktop app, core, and types from 0.x to 1.0.0. This marks the Electron desktop line as stable ahead of the 2.0 Tauri major.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@1.0.0
+
+
+### Patch Changes
+
+- Updated dependencies [[`d1dff85`](https://github.com/qlan-ro/mainframe/commit/d1dff8583876f611e2d9399359b7eeb685e11927)]:
+  - @qlan-ro/mainframe-core@1.0.0
+  - @qlan-ro/mainframe-types@1.0.0
+
+
+## 0.22.2
+
+
+### Patch Changes
+
+- [#385](https://github.com/qlan-ro/mainframe/pull/385) [`193663d`](https://github.com/qlan-ro/mainframe/commit/193663df57881320dd264dccce26ae3df0f14d39) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Start the daemon before reconciling recovered Claude background tasks, and broadcast recovered tasks to connected clients once reconciliation completes.
+
+- [#384](https://github.com/qlan-ro/mainframe/pull/384) [`6479309`](https://github.com/qlan-ro/mainframe/commit/6479309395716d1844e3ea3562148612b612d2b4) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Handle Codex app-server JSON-RPC messages that include trailing stdout bytes on the same line instead of dropping the notification as malformed.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@0.22.2
+
+
+### Patch Changes
+
+- Updated dependencies [[`193663d`](https://github.com/qlan-ro/mainframe/commit/193663df57881320dd264dccce26ae3df0f14d39), [`6479309`](https://github.com/qlan-ro/mainframe/commit/6479309395716d1844e3ea3562148612b612d2b4)]:
+  - @qlan-ro/mainframe-core@0.22.2
+  - @qlan-ro/mainframe-types@0.22.2
+
+
+## 0.22.1
+
+
+### Patch Changes
+
+- [#380](https://github.com/qlan-ro/mainframe/pull/380) [`c3136b3`](https://github.com/qlan-ro/mainframe/commit/c3136b30c423c6b0bb147bfa0555d511256c31ca) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix Codex sessions failing immediately with "Session ended unexpectedly". Non-fast turns were sending `serviceTier: 'flex'`, which models like gpt-5.5 reject with `400 Unsupported service_tier: flex`. The fast toggle now sends `serviceTier: 'fast'` only when on, and omits the field otherwise so Codex uses the account default tier. The failure reason from a failed Codex turn is now logged and surfaced in the error card instead of the generic message.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@0.22.1
+
+
+### Patch Changes
+
+- Updated dependencies [[`c3136b3`](https://github.com/qlan-ro/mainframe/commit/c3136b30c423c6b0bb147bfa0555d511256c31ca)]:
+  - @qlan-ro/mainframe-core@0.22.1
+  - @qlan-ro/mainframe-types@0.22.1
+
+
+## 0.22.0
+
+
+### Minor Changes
+
+- [#378](https://github.com/qlan-ro/mainframe/pull/378) [`b8f7c7d`](https://github.com/qlan-ro/mainframe/commit/b8f7c7d20e5e3909cd712b7a1f829776b16401e0) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Dynamic per-model effort levels + fast/ultracode/adaptive-thinking flags (composer) and Codex personality/reasoning-summary (provider settings), driven by each adapter's advertised capabilities instead of hardcoded lists. Claude applies tuning via `apply_flag_settings` (no `--effort`, which would install a masking permission layer); Codex via `turn/start`. Per-chat knobs inherit provider defaults (null = inherit, resolved once at spawn/apply).
+
+### Patch Changes
+
+- Updated dependencies [[`b8f7c7d`](https://github.com/qlan-ro/mainframe/commit/b8f7c7d20e5e3909cd712b7a1f829776b16401e0)]:
+  - @qlan-ro/mainframe-types@0.22.0
+
+
+### Minor Changes
+
+- [#378](https://github.com/qlan-ro/mainframe/pull/378) [`b8f7c7d`](https://github.com/qlan-ro/mainframe/commit/b8f7c7d20e5e3909cd712b7a1f829776b16401e0) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Dynamic per-model effort levels + fast/ultracode/adaptive-thinking flags (composer) and Codex personality/reasoning-summary (provider settings), driven by each adapter's advertised capabilities instead of hardcoded lists. Claude applies tuning via `apply_flag_settings` (no `--effort`, which would install a masking permission layer); Codex via `turn/start`. Per-chat knobs inherit provider defaults (null = inherit, resolved once at spawn/apply).
+
+### Patch Changes
+
+- Updated dependencies [[`b8f7c7d`](https://github.com/qlan-ro/mainframe/commit/b8f7c7d20e5e3909cd712b7a1f829776b16401e0)]:
+  - @qlan-ro/mainframe-types@0.22.0
+  - @qlan-ro/mainframe-core@0.22.0
+
+
+### Minor Changes
+
+- [#378](https://github.com/qlan-ro/mainframe/pull/378) [`b8f7c7d`](https://github.com/qlan-ro/mainframe/commit/b8f7c7d20e5e3909cd712b7a1f829776b16401e0) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Dynamic per-model effort levels + fast/ultracode/adaptive-thinking flags (composer) and Codex personality/reasoning-summary (provider settings), driven by each adapter's advertised capabilities instead of hardcoded lists. Claude applies tuning via `apply_flag_settings` (no `--effort`, which would install a masking permission layer); Codex via `turn/start`. Per-chat knobs inherit provider defaults (null = inherit, resolved once at spawn/apply).
+
+
 ## 0.21.0
 
 

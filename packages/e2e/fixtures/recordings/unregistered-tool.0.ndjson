@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["Use the custom analytics tool to report a build event"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-unregistered-tool-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll report that via the analytics tool."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_custom_1","name":"CustomAnalyticsReport","input":{"event":"build_completed","durationMs":4200},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":80}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_custom_1","content":"Event recorded: build_completed (4200ms)","isError":false}]],"delayMs":140}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Recorded the build_completed event."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":180}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.007,"usage":{"input_tokens":16,"output_tokens":12},"subtype":"success","is_error":false}],"delayMs":220}

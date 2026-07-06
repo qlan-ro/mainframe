@@ -1,0 +1,110 @@
+'use client';
+
+/**
+ * PdfViewer.tsx
+ *
+ * Renders a PDF file via <embed> using an object URL built from base64 bytes.
+ *
+ * The <embed> element uses a blob: URL (createObjectURL) built from base64
+ * bytes returned by the daemon. The Tauri CSP must allow blob: in object-src;
+ * this is set in src-tauri/tauri.conf.json (object-src blob:).
+ *
+ * Props:
+ *   base64   — base64-encoded PDF bytes; null while loading.
+ *   mimeType — MIME type string, typically "application/pdf".
+ *   path     — original file path, used for breadcrumb + "open externally" label.
+ *
+ * data-testid="viewer-pdf" on the root.
+ * data-testid="viewer-pdf-fallback" on the open-externally button.
+ */
+import { useEffect, useState } from 'react';
+import { useHost } from '@/lib/host';
+import { Hint } from '@/components/ui/hint';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { ViewerShell } from './ViewerShell';
+import { formatBytes } from './viewer-status';
+import { toFileUrl } from './viewer-file-url';
+
+interface PdfViewerProps {
+  base64: string | null;
+  mimeType: string;
+  path: string;
+}
+
+function base64ByteLength(b64: string): number {
+  const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - padding;
+}
+
+function base64ToArrayBuffer(b64: string): ArrayBuffer {
+  const binary = atob(b64);
+  const buf = new ArrayBuffer(binary.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < binary.length; i++) {
+    view[i] = binary.charCodeAt(i);
+  }
+  return buf;
+}
+
+export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
+  const host = useHost();
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const { projectPath } = useActiveIdentity();
+  const fileUrl = toFileUrl(path, projectPath);
+
+  useEffect(() => {
+    if (base64 === null) {
+      setObjectUrl(null);
+      return;
+    }
+
+    const buf = base64ToArrayBuffer(base64);
+    const blob = new Blob([buf], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    setObjectUrl(url);
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [base64, mimeType]);
+
+  async function handleOpenExternal() {
+    if (!fileUrl) return;
+    try {
+      await host.shell.openExternal(fileUrl);
+    } catch (err) {
+      console.warn('[PdfViewer] openExternal failed', err);
+    }
+  }
+
+  const bytes = base64 ? base64ByteLength(base64) : 0;
+  const status = base64 ? `PDF · ${formatBytes(bytes)}` : 'PDF · Loading…';
+
+  const actions = (
+    <Hint label={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}>
+      <button
+        type="button"
+        data-testid="viewer-pdf-fallback"
+        onClick={() => void handleOpenExternal()}
+        disabled={fileUrl === null}
+        className="rounded-sm px-2 py-0.5 text-caption font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Open externally
+      </button>
+    </Hint>
+  );
+
+  return (
+    <ViewerShell path={path} status={status} actions={actions}>
+      <div data-testid="viewer-pdf" className="flex h-full flex-col bg-mf-viewer-matte">
+        {base64 === null ? (
+          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
+        ) : objectUrl ? (
+          <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
+        )}
+      </div>
+    </ViewerShell>
+  );
+}

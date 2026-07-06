@@ -227,8 +227,8 @@ describe('queued messages and thinking indicator', () => {
     // Adapters without per-message replay ack — Codex turn/start, Claude SDK
     // streamFollowUp — must NOT get stuck in processState=working when a
     // second message is sent while busy. chat-manager skips queuedRefs for
-    // them entirely, so the new getQueuedCount gate sees 0 and onResult
-    // flips to idle as expected.
+    // them entirely, so onResult sees an empty queuedRefs list and flips to
+    // idle as expected.
     class NonAckingMockSession extends MockBaseSession {
       constructor(private adapter: MockAdapter) {
         super('proc-1', adapter.id, '/tmp');

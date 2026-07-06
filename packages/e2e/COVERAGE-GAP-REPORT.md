@@ -1,6 +1,6 @@
 # E2E Coverage Gap Report
 
-_Generated 2026-05-30. Method: diff `data-testid` defined in `packages/desktop/src` against
+_Generated 2026-05-30. Method: diff `data-testid` defined in `packages/app-electron/src` against
 test-ids referenced via `.locator('[data-testid=...]')` in `packages/e2e/{tests,fixtures,helpers}`._
 
 > **Caveat:** this is a literal-string diff. Test-ids that are templated/dynamic

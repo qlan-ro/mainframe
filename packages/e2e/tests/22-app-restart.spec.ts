@@ -23,7 +23,7 @@ test.describe('§22 App restart & state persistence', () => {
     const path = await import('path');
     const { fileURLToPath } = await import('url');
     const __dirname = path.default.dirname(fileURLToPath(import.meta.url));
-    const APP_MAIN = path.default.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
+    const APP_MAIN = path.default.resolve(__dirname, '../../../packages/app-electron/out/main/index.js');
 
     const app2 = await electron.launch({
       // Reuse the SAME Chromium profile launchApp() created, so localStorage (active chat, layout)

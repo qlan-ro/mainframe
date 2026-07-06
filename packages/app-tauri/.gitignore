@@ -1,0 +1,7 @@
+# Dependencies
+node_modules
+
+# Vite build output
+dist
+dist-ssr
+*.local

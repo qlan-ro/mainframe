@@ -1,0 +1,199 @@
+/**
+ * Behavior tests for `handleDaemonEvent` — queued.snapshot routing, plus
+ * chatId filtering (fix #4).
+ *
+ * Pure function tests: fixed input events, hardcoded expected HandleResult
+ * values. No logic from the implementation is re-derived.
+ */
+import { describe, it, expect } from 'vitest';
+import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import { handleDaemonEvent } from '../handle-daemon-event';
+
+const CHAT_ID = 'chat-abc';
+const OTHER_CHAT = 'chat-other';
+const EMPTY_MSGS = {} as Readonly<Record<string, unknown>>;
+
+function makeRef(uuid: string): QueuedMessageRef {
+  return { uuid, content: `msg-${uuid}` } as unknown as QueuedMessageRef;
+}
+
+// ---------------------------------------------------------------------------
+// message.queued.snapshot
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — message.queued.snapshot', () => {
+  it('returns queued.snapshot event with refs when chatId matches', () => {
+    const result = handleDaemonEvent(
+      {
+        type: 'message.queued.snapshot',
+        chatId: CHAT_ID,
+        refs: [makeRef('A'), makeRef('B')],
+      },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: {
+        type: 'queued.snapshot',
+        refs: [makeRef('A'), makeRef('B')],
+      },
+    });
+  });
+
+  it('returns noop when chatId does not match', () => {
+    const result = handleDaemonEvent(
+      {
+        type: 'message.queued.snapshot',
+        chatId: OTHER_CHAT,
+        refs: [makeRef('A')],
+      },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+
+  it('preserves the refs array exactly — no re-ordering or filtering', () => {
+    const refs = [makeRef('Z'), makeRef('M'), makeRef('A')];
+    const result = handleDaemonEvent({ type: 'message.queued.snapshot', chatId: CHAT_ID, refs }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result.kind).toBe('event');
+    if (result.kind === 'event' && result.event.type === 'queued.snapshot') {
+      expect(result.event.refs).toEqual([makeRef('Z'), makeRef('M'), makeRef('A')]);
+    }
+  });
+
+  it('handles an empty refs array', () => {
+    const result = handleDaemonEvent(
+      { type: 'message.queued.snapshot', chatId: CHAT_ID, refs: [] },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'queued.snapshot', refs: [] },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat.contextUsage
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — chat.contextUsage', () => {
+  it('returns context.usage event with all fields when chatId matches', () => {
+    const result = handleDaemonEvent(
+      {
+        type: 'chat.contextUsage',
+        chatId: CHAT_ID,
+        percentage: 38,
+        totalTokens: 76_000,
+        maxTokens: 200_000,
+      },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: {
+        type: 'context.usage',
+        percentage: 38,
+        totalTokens: 76_000,
+        maxTokens: 200_000,
+      },
+    });
+  });
+
+  it('returns noop when chatId does not match', () => {
+    const result = handleDaemonEvent(
+      {
+        type: 'chat.contextUsage',
+        chatId: OTHER_CHAT,
+        percentage: 38,
+        totalTokens: 76_000,
+        maxTokens: 200_000,
+      },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat.compacting
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — chat.compacting', () => {
+  it('returns compact.started event when chatId matches', () => {
+    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: CHAT_ID }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'compact.started' },
+    });
+  });
+
+  it('returns noop when chatId does not match', () => {
+    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: OTHER_CHAT }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat.compactDone
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — chat.compactDone', () => {
+  it('returns compact.done event when chatId matches', () => {
+    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: CHAT_ID }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'compact.done' },
+    });
+  });
+
+  it('returns noop when chatId does not match', () => {
+    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: OTHER_CHAT }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// error
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — error', () => {
+  it('returns run.failed when chatId matches this chat', () => {
+    const result = handleDaemonEvent({ type: 'error', chatId: CHAT_ID, error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'run.failed', error: 'boom' },
+    });
+  });
+
+  it('returns run.failed when chatId is absent (global error applies to current run)', () => {
+    const result = handleDaemonEvent({ type: 'error', error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'run.failed', error: 'boom' },
+    });
+  });
+
+  it('returns noop when chatId targets a different chat', () => {
+    const result = handleDaemonEvent({ type: 'error', chatId: OTHER_CHAT, error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});

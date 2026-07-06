@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# One-time script to regenerate app icons from packages/desktop/resources/icon.svg.
+# One-time script to regenerate app icons from packages/app-electron/resources/icon.svg.
 # Requires: macOS (sips + iconutil built-in), internet access for npx png-to-ico
 set -e
 
-RESOURCES="packages/desktop/resources"
+RESOURCES="packages/app-electron/resources"
 SVG="$RESOURCES/icon.svg"
 PNG="$RESOURCES/icon.png"
 ICNS="$RESOURCES/icon.icns"
 ICO="$RESOURCES/icon.ico"
-FAVICON="packages/desktop/src/renderer/favicon.png"
+FAVICON="packages/app-electron/src/renderer/favicon.png"
 ICONSET="$RESOURCES/icon.iconset"
 
 echo "Generating icon.png (1024x1024)..."

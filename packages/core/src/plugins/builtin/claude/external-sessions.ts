@@ -1,281 +1,105 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { homedir } from 'node:os';
+import type { ExternalSession, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../../../logger.js';
-import type { ExternalSession } from '@qlan-ro/mainframe-types';
+import { canonicalizeProjectPath, discoverProjectDirs, isUuidJsonl } from './external-session-paths.js';
+import { enrichSession, type Candidate } from './external-session-enrich.js';
+import { getCached, setCached } from './external-session-cache.js';
 
 const logger = createChildLogger('claude:external-sessions');
 
-interface SessionIndexEntry {
-  sessionId: string;
-  fullPath?: string;
-  fileMtime?: number;
-  firstPrompt?: string;
-  summary?: string;
-  messageCount?: number;
-  created?: string;
-  modified?: string;
-  gitBranch?: string;
-  projectPath?: string;
-  isSidechain?: boolean;
-}
+const DEFAULT_LIMIT = 50;
+const ENRICH_CONCURRENCY = 8;
+const TITLE_GEN_PREFIX = 'Generate a short title (2-5 words) for a coding chat that';
 
-interface SessionIndex {
-  version: number;
-  entries: SessionIndexEntry[];
-}
+/** Stat-only candidate pass: UUID-named jsonl across all matching dirs, deduped + sorted mtime desc. */
+export async function scanLiteCandidates(projectPath: string, excludeSet: Set<string>): Promise<Candidate[]> {
+  const canonical = await canonicalizeProjectPath(projectPath);
+  const dirs = await discoverProjectDirs(canonical);
+  const bySession = new Map<string, Candidate>();
 
-function encodePath(p: string): string {
-  return p.replace(/[^a-zA-Z0-9-]/g, '-');
-}
-
-function projectsRoot(): string {
-  return path.join(homedir(), '.claude', 'projects');
-}
-
-/**
- * Belongs to this project if cwd equals the root or is nested under it.
- * Claude writes cwd as a native path matching the OS where it ran, so we use
- * `path.sep` rather than a hardcoded '/' — Mainframe stores projectPath in the
- * same native form, so both sides share separators on the host that scans.
- */
-function cwdBelongsToProject(cwd: string | undefined, projectPath: string): boolean {
-  if (!cwd) return false;
-  if (cwd === projectPath) return true;
-  return cwd.startsWith(projectPath + path.sep);
-}
-
-/** Discover every encoded dir under ~/.claude/projects whose prefix matches the project. */
-async function discoverProjectDirs(projectPath: string): Promise<string[]> {
-  const root = projectsRoot();
-  const encodedPrefix = encodePath(projectPath);
-  let entries: string[];
-  try {
-    entries = await readdir(root);
-  } catch {
-    /* expected: no Claude session dir for this project */
-    return [];
+  for (const dir of dirs) {
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      /* expected: dir vanished between discovery and read */
+      continue;
+    }
+    for (const name of names) {
+      if (!isUuidJsonl(name)) continue;
+      const sessionId = name.slice(0, -'.jsonl'.length);
+      if (excludeSet.has(sessionId)) continue;
+      const filePath = path.join(dir, name);
+      let st: { mtimeMs: number; size: number };
+      try {
+        const s = await stat(filePath);
+        st = { mtimeMs: s.mtimeMs, size: s.size };
+      } catch {
+        /* expected: file deleted mid-scan */
+        continue;
+      }
+      const prev = bySession.get(sessionId);
+      if (!prev || st.mtimeMs > prev.mtimeMs) {
+        bySession.set(sessionId, { sessionId, filePath, mtimeMs: st.mtimeMs, size: st.size });
+      }
+    }
   }
-  return entries
-    .filter((name) => name === encodedPrefix || name.startsWith(encodedPrefix + '-'))
-    .map((name) => path.join(root, name));
+
+  return [...bySession.values()].sort((a, b) => b.mtimeMs - a.mtimeMs || (a.sessionId < b.sessionId ? 1 : -1));
 }
 
-/** Scan all matching dirs for the project; verify each session by cwd. */
+/** Enrich a window with bounded concurrency, using the cache for unchanged files. */
+async function enrichWindow(window: Candidate[], projectPath: string): Promise<ExternalSession[]> {
+  const out: (ExternalSession | null)[] = new Array(window.length).fill(null);
+  let next = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++;
+      if (i >= window.length) return;
+      const c = window[i]!;
+      const cached = getCached(c.sessionId, c.mtimeMs, c.size);
+      if (cached) {
+        out[i] = cached;
+        continue;
+      }
+      const meta = await enrichSession(c, projectPath);
+      if (meta) {
+        setCached(c.sessionId, c.mtimeMs, c.size, meta);
+        out[i] = meta;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(ENRICH_CONCURRENCY, window.length) }, worker));
+  return out.filter((s): s is ExternalSession => s !== null && !isTitleGenGhost(s));
+}
+
+/** Belt-and-suspenders for pre-existing title-gen ghost files (new ones are prevented upstream). */
+function isTitleGenGhost(s: ExternalSession): boolean {
+  return !!s.firstPrompt && s.firstPrompt.startsWith(TITLE_GEN_PREFIX);
+}
+
 export async function listExternalSessions(
   projectPath: string,
   excludeSessionIds: string[],
-): Promise<ExternalSession[]> {
-  const excludeSet = new Set(excludeSessionIds);
-  const candidateDirs = await discoverProjectDirs(projectPath);
-  const aggregated: ExternalSession[] = [];
+  opts?: { offset?: number; limit?: number },
+): Promise<ExternalSessionPage> {
+  const offset = Math.max(0, opts?.offset ?? 0);
+  const limit = opts?.limit ?? DEFAULT_LIMIT;
 
-  for (const dir of candidateDirs) {
-    const fromIndex = await listFromIndex(dir, projectPath, excludeSet);
-    const sessions = fromIndex ?? (await listFromJsonl(dir, projectPath, excludeSet));
-    aggregated.push(...sessions);
-  }
-
-  const seen = new Set<string>();
-  const deduped: ExternalSession[] = [];
-  for (const session of aggregated) {
-    if (seen.has(session.sessionId)) continue;
-    if (!cwdBelongsToProject(session.cwd, projectPath)) continue;
-    seen.add(session.sessionId);
-    deduped.push(session);
-  }
-
-  return deduped.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
-}
-
-async function listFromIndex(
-  projectDir: string,
-  projectPath: string,
-  excludeSet: Set<string>,
-): Promise<ExternalSession[] | null> {
-  const indexPath = path.join(projectDir, 'sessions-index.json');
-
-  let raw: string;
+  let candidates: Candidate[];
   try {
-    raw = await readFile(indexPath, 'utf-8');
-  } catch {
-    /* expected: no Claude session file for this project */
-    return null;
+    candidates = await scanLiteCandidates(projectPath, new Set(excludeSessionIds));
+  } catch (err) {
+    logger.warn({ err: String(err), projectPath }, 'external-session lite scan failed');
+    return { sessions: [], total: 0, nextOffset: null };
   }
 
-  let index: SessionIndex;
-  try {
-    index = JSON.parse(raw) as SessionIndex;
-  } catch {
-    logger.warn({ indexPath }, 'Malformed sessions-index.json');
-    return null;
-  }
+  const total = candidates.length;
+  if (limit <= 0) return { sessions: [], total, nextOffset: null };
 
-  if (!index.entries || !Array.isArray(index.entries)) {
-    logger.warn({ indexPath }, 'sessions-index.json has no entries array');
-    return null;
-  }
-
-  if (index.entries.length === 0) return null;
-
-  const candidates = index.entries.filter(
-    (e) => e.sessionId && !excludeSet.has(e.sessionId) && !e.isSidechain && e.firstPrompt,
-  );
-
-  const verified: ExternalSession[] = [];
-  for (const entry of candidates) {
-    const jsonlPath = entry.fullPath ?? path.join(projectDir, entry.sessionId + '.jsonl');
-    let fileMtimeIso: string | undefined;
-    try {
-      const s = await stat(jsonlPath);
-      fileMtimeIso = s.mtime.toISOString();
-    } catch {
-      continue; // JSONL deleted/unreachable — skip ghost index entry
-    }
-
-    const indexMtimeIso = typeof entry.fileMtime === 'number' ? new Date(entry.fileMtime).toISOString() : undefined;
-
-    const createdAt = entry.created ?? entry.modified ?? indexMtimeIso ?? fileMtimeIso;
-    const modifiedAt = entry.modified ?? indexMtimeIso ?? fileMtimeIso ?? entry.created;
-    if (!createdAt || !modifiedAt) {
-      // Without any real timestamp, omit the session rather than fake "now".
-      logger.warn({ sessionId: entry.sessionId }, 'no timestamp available for session, skipping');
-      continue;
-    }
-
-    verified.push({
-      sessionId: entry.sessionId,
-      adapterId: 'claude',
-      projectPath,
-      cwd: entry.projectPath,
-      firstPrompt: entry.firstPrompt,
-      summary: entry.summary,
-      messageCount: entry.messageCount,
-      createdAt,
-      modifiedAt,
-      gitBranch: entry.gitBranch || undefined,
-    });
-  }
-
-  return verified.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
-}
-
-async function listFromJsonl(
-  projectDir: string,
-  projectPath: string,
-  excludeSet: Set<string>,
-): Promise<ExternalSession[]> {
-  let entries: string[];
-  try {
-    entries = await readdir(projectDir);
-  } catch {
-    /* expected: no Claude session dir/file for this project */
-    return [];
-  }
-
-  const jsonlFiles = entries.filter((e) => e.endsWith('.jsonl'));
-  const sessions: ExternalSession[] = [];
-
-  for (const file of jsonlFiles) {
-    const sessionId = file.replace('.jsonl', '');
-    if (excludeSet.has(sessionId)) continue;
-
-    const filePath = path.join(projectDir, file);
-    try {
-      const session = await extractSessionMeta(filePath, sessionId, projectPath);
-      if (session) sessions.push(session);
-    } catch (err) {
-      logger.warn({ err: String(err), filePath }, 'failed to read external session file');
-    }
-  }
-
-  return sessions.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
-}
-
-async function extractSessionMeta(
-  filePath: string,
-  sessionId: string,
-  projectPath: string,
-): Promise<ExternalSession | null> {
-  const fileStat = await stat(filePath);
-  const modifiedAt = fileStat.mtime.toISOString();
-
-  const stream = createReadStream(filePath);
-  let firstPrompt: string | undefined;
-  let createdAt: string | undefined;
-  let gitBranch: string | undefined;
-  let cwd: string | undefined;
-  let isSidechain = false;
-  let linesRead = 0;
-
-  try {
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      linesRead++;
-      if (linesRead > 50) break;
-
-      try {
-        const entry = JSON.parse(line);
-
-        if (entry.isSidechain) {
-          isSidechain = true;
-          break;
-        }
-
-        if (!createdAt && entry.timestamp) createdAt = entry.timestamp;
-        if (!gitBranch && entry.gitBranch) gitBranch = entry.gitBranch;
-        if (!cwd && entry.cwd) cwd = entry.cwd;
-
-        if (!firstPrompt && entry.type === 'user' && entry.message?.content) {
-          if (entry.sessionId && entry.sessionId !== sessionId) continue;
-          const content = entry.message.content;
-          const raw = extractRawText(content, 2000);
-          const cleaned = raw ? stripCommandBoilerplate(raw) : undefined;
-          if (cleaned) firstPrompt = cleaned.slice(0, 500);
-        }
-
-        if (firstPrompt && createdAt && gitBranch && cwd) break;
-      } catch {
-        // Skip malformed lines
-      }
-    }
-  } finally {
-    stream.destroy();
-  }
-
-  if (isSidechain) return null;
-  if (!firstPrompt) return null;
-
-  return {
-    sessionId,
-    adapterId: 'claude',
-    projectPath,
-    cwd,
-    firstPrompt,
-    createdAt: createdAt ?? modifiedAt,
-    modifiedAt,
-    gitBranch: gitBranch || undefined,
-  };
-}
-
-function extractRawText(content: unknown, limit = 200): string | undefined {
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (block?.type === 'text' && block.text) return (block.text as string).slice(0, limit);
-    }
-    return undefined;
-  }
-  if (typeof content === 'string') return content.slice(0, limit);
-  return undefined;
-}
-
-function stripCommandBoilerplate(text: string): string {
-  return text
-    .replace(/<[^>]+>[^<]*<\/[^>]+>/g, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const window = candidates.slice(offset, offset + limit);
+  const sessions = await enrichWindow(window, projectPath);
+  const nextOffset = offset + limit < total ? offset + limit : null;
+  return { sessions, total, nextOffset };
 }

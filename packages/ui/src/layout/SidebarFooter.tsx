@@ -1,0 +1,55 @@
+import { useAssistantRuntime } from '@assistant-ui/react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUnreadStore } from '@/store/unread-store';
+import { threadListStateToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { countByBaseStatus, type BaseStatusCounts } from '@/features/sessions/view-model/count-by-base-status';
+import { DaemonFooterStatus } from '@/features/daemon/DaemonFooterStatus';
+
+const COUNT_META: { key: keyof BaseStatusCounts; label: string; dot: string; text: string }[] = [
+  { key: 'working', label: 'Working', dot: 'bg-primary animate-pulse', text: 'text-primary' },
+  { key: 'waiting', label: 'Waiting for you', dot: 'bg-mf-warning', text: 'text-mf-warning' },
+  { key: 'idle', label: 'Idle', dot: 'bg-mf-text-4', text: 'text-mf-text-3' },
+];
+
+export function SidebarFooterView({ counts }: { counts: BaseStatusCounts }) {
+  return (
+    <div
+      data-testid="sidebar-footer"
+      className="flex h-[25px] flex-shrink-0 items-center gap-2 px-[12px] text-micro text-mf-text-3"
+    >
+      <DaemonFooterStatus />
+      <span className="flex-1" />
+      <span data-testid="sidebar-footer-counts" className="flex items-center gap-[9px]">
+        {COUNT_META.filter((m) => counts[m.key] > 0).map((m) => (
+          <Tooltip key={m.key}>
+            <TooltipTrigger asChild>
+              <span
+                data-testid={`sidebar-footer-count-${m.key}`}
+                className={`flex items-center gap-[4px] font-semibold tabular-nums ${m.text}`}
+              >
+                <span className={`size-1.5 rounded-full ${m.dot}`} />
+                {counts[m.key]}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{m.label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Self-sufficient sidebar chrome footer: DaemonFooterStatus button + per-status
+ * session counts. Derives its own counts from the thread list so it composes
+ * directly under `SidebarShell` without threading props in.
+ */
+export function SidebarFooter() {
+  const threads = useAssistantRuntime().threads;
+  const unreadSet = useUnreadStore((s) => s.unread);
+  // Recompute each render (getState() is a snapshot); the SidebarShell re-render
+  // cascade keeps it as fresh as the old SessionSidebar-owned footer was.
+  const items = threads ? threadListStateToSessionItems(threads.getState()) : [];
+  const counts = countByBaseStatus(items, unreadSet);
+  return <SidebarFooterView counts={counts} />;
+}

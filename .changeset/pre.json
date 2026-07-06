@@ -1,0 +1,16 @@
+{
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "@qlan-ro/mainframe-app-electron": "1.0.0",
+    "@qlan-ro/mainframe-app-tauri": "1.0.0",
+    "@qlan-ro/mainframe-core": "1.0.0",
+    "@qlan-ro/mainframe-e2e": "0.1.0",
+    "@qlan-ro/mainframe-types": "1.0.0",
+    "@qlan-ro/mainframe-ui": "1.0.0"
+  },
+  "changesets": [
+    "mainframe-2-0",
+    "release-prerelease-mode"
+  ]
+}

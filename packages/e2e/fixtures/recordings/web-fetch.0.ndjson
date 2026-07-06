@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["Fetch https://example.com/docs and summarize it"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-web-fetch-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll fetch that page."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_wf_1","name":"WebFetch","input":{"url":"https://example.com/docs","prompt":"Summarize the docs page"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":80}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_wf_1","content":"The docs page describes a REST API with three endpoints: /users, /projects, and /chats. Each endpoint supports GET and POST.","isError":false}]],"delayMs":140}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"The docs describe a REST API with /users, /projects, and /chats endpoints."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":180}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01,"usage":{"input_tokens":18,"output_tokens":16},"subtype":"success","is_error":false}],"delayMs":220}

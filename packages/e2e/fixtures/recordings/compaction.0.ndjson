@@ -1,0 +1,6 @@
+{"dir":"in","method":"sendMessage","args":["Summarize our conversation so far and keep going"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-compaction-sess-1"],"delayMs":20}
+{"dir":"out","method":"onCompactStart","args":[],"delayMs":40}
+{"dir":"out","method":"onCompact","args":[],"delayMs":300}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Context compacted. Picking up where we left off — the project's `index.ts` exports a `greeting` constant."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":340}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.006,"usage":{"input_tokens":12,"output_tokens":10},"subtype":"success","is_error":false}],"delayMs":380}

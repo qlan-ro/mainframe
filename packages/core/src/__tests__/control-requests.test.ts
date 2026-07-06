@@ -108,12 +108,21 @@ describe('ClaudeAdapter control requests', () => {
     expect(payload.request.mode).toBe('plan');
   });
 
+  // setModel now awaits the CLI's control_response (Task 8), so tests must resolve it via the
+  // session's ControlRequestChannel — otherwise the call hangs until the 5s timeout and rejects.
+  function resolveWrittenAsSuccess(session: any, written: string[], index: number): void {
+    const requestId = JSON.parse(written[index]!.trim()).request_id;
+    session.control.resolve(requestId, { request_id: requestId, subtype: 'success' });
+  }
+
   it('setModel sends correct control_request payload', async () => {
     const { session, written } = injectMockChild(adapter, chatId);
 
-    await session.setModel('claude-sonnet-4-5-20250929');
+    const pending = session.setModel('claude-sonnet-4-5-20250929');
+    await vi.waitFor(() => expect(written).toHaveLength(1));
+    resolveWrittenAsSuccess(session, written, 0);
+    await pending;
 
-    expect(written).toHaveLength(1);
     const payload = JSON.parse(written[0]!.trim());
     expect(payload.type).toBe('control_request');
     expect(payload.request_id).toBeTruthy();
@@ -137,9 +146,11 @@ describe('ClaudeAdapter control requests', () => {
     const { session, written } = injectMockChild(adapter, chatId);
 
     await session.setPermissionMode('default');
-    await session.setModel('claude-opus-4-6');
+    const pending = session.setModel('claude-opus-4-6');
+    await vi.waitFor(() => expect(written).toHaveLength(2));
+    resolveWrittenAsSuccess(session, written, 1);
+    await pending;
 
-    expect(written).toHaveLength(2);
     const id1 = JSON.parse(written[0]!.trim()).request_id;
     const id2 = JSON.parse(written[1]!.trim()).request_id;
     expect(id1).not.toBe(id2);

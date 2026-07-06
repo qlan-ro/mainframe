@@ -79,11 +79,17 @@ const Unsubscribe = z.object({
 const SubscribeFile = z.object({
   type: z.literal('subscribe:file'),
   path: z.string().min(1),
+  /** When path is relative, the daemon resolves it against the project/worktree base. */
+  projectId: z.string().min(1).optional(),
+  chatId: z.string().min(1).optional(),
 });
 
 const UnsubscribeFile = z.object({
   type: z.literal('unsubscribe:file'),
   path: z.string().min(1),
+  /** Must match the projectId/chatId sent with subscribe:file to look up the resolved path. */
+  projectId: z.string().min(1).optional(),
+  chatId: z.string().min(1).optional(),
 });
 
 export const ClientEventSchema = z.discriminatedUnion('type', [

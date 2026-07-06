@@ -3,12 +3,16 @@
 # non-AI specs run for real. Mock mode makes NO Claude/Codex API calls, so this needs no secrets.
 name: e2e-mock
 
+# TEMPORARILY DISABLED from automatic runs (2026-07-06): the app-tauri e2e suite is too slow to
+# gate PRs right now (~28 min serial; workers:1 because the app is stateful on one daemon port).
+# Re-enable by uncommenting the pull_request / push triggers once the suite is parallelized
+# (multi-worker + per-worker daemon ports). Still runnable on demand via workflow_dispatch.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-  workflow_dispatch: # manual trigger (e.g. first validation once this lands on main)
+  # pull_request:
+  #   branches: [main]
+  # push:
+  #   branches: [main]
+  workflow_dispatch: # manual trigger only, for now
 
 # One run per ref; cancel superseded runs so PR pushes don't pile up Electron jobs.
 concurrency:

@@ -503,3 +503,42 @@ describe('EventHandler onPermission — yolo no longer auto-approves', () => {
     expect(permissions.hasPending(chatId)).toBe(true);
   });
 });
+
+describe('EventHandler onTrustRequired', () => {
+  let db: any;
+  let messages: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let activeChats: Map<string, any>;
+
+  const chatId = 'chat-1';
+
+  beforeEach(() => {
+    db = {
+      chats: { update: vi.fn(), get: vi.fn(), addSkillFile: vi.fn().mockReturnValue(false) },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    messages = new MessageCache();
+    permissions = new PermissionManager();
+    emitEvent = vi.fn();
+    activeChats = new Map();
+  });
+
+  it('emits chat.trustRequired with the chatId and projectPath, and does not touch chat run state', () => {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onTrustRequired!('/home/me/proj');
+
+    expect(emitEvent).toHaveBeenCalledTimes(1);
+    expect(emitEvent).toHaveBeenCalledWith({
+      type: 'chat.trustRequired',
+      chatId,
+      projectPath: '/home/me/proj',
+    });
+
+    const runStateEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'chat.updated');
+    expect(runStateEvents).toHaveLength(0);
+  });
+});

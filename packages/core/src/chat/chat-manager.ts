@@ -13,8 +13,8 @@ import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { ChatListFilters } from '../db/chats.js';
-import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
+import { isWorktreePresent } from '../workspace/worktree.js';
 import { createChildLogger } from '../logger.js';
 import { MessageCache } from './message-cache.js';
 import { PermissionManager } from './permission-manager.js';
@@ -35,6 +35,7 @@ import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
 import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
+import { writeWorkspaceTrust } from '../plugins/builtin/claude/trust-store.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -124,6 +125,21 @@ export class ChatManager {
     this.idleScanner.start();
   }
 
+  /**
+   * On boot, no in-memory CLI sessions exist, so any persisted
+   * `processState: 'working'` was orphaned by a previous daemon restart/crash.
+   * Reset it to 'idle' so the UI doesn't treat the chat as running — otherwise a
+   * new message queues forever ("sends after the current run") because there is
+   * no live run to finish. A chat that was genuinely mid-run is interrupted by
+   * the restart anyway (the CLI dies with the daemon), so 'idle' is correct.
+   *
+   * Call once at daemon boot, after construction (see `index.ts`).
+   */
+  recoverStaleWorkingState(): void {
+    const count = this.db.chats.resetWorkingToIdle();
+    logger.info({ count }, 'reset orphaned working chats to idle on boot');
+  }
+
   /** Stop background timers. Idempotent. Tests and shutdown should call this. */
   dispose(): void {
     this.idleScanner.stop();
@@ -174,6 +190,15 @@ export class ChatManager {
 
   async resumeChat(chatId: string): Promise<void> {
     return this.lifecycle.resumeChat(chatId);
+  }
+
+  /** Trust the chat's workspace in ~/.claude.json (path derived server-side from the chat). */
+  async trustWorkspace(chatId: string): Promise<void> {
+    const chat = this.db.chats.get(chatId);
+    if (!chat) throw new Error(`Chat ${chatId} not found`);
+    const project = this.db.projects.get(chat.projectId);
+    if (!project) throw new Error(`Project ${chat.projectId} not found`);
+    await writeWorkspaceTrust(chat.worktreePath ?? project.path);
   }
 
   async updateChatConfig(
@@ -250,6 +275,10 @@ export class ChatManager {
     if (!postStart?.session?.isSpawned) throw new Error(`Chat ${chatId} not running`);
     logger.info({ chatId }, 'user message sent');
 
+    // Stamp the turn start now, right before dispatch, so onResult can compute
+    // turnDurationMs for the MessageTiming pill (metadata.turnDurationMs).
+    postStart.turnStartedAt = Date.now();
+
     // Command routing — provider commands go to sendCommand, mainframe commands get wrapped
     if (metadata?.command) {
       const { name, source, args } = metadata.command;
@@ -290,8 +319,8 @@ export class ChatManager {
     // per-message replay ack (Claude CLI stream-json). Adapters that consume
     // sendMessage synchronously (Codex turn/start, Claude SDK streamFollowUp)
     // never call `sink.onQueuedProcessed`, so leaving them on the queued path
-    // would strand `queuedRefs` and pin `processState='working'` forever via
-    // the new `getQueuedCount` gate in onResult.
+    // would strand `queuedRefs` and pin `processState='working'` forever —
+    // onResult keeps processState at 'working' as long as queuedRefs remain.
     const adapterAcksReplay = postStart.session.supportsReplayAck === true;
     const isQueued = adapterAcksReplay && postStart.chat.processState === 'working';
     const transientMetadata: Record<string, unknown> = {};
@@ -359,8 +388,9 @@ export class ChatManager {
 
     const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
     if (!cancelled) {
-      logger.info({ chatId, uuid: ref.uuid }, 'edit failed: message already dequeued by CLI');
-      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
+      // Lost race: the original already went through. Silently discard the edit —
+      // the imminent isReplay ack relocates the original bubble and clears the banner.
+      logger.info({ chatId, uuid: ref.uuid }, 'edit lost race: original already dequeued by CLI');
       return;
     }
 
@@ -381,8 +411,9 @@ export class ChatManager {
 
     const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
     if (!cancelled) {
-      logger.info({ chatId, uuid: ref.uuid }, 'cancel failed: message already dequeued by CLI');
-      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
+      // Lost race: the CLI already consumed the message. Stay silent — the
+      // imminent ack moves the bubble and clears the banner.
+      logger.info({ chatId, uuid: ref.uuid }, 'cancel lost race: message already dequeued by CLI');
       return;
     }
 
@@ -428,6 +459,8 @@ export class ChatManager {
     this.db.chats.update(chatId, { title });
     const active = this.activeChats.get(chatId);
     if (active) active.chat.title = title;
+    const chat = this.db.chats.get(chatId);
+    if (chat) this.emitEvent({ type: 'chat.updated', chat });
   }
 
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
@@ -505,6 +538,18 @@ export class ChatManager {
     }
   }
 
+  /**
+   * Broadcast `chat.updated` for a chat whose fields were persisted out-of-band
+   * (e.g. the tuning PATCH writes effort/features straight to the DB). Without
+   * this, a server-authoritative client never learns of the change until the
+   * next unrelated `chat.updated` — the composer effort/feature chip would stay
+   * stale. Mirrors `notifyWorktreeDeleted`'s enriched re-emit.
+   */
+  emitChatUpdated(chatId: string): void {
+    const chat = this.getChat(chatId);
+    if (chat) this.emitEvent({ type: 'chat.updated', chat });
+  }
+
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
     const chat = active ? active.chat : this.db.chats.get(chatId);
@@ -551,12 +596,35 @@ export class ChatManager {
     }
   }
 
+  /**
+   * Returns the working directory for `chatId`:
+   * - the chat's worktree path when it has one and the directory still exists;
+   * - the project root otherwise.
+   *
+   * Returns `null` when the chat is unknown, the project is unknown, or the
+   * chat's worktree has been deleted (`worktreeMissing === true`).
+   * Callers that need to distinguish "worktree missing" from "chat not found"
+   * should check `getChat(chatId)?.worktreeMissing` after receiving `null`.
+   */
   getEffectivePath(chatId: string): string | null {
     const chat = this.getChat(chatId);
     if (!chat) return null;
-    if (chat.worktreePath) return chat.worktreePath;
+    if (chat.worktreePath) {
+      if (chat.worktreeMissing) return null;
+      return chat.worktreePath;
+    }
     const project = this.db.projects.get(chat.projectId);
     return project?.path ?? null;
+  }
+
+  /** Returns the root path for a project, or null if the project is not found. */
+  getProjectPath(projectId: string): string | null {
+    return this.db.projects.get(projectId)?.path ?? null;
+  }
+
+  /** Returns the projectId that owns the given chat, or null if the chat is not found. */
+  getChatProjectId(chatId: string): string | null {
+    return this.getChat(chatId)?.projectId ?? null;
   }
 
   async getMessages(chatId: string): Promise<ChatMessage[]> {
@@ -686,7 +754,7 @@ export class ChatManager {
     const hasPending = this.permissions.hasPending(chat.id);
     chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
     chat.isRunning = chat.processState === 'working' && !hasPending;
-    chat.worktreeMissing = chat.worktreePath ? !existsSync(chat.worktreePath) : false;
+    chat.worktreeMissing = chat.worktreePath ? !isWorktreePresent(chat.worktreePath) : false;
     return chat;
   }
 

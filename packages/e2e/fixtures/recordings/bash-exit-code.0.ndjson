@@ -1,0 +1,10 @@
+{"dir":"in","method":"sendMessage","args":["Run the test suite, then run a bad command"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-bash-exit-code-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Running the test suite."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_bash_1","name":"Bash","input":{"command":"pnpm test","description":"Run the test suite"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_bash_1","content":"5 passed, 0 failed\nexit 0","isError":false}]],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Tests passed. Now trying a bad command."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":120}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_bash_2","name":"Bash","input":{"command":"pnpm build:missing","description":"Run a missing build script"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":140}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_bash_2","content":"sh: pnpm: command not found\nexit 127","isError":true}]],"delayMs":160}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"That command failed as expected — pnpm is not on PATH here."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":200}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.014,"usage":{"input_tokens":36,"output_tokens":24},"subtype":"success","is_error":false}],"delayMs":240}

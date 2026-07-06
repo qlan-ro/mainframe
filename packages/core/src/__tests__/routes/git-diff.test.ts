@@ -49,7 +49,9 @@ function createCtx(projectPath: string, worktreePath?: string): RouteContext {
       settings: { get: vi.fn().mockReturnValue(null) },
     } as any,
     chats: {
-      getChat: vi.fn().mockReturnValue(worktreePath ? { worktreePath, worktreeMissing: false } : null),
+      getChat: vi
+        .fn()
+        .mockReturnValue(worktreePath ? { projectId: 'proj-1', worktreePath, worktreeMissing: false } : null),
       getEffectivePath: vi.fn().mockReturnValue(projectPath),
       on: vi.fn(),
     } as any,

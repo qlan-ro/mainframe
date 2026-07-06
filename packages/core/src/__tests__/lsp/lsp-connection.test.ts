@@ -42,12 +42,22 @@ import { parseLspUpgradePath } from '../../lsp/lsp-connection.js';
 describe('parseLspUpgradePath', () => {
   it('parses valid /lsp/:projectId/:language path', () => {
     const result = parseLspUpgradePath('/lsp/abc-123/typescript');
-    expect(result).toEqual({ projectId: 'abc-123', language: 'typescript' });
+    expect(result).toEqual({ projectId: 'abc-123', language: 'typescript', chatId: undefined });
   });
 
-  it('parses path with query params', () => {
+  it('parses path with query params but no chatId', () => {
     const result = parseLspUpgradePath('/lsp/abc-123/python?token=xyz');
-    expect(result).toEqual({ projectId: 'abc-123', language: 'python' });
+    expect(result).toEqual({ projectId: 'abc-123', language: 'python', chatId: undefined });
+  });
+
+  it('parses chatId from query string', () => {
+    const result = parseLspUpgradePath('/lsp/abc-123/typescript?chatId=chat-99');
+    expect(result).toEqual({ projectId: 'abc-123', language: 'typescript', chatId: 'chat-99' });
+  });
+
+  it('parses chatId alongside other query params', () => {
+    const result = parseLspUpgradePath('/lsp/proj-1/python?token=abc&chatId=chat-42');
+    expect(result).toEqual({ projectId: 'proj-1', language: 'python', chatId: 'chat-42' });
   });
 
   it('returns null for non-LSP paths', () => {
@@ -91,7 +101,7 @@ describe('LspConnectionHandler.handleUpgrade', () => {
     const handler = new LspConnectionHandler(manager, mockDb);
 
     const { socket, written } = createMockSocket();
-    await handler.handleUpgrade('unknown-id', 'typescript', {} as any, socket, Buffer.alloc(0));
+    await handler.handleUpgrade('unknown-id', 'typescript', undefined, {} as any, socket, Buffer.alloc(0));
 
     expect(written.some((w) => w.includes('404'))).toBe(true);
     expect(socket.destroy).toHaveBeenCalled();
@@ -110,7 +120,7 @@ describe('LspConnectionHandler.handleUpgrade', () => {
     const handler = new LspConnectionHandler(manager, mockDb);
 
     const { socket, written } = createMockSocket();
-    await handler.handleUpgrade('p1', 'rust', {} as any, socket, Buffer.alloc(0));
+    await handler.handleUpgrade('p1', 'rust', undefined, {} as any, socket, Buffer.alloc(0));
 
     expect(written.some((w) => w.includes('404'))).toBe(true);
     expect(socket.destroy).toHaveBeenCalled();
@@ -138,11 +148,130 @@ describe('LspConnectionHandler.handleUpgrade', () => {
     const handler = new LspConnectionHandler(manager, mockDb);
     const { socket } = createMockSocket();
     try {
-      await handler.handleUpgrade('p1', 'typescript', {} as any, socket, Buffer.alloc(0));
+      await handler.handleUpgrade('p1', 'typescript', undefined, {} as any, socket, Buffer.alloc(0));
     } catch {
       // Expected — wss.handleUpgrade fails with mock socket
     }
 
     expect(mockClose).toHaveBeenCalledWith(1001, 'Replaced by new client');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R4: worktree-aware LSP cwd — LspConnectionHandler uses getEffectivePath
+// ---------------------------------------------------------------------------
+
+describe('LspConnectionHandler.handleUpgrade — worktree-aware cwd (R4)', () => {
+  function createMockSocket() {
+    const written: string[] = [];
+    const socket = new PassThrough() as any;
+    const origWrite = socket.write.bind(socket);
+    socket.write = (chunk: any) => {
+      written.push(typeof chunk === 'string' ? chunk : chunk.toString());
+      return origWrite(chunk);
+    };
+    socket.destroy = vi.fn();
+    return { socket, written };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('spawns LSP server with worktree path as cwd when chatId has a live worktree', async () => {
+    const { LspConnectionHandler } = await import('../../lsp/lsp-connection.js');
+    const { LspRegistry } = await import('../../lsp/lsp-registry.js');
+    const { LspManager } = await import('../../lsp/lsp-manager.js');
+    const { spawn } = await import('node:child_process');
+
+    const registry = new LspRegistry();
+    vi.spyOn(registry, 'resolveCommand').mockResolvedValue({ command: 'node', args: ['--stdio'] });
+    const manager = new LspManager(registry);
+
+    const mockDb = {
+      projects: { get: vi.fn().mockReturnValue({ id: 'p1', path: '/project/root' }) },
+    } as any;
+    const mockChats = {
+      getChat: vi.fn().mockReturnValue({
+        projectId: 'p1',
+        worktreePath: '/project/worktrees/feat-branch',
+        worktreeMissing: false,
+      }),
+    } as any;
+
+    const handler = new LspConnectionHandler(manager, mockDb, mockChats);
+    const { socket } = createMockSocket();
+
+    try {
+      await handler.handleUpgrade('p1', 'typescript', 'chat-wt-1', {} as any, socket, Buffer.alloc(0));
+    } catch {
+      // Expected — wss.handleUpgrade fails with mock socket
+    }
+
+    // The spawn cwd must be the worktree path, not the project root.
+    expect(spawn).toHaveBeenCalledWith(
+      'node',
+      ['--stdio'],
+      expect.objectContaining({ cwd: '/project/worktrees/feat-branch' }),
+    );
+  });
+
+  it('spawns LSP server with project root as cwd when no chatId is supplied', async () => {
+    const { LspConnectionHandler } = await import('../../lsp/lsp-connection.js');
+    const { LspRegistry } = await import('../../lsp/lsp-registry.js');
+    const { LspManager } = await import('../../lsp/lsp-manager.js');
+    const { spawn } = await import('node:child_process');
+
+    const registry = new LspRegistry();
+    vi.spyOn(registry, 'resolveCommand').mockResolvedValue({ command: 'node', args: ['--stdio'] });
+    const manager = new LspManager(registry);
+
+    const mockDb = {
+      projects: { get: vi.fn().mockReturnValue({ id: 'p1', path: '/project/root' }) },
+    } as any;
+
+    const handler = new LspConnectionHandler(manager, mockDb);
+    const { socket } = createMockSocket();
+
+    try {
+      await handler.handleUpgrade('p1', 'typescript', undefined, {} as any, socket, Buffer.alloc(0));
+    } catch {
+      // Expected — wss.handleUpgrade fails with mock socket
+    }
+
+    expect(spawn).toHaveBeenCalledWith('node', ['--stdio'], expect.objectContaining({ cwd: '/project/root' }));
+  });
+
+  it('rejects upgrade with 409 when chatId points to a missing worktree', async () => {
+    const { LspConnectionHandler } = await import('../../lsp/lsp-connection.js');
+    const { LspRegistry } = await import('../../lsp/lsp-registry.js');
+    const { LspManager } = await import('../../lsp/lsp-manager.js');
+
+    const registry = new LspRegistry();
+    const manager = new LspManager(registry);
+
+    const mockDb = {
+      projects: { get: vi.fn().mockReturnValue({ id: 'p1', path: '/project/root' }) },
+    } as any;
+    const mockChats = {
+      getChat: vi.fn().mockReturnValue({
+        projectId: 'p1',
+        worktreePath: '/project/worktrees/feat-branch',
+        worktreeMissing: true,
+      }),
+    } as any;
+
+    const handler = new LspConnectionHandler(manager, mockDb, mockChats);
+    const { socket, written } = createMockSocket();
+
+    await handler.handleUpgrade('p1', 'typescript', 'chat-missing-wt', {} as any, socket, Buffer.alloc(0));
+
+    expect(written.some((w) => w.includes('409'))).toBe(true);
+    expect(socket.destroy).toHaveBeenCalled();
   });
 });

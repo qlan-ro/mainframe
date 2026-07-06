@@ -1,0 +1,13 @@
+{"dir":"in","method":"sendMessage","args":["Enter a worktree for feature-x, exit keeping it, enter one for feature-y, then exit removing it"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-worktree-pills-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll enter the feature-x worktree now."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_wt_1","name":"EnterWorktree","input":{"name":"feature-x"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_wt_1","content":"{\"worktreePath\":\"/repo/.worktrees/feature-x\",\"worktreeBranch\":\"feature-x\"}","isError":false}]],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_wt_2","name":"ExitWorktree","input":{"action":"keep"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":100}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_wt_2","content":"Worktree kept","isError":false}]],"delayMs":120}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_wt_3","name":"EnterWorktree","input":{"name":"feature-y"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":140}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_wt_3","content":"{\"worktreePath\":\"/repo/.worktrees/feature-y\",\"worktreeBranch\":\"feature-y\"}","isError":false}]],"delayMs":160}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_wt_4","name":"ExitWorktree","input":{"action":"remove"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":180}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_wt_4","content":"Worktree removed","isError":false}]],"delayMs":200}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Both worktrees handled: feature-x kept, feature-y removed."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":240}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.015,"usage":{"input_tokens":40,"output_tokens":24},"subtype":"success","is_error":false}],"delayMs":280}

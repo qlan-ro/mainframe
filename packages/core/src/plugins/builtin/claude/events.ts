@@ -33,10 +33,20 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(_session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
+// The CLI prints this to stderr but keeps running — it is advisory, not fatal.
+// Require both tokens so a genuine fatal error that happens to mention "has
+// not been trusted" isn't misclassified as the advisory.
+const TRUST_NOT_TRUSTED = /has not been trusted/i;
+const TRUST_PERMISSIONS = /permissions\.allow|hasTrustDialogAccepted/i;
+
+export function handleStderr(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
+  if (TRUST_NOT_TRUSTED.test(message) && TRUST_PERMISSIONS.test(message)) {
+    sink.onTrustRequired?.(session.projectPath);
+    return;
+  }
   sink.onError(new Error(message));
 }
 
@@ -117,30 +127,13 @@ export function handleControlResponseEvent(
     sink.onContextUsage(usage);
   }
 
-  // Route cancel_async_message responses to pending callbacks
+  // Route every other control_response (set_model, apply_flag_settings, cancel_async_message,
+  // stop_task, ...) through the session's single correlation channel by request_id. `response`
+  // is the OUTER envelope ({subtype, request_id, response?}) — resolve() hands it to whichever
+  // awaiting caller's isTerminal predicate accepts it. Unmatched ids (e.g. this same context-usage
+  // response, which has no pending awaiter) return false harmlessly.
   const requestId = (response.request_id as string) || undefined;
-  const innerResponse = response.response as Record<string, unknown> | undefined;
-  if (requestId && innerResponse && typeof innerResponse.cancelled === 'boolean') {
-    const callback = session.state.pendingCancelCallbacks.get(requestId);
-    if (callback) {
-      session.state.pendingCancelCallbacks.delete(requestId);
-      callback(innerResponse.cancelled);
-    }
-  }
-
-  // Route stop_task responses to pending callbacks (mirrors cancel above)
-  if (requestId && innerResponse && typeof innerResponse.subtype === 'string') {
-    const stopCb = session.state.pendingStopTaskCallbacks.get(requestId);
-    if (stopCb) {
-      session.state.pendingStopTaskCallbacks.delete(requestId);
-      if (innerResponse.subtype === 'success') {
-        stopCb({ ok: true });
-      } else {
-        const errMsg = typeof innerResponse.error === 'string' ? innerResponse.error : 'unknown error';
-        stopCb({ ok: false, error: errMsg });
-      }
-    }
-  }
+  if (requestId) session.control.resolve(requestId, response);
 }
 
 function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {

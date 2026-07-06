@@ -4,17 +4,22 @@ import { stat } from 'node:fs/promises';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { LspManager, LspServerHandle } from './lsp-manager.js';
 import type { DatabaseManager } from '../db/index.js';
+import type { ChatManager } from '../chat/index.js';
 import { bridgeWsToProcess, encodeJsonRpc } from './lsp-proxy.js';
 import { createChildLogger } from '../logger.js';
+import { getEffectivePath } from '../server/routes/types.js';
 
 const log = createChildLogger('lsp-connection');
 
 /** Parse /lsp/:projectId/:language from a URL path. Returns null if not an LSP path. */
-export function parseLspUpgradePath(url: string): { projectId: string; language: string } | null {
-  const pathname = url.split('?')[0] ?? '';
-  const match = pathname.match(/^\/lsp\/([^/]+)\/([^/]+)$/);
+export function parseLspUpgradePath(
+  url: string,
+): { projectId: string; language: string; chatId: string | undefined } | null {
+  const [pathname, qs = ''] = url.split('?') as [string, string | undefined];
+  const match = (pathname ?? '').match(/^\/lsp\/([^/]+)\/([^/]+)$/);
   if (!match) return null;
-  return { projectId: match[1]!, language: match[2]! };
+  const chatId = new URLSearchParams(qs).get('chatId') ?? undefined;
+  return { projectId: match[1]!, language: match[2]!, chatId };
 }
 
 export class LspConnectionHandler {
@@ -23,11 +28,13 @@ export class LspConnectionHandler {
   constructor(
     private manager: LspManager,
     private db: DatabaseManager,
+    private chats?: ChatManager,
   ) {}
 
   async handleUpgrade(
     projectId: string,
     language: string,
+    chatId: string | undefined,
     request: IncomingMessage,
     socket: Duplex,
     head: Buffer,
@@ -41,11 +48,35 @@ export class LspConnectionHandler {
       return;
     }
 
-    // Validate project path exists on disk (async — no sync I/O in server code)
+    // When chatId is supplied and its worktree is missing, refuse with 409 so the
+    // client can surface a clear error instead of silently falling back to the
+    // project root (which would serve stale file:// URIs to tsserver).
+    if (chatId && this.chats) {
+      const chat = this.chats.getChat(chatId);
+      if (chat?.worktreeMissing) {
+        log.warn({ projectId, language, chatId }, 'LSP upgrade rejected: worktree missing');
+        socket.write('HTTP/1.1 409 Conflict\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+    }
+
+    // Resolve effective path: worktree when chatId points to a live worktree,
+    // project root otherwise.  getEffectivePath needs a minimal RouteContext shape.
+    const ctx = { db: this.db, chats: this.chats ?? ({ getChat: () => undefined } as unknown as ChatManager) };
+    const effectivePath = getEffectivePath(ctx as Parameters<typeof getEffectivePath>[0], projectId, chatId);
+    if (!effectivePath) {
+      log.warn({ projectId, language, chatId }, 'LSP upgrade rejected: project or worktree not found');
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    // Validate effective path exists on disk (async — no sync I/O in server code)
     try {
-      await stat(project.path);
+      await stat(effectivePath);
     } catch (err) {
-      log.warn({ err, projectId, path: project.path }, 'LSP upgrade rejected: project path not found');
+      log.warn({ err, projectId, path: effectivePath }, 'LSP upgrade rejected: project path not found');
       socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
       socket.destroy();
       return;
@@ -71,10 +102,10 @@ export class LspConnectionHandler {
       existingHandle.cleanup = null;
     }
 
-    // Spawn or get existing LSP server
+    // Spawn or get existing LSP server using the worktree-aware effective path.
     let handle: LspServerHandle;
     try {
-      handle = await this.manager.getOrSpawn(projectId, language, project.path);
+      handle = await this.manager.getOrSpawn(projectId, language, effectivePath);
     } catch (err) {
       log.error({ err, projectId, language }, 'Failed to spawn LSP server');
       socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');

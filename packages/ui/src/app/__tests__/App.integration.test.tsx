@@ -1,0 +1,388 @@
+/**
+ * App integration — behavior tests (TDD red phase).
+ *
+ * Behaviors covered:
+ *  1. renders sidebar shell, dev harness gone — app-chatid-input absent, sessions-sidebar present.
+ *  2. renders chat surface — chat-thread-area present, chat-surface-stub present inside it.
+ *  3. mounts the single archive dialog outlet — sessions-archive-confirm-dialog present, exactly 1.
+ *  4. mounts the tag popover host — tag-popover-host-stub present.
+ *  5. status bar retired — app-status-bar absent; sidebar-footer present (via SessionSidebar mock stub).
+ *  6. runs the session-list router under the runtime — useSessionListRouter mock was called.
+ *  7. provides the daemon port to the runtime layer — DaemonPortProvider is mounted; the
+ *     useSessionsThreadList mock calls the REAL useDaemonPort and sees 31415.
+ *  8. waits for daemon when port is null — app-waiting-daemon present, sessions-sidebar absent.
+ *  8b. waits for daemon when the port is known but not yet ready — shell stays gated (boot race).
+ *  9. keeps top chrome controls clickable — no app-wide fixed drag region over the headers.
+ *
+ * Strategy:
+ *  - All heavy modules mocked so the test stays a pure unit for App's wiring.
+ *  - useConnectionState default: { state: 'connected', daemonStatus: 'running', port: 31415 }.
+ *  - Behavior 7: useSessionsThreadList mock imports the REAL useDaemonPort via vi.importActual
+ *    so the DaemonPortProvider wrapping is genuinely exercised.
+ *  - Behavior 8: vi.mocked(useConnectionState).mockReturnValueOnce overrides for that one test.
+ */
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
+
+// ---------------------------------------------------------------------------
+// Module-scope let — behavior 7: records the port seen inside the runtime mock.
+// ---------------------------------------------------------------------------
+
+let daemonPortSeenByRuntime: number | null = null;
+
+// ---------------------------------------------------------------------------
+// Hoisted spy for useSessionListRouter — referenced in behavior 6. Declared
+// via vi.hoisted so it exists before the vi.mock factory (hoisted above the
+// file) reads it.
+// ---------------------------------------------------------------------------
+
+const { useSessionListRouterMock } = vi.hoisted(() => ({ useSessionListRouterMock: vi.fn() }));
+const { initLspPortMock } = vi.hoisted(() => ({ initLspPortMock: vi.fn(() => Promise.resolve()) }));
+
+// ---------------------------------------------------------------------------
+// vi.mock declarations — must appear before any import of the module under test.
+// ---------------------------------------------------------------------------
+
+vi.mock('../useConnectionState', () => ({
+  useConnectionState: vi.fn(() => ({ state: 'connected', daemonStatus: 'running', port: 31415, ready: true })),
+}));
+
+vi.mock('../../lib/daemon/ws-client', () => ({
+  daemonWs: {
+    setPort: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    onEvent: vi.fn(() => () => {}),
+    subscribe: vi.fn(),
+    send: vi.fn(),
+    subscribeConnection: vi.fn(() => () => {}),
+    connected: true,
+  },
+}));
+
+vi.mock('@/lib/api/adapters', () => ({ getAdapters: vi.fn(() => Promise.resolve([])) }));
+
+vi.mock('@assistant-ui/react', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@assistant-ui/react');
+  return {
+    ...actual,
+    AssistantRuntimeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    useAssistantRuntime: () => ({
+      threads: {
+        reload: vi.fn().mockResolvedValue(undefined),
+        switchToThread: vi.fn(),
+        switchToNewThread: vi.fn().mockResolvedValue(undefined),
+        getState: () => ({
+          mainThreadId: 'main',
+          newThreadId: '__LOCALID_test',
+          threadIds: [],
+          archivedThreadIds: [],
+          isLoading: false,
+          isLoadingMore: false,
+          hasMore: false,
+          threadItems: {},
+        }),
+      },
+    }),
+    useAui: () => ({ composer: () => ({ setText: vi.fn() }) }),
+  };
+});
+
+vi.mock('../../features/sessions/runtime/use-sessions-thread-list', async () => {
+  // Import the REAL useDaemonPort so the DaemonPortProvider wrapping is exercised.
+  const { useDaemonPort } = await vi.importActual<typeof import('../../features/sessions/runtime/daemon-port-context')>(
+    '../../features/sessions/runtime/daemon-port-context',
+  );
+
+  return {
+    useSessionsThreadList: () => {
+      daemonPortSeenByRuntime = useDaemonPort();
+      return {};
+    },
+  };
+});
+
+vi.mock('../../lib/lsp', () => ({
+  initLspPort: initLspPortMock,
+  lspClientManager: { hasClient: vi.fn(() => false), ensureClient: vi.fn(() => Promise.resolve()) },
+  getLspLanguage: vi.fn(() => null),
+  hasLspSupport: vi.fn(() => false),
+  initAutoConnect: vi.fn(() => () => undefined),
+}));
+
+vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
+  useSessionListRouter: useSessionListRouterMock,
+}));
+
+// MainToolbar resolves identity via useAuiState + useProjects; with the runtime
+// provider stubbed to a passthrough there is no AuiProvider context, so stub the
+// identity hook directly.
+vi.mock('../../features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectName: 'mainframe', branchName: undefined }),
+}));
+
+vi.mock('../../layout/SidebarShell', () => ({
+  SIDEBAR_EXPANDED_WIDTH: 300,
+  SIDEBAR_COLLAPSED_WIDTH: 0,
+  SIDEBAR_COLLAPSE_THRESHOLD: 150,
+  clampSidebarWidth: (width: number) => Math.min(300, Math.max(0, width)),
+  SidebarShell: () => (
+    <div data-testid="sessions-sidebar">
+      <div data-testid="sidebar-footer" />
+    </div>
+  ),
+}));
+
+vi.mock('../../features/sessions/sidebar/SessionSidebar', () => ({
+  SessionSidebar: () => null,
+}));
+
+vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
+  ArchiveWorktreeDialog: () => <div data-testid="sessions-archive-confirm-dialog" />,
+}));
+
+vi.mock('../../features/palette/SpotlightPalette', () => ({
+  SpotlightPalette: () => null,
+}));
+
+vi.mock('../../components/overlays/FindInPathModal', () => ({
+  FindInPathModal: () => null,
+}));
+
+vi.mock('../../components/overlays/DirectoryPickerModal', () => ({
+  DirectoryPickerModal: () => null,
+}));
+
+vi.mock('../../features/review/ReviewPanel', () => ({
+  ReviewPanel: () => null,
+}));
+
+vi.mock('../../features/sessions/tags/TagPopoverHost', () => ({
+  TagPopoverHost: (p: { port: number }) => <div data-testid="tag-popover-host-stub" data-port={p.port} />,
+}));
+
+vi.mock('../../features/sessions/new-thread/ChatSurface', () => ({
+  ChatSurface: (p: { port: number }) => <div data-testid="chat-surface-stub" data-port={p.port} />,
+}));
+
+vi.mock('@/components/ui/sonner', () => ({
+  Toaster: () => null,
+}));
+
+// ---------------------------------------------------------------------------
+// Import the component under test — AFTER all mocks.
+// ---------------------------------------------------------------------------
+
+import { useConnectionState } from '../useConnectionState';
+import { App } from '../App';
+
+// ---------------------------------------------------------------------------
+// Reset per-test
+// ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  daemonPortSeenByRuntime = null;
+  useSessionListRouterMock.mockReset();
+  vi.mocked(useConnectionState).mockReturnValue({
+    state: 'connected',
+    daemonStatus: 'running',
+    port: 31415,
+    ready: true,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 1 — sidebar shell present, dev harness gone
+// ---------------------------------------------------------------------------
+
+describe('App integration — renders sidebar shell, dev harness gone', () => {
+  it('app-chatid-input is null and sessions-sidebar is defined', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.queryByTestId('app-chatid-input')).toBeNull();
+    expect(screen.getByTestId('sessions-sidebar')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 2 — chat surface
+// ---------------------------------------------------------------------------
+
+describe('App integration — renders chat surface', () => {
+  it('chat-thread-area is defined and contains chat-surface-stub', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByTestId('chat-thread-area')).toBeDefined();
+    expect(screen.getByTestId('chat-surface-stub')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 3 — single archive dialog outlet
+// ---------------------------------------------------------------------------
+
+describe('App integration — mounts the single archive dialog outlet', () => {
+  it('sessions-archive-confirm-dialog is defined and appears exactly once', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByTestId('sessions-archive-confirm-dialog')).toBeDefined();
+    expect(screen.getAllByTestId('sessions-archive-confirm-dialog')).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 4 — tag popover host
+// ---------------------------------------------------------------------------
+
+describe('App integration — mounts the tag popover host', () => {
+  it('tag-popover-host-stub is defined', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByTestId('tag-popover-host-stub')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 5 — status bar retired; sidebar footer present
+// ---------------------------------------------------------------------------
+
+describe('App integration — status bar retired; sidebar footer present', () => {
+  it('app-status-bar is absent and sidebar-footer is present', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.queryByTestId('app-status-bar')).toBeNull();
+    expect(screen.getByTestId('sidebar-footer')).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 6 — session-list router is called
+// ---------------------------------------------------------------------------
+
+describe('App integration — runs the session-list router under the runtime', () => {
+  it('useSessionListRouter mock has been called', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(useSessionListRouterMock).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 7 — daemon port provided to runtime layer
+// ---------------------------------------------------------------------------
+
+describe('App integration — provides the daemon port to the runtime layer', () => {
+  it('does not throw and daemonPortSeenByRuntime is 31415', async () => {
+    await expect(
+      act(async () => {
+        render(<App />);
+      }),
+    ).resolves.not.toThrow();
+
+    expect(daemonPortSeenByRuntime).toBe(31415);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 8 — waiting for daemon when port is null
+// ---------------------------------------------------------------------------
+
+describe('App integration — waits for daemon when port is null', () => {
+  it('app-waiting-daemon is present and sessions-sidebar is null', async () => {
+    vi.mocked(useConnectionState).mockReturnValueOnce({
+      state: 'connecting',
+      daemonStatus: 'initializing',
+      port: null,
+      ready: false,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
+    expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 8b — boot race: port known but daemon not yet ready
+// ---------------------------------------------------------------------------
+
+describe('App integration — waits for the daemon when the port is known but not yet ready', () => {
+  it('does NOT mount the data shell until /health passes (ready=false)', async () => {
+    // The sidecar opens its port before it accepts requests: the port is known
+    // but the daemon is not reachable yet (ready=false). Gating only on the port
+    // would mount the sidebar and fire the initial REST loads against a dead
+    // daemon — the boot race. The shell must stay gated until ready latches true.
+    vi.mocked(useConnectionState).mockReturnValueOnce({
+      state: 'connecting',
+      daemonStatus: 'initializing',
+      port: 31415,
+      ready: false,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
+    expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 10 — LSP port initialization
+// ---------------------------------------------------------------------------
+
+describe('App integration — initializes the LSP port once connected', () => {
+  it('calls initLspPort when a port is live', async () => {
+    initLspPortMock.mockClear();
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(initLspPortMock).toHaveBeenCalled();
+  });
+
+  it('does not call initLspPort while waiting for the daemon', async () => {
+    initLspPortMock.mockClear();
+    vi.mocked(useConnectionState).mockReturnValueOnce({
+      state: 'connecting',
+      daemonStatus: 'initializing',
+      port: null,
+      ready: false,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(initLspPortMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 9 — no global drag shield over interactive chrome
+// ---------------------------------------------------------------------------
+
+describe('App integration — keeps top chrome controls clickable', () => {
+  it('does not render an app-wide fixed drag region over the header controls', async () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelector('[data-tauri-drag-region].fixed')).toBeNull();
+  });
+});

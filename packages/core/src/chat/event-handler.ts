@@ -297,13 +297,17 @@ function buildSessionSink(
       const cachedQueuedUuids = new Set<string>();
       let displayChanged = false;
 
-      for (const m of cached) {
+      // Iterate a snapshot: moveToEnd splices+pushes on the live `cached` array,
+      // and mutating an array mid-for-of shifts the iterator, silently skipping
+      // whichever orphan lands in the vacated slot.
+      for (const m of [...cached]) {
         const u = m.metadata?.uuid;
         if (m.metadata?.queued && typeof u === 'string') {
           cachedQueuedUuids.add(u);
           if (!refUuids.has(u)) {
             delete (m.metadata as Record<string, unknown>).queued;
             delete (m.metadata as Record<string, unknown>).uuid;
+            messages.moveToEnd(chatId, m.id);
             displayChanged = true;
             log.warn({ chatId, uuid: u }, 'onResult: orphan metadata.queued (no matching ref) — clearing');
             emitEvent({ type: 'message.queued.processed', chatId, uuid: u });
@@ -362,11 +366,29 @@ function buildSessionSink(
       log.debug({ chatId, reason, wasInterrupted, isError }, 'onResult: emitting chat.updated with processState=idle');
       emitEvent({ type: 'chat.updated', chat: active.chat, reason });
 
+      // Turn duration for the MessageTiming pill. `turnStartedAt` is stamped by
+      // ChatManager.sendMessage right before dispatch; emit it as a transient
+      // `system` marker that groupMessages() merges onto the preceding
+      // assistant turn as `metadata.turnDurationMs` and then discards.
+      if (typeof active.turnStartedAt === 'number') {
+        const turnDurationMs = Date.now() - active.turnStartedAt;
+        active.turnStartedAt = undefined;
+        const timingMessage = messages.createTransientMessage(chatId, 'system', [], { turnDurationMs });
+        messages.append(chatId, timingMessage);
+        emitEvent({ type: 'message.added', chatId, message: timingMessage });
+        emitDisplay();
+      }
+
       const notifyConfig = readNotificationConfig(db);
       if (isError) {
         if (!wasInterrupted) {
+          const detail = typeof data.result === 'string' ? data.result.trim() : '';
+          log.warn(
+            { chatId, subtype: data.subtype, reason: detail || null },
+            'session ended unexpectedly — emitting error message',
+          );
           const message = messages.createTransientMessage(chatId, 'error', [
-            { type: 'error', message: 'Session ended unexpectedly' },
+            { type: 'error', message: detail || 'Session ended unexpectedly' },
           ]);
           messages.append(chatId, message);
           emitEvent({ type: 'message.added', chatId, message });
@@ -399,13 +421,16 @@ function buildSessionSink(
     },
 
     onQueuedProcessed(uuid: string) {
-      log.debug({ chatId, uuid }, 'onQueuedProcessed: removing queued flag from message');
+      log.debug({ chatId, uuid }, 'onQueuedProcessed: moving queued message to end + clearing flag');
       const msgs = messages.get(chatId);
       const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
       if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
-        log.debug({ chatId, uuid, messageId: msg.id }, 'onQueuedProcessed: queued flag removed, emitting display');
+        // Move on process: the ack fires when the CLI injects this message into
+        // context, so relocating it to the end matches the JSONL consumption
+        // point. Reloads no longer reshuffle order.
+        messages.moveToEnd(chatId, msg.id);
         emitDisplay();
       } else {
         log.warn({ chatId, uuid }, 'onQueuedProcessed: message not found in cache or already processed');
@@ -423,8 +448,8 @@ function buildSessionSink(
       log.debug({ sessionId, chatId }, 'session exited');
 
       // Any messages still flagged as queued are stranded — the CLI process
-      // is gone and will never emit an isReplay ack for them. Clear here so
-      // the composer banner and the daemon's queuedRefs don't leak.
+      // is gone and will never emit an isReplay ack for them. Clear the
+      // cached flags so the composer banner doesn't leak.
       const cachedMsgs = messages.get(chatId);
       let hadQueued = false;
       if (cachedMsgs) {
@@ -542,6 +567,10 @@ function buildSessionSink(
 
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
+    },
+
+    onTrustRequired(projectPath: string) {
+      emitEvent({ type: 'chat.trustRequired', chatId, projectPath });
     },
   };
 }

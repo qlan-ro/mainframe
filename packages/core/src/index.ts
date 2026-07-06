@@ -10,7 +10,7 @@ import { BackgroundTaskTracker } from './background-tasks/tracker.js';
 import { reconcileBackgroundTasks } from './background-tasks/reconcile.js';
 import { startLivenessScheduler } from './background-tasks/liveness.js';
 import { AdapterRegistry } from './adapters/index.js';
-import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
+import { backfillAdapterExecutables, defaultRun, resolveAdapterExecutable } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
@@ -27,6 +27,8 @@ import { logger } from './logger.js';
 import { wrapClaudeForRecording } from './testing/record-wrapper.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 import { backfillWorktreeRelationships } from './workspace/worktree.js';
+import { WorkflowService } from './workflows/index.js';
+import { makeChatManagerPort } from './workflows/agent-port.js';
 
 function enrichPath(): void {
   try {
@@ -74,6 +76,10 @@ async function main(): Promise<void> {
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
   const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event));
+  // No in-memory CLI sessions survive a restart, so reset any persisted
+  // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
+  // otherwise those chats look "running" and new messages queue forever.
+  chats.recoverStaleWorkingState();
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
@@ -90,6 +96,14 @@ async function main(): Promise<void> {
   chats.setStopLaunchProcesses(async (projectId, projectPath) => {
     const manager = launchRegistry.get(projectId, projectPath);
     if (manager) await manager.stopAll();
+  });
+
+  const workflows = new WorkflowService({
+    dataDir: getDataDir(),
+    logger,
+    emitEvent: (event) => broadcastEvent(event),
+    agentPort: makeChatManagerPort(chats, () => db.projects.list()[0]?.id ?? null),
+    listProjects: () => db.projects.list().map((p) => ({ id: p.id, path: p.path })),
   });
 
   // PluginManager owns its own Express Router; no circular dep on the Express app
@@ -119,6 +133,21 @@ async function main(): Promise<void> {
     wrapClaudeForRecording(adapters);
   }
 
+  // Static, spawn-free seed so GET /api/adapters serves instantly and never blocks on a CLI.
+  // MUST stay static — CodexAdapter.listModels() spawns a 30s-timeout app-server (see codex/adapter.ts).
+  adapters.seedStaticSnapshots();
+
+  // Configure the refresh BEFORE server.start() so no request can trigger an unconfigured probe.
+  // emitEvent late-binds through the broadcastEvent closure (set after server.start()).
+  adapters.configureRefresh({
+    resolveExecutablePath: async (adapterId) => {
+      const resolved = await resolveAdapterExecutable(adapterId, { settings: db.settings, run: defaultRun });
+      return resolved.valid ? resolved.path : undefined;
+    },
+    run: defaultRun,
+    emitEvent: (event) => broadcastEvent(event),
+  });
+
   let daemonTunnelUrl: string | null = null;
 
   const server = createServerManager({
@@ -132,20 +161,28 @@ async function main(): Promise<void> {
     tunnelManager,
     port: config.port,
     backgroundTasks,
+    workflows,
   });
 
-  await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
 
   await server.start(config.port);
-  broadcastEvent = (event) => server.broadcastEvent(event);
+  // Bind the real WS broadcast AND feed daemon events to the workflow engine.
+  // All event sources (chats, launchRegistry, tunnelManager, backgroundTasks,
+  // pluginManager) use the broadcastEvent closure by reference, so every event
+  // is forwarded here after server.start().
+  broadcastEvent = (event) => {
+    server.broadcastEvent(event);
+    workflows.onDaemonEvent(event);
+  };
 
-  // Probe adapters for dynamic model lists (non-blocking)
-  adapters
-    .probeAllModels((event) => broadcastEvent(event))
-    .catch((err) => {
-      logger.warn({ err }, 'Model probe failed');
-    });
+  await workflows.start().catch((err) => {
+    logger.error({ err }, 'WorkflowService failed to start — continuing without workflows');
+  });
+
+  reconcileBackgroundTasks({ tracker: backgroundTasks, db }).catch((err) => {
+    logger.warn({ err }, 'Background task reconciliation failed');
+  });
 
   // Non-blocking: backfill worktree parent relationships for existing projects.
   // Failure here must not prevent the daemon from serving requests.
@@ -153,13 +190,20 @@ async function main(): Promise<void> {
     logger.warn({ err }, 'Worktree relationship backfill failed');
   });
 
-  // Non-blocking: resolve + persist absolute CLI paths for registered adapters
-  // so spawns are explicit. Failure must not block serving requests.
-  backfillAdapterExecutables(
+  // Resolve + persist absolute CLI paths BEFORE any live refresh so the probe/enrichment
+  // spawn the real executable (not a bare name that ENOENTs under a packaged-app PATH).
+  await backfillAdapterExecutables(
     adapters.getAll().map((a) => a.id),
     { settings: db.settings, run: defaultRun },
   ).catch((err) => {
     logger.warn({ err }, 'Adapter executable backfill failed');
+  });
+
+  // Only now may the refresh run. allowRefresh() is the gate that makes a pre-backfill
+  // probe impossible; refreshAll() enriches installed/version/models per adapter and emits.
+  adapters.allowRefresh();
+  adapters.refreshAll().catch((err) => {
+    logger.warn({ err }, 'Adapter catalog refresh failed');
   });
 
   if (config.tunnel === true) {
@@ -180,6 +224,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    workflows.stop();
     chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();

@@ -36,7 +36,6 @@ function createMockSession(): ClaudeSession {
       status: 'ready',
       lastAssistantUsage: undefined,
       activeTasks: new Map(),
-      pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
       toolUseRegistry: new Map(),

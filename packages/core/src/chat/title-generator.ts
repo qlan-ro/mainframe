@@ -28,7 +28,21 @@ export async function generateTitle(content: string, binary: string): Promise<st
 
   const { stdout } = await execFileNoStdin(
     binary,
-    ['-p', prompt, '--output-format', 'text', '--model', 'claude-haiku-4-5-20251001', '--max-turns', '1'],
+    [
+      '-p',
+      prompt,
+      // Don't persist this throwaway prompt as a resumable session on disk —
+      // otherwise it pollutes the CLI's session list (and our external-sessions
+      // scan) as a "Generate a short title…" ghost. The CLI's own title gen
+      // avoids this by calling the API directly; we shell out, so we opt out here.
+      '--no-session-persistence',
+      '--output-format',
+      'text',
+      '--model',
+      'claude-haiku-4-5-20251001',
+      '--max-turns',
+      '1',
+    ],
     { timeout: 30_000, maxBuffer: 8192, env: { ...process.env, NO_COLOR: '1' } },
   );
 

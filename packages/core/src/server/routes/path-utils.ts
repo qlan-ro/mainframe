@@ -14,6 +14,22 @@ export function isWithinBase(realBase: string, realTarget: string): boolean {
   return realTarget.startsWith(prefix);
 }
 
+/**
+ * Resolves `requestedPath` relative to `basePath` and confirms it is contained
+ * within `basePath` (realpath + containment check).  Returns the resolved
+ * absolute path or `null` if the path escapes the base or does not exist.
+ *
+ * **Wire flavour:** effective-base-relative.  `basePath` is the value returned
+ * by `getEffectivePath` — either the chat's live worktree directory or the
+ * project root.  Callers MUST obtain `basePath` from `getEffectivePath` before
+ * calling this function; never pass a raw user-supplied string as `basePath`.
+ *
+ * Consumer responsibilities:
+ * - Call `getEffectivePath` first to resolve the base.
+ * - Pass only paths that are relative to (or absolute within) that base.
+ * - Treat a `null` return as "forbidden" (403) — never fall back to an
+ *   unvalidated path.
+ */
 export function resolveAndValidatePath(basePath: string, requestedPath: string): string | null {
   try {
     const realBase = realpathSync(basePath);
@@ -42,8 +58,15 @@ export function resolveClaudeConfigPath(basePath: string, requestedPath: string)
 
 /**
  * Resolve a requested path for reading: validated inside the project base, or —
- * as a fallback — under ~/.claude/. Returns the validated absolute path or null.
- * Centralizes the dual-resolution so every read route applies identical
+ * as a fallback — under `~/.claude/` (plans, skills, etc.).  Returns the
+ * validated absolute path or `null`.
+ *
+ * **Wire flavour:** effective-base-relative (same as `resolveAndValidatePath`).
+ * `GET /files` uses this helper to support an absolute-under-base path as a
+ * compatibility affordance.  `/filesystem/browse` and `/files/external` are the
+ * only endpoints that intentionally accept paths outside the project base.
+ *
+ * Centralises the dual-resolution so every read route applies identical
  * path-traversal checks.
  */
 export function resolveReadablePath(basePath: string, requestedPath: string): string | null {

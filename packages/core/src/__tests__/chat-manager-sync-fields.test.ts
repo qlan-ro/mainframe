@@ -2,6 +2,7 @@ import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { ChatManager } from '../chat/chat-manager.js';
 import type { ActiveChat } from '../chat/types.js';
 
@@ -72,5 +73,36 @@ describe('ChatManager.syncChatFields', () => {
     expect(cachedNow.effort).toBe('high');
     expect(cachedNow.title).toBe('keep me');
     expect(cachedNow.pinned).toBe(false);
+  });
+});
+
+describe('ChatManager.emitChatUpdated', () => {
+  it('emits a chat.updated event whose chat carries the persisted effort value', () => {
+    // Arrange: DB returns a chat with effort already persisted as 'high'.
+    const persistedChat = { id: 'c1', projectId: 'p1', status: 'active', effort: 'high' };
+    const db = makeDb(persistedChat);
+    const emitted: DaemonEvent[] = [];
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker(), undefined, (e) => emitted.push(e));
+
+    // Act
+    manager.emitChatUpdated('c1');
+
+    // Assert: exactly one event, type chat.updated, effort is literally 'high'.
+    expect(emitted).toHaveLength(1);
+    const event = emitted[0];
+    expect(event.type).toBe('chat.updated');
+    if (event.type === 'chat.updated') {
+      expect(event.chat.effort).toBe('high');
+    }
+  });
+
+  it('emits nothing when the chat does not exist', () => {
+    const db = makeDb(null);
+    const emitted: DaemonEvent[] = [];
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker(), undefined, (e) => emitted.push(e));
+
+    manager.emitChatUpdated('nonexistent');
+
+    expect(emitted).toHaveLength(0);
   });
 });

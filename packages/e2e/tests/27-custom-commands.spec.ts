@@ -136,7 +136,7 @@ test.describe.skip('§27b Command persistence after restart', () => {
     const path = await import('path');
     const { fileURLToPath } = await import('url');
     const __dirname = path.default.dirname(fileURLToPath(import.meta.url));
-    const APP_MAIN = path.default.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
+    const APP_MAIN = path.default.resolve(__dirname, '../../../packages/app-electron/out/main/index.js');
 
     const app2 = await electron.launch({
       args: [APP_MAIN],

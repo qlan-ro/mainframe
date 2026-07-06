@@ -43,7 +43,12 @@ function chatRoute<T extends { chatId: string; files?: string[] }>(
     const data = parsed.data;
     const workDir = ctx.chats.getEffectivePath(data.chatId);
     if (!workDir) {
-      fail(res, 404, 'Chat not found');
+      const chat = ctx.chats.getChat(data.chatId);
+      if (chat?.worktreeMissing) {
+        fail(res, 409, 'Worktree missing');
+      } else {
+        fail(res, 404, 'Chat not found');
+      }
       return;
     }
     if (opts?.validatePaths && data.files) {
@@ -83,9 +88,14 @@ async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Respons
     return;
   }
   const { chatId, files } = parsed.data;
-  const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
+  const projectId = param(req, 'id');
+  const basePath = getEffectivePath(ctx, projectId, chatId);
   if (!basePath) {
-    fail(res, 404, 'Project not found');
+    if (chatId && ctx.chats.getChat(chatId)?.worktreeMissing) {
+      fail(res, 409, 'Worktree missing');
+    } else {
+      fail(res, 404, 'Project not found');
+    }
     return;
   }
 

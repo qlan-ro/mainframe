@@ -11,8 +11,8 @@ Git operations require a real repository with specific state (branches, remotes,
 Unit and integration tests exist in:
 - `packages/core/src/__tests__/git/git-service.test.ts` — GitService with mocked simple-git
 - `packages/core/src/__tests__/routes/git-write.test.ts` — REST endpoint integration tests
-- `packages/desktop/src/__tests__/components/git/BranchPopover.test.tsx` — UI component tests
-- `packages/desktop/src/__tests__/components/Toaster.test.tsx` — Toast system tests
+- `packages/app-electron/src/__tests__/components/git/BranchPopover.test.tsx` — UI component tests
+- `packages/app-electron/src/__tests__/components/Toaster.test.tsx` — Toast system tests
 
 ## Future work
 

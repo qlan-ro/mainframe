@@ -1,0 +1,17 @@
+{"dir":"in","method":"sendMessage","args":["Track three tasks: add a login form, write its tests, update the docs. Use TaskCreate/TaskUpdate to track progress."],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-task-progress-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll track this as three tasks."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_tc_1","name":"TaskCreate","input":{"subject":"Add login form"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_tc_1","content":"Task #1 created: Add login form","isError":false}]],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_tc_2","name":"TaskCreate","input":{"subject":"Write login form tests"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":100}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_tc_2","content":"Task #2 created: Write login form tests","isError":false}]],"delayMs":120}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_tc_3","name":"TaskCreate","input":{"subject":"Update login form docs"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":140}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_tc_3","content":"Task #3 created: Update login form docs","isError":false}]],"delayMs":160}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_tu_1","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":180}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_tu_1","content":"Task #1 updated: in_progress","isError":false}]],"delayMs":200}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_tu_2","name":"TaskUpdate","input":{"taskId":"1","status":"completed"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":220}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_tu_2","content":"Task #1 updated: completed","isError":false}]],"delayMs":240}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_tu_3","name":"TaskUpdate","input":{"taskId":"2","status":"in_progress"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":260}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_tu_3","content":"Task #2 updated: in_progress","isError":false}]],"delayMs":280}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Login form is done; tests are in progress; docs are queued next."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":300}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.018,"usage":{"input_tokens":36,"output_tokens":28},"subtype":"success","is_error":false}],"delayMs":340}

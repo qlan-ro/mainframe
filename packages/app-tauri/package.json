@@ -1,0 +1,23 @@
+{
+  "name": "@qlan-ro/mainframe-app-tauri",
+  "version": "2.0.0-rc.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "tauri:dev": "node scripts/tauri-dev.mjs",
+    "tauri:build": "cargo tauri build",
+    "provision:node": "node scripts/provision-node.mjs",
+    "bundle:daemon": "node scripts/bundle-daemon.mjs",
+    "bundle": "pnpm run provision:node && pnpm run bundle:daemon",
+    "codesign:daemon": "node scripts/codesign-daemon.mjs",
+    "codesign:daemon:dry-run": "node scripts/codesign-daemon.mjs --dry-run"
+  },
+  "dependencies": {
+    "@qlan-ro/mainframe-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "esbuild": "^0.28.0"
+  }
+}

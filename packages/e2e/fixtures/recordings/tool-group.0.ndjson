@@ -1,0 +1,9 @@
+{"dir":"in","method":"sendMessage","args":["Find where greeting is defined and used"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-tool-group-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll search for that."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_grp_1","name":"Read","input":{"file_path":"index.ts"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":60}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_grp_1","content":"export const greeting = \"hello\";\n","isError":false}]],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_grp_2","name":"Grep","input":{"pattern":"greeting","path":"."},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":100}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_grp_2","content":"./index.ts:1:export const greeting = \"hello\";","isError":false}]],"delayMs":220}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Found it: `index.ts` defines `greeting`, and is the only place that references it."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":260}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.012,"usage":{"input_tokens":30,"output_tokens":20},"subtype":"success","is_error":false}],"delayMs":300}

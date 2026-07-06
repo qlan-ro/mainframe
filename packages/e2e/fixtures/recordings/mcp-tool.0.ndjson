@@ -1,0 +1,9 @@
+{"dir":"in","method":"sendMessage","args":["Use the linear MCP server to look up issue MF-42"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-tool-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll look that up via the linear MCP server."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_mcp_1","name":"mcp__linear__get_issue","input":{"issueId":"MF-42"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":80}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_mcp_1","content":"{\"id\":\"MF-42\",\"title\":\"Add recording infra for gate stacking\",\"state\":\"In Progress\"}","isError":false}]],"delayMs":140}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_mcp_2","name":"mcp__linear__get_issue","input":{"issueId":"MF-999"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":180}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_mcp_2","content":"Issue MF-999 not found","isError":true}]],"delayMs":220}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"MF-42 is \"Add recording infra for gate stacking\", currently In Progress. MF-999 doesn't exist."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":260}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.012,"usage":{"input_tokens":26,"output_tokens":20},"subtype":"success","is_error":false}],"delayMs":300}

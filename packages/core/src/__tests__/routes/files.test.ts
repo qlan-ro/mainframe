@@ -672,3 +672,167 @@ describe('PUT /api/projects/:id/files', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/projects/:id/paths/resolve
+// ---------------------------------------------------------------------------
+
+describe('GET /api/projects/:id/paths/resolve', () => {
+  it('resolves a relative path to absolute + relative + baseKind:project when no chatId', async () => {
+    await mkdir(join(projectDir, 'src'), { recursive: true });
+    await writeFile(join(projectDir, 'src', 'index.ts'), '');
+
+    const realProjectDir = await realpath(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/paths/resolve');
+    const res = mockRes();
+
+    await handler({ params: { id: 'proj-1' }, query: { path: 'src/index.ts' } }, res, vi.fn());
+
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: {
+        relative: 'src/index.ts',
+        absolute: join(realProjectDir, 'src', 'index.ts'),
+        baseKind: 'project',
+        basePath: realProjectDir,
+        contained: true,
+      },
+    });
+  });
+
+  it('returns 400 when path query param is missing', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/paths/resolve');
+    const res = mockRes();
+
+    await handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 404 when the project does not exist', async () => {
+    const ctx: RouteContext = {
+      db: {
+        projects: { get: vi.fn().mockReturnValue(null) },
+        chats: { list: vi.fn().mockReturnValue([]) },
+        settings: { get: vi.fn().mockReturnValue(null) },
+      } as any,
+      chats: { getChat: vi.fn().mockReturnValue(null), on: vi.fn() } as any,
+      adapters: { get: vi.fn(), list: vi.fn() } as any,
+    };
+    await writeFile(join(projectDir, 'a.ts'), '');
+
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/paths/resolve');
+    const res = mockRes();
+
+    await handler({ params: { id: 'nonexistent' }, query: { path: 'a.ts' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Project not found' }));
+  });
+
+  it('returns contained:false for a path outside the project base (e.g. ~/.claude fallback)', async () => {
+    // Use the project dir itself — request a path that resolves outside via a relative traversal
+    // We simulate this by passing an absolute path outside the base.
+    const outsideDir = await mkdtemp(join(tmpdir(), 'mf-outside-resolve-'));
+    try {
+      const outsideFile = join(outsideDir, 'outside.ts');
+      await writeFile(outsideFile, '');
+      // Resolve symlinks (macOS /var -> /private/var) so assertions match what the endpoint returns.
+      const realOutsideFile = await realpath(outsideFile);
+
+      const ctx = createCtx(projectDir);
+      const router = fileRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/projects/:id/paths/resolve');
+      const res = mockRes();
+
+      // Pass an absolute path that is outside the project base
+      await handler({ params: { id: 'proj-1' }, query: { path: outsideFile } }, res, vi.fn());
+
+      const call = res.json.mock.calls[0][0] as { success: boolean; data?: { contained: boolean; absolute: string } };
+      // Should succeed but with contained:false
+      expect(call.success).toBe(true);
+      expect(call.data?.contained).toBe(false);
+      expect(call.data?.absolute).toBe(realOutsideFile);
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it('yields baseKind:worktree and the worktree basePath when chatId has a live worktree', async () => {
+    const worktreeDir = await mkdtemp(join(tmpdir(), 'mf-wt-resolve-'));
+    try {
+      await writeFile(join(worktreeDir, 'main.ts'), '');
+      const realWorktreeDir = await realpath(worktreeDir);
+
+      const ctx: RouteContext = {
+        db: {
+          projects: { get: vi.fn().mockReturnValue({ id: 'proj-1', name: 'Test', path: projectDir }) },
+          chats: { list: vi.fn().mockReturnValue([]) },
+          settings: { get: vi.fn().mockReturnValue(null) },
+        } as any,
+        chats: {
+          getChat: vi.fn().mockReturnValue({
+            projectId: 'proj-1',
+            worktreePath: worktreeDir,
+            worktreeMissing: false,
+          }),
+          on: vi.fn(),
+        } as any,
+        adapters: { get: vi.fn(), list: vi.fn() } as any,
+      };
+
+      const router = fileRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/projects/:id/paths/resolve');
+      const res = mockRes();
+
+      await handler({ params: { id: 'proj-1' }, query: { path: 'main.ts', chatId: 'chat-wt' } }, res, vi.fn());
+
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          relative: 'main.ts',
+          absolute: join(realWorktreeDir, 'main.ts'),
+          baseKind: 'worktree',
+          basePath: realWorktreeDir,
+          contained: true,
+        },
+      });
+    } finally {
+      await rm(worktreeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns 409 when chatId references a missing worktree', async () => {
+    const ctx: RouteContext = {
+      db: {
+        projects: { get: vi.fn().mockReturnValue({ id: 'proj-1', name: 'Test', path: projectDir }) },
+        chats: { list: vi.fn().mockReturnValue([]) },
+        settings: { get: vi.fn().mockReturnValue(null) },
+      } as any,
+      chats: {
+        getChat: vi.fn().mockReturnValue({
+          projectId: 'proj-1',
+          worktreePath: '/tmp/deleted-wt',
+          worktreeMissing: true,
+        }),
+        on: vi.fn(),
+      } as any,
+      adapters: { get: vi.fn(), list: vi.fn() } as any,
+    };
+
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/paths/resolve');
+    const res = mockRes();
+
+    await handler({ params: { id: 'proj-1' }, query: { path: 'a.ts', chatId: 'chat-missing-wt' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Worktree missing' }));
+  });
+});

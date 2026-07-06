@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildToolResultBlocks, convertHistoryEntry } from '../plugins/builtin/claude/history.js';
+import { convertHistoryEntry } from '../plugins/builtin/claude/history-converters.js';
+import { buildToolResultBlocks } from '../plugins/builtin/claude/history-tool-result.js';
 import type { ToolResultMessageContent } from '@qlan-ro/mainframe-types';
 
 /**

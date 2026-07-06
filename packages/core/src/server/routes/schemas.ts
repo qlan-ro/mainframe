@@ -141,6 +141,7 @@ const gitBranchName = z
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/, 'Invalid branch name');
 
 export const GitCheckoutBody = z.object({ branch: z.string().min(1) });
+export const GitCommitBody = z.object({ message: z.string().min(1, 'Commit message cannot be empty') });
 export const GitCreateBranchBody = z.object({ name: gitBranchName, startPoint: z.string().optional() });
 export const GitFetchBody = z.object({ remote: z.string().optional() });
 export const GitPullBody = z

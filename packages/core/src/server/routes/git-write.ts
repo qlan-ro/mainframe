@@ -8,6 +8,7 @@ import { createChildLogger } from '../../logger.js';
 import { ok, okEmpty, fail } from './respond.js';
 import {
   GitCheckoutBody,
+  GitCommitBody,
   GitCreateBranchBody,
   GitFetchBody,
   GitPullBody,
@@ -77,6 +78,10 @@ export function gitWriteRoutes(ctx: RouteContext): Router {
   router.post(
     '/api/projects/:id/git/checkout',
     gitRoute(ctx, GitCheckoutBody, (svc, d) => svc.checkout(d.branch), 'checkout'),
+  );
+  router.post(
+    '/api/projects/:id/git/commit',
+    gitRoute(ctx, GitCommitBody, async (svc, d) => ({ commit: await svc.commitAll(d.message) }), 'commit'),
   );
   router.post(
     '/api/projects/:id/git/branch',

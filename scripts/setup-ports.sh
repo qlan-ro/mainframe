@@ -58,8 +58,8 @@ echo "Building @qlan-ro/mainframe-core…"
 (cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-core build)
 
 echo ""
-echo "Building @qlan-ro/mainframe-desktop…"
-(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-desktop build)
+echo "Building @qlan-ro/mainframe-app-electron…"
+(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-app-electron build)
 
 echo ""
 echo "Worktree setup complete."
