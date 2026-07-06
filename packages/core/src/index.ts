@@ -253,6 +253,13 @@ if (subcommand === 'pair') {
   import('./cli/pair.js').then(({ runPair }) => runPair());
 } else if (subcommand === 'status') {
   import('./cli/status.js').then(({ runStatus }) => runStatus());
+} else if (subcommand === 'update') {
+  import('./cli/update.js').then(({ runUpdate }) =>
+    runUpdate().catch((error) => {
+      console.error(`  Update failed: ${(error as Error).message}`);
+      process.exit(1);
+    }),
+  );
 } else {
   main().catch((error) => {
     logger.fatal({ err: error }, 'Fatal error');

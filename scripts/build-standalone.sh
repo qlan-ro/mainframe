@@ -64,16 +64,22 @@ else
 fi
 chmod +x "${DIST_DIR}/bin/cloudflared"
 
-# 5. Create wrapper script
-cat > "${DIST_DIR}/bin/mainframe-daemon" << 'WRAPPER'
+# 5. Create wrapper script.
+# MAINFRAME_STANDALONE_ROOT tells `mainframe update` where the install lives so it
+# can extract a new release over it.
+cat > "${DIST_DIR}/bin/mainframe" << 'WRAPPER'
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 export MAINFRAME_ORIG_PATH="${PATH}"
+export MAINFRAME_STANDALONE_ROOT="${BASE_DIR}"
 export PATH="${SCRIPT_DIR}:${PATH}"
 exec "${SCRIPT_DIR}/node" "${BASE_DIR}/lib/daemon.cjs" "$@"
 WRAPPER
-chmod +x "${DIST_DIR}/bin/mainframe-daemon"
+chmod +x "${DIST_DIR}/bin/mainframe"
+
+# Back-compat alias: existing systemd units / PATHs reference `mainframe-daemon`.
+ln -sf mainframe "${DIST_DIR}/bin/mainframe-daemon"
 
 # 6. Package
 tar -czf "dist-standalone/${DIST_NAME}.tar.gz" -C dist-standalone "$DIST_NAME"

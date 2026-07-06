@@ -23,7 +23,7 @@ The simplest approach. The daemon spawns `cloudflared` as a child process and te
 No Cloudflare account needed. The URL changes on every restart.
 
 ```bash
-TUNNEL=true mainframe-daemon
+TUNNEL=true mainframe
 ```
 
 Or in the desktop app: **Settings → Tunnel → Enable**.
@@ -41,7 +41,7 @@ Requires a Cloudflare account and a domain managed by Cloudflare.
 5. Start the daemon with the token and URL:
 
 ```bash
-TUNNEL=true TUNNEL_TOKEN=<TOKEN> TUNNEL_URL=https://mainframe.example.com mainframe-daemon
+TUNNEL=true TUNNEL_TOKEN=<TOKEN> TUNNEL_URL=https://mainframe.example.com mainframe
 ```
 
 Or configure once and forget:
@@ -66,7 +66,7 @@ If you prefer to manage the tunnel process independently — for example, runnin
 cloudflared tunnel run --token <TOKEN>
 
 # Terminal 2: start the daemon with the known URL
-TUNNEL_URL=https://mainframe.example.com mainframe-daemon
+TUNNEL_URL=https://mainframe.example.com mainframe
 ```
 
 In this mode the daemon does not spawn or stop `cloudflared`. It uses the URL for mobile pairing and push notifications.
