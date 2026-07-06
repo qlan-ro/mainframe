@@ -15,9 +15,15 @@ jobs:
       matrix:
         # TEMPORARILY macOS-only (2026-07-06): Windows (pnpm-on-PATH in beforeBuildCommand)
         # and Linux (updater signing-key secret) release legs are disabled while the macOS
-        # signing/notarization path is stabilized. Restore [macos-latest, windows-2022,
-        # ubuntu-latest] once those are fixed.
-        os: [macos-latest]
+        # signing/notarization path is stabilized. Restore the windows-2022 (x64) and
+        # ubuntu-latest (x64) entries once those are fixed.
+        #
+        # target_os/target_arch drive artifact naming; macos-latest is Apple Silicon
+        # (arm64) as of the 2024 runner migration.
+        include:
+          - os: macos-latest
+            target_os: macos
+            target_arch: arm64
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -50,16 +56,16 @@ jobs:
       - name: Package
         run: pnpm --filter @qlan-ro/mainframe-app-electron exec electron-builder --publish never
         env:
-          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: desktop-${{ matrix.os }}
+          name: desktop-electron-${{ matrix.target_os }}-${{ matrix.target_arch }}
           path: |
             packages/app-electron/dist/*.dmg
             packages/app-electron/dist/*.exe
@@ -217,6 +223,34 @@ jobs:
           # tracks. Clean vX.Y.Z tags publish as stable.
           prerelease: ${{ contains(github.ref_name, '-') }}
 
+      # tauri-action uploads the installer as `Mainframe_<ver>_<arch>.dmg` (arch =
+      # aarch64|x64) — a name that says neither "tauri" nor a consistent arch, and
+      # collides in spirit with the Electron dmg. Rename it in place to the shared
+      # `Mainframe-tauri-<ver>-macos-<arch>.dmg` scheme (arch normalized to arm64|x64).
+      #
+      # We rename ONLY the .dmg: it's the user-facing installer and is NOT referenced by
+      # latest.json (the macOS updater downloads the `.app.tar.gz`), so renaming is safe
+      # for the updater flow. The GitHub API PATCH renames the asset without re-uploading.
+      # Idempotent: renamed assets no longer match `^Mainframe_`, so re-runs skip them.
+      - name: Normalize Tauri dmg asset name
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          release_id=$(gh api "repos/$REPO/releases/tags/$TAG" -q '.id')
+          gh api "repos/$REPO/releases/$release_id/assets" \
+            -q '.[] | select(.name | test("^Mainframe_.*\\.dmg$")) | "\(.id) \(.name)"' \
+          | while read -r id name; do
+              new=$(printf '%s' "$name" \
+                | sed -E 's/^Mainframe_(.+)_aarch64\.dmg$/Mainframe-tauri-\1-macos-arm64.dmg/;
+                          s/^Mainframe_(.+)_x64\.dmg$/Mainframe-tauri-\1-macos-x64.dmg/')
+              echo "Renaming $name -> $new"
+              gh api -X PATCH "repos/$REPO/releases/assets/$id" -f name="$new" >/dev/null
+            done
+
   release:
     needs: [build-desktop, build-daemon, build-app-tauri]
     runs-on: ubuntu-latest
@@ -230,7 +264,16 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
-          files: artifacts/*
+          # Curated so build metadata (builder-debug.yml) never lands on the release.
+          # electron-builder emits Mainframe-electron-<ver>-<os>-<arch> installers +
+          # latest*.yml updater manifests; the daemon job emits daemon-<os>-<arch> tarballs.
+          files: |
+            artifacts/*.dmg
+            artifacts/*.exe
+            artifacts/*.AppImage
+            artifacts/*.zip
+            artifacts/*.tar.gz
+            artifacts/latest*.yml
           draft: true
           # Mirror the tauri-action job: pre-release suffix → GitHub pre-release.
           prerelease: ${{ contains(github.ref_name, '-') }}
