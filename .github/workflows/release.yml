@@ -212,7 +212,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Mainframe ${{ github.ref_name }}
           releaseDraft: true
-          prerelease: false
+          # Any tag with a pre-release suffix (v2.0.0-rc.1, -nightly.N, …) is a
+          # pre-release, so it never becomes the "latest" release the in-app updater
+          # tracks. Clean vX.Y.Z tags publish as stable.
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
   release:
     needs: [build-desktop, build-daemon, build-app-tauri]
@@ -229,6 +232,8 @@ jobs:
         with:
           files: artifacts/*
           draft: true
+          # Mirror the tauri-action job: pre-release suffix → GitHub pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           body: |
             ---
