@@ -104,7 +104,7 @@ export class CodexAdapter implements Adapter {
   // TODO: implement listAgents, createAgent, updateAgent, deleteAgent
   // TODO: implement listCommands
 
-  async listExternalSessions(projectPath: string, _excludeSessionIds: string[]): Promise<ExternalSession[]> {
+  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
     let client: JsonRpcClient | null = null;
     try {
       client = await this.spawnTempAppServer();
@@ -132,7 +132,10 @@ export class CodexAdapter implements Adapter {
       } catch (err) {
         log.warn({ err, projectPath }, 'codex: failed to list external sessions for path');
       }
-      return aggregated;
+      // Exclude already-imported/active sessions so they don't appear as
+      // duplicates in the resume picker (parity with the Claude adapter).
+      const excludeSet = new Set(excludeSessionIds);
+      return aggregated.filter((s) => !excludeSet.has(s.sessionId));
     } catch (err) {
       log.warn({ err }, 'codex: failed to list external sessions');
       return [];

@@ -124,6 +124,21 @@ export class ChatManager {
     this.idleScanner.start();
   }
 
+  /**
+   * On boot, no in-memory CLI sessions exist, so any persisted
+   * `processState: 'working'` was orphaned by a previous daemon restart/crash.
+   * Reset it to 'idle' so the UI doesn't treat the chat as running — otherwise a
+   * new message queues forever ("sends after the current run") because there is
+   * no live run to finish. A chat that was genuinely mid-run is interrupted by
+   * the restart anyway (the CLI dies with the daemon), so 'idle' is correct.
+   *
+   * Call once at daemon boot, after construction (see `index.ts`).
+   */
+  recoverStaleWorkingState(): void {
+    const count = this.db.chats.resetWorkingToIdle();
+    logger.info({ count }, 'reset orphaned working chats to idle on boot');
+  }
+
   /** Stop background timers. Idempotent. Tests and shutdown should call this. */
   dispose(): void {
     this.idleScanner.stop();
@@ -551,10 +566,23 @@ export class ChatManager {
     }
   }
 
+  /**
+   * Returns the working directory for `chatId`:
+   * - the chat's worktree path when it has one and the directory still exists;
+   * - the project root otherwise.
+   *
+   * Returns `null` when the chat is unknown, the project is unknown, or the
+   * chat's worktree has been deleted (`worktreeMissing === true`).
+   * Callers that need to distinguish "worktree missing" from "chat not found"
+   * should check `getChat(chatId)?.worktreeMissing` after receiving `null`.
+   */
   getEffectivePath(chatId: string): string | null {
     const chat = this.getChat(chatId);
     if (!chat) return null;
-    if (chat.worktreePath) return chat.worktreePath;
+    if (chat.worktreePath) {
+      if (chat.worktreeMissing) return null;
+      return chat.worktreePath;
+    }
     const project = this.db.projects.get(chat.projectId);
     return project?.path ?? null;
   }

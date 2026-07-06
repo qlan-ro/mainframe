@@ -298,6 +298,15 @@ export class ChatsRepository {
     this.db.prepare('UPDATE chats SET todos = ? WHERE id = ?').run(JSON.stringify(todos), chatId);
   }
 
+  /**
+   * Bulk-reset every chat whose process_state is 'working' to 'idle'.
+   * Returns the number of rows affected.
+   */
+  resetWorkingToIdle(): number {
+    const result = this.db.prepare("UPDATE chats SET process_state = 'idle' WHERE process_state = 'working'").run();
+    return result.changes;
+  }
+
   getImportedSessionIds(projectId: string): string[] {
     const stmt = this.db.prepare(`
       SELECT claude_session_id FROM chats
