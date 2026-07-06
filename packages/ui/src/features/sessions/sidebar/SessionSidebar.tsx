@@ -133,7 +133,10 @@ function SessionSidebarImpl() {
   const filterProjectName = filterProjectId != null ? projectNameOf(filterProjectId) : null;
 
   // Selecting a project pill sets the filter AND activates that project's
-  // most-recent (or remembered) session. Toggling OFF only clears the filter.
+  // most-recent (or remembered) session. When the project has no sessions,
+  // open a new-thread draft so the chat pane reflects the empty project
+  // instead of stranding the previous project's session. Toggling OFF only
+  // clears the filter.
   const onSelectProject = useCallback(
     (projectId: string | null) => {
       setFilterProjectId(projectId);
@@ -141,6 +144,8 @@ function SessionSidebarImpl() {
         const target = resolveProjectSession(allItems, projectId, useLastSessionStore.getState().lastByProject);
         if (target != null) {
           runtime.threads.switchToThread(target);
+        } else {
+          void runtime.threads.switchToNewThread();
         }
       }
     },

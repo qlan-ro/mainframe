@@ -28,20 +28,27 @@ export interface ChatWsHost {
   /** Seed the gate from a REST-read pending permission. */
   dispatchPermission: (request: ControlRequest) => void;
   /**
-   * Background history re-seed after a subscribe:ack. Always fires on a reconnect
-   * (the daemon kept emitting while the socket was down — catch up). On the INITIAL
-   * attach it fires ONLY when `hasUnreconciledPendings()` is true: a clean open is
-   * already seeded by the mount/setRemoteId `load()`, and re-seeding there would
-   * wholesale-replace messageOrder from a possibly-stale REST snapshot, clobbering
-   * messages an actively-streaming chat just delivered. The one initial-attach gap
-   * worth healing is the first-message handoff: the first send happens during the
-   * __LOCALID_* → remoteId window before the sub attaches, so the daemon's
-   * `display.messages.set [user]` lands with no subscriber and the optimistic
-   * pending lingers — a pending at ack time is exactly that signal.
+   * Background history re-seed after a subscribe:ack. Fires on:
+   *  - a reconnect (the daemon kept emitting while the socket was down — catch up);
+   *  - a reattach after dormancy (`isReattach()`): switching away tears down the
+   *    per-chat sub, so a backgrounded chat receives NOTHING while dormant even
+   *    though the daemon keeps persisting messages — the reattach must re-seed or
+   *    the transcript stays stuck at the pre-dormancy snapshot; and
+   *  - the first-message handoff (`hasUnreconciledPendings()`): the first send
+   *    happens during the __LOCALID_* → remoteId window before the sub attaches,
+   *    so the daemon's `display.messages.set [user]` lands with no subscriber and
+   *    the optimistic pending lingers — a pending at ack time is exactly that signal.
+   *
+   * It does NOT fire on the controller's FIRST-EVER attach with no pending: that
+   * open is already seeded by the mount/setRemoteId `load()`, and re-seeding there
+   * would wholesale-replace messageOrder from a possibly-stale REST snapshot,
+   * clobbering messages an actively-streaming chat just delivered.
    */
   onSubscribeRefresh: () => void;
   /** True when an optimistic send has not yet been reconciled (handoff-gap signal). */
   hasUnreconciledPendings: () => boolean;
+  /** True when a live sub was previously torn down — this attach is a post-dormancy reattach. */
+  isReattach: () => boolean;
   /** True once the controller is disposed — gates all async tails. */
   isDisposed: () => boolean;
 }
@@ -117,11 +124,13 @@ export class ChatWsSubscription {
       console.warn('[chat-ws] resumeChat failed', err),
     );
     this.restorePendingPermission();
-    // Reconnect always re-seeds (catch up on events missed while disconnected).
-    // Initial attach re-seeds only to heal the first-message handoff gap — i.e.
-    // when an optimistic pending is still unreconciled — so a clean open of a
-    // streaming chat is not clobbered by a stale REST snapshot.
-    if (reconnect || this.host.hasUnreconciledPendings()) {
+    // Re-seed to catch up on anything received without a live subscriber:
+    //  - reconnect: events missed while the socket was down;
+    //  - reattach after dormancy: events streamed while this chat was backgrounded;
+    //  - unreconciled pending: the first-message handoff gap.
+    // The controller's first-ever attach with no pending is skipped — it is already
+    // seeded by the mount load(), so re-seeding there could clobber a live stream.
+    if (reconnect || this.host.isReattach() || this.host.hasUnreconciledPendings()) {
       this.host.onSubscribeRefresh();
     }
   }

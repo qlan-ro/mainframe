@@ -43,6 +43,11 @@ export class ChatThreadController {
   private daemonId: string;
   private remoteIdSet = false;
   private liveRefs = 0;
+  // True once a live sub has been torn down (the thread went dormant). A warm
+  // controller that reactivates may have missed events streamed while dormant —
+  // its next attach must re-seed from REST to catch up. Distinguishes a genuine
+  // reattach from the controller's first-ever attach (already seeded by load()).
+  private hasBeenLive = false;
   // The stable aui item.id (constructor chatId) — never changes on adopt, so onNew
   // uses it as the createForLocal localId (same key the picker's draft uses).
   private readonly threadId: string;
@@ -119,6 +124,8 @@ export class ChatThreadController {
       if (this.liveRefs === 0) {
         this.wsSub?.detach();
         this.wsSub = null;
+        // Went dormant: the next attach is a reattach that must re-seed.
+        this.hasBeenLive = true;
       }
     };
   }
@@ -145,6 +152,7 @@ export class ChatThreadController {
         this.dispatch({ type: 'permission.requested', requestId: request.requestId, request }),
       onSubscribeRefresh: () => this.refreshInBackground(),
       hasUnreconciledPendings: () => Object.keys(this.state.pendingUserMessages).length > 0,
+      isReattach: () => this.hasBeenLive,
       isDisposed: () => this.disposed,
     };
   }
