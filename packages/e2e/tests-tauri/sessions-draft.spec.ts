@@ -5,7 +5,11 @@
  * picker, "All" view) → DraftSessionRow (sidebar synthetic row) → WelcomeState
  * (repo suggestions) / FirstRunState (zero projects), with the chat created
  * ONLY on first send (D3) and no cross-project draft leak on repeated New
- * cycles (the historical slot-reuse regression).
+ * cycles (the historical slot-reuse regression). Also covers the bugfix where
+ * ⌘N in "All" view and a zero-session boot both used to strand the user on a
+ * projectless dead-end new-thread surface instead of resolving a project
+ * first (useNewChatHotkeyHandler + ChatSurface's boot-settle fallback, both
+ * driving the shared useNewSessionPickerTarget store).
  *
  * `docs/plans/2026-07-03-tauri-e2e-test-plan.md` §6 is STALE (written against a
  * deleted NewThreadConfigPicker) — scenarios below are derived from the CURRENT
@@ -312,6 +316,101 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
   });
 });
 
+// ─── §sessions-draft — bugfix: ⌘N in "All" view opens the project picker ────
+//
+// Regression coverage for the reported bug: ⌘N in "All" view used to bypass
+// SessionsNewButton's picker entirely (AppShell's hotkey called
+// switchToNewThread() directly), dropping the user on a projectless dead-end
+// (no project chip, no file tree; first send failed and rolled back via the
+// coordinator's "no draft config" guard). Fixed via useNewChatHotkeyHandler +
+// the shared useNewSessionPickerTarget store — ⌘N now opens the SAME anchored
+// popover the "+" button does when no project pill is active, and is
+// unchanged (switch straight to a new thread) when a pill IS active.
+
+test.describe('§sessions-draft — ⌘N in "All" view opens the project picker (no projectless session)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('⌘N opens the same anchored picker as the "+" button; no projectless draft is created', async () => {
+    const { page } = app;
+    const rowsBefore = await page.getByTestId('sessions-row').count();
+    // Guarantee "All" view (no project pill active).
+    await expect(page.getByTestId('sessions-new-button')).toBeVisible();
+
+    await page.keyboard.press('ControlOrMeta+n');
+
+    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
+    // The picker gates project choice BEFORE any draft/chat exists — no
+    // projectless dead-end row and no new session.
+    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
+    await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
+
+    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
+    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
+
+    const draftRow = page.getByTestId('sessions-draft-row');
+    await expect(draftRow).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-header-project')).toBeVisible();
+  });
+
+  test('sending from the ⌘N-picked draft creates exactly one chat tied to the picked project', async () => {
+    const { page } = app;
+    const rowsBefore = await page.getByTestId('sessions-row').count();
+    const idsBefore = await page
+      .getByTestId('sessions-row')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
+
+    // Continues from the previous test's ⌘N-picked draft.
+    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
+    await composer(page).submit('e2e cmd-n picker test');
+
+    await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
+    const idsAfter = await page
+      .getByTestId('sessions-row')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
+    const newChatId = idsAfter.find((id) => id != null && !idsBefore.includes(id));
+    expect(newChatId).toBeTruthy();
+
+    const projectId = await fetchChatProjectId(newChatId as string);
+    expect(projectId).toBe(project.projectId);
+  });
+
+  test('with a project pill active, ⌘N still skips the picker and seeds that project directly', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+
+    await sidebar.projectFilterPill(project.projectId).click();
+    await expect(sidebar.projectFilterPill(project.projectId)).toHaveAttribute('aria-pressed', 'true', {
+      timeout: 5_000,
+    });
+
+    await page.keyboard.press('ControlOrMeta+n');
+    // No picker this time — the draft resolves straight from the active pill.
+    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
+
+    const draftRow = page.getByTestId('sessions-draft-row');
+    await expect(draftRow).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
+
+    // Clean up: discard, then clear the pill.
+    await draftRow.hover();
+    await draftRow.getByTestId('sessions-draft-row-discard').click();
+    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
+    await sidebar.projectFilterPill(project.projectId).click();
+  });
+});
+
 // ─── §sessions-draft — WelcomeState repo suggestions ──────────────────────────
 
 test.describe('§sessions-draft — WelcomeState suggestions', () => {
@@ -390,5 +489,42 @@ test.describe('§sessions-draft — FirstRunState (zero projects)', () => {
     await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('directory-picker')).toHaveCount(0);
+  });
+});
+
+// ─── §sessions-draft — bugfix: zero-session boot opens the project picker ───
+//
+// Regression coverage: booting into "All" view with projects>0 but 0 sessions
+// used to strand the user on the boot draft with no project resolved (no
+// FirstRunState — projects exist — and no picker either, since nothing had
+// opened it). ChatSurface's boot-settle effect now force-opens the same
+// anchored picker after BOOT_SETTLE_MS if the boot draft is still
+// unresolved, so the workspace never lands on that dead-end surface.
+
+test.describe('§sessions-draft — zero-session boot (projects>0, no sessions) opens the project picker', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    // createTauriProject reloads the page after seeding the project via REST —
+    // the reload remounts the app fresh, i.e. a "boot" with 1 project, 0 chats.
+    project = await createTauriProject(app.page);
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('boot lands on the project picker, not a projectless dead-end surface', async () => {
+    const { page } = app;
+    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 15_000 });
+    // No dead-end draft/session sitting behind the forced picker.
+    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
+    await expect(page.getByTestId('sessions-firstrun')).toHaveCount(0);
+
+    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
   });
 });
