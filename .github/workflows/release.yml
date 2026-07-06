@@ -13,10 +13,11 @@ jobs:
       # Don't cancel the other platforms when one fails — we still want their artifacts.
       fail-fast: false
       matrix:
-        # Pin Windows to 2022: the windows-latest (2025) image breaks pnpm's bundled
-        # node-gyp VS finder (ERR_CHILD_PROCESS_STDIO_MAXBUFFER), failing native builds
-        # (better-sqlite3 / node-pty).
-        os: [macos-latest, windows-2022, ubuntu-latest]
+        # TEMPORARILY macOS-only (2026-07-06): Windows (pnpm-on-PATH in beforeBuildCommand)
+        # and Linux (updater signing-key secret) release legs are disabled while the macOS
+        # signing/notarization path is stabilized. Restore [macos-latest, windows-2022,
+        # ubuntu-latest] once those are fixed.
+        os: [macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -73,15 +74,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TEMPORARILY macOS-only (2026-07-06) — see build-desktop note. Restore the
+        # ubuntu x64/arm64 daemon targets when Windows/Linux release legs are re-enabled.
         include:
           - os: macos-14
             target_os: darwin
-            target_arch: arm64
-          - os: ubuntu-latest
-            target_os: linux
-            target_arch: x64
-          - os: ubuntu-24.04-arm
-            target_os: linux
             target_arch: arm64
 
     runs-on: ${{ matrix.os }}
@@ -123,12 +120,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TEMPORARILY macOS-only (2026-07-06) — see build-desktop note. Windows
+        # (pnpm-on-PATH in the tauri beforeBuildCommand) and Linux (updater signing-key
+        # secret) are disabled until fixed; restore the ubuntu/windows entries then.
         include:
           - os: macos-14 # Apple Silicon (arm64)
           - os: macos-13 # Intel (x86_64)
-          - os: ubuntu-latest # Linux x86_64
-          - os: ubuntu-24.04-arm # Linux ARM64
-          - os: windows-latest # Windows x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
