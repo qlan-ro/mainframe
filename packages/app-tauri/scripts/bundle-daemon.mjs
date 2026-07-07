@@ -25,7 +25,7 @@
  */
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectDaemonDeps } from '../../../scripts/collect-daemon-deps.mjs';
@@ -35,6 +35,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appTauri = resolve(here, '..'); // packages/app-tauri
 const repoRoot = resolve(appTauri, '../..'); // monorepo root
 const coreEntry = join(repoRoot, 'packages/core/dist/index.js');
+const coreVersion = JSON.parse(
+  readFileSync(join(repoRoot, 'packages/core/package.json'), 'utf8'),
+).version;
 const daemonDir = join(appTauri, 'src-tauri/resources/daemon');
 const binariesDir = join(appTauri, 'src-tauri/binaries'); // provisioned `node-<triple>` (provision-node.mjs)
 const outfile = join(daemonDir, 'daemon.cjs');
@@ -67,6 +70,8 @@ await build({
   external: EXTERNAL,
   outfile,
   logLevel: 'info',
+  // Inline the daemon's version — the tarball ships no package.json to read at runtime.
+  define: { __DAEMON_VERSION__: JSON.stringify(coreVersion) },
   // import.meta.url is guarded with ?? in core; suppress the cosmetic warning.
   logOverride: { 'empty-import-meta': 'silent' },
 });

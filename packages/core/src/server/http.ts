@@ -5,6 +5,7 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { LaunchRegistry } from '../launch/index.js';
 import { createChildLogger } from '../logger.js';
+import { DAEMON_VERSION } from '../version.js';
 import { createAuthMiddleware } from './middleware/auth.js';
 import {
   projectRoutes,
@@ -101,6 +102,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
+      version: DAEMON_VERSION,
       timestamp: new Date().toISOString(),
       tunnelUrl: ctx.tunnelUrl ?? getTunnelUrl?.() ?? null,
     });
