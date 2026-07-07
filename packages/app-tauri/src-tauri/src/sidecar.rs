@@ -3,8 +3,8 @@
 /// Mirrors `packages/app-electron/src/main/index.ts:startDaemon()`.
 /// Spawns the daemon as a child process with `detached: false` semantics
 /// (the child dies when this process dies — Rust's default).
-/// The login-shell env is merged over the process env before spawn,
-/// replicating `{ ...process.env, NODE_ENV: 'production', ...shellEnv }`.
+/// The login-shell env is merged over the process env before spawn, then
+/// app-owned daemon settings are reapplied.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -62,7 +62,7 @@ pub struct SidecarConfig {
 /// Spawn the daemon sidecar. Returns a handle used to kill it on app exit.
 ///
 /// Environment precedence (matching Electron's `startDaemon`):
-///   base process env  ←  shell_env overlay  ←  explicit overrides
+///   base process env  ←  shell_env overlay  ←  app-owned daemon overrides
 pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     let mut cmd = Command::new(&config.node_bin);
     cmd.arg(&config.daemon_entry);

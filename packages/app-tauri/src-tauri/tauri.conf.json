@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:31500 ws://127.0.0.1:31500 https: wss:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; object-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https: wss:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; object-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     },
     "macOSPrivateApi": true
   },

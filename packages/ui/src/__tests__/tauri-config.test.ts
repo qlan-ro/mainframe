@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import * as path from 'node:path';
+import viteConfig from '../../vite.config';
 
 const BASE_CONFIG_PATH = path.resolve(__dirname, '../../../app-tauri/src-tauri/tauri.conf.json');
 const DEV_OVERLAY_PATH = path.resolve(__dirname, '../../../app-tauri/src-tauri/tauri.dev.conf.json');
@@ -32,5 +33,22 @@ describe('tauri config release safety', () => {
     const raw = readFileSync(DEV_OVERLAY_PATH, 'utf8');
     const overlay = JSON.parse(raw) as { app?: { withGlobalTauri?: boolean } };
     expect(overlay.app?.withGlobalTauri).toBe(true);
+  });
+
+  it('allows loopback daemon ports configured at runtime', () => {
+    const raw = readFileSync(BASE_CONFIG_PATH, 'utf8');
+    const config = JSON.parse(raw) as { app?: { security?: { csp?: string } } };
+    expect(config.app?.security?.csp).toContain('http://127.0.0.1:*');
+    expect(config.app?.security?.csp).toContain('ws://127.0.0.1:*');
+  });
+
+  it('uses relative asset paths so packaged desktop shells can load the renderer', () => {
+    const config = typeof viteConfig === 'function' ? viteConfig({ mode: 'production', command: 'build' }) : viteConfig;
+    expect(config.base).toBe('./');
+  });
+
+  it('uses a Vite target supported by the current desktop build toolchain', () => {
+    const config = typeof viteConfig === 'function' ? viteConfig({ mode: 'production', command: 'build' }) : viteConfig;
+    expect(config.build?.target).toBe('es2020');
   });
 });
