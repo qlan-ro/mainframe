@@ -1,4 +1,4 @@
-import { Play, Square, RotateCw } from 'lucide-react';
+import { Play, Square, RefreshCw } from 'lucide-react';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { Hint } from '@/components/ui/hint';
 import { PreviewIconButton } from './PreviewIconButton';
@@ -43,8 +43,8 @@ export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewR
           Stop
         </button>
       </Hint>
-      <PreviewIconButton testId="preview-run-restart" title="Restart" onClick={onRestart} className="w-[24px]">
-        <RotateCw size={13} />
+      <PreviewIconButton testId="preview-run-restart" title="Restart server" onClick={onRestart} className="w-[24px]">
+        <RefreshCw size={13} />
       </PreviewIconButton>
     </div>
   );

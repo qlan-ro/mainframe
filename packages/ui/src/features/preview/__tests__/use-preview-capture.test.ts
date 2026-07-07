@@ -40,11 +40,13 @@ function makeFakeHandle(): PreviewHandle {
     navigate: vi.fn().mockResolvedValue(undefined),
     capture: vi.fn().mockResolvedValue(new Uint8Array([137, 80, 78, 71])),
     startInspect: vi.fn().mockResolvedValue(undefined),
+    cancelInspect: vi.fn().mockResolvedValue(undefined),
     onInspect: vi.fn().mockImplementation((cb: (result: InspectResult) => void) => {
       inspectResultCallback = cb;
       return () => {};
     }),
     startRegionSelect: vi.fn().mockResolvedValue(undefined),
+    cancelRegionSelect: vi.fn().mockResolvedValue(undefined),
     onRegionSelect: vi.fn().mockImplementation((cb: (result: RegionSelectResult) => void) => {
       regionResultCallback = cb;
       return () => {};
@@ -141,6 +143,37 @@ describe('usePreviewCapture', () => {
     expect(fakeHandle.startInspect).toHaveBeenCalled();
   });
 
+  it('mutual exclusion: onRegionClick while inspect is active cancels inspect and starts region select', () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    act(() => {
+      result.current.onInspectClick();
+    });
+    expect(result.current.inspectActive).toBe(true);
+    act(() => {
+      result.current.onRegionClick();
+    });
+    expect(result.current.inspectActive).toBe(false);
+    expect(result.current.regionSelectActive).toBe(true);
+    expect(fakeHandle.cancelInspect).toHaveBeenCalled();
+    expect(fakeHandle.startRegionSelect).toHaveBeenCalled();
+  });
+
+  it('inspect: clicking onInspectClick again while active toggles it off without starting a new inspect', () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    act(() => {
+      result.current.onInspectClick();
+    });
+    expect(result.current.inspectActive).toBe(true);
+    act(() => {
+      result.current.onInspectClick();
+    });
+    expect(result.current.inspectActive).toBe(false);
+    expect(fakeHandle.cancelInspect).toHaveBeenCalled();
+    expect(fakeHandle.startInspect).toHaveBeenCalledTimes(1);
+  });
+
   it('inspect: null selector exits inspect mode', async () => {
     const fakeHandle = makeFakeHandle();
     const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
@@ -150,6 +183,25 @@ describe('usePreviewCapture', () => {
     await act(async () => {});
     await act(async () => {
       inspectResultCallback?.({ tabId: 'tab-1', selector: null, rect: null, viewport: null });
+    });
+    expect(result.current.inspectActive).toBe(false);
+  });
+
+  it('inspect: a successful pick clears inspectActive', async () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    act(() => {
+      result.current.onInspectClick();
+    });
+    await act(async () => {});
+    expect(result.current.inspectActive).toBe(true);
+    await act(async () => {
+      inspectResultCallback?.({
+        tabId: 'tab-1',
+        selector: 'h1#hello',
+        rect: { x: 48, y: 48, w: 416, h: 110 },
+        viewport: { x: 0, y: 0, w: 512, h: 706 },
+      });
     });
     expect(result.current.inspectActive).toBe(false);
   });

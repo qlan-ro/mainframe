@@ -1,4 +1,5 @@
 pub mod bridge;
+pub mod bridge_plugin;
 pub mod crop;
 
 #[cfg(target_os = "macos")]
@@ -76,7 +77,7 @@ const ALLOWED_EXTERNAL_SCHEMES: &[&str] = &[
 
 /// Returns `true` only for schemes safe to forward to the OS opener.
 /// Rejects `file://`, `javascript:`, `ssh://`, `data:` and any unknown scheme.
-fn is_allowed_external_scheme(url: &str) -> bool {
+pub(crate) fn is_allowed_external_scheme(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
     ALLOWED_EXTERNAL_SCHEMES
         .iter()
@@ -320,55 +321,6 @@ pub async fn preview_capture(
         let _ = (tab_id, region, manager);
         Err("preview capture unsupported on this platform".to_string())
     }
-}
-
-/// Open a URL in the OS default browser.
-///
-/// Only `http://` and `https://` are forwarded to the opener.  Any other
-/// scheme (`file://`, `javascript:`, `ssh://`, etc.) is rejected and logged
-/// to prevent BRIDGE_JS from being used as an OS-command injection vector
-/// (Finding 2).
-#[tauri::command]
-pub async fn preview_open_external(url: String, app: tauri::AppHandle) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    if !is_allowed_external_scheme(&url) {
-        tracing::warn!(url = %url, "preview_open_external: rejected disallowed scheme");
-        return Err(format!("disallowed URL scheme: {url}"));
-    }
-    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
-}
-
-/// Receive the inspect-picker result from the injected BRIDGE_JS and re-emit
-/// it as a Tauri event that `PreviewInstance` can listen to.
-#[tauri::command]
-pub async fn preview_inspect_result(
-    result: InspectResult,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    use tauri::Emitter;
-    app.emit("preview:inspect-result", &result).map_err(|e| e.to_string())
-}
-
-/// Receive the region-select result from the injected BRIDGE_JS and re-emit it
-/// as a Tauri event that `PreviewInstance` can listen to.
-#[tauri::command]
-pub async fn preview_region_result(
-    result: RegionSelectResult,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    use tauri::Emitter;
-    app.emit("preview:region-select", &result).map_err(|e| e.to_string())
-}
-
-/// Receive a navigation event from the injected BRIDGE_JS tracker and re-emit it
-/// as a Tauri event that `PreviewInstance`'s `onNavigate` subscription listens to.
-#[tauri::command]
-pub async fn preview_navigate_event(
-    result: NavigateResult,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    use tauri::Emitter;
-    app.emit("preview:navigate", &result).map_err(|e| e.to_string())
 }
 
 /// Evaluate JavaScript in the child webview (fire-and-forget).

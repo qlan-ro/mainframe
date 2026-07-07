@@ -2,20 +2,20 @@
 ///
 /// Responsibilities:
 ///   (a) Intercept `target=_blank` / external navigation → open in the OS
-///       default browser via the `preview_open_external` Tauri command.
+///       default browser via the `plugin:preview-bridge|open_external` Tauri command.
 ///   (b) Expose `window.__mfInspectInstall()` and `window.__mfInspectCancel()`
 ///       that the `PreviewInstance` React component calls (via `preview_eval`)
 ///       to toggle the element-picker. The picker posts its result back via
-///       `window.__TAURI_INTERNALS__.invoke('preview_inspect_result', {...})`.
+///       `window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|inspect_result', {...})`.
 ///   (c) Expose `window.__mfRegionSelectInstall(tabId)` and
 ///       `window.__mfRegionSelectCancel()` for drag-rectangle region capture.
 ///       Posts `{ tabId, region: {x,y,w,h} }` (or `region: null` on cancel/Escape)
-///       via `window.__TAURI_INTERNALS__.invoke('preview_region_result', {...})`.
+///       via `window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|region_result', {...})`.
 ///   (d) Navigation tracking — reports `location.href` once on full-page load and
 ///       patches `history.pushState`/`replaceState` + listens to `popstate`/
 ///       `hashchange` for SPA in-page navigation. De-duped against the last
 ///       reported URL. Posts `{ tabId, url }` via
-///       `window.__TAURI_INTERNALS__.invoke('preview_navigate_event', {...})`.
+///       `window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|navigate_event', {...})`.
 ///
 /// Kept minimal and self-removing — the ONLY code injected into the user page.
 pub const BRIDGE_JS: &str = r#"
@@ -28,7 +28,7 @@ pub const BRIDGE_JS: &str = r#"
     var a = t && t.closest ? t.closest('a[target=_blank]') : null;
     if (a && a.href) {
       e.preventDefault();
-      window.__TAURI_INTERNALS__.invoke('preview_open_external', { url: a.href });
+      window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|open_external', { url: a.href });
     }
   }, true);
 
@@ -85,13 +85,13 @@ pub const BRIDGE_JS: &str = r#"
       viewport: { w: window.innerWidth, h: window.innerHeight },
     };
     removeInspect();
-    window.__TAURI_INTERNALS__.invoke('preview_inspect_result', { result: result });
+    window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|inspect_result', { result: result });
   }
 
   function _onKey(e) {
     if (e.key === 'Escape') {
       removeInspect();
-      window.__TAURI_INTERNALS__.invoke('preview_inspect_result', {
+      window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|inspect_result', {
         result: { tabId: window.__mfPreviewTabId || '', selector: null, rect: null, viewport: null }
       });
     }
@@ -145,7 +145,7 @@ pub const BRIDGE_JS: &str = r#"
     }
     function finish(region) {
       removeRegion();
-      window.__TAURI_INTERNALS__.invoke('preview_region_result', {
+      window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|region_result', {
         result: { tabId: window.__mfPreviewTabId || '', region: region },
       });
     }
@@ -187,7 +187,7 @@ pub const BRIDGE_JS: &str = r#"
   function _mfReportNav() {
     if (location.href === _mfLastUrl) return;
     _mfLastUrl = location.href;
-    window.__TAURI_INTERNALS__.invoke('preview_navigate_event', {
+    window.__TAURI_INTERNALS__.invoke('plugin:preview-bridge|navigate_event', {
       result: { tabId: window.__mfPreviewTabId || '', url: location.href },
     });
   }

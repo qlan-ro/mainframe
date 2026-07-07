@@ -6,17 +6,89 @@
  * a terminal tab shows the PTY. The whole surface is a drop target for a
  * Files-tab drag (`data-drop-surface="run"`).
  */
+import { GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, X } from 'lucide-react';
 import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { PreviewInstance } from '@/features/preview/PreviewInstance';
 import { ConsolePane } from '@/features/run/ConsolePane';
 import { RunTabStrip } from '../RunTabStrip';
-import { useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { activeLaunchScope } from '@/lib/launch-scope';
 import { filterRunByScope } from '@/store/run-scope-filter';
 import type { RunPane, RunTab } from '@/store/run-pane';
 import { SurfacePicker } from '../SurfacePicker';
+import { useSurfaceDragStore } from '../use-surface-drag';
+import { Hint } from '@/components/ui/hint';
+
+const HEADER_BTN =
+  'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
+
+/**
+ * Header shown when the Run surface has no tabs — keeps the split/close controls
+ * reachable so an empty surface can still be split or dismissed (todo #195). The
+ * `+`/add affordance is the SurfacePicker below, so it isn't repeated here.
+ */
+function RunEmptyHeader() {
+  const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
+  const splitSurface = useLayoutStore((s) => s.splitSurface);
+  const toggleSurface = useLayoutStore((s) => s.toggleSurface);
+  const runIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'run'));
+  const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
+
+  return (
+    <div className="flex h-[36px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]">
+      <div
+        data-testid="run-surface-drag"
+        className="grid h-full w-[20px] flex-shrink-0 cursor-grab place-items-center pl-[4px]"
+        onPointerDown={(e) => beginSurfaceDrag('run', { clientX: e.clientX, clientY: e.clientY })}
+      >
+        <GripVertical size={13} className="text-mf-text-4" />
+      </div>
+      <div className="flex-shrink-0 px-[4px]">
+        <Play size={11} className="text-mf-surface-run" fill="currentColor" />
+      </div>
+      <div className="flex-1" />
+      <div className="flex flex-shrink-0 items-center gap-px pl-[2px] pr-[6px]">
+        {splitAvailable && (
+          <>
+            <Hint label="Split right">
+              <button
+                data-testid="run-tab-strip-split-right"
+                type="button"
+                onClick={() => splitSurface('v')}
+                className={HEADER_BTN}
+              >
+                <LayoutPanelLeft size={13} className="text-mf-text-3" />
+              </button>
+            </Hint>
+            <Hint label="Split down">
+              <button
+                data-testid="run-tab-strip-split-down"
+                type="button"
+                onClick={() => splitSurface('h')}
+                className={HEADER_BTN}
+              >
+                <LayoutPanelTop size={13} className="text-mf-text-3" />
+              </button>
+            </Hint>
+          </>
+        )}
+        <Hint label="Close Run">
+          <button
+            data-testid="run-surface-close"
+            type="button"
+            disabled={runIsFloor}
+            onClick={() => toggleSurface('run')}
+            className={`${HEADER_BTN} ${runIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
+          >
+            <X size={12} className="text-mf-text-3" />
+          </button>
+        </Hint>
+      </div>
+    </div>
+  );
+}
 
 interface RunPaneViewProps {
   pane: RunPane;
@@ -124,7 +196,10 @@ export function RunSurface() {
           ))}
         </div>
       ) : (
-        <SurfacePicker surface="run" />
+        <>
+          <RunEmptyHeader />
+          <SurfacePicker surface="run" />
+        </>
       )}
     </div>
   );

@@ -24,6 +24,7 @@ interface WebviewElement extends HTMLElement {
   executeJavaScript(js: string): Promise<unknown>;
   getZoomFactor?(): number;
   getWebContentsId(): number;
+  reloadIgnoringCache?(): void;
 }
 
 interface CropRect {
@@ -255,6 +256,38 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
     }
   };
 
+  const evalIgnoreErrors = async (js: string, label: string): Promise<void> => {
+    if (typeof (wv as unknown as { executeJavaScript?: unknown }).executeJavaScript !== 'function') return;
+    try {
+      await wv.executeJavaScript(js);
+    } catch (e) {
+      console.warn(`[preview] electron ${label} failed`, e);
+    }
+  };
+
+  // Toggle-off teardown: the injected pickers expose a cleanup hook that removes
+  // their overlay and resolves the pending Promise with a null result (which the
+  // shared capture hook treats as "cancelled" — no capture).
+  const cancelInspect = (): Promise<void> =>
+    evalIgnoreErrors('window.__mf_inspect_cleanup && window.__mf_inspect_cleanup()', 'inspect cancel');
+  const cancelRegionSelect = (): Promise<void> =>
+    evalIgnoreErrors('window.__mf_region_cleanup && window.__mf_region_cleanup()', 'region cancel');
+
+  const clearCache = async (): Promise<void> => {
+    await evalIgnoreErrors(
+      `(async () => {
+         try { if (self.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) {}
+         try { localStorage.clear(); } catch (e) {}
+         try { sessionStorage.clear(); } catch (e) {}
+       })()`,
+      'clearCache',
+    );
+    // reloadIgnoringCache also bypasses the HTTP cache — a stronger clear than the
+    // Tauri path, which can only reach the Cache API + storage from JS.
+    if (typeof wv.reloadIgnoringCache === 'function') wv.reloadIgnoringCache();
+    else void navigate(url);
+  };
+
   const startRegionSelect = async (): Promise<void> => {
     if (typeof (wv as unknown as { executeJavaScript?: unknown }).executeJavaScript !== 'function') return;
     try {
@@ -276,7 +309,9 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
     compositesAboveDom: false,
     navigate,
     capture,
+    clearCache,
     startInspect,
+    cancelInspect,
     onInspect: (cb: (r: InspectResult) => void): Unsubscribe => {
       inspectCbs.add(cb);
       return () => {
@@ -284,6 +319,7 @@ export function mountElectronPreview(container: HTMLElement, url: string, opts?:
       };
     },
     startRegionSelect,
+    cancelRegionSelect,
     onRegionSelect: (cb: (r: RegionSelectResult) => void): Unsubscribe => {
       regionCbs.add(cb);
       return () => {
