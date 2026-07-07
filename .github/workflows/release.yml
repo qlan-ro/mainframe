@@ -220,7 +220,7 @@ jobs:
         with:
           projectPath: packages/app-tauri
           tagName: ${{ github.ref_name }}
-          releaseName: Mainframe ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
           releaseDraft: true
           # Any tag with a pre-release suffix (v2.0.0-rc.1, -nightly.N, …) is a
           # pre-release, so it never becomes the "latest" release the in-app updater
