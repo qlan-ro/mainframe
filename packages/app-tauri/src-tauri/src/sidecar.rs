@@ -15,6 +15,12 @@ use std::sync::{Arc, Mutex};
 /// in a dev build (spawning a zero-byte file would fail at runtime).
 const MIN_NODE_BIN_BYTES: u64 = 1024;
 
+#[derive(Debug, PartialEq, Eq)]
+enum EnvOverride {
+    Set(&'static str, String),
+    Remove(&'static str),
+}
+
 pub struct DaemonHandle {
     child: Arc<Mutex<Option<Child>>>,
 }
@@ -53,7 +59,7 @@ pub struct SidecarConfig {
     pub daemon_entry: PathBuf,
     /// Login-shell env captured by `shell_env::resolve_shell_env_with_timeout`.
     pub shell_env: HashMap<String, String>,
-    /// Daemon HTTP/WS port. Use a non-default (31500) to avoid colliding with dev.
+    /// Daemon HTTP/WS port.
     pub daemon_port: u16,
     /// Optional data dir override.
     pub data_dir: Option<PathBuf>,
@@ -76,11 +82,15 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
         cmd.env(k, v);
     }
 
-    // 2. Explicit overrides (win over everything).
-    cmd.env("NODE_ENV", "production");
-    cmd.env("DAEMON_PORT", config.daemon_port.to_string());
-    if let Some(data_dir) = &config.data_dir {
-        cmd.env("MAINFRAME_DATA_DIR", data_dir);
+    for env_override in daemon_env_overrides(config.daemon_port, config.data_dir.as_deref()) {
+        match env_override {
+            EnvOverride::Set(key, value) => {
+                cmd.env(key, value);
+            }
+            EnvOverride::Remove(key) => {
+                cmd.env_remove(key);
+            }
+        }
     }
 
     tracing::info!(
@@ -100,6 +110,26 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     Ok(DaemonHandle {
         child: Arc::new(Mutex::new(Some(child))),
     })
+}
+
+fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOverride> {
+    let port = daemon_port.to_string();
+    let mut overrides = vec![
+        EnvOverride::Set("NODE_ENV", "production".to_string()),
+        EnvOverride::Set("DAEMON_PORT", port.clone()),
+        EnvOverride::Set("VITE_DAEMON_HTTP_PORT", port.clone()),
+        EnvOverride::Set("VITE_DAEMON_WS_PORT", port),
+    ];
+
+    match data_dir {
+        Some(data_dir) => overrides.push(EnvOverride::Set(
+            "MAINFRAME_DATA_DIR",
+            data_dir.to_string_lossy().into_owned(),
+        )),
+        None => overrides.push(EnvOverride::Remove("MAINFRAME_DATA_DIR")),
+    }
+
+    overrides
 }
 
 /// Prefer the bundled Node sidecar in a packaged build.
@@ -286,5 +316,21 @@ mod tests {
         assert_eq!(find_bundled_node_in(&dir), Some(dir.join("node")));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn daemon_env_overrides_remove_shell_owned_data_dir_when_not_explicit() {
+        assert!(
+            daemon_env_overrides(31500, None).contains(&EnvOverride::Remove("MAINFRAME_DATA_DIR"))
+        );
+    }
+
+    #[test]
+    fn daemon_env_overrides_keep_explicit_data_dir() {
+        assert!(
+            daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data"))).contains(
+                &EnvOverride::Set("MAINFRAME_DATA_DIR", "/tmp/mainframe-data".to_string())
+            )
+        );
     }
 }
