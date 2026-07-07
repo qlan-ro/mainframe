@@ -5,7 +5,7 @@ export async function runStatus(): Promise<void> {
   const baseUrl = `http://127.0.0.1:${config.port}`;
 
   // Fetch health
-  let health: { status: string; timestamp: string; tunnelUrl?: string | null };
+  let health: { status: string; version?: string; timestamp: string; tunnelUrl?: string | null };
   try {
     const res = await fetch(`${baseUrl}/health`);
     health = (await res.json()) as typeof health;
@@ -16,6 +16,7 @@ export async function runStatus(): Promise<void> {
 
   console.log('\n  Mainframe Daemon');
   console.log('  Status:     %s', health.status);
+  console.log('  Version:    %s', health.version ?? 'unknown');
   console.log('  Port:       %d', config.port);
   console.log('  Tunnel:     %s', health.tunnelUrl ?? 'not active');
   console.log('  Data dir:   %s', config.dataDir);

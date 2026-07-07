@@ -136,6 +136,8 @@ mainframe update --version v2.0.0-rc.1   # a specific tag
 systemctl restart mainframe      # or: kill the foreground process and re-run `mainframe`
 ```
 
+Check versions with `mainframe --version` (the installed binary) and `mainframe status` (the **running** daemon) — after a restart they should match.
+
 Re-running the [install script](#2-install-the-daemon) does the same thing and is the fallback if the daemon is too broken to run `mainframe update`.
 
 ## Troubleshooting

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './cli/early-flags.js'; // MUST be first — answers `--version` before the logger/daemon graph loads
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
@@ -249,6 +250,7 @@ async function main(): Promise<void> {
 
 const subcommand = process.argv[2];
 
+// `--version`/`version` is handled earlier by ./cli/early-flags.js.
 if (subcommand === 'pair') {
   import('./cli/pair.js').then(({ runPair }) => runPair());
 } else if (subcommand === 'status') {
