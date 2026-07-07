@@ -46,10 +46,7 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
   }
 
   function handleClearCache() {
-    if (!port) return;
-    handle
-      ?.navigate(`http://localhost:${port}`)
-      .catch((e: unknown) => console.warn('[preview] url-bar clear-cache', e));
+    handle?.clearCache?.().catch((e: unknown) => console.warn('[preview] url-bar clear-cache', e));
   }
 
   return (

@@ -17,6 +17,7 @@ function makeHandle(): PreviewHandle {
     refit: vi.fn(),
     setDevice: vi.fn(),
     destroy: vi.fn(),
+    clearCache: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -75,5 +76,12 @@ describe('PreviewUrlBar', () => {
     expect(openSpy).toHaveBeenCalledWith('http://localhost:3000', '_blank', 'noopener,noreferrer');
     expect(handle.navigate).not.toHaveBeenCalled();
     openSpy.mockRestore();
+  });
+
+  it('Clear cache clears the webview caches instead of navigating', () => {
+    render(<PreviewUrlBar handle={handle} port={3000} isRunning />);
+    fireEvent.click(screen.getByTestId('preview-url-clear-cache'));
+    expect(handle.clearCache).toHaveBeenCalledTimes(1);
+    expect(handle.navigate).not.toHaveBeenCalled();
   });
 });

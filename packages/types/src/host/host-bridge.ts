@@ -93,6 +93,8 @@ export interface PreviewHandle {
   readonly compositesAboveDom: boolean;
   navigate(url: string): Promise<void>;
   capture(region?: Region): Promise<Uint8Array>;
+  /** Clear the webview's runtime caches (Cache API + storage) and reload. Optional (Tauri/Electron implement it). */
+  clearCache?(): Promise<void>;
   startInspect(): Promise<void>;
   /** Tear down an in-progress inspect picker for a toggle-off. Optional (Tauri implements it). */
   cancelInspect?(): Promise<void>;
