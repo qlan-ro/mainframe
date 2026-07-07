@@ -37,10 +37,10 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   useEffect(() => {
     if (!handle) return;
     const handleInspectResult = (result: InspectResult) => {
-      if (result.selector === null) {
-        setInspectActive(false);
-        return;
-      }
+      // Any result ends the pick — the child-side picker self-removes on both
+      // click and Escape, so the toolbar button must not stay lit.
+      setInspectActive(false);
+      if (result.selector === null) return;
       const { rect, viewport } = result;
       if (!rect || !viewport) return;
       const x = Math.max(0, rect.x - PAD);

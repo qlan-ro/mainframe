@@ -25,8 +25,7 @@ use commands::{
 use presence::{report_activity, DaemonPort};
 use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
 use preview::{
-    preview_capture, preview_create, preview_destroy, preview_eval, preview_inspect_result,
-    preview_navigate, preview_navigate_event, preview_open_external, preview_region_result,
+    preview_capture, preview_create, preview_destroy, preview_eval, preview_navigate,
     preview_set_bounds, preview_set_visible, PreviewManager,
 };
 
@@ -76,7 +75,10 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_updater::Builder::new().build());
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Child-preview → app callbacks; a plugin so the remote capability
+        // (capabilities/preview.json) can grant exactly these four commands.
+        .plugin(preview::bridge_plugin::init());
 
     // Dev-only: MCP Bridge plugin (webview automation for the Tauri MCP server).
     // Behind the non-default `mcp-bridge` feature (enabled by `tauri:dev`) so the
@@ -113,10 +115,6 @@ pub fn run() {
             preview_set_visible,
             preview_capture,
             preview_destroy,
-            preview_open_external,
-            preview_inspect_result,
-            preview_region_result,
-            preview_navigate_event,
             preview_eval,
             // auto-updater commands (Plan 3, decision 1)
             updater::updater_check,

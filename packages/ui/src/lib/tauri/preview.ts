@@ -84,7 +84,7 @@ export function previewEval(tabId: string, js: string): Promise<void> {
 
 /**
  * Subscribe to the `preview:inspect-result` event emitted by the Rust
- * `preview_inspect_result` command (called back from BRIDGE_JS).
+ * `plugin:preview-bridge|inspect_result` command (called back from BRIDGE_JS).
  *
  * Returns an `UnlistenFn` — call it to remove the listener.
  */
@@ -96,7 +96,7 @@ export function onInspectResult(callback: (result: InspectResult) => void): Prom
 
 /**
  * Subscribe to the `preview:region-select` event emitted by the Rust
- * `preview_region_result` command (called back from BRIDGE_JS).
+ * `plugin:preview-bridge|region_result` command (called back from BRIDGE_JS).
  *
  * Returns an `UnlistenFn` — call it to remove the listener.
  */
@@ -114,7 +114,7 @@ export interface NavigateResult {
 
 /**
  * Subscribe to the `preview:navigate` event emitted by the Rust
- * `preview_navigate_event` command (called back from BRIDGE_JS navigation
+ * `plugin:preview-bridge|navigate_event` command (called back from BRIDGE_JS navigation
  * tracking). Returns an `UnlistenFn`.
  */
 export function onNavigateResult(callback: (result: NavigateResult) => void): Promise<UnlistenFn> {

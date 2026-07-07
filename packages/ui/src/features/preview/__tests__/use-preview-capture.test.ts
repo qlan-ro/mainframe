@@ -154,6 +154,25 @@ describe('usePreviewCapture', () => {
     expect(result.current.inspectActive).toBe(false);
   });
 
+  it('inspect: a successful pick clears inspectActive', async () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    act(() => {
+      result.current.onInspectClick();
+    });
+    await act(async () => {});
+    expect(result.current.inspectActive).toBe(true);
+    await act(async () => {
+      inspectResultCallback?.({
+        tabId: 'tab-1',
+        selector: 'h1#hello',
+        rect: { x: 48, y: 48, w: 416, h: 110 },
+        viewport: { x: 0, y: 0, w: 512, h: 706 },
+      });
+    });
+    expect(result.current.inspectActive).toBe(false);
+  });
+
   it('inspect: result with rect computes padded region and captures element', async () => {
     const fakeHandle = makeFakeHandle();
     renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
