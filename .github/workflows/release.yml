@@ -54,7 +54,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Package
-        run: pnpm --filter @qlan-ro/mainframe-app-electron run package -- --publish never
+        run: pnpm --filter @qlan-ro/mainframe-app-electron run package:ci
         env:
           CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
