@@ -135,9 +135,13 @@ jobs:
         # TEMPORARILY macOS-only (2026-07-06) — see build-desktop note. Windows
         # (pnpm-on-PATH in the tauri beforeBuildCommand) and Linux (updater signing-key
         # secret) are disabled until fixed; restore the ubuntu/windows entries then.
+        #
+        # macos-13 (Intel) removed 2026-07-07: GitHub-hosted macOS Intel runners are
+        # no longer being provisioned for this repo — the leg sat `queued` with no
+        # runner across every release run, indefinitely blocking the pipeline. Ship
+        # Apple Silicon only; re-add an Intel leg via a self-hosted runner if needed.
         include:
           - os: macos-14 # Apple Silicon (arm64)
-          - os: macos-13 # Intel (x86_64)
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -234,13 +238,22 @@ jobs:
       # Idempotent: renamed assets no longer match `^Mainframe_`, so re-runs skip them.
       - name: Normalize Tauri dmg asset name
         if: runner.os == 'macOS'
+        # Cosmetic asset rename — never let it fail the job (and, via `needs`, the release).
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          release_id=$(gh api "repos/$REPO/releases/tags/$TAG" -q '.id')
+          # tauri-action creates the release as a DRAFT, and GET /releases/tags/{tag}
+          # returns published releases only (404s on drafts). Find it by listing.
+          release_id=$(gh api "repos/$REPO/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$TAG\")][0].id // empty")
+          if [ -z "$release_id" ]; then
+            echo "No release found for $TAG yet — skipping dmg rename."
+            exit 0
+          fi
           gh api "repos/$REPO/releases/$release_id/assets" \
             -q '.[] | select(.name | test("^Mainframe_.*\\.dmg$")) | "\(.id) \(.name)"' \
           | while read -r id name; do
@@ -253,6 +266,11 @@ jobs:
 
   release:
     needs: [build-desktop, build-daemon, build-app-tauri]
+    # Publish as long as the daemon built — the daemon tarballs back `mainframe update`
+    # and must never be blocked by a desktop/Tauri build failure. `always()` overrides
+    # the default "skip if any need failed"; download-artifact then attaches whatever
+    # desktop/tauri artifacts did succeed.
+    if: ${{ always() && needs.build-daemon.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
