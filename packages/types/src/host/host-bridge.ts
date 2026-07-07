@@ -94,8 +94,12 @@ export interface PreviewHandle {
   navigate(url: string): Promise<void>;
   capture(region?: Region): Promise<Uint8Array>;
   startInspect(): Promise<void>;
+  /** Tear down an in-progress inspect picker for a toggle-off. Optional (Tauri implements it). */
+  cancelInspect?(): Promise<void>;
   onInspect(cb: (result: InspectResult) => void): Unsubscribe;
   startRegionSelect(): Promise<void>;
+  /** Tear down an in-progress region-select drag for a toggle-off. Optional (Tauri implements it). */
+  cancelRegionSelect?(): Promise<void>;
   onRegionSelect(cb: (result: RegionSelectResult) => void): Unsubscribe;
   /**
    * Subscribe to navigations that occur inside the preview webview — link

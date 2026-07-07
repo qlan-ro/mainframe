@@ -93,22 +93,42 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
       .catch((e: unknown) => console.warn('[preview] capture failed', e));
   }, [handle, openAnnotation]);
 
+  // Inspect and region are mutually exclusive toggles: at most one is active,
+  // selecting one cancels the other, and clicking the active one turns it off.
+  const onInspectClick = useCallback(() => {
+    if (inspectActive) {
+      setInspectActive(false);
+      handle?.cancelInspect?.().catch((e: unknown) => console.warn('[preview] inspect cancel failed', e));
+      return;
+    }
+    if (regionSelectActive) {
+      setRegionSelectActive(false);
+      handle?.cancelRegionSelect?.().catch((e: unknown) => console.warn('[preview] region cancel failed', e));
+    }
+    setInspectActive(true);
+    handle?.startInspect().catch((e: unknown) => {
+      setInspectActive(false);
+      console.warn('[preview] inspect failed', e);
+    });
+  }, [handle, inspectActive, regionSelectActive]);
+
   const onRegionClick = useCallback(() => {
     if (!handle) return;
+    if (regionSelectActive) {
+      setRegionSelectActive(false);
+      handle.cancelRegionSelect?.().catch((e: unknown) => console.warn('[preview] region cancel failed', e));
+      return;
+    }
+    if (inspectActive) {
+      setInspectActive(false);
+      handle.cancelInspect?.().catch((e: unknown) => console.warn('[preview] inspect cancel failed', e));
+    }
     setRegionSelectActive(true);
     handle.startRegionSelect().catch((e: unknown) => {
       setRegionSelectActive(false);
       console.warn('[preview] region select failed', e);
     });
-  }, [handle]);
-
-  const onInspectClick = useCallback(() => {
-    setInspectActive((prev) => {
-      const next = !prev;
-      if (next) handle?.startInspect().catch((e: unknown) => console.warn('[preview] inspect failed', e));
-      return next;
-    });
-  }, [handle]);
+  }, [handle, inspectActive, regionSelectActive]);
 
   const onAnnotationChange = useCallback((id: string, annotation: string) => {
     setAnnotations((prev) => new Map(prev).set(id, annotation));

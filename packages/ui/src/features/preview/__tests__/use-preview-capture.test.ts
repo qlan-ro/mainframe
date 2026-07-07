@@ -40,11 +40,13 @@ function makeFakeHandle(): PreviewHandle {
     navigate: vi.fn().mockResolvedValue(undefined),
     capture: vi.fn().mockResolvedValue(new Uint8Array([137, 80, 78, 71])),
     startInspect: vi.fn().mockResolvedValue(undefined),
+    cancelInspect: vi.fn().mockResolvedValue(undefined),
     onInspect: vi.fn().mockImplementation((cb: (result: InspectResult) => void) => {
       inspectResultCallback = cb;
       return () => {};
     }),
     startRegionSelect: vi.fn().mockResolvedValue(undefined),
+    cancelRegionSelect: vi.fn().mockResolvedValue(undefined),
     onRegionSelect: vi.fn().mockImplementation((cb: (result: RegionSelectResult) => void) => {
       regionResultCallback = cb;
       return () => {};
@@ -139,6 +141,37 @@ describe('usePreviewCapture', () => {
     });
     expect(result.current.inspectActive).toBe(true);
     expect(fakeHandle.startInspect).toHaveBeenCalled();
+  });
+
+  it('mutual exclusion: onRegionClick while inspect is active cancels inspect and starts region select', () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    act(() => {
+      result.current.onInspectClick();
+    });
+    expect(result.current.inspectActive).toBe(true);
+    act(() => {
+      result.current.onRegionClick();
+    });
+    expect(result.current.inspectActive).toBe(false);
+    expect(result.current.regionSelectActive).toBe(true);
+    expect(fakeHandle.cancelInspect).toHaveBeenCalled();
+    expect(fakeHandle.startRegionSelect).toHaveBeenCalled();
+  });
+
+  it('inspect: clicking onInspectClick again while active toggles it off without starting a new inspect', () => {
+    const fakeHandle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+    act(() => {
+      result.current.onInspectClick();
+    });
+    expect(result.current.inspectActive).toBe(true);
+    act(() => {
+      result.current.onInspectClick();
+    });
+    expect(result.current.inspectActive).toBe(false);
+    expect(fakeHandle.cancelInspect).toHaveBeenCalled();
+    expect(fakeHandle.startInspect).toHaveBeenCalledTimes(1);
   });
 
   it('inspect: null selector exits inspect mode', async () => {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { RotateCw, ExternalLink, Eraser } from 'lucide-react';
 import { PreviewIconButton } from './PreviewIconButton';
 import { usePreviewAddress } from './use-preview-address';
+import { useHost } from '@/lib/host';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 
 interface PreviewUrlBarProps {
@@ -11,6 +12,7 @@ interface PreviewUrlBarProps {
 }
 
 export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
+  const host = useHost();
   const { currentUrl, navigateTo } = usePreviewAddress(handle, port);
   const [draft, setDraft] = useState(currentUrl);
   const [invalid, setInvalid] = useState(false);
@@ -38,11 +40,9 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
   }
 
   function handleOpenBrowser() {
-    console.warn('[preview] open-in-browser: no external open API, using navigate fallback');
-    if (!port) return;
-    handle
-      ?.navigate(`http://localhost:${port}`)
-      .catch((e: unknown) => console.warn('[preview] url-bar open-browser', e));
+    const url = currentUrl || (port ? `http://localhost:${port}` : '');
+    if (!url) return;
+    host.shell.openExternal(url).catch((e: unknown) => console.warn('[preview] url-bar open-browser', e));
   }
 
   function handleClearCache() {

@@ -67,4 +67,13 @@ describe('PreviewUrlBar', () => {
     render(<PreviewUrlBar handle={null} port={null} isRunning={false} />);
     expect(screen.getByTestId('preview-url-input')).toBeDisabled();
   });
+
+  it('Open in browser opens the current URL externally (not an in-webview navigate)', () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<PreviewUrlBar handle={handle} port={3000} isRunning />);
+    fireEvent.click(screen.getByTestId('preview-url-open-browser'));
+    expect(openSpy).toHaveBeenCalledWith('http://localhost:3000', '_blank', 'noopener,noreferrer');
+    expect(handle.navigate).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
 });

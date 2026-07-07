@@ -44,6 +44,8 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     capture: (region?: Region): Promise<Uint8Array> => preview.previewCapture(tabId, region),
     startInspect: (): Promise<void> =>
       preview.previewEval(tabId, `window.__mfInspectInstall && window.__mfInspectInstall('${tabId}')`),
+    cancelInspect: (): Promise<void> =>
+      preview.previewEval(tabId, `window.__mfInspectCancel && window.__mfInspectCancel()`),
     onInspect: (cb: (result: InspectResult) => void): Unsubscribe => {
       let unlisten: (() => void) | null = null;
       void preview
@@ -58,6 +60,8 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     },
     startRegionSelect: (): Promise<void> =>
       preview.previewEval(tabId, `window.__mfRegionSelectInstall && window.__mfRegionSelectInstall('${tabId}')`),
+    cancelRegionSelect: (): Promise<void> =>
+      preview.previewEval(tabId, `window.__mfRegionSelectCancel && window.__mfRegionSelectCancel()`),
     onRegionSelect: (cb: (result: RegionSelectResult) => void): Unsubscribe => {
       let unlisten: (() => void) | null = null;
       void preview
