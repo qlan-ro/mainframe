@@ -340,4 +340,47 @@ describe('mountElectronPreview', () => {
     wv.dispatchEvent(Object.assign(new Event('did-navigate'), { url: 'http://x/y' }));
     expect(cb).not.toHaveBeenCalled();
   });
+
+  it('cancelInspect tears down the injected inspect picker', async () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    const spy = vi.fn((_js: string) => Promise.resolve(undefined));
+    wv.executeJavaScript = spy;
+    await handle.cancelInspect?.();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![0]).toContain('__mf_inspect_cleanup');
+  });
+
+  it('cancelRegionSelect tears down the injected region picker', async () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    const spy = vi.fn((_js: string) => Promise.resolve(undefined));
+    wv.executeJavaScript = spy;
+    await handle.cancelRegionSelect?.();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![0]).toContain('__mf_region_cleanup');
+  });
+
+  it('clearCache clears storage/caches then reloads ignoring the HTTP cache', async () => {
+    const container = document.createElement('div');
+    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+      reloadIgnoringCache: () => void;
+    };
+    const evalSpy = vi.fn((_js: string) => Promise.resolve(undefined));
+    const reloadSpy = vi.fn();
+    wv.executeJavaScript = evalSpy;
+    wv.reloadIgnoringCache = reloadSpy;
+    await handle.clearCache?.();
+    expect(evalSpy).toHaveBeenCalledTimes(1);
+    expect(evalSpy.mock.calls[0]![0]).toContain('caches.delete');
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
 });
