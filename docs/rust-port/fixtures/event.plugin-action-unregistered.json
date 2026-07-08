@@ -1,0 +1,6 @@
+{
+  "_provenance": "synthetic",
+  "type": "plugin.action.unregistered",
+  "pluginId": "plugin_todos",
+  "actionId": "action_add"
+}

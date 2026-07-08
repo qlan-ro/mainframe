@@ -1,0 +1,28 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "process.started",
+    "chatId": "chat_9f2a3b1c",
+    "process": {
+      "id": "proc_001",
+      "adapterId": "claude",
+      "chatId": "chat_9f2a3b1c",
+      "pid": 42123,
+      "status": "starting",
+      "projectPath": "/Users/doru/Projects/mainframe"
+    }
+  },
+  "full": {
+    "type": "process.started",
+    "chatId": "chat_9f2a3b1c",
+    "process": {
+      "id": "proc_002",
+      "adapterId": "claude",
+      "chatId": "chat_9f2a3b1c",
+      "pid": 42124,
+      "status": "running",
+      "projectPath": "/Users/doru/Projects/mainframe",
+      "model": "claude-sonnet-5"
+    }
+  }
+}

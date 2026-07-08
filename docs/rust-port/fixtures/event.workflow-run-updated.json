@@ -1,0 +1,38 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "workflow.run.updated",
+    "run": {
+      "id": "run_001",
+      "workflowId": "wf_release",
+      "status": "running",
+      "triggerKind": "manual",
+      "parentRunId": null,
+      "startedAt": 1751970000000,
+      "finishedAt": null,
+      "error": null,
+      "outputs": null
+    }
+  },
+  "full": {
+    "type": "workflow.run.updated",
+    "run": {
+      "id": "run_002",
+      "workflowId": "wf_release",
+      "status": "succeeded",
+      "triggerKind": "manual",
+      "parentRunId": null,
+      "startedAt": 1751970000000,
+      "finishedAt": 1751970500000,
+      "error": null,
+      "outputs": {
+        "releaseTag": "v1.4.0"
+      },
+      "banner": "Release v1.4.0 published successfully.",
+      "bannerCta": {
+        "label": "View run",
+        "action": "answer"
+      }
+    }
+  }
+}

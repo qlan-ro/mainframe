@@ -1,0 +1,6 @@
+{
+  "_provenance": "synthetic",
+  "_route": "POST /api/chats/:id/messages",
+  "success": false,
+  "error": "Chat not found"
+}

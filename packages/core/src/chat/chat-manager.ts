@@ -352,7 +352,9 @@ export class ChatManager {
       postStart.chat.title = title;
       this.db.chats.update(chatId, { title });
       this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
-      this.lifecycle.doGenerateTitle(chatId, content).catch(() => {});
+      this.lifecycle
+        .doGenerateTitle(chatId, content)
+        .catch((error) => logger.warn({ chatId, error }, 'title generation failed'));
     }
 
     const now = new Date().toISOString();

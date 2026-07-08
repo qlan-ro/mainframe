@@ -1,0 +1,38 @@
+{
+  "_provenance": "synthetic",
+  "_route": "GET /api/adapters",
+  "success": true,
+  "data": [
+    {
+      "id": "claude",
+      "name": "Claude",
+      "description": "Anthropic Claude CLI",
+      "installed": true,
+      "version": "1.2.3",
+      "models": [
+        {
+          "id": "claude-sonnet-5",
+          "label": "Sonnet 5"
+        },
+        {
+          "id": "claude-opus-4-8",
+          "label": "Opus 4.8",
+          "description": "Most capable Claude model",
+          "contextWindow": 200000,
+          "isDefault": true,
+          "supportedEfforts": ["low", "medium", "high", "max"],
+          "defaultEffort": "medium",
+          "supportsFast": true,
+          "supportsUltracode": true,
+          "supportsAdaptiveThinking": true,
+          "supportsPersonality": false
+        }
+      ],
+      "modelsRevision": 2,
+      "catalogSource": "probed",
+      "capabilities": {
+        "planMode": true
+      }
+    }
+  ]
+}

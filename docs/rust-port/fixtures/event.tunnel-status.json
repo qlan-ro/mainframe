@@ -1,0 +1,15 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "tunnel:status",
+    "state": "starting",
+    "label": "dev-server"
+  },
+  "full": {
+    "type": "tunnel:status",
+    "state": "ready",
+    "label": "dev-server",
+    "url": "https://dev-server-a1b2c3.mainframe.tunnel",
+    "dnsVerified": true
+  }
+}

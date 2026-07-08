@@ -1,0 +1,24 @@
+{
+  "_provenance": "synthetic",
+  "type": "background_task.ended",
+  "chatId": "chat_9f2a3b1c",
+  "task": {
+    "id": "bgt_002",
+    "toolName": "Monitor",
+    "toolUseId": "toolu_06F",
+    "command": "pnpm build:watch",
+    "description": "Watch build output",
+    "outputPath": "/Users/doru/.mainframe/logs/bgt_002.log",
+    "startedAt": 1751970000000,
+    "endedAt": 1751970060000,
+    "status": "completed",
+    "lastOutputLine": "Build succeeded in 3.2s",
+    "summary": "Build completed with no errors.",
+    "usage": {
+      "totalTokens": 812,
+      "toolUses": 3,
+      "durationMs": 60000
+    },
+    "recovered": true
+  }
+}

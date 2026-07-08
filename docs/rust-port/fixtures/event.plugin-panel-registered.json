@@ -1,0 +1,18 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "plugin.panel.registered",
+    "pluginId": "plugin_todos",
+    "panelId": "panel_todos",
+    "zone": "sidebar",
+    "label": "Todos"
+  },
+  "full": {
+    "type": "plugin.panel.registered",
+    "pluginId": "plugin_todos",
+    "panelId": "panel_todos",
+    "zone": "sidebar",
+    "label": "Todos",
+    "icon": "check-circle"
+  }
+}

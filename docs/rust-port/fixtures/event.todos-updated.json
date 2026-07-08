@@ -1,0 +1,22 @@
+{
+  "_provenance": "synthetic",
+  "type": "todos.updated",
+  "chatId": "chat_9f2a3b1c",
+  "todos": [
+    {
+      "content": "Reproduce the flake",
+      "status": "completed",
+      "activeForm": "Reproducing the flake"
+    },
+    {
+      "content": "Write regression test",
+      "status": "in_progress",
+      "activeForm": "Writing regression test"
+    },
+    {
+      "content": "Ship the fix",
+      "status": "pending",
+      "activeForm": "Shipping the fix"
+    }
+  ]
+}
