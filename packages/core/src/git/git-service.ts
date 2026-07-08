@@ -1,9 +1,14 @@
-import { simpleGit } from 'simple-git';
 import { access, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { createChildLogger } from '../logger.js';
 import { acquireProjectLock } from './project-lock.js';
 import { parseWorktreeList } from '../workspace/worktree.js';
+import { execGit } from './git-exec.js';
+// prettier-ignore
+import {
+  parseBranchList, parseRemotes, parseCommitHash, parseDiffStatSummary,
+  parseStatusZ, countAutoMerges, type BranchList, type PorcelainStatus,
+} from './git-parse.js';
 import type {
   BranchListResult,
   BranchInfo,
@@ -21,6 +26,9 @@ import type {
 
 const logger = createChildLogger('git-service');
 
+/** Network/mutation ops may run past the read-command default timeout; leave uncapped. */
+const NO_TIMEOUT = { timeout: 0 } as const;
+
 export class GitService {
   private constructor(private readonly projectPath: string) {}
 
@@ -28,8 +36,17 @@ export class GitService {
     return new GitService(projectPath);
   }
 
-  private git() {
-    return simpleGit(this.projectPath);
+  private git(args: string[], opts?: { timeout?: number }): Promise<string> {
+    return execGit(args, this.projectPath, opts);
+  }
+
+  private async branchInfo(all: boolean): Promise<BranchList> {
+    return parseBranchList(await this.git(all ? ['branch', '--no-color', '-a'] : ['branch', '--no-color']));
+  }
+
+  /** Unmerged (conflicted) paths in the working tree, used to classify failures. */
+  private async unmergedPaths(): Promise<string[]> {
+    return (await this.git(['diff', '--name-only', '--diff-filter=U'])).split('\n').filter(Boolean);
   }
 
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -42,21 +59,19 @@ export class GitService {
   }
 
   async currentBranch(): Promise<string> {
-    const result = await this.git().branch();
-    return result.current;
+    return (await this.branchInfo(false)).current;
   }
 
   async statusRaw(): Promise<string> {
-    return this.git().raw(['status', '--porcelain']);
+    return this.git(['status', '--porcelain']);
   }
 
-  async status(): Promise<{ conflicted: string[]; files: { path: string; index: string; working_dir: string }[] }> {
-    const result = await this.git().status();
-    return { conflicted: result.conflicted, files: result.files };
+  async status(): Promise<PorcelainStatus> {
+    return parseStatusZ(await this.git(['status', '--porcelain', '-z']));
   }
 
   async branches(): Promise<BranchListResult> {
-    const result = await this.git().branch(['-a']);
+    const info = await this.branchInfo(true);
     const local: BranchInfo[] = [];
     const remote: string[] = [];
 
@@ -64,7 +79,7 @@ export class GitService {
     const branchToWorktree = new Map<string, string>();
     const worktreeNames: string[] = [];
     try {
-      const wtOutput = await this.git().raw(['worktree', 'list', '--porcelain']);
+      const wtOutput = await this.git(['worktree', 'list', '--porcelain']);
       const entries = parseWorktreeList(wtOutput);
       for (const entry of entries) {
         // Skip the main worktree (the project directory itself — always first entry)
@@ -79,7 +94,7 @@ export class GitService {
       // Not a git repo or worktree command unavailable — proceed without worktree info
     }
 
-    for (const name of result.all) {
+    for (const name of info.all) {
       if (name.startsWith('remotes/')) {
         // Skip pseudo-refs like "remotes/origin/HEAD -> origin/main"
         if (name.includes(' -> ') || name.endsWith('/HEAD')) continue;
@@ -90,12 +105,10 @@ export class GitService {
         let ahead: number | undefined;
         let behind: number | undefined;
         try {
-          const upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
+          const upstream = (await this.git(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
           if (upstream && upstream !== '') {
             tracking = upstream;
-            const counts = (
-              await this.git().raw(['rev-list', '--left-right', '--count', `${name}...${upstream}`])
-            ).trim();
+            const counts = (await this.git(['rev-list', '--left-right', '--count', `${name}...${upstream}`])).trim();
             const [a, b] = counts.split(/\s+/);
             ahead = parseInt(a!, 10) || 0;
             behind = parseInt(b!, 10) || 0;
@@ -105,7 +118,7 @@ export class GitService {
         }
         local.push({
           name,
-          current: name === result.current,
+          current: name === info.current,
           tracking,
           ahead,
           behind,
@@ -117,7 +130,7 @@ export class GitService {
     // Detect active merge/rebase operation
     let activeOperation: 'merge' | 'rebase' | undefined;
     try {
-      const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+      const gitDir = (await this.git(['rev-parse', '--git-dir'])).trim();
       try {
         await access(join(gitDir, 'MERGE_HEAD'));
         activeOperation = 'merge';
@@ -144,21 +157,24 @@ export class GitService {
       /* git-dir resolution failed */
     }
 
-    return { current: result.current, local, remote, worktrees: worktreeNames, activeOperation };
+    return { current: info.current, local, remote, worktrees: worktreeNames, activeOperation };
   }
 
   async stage(files: string[]): Promise<void> {
-    await this.git().add(files);
+    await this.git(['add', ...files]);
   }
 
   async unstage(files: string[]): Promise<void> {
     if (files.length === 0) return;
-    await this.git().raw(['reset', 'HEAD', '--', ...files]);
+    await this.git(['reset', 'HEAD', '--', ...files]);
   }
 
+  // `-c core.abbrev=40` forces the full 40-char SHA in `git commit`'s output line
+  // instead of git's repo-size-dependent abbreviation, so parseCommitHash returns a
+  // deterministic hash. This intentionally widens the return vs simple-git's short
+  // hash; no consumer relies on the short form (a full SHA is a display superset).
   async commit(message: string): Promise<string> {
-    const result = await this.git().commit(message);
-    return result.commit;
+    return parseCommitHash(await this.git(['-c', 'core.abbrev=40', 'commit', '-m', message]));
   }
 
   /**
@@ -167,10 +183,10 @@ export class GitService {
    * "Commit N files" action, which commits the whole working tree at once.
    */
   async commitAll(message: string): Promise<string> {
-    await this.git().add(['-A']);
-    const result = await this.git().commit(message);
-    if (!result.commit) throw new Error('Nothing to commit');
-    return result.commit;
+    await this.git(['add', '-A']);
+    const commit = parseCommitHash(await this.git(['-c', 'core.abbrev=40', 'commit', '-m', message]));
+    if (!commit) throw new Error('Nothing to commit');
+    return commit;
   }
 
   /**
@@ -182,7 +198,7 @@ export class GitService {
   async workingStat(): Promise<WorkingStat> {
     const files: WorkingStatFile[] = [];
 
-    const numstat = await this.git().raw(['diff', '--numstat', 'HEAD']);
+    const numstat = await this.git(['diff', '--numstat', 'HEAD']);
     for (const line of numstat.split('\n').filter(Boolean)) {
       const [addStr, delStr, ...pathParts] = line.split('\t');
       const path = pathParts.join('\t');
@@ -195,7 +211,7 @@ export class GitService {
     }
 
     // Untracked files (`-uall` lists individual files inside new directories).
-    const status = await this.git().raw(['status', '--porcelain', '-uall']);
+    const status = await this.git(['status', '--porcelain', '-uall']);
     for (const line of status.split('\n').filter(Boolean)) {
       if (!line.startsWith('??')) continue;
       const path = line.slice(3);
@@ -223,16 +239,16 @@ export class GitService {
   }
 
   async diff(args: string[]): Promise<string> {
-    return this.git().raw(['diff', ...args]);
+    return this.git(['diff', ...args]);
   }
 
   async show(ref: string): Promise<string> {
-    return this.git().raw(['show', ref]);
+    return this.git(['show', ref]);
   }
 
   async mergeBase(branch1: string, branch2: string): Promise<string | null> {
     try {
-      return (await this.git().raw(['merge-base', branch1, branch2])).trim();
+      return (await this.git(['merge-base', branch1, branch2])).trim();
     } catch {
       /* expected — branches may share no common ancestor */
       return null;
@@ -260,13 +276,13 @@ export class GitService {
       const remoteRefMatch = branch.match(/^([^/]+)\/(.+)$/);
       if (remoteRefMatch) {
         const [, remote, localName] = remoteRefMatch;
-        const remotes = await this.git().getRemotes();
-        if (remotes.some((r) => r.name === remote)) {
+        const remotes = parseRemotes(await this.git(['remote']));
+        if (remotes.includes(remote!)) {
           try {
-            await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
+            await this.git(['checkout', '-b', localName!, `${branch}`, '--track']);
           } catch (err: any) {
             if (err?.message?.includes('already exists')) {
-              await this.git().checkout(localName!);
+              await this.git(['checkout', localName!]);
             } else {
               throw err;
             }
@@ -274,16 +290,16 @@ export class GitService {
           return;
         }
       }
-      await this.git().checkout(branch);
+      await this.git(['checkout', branch]);
     });
   }
 
   async createBranch(name: string, startPoint?: string): Promise<void> {
     return this.withLock(async () => {
       if (startPoint) {
-        await this.git().raw(['checkout', '-b', name, startPoint]);
+        await this.git(['checkout', '-b', name, startPoint]);
       } else {
-        await this.git().checkoutLocalBranch(name);
+        await this.git(['checkout', '-b', name]);
       }
     });
   }
@@ -291,9 +307,9 @@ export class GitService {
   async fetch(remote?: string): Promise<FetchResult> {
     return this.withLock(async () => {
       if (remote) {
-        await this.git().fetch(remote, { '--prune': null });
+        await this.git(['fetch', remote, '--prune'], NO_TIMEOUT);
       } else {
-        await this.git().fetch(['--all', '--prune']);
+        await this.git(['fetch', '--all', '--prune'], NO_TIMEOUT);
       }
       return { status: 'success', remote: remote ?? 'all' };
     });
@@ -305,33 +321,27 @@ export class GitService {
       // use `git fetch remote remoteBranch:localBranch` to fast-forward the target
       // ref without switching the working tree.
       if (localBranch && branch) {
-        const currentBranch = (await this.git().branch()).current;
+        const currentBranch = (await this.branchInfo(false)).current;
         if (currentBranch !== localBranch) {
           const pullRemote = remote ?? 'origin';
-          const refBefore = (await this.git().raw(['rev-parse', localBranch])).trim();
-          await this.git().fetch(pullRemote, `${branch}:${localBranch}`);
-          const refAfter = (await this.git().raw(['rev-parse', localBranch])).trim();
+          const refBefore = (await this.git(['rev-parse', localBranch])).trim();
+          await this.git(['fetch', pullRemote, `${branch}:${localBranch}`], NO_TIMEOUT);
+          const refAfter = (await this.git(['rev-parse', localBranch])).trim();
           if (refBefore === refAfter) return { status: 'up-to-date' };
           return { status: 'success', summary: { changes: 0, insertions: 0, deletions: 0 } };
         }
       }
 
       try {
-        const result = await this.git().pull(remote, branch, { '--ff-only': null });
-        if (result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0) {
+        const args = ['pull', ...(remote ? [remote] : []), ...(branch ? [branch] : []), '--ff-only'];
+        const summary = parseDiffStatSummary(await this.git(args, NO_TIMEOUT));
+        if (summary.changes === 0 && summary.insertions === 0 && summary.deletions === 0)
           return { status: 'up-to-date' };
-        }
-        return {
-          status: 'success',
-          summary: {
-            changes: result.summary.changes,
-            insertions: result.summary.insertions,
-            deletions: result.summary.deletions,
-          },
-        };
+        return { status: 'success', summary };
       } catch (err: any) {
-        if (err?.git?.conflicts?.length > 0) {
-          return { status: 'conflict', conflicts: err.git.conflicts, message: err.message };
+        const conflicts = await this.unmergedPaths();
+        if (conflicts.length > 0) {
+          return { status: 'conflict', conflicts, message: err?.message ?? String(err) };
         }
         throw err;
       }
@@ -341,14 +351,14 @@ export class GitService {
   async push(branch?: string, remote?: string): Promise<PushResult> {
     return this.withLock(async () => {
       try {
-        const currentBranch = branch ?? (await this.git().branch()).current;
+        const currentBranch = branch ?? (await this.branchInfo(false)).current;
         const pushRemote = remote ?? 'origin';
 
         // Look up the tracking branch to build a correct refspec when the
         // local and remote branch names differ.
         let remoteBranch = currentBranch;
         try {
-          const upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${currentBranch}@{upstream}`])).trim();
+          const upstream = (await this.git(['rev-parse', '--abbrev-ref', `${currentBranch}@{upstream}`])).trim();
           if (upstream) {
             const idx = upstream.indexOf('/');
             if (idx > 0) remoteBranch = upstream.slice(idx + 1);
@@ -357,7 +367,7 @@ export class GitService {
           // No upstream configured — push local name (may create new remote branch)
         }
 
-        await this.git().push(pushRemote, `${currentBranch}:${remoteBranch}`);
+        await this.git(['push', pushRemote, `${currentBranch}:${remoteBranch}`], NO_TIMEOUT);
         return { status: 'success', branch: currentBranch, remote: pushRemote };
       } catch (err: any) {
         if (err?.message?.includes('non-fast-forward') || err?.message?.includes('rejected')) {
@@ -371,18 +381,20 @@ export class GitService {
   async merge(branch: string): Promise<MergeResult> {
     return this.withLock(async () => {
       try {
-        const result = await this.git().merge([branch]);
+        const output = await this.git(['merge', branch], NO_TIMEOUT);
+        const summary = parseDiffStatSummary(output);
         return {
           status: 'success',
           summary: {
-            commits: result.merges?.length ?? 0,
-            insertions: result.summary?.insertions ?? 0,
-            deletions: result.summary?.deletions ?? 0,
+            commits: countAutoMerges(output),
+            insertions: summary.insertions,
+            deletions: summary.deletions,
           },
         };
       } catch (err: any) {
-        if (err?.git?.conflicts?.length > 0) {
-          return { status: 'conflict', conflicts: err.git.conflicts, message: err.message };
+        const conflicts = await this.unmergedPaths();
+        if (conflicts.length > 0) {
+          return { status: 'conflict', conflicts, message: err?.message ?? String(err) };
         }
         throw err;
       }
@@ -392,13 +404,13 @@ export class GitService {
   async rebase(branch: string): Promise<RebaseResult> {
     return this.withLock(async () => {
       try {
-        await this.git().rebase([branch]);
+        await this.git(['rebase', branch], NO_TIMEOUT);
         return { status: 'success' };
       } catch (err: any) {
         try {
-          const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+          const gitDir = (await this.git(['rev-parse', '--git-dir'])).trim();
           await access(join(gitDir, 'rebase-merge'));
-          const statusResult = await this.git().status();
+          const statusResult = await this.status();
           return { status: 'conflict', conflicts: statusResult.conflicted, message: err.message };
         } catch {
           throw err;
@@ -410,24 +422,24 @@ export class GitService {
   async abort(): Promise<{ aborted: boolean }> {
     return this.withLock(async () => {
       // Use git rev-parse to find the actual git dir (works in worktrees where .git is a file)
-      const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+      const gitDir = (await this.git(['rev-parse', '--git-dir'])).trim();
       try {
         await access(join(gitDir, 'MERGE_HEAD'));
-        await this.git().merge(['--abort']);
+        await this.git(['merge', '--abort']);
         return { aborted: true };
       } catch {
         /* expected — probing whether a merge is in progress */
       }
       try {
         await access(join(gitDir, 'rebase-merge'));
-        await this.git().rebase(['--abort']);
+        await this.git(['rebase', '--abort']);
         return { aborted: true };
       } catch {
         /* expected — probing whether an interactive rebase is in progress */
       }
       try {
         await access(join(gitDir, 'rebase-apply'));
-        await this.git().rebase(['--abort']);
+        await this.git(['rebase', '--abort']);
         return { aborted: true };
       } catch {
         /* expected — no active merge or rebase to abort */
@@ -438,7 +450,7 @@ export class GitService {
 
   async renameBranch(oldName: string, newName: string): Promise<void> {
     return this.withLock(async () => {
-      await this.git().raw(['branch', '-m', oldName, newName]);
+      await this.git(['branch', '-m', oldName, newName]);
     });
   }
 
@@ -448,11 +460,11 @@ export class GitService {
         const remoteMatch = name.match(/^([^/]+)\/(.+)$/);
         if (!remoteMatch) throw new Error(`Invalid remote branch name: ${name}`);
         const [, remote, branchName] = remoteMatch;
-        await this.git().raw(['push', remote!, '--delete', branchName!]);
+        await this.git(['push', remote!, '--delete', branchName!], NO_TIMEOUT);
         return { status: 'success' };
       }
       try {
-        await this.git().deleteLocalBranch(name, force);
+        await this.git(['branch', force ? '-D' : '-d', name]);
         return { status: 'success' };
       } catch (err: any) {
         if (err?.message?.includes('not fully merged')) {
@@ -470,7 +482,7 @@ export class GitService {
     return this.withLock(async () => {
       let fetched = false;
       try {
-        await this.git().fetch(['--all', '--prune']);
+        await this.git(['fetch', '--all', '--prune'], NO_TIMEOUT);
         fetched = true;
       } catch (err) {
         logger.warn({ err }, 'fetch --all failed during updateAll');
@@ -479,22 +491,15 @@ export class GitService {
       // Pull current branch
       let pull: PullResult;
       try {
-        const result = await this.git().pull({ '--ff-only': null });
-        if (result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0) {
-          pull = { status: 'up-to-date' };
-        } else {
-          pull = {
-            status: 'success',
-            summary: {
-              changes: result.summary.changes,
-              insertions: result.summary.insertions,
-              deletions: result.summary.deletions,
-            },
-          };
-        }
+        const summary = parseDiffStatSummary(await this.git(['pull', '--ff-only'], NO_TIMEOUT));
+        pull =
+          summary.changes === 0 && summary.insertions === 0 && summary.deletions === 0
+            ? { status: 'up-to-date' }
+            : { status: 'success', summary };
       } catch (err: any) {
-        if (err?.git?.conflicts?.length > 0) {
-          pull = { status: 'conflict', conflicts: err.git.conflicts, message: err.message };
+        const conflicts = await this.unmergedPaths();
+        if (conflicts.length > 0) {
+          pull = { status: 'conflict', conflicts, message: err?.message ?? String(err) };
         } else {
           logger.warn({ err }, 'pull failed during updateAll');
           pull = { status: 'up-to-date' };
@@ -504,14 +509,14 @@ export class GitService {
       // Fast-forward all non-current local branches that have tracking remotes
       const branches: BranchUpdateStatus[] = [];
       try {
-        const branchResult = await this.git().branch(['-a']);
+        const branchResult = await this.branchInfo(true);
         const currentBranch = branchResult.current;
 
         for (const name of branchResult.all) {
           if (name.startsWith('remotes/') || name === currentBranch) continue;
           let upstream: string;
           try {
-            upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
+            upstream = (await this.git(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
           } catch {
             continue; // no tracking remote
           }
@@ -520,9 +525,9 @@ export class GitService {
           const remote = upstream.slice(0, idx);
           const remoteBranch = upstream.slice(idx + 1);
           try {
-            const refBefore = (await this.git().raw(['rev-parse', name])).trim();
-            await this.git().fetch(remote, `${remoteBranch}:${name}`);
-            const refAfter = (await this.git().raw(['rev-parse', name])).trim();
+            const refBefore = (await this.git(['rev-parse', name])).trim();
+            await this.git(['fetch', remote, `${remoteBranch}:${name}`], NO_TIMEOUT);
+            const refAfter = (await this.git(['rev-parse', name])).trim();
             branches.push({ branch: name, status: refBefore === refAfter ? 'up-to-date' : 'updated' });
           } catch (err: any) {
             branches.push({ branch: name, status: 'error', error: err.message });
