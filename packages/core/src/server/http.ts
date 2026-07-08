@@ -7,6 +7,7 @@ import type { LaunchRegistry } from '../launch/index.js';
 import { createChildLogger } from '../logger.js';
 import { DAEMON_VERSION } from '../version.js';
 import { createAuthMiddleware } from './middleware/auth.js';
+import { isAllowedOrigin } from './cors-origin.js';
 import {
   projectRoutes,
   chatRoutes,
@@ -77,11 +78,9 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.set('trust proxy', 'loopback');
   const pushService = new PushService();
 
-  const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-
   app.use((_req, res, next) => {
     const origin = _req.headers.origin;
-    if (origin && LOCALHOST_ORIGIN.test(origin)) {
+    if (isAllowedOrigin(origin)) {
       res.header('Access-Control-Allow-Origin', origin);
     }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
