@@ -1,0 +1,13 @@
+[package]
+name = "mainframe-background-tasks"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+thiserror = { workspace = true }
+mainframe-types = { workspace = true }

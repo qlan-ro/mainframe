@@ -1,0 +1,22 @@
+[package]
+name = "mainframe-daemon"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mainframe-daemon"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+mainframe-server = { workspace = true }
+mainframe-runtime = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
