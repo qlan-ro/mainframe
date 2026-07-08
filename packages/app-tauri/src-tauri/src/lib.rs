@@ -36,14 +36,18 @@ static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
 
 /// Daemon HTTP/WS port for this session. Configurable via the `DAEMON_PORT` env
 /// (the dev launch configs set it, alongside `VITE_DAEMON_HTTP_PORT`); falls back
-/// to 31500 — non-default to avoid colliding with a system daemon on 31415.
+/// to the daemon default.
 fn daemon_port() -> u16 {
     parse_daemon_port(std::env::var("DAEMON_PORT").ok())
 }
 
-/// Parse a raw `DAEMON_PORT` value, falling back to 31500 when unset or invalid.
+fn daemon_data_dir_override(raw: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    raw.map(PathBuf::from)
+}
+
+/// Parse a raw `DAEMON_PORT` value, falling back to 31415 when unset or invalid.
 fn parse_daemon_port(raw: Option<String>) -> u16 {
-    raw.and_then(|s| s.parse::<u16>().ok()).unwrap_or(31500)
+    raw.and_then(|s| s.parse::<u16>().ok()).unwrap_or(31415)
 }
 
 /// True when `MAINFRAME_EXTERNAL_DAEMON` opts out of spawning — the renderer then
@@ -288,7 +292,7 @@ fn boot_daemon(
         daemon_entry,
         shell_env: shell_env.clone(),
         daemon_port: daemon_port(),
-        data_dir: None,
+        data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
     })
 }
 
@@ -372,24 +376,36 @@ fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod daemon_port_tests {
-    use super::{daemon_port, parse_daemon_port};
+    use super::{daemon_data_dir_override, daemon_port, parse_daemon_port};
+    use std::path::PathBuf;
 
     #[test]
     fn parse_uses_value_then_falls_back() {
         assert_eq!(parse_daemon_port(Some("31416".into())), 31416);
-        assert_eq!(parse_daemon_port(Some("not-a-port".into())), 31500);
-        assert_eq!(parse_daemon_port(None), 31500);
+        assert_eq!(parse_daemon_port(Some("not-a-port".into())), 31415);
+        assert_eq!(parse_daemon_port(None), 31415);
     }
 
     // Regression: the reader used a malformed env-var name (`"daemon_port()"`)
-    // and always returned the 31500 fallback, ignoring the launch config's
+    // and always returned the fallback, ignoring the launch config's
     // `DAEMON_PORT` — so the dev shell could never reach the configured daemon.
     #[test]
     fn daemon_port_reads_the_daemon_port_env() {
         std::env::set_var("DAEMON_PORT", "31416");
         assert_eq!(daemon_port(), 31416);
         std::env::remove_var("DAEMON_PORT");
-        assert_eq!(daemon_port(), 31500);
+        assert_eq!(daemon_port(), 31415);
+    }
+
+    #[test]
+    fn daemon_data_dir_override_reads_mainframe_data_dir_env() {
+        let dir = std::ffi::OsString::from("/tmp/mainframe-tauri-test-data");
+
+        assert_eq!(
+            daemon_data_dir_override(Some(dir.clone())),
+            Some(PathBuf::from(dir))
+        );
+        assert_eq!(daemon_data_dir_override(None), None);
     }
 }
 
