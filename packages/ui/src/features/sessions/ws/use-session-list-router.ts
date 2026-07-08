@@ -65,10 +65,13 @@ export function useSessionListRouter(): void {
 
   // Keep a ref so the router callback (created once in [runtime] effect) can
   // read the current active thread id without closing over a stale value.
-  const mainThreadIdRef = useRef<string | null>(null);
+  const activeChatIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    mainThreadIdRef.current = mainThreadId ?? null;
-  }, [mainThreadId]);
+    const active = mainThreadId == null ? undefined : items.find((t) => t.id === mainThreadId);
+    activeChatIdsRef.current = new Set(
+      [mainThreadId ?? undefined, active?.id, active?.remoteId].filter((id): id is string => id != null),
+    );
+  }, [items, mainThreadId]);
 
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {
@@ -101,7 +104,7 @@ export function useSessionListRouter(): void {
         // Skip marking unread when the notification is for the active thread —
         // the active-thread effect already clears unread on focus, so marking
         // it here would leave a stale dot until the next thread switch.
-        if (id === mainThreadIdRef.current) return;
+        if (activeChatIdsRef.current.has(id)) return;
         useUnreadStore.getState().markUnread(id);
       },
     });
@@ -125,7 +128,11 @@ export function useSessionListRouter(): void {
     // Desktop parity: land on the last-used (else most-recent) non-archived session,
     // respecting the active project filter. pickArchiveFallback skips archived items.
     const fallback = (): string | null =>
-      pickArchiveFallback(items, useSessionFilters.getState().filterProjectId, useLastSessionStore.getState().lastSessionId);
+      pickArchiveFallback(
+        items,
+        useSessionFilters.getState().filterProjectId,
+        useLastSessionStore.getState().lastSessionId,
+      );
 
     if (onDraft) {
       // Archive-induced empty state: aui `switchToNewThread()`s off the archived
@@ -156,7 +163,9 @@ export function useSessionListRouter(): void {
     if (mainThreadId === lastActiveRef.current) return;
     lastActiveRef.current = mainThreadId;
 
-    useUnreadStore.getState().clearUnread(mainThreadId);
+    const unreadStore = useUnreadStore.getState();
+    unreadStore.clearUnread(mainThreadId);
+    if (active.remoteId != null && active.remoteId !== mainThreadId) unreadStore.clearUnread(active.remoteId);
     rememberActiveSession(active);
     clearFilterOnCrossProject(active);
   }, [mainThreadId, items, runtime]);

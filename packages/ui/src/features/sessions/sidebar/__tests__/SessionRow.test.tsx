@@ -8,7 +8,7 @@
  *    and also sets data-active="true" when the stub state reports it is active.
  *    ThreadListItemPrimitive.Trigger is stubbed to a passthrough <span>.
  *    ThreadListItemRuntimeProvider just renders children.
- *  - Mock `@/store/unread-store` so isUnread is controlled per test.
+ *  - Mock `@/store/unread-store` so unread state is controlled per test.
  *  - Mock `../../runtime/daemon-port-context` so useDaemonPort returns 31415.
  *  - Mock `@/lib/api/chats` so pinChat is a spy (never hits the network).
  *
@@ -40,7 +40,7 @@ import { useTagPopoverTarget } from '../../tags/use-tag-popover-target';
 /** Controls what useAuiState returns per test. */
 let __mainThreadId: string | null = null;
 
-/** Controls whether useUnreadStore.isUnread returns true for 'chat-1'. */
+/** Controls whether useUnreadStore.unread contains 'chat-1'. */
 let __isUnread = false;
 
 /** Spies on itemRuntime.rename and .archive — reset per test. */
@@ -110,8 +110,11 @@ vi.mock('@assistant-ui/react', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('@/store/unread-store', () => ({
-  useUnreadStore: (selector: (s: { isUnread: (id: string) => boolean }) => unknown) =>
-    selector({ isUnread: (id: string) => id === 'chat-1' && __isUnread }),
+  useUnreadStore: (selector: (s: { unread: Set<string>; isUnread: (id: string) => boolean }) => unknown) =>
+    selector({
+      unread: __isUnread ? new Set(['chat-1']) : new Set(),
+      isUnread: (id: string) => id === 'chat-1' && __isUnread,
+    }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -192,9 +195,10 @@ describe('SessionRow — renders row and title', () => {
 
 describe('SessionRow — status dot aria-label when displayStatus=working', () => {
   it('renders sessions-row-status-dot with aria-label="working"', () => {
-    render(<SessionRow item={makeItem({ displayStatus: 'working' })} />);
+    render(<SessionRow item={makeItem({ adapterId: 'codex', displayStatus: 'working' })} />);
     const dot = screen.getByTestId('sessions-row-status-dot');
     expect(dot.getAttribute('aria-label')).toBe('working');
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'openai');
   });
 });
 
@@ -215,12 +219,12 @@ describe('SessionRow — status dot aria-label when hasPending=true and not unre
 // 4. Unread → title has font-semibold class
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — title is font-semibold when isUnread=true', () => {
-  it('sessions-row-title className contains "font-semibold" when unread', () => {
+describe('SessionRow — title is bold when isUnread=true', () => {
+  it('sessions-row-title className contains "font-bold" when unread', () => {
     __isUnread = true;
     render(<SessionRow item={makeItem()} />);
     const title = screen.getByTestId('sessions-row-title');
-    expect(title.className).toContain('font-semibold');
+    expect(title.className).toContain('font-bold');
   });
 });
 
@@ -233,6 +237,28 @@ describe('SessionRow — data-active="true" when mainThreadId matches item.id', 
     __mainThreadId = 'chat-1';
     render(<SessionRow item={makeItem()} />);
     expect(screen.getByTestId('sessions-row').getAttribute('data-active')).toBe('true');
+  });
+
+  it('does not make the selected read title use unread typography', () => {
+    __mainThreadId = 'chat-1';
+    __isUnread = false;
+    render(<SessionRow item={makeItem()} />);
+
+    const title = screen.getByTestId('sessions-row-title');
+    expect(title.className).not.toContain('group-data-[active=true]:font-semibold');
+    expect(title.className).not.toContain('group-data-[active=true]:text-foreground');
+    expect(title.className).toContain('font-medium text-foreground');
+  });
+});
+
+describe('SessionRow — pinned read sessions do not use unread typography', () => {
+  it('keeps a pinned read title muted while still rendering the pin glyph', () => {
+    render(<SessionRow item={makeItem({ pinned: true })} />);
+
+    const title = screen.getByTestId('sessions-row-title');
+    expect(title.className).not.toContain('font-bold');
+    expect(title.className).toContain('font-medium text-foreground');
+    expect(screen.getByTestId('sessions-row-pin-glyph')).toBeTruthy();
   });
 });
 
@@ -301,37 +327,57 @@ describe('SessionRow — relative time renders non-empty text', () => {
 // ---------------------------------------------------------------------------
 
 describe('session row badge presentation', () => {
-  it('waiting + unread → amber ping-halo dot, no answer pill anywhere', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
+  it('waiting + unread → vivid pulsing provider logo, no warning color, no answer pill anywhere', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} adapterId="claude" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    // The dot uses a ping-halo structure: the outer container has a child
-    // span with the amber color and animate-ping (the halo beacon).
-    const halo = dot.querySelector('.bg-mf-warning');
-    expect(halo).toBeTruthy();
+    expect(dot.className).toContain('animate-pulse');
+    expect(dot.className).not.toContain('text-mf-warning');
+    expect(dot.className).not.toContain('opacity-50');
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'claude');
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
     expect(screen.queryByText('Answer ready')).toBeNull();
   });
-  it('idle + unread → accent-tinted, non-pulsing dot, no pill', () => {
-    render(<StatusDot badge={{ base: 'idle', unread: true }} />);
+  it('idle + unread → accent-tinted, non-pulsing provider logo, no pill', () => {
+    render(<StatusDot badge={{ base: 'idle', unread: true }} adapterId="gemini" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('bg-primary');
-    expect(dot.querySelector('.animate-ping')).toBeNull();
+    expect(dot.className).toContain('text-primary');
+    expect(dot.className).not.toContain('animate-pulse');
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'gemini');
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
     expect(screen.queryByText('Answer ready')).toBeNull();
   });
-  it('idle + read → muted dot (bg-mf-text-4, opacity-50), no pill', () => {
-    render(<StatusDot badge={{ base: 'idle', unread: false }} />);
+  it('idle + read → muted provider logo, no pill', () => {
+    render(<StatusDot badge={{ base: 'idle', unread: false }} adapterId="opencode" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('bg-mf-text-4');
+    expect(dot.className).toContain('text-mf-text-4');
     expect(dot.className).toContain('opacity-50');
-    expect(dot.querySelector('.animate-ping')).toBeNull();
+    expect(dot.className).not.toContain('grayscale');
+    expect(dot.className).not.toContain('animate-pulse');
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'opencode');
     expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
   });
-  it('working → spinning progress ring (animate-spin, border-primary)', () => {
-    render(<StatusDot badge={{ base: 'working', unread: false }} />);
+  it('working + read → rotating full-colour provider logo', () => {
+    render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="codex" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
     expect(dot.className).toContain('animate-spin');
-    expect(dot.className).toContain('border-primary');
+    expect(dot.className).toContain('text-primary');
+    expect(dot.className).not.toContain('opacity-50');
+    expect(dot.className).not.toContain('grayscale');
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'openai');
+  });
+  it('working Claude → uses the Claude avatar motion instead of generic spin', () => {
+    render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="claude" />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('animate-[mf-claude-logo-working_1.52s_linear_infinite]');
+    expect(dot.className).not.toContain('animate-spin');
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'claude');
+  });
+  it('worktree missing + read → does not make the provider logo destructive', () => {
+    render(<StatusDot badge={{ base: 'worktree-missing', unread: false }} adapterId="claude" />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).not.toContain('text-destructive');
+    expect(dot.className).toContain('opacity-50');
+    expect(dot.className).not.toContain('grayscale');
   });
 });
 
@@ -473,62 +519,50 @@ describe('StatusDot is the only status indicator (AnswerPill removed)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 15. StatusDot waiting ping-halo beacon (artboard Phase-3 majors, reworked for
-// the four-state rework: BOTH unread=true and unread=false waiting sessions now
-// pulse — being "waiting" IS the call to respond, read or not.
-//
-// Visual deltas per spec:
-//  - waiting beacon wrapper is `size-2.5`; the inner solid dot is `size-[9px]`.
-//  - waiting-unread inner dot gains a 2px 18%-amber ring shadow class.
+// 15. StatusDot provider logos. BOTH unread=true and unread=false waiting
+// sessions pulse — being "waiting" IS the call to respond, read or not.
 // ---------------------------------------------------------------------------
 
-describe('StatusDot waiting ping-halo beacon', () => {
-  it('waiting + unread status dot renders a child halo span with animate-ping class', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
+describe('StatusDot provider logos', () => {
+  it('waiting + unread status logo uses animate-pulse', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} adapterId="claude" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    // The halo is a child element with animate-ping
-    const halo = dot.querySelector('.animate-ping');
-    expect(halo).toBeTruthy();
+    expect(dot.className).toContain('animate-pulse');
   });
 
-  it('waiting + seen status dot DOES render the animate-ping halo (both unread states pulse)', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
+  it('waiting + seen status logo DOES animate-pulse at full colour', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: false }} adapterId="claude" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.querySelector('.animate-ping')).toBeTruthy();
+    expect(dot.className).toContain('animate-pulse');
+    expect(dot.className).toContain('text-primary');
+    expect(dot.className).not.toContain('opacity-50');
+    expect(dot.className).not.toContain('grayscale');
   });
 
-  it('waiting + seen status dot beacon: wrapper is size-2.5, inner solid dot is size-[9px]', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
+  it('status logo wrapper uses a 32px slot and a 28px logo', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: false }} adapterId="claude" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('size-2.5');
-    const inner = dot.querySelector('.bg-mf-warning:not(.animate-ping)');
-    expect(inner).toBeTruthy();
-    expect(inner?.className).toContain('size-[9px]');
+    const logo = screen.getByTestId('sessions-row-provider-logo');
+    expect(dot.className).toContain('size-8');
+    expect(logo.getAttribute('class')).toContain('size-7');
   });
 
-  it('waiting + unread inner dot carries a 2px 18%-amber ring shadow class', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    // Inner solid dot is a sibling of the ping halo — hardcoded shadow spec:
-    // 2px spread, 18% amber mix.
-    const inner = dot.querySelector('.bg-mf-warning:not(.animate-ping)');
-    expect(inner).toBeTruthy();
-    expect(inner?.className).toContain('shadow-[0_0_0_2px_color-mix(in_srgb,var(--mf-warning)_18%,transparent)]');
+  it('unknown adapter falls back to the generic provider logo identity', () => {
+    render(<StatusDot badge={{ base: 'idle', unread: false }} adapterId="custom-cli" />);
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'unknown');
   });
 });
 
 // ---------------------------------------------------------------------------
-// 16. StatusDot 'working' spinner ring size (audit finding 1.5) — design wants
-// an 8px ring; the compressed spacing scale makes `size-2` resolve to 4px, so
-// the class must be the explicit arbitrary `size-[8px]`.
+// 16. StatusDot 'working' provider logo size.
 // ---------------------------------------------------------------------------
 
-describe('StatusDot working spinner ring size (finding 1.5)', () => {
-  it('working status dot uses size-[8px] (not the compressed-scale size-2)', () => {
-    render(<StatusDot badge={{ base: 'working', unread: false }} />);
+describe('StatusDot working provider logo size', () => {
+  it('working status logo uses the larger 16px slot', () => {
+    render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="codex" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('size-[8px]');
-    expect(dot.className).not.toContain('size-2 ');
+    expect(dot.className).toContain('size-8');
+    expect(dot.className).not.toContain('size-[8px]');
   });
 });
 

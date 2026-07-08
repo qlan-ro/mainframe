@@ -4,10 +4,10 @@
  * Behaviors covered:
  *  - chat.created  → onReload called once; onMarkUnread not called
  *  - chat.ended    → onReload called once; onMarkUnread not called
- *  - chat.updated  → onReload called once; onMarkUnread not called
+ *  - chat.updated  → onReload called once; waiting/completed/error also mark unread
  *  - chat.notification → onMarkUnread called with the chatId; onReload not called
  *  - permission.requested (notify: true)  → onMarkUnread called with chatId; onReload not called
- *  - permission.requested (notify: false) → neither mock called
+ *  - permission.requested (notify: false) → onMarkUnread called with chatId
  *  - permission.resolved  → neither mock called
  *  - dispose() unsubscribes; subsequent dispatched events are ignored
  *  - Unrelated event type (display.message.added) → no-op
@@ -142,6 +142,37 @@ describe('session-list-router — chat.updated triggers reload', () => {
     expect(onReload).toHaveBeenCalledTimes(1);
     expect(onMarkUnread).not.toHaveBeenCalled();
   });
+
+  it('marks unread when chat.updated carries a waiting display status', () => {
+    dispatch({ type: 'chat.updated', chat: { ...FULL_CHAT, displayStatus: 'waiting' } });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledWith('c2');
+  });
+
+  it('marks unread when chat.updated carries a completed terminal reason', () => {
+    dispatch({ type: 'chat.updated', chat: { ...FULL_CHAT, displayStatus: 'idle' }, reason: 'completed' });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledWith('c2');
+  });
+
+  it('marks unread when chat.updated carries an error terminal reason', () => {
+    dispatch({ type: 'chat.updated', chat: { ...FULL_CHAT, displayStatus: 'idle' }, reason: 'error' });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledWith('c2');
+  });
+
+  it('does not mark unread when chat.updated carries an interrupted terminal reason', () => {
+    dispatch({ type: 'chat.updated', chat: { ...FULL_CHAT, displayStatus: 'idle' }, reason: 'interrupted' });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -178,11 +209,11 @@ describe('session-list-router — permission.requested (notify: true) triggers m
 });
 
 // ---------------------------------------------------------------------------
-// permission.requested with notify: false → no markUnread
+// permission.requested with notify: false → markUnread
 // ---------------------------------------------------------------------------
 
-describe('session-list-router — permission.requested (notify: false) calls neither mock', () => {
-  it('does not call onMarkUnread or onReload', () => {
+describe('session-list-router — permission.requested (notify: false) still triggers markUnread', () => {
+  it('calls onMarkUnread with the chatId and does not call onReload', () => {
     dispatch({
       type: 'permission.requested',
       chatId: 'c4',
@@ -190,7 +221,8 @@ describe('session-list-router — permission.requested (notify: false) calls nei
       request: { requestId: 'r1', toolUseId: 't1', toolName: 'Bash', input: {}, suggestions: [] },
     });
 
-    expect(onMarkUnread).not.toHaveBeenCalled();
+    expect(onMarkUnread).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledWith('c4');
     expect(onReload).not.toHaveBeenCalled();
   });
 });
