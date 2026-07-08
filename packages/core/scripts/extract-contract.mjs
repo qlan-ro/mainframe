@@ -1,0 +1,186 @@
+#!/usr/bin/env tsx
+// Wire-contract freeze generator (Phase 0.4 of the Rust port).
+//
+// Emits deterministic JSON describing the daemon's HTTP + WebSocket surface:
+//   docs/rust-port/CONTRACT/routes.json     — one entry per HTTP route
+//   docs/rust-port/CONTRACT/ws-events.json  — one entry per WS message type
+//
+// Run: pnpm --filter @qlan-ro/mainframe-core exec tsx scripts/extract-contract.mjs
+// Output is sorted and timestamp-free so `git diff` is the CI freeze check.
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { enumerateRoutes, PLUGIN_MOUNT } from './lib/walk-routes.mjs';
+import { analyzeAllRoutes } from './lib/analyze-routes.mjs';
+import { buildSchemaRegistry } from './lib/zod-json.mjs';
+import { parseEventUnions, clientEventSchemas } from './lib/parse-events.mjs';
+import { classifyAuth, AUTH_MODEL } from './lib/auth.mjs';
+
+const OUT_DIR = new URL('../../../docs/rust-port/CONTRACT/', import.meta.url);
+
+// Routes the router walk sees but the AST can't (handler defined outside routes/).
+const CURATED = {
+  'GET /health': {
+    sourceFile: 'src/server/http.ts',
+    statusCodes: [200],
+    envelope: 'bare-json',
+    responseExample: { status: 'ok', version: '<daemon version>', timestamp: '<iso8601>', tunnelUrl: 'string|null' },
+    confidence: 'high',
+    notes: 'Unauthenticated health probe. Not the canonical envelope — bare object.',
+  },
+};
+
+function classifyEnvelope(responses, statusCodes) {
+  const has = (k) => responses.includes(k);
+  if (has('no-body') && !has('json') && !has('envelope:ok')) {
+    return statusCodes.includes(204) ? 'bare-no-body-204' : 'no-body';
+  }
+  if (has('raw-send')) return 'raw';
+  const onlyHelpers = responses.every((r) => r.startsWith('envelope:') || r === 'no-body');
+  if (responses.length && onlyHelpers) return 'canonical-helpers';
+  if (has('json')) return 'hand-rolled-json';
+  return 'unknown';
+}
+
+function resolveRequestSchema(detail, registry) {
+  if (!detail || !detail.requestSchema) return null;
+  const name = detail.requestSchema;
+  if (registry.has(name)) return registry.get(name);
+  const local = detail.localSchemas?.get(name);
+  if (local) {
+    return { name, zodSource: local, source: `${detail.sourceFile}:${name}`, note: 'inline module-local Zod schema' };
+  }
+  return { name, note: 'schema identifier referenced but not resolvable (dynamic/imported elsewhere)' };
+}
+
+function buildRoutes() {
+  return Promise.all([enumerateRoutes(), buildSchemaRegistry()]).then(([routes, registry]) => {
+    const details = analyzeAllRoutes();
+    const entries = routes.map((r) => {
+      const key = `${r.method} ${r.path}`;
+      const curated = CURATED[key];
+      const detail = details.get(key);
+      const auth = classifyAuth(r.path);
+      if (curated) return { method: r.method, path: r.path, auth, request: null, ...curated };
+
+      const request = resolveRequestSchema(detail, registry);
+      const requestUnresolved = request && !request.jsonSchema && !request.zodSource;
+      // A delegating handler whose response body couldn't be resolved leaves no
+      // response kinds — flag it low rather than claiming a confident empty shape.
+      const responseUnresolved = detail && detail.responses.length === 0;
+      let confidence = 'high';
+      if (!detail || responseUnresolved) confidence = 'low';
+      else if ((request && request.zodSource) || requestUnresolved) confidence = 'medium';
+
+      return {
+        method: r.method,
+        path: r.path,
+        auth,
+        request,
+        response: {
+          envelope: detail ? classifyEnvelope(detail.responses, detail.statusCodes) : 'unknown',
+          kinds: detail?.responses ?? [],
+        },
+        statusCodes: detail?.statusCodes ?? [],
+        sourceFile: detail?.sourceFile ?? null,
+        confidence,
+        ...(detail?.via ? { via: detail.via } : {}),
+        ...(detail ? {} : { notes: 'Route present in router walk but no static handler detail found.' }),
+      };
+    });
+    return { entries, count: entries.length };
+  });
+}
+
+async function buildWsEvents() {
+  const { daemonEvents, clientEvents } = parseEventUnions();
+  const schemas = await clientEventSchemas();
+  return {
+    clientToServer: clientEvents.map((e) => ({
+      type: e.type,
+      fields: e.fields,
+      validation: schemas.get(e.type) ?? { note: 'no runtime Zod schema found for this type' },
+    })),
+    serverToClient: daemonEvents.map((e) => ({ type: e.type, fields: e.fields })),
+    counts: { clientToServer: clientEvents.length, serverToClient: daemonEvents.length },
+  };
+}
+
+function writeJson(fileName, value) {
+  mkdirSync(OUT_DIR, { recursive: true });
+  writeFileSync(new URL(fileName, OUT_DIR), JSON.stringify(value, null, 2) + '\n');
+}
+
+async function main() {
+  const { entries, count } = await buildRoutes();
+  writeJson('routes.json', {
+    $description:
+      'Frozen HTTP wire contract for @qlan-ro/mainframe-core. Generated by scripts/extract-contract.mjs — do not hand-edit.',
+    generator: 'packages/core/scripts/extract-contract.mjs',
+    method:
+      'HTTP routes enumerated by walking the live Express router stack (each factory mounted with a Proxy ctx); ' +
+      'per-endpoint request schema, response shape, and status codes derived by TypeScript-AST analysis of src/server/routes/*.ts.',
+    authModel: AUTH_MODEL,
+    envelopeShapes: {
+      ok: { success: true, data: '<T>' },
+      okEmpty: { success: true },
+      fail: { success: false, error: '<string>' },
+      helper: 'src/server/routes/respond.ts (ok / okEmpty / fail)',
+    },
+    globalBehaviors: {
+      cors: 'Access-Control-Allow-Origin echoed for http(s)://localhost|127.0.0.1(:port); OPTIONS → 204',
+      bodyLimit: '30mb JSON (express.json)',
+      unhandledError: { status: 500, body: { success: false, error: 'Internal server error' } },
+      securityHeaders: ['X-Content-Type-Options: nosniff'],
+    },
+    knownDeviations: [
+      'DELETE /api/tags/:name returns bare 204 (no envelope).',
+      'GET /health returns a bare status object, not the {success,data} envelope.',
+      'POST /api/projects returns 409 with a data payload alongside success:false on duplicate.',
+    ],
+    dynamicMounts: [PLUGIN_MOUNT],
+    routeCount: count,
+    routes: entries,
+  });
+
+  const ws = await buildWsEvents();
+  writeJson('ws-events.json', {
+    $description:
+      'Frozen WebSocket wire contract for @qlan-ro/mainframe-core. Generated by scripts/extract-contract.mjs — do not hand-edit.',
+    generator: 'packages/core/scripts/extract-contract.mjs',
+    method:
+      'client→server types parsed from src/server/ws-schemas.ts (runtime Zod) + packages/types/src/events.ts (ClientEvent); ' +
+      'server→client DaemonEvent types parsed from packages/types/src/events.ts via TypeScript AST.',
+    transport: {
+      path: '/ (same port as HTTP; ws upgrade). LSP upgrades use /lsp/... and are handled before the generic WS handler.',
+      auth: AUTH_MODEL.websocket,
+      encoding: 'JSON text frames; every message is a bare object with a `type` discriminator.',
+    },
+    connectionSemantics: {
+      firstFrame: { type: 'connection.ready', clientId: '<uuid>', note: 'sent immediately on connect' },
+      afterReady: 'adapter replay events (buildConnectReplayEvents over live adapter snapshots) are streamed next',
+      onInvalidClientMessage: { type: 'error', error: '<reason>' },
+    },
+    subscriptionSemantics: {
+      model: 'per-chat subscription set per connection; file subscriptions tracked separately per connection',
+      onSubscribe: [
+        { type: 'message.queued.snapshot', chatId: '<id>', refs: '[...]', note: 'sent first' },
+        { type: 'subscribe:ack', chatId: '<id>', note: 'sent after snapshot' },
+      ],
+      onSubscribeFile: { type: 'subscribe:file:ack', requestedPath: '<p>', resolvedPath: '<realpath>' },
+      broadcastScoping:
+        'events carrying chatId are delivered only to connections subscribed to that chatId, EXCEPT ' +
+        'chat.notification and permission.requested which are connection-global (delivered to every client). ' +
+        'Events without a chatId are broadcast to all clients.',
+    },
+    counts: ws.counts,
+    clientToServer: ws.clientToServer,
+    serverToClient: ws.serverToClient,
+  });
+
+  process.stdout.write(`Wrote routes.json (${count} routes) and ws-events.json ` +
+    `(${ws.counts.clientToServer} client→server, ${ws.counts.serverToClient} server→client)\n`);
+}
+
+main().catch((err) => {
+  process.stderr.write(`extract-contract failed: ${err?.stack ?? err}\n`);
+  process.exit(1);
+});
