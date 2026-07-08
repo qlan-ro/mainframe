@@ -42,10 +42,20 @@ export function usePreviewVisibility(
     return (Array.isArray(layout.top) && layout.top.includes('run')) || layout.bottom === 'run';
   });
   const prevVisibleRef = useRef<boolean | null>(null);
+  const prevHandleRef = useRef<PreviewHandle | null>(null);
 
   const compositesAboveDom = handle?.compositesAboveDom ?? false;
 
   useEffect(() => {
+    // A recreated webview (stop/start, navigate, tab rebuild) is shown by default,
+    // but the dedup cache below still holds the OLD webview's state. A stale `false`
+    // would make the guard skip the setVisible(false) that hides the NEW webview
+    // behind an overlay — leaving the live webview composited over the annotation
+    // UI until a full reload resets the ref. Re-assert on every handle change.
+    if (prevHandleRef.current !== handle) {
+      prevHandleRef.current = handle;
+      prevVisibleRef.current = null;
+    }
     const visible = computePreviewVisible({
       isActiveTab,
       surfaceVisible,

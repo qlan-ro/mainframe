@@ -42,8 +42,23 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     compositesAboveDom: true,
     navigate: (next: string): Promise<void> => preview.previewNavigate(tabId, next),
     capture: (region?: Region): Promise<Uint8Array> => preview.previewCapture(tabId, region),
+    // Clears service-worker/Cache-API entries + web storage, then reloads. Does
+    // NOT purge the native HTTP disk cache (no WKWebView API from JS) — enough for
+    // a dev preview whose staleness is almost always app-level cached responses.
+    clearCache: (): Promise<void> =>
+      preview.previewEval(
+        tabId,
+        `(async () => {
+           try { if (self.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) {}
+           try { localStorage.clear(); } catch (e) {}
+           try { sessionStorage.clear(); } catch (e) {}
+           location.reload();
+         })()`,
+      ),
     startInspect: (): Promise<void> =>
       preview.previewEval(tabId, `window.__mfInspectInstall && window.__mfInspectInstall('${tabId}')`),
+    cancelInspect: (): Promise<void> =>
+      preview.previewEval(tabId, `window.__mfInspectCancel && window.__mfInspectCancel()`),
     onInspect: (cb: (result: InspectResult) => void): Unsubscribe => {
       let unlisten: (() => void) | null = null;
       void preview
@@ -58,6 +73,8 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     },
     startRegionSelect: (): Promise<void> =>
       preview.previewEval(tabId, `window.__mfRegionSelectInstall && window.__mfRegionSelectInstall('${tabId}')`),
+    cancelRegionSelect: (): Promise<void> =>
+      preview.previewEval(tabId, `window.__mfRegionSelectCancel && window.__mfRegionSelectCancel()`),
     onRegionSelect: (cb: (result: RegionSelectResult) => void): Unsubscribe => {
       let unlisten: (() => void) | null = null;
       void preview
