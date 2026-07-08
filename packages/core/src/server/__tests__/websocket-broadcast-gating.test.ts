@@ -6,7 +6,7 @@ import type { ChatManager } from '../../chat/index.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 /**
- * Background-chat notification delivery (bug: chat.notification/permission.requested
+ * Background-chat attention delivery (bug: notification/permission/lifecycle events
  * were gated by the same per-chat `subscriptions` set the client only maintains for
  * the ACTIVE thread, so a background chat's completion notice was silently dropped).
  */
@@ -59,6 +59,34 @@ describe('WebSocketManager.broadcastEvent — connection-global event types', ()
 
     const messages = await received;
     expect(messages.some((m) => m.type === 'permission.requested' && m.chatId === 'background-chat')).toBe(true);
+    ws.close();
+  });
+
+  it('delivers chat.updated to a client NOT subscribed to that chatId', async () => {
+    const ws = await connectWs(port);
+    const received = collectMessages(ws);
+
+    const event: DaemonEvent = {
+      type: 'chat.updated',
+      reason: 'completed',
+      chat: {
+        id: 'background-chat',
+        adapterId: 'claude',
+        projectId: 'p1',
+        status: 'active',
+        displayStatus: 'idle',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        totalCost: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
+        lastContextTokensInput: 0,
+      },
+    };
+    manager.broadcastEvent(event);
+
+    const messages = await received;
+    expect(messages.some((m) => m.type === 'chat.updated' && m.chat.id === 'background-chat')).toBe(true);
     ws.close();
   });
 

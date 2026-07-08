@@ -228,6 +228,16 @@ describe('useSessionListRouter — active thread change clears unread', () => {
 
     expect(clearUnreadSpy).toHaveBeenCalledWith('chat-A');
   });
+
+  it('clears both the stable active id and remoteId when they differ', () => {
+    mainThreadIdValue = 'thread-A';
+    fakeThreadItems = [{ id: 'thread-A', remoteId: 'chat-A', custom: { projectId: 'p1' } }];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(clearUnreadSpy).toHaveBeenCalledWith('thread-A');
+    expect(clearUnreadSpy).toHaveBeenCalledWith('chat-A');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -576,6 +586,19 @@ describe('useSessionListRouter — onMarkUnread for active thread is a no-op', (
   it('does NOT call markUnreadSpy when the marked id matches the active mainThreadId', () => {
     mainThreadIdValue = 'chat-A';
     fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1' } }];
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onMarkUnread('chat-A');
+    });
+
+    expect(markUnreadSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call markUnreadSpy when the marked id matches the active item remoteId', () => {
+    mainThreadIdValue = 'thread-A';
+    fakeThreadItems = [{ id: 'thread-A', remoteId: 'chat-A', custom: { projectId: 'p1' } }];
 
     renderHook(() => useSessionListRouter());
 

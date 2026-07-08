@@ -122,6 +122,8 @@
   --mf-tool-web: #16a394;
   --mf-tool-web-tint: rgba(22, 163, 148, 0.11);
   --mf-code-inline-fg: #7a4d2a;
+  --mf-provider-claude-avatar: #d97757;
+  --mf-provider-openai-avatar: #19c37d;
 
   /* Tasks/Todos semantic tints — design-constant (ported from 12-todos.jsx
      TD_TYPE/TD_PRI); no scheme override, same convention as the --mf-tool-*
@@ -979,10 +981,19 @@ code {
   animation: mf-text-shimmer 2.4s linear infinite;
 }
 
+@keyframes mf-claude-logo-working {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mf-text-shimmer {
     animation: none;
     color: var(--mf-text-3);
+  }
+
+  .animate-\[mf-claude-logo-working_1\.52s_linear_infinite\] {
+    animation: none;
   }
 }
 
@@ -1072,7 +1083,10 @@ code {
   height: 10px;
 }
 .mf-thin-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background-color: transparent;
+}
+.mf-thin-scrollbar::-webkit-scrollbar-corner {
+  background-color: transparent;
 }
 .mf-thin-scrollbar::-webkit-scrollbar-thumb {
   background-color: transparent;

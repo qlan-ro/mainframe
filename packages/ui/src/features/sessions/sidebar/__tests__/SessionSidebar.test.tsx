@@ -322,6 +322,11 @@ describe('SessionSidebar — list scroll area is present on render', () => {
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-list-scroll')).toBeTruthy();
   });
+
+  it('keeps the scrollbar gutter transparent so the parent background shows through', () => {
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-list-scroll').className).toContain('bg-transparent');
+  });
 });
 
 // ---------------------------------------------------------------------------

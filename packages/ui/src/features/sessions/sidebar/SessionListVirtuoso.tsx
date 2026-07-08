@@ -23,6 +23,7 @@ import { GroupedVirtuoso } from 'react-virtuoso';
 import type { SessionGroupResult } from '../view-model/group-sessions';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { SessionGroupHeader } from './SessionGroupHeader';
+import { cn } from '@/lib/utils';
 
 export interface SessionListVirtuosoProps {
   groups: SessionGroupResult[];
@@ -34,14 +35,19 @@ export interface SessionListVirtuosoProps {
 // scrollbar; forwardRef is required — Virtuoso attaches its scroll listener to
 // this node. Defined at module scope so its identity is stable across renders
 // (an inline component would remount the scroller every render).
-const SessionsScroller = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'div'>>(function SessionsScroller(
-  props,
-  ref,
-) {
-  return (
-    <div ref={ref} data-testid="sessions-list-scroll" className="mf-thin-scrollbar overscroll-contain" {...props} />
-  );
-});
+const SessionsScroller = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'div'>>(
+  function SessionsScroller(props, ref) {
+    const { className, ...rest } = props;
+    return (
+      <div
+        ref={ref}
+        data-testid="sessions-list-scroll"
+        className={cn('mf-thin-scrollbar overscroll-contain bg-transparent', className)}
+        {...rest}
+      />
+    );
+  },
+);
 
 const VIRTUOSO_COMPONENTS = { Scroller: SessionsScroller };
 

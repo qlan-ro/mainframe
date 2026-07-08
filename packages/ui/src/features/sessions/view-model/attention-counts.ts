@@ -6,7 +6,10 @@
  * than embedded in SessionCustom, keeping the view-model side-effect-free.
  */
 import type { SessionItem } from './chat-to-thread-custom';
+import { isSessionUnreadById } from './session-unread';
 
 export function attentionCount(items: SessionItem[], isUnread: (id: string) => boolean, projectId: string): number {
-  return items.filter((i) => i.custom.projectId === projectId && (isUnread(i.id) || i.custom.hasPending)).length;
+  return items.filter(
+    (i) => i.custom.projectId === projectId && (isSessionUnreadById(i, isUnread) || i.custom.hasPending),
+  ).length;
 }

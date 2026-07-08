@@ -6,7 +6,8 @@
  *   ordering stays drift-free (spec §11). chat.updated reloads rather than
  *   surgically patching custom because @assistant-ui/react@0.14.14 exposes no
  *   mutate-one-thread API (D6 deviation — see plan Phase 7 header).
- * chat.notification / permission.requested (notify:true) → markUnread.
+ * chat.notification / permission.requested / waiting-or-terminal chat.updated
+ * → markUnread.
  * permission.resolved is a no-op: the subsequent chat.updated → reload re-carries
  *   displayStatus and clears the "waiting" badge (Spike 0.3 / S4). If 0.3 shows
  *   the daemon does NOT re-emit chat.updated, add `case 'permission.resolved':
@@ -34,6 +35,10 @@ export interface SessionListRouterHandle {
   dispose: () => void;
 }
 
+function chatUpdatedNeedsAttention(event: Extract<DaemonEvent, { type: 'chat.updated' }>): boolean {
+  return event.chat.displayStatus === 'waiting' || event.reason === 'completed' || event.reason === 'error';
+}
+
 export class SessionListRouter {
   private readonly unsubscribe: () => void;
   private disposed = false;
@@ -59,6 +64,7 @@ export class SessionListRouter {
         } else {
           this.deps.onReload();
         }
+        if (chatUpdatedNeedsAttention(event)) this.deps.onMarkUnread(event.chat.id);
         return;
 
       case 'chat.notification':
@@ -66,7 +72,7 @@ export class SessionListRouter {
         return;
 
       case 'permission.requested':
-        if (event.notify) this.deps.onMarkUnread(event.chatId);
+        this.deps.onMarkUnread(event.chatId);
         return;
 
       default:

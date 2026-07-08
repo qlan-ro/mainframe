@@ -35,7 +35,7 @@ import type { SessionGroupResult } from '../../view-model/group-sessions';
 vi.mock('react-virtuoso', () => ({
   GroupedVirtuoso: (props: {
     groupCounts: number[];
-    components: { Scroller: React.ComponentType<{ children?: React.ReactNode }> };
+    components: { Scroller: React.ComponentType<React.HTMLAttributes<HTMLDivElement>> };
     groupContent: (groupIndex: number) => React.ReactNode;
     itemContent: (index: number, groupIndex: number) => React.ReactNode;
   }) => {
@@ -50,7 +50,7 @@ vi.mock('react-virtuoso', () => ({
         flatIndex++;
       }
     });
-    return <Scroller>{rows}</Scroller>;
+    return <Scroller className="virtuoso-scroller">{rows}</Scroller>;
   },
 }));
 
@@ -96,6 +96,18 @@ describe('SessionListVirtuoso — scroller test hook is present', () => {
       />,
     );
     expect(screen.getByTestId('sessions-list-scroll')).toBeTruthy();
+  });
+
+  it('keeps the scrollbar gutter transparent while preserving Virtuoso classes', () => {
+    render(
+      <SessionListVirtuoso
+        groups={[TODAY_GROUP]}
+        showProject
+        renderItem={(item) => <div key={item.id}>{item.id}</div>}
+      />,
+    );
+    expect(screen.getByTestId('sessions-list-scroll').className).toContain('bg-transparent');
+    expect(screen.getByTestId('sessions-list-scroll').className).toContain('virtuoso-scroller');
   });
 });
 
