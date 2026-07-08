@@ -164,6 +164,7 @@ function RuntimeBody({ port }: { port: number }) {
           onExpandSidebar={expandSidebar}
           projectName={projectName}
           branchName={branchName}
+          isWorktree={Boolean(worktreePath)}
           windowStyle={windowStyle}
           port={port}
           projectId={projectId}

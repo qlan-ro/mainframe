@@ -8,6 +8,7 @@
  * density pass) — no text pill here, so worktree + PR keep the room.
  */
 
+import { GitFork } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import { TAG_DOT_STYLE } from '../tags/tag-colors';
@@ -73,20 +74,7 @@ export function SessionRowMeta({
             ].join(' ')}
           >
             {worktreeMissing && <span data-testid="sessions-row-meta-worktree-missing" aria-label="worktree missing" />}
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 16 16"
-              fill="none"
-              className="flex-shrink-0 text-mf-text-3"
-              aria-hidden
-            >
-              <path
-                d="M5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
-                fill="currentColor"
-              />
-              <path d="M5 7v1.17A3 3 0 0 1 6.83 10H9a2 2 0 0 0 2-2V7" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
+            <GitFork size={9} className="flex-shrink-0 text-mf-text-3" aria-hidden />
             <span className="max-w-[8rem] truncate">{worktreeBasename(worktreePath)}</span>
           </span>
         </Hint>
