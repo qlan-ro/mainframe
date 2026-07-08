@@ -29,6 +29,10 @@ nanoid = "0.4"
 dashmap = "6"
 notify = "6"
 chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
+tempfile = "3"
 
 mainframe-types = { path = "crates/mainframe-types" }
 mainframe-runtime = { path = "crates/mainframe-runtime" }

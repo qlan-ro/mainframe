@@ -868,11 +868,13 @@ starts (raise a blocker if you need it sooner; do not add it locally).
 | `dashmap` | `SHARED_MAP` concurrent maps | in workspace |
 | `notify` | file watcher (verify vs `fs.watch` on macOS) | in workspace |
 | `chrono` | timestamps + the ISO-8601 wire helper (§4) | in workspace |
+| `dirs` | home-dir resolution (`os.homedir()` equivalent) | in workspace |
+| `reqwest` (rustls-tls, json) | HTTP client: push delivery (Phase 2), workflow HTTP connector (Phase 5) | in workspace |
+| `tempfile` | **dev-dependency only** — temp dirs/files in db/git/fs tests | in workspace |
 | `anyhow` | **binary crate top level only** (verify gate exempts the `mainframe-daemon` crate, forbids it elsewhere) | in workspace |
 | `serde_yaml` | workflow DSL | deferred → Phase 5 (`mainframe-workflows`) |
 | `cron` | workflow schedule triggers | deferred → Phase 5 |
 | `qrcode` | pairing QR | deferred → Phase 3 (`mainframe-server` auth/pairing) |
-| `reqwest` | HTTP connector (workflows) + push | deferred → Phases 2/5 |
 | `futures` | stream/select combinators | deferred (added with the first crate that needs it) |
 
 **Open dependency decisions (blockers, not local calls):**
