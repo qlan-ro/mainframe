@@ -3,7 +3,7 @@
  * switches the sessions runtime to it.
  *
  * The caller resolves `adapterId` from the active thread's `custom.adapterId`
- * (via sessionCustomOf) with `'claude'` as the fallback — it is REQUIRED by
+ * (via activeSessionCustom) with `'claude'` as the fallback — it is REQUIRED by
  * createChat's CreateChatBody. Passed as an arg rather than read here so the
  * hook remains runtime-provider-free (simpler to test).
  */

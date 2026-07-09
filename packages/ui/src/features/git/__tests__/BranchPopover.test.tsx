@@ -29,7 +29,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 // ---------------------------------------------------------------------------
 
 vi.mock('@assistant-ui/react', () => ({
-  useAuiState: (selector: (s: { threadListItem: null }) => unknown) => selector({ threadListItem: null }),
+  useAuiState: (selector: (s: { threadListItem: null; threads: { threadItems: [] } }) => unknown) =>
+    selector({ threadListItem: null, threads: { threadItems: [] } }),
   useAssistantRuntime: () => ({
     threads: {
       reload: vi.fn().mockResolvedValue(undefined),
@@ -47,11 +48,11 @@ vi.mock('../use-worktree-session', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock sessionCustomOf — returns null so adapterId falls back to 'claude'
+// Mock activeSessionCustom — returns null so adapterId falls back to 'claude'
 // ---------------------------------------------------------------------------
 
 vi.mock('@/features/sessions/view-model/chat-to-thread-custom', () => ({
-  sessionCustomOf: () => null,
+  activeSessionCustom: () => null,
 }));
 
 // ---------------------------------------------------------------------------
