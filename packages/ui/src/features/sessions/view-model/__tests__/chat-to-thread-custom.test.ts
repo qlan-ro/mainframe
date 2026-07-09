@@ -265,6 +265,20 @@ describe('chatToThreadCustom — custom.branchName', () => {
 });
 
 // ---------------------------------------------------------------------------
+// custom.transcriptMissing
+// ---------------------------------------------------------------------------
+
+describe('chatToThreadCustom — custom.transcriptMissing', () => {
+  it('is false when chat.transcriptMissing is absent', () => {
+    expect(chatToThreadCustom(makeChat()).custom.transcriptMissing).toBe(false);
+  });
+
+  it('is true when chat.transcriptMissing is true', () => {
+    expect(chatToThreadCustom(makeChat({ transcriptMissing: true })).custom.transcriptMissing).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // activeSessionCustom — freshest custom for the ACTIVE thread-list item
 // ---------------------------------------------------------------------------
 

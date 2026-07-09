@@ -4,8 +4,8 @@
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
 import type {
-  DisplayMessage,
   Chat,
+  ChatHistoryPayload,
   SessionTuning,
   ExecutionMode,
   PermissionMode,
@@ -29,8 +29,23 @@ export interface ChatConfigPatch {
 export const setChatConfig = (port: number, chatId: string, body: ChatConfigPatch): Promise<Chat> =>
   request<Chat>('PATCH', `${apiBase(port)}/api/chats/${chatId}/config`, body);
 
-export const getChatMessages = (port: number, chatId: string): Promise<DisplayMessage[]> =>
-  request<DisplayMessage[]>('GET', `${apiBase(port)}/api/chats/${chatId}/messages`);
+/** History + transcript presence — `transcriptMissing` tells an empty thread from a deleted transcript. */
+export const getChatMessages = (port: number, chatId: string): Promise<ChatHistoryPayload> =>
+  request<ChatHistoryPayload>('GET', `${apiBase(port)}/api/chats/${chatId}/messages`);
+
+// ── Degraded-chat recovery (missing transcript / missing worktree) ──────────
+
+/** Forget the dead CLI session; the next send spawns fresh in the same chat row. */
+export const continueChatHere = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/continue-here`);
+
+/** Re-add the deleted worktree at its stored path from the stored branch (409 when the branch is gone). */
+export const recreateChatWorktree = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/recreate-worktree`);
+
+/** Detach the chat from its deleted worktree and rebind it to the project root. */
+export const continueChatInProjectRoot = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/continue-in-project-root`);
 
 /** The chat record (model, effort, planMode, permissionMode, adapterId, isRunning, …). */
 export const getChat = (port: number, chatId: string): Promise<Chat> =>

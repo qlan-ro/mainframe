@@ -48,6 +48,7 @@ function statusLogoClass(badge: SessionBadge, adapterId: string): string {
   const visual = badge.unread || active ? 'text-primary' : 'text-mf-text-4 opacity-50';
   switch (badge.base) {
     case 'worktree-missing':
+    case 'transcript-missing':
       return `${base} ${visual}`;
     case 'working':
       return `${base} ${visual} ${workingLogoAnimation(adapterId)}`;
@@ -63,6 +64,8 @@ function dotLabel(badge: SessionBadge): string {
   switch (badge.base) {
     case 'worktree-missing':
       return 'Worktree missing';
+    case 'transcript-missing':
+      return 'Transcript missing';
     case 'working':
       return 'Working';
     case 'waiting':
@@ -285,6 +288,7 @@ function SessionRowInner({
                 <SessionRowMeta
                   worktreePath={custom.worktreePath}
                   worktreeMissing={custom.worktreeMissing}
+                  transcriptMissing={custom.transcriptMissing}
                   detectedPrs={custom.detectedPrs}
                   tags={custom.tags}
                   colorOf={colorOf}

@@ -101,6 +101,32 @@ export async function backfillWorktreeRelationships(projects: ProjectsRepository
   }
 }
 
+export async function branchExists(projectPath: string, branchName: string): Promise<boolean> {
+  try {
+    await execGit(['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}`], projectPath);
+    return true;
+  } catch {
+    /* expected: branch missing */
+    return false;
+  }
+}
+
+/** Re-add a previously deleted worktree at its original path, checking out an existing branch. */
+export async function addWorktreeForBranch(
+  projectPath: string,
+  worktreePath: string,
+  branchName: string,
+): Promise<void> {
+  try {
+    // Drop the stale registration git still holds for the deleted directory.
+    await execGit(['worktree', 'prune'], projectPath);
+  } catch {
+    /* best-effort */
+  }
+  // No timeout: checkout of a large tree can exceed the default cap (see createWorktree).
+  await execGit(['worktree', 'add', worktreePath, branchName], projectPath, { timeout: 0 });
+}
+
 export async function removeWorktree(projectPath: string, worktreePath: string, branchName: string): Promise<void> {
   try {
     await execGit(['worktree', 'remove', worktreePath, '--force'], projectPath);

@@ -16,6 +16,7 @@ type RawChatRow = Omit<
   | 'fast'
   | 'ultracode'
   | 'adaptiveThinking'
+  | 'transcriptMissing'
   | 'lastContextTotalTokens'
   | 'lastContextMaxTokens'
 > & {
@@ -31,6 +32,7 @@ type RawChatRow = Omit<
   fast: number | null;
   ultracode: number | null;
   adaptive_thinking: number | null;
+  transcriptMissing: number;
 };
 
 const CHAT_SELECT_FIELDS = `
@@ -46,6 +48,7 @@ const CHAT_SELECT_FIELDS = `
   process_state as processState, todos, pinned, effort,
   plan_mode as planMode, detected_prs as detectedPrs,
   session_file_path as sessionFilePath,
+  transcript_missing as transcriptMissing,
   fast, ultracode, adaptive_thinking
 `.trim();
 
@@ -192,6 +195,7 @@ export class ChatsRepository {
     ultracode: { column: 'ultracode', transform: (v) => (v == null ? null : v ? 1 : 0) },
     adaptiveThinking: { column: 'adaptive_thinking', transform: (v) => (v == null ? null : v ? 1 : 0) },
     planMode: { column: 'plan_mode', transform: (v) => (v ? 1 : 0) },
+    transcriptMissing: { column: 'transcript_missing', transform: (v) => (v ? 1 : 0) },
   };
 
   update(id: string, updates: Partial<Chat>): void {
@@ -315,6 +319,24 @@ export class ChatsRepository {
   }
 
   /**
+   * Forget the CLI session bound to this chat: the next send spawns a fresh
+   * session instead of `--resume`ing a dead id. Used by degraded-chat recovery
+   * ("Continue here") after the CLI's transcript file was deleted.
+   */
+  clearSession(id: string): void {
+    this.db
+      .prepare(
+        'UPDATE chats SET claude_session_id = NULL, session_file_path = NULL, transcript_missing = 0 WHERE id = ?',
+      )
+      .run(id);
+  }
+
+  /** Detach the chat from its (deleted) worktree so it rebinds to the project root. */
+  clearWorktree(id: string): void {
+    this.db.prepare('UPDATE chats SET worktree_path = NULL, branch_name = NULL WHERE id = ?').run(id);
+  }
+
+  /**
    * Bulk-reset every chat whose process_state is 'working' to 'idle'.
    * Returns the number of rows affected.
    */
@@ -360,6 +382,7 @@ export class ChatsRepository {
       adaptiveThinking: parseNullableBool(row.adaptive_thinking),
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
+      transcriptMissing: Boolean(row.transcriptMissing),
     };
   }
 

@@ -25,6 +25,7 @@ import {
   contentSearchRoutes,
   lspRoutes,
   worktreeRoutes,
+  chatRecoveryRoutes,
   tagRoutes,
   workflowRoutes,
   suggestionRoutes,
@@ -145,6 +146,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(launchRoutes(ctx));
   app.use(externalSessionRoutes(ctx));
   app.use(worktreeRoutes(ctx));
+  app.use(chatRecoveryRoutes(ctx));
   app.use(tagRoutes(ctx));
   app.use(workflowRoutes(ctx));
   app.use(workflowAdminRoutes(ctx));

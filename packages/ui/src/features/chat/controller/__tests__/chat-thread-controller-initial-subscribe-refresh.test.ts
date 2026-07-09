@@ -29,7 +29,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
 }));
 
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue([]),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
   getChat: vi.fn().mockResolvedValue({ id: 'chat', adapterId: 'claude' }),
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
@@ -119,7 +119,10 @@ afterEach(() => {
 describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
   it('refreshes history when a warm controller re-attaches, even with no pending send', async () => {
     // First activation: the chat already holds one message; the mount load() seeds it.
-    vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-1', 'first')]);
+    vi.mocked(getChatMessages).mockResolvedValue({
+      messages: [userDisplayMsg('srv-1', 'first')],
+      transcriptMissing: false,
+    });
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -139,10 +142,10 @@ describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
 
     // While dormant, the daemon appended a message. It is persisted (REST now
     // returns it) but was never delivered live — the controller had no sub.
-    vi.mocked(getChatMessages).mockResolvedValue([
-      userDisplayMsg('srv-1', 'first'),
-      userDisplayMsg('srv-2', 'arrived while backgrounded'),
-    ]);
+    vi.mocked(getChatMessages).mockResolvedValue({
+      messages: [userDisplayMsg('srv-1', 'first'), userDisplayMsg('srv-2', 'arrived while backgrounded')],
+      transcriptMissing: false,
+    });
 
     // Switch back — a fresh sub attaches. The user was only reading, so there is
     // NO unreconciled pending; only the reattach signal can trigger the catch-up.
@@ -158,7 +161,7 @@ describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
 describe('initial subscribe:ack — recovers a missed handoff event', () => {
   it('refreshes history on the first ack so the optimistic pending is reconciled', async () => {
     // The just-created chat is empty when the first load + send happen.
-    vi.mocked(getChatMessages).mockResolvedValue([]);
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -173,7 +176,10 @@ describe('initial subscribe:ack — recovers a missed handoff event', () => {
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
 
     // The daemon now holds the user message; a refresh would reconcile the pending.
-    vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-1', 'which model are you?')]);
+    vi.mocked(getChatMessages).mockResolvedValue({
+      messages: [userDisplayMsg('srv-1', 'which model are you?')],
+      transcriptMissing: false,
+    });
 
     // The subscription finally attaches and acks (initial, not a reconnect).
     pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });

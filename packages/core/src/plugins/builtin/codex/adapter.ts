@@ -10,6 +10,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { CodexSession } from './session.js';
 import { CodexPlanModeHandler } from './plan-mode-handler.js';
+import { isCodexTranscriptPresent } from './transcript.js';
 import { JsonRpcClient } from './jsonrpc.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import type { InitializeResult, ModelInfo, ModelListResult, ThreadListResult } from './types.js';
@@ -162,6 +163,10 @@ export class CodexAdapter implements Adapter {
     } finally {
       client?.close();
     }
+  }
+
+  async isTranscriptPresent(sessionId: string): Promise<boolean | null> {
+    return isCodexTranscriptPresent(sessionId);
   }
 
   private async spawnTempAppServer(): Promise<JsonRpcClient> {

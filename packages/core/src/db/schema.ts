@@ -132,6 +132,9 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'session_file_path')) {
     db.exec('ALTER TABLE chats ADD COLUMN session_file_path TEXT');
   }
+  if (!cols.some((c) => c.name === 'transcript_missing')) {
+    db.exec('ALTER TABLE chats ADD COLUMN transcript_missing INTEGER DEFAULT 0');
+  }
 
   const sdkChats = db.prepare("SELECT COUNT(*) as n FROM chats WHERE adapter_id = 'claude-sdk'").get() as { n: number };
   if (sdkChats.n > 0) {

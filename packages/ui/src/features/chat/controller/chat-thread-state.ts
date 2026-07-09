@@ -98,7 +98,7 @@ export interface ChatThreadState {
 
 export type ChatStateEvent =
   | { type: 'history.loading' }
-  | { type: 'history.loaded'; messages: DisplayMessage[] }
+  | { type: 'history.loaded'; messages: DisplayMessage[]; transcriptMissing?: boolean }
   | { type: 'history.failed'; error: unknown }
   | { type: 'run.started' }
   | { type: 'run.cancelling' }
@@ -192,6 +192,7 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.ultracode === b.ultracode &&
     a.adaptiveThinking === b.adaptiveThinking &&
     a.worktreeMissing === b.worktreeMissing &&
+    a.transcriptMissing === b.transcriptMissing &&
     a.worktreePath === b.worktreePath &&
     a.branchName === b.branchName
   );
@@ -225,11 +226,20 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         messagesById[msg.id] = msg;
         messageOrder.push(msg.id);
       }
+      // Mirror the load-time transcript detection into chatConfig so the
+      // degraded card reacts without waiting for the chat.updated broadcast.
+      const chatConfig =
+        event.transcriptMissing !== undefined &&
+        state.chatConfig !== null &&
+        state.chatConfig.transcriptMissing !== event.transcriptMissing
+          ? { ...state.chatConfig, transcriptMissing: event.transcriptMissing }
+          : state.chatConfig;
       return {
         ...state,
         loadState: { type: 'ready' },
         messagesById,
         messageOrder,
+        chatConfig,
       };
     }
 

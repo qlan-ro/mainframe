@@ -69,6 +69,8 @@ export interface Chat {
   /** Live background work (agents/bash/workflows) — derived per response, never persisted. */
   backgroundActivity?: BackgroundActivity;
   worktreeMissing?: boolean;
+  /** True when the CLI's transcript file for this session was deleted from disk (persisted flag). */
+  transcriptMissing?: boolean;
   todos?: TodoItem[];
   pinned?: boolean;
   effort?: EffortLevel | null;

@@ -68,3 +68,12 @@ export interface DisplayMessage {
   timestamp: string;
   metadata?: Record<string, unknown>;
 }
+
+/**
+ * GET /api/chats/:id/messages payload — `transcriptMissing` distinguishes a
+ * genuinely empty thread from one whose CLI transcript was deleted from disk.
+ */
+export interface ChatHistoryPayload {
+  messages: DisplayMessage[];
+  transcriptMissing: boolean;
+}

@@ -33,6 +33,7 @@ function makeCustom(): SessionCustom {
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    transcriptMissing: false,
     updatedAt: 1749284160000,
   };
 }

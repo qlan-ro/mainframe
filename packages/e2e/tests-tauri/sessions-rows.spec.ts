@@ -13,12 +13,12 @@
  *   SessionRowMeta.tsx    — project chip / worktree pill / PR link / tag dots
  *   SessionContextMenu.tsx — right-click menu (Pin/Unpin, Rename, Tags, Archive, Copy Session ID)
  *   SessionGroupHeader.tsx — group header, incl. the 'Pinned' group's pin glyph
- *   view-model/session-status.ts — deriveSessionBadge (worktree-missing > working > waiting > idle)
+ *   view-model/session-status.ts — deriveSessionBadge (worktree-missing > transcript-missing > working > waiting > idle)
  *
  * Testid reference (all verified against source above):
  *   sessions-row                     — row root (data-chat-id, data-active)
  *   sessions-row-status-dot          — StatusDot; aria-label = badge.base
- *                                       ('idle'|'working'|'waiting'|'worktree-missing')
+ *                                       ('idle'|'working'|'waiting'|'worktree-missing'|'transcript-missing')
  *   sessions-row-relative-time       — time label, hidden on row hover
  *   sessions-row-action-tags/-rename/-archive — hover-action buttons (hidden until row hover)
  *   sessions-ctx-pin/-rename/-tags/-archive/-copy-id — context-menu items
@@ -26,7 +26,7 @@
  *   sessions-group-pin-glyph         — pin glyph on the Pinned group header (see NOTE below)
  *   sessions-row-meta-project        — project chip (All view only)
  *   sessions-row-meta-worktree       — worktree pill (text-destructive when missing)
- *   sessions-row-meta-worktree-missing — empty marker span, present only when worktreeMissing
+ *   sessions-row-meta-degraded       — unified degraded marker (muted icon); aria-label names the cause(s)
  *   sessions-row-meta-tag-dot-<name> — applied-tag dot cluster
  *
  * NOTE on the pin glyph: SessionRow.tsx also renders a PER-ROW
@@ -253,7 +253,7 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     const pill = row.getByTestId('sessions-row-meta-worktree');
     await expect(pill).toBeVisible({ timeout: 15_000 });
     await expect(pill).not.toHaveClass(/text-destructive/);
-    await expect(row.getByTestId('sessions-row-meta-worktree-missing')).toHaveCount(0);
+    await expect(row.getByTestId('sessions-row-meta-degraded')).toHaveCount(0);
     await expect(dot).toHaveAttribute('aria-label', 'idle');
 
     const chatRes = await page.request.get(`${DAEMON_BASE}/api/chats/${chatId}`);
@@ -269,8 +269,10 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
 
     await expect(dot).toHaveAttribute('aria-label', 'worktree-missing', { timeout: 15_000 });
     await expect(pill).toHaveClass(/text-destructive/);
-    // Present-but-empty marker span — assert attachment, not visibility (it has no box).
-    await expect(row.getByTestId('sessions-row-meta-worktree-missing')).toHaveCount(1);
+    // Unified degraded marker — aria-label names the cause.
+    const marker = row.getByTestId('sessions-row-meta-degraded');
+    await expect(marker).toHaveCount(1);
+    await expect(marker).toHaveAttribute('aria-label', 'Worktree missing');
   });
 });
 

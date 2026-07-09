@@ -28,7 +28,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
 }));
 
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue([]),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
   getChat: vi.fn().mockResolvedValue(null),
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
@@ -116,7 +116,7 @@ describe('ChatThreadController.refresh — recovers from a prior failure', () =>
     // First call rejects (the failure).
     vi.mocked(getChatMessages).mockRejectedValueOnce(new Error('transient'));
     // Second call (refresh) resolves with an empty history.
-    vi.mocked(getChatMessages).mockResolvedValueOnce([]);
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();
@@ -137,7 +137,7 @@ describe('ChatThreadController.refresh — recovers from a prior failure', () =>
 
 describe('ChatThreadController.load — getChatMessages resolves', () => {
   it('sets loadState.type to "ready" when getChatMessages resolves with an empty array', async () => {
-    vi.mocked(getChatMessages).mockResolvedValueOnce([]);
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();

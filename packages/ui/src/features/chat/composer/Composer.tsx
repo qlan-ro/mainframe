@@ -13,7 +13,7 @@
  */
 import { useCallback } from 'react';
 import { ComposerPrimitive, useAui, useAuiState } from '@assistant-ui/react';
-import { AlertTriangleIcon, ArrowUpIcon, SquareIcon } from 'lucide-react';
+import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
 import { ComposerEditMode } from './edit/ComposerEditMode';
@@ -53,29 +53,6 @@ function SendOrCancelButton({ sendDisabled }: { sendDisabled?: boolean }) {
     >
       <ArrowUpIcon className="size-3.5" />
     </ComposerPrimitive.Send>
-  );
-}
-
-/** Shown when the session's worktree was deleted out from under it — input is locked until it's restored or the chat archived. */
-function WorktreeMissingBanner({ worktreePath }: { worktreePath?: string }) {
-  return (
-    <div
-      data-testid="chat-composer-worktree-missing"
-      className="mx-3 mt-2 flex items-center gap-2 rounded-md bg-mf-destructive-tint px-3 py-2 text-caption text-destructive"
-    >
-      <AlertTriangleIcon className="size-3.5 shrink-0" />
-      <span>
-        The worktree for this session was deleted. Archive this session or recreate the worktree
-        {worktreePath ? (
-          <>
-            {' '}
-            at <code className="font-mono">{worktreePath}</code>.
-          </>
-        ) : (
-          '.'
-        )}
-      </span>
-    </div>
   );
 }
 
@@ -125,8 +102,6 @@ export function Composer() {
             '[&[data-dragging]]:bg-mf-selection',
           )}
         >
-          {worktreeMissing && <WorktreeMissingBanner worktreePath={chat?.worktreePath} />}
-
           {/* Quote pill — renders only when a quote is set (select-to-quote). */}
           <ComposerQuotePreview />
 

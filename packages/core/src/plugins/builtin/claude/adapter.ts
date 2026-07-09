@@ -16,6 +16,7 @@ import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
+import { isClaudeTranscriptPresent } from './transcript.js';
 import { ClaudePlanModeHandler } from './plan-mode-handler.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import { createChildLogger } from '../../../logger.js';
@@ -285,5 +286,13 @@ export class ClaudeAdapter implements Adapter {
     opts?: { offset?: number; limit?: number },
   ): Promise<ExternalSessionPage> {
     return listExternalSessions(projectPath, excludeSessionIds, opts);
+  }
+
+  async isTranscriptPresent(
+    sessionId: string,
+    projectPath: string,
+    sessionFilePath?: string | null,
+  ): Promise<boolean | null> {
+    return isClaudeTranscriptPresent(sessionId, projectPath, sessionFilePath);
   }
 }
