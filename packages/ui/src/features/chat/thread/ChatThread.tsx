@@ -14,6 +14,7 @@ import { Composer } from '../composer/Composer';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
+import { DegradedChatCard } from './DegradedChatCard';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
@@ -83,6 +84,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           >
             <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
               <LoadErrorBanner />
+              <DegradedChatCard />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
               <ChatGateMount />

@@ -25,6 +25,7 @@ function item(
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    transcriptMissing: false,
     updatedAt,
     ...overrides,
   };

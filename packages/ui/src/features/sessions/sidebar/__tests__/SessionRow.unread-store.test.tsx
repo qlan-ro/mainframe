@@ -65,6 +65,7 @@ function makeItem(overrides: Partial<SessionItem> = {}): SessionItem {
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    transcriptMissing: false,
     updatedAt: 1749284160000,
   };
   return {

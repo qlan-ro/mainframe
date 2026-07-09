@@ -206,9 +206,9 @@ export class ChatThreadController {
     }
 
     const request = getChatMessages(this.port, this.daemonId)
-      .then((messages) => {
+      .then(({ messages, transcriptMissing }) => {
         if (this.loadPromise !== request) return;
-        this.dispatch({ type: 'history.loaded', messages });
+        this.dispatch({ type: 'history.loaded', messages, transcriptMissing });
         this.reconcilePendingAgainstHistory(messages);
       })
       .catch((error: unknown) => {

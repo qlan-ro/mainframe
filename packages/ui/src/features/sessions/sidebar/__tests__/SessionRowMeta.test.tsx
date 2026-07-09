@@ -87,14 +87,45 @@ describe('SessionRowMeta — worktree pill (not missing)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Worktree missing indicator is present when worktreeMissing=true
+// 3. Unified degraded marker (cause-agnostic, aria-label names the cause)
 // ---------------------------------------------------------------------------
 
-describe('SessionRowMeta — worktree missing indicator', () => {
-  it('renders data-testid="sessions-row-meta-worktree-missing" when worktreeMissing=true', () => {
+describe('SessionRowMeta — unified degraded marker', () => {
+  it('renders sessions-row-meta-degraded labelled "Worktree missing" when worktreeMissing=true', () => {
     render(<SessionRowMeta worktreePath="/repos/mf/.git/worktrees/feat-x" worktreeMissing={true} detectedPrs={[]} />);
     expect(screen.getByTestId('sessions-row-meta-worktree')).toBeTruthy();
-    expect(screen.getByTestId('sessions-row-meta-worktree-missing')).toBeTruthy();
+    const marker = screen.getByTestId('sessions-row-meta-degraded');
+    expect(marker.getAttribute('aria-label')).toBe('Worktree missing');
+  });
+
+  it('renders the marker labelled "Transcript missing" when transcriptMissing=true', () => {
+    render(<SessionRowMeta worktreeMissing={false} transcriptMissing={true} detectedPrs={[]} />);
+    const marker = screen.getByTestId('sessions-row-meta-degraded');
+    expect(marker.getAttribute('aria-label')).toBe('Transcript missing');
+  });
+
+  it('names both causes when both flags are set', () => {
+    render(
+      <SessionRowMeta
+        worktreePath="/repos/mf/.git/worktrees/feat-x"
+        worktreeMissing={true}
+        transcriptMissing={true}
+        detectedPrs={[]}
+      />,
+    );
+    const marker = screen.getByTestId('sessions-row-meta-degraded');
+    expect(marker.getAttribute('aria-label')).toBe('Worktree missing · Transcript missing');
+  });
+
+  it('renders no marker (and never the old worktree-missing testid) when healthy', () => {
+    render(<SessionRowMeta worktreePath="/repos/mf/.git/worktrees/feat-x" worktreeMissing={false} detectedPrs={[]} />);
+    expect(screen.queryByTestId('sessions-row-meta-degraded')).toBeNull();
+    expect(screen.queryByTestId('sessions-row-meta-worktree-missing')).toBeNull();
+  });
+
+  it('the old sessions-row-meta-worktree-missing testid is gone even when degraded', () => {
+    render(<SessionRowMeta worktreePath="/repos/mf/.git/worktrees/feat-x" worktreeMissing={true} detectedPrs={[]} />);
+    expect(screen.queryByTestId('sessions-row-meta-worktree-missing')).toBeNull();
   });
 });
 
@@ -144,7 +175,9 @@ describe('SessionRowMeta — answer pill removed', () => {
       <SessionRowMeta
         worktreePath="/repos/mf/.git/worktrees/feat-x"
         worktreeMissing={false}
-        detectedPrs={[{ number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' }]}
+        detectedPrs={[
+          { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
+        ]}
         tags={['alpha']}
         colorOf={() => 'blue'}
         projectId="p1"

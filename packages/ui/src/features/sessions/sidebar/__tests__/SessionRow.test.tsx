@@ -156,6 +156,7 @@ function makeItem(overrides?: Partial<SessionCustom>): SessionItem {
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    transcriptMissing: false,
     updatedAt: 1749284160000,
     ...overrides,
   };
