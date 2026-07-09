@@ -7,8 +7,8 @@
  *  - projectId + projectName → a colored project chip renders (only in "All" view).
  *  - worktreePath="/repos/mf/.git/worktrees/feat-x" and worktreeMissing=false →
  *    data-testid="sessions-row-meta-worktree" is present and contains text "feat-x".
- *  - worktreePath="/repos/mf/.git/worktrees/feat-x" and worktreeMissing=true →
- *    data-testid="sessions-row-meta-worktree-missing" is present in the DOM.
+ *  - worktreeMissing/transcriptMissing → the unified
+ *    data-testid="sessions-row-meta-degraded" marker, aria-label naming the cause(s).
  *  - detectedPrs=[{ number: 42, url: "https://github.com/org/r/pull/42" }] →
  *    data-testid="sessions-row-meta-pr" renders text "#42".
  *  - detectedPrs=[] and no worktreePath → neither worktree nor PR elements appear.
