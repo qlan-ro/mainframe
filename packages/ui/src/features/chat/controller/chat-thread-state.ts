@@ -156,7 +156,8 @@ function removePending(state: ChatThreadState, clientId: string): ChatThreadStat
  * `get_context_usage` after each turn), mapped to the contextUsage slice shape.
  * Null when the chat has never reported (legacy rows, codex).
  */
-function persistedContextUsage(chat: Chat): ChatThreadState['contextUsage'] {
+function persistedContextUsage(chat: Chat | null): ChatThreadState['contextUsage'] {
+  if (chat == null) return null;
   const { lastContextTotalTokens: total, lastContextMaxTokens: max } = chat;
   if (total == null || max == null || max <= 0) return null;
   return { percentage: (total / max) * 100, totalTokens: total, maxTokens: max };
