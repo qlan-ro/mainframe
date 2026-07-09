@@ -50,13 +50,6 @@ steps:
       msg: "hi"
 `;
 
-const INVALID_YAML = `version: 1
-steps:
-  - id: bad
-    set:
-      v: "\${ ghost.output }"
-`;
-
 const MOCK_SUMMARY: WorkflowSummary = {
   id: 'global:greet',
   name: 'greet',
@@ -116,17 +109,16 @@ describe('WorkflowEditor', () => {
     expect(screen.getByText('Edit workflow')).toBeInTheDocument();
   });
 
-  it('typing YAML triggers validateYaml after debounce', async () => {
+  it('editing the builder triggers validateYaml after debounce', async () => {
     renderEditor({ mode: 'new' });
-    const textarea = screen.getByTestId('workflows-editor-yaml');
-    fireEvent.change(textarea, { target: { value: VALID_YAML } });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'greet' } });
     // Before debounce fires
     expect(wfApi.validateYaml).not.toHaveBeenCalled();
     // Advance timers by 500ms (debounce is ~400ms)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(wfApi.validateYaml).toHaveBeenCalledWith(PORT, VALID_YAML);
+    expect(wfApi.validateYaml).toHaveBeenCalledWith(PORT, expect.stringContaining('name: greet'));
   });
 
   it('invalid YAML disables Save and shows errors', async () => {
@@ -135,8 +127,7 @@ describe('WorkflowEditor', () => {
       errors: [{ message: 'step references "ghost" which is not in scope' }],
     });
     renderEditor({ mode: 'new' });
-    const textarea = screen.getByTestId('workflows-editor-yaml');
-    fireEvent.change(textarea, { target: { value: INVALID_YAML } });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'bad' } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
@@ -147,8 +138,7 @@ describe('WorkflowEditor', () => {
   it('Save button calls putWorkflow and closes the editor', async () => {
     vi.mocked(wfApi.validateYaml).mockResolvedValue({ valid: true, errors: [] });
     renderEditor({ mode: 'new' });
-    const textarea = screen.getByTestId('workflows-editor-yaml');
-    fireEvent.change(textarea, { target: { value: VALID_YAML } });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'greet' } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
@@ -160,15 +150,18 @@ describe('WorkflowEditor', () => {
     await act(async () => {
       await vi.runAllTimersAsync();
     });
-    expect(wfApi.putWorkflow).toHaveBeenCalledWith(PORT, expect.stringContaining('greet'), VALID_YAML);
+    expect(wfApi.putWorkflow).toHaveBeenCalledWith(
+      PORT,
+      expect.stringContaining('greet'),
+      expect.stringContaining('name: greet'),
+    );
     expect(useWorkflowsModal.getState().editorTarget).toBeNull();
   });
 
   it('a validateYaml failure surfaces an inline destructive error instead of hanging on "Validating…"', async () => {
     vi.mocked(wfApi.validateYaml).mockRejectedValue(new Error('Unrecognized key: "scope"'));
     renderEditor({ mode: 'new' });
-    const textarea = screen.getByTestId('workflows-editor-yaml');
-    fireEvent.change(textarea, { target: { value: VALID_YAML } });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'greet' } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
@@ -227,10 +220,10 @@ describe('WorkflowEditor', () => {
 
   it('new-mode YAML pane is initialized from the blank draft on first open, not empty', () => {
     renderEditor({ mode: 'new' });
-    const textarea = screen.getByTestId('workflows-editor-yaml') as HTMLTextAreaElement;
-    expect(textarea.value).not.toBe('');
-    expect(textarea.value).toContain('name: untitled');
-    expect(textarea.value).toContain('steps:');
+    const preview = screen.getByTestId('workflows-editor-yaml');
+    expect(preview.textContent).not.toBe('');
+    expect(preview.textContent).toContain('name: untitled');
+    expect(preview.textContent).toContain('steps:');
   });
 
   it('new-mode schedules validation for the initial YAML without requiring a user edit first', async () => {

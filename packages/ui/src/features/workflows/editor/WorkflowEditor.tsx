@@ -110,24 +110,14 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
 
   // New drafts: validate the initial serialized blank draft immediately, so
   // "Create" isn't stuck disabled ("Validating…" forever) until the user
-  // edits the builder or the YAML pane. Edit mode's own load effect above
-  // reads server YAML asynchronously and doesn't need this.
+  // edits the builder. Edit mode's own load effect above reads server YAML
+  // asynchronously and doesn't need this.
   // Mount-only: run once against the initializer's value. Every later edit
-  // already reschedules validation via handleYamlChange/handleModelChange, so
-  // this intentionally does not depend on `yaml`/`scheduleValidation`.
+  // already reschedules validation via handleModelChange, so this
+  // intentionally does not depend on `yaml`/`scheduleValidation`.
   useEffect(() => {
     if (isNew) scheduleValidation(yaml);
   }, []);
-
-  const handleYamlChange = useCallback(
-    (value: string) => {
-      setYaml(value);
-      setValidation(null); // reset until new validation arrives
-      setValidationError(null);
-      scheduleValidation(value);
-    },
-    [scheduleValidation],
-  );
 
   /** Builder mutation: re-serialize the model to YAML and validate. */
   const handleModelChange = useCallback(
@@ -217,7 +207,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
         )}
         {(mode === 'yaml' || mode === 'split') && (
           <div className="min-w-0 flex-1">
-            <WfYamlPane yaml={yaml} onChange={handleYamlChange} validation={validation} filename={filename} />
+            <WfYamlPane yaml={yaml} validation={validation} filename={filename} />
           </div>
         )}
       </div>

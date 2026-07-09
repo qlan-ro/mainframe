@@ -1,9 +1,16 @@
 /**
- * WfYamlPane — editable YAML textarea bound to the editor's yaml/onChange.
- * Header chip reflects the latest validation: green "Valid" or amber "N issues".
+ * WfYamlPane — read-only, syntax-highlighted preview of the generated YAML.
+ *
+ * The builder is the single source of truth (Task 21); this pane only ever
+ * shows `serializeWorkflow(model)`, so it takes no `onChange` and has no
+ * editable textarea. Header chip reflects the latest validation: green
+ * "Valid" or amber "N issues".
  */
-import { FileText, Check, TriangleAlert } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { FileText, Check, TriangleAlert, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ShikiCode } from '@/lib/shiki-tokens';
+import { Hint } from '@/components/ui/hint';
 
 interface ValidationResult {
   valid: boolean;
@@ -12,12 +19,47 @@ interface ValidationResult {
 
 interface WfYamlPaneProps {
   yaml: string;
-  onChange: (value: string) => void;
   validation: ValidationResult | null;
   filename: string;
 }
 
-export function WfYamlPane({ yaml, onChange, validation, filename }: WfYamlPaneProps): React.ReactElement {
+const PRE_CLASS =
+  'flex-1 overflow-auto bg-mf-code-bg p-[10px_14px] font-mono text-caption leading-relaxed text-mf-code-fg';
+
+function YamlCopyButton({ yaml }: { yaml: string }): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(yaml).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      (err: unknown) => {
+        console.warn('[WfYamlPane] clipboard write failed', err);
+      },
+    );
+  }, [yaml]);
+
+  return (
+    <Hint label={copied ? 'Copied' : 'Copy YAML'}>
+      <button
+        type="button"
+        data-testid="workflows-editor-yaml-copy"
+        aria-label={copied ? 'Copied' : 'Copy YAML'}
+        onClick={handleCopy}
+        className={cn(
+          'inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground',
+          copied && 'text-mf-success',
+        )}
+      >
+        {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+      </button>
+    </Hint>
+  );
+}
+
+export function WfYamlPane({ yaml, validation, filename }: WfYamlPaneProps): React.ReactElement {
   const valid = validation?.valid ?? null;
   const errorCount = validation?.errors.length ?? 0;
 
@@ -42,17 +84,12 @@ export function WfYamlPane({ yaml, onChange, validation, filename }: WfYamlPaneP
           </span>
         )}
         {valid === null && <span className="text-micro text-mf-text-4">Validating…</span>}
+        <YamlCopyButton yaml={yaml} />
       </div>
-      {/* editable textarea */}
-      <textarea
-        data-testid="workflows-editor-yaml"
-        value={yaml}
-        onChange={(e) => onChange(e.target.value)}
-        spellCheck={false}
-        className={cn(
-          'flex-1 resize-none border-none bg-mf-code-bg p-[10px_14px] font-mono text-caption leading-relaxed text-mf-code-fg outline-none',
-        )}
-      />
+      {/* read-only preview */}
+      <div data-testid="workflows-editor-yaml" className="flex min-h-0 flex-1 flex-col">
+        <ShikiCode code={yaml} lang="yaml" preClass={PRE_CLASS} />
+      </div>
     </div>
   );
 }
