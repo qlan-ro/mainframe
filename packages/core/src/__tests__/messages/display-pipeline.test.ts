@@ -372,6 +372,150 @@ describe('prepareMessagesForClient', () => {
       expect(taskGroups).toHaveLength(1);
     });
 
+    it('keeps a subagent explore burst inside its task group when the main agent explores adjacently', () => {
+      // Merged turn: the subagent's last children are explore tools and the main
+      // agent's own explore tool follows. The subagent burst must nest inside the
+      // task group; the main tool must stay top-level.
+      const messages = [
+        rawMsg('assistant', [
+          tu('task1', 'Task', { description: 'explore' }),
+          { ...tu('c1', 'Read', { file: '/a' }), parentToolUseId: 'task1' } as MessageContent,
+          { ...tu('c2', 'Grep', { pattern: 'x' }), parentToolUseId: 'task1' } as MessageContent,
+        ]),
+        rawMsg('assistant', [tu('m1', 'Grep', { pattern: 'main' })]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      expect(result).toHaveLength(1);
+      const content = result[0]!.content;
+
+      const taskGroup = content.find((c) => c.type === 'task_group') as
+        | Extract<(typeof content)[number], { type: 'task_group' }>
+        | undefined;
+      expect(taskGroup).toBeDefined();
+      const nestedGroup = taskGroup!.calls.find((c) => c.type === 'tool_group') as
+        | Extract<(typeof content)[number], { type: 'tool_group' }>
+        | undefined;
+      expect(nestedGroup).toBeDefined();
+      expect(nestedGroup!.calls.map((c) => (c as { id: string }).id)).toEqual(['c1', 'c2']);
+
+      // Main-agent grep stays top-level, outside any group
+      const topLevelCall = content.find((c) => c.type === 'tool_call') as { id: string } | undefined;
+      expect(topLevelCall?.id).toBe('m1');
+      expect(content.filter((c) => c.type === 'tool_group')).toHaveLength(0);
+    });
+
+    it('nests subagent progress inside its task group and keeps one untagged top-level task_progress', () => {
+      const messages = [
+        rawMsg('assistant', [
+          tu('task1', 'Task', { description: 'work' }),
+          { ...tu('p1', 'TaskCreate', { subject: 'child step' }), parentToolUseId: 'task1' } as MessageContent,
+          tu('p0', 'TaskCreate', { subject: 'main step' }),
+          { ...tu('p3', 'TaskUpdate', { taskId: '1' }), parentToolUseId: 'task1' } as MessageContent,
+        ]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      const content = result[0]!.content;
+
+      const taskGroup = content.find((c) => c.type === 'task_group') as
+        | Extract<(typeof content)[number], { type: 'task_group' }>
+        | undefined;
+      expect(taskGroup).toBeDefined();
+      const nestedProgress = taskGroup!.calls.find((c) => c.type === 'task_progress') as
+        | Extract<(typeof content)[number], { type: 'task_progress' }>
+        | undefined;
+      expect(nestedProgress).toBeDefined();
+      expect(nestedProgress!.items.map((i) => i.id)).toEqual(['p1', 'p3']);
+
+      const topLevelProgress = content.filter((c) => c.type === 'task_progress') as Array<
+        Extract<(typeof content)[number], { type: 'task_progress' }>
+      >;
+      expect(topLevelProgress).toHaveLength(1);
+      expect(topLevelProgress[0]!.items.map((i) => i.id)).toEqual(['p0']);
+    });
+
+    it('surfaces in-content tool_result blocks on child tool calls (live shape: results appended at end)', () => {
+      const messages = [
+        rawMsg('assistant', [
+          tu('task1', 'Task', { description: 'child work' }),
+          { ...tu('c1', 'Bash', { command: 'ls' }), parentToolUseId: 'task1' } as MessageContent,
+          { type: 'tool_result', toolUseId: 'c1', content: 'child-output', isError: false, parentToolUseId: 'task1' },
+        ]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      const taskGroup = result[0]!.content.find((c) => c.type === 'task_group') as
+        | { type: 'task_group'; calls: Array<{ type: string; id?: string; result?: unknown }> }
+        | undefined;
+      expect(taskGroup).toBeDefined();
+      const child = taskGroup!.calls.find((c) => c.type === 'tool_call' && c.id === 'c1');
+      expect(child?.result).toMatchObject({ content: 'child-output', isError: false });
+    });
+
+    it('surfaces in-content tool_result blocks on child tool calls (history shape: result follows its tool_use)', () => {
+      const messages = [
+        rawMsg('assistant', [
+          tu('task1', 'Task', { description: 'child work' }),
+          { ...tu('c1', 'Bash', { command: 'ls' }), parentToolUseId: 'task1' } as MessageContent,
+          { type: 'tool_result', toolUseId: 'c1', content: 'ls-output', isError: false, parentToolUseId: 'task1' },
+          { ...tu('c2', 'Bash', { command: 'pwd' }), parentToolUseId: 'task1' } as MessageContent,
+          { type: 'tool_result', toolUseId: 'c2', content: '/repo', isError: true, parentToolUseId: 'task1' },
+        ]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      const taskGroup = result[0]!.content.find((c) => c.type === 'task_group') as
+        | { type: 'task_group'; calls: Array<{ type: string; id?: string; result?: unknown }> }
+        | undefined;
+      expect(taskGroup).toBeDefined();
+      const c1 = taskGroup!.calls.find((c) => c.type === 'tool_call' && c.id === 'c1');
+      const c2 = taskGroup!.calls.find((c) => c.type === 'tool_call' && c.id === 'c2');
+      expect(c1?.result).toMatchObject({ content: 'ls-output', isError: false });
+      expect(c2?.result).toMatchObject({ content: '/repo', isError: true });
+    });
+
+    it('renders subagent thinking prose inside the task group even when separated from the Task', () => {
+      const messages = [
+        rawMsg('assistant', [
+          tu('task1', 'Task', { description: 'think' }),
+          txt('meanwhile in main'),
+          { type: 'thinking', thinking: 'child reasoning', parentToolUseId: 'task1' } as MessageContent,
+          { ...tu('c1', 'Bash', { command: 'ls' }), parentToolUseId: 'task1' } as MessageContent,
+        ]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      const content = result[0]!.content;
+
+      const taskGroup = content.find((c) => c.type === 'task_group') as
+        | { type: 'task_group'; calls: Array<Record<string, unknown>> }
+        | undefined;
+      expect(taskGroup).toBeDefined();
+      expect(taskGroup!.calls[0]).toEqual({ type: 'thinking', thinking: 'child reasoning', parentToolUseId: 'task1' });
+
+      // Main-agent text stays top-level; no thinking leaks top-level
+      expect(content.find((c) => c.type === 'text')).toEqual({ type: 'text', text: 'meanwhile in main' });
+      expect(content.filter((c) => c.type === 'thinking')).toHaveLength(0);
+    });
+
+    it('suppresses empty (signature-only) thinking blocks top-level and nested', () => {
+      const messages = [
+        rawMsg('assistant', [
+          { type: 'thinking', thinking: '' } as MessageContent,
+          tu('task1', 'Task', { description: 'x' }),
+          { type: 'thinking', thinking: '   ', parentToolUseId: 'task1' } as MessageContent,
+          { ...tu('c1', 'Bash', { command: 'ls' }), parentToolUseId: 'task1' } as MessageContent,
+          txt('answer'),
+        ]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      const content = result[0]!.content;
+
+      expect(content.filter((c) => c.type === 'thinking')).toHaveLength(0);
+      const taskGroup = content.find((c) => c.type === 'task_group') as
+        | { type: 'task_group'; calls: Array<{ type: string }> }
+        | undefined;
+      expect(taskGroup).toBeDefined();
+      expect(taskGroup!.calls.filter((c) => c.type === 'thinking')).toHaveLength(0);
+      expect(taskGroup!.calls.map((c) => c.type)).toEqual(['tool_call']);
+    });
+
     it('preserves thinking block position among grouped tool calls', () => {
       // thinking appears between text and tool calls — should stay in order
       const messages = [
