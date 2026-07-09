@@ -122,7 +122,7 @@ files.
 |---|---|---|
 | `packages/core/src/config.ts` | `mainframe-runtime::config` | todo |
 | `packages/core/src/logger.ts` | `mainframe-runtime::logging` | todo |
-| `packages/core/src/version.ts` | `mainframe-runtime::version` | todo |
+| `packages/core/src/version.ts` | `mainframe-daemon` (binary) — the TS build-time `__DAEMON_VERSION__` define becomes `env!("CARGO_PKG_VERSION")` at the binary's boot; ported with the Phase 5 boot sequence | todo |
 | `packages/core/src/auth/index.ts` | `mainframe-runtime::auth` (re-exports) | todo |
 | `packages/core/src/auth/token.ts` | `mainframe-runtime::auth::token` | todo |
 | `packages/core/src/auth/validate-authed-token.ts` | `mainframe-runtime::auth::validate_authed_token` | todo |

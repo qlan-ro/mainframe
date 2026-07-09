@@ -23,7 +23,6 @@ ALWAYS_FORBIDDEN = [
     (re.compile(r"\bunsafe\b"), "unsafe"),
     (re.compile(r"\btodo!\("), "todo!("),
     (re.compile(r"\bunimplemented!\("), "unimplemented!("),
-    (re.compile(r"\bpanic!\("), "panic!("),
     (re.compile(r"\bstatic\s+mut\b"), "static mut"),
     (re.compile(r"\blazy_static\b"), "lazy_static"),
     (re.compile(r"std::thread::spawn"), "std::thread::spawn"),
@@ -36,7 +35,10 @@ ALWAYS_FORBIDDEN = [
 # guard so a future rule change can't accidentally trip its own grep.
 FORBID_DECLARATION = re.compile(r"#!\[forbid\(unsafe_code\)\]")
 
+# panic! is test-exempt like unwrap/expect: PORTING forbids it outside
+# #[cfg(test)] code and main.rs boot, and tests use it idiomatically.
 UNWRAP_EXPECT = [
+    (re.compile(r"\bpanic!\("), "panic!("),
     (re.compile(r"\.unwrap\("), ".unwrap("),
     (re.compile(r"\.expect\("), ".expect("),
 ]
