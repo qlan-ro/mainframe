@@ -13,8 +13,9 @@ import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { getKindMeta } from '../glyphs';
 import { WfStepConfigForm } from './config/WfStepConfigForm';
-import type { WfScopeSource } from './config/wf-scope';
-import type { WfStep } from './wf-draft-types';
+import { WfStepList } from './WfStepList';
+import type { WfScopeSource, WfStepPath } from './config/wf-scope';
+import type { WfDraft, WfStep } from './wf-draft-types';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,10 @@ interface WfbStepRowProps {
   onPatch?: (patch: Partial<WfStep>) => void;
   onRemove: () => void;
   scope?: WfScopeSource[];
+  /** Recursion hooks (Task 14) — only used to nest a `WfStepList` for composite kinds. */
+  draft?: WfDraft;
+  path?: WfStepPath;
+  onRootChange?: (steps: WfStep[]) => void;
 }
 
 // ── Summary helper ────────────────────────────────────────────────────────────
@@ -49,9 +54,69 @@ function stepSummary(step: WfStep): string {
   }
 }
 
+// ── Nested composite children (choose arms / foreach body / parallel branches) ──
+
+interface WfbNestedCompositeProps {
+  step: WfStep;
+  draft?: WfDraft;
+  path?: WfStepPath;
+  onRootChange?: (steps: WfStep[]) => void;
+}
+
+function WfbNestedComposite({ step, draft, path, onRootChange }: WfbNestedCompositeProps): React.ReactElement | null {
+  if (!draft || !path || !onRootChange) return null;
+
+  if (step.kind === 'choose') {
+    return (
+      <div className="mt-[8px] flex flex-col gap-[10px] border-t border-border pt-[10px]">
+        {step.arms.map((arm, k) => (
+          <div key={k} className="pl-[14px]">
+            <div className="mb-[6px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
+              {arm.else ? 'Else' : `Arm ${k}`}
+            </div>
+            <WfStepList draft={draft} path={[...path, { arm: k }]} onRootChange={onRootChange} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (step.kind === 'foreach') {
+    return (
+      <div className="mt-[8px] border-t border-border pt-[10px] pl-[14px]">
+        <WfStepList draft={draft} path={path} onRootChange={onRootChange} />
+      </div>
+    );
+  }
+
+  if (step.kind === 'parallel') {
+    return (
+      <div className="mt-[8px] flex flex-col gap-[10px] border-t border-border pt-[10px]">
+        {Object.keys(step.branches).map((name) => (
+          <div key={name} className="pl-[14px]">
+            <div className="mb-[6px] text-micro font-bold uppercase tracking-wide text-mf-text-3">{name}</div>
+            <WfStepList draft={draft} path={[...path, { branch: name }]} onRootChange={onRootChange} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function WfbStepRow({ step, index, onPatch, onRemove, scope = [] }: WfbStepRowProps): React.ReactElement {
+export function WfbStepRow({
+  step,
+  index,
+  onPatch,
+  onRemove,
+  scope = [],
+  draft,
+  path,
+  onRootChange,
+}: WfbStepRowProps): React.ReactElement {
   const meta = getKindMeta(step.kind);
   const Icon = meta.Icon;
   const summary = stepSummary(step);
@@ -125,6 +190,7 @@ export function WfbStepRow({ step, index, onPatch, onRemove, scope = [] }: WfbSt
       {configOpen && (
         <div ref={panelRef} className="border-t border-border pt-[2px] pr-[12px] pb-[12px] pl-[30px]">
           <WfStepConfigForm step={step} onPatch={onPatch ?? (() => {})} scope={scope} />
+          <WfbNestedComposite step={step} draft={draft} path={path} onRootChange={onRootChange} />
         </div>
       )}
     </div>

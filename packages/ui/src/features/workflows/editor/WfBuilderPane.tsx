@@ -7,16 +7,14 @@
  * YAML-only until YAML→model reparse is implemented in a future task).
  * Ported from WfBuilderPane in 19-wfeditor.jsx; tokens → Tailwind v4.
  */
-import { useState } from 'react';
-import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, BoltIcon, Plus } from 'lucide-react';
+import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, BoltIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
-import { stubStep, stubTrigger } from './wf-stubs';
+import { stubTrigger } from './wf-stubs';
 import { WfbAddTrigger } from './WfbDropdowns';
-import { WfbStepRow } from './WfbStepRow';
-import { WfStepLibrary } from './WfStepLibrary';
-import { scopeForPath } from './config/wf-scope';
-import type { WfDraft, WfTrigger, WfStep } from './wf-draft-types';
+import { WfStepList } from './WfStepList';
+import { WfbOutputRow } from './WfbOutputRow';
+import type { WfDraft, WfTrigger } from './wf-draft-types';
 
 // ── WfbSection ────────────────────────────────────────────────────────────────
 
@@ -109,8 +107,6 @@ export interface WfBuilderPaneProps {
 }
 
 export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.ReactElement {
-  const [libraryOpen, setLibraryOpen] = useState(false);
-
   function patch(partial: Partial<WfDraft>): void {
     onChange({ ...model, ...partial });
   }
@@ -121,21 +117,6 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
 
   function removeTrigger(i: number): void {
     patch({ triggers: model.triggers.filter((_, k) => k !== i) });
-  }
-
-  function addStep(kind: WfStep['kind']): void {
-    patch({ steps: [...model.steps, stubStep(kind)] });
-    setLibraryOpen(false);
-  }
-
-  function removeStep(i: number): void {
-    patch({ steps: model.steps.filter((_, k) => k !== i) });
-  }
-
-  function onStepPatch(i: number, stepPatch: Partial<WfStep>): void {
-    const steps = model.steps.slice();
-    steps[i] = { ...steps[i]!, ...stepPatch } as WfStep;
-    patch({ steps });
   }
 
   function addOutput(): void {
@@ -258,42 +239,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
 
         {/* ── Steps ── */}
         <WfbSection Icon={Layers} title="Steps" count={model.steps.length}>
-          <div className="relative">
-            {model.steps.map((s, i) => (
-              <WfbStepRow
-                key={s.id ?? i}
-                step={s}
-                index={i}
-                onPatch={(p) => onStepPatch(i, p)}
-                onRemove={() => removeStep(i)}
-                scope={scopeForPath(model, [i])}
-              />
-            ))}
-            {model.steps.length === 0 && <p className="px-0.5 py-1 text-caption text-mf-text-3">No steps yet.</p>}
-            <button
-              type="button"
-              data-testid="workflows-builder-add-step"
-              onClick={() => setLibraryOpen(true)}
-              className={cn(
-                'mt-[3px] inline-flex h-[28px] items-center gap-[6px] rounded-md border border-dashed border-mf-border-hover pl-[9px] pr-[11px]',
-                'text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground',
-              )}
-            >
-              <Plus size={12} aria-hidden />
-              Add step
-            </button>
-            {/* Step library — a centered modal with its own bounded height.
-                It must NOT be `absolute inset-0` of this steps container: with
-                zero steps that container is only tall enough for the row above,
-                which collapses the library's flex-1 card grid to nothing. */}
-            {libraryOpen && (
-              <div className="fixed inset-0 z-[70] flex items-center justify-center bg-mf-scrim">
-                <div className="h-[82vh] max-h-[720px] w-[720px] max-w-[92vw] overflow-hidden rounded-xl bg-card shadow-[var(--mf-shadow-pop)]">
-                  <WfStepLibrary onAdd={addStep} onClose={() => setLibraryOpen(false)} />
-                </div>
-              </div>
-            )}
-          </div>
+          <WfStepList draft={model} path={[]} onRootChange={(steps) => patch({ steps })} />
         </WfbSection>
 
         {/* ── Outputs ── */}
@@ -315,33 +261,12 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
           {model.outputs.length > 0 ? (
             <div className="flex flex-col gap-[6px]">
               {model.outputs.map((o, i) => (
-                <div key={i} className="flex items-center gap-[8px]">
-                  <input
-                    type="text"
-                    value={o.name}
-                    onChange={(e) => setOutputField(i, { name: e.target.value })}
-                    placeholder="name"
-                    className="w-[130px] shrink-0 rounded-md border border-border bg-mf-content2 px-[9px] py-[6px] font-mono text-caption text-foreground outline-none"
-                  />
-                  <span className="font-mono text-mf-text-4">:</span>
-                  <input
-                    type="text"
-                    value={o.expr}
-                    onChange={(e) => setOutputField(i, { expr: e.target.value })}
-                    placeholder="${ step.output.field }"
-                    className="min-w-0 flex-1 rounded-md border border-border bg-mf-content2 px-[9px] py-[6px] font-mono text-caption text-mf-code-fn outline-none"
-                  />
-                  <Hint label="Remove output">
-                    <button
-                      type="button"
-                      aria-label="Remove output"
-                      onClick={() => removeOutput(i)}
-                      className="inline-flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-sm text-mf-text-3 hover:bg-accent hover:text-foreground"
-                    >
-                      <X size={12} aria-hidden />
-                    </button>
-                  </Hint>
-                </div>
+                <WfbOutputRow
+                  key={i}
+                  output={o}
+                  onChange={(partial) => setOutputField(i, partial)}
+                  onRemove={() => removeOutput(i)}
+                />
               ))}
             </div>
           ) : (
