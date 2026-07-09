@@ -3,25 +3,24 @@
  * through `getByPath`/`setByPath` (Task 10) so every control patches the
  * whole step with only its own field changed, preserving every sibling.
  *
- * `expr`-marked `text`/`textarea`/`kv` fields are meant to render `WfExprInput`
- * (Task 17, magic-variable chips); until that lands, `WF_EXPR_ENABLED` gates
- * them to a plain `Input`/`Textarea` so this renderer is testable in isolation.
- *
- * Each control kind is its own small render function so the dispatcher stays
- * short; the `kv` record editor (`WfKvEditor`) is the one non-trivial
- * subcomponent, per the plan's "own small subcomponent in the same file".
+ * `expr`-marked `text`/`textarea`/`kv` fields render `WfExprInput` (Task 17,
+ * magic-variable chips) behind the `WF_EXPR_ENABLED` flag. The `kv` record
+ * editor lives in its own file (`WfKvEditor.tsx`) — Task 17's expr wiring
+ * pushed it past the "same file" call from Task 12.
  */
-import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
+import { WfExprInput } from './WfExprInput';
+import { WfKvEditor } from './WfKvEditor';
 import { getByPath, setByPath } from './descriptor-types';
 import type { WfFieldDesc, WfCustomSlotProps } from './descriptor-types';
+import type { WfScopeSource } from './wf-scope';
+import { WF_EXPR_ENABLED } from './wf-expr-flag';
 
-export const WF_EXPR_ENABLED = false;
+export { WF_EXPR_ENABLED } from './wf-expr-flag';
 
 interface WfFieldControlProps extends WfCustomSlotProps {
   desc: WfFieldDesc;
@@ -45,103 +44,6 @@ function FieldShell({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-// ── kv record editor ─────────────────────────────────────────────────────────
-
-function nextKvKey(existing: string[]): string {
-  let n = 1;
-  while (existing.includes(`key-${n}`)) n++;
-  return `key-${n}`;
-}
-
-interface WfKvEditorProps {
-  value: Record<string, unknown>;
-  onChange: (next: Record<string, unknown>) => void;
-  testId: string;
-}
-
-interface WfKvRowProps {
-  rowKey: string;
-  rowValue: unknown;
-  testId: string;
-  onReplace: (key: string, value: unknown) => void;
-  onRemove: () => void;
-}
-
-function WfKvRow({ rowKey, rowValue, testId, onReplace, onRemove }: WfKvRowProps): React.ReactElement {
-  return (
-    <div className="flex items-center gap-[6px]">
-      <Input
-        data-testid={`${testId}-key`}
-        value={rowKey}
-        placeholder="key"
-        onChange={(e) => onReplace(e.target.value, rowValue)}
-        className="flex-1"
-      />
-      <Input
-        data-testid={`${testId}-value`}
-        value={typeof rowValue === 'string' ? rowValue : String(rowValue ?? '')}
-        placeholder="value"
-        onChange={(e) => onReplace(rowKey, e.target.value)}
-        className="flex-1"
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Remove row"
-        data-testid={`${testId}-remove`}
-        onClick={onRemove}
-      >
-        <X size={13} aria-hidden />
-      </Button>
-    </div>
-  );
-}
-
-function WfKvEditor({ value, onChange, testId }: WfKvEditorProps): React.ReactElement {
-  const entries = Object.entries(value);
-
-  function replaceEntry(i: number, key: string, val: unknown): void {
-    const next: Record<string, unknown> = {};
-    entries.forEach(([k, v], idx) => {
-      next[idx === i ? key : k] = idx === i ? val : v;
-    });
-    onChange(next);
-  }
-
-  function removeRow(i: number): void {
-    const next: Record<string, unknown> = {};
-    entries.forEach(([k, v], idx) => {
-      if (idx !== i) next[k] = v;
-    });
-    onChange(next);
-  }
-
-  return (
-    <div data-testid={testId} className="space-y-[6px]">
-      {entries.map(([k, v], i) => (
-        <WfKvRow
-          key={i}
-          rowKey={k}
-          rowValue={v}
-          testId={`${testId}-row-${i}`}
-          onReplace={(key, val) => replaceEntry(i, key, val)}
-          onRemove={() => removeRow(i)}
-        />
-      ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        data-testid={`${testId}-add`}
-        onClick={() => onChange({ ...value, [nextKvKey(Object.keys(value))]: '' })}
-      >
-        + Add
-      </Button>
-    </div>
-  );
-}
-
 // ── per-kind field renderers ──────────────────────────────────────────────────
 
 interface FieldRenderProps {
@@ -149,14 +51,23 @@ interface FieldRenderProps {
   testId: string;
   raw: unknown;
   patchValue: (value: unknown) => void;
+  scope: WfScopeSource[];
 }
 
-function WfTextField({ desc, testId, raw, patchValue }: FieldRenderProps): React.ReactElement {
+function WfTextField({ desc, testId, raw, patchValue, scope }: FieldRenderProps): React.ReactElement {
+  const value = typeof raw === 'string' ? raw : '';
+  if (desc.kind === 'text' && desc.expr && WF_EXPR_ENABLED) {
+    return (
+      <FieldShell label={desc.label}>
+        <WfExprInput value={value} onChange={patchValue} scope={scope} testId={testId} />
+      </FieldShell>
+    );
+  }
   return (
     <FieldShell label={desc.label}>
       <Input
         data-testid={testId}
-        value={typeof raw === 'string' ? raw : ''}
+        value={value}
         placeholder={'placeholder' in desc ? desc.placeholder : undefined}
         onChange={(e) => patchValue(e.target.value)}
       />
@@ -164,12 +75,20 @@ function WfTextField({ desc, testId, raw, patchValue }: FieldRenderProps): React
   );
 }
 
-function WfTextareaField({ desc, testId, raw, patchValue }: FieldRenderProps): React.ReactElement {
+function WfTextareaField({ desc, testId, raw, patchValue, scope }: FieldRenderProps): React.ReactElement {
+  const value = typeof raw === 'string' ? raw : '';
+  if (desc.kind === 'textarea' && desc.expr && WF_EXPR_ENABLED) {
+    return (
+      <FieldShell label={desc.label}>
+        <WfExprInput value={value} onChange={patchValue} scope={scope} multiline testId={testId} />
+      </FieldShell>
+    );
+  }
   return (
     <FieldShell label={desc.label}>
       <Textarea
         data-testid={testId}
-        value={typeof raw === 'string' ? raw : ''}
+        value={value}
         placeholder={'placeholder' in desc ? desc.placeholder : undefined}
         onChange={(e) => patchValue(e.target.value)}
       />
@@ -222,10 +141,17 @@ function WfSelectField({ desc, testId, raw, patchValue }: FieldRenderProps): Rea
   );
 }
 
-function WfKvField({ desc, testId, raw, patchValue }: FieldRenderProps): React.ReactElement {
+function WfKvField({ desc, testId, raw, patchValue, scope }: FieldRenderProps): React.ReactElement {
+  if (desc.kind !== 'kv') throw new Error('WfKvField requires a kv descriptor');
   return (
     <FieldShell label={desc.label}>
-      <WfKvEditor testId={testId} value={isRecord(raw) ? raw : {}} onChange={(next) => patchValue(next)} />
+      <WfKvEditor
+        testId={testId}
+        value={isRecord(raw) ? raw : {}}
+        onChange={(next) => patchValue(next)}
+        expr={desc.expr}
+        scope={scope}
+      />
     </FieldShell>
   );
 }
@@ -246,7 +172,7 @@ export function WfFieldControl({ desc, step, onPatch, scope }: WfFieldControlPro
 
   const raw = getByPath(step, desc.key);
   const patchValue = (value: unknown): void => onPatch(setByPath(step, desc.key, value));
-  const props: FieldRenderProps = { desc, testId, raw, patchValue };
+  const props: FieldRenderProps = { desc, testId, raw, patchValue, scope };
 
   switch (desc.kind) {
     case 'text':

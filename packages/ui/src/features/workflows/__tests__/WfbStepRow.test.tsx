@@ -23,6 +23,29 @@ vi.mock('@/features/workflows/editor/config/FormFieldsSlot', () => ({
   ),
 }));
 
+// WfExprInput mounts real CodeMirror (Task 17); this suite exercises step-row
+// patching, not CM6 itself (covered by wf-expr-chips[-editor].test.ts and
+// WfVarPicker.test.tsx), so a plain-input stand-in keeps fireEvent.change
+// working unchanged.
+vi.mock('@/features/workflows/editor/config/WfExprInput', () => ({
+  WfExprInput: ({
+    value,
+    onChange,
+    multiline,
+    testId,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    multiline?: boolean;
+    testId: string;
+  }) =>
+    multiline ? (
+      <textarea data-testid={testId} value={value} onChange={(e) => onChange(e.target.value)} />
+    ) : (
+      <input data-testid={testId} value={value} onChange={(e) => onChange(e.target.value)} />
+    ),
+}));
+
 function chooseStep(): WfStep {
   return { id: 'b1', kind: 'choose', arms: [{ when: 'true', steps: [] }] };
 }

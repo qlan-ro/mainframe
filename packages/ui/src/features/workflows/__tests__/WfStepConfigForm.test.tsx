@@ -4,6 +4,29 @@ import { WfStepConfigForm } from '@/features/workflows/editor/config/WfStepConfi
 import { WfFieldControl } from '@/features/workflows/editor/config/WfFieldControl';
 import type { WfStep } from '@/features/workflows/editor/wf-draft-types';
 
+// WfExprInput mounts real CodeMirror (Task 17); these tests exercise
+// getByPath/setByPath patching through WfFieldControl, not CM6 itself
+// (covered by wf-expr-chips[-editor].test.ts and WfVarPicker.test.tsx), so a
+// plain-input stand-in keeps fireEvent.change working unchanged.
+vi.mock('@/features/workflows/editor/config/WfExprInput', () => ({
+  WfExprInput: ({
+    value,
+    onChange,
+    multiline,
+    testId,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    multiline?: boolean;
+    testId: string;
+  }) =>
+    multiline ? (
+      <textarea data-testid={testId} value={value} onChange={(e) => onChange(e.target.value)} />
+    ) : (
+      <input data-testid={testId} value={value} onChange={(e) => onChange(e.target.value)} />
+    ),
+}));
+
 describe('WfStepConfigForm', () => {
   it('renders foreach fields and patches over/as', () => {
     const step: WfStep = { id: 'loop', kind: 'foreach', over: '', as: 'item', steps: [] };

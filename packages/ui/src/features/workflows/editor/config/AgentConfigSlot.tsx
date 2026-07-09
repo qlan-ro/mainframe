@@ -12,12 +12,12 @@
  * existing worktree value survives edits to any other field.
  */
 import type { PermissionMode } from '@qlan-ro/mainframe-types';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ProviderModelSelect } from '@/features/chat/composer/config-toolbar/ProviderModelSelect';
 import { PermissionSelect } from '@/features/chat/composer/config-toolbar/PermissionSelect';
 import { synthesizeDraftChat } from '@/features/chat/composer/config-toolbar/synthesize-draft-chat';
 import { useAdapters } from '@/store/adapters';
+import { WfExprInput } from './WfExprInput';
 import type { WfCustomSlotProps } from './descriptor-types';
 
 const PERMISSION_MODES = ['default', 'acceptEdits', 'yolo', 'plan'] as const;
@@ -43,7 +43,7 @@ function parseTimeout(raw: string): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-export function AgentConfigSlot({ step, onPatch }: WfCustomSlotProps): React.ReactElement | null {
+export function AgentConfigSlot({ step, onPatch, scope }: WfCustomSlotProps): React.ReactElement | null {
   const adapters = useAdapters();
   if (step.kind !== 'agent') return null;
   const agent = step.agent;
@@ -83,10 +83,12 @@ export function AgentConfigSlot({ step, onPatch }: WfCustomSlotProps): React.Rea
       </div>
 
       <FieldShell label="Prompt">
-        <Textarea
-          data-testid={`workflows-config-${step.id}-prompt`}
+        <WfExprInput
           value={agent.prompt}
-          onChange={(e) => onPatch({ agent: { ...agent, prompt: e.target.value } })}
+          onChange={(prompt) => onPatch({ agent: { ...agent, prompt } })}
+          scope={scope}
+          multiline
+          testId={`workflows-config-${step.id}-prompt`}
         />
       </FieldShell>
 
