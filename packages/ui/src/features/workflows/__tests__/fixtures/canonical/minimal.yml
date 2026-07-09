@@ -1,0 +1,6 @@
+# Negative fixture: version + name + a single one-line `set` step only — no triggers, inputs,
+# vars, or outputs. Proves the parser accepts a workflow with every collection absent.
+version: 1
+name: minimal-fixture
+steps:
+  - { id: only-step, set: { status: done } }

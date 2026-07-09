@@ -1,0 +1,10 @@
+# Exercises: `connector: files.append` + `with:` + `credential:`.
+version: 1
+name: service-fixture
+steps:
+  - id: append-log
+    connector: files.append
+    credential: files-cred
+    with:
+      path: /tmp/log.txt
+      content: Run started at ${ now }

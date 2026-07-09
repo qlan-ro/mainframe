@@ -1,0 +1,11 @@
+# Exercises: `foreach: ${ inputs.items }` + `as: item` + nested `steps`.
+version: 1
+name: foreach-fixture
+steps:
+  - id: loop
+    foreach: ${ inputs.items }
+    as: item
+    steps:
+      - id: greet
+        agent:
+          prompt: Say hi to ${ item }

@@ -1,0 +1,16 @@
+# Exercises: n-way `choose` with a `when` arm and a final `else: true` arm, each with `steps`.
+version: 1
+name: choose-fixture
+steps:
+  - id: branch
+    choose:
+      - when: ${ inputs.mode == "fast" }
+        steps:
+          - id: fast-path
+            set:
+              result: fast
+      - else: true
+        steps:
+          - id: slow-path
+            set:
+              result: slow

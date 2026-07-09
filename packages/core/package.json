@@ -14,7 +14,8 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./messages": "./dist/messages/index.js"
+    "./messages": "./dist/messages/index.js",
+    "./workflows/dsl": "./dist/workflows/dsl/index.js"
   },
   "bin": {
     "mainframe": "./dist/index.js",

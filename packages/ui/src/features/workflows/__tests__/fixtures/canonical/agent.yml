@@ -1,0 +1,13 @@
+# Exercises: agent step with worktree { branchName, baseBranch }, timeoutMinutes, model, permissionMode.
+version: 1
+name: agent-fixture
+steps:
+  - id: run-agent
+    agent:
+      prompt: Summarize ${ inputs.topic }
+      model: claude-sonnet-5
+      permissionMode: acceptEdits
+      timeoutMinutes: 15
+      worktree:
+        branchName: feature/agent-fixture
+        baseBranch: main

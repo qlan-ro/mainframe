@@ -1,0 +1,22 @@
+# Exercises: the same step as form.yml, authored with the legacy `question:` key (proves both map to model kind `form`).
+version: 1
+name: question-legacy-fixture
+steps:
+  - id: ask-details
+    question:
+      title: Tell us more
+      timeout:
+        afterMinutes: 10
+        onTimeout: continue
+      fields:
+        - key: mode
+          type: choice
+          label: Mode
+          options: [quick, thorough]
+          required: true
+        - key: notes
+          type: textarea
+          label: Notes
+          when:
+            key: mode
+            equals: thorough

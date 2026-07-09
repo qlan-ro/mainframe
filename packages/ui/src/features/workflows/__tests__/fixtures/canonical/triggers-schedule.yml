@@ -1,0 +1,11 @@
+# Exercises: `schedule: { cron, on_missed }` (canonical object trigger form).
+version: 1
+name: schedule-trigger-fixture
+triggers:
+  - schedule:
+      cron: '0 * * * *'
+      on_missed: skip
+steps:
+  - id: tick
+    set:
+      ran: true

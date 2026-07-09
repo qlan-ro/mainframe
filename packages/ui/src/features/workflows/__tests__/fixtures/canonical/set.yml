@@ -1,0 +1,15 @@
+# Exercises: `set: { key: value }`, base fields `retry` + `on_failure`, and a non-string `output`
+# (proves WfStepBase.output: unknown is not silently coerced to a string).
+version: 1
+name: set-fixture
+steps:
+  - id: mark
+    set:
+      status: done
+    retry:
+      attempts: 3
+      backoff: exponential
+      initialDelayMs: 500
+    on_failure: continue
+    output:
+      flagged: true

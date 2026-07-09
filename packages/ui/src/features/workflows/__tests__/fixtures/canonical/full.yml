@@ -1,0 +1,40 @@
+# Exercises: `inputs` (title/required/enum mixing a string and a number), `vars`, all trigger
+# shapes (schedule object, schedule cron-string shorthand, event object), `outputs`, and 2-level
+# step nesting (foreach > choose > set).
+version: 1
+name: full-fixture
+description: Exercises full grammar breadth
+inputs:
+  topic:
+    type: string
+    title: Topic
+    required: true
+    enum: [alpha, 2]
+vars:
+  greeting: hello
+triggers:
+  - schedule:
+      cron: '0 0 * * *'
+      on_missed: run_once
+  - schedule: '*/15 * * * *'
+  - event:
+      on: chat.created
+steps:
+  - id: outer-loop
+    foreach: ${ inputs.items }
+    as: item
+    steps:
+      - id: inner-choice
+        choose:
+          - when: ${ item.priority == "high" }
+            steps:
+              - id: escalate
+                set:
+                  escalated: true
+          - else: true
+            steps:
+              - id: normal
+                set:
+                  escalated: false
+outputs:
+  greeting: ${ vars.greeting }

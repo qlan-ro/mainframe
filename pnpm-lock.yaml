@@ -627,6 +627,9 @@ importers:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.14)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
     devDependencies:
+      '@qlan-ro/mainframe-core':
+        specifier: workspace:*
+        version: link:../core
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1

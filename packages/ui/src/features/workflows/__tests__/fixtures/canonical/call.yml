@@ -1,0 +1,8 @@
+# Exercises: `call: other-wf` + `with:`.
+version: 1
+name: call-fixture
+steps:
+  - id: invoke-other
+    call: other-wf
+    with:
+      topic: ${ inputs.topic }

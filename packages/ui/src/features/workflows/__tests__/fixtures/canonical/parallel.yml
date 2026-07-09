@@ -1,0 +1,14 @@
+# Exercises: `parallel:` record with two branches.
+version: 1
+name: parallel-fixture
+steps:
+  - id: fanout
+    parallel:
+      branch-a:
+        - id: a-step
+          set:
+            done: true
+      branch-b:
+        - id: b-step
+          set:
+            done: true

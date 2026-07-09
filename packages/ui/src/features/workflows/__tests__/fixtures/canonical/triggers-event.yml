@@ -1,0 +1,11 @@
+# Exercises: `event: { on, workflow }` (canonical object trigger form).
+version: 1
+name: event-trigger-fixture
+triggers:
+  - event:
+      on: chat.created
+      workflow: notify-fixture
+steps:
+  - id: notify
+    set:
+      notified: true
