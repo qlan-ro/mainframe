@@ -38,7 +38,7 @@ function seedActiveChat(manager: ChatManager, chatId: string, tracker: Backgroun
   // Plant a task in the tracker so we can confirm it's cleaned up
   tracker.start(
     chatId,
-    { id: 'task-1', toolName: 'Bash', toolUseId: 'tu-1', command: 'sleep 1', description: '' },
+    { id: 'task-1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu-1', command: 'sleep 1', description: '' },
     '/tmp/out',
   );
   // Inject a minimal active chat

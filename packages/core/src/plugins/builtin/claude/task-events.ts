@@ -1,4 +1,4 @@
-import type { BackgroundTaskStatus, BackgroundTaskToolName } from '@qlan-ro/mainframe-types';
+import type { BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind } from '@qlan-ro/mainframe-types';
 import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { encodeCwdSegment } from '../../../background-tasks/encoding.js';
 import { spoolRoot } from '../../../background-tasks/spool-root.js';
@@ -19,6 +19,12 @@ type TaskStartedPayload = {
   task_id: string;
   tool_use_id?: string;
   description?: string;
+  task_type?: string;
+};
+
+type TaskUpdatedPayload = {
+  task_id: string;
+  status: string;
 };
 
 type TaskNotificationPayload = {
@@ -30,6 +36,19 @@ type TaskNotificationPayload = {
 };
 
 const KNOWN_STATUSES = new Set<BackgroundTaskStatus>(['completed', 'failed', 'stopped']);
+
+/**
+ * CLI `task_type` → client-facing kind. Prefix-tolerant (`local_agent`,
+ * `remote_agent`, teammates → agent) so new CLI variants degrade gracefully;
+ * genuinely unknown types land in 'other', never dropped.
+ */
+export function mapTaskKind(taskType: string | undefined, hasBashMetadata: boolean): BackgroundWorkKind {
+  if (taskType === undefined) return hasBashMetadata ? 'bash' : 'other';
+  if (taskType.includes('bash')) return 'bash';
+  if (taskType.includes('agent') || taskType.includes('teammate')) return 'agent';
+  if (taskType.includes('workflow')) return 'workflow';
+  return 'other';
+}
 
 function mapStatus(s: string): Exclude<BackgroundTaskStatus, 'running'> {
   if (KNOWN_STATUSES.has(s as BackgroundTaskStatus)) {
@@ -72,6 +91,7 @@ export class ClaudeTaskEvents {
       chatId,
       {
         id: payload.task_id,
+        kind: mapTaskKind(payload.task_type, meta !== null),
         toolName: meta?.toolName ?? 'Bash',
         toolUseId: payload.tool_use_id ?? '',
         command: meta?.command ?? payload.description ?? '<unknown>',
@@ -79,6 +99,21 @@ export class ClaudeTaskEvents {
       },
       outputPath,
     );
+  }
+
+  /**
+   * `task_updated` fires alongside `task_notification` (post-leak CLI addition).
+   * Only a terminal status closes the task — the tracker dedups when the
+   * notification already landed; non-terminal updates carry nothing we track.
+   */
+  handleTaskUpdated(chatId: string, payload: TaskUpdatedPayload): void {
+    if (!KNOWN_STATUSES.has(payload.status as BackgroundTaskStatus)) return;
+    this.tracker.end(chatId, payload.task_id, {
+      status: payload.status as Exclude<BackgroundTaskStatus, 'running'>,
+      outputPath: '',
+      summary: '',
+      usage: null,
+    });
   }
 
   handleTaskNotification(chatId: string, payload: TaskNotificationPayload): void {

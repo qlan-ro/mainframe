@@ -1,4 +1,5 @@
 import type { SessionMention } from './context.js';
+import type { BackgroundActivity } from './background-task.js';
 import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
 import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
@@ -65,6 +66,8 @@ export interface Chat {
   processState?: 'working' | 'idle' | null;
   displayStatus?: 'idle' | 'working' | 'waiting';
   isRunning?: boolean;
+  /** Live background work (agents/bash/workflows) — derived per response, never persisted. */
+  backgroundActivity?: BackgroundActivity;
   worktreeMissing?: boolean;
   todos?: TodoItem[];
   pinned?: boolean;

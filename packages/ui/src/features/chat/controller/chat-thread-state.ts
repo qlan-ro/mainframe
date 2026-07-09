@@ -15,7 +15,13 @@
  *  - interactions.queued — from message.queued.* events
  *  - pendingUserMessages — optimistic send, reconciled on echo
  */
-import type { DisplayMessage, ControlRequest, QueuedMessageRef, Chat } from '@qlan-ro/mainframe-types';
+import type {
+  BackgroundActivityTask,
+  Chat,
+  ControlRequest,
+  DisplayMessage,
+  QueuedMessageRef,
+} from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -78,6 +84,12 @@ export interface ChatThreadState {
   readonly contextUsage: { percentage: number; totalTokens: number; maxTokens: number } | null;
   /** True between `chat.compacting` and `chat.compactDone` — session-bar status. */
   readonly compacting: boolean;
+  /**
+   * Live background work (agents / bg bash / workflows) keyed by task id — fed
+   * by `background_task.*` events, resynced from `chat.updated`'s
+   * `backgroundActivity` snapshot. Drives the BackgroundActivityBar chip.
+   */
+  readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +121,10 @@ export type ChatStateEvent =
   | { type: 'chat.id.adopted'; chatId: string }
   | { type: 'context.usage'; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'compact.started' }
-  | { type: 'compact.done' };
+  | { type: 'compact.done' }
+  | { type: 'background.upsert'; task: BackgroundActivityTask }
+  | { type: 'background.ended'; taskId: string }
+  | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] };
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -130,6 +145,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     chatConfig: null,
     contextUsage: null,
     compacting: false,
+    backgroundTasks: {} as Readonly<Record<string, BackgroundActivityTask>>,
   };
 }
 
@@ -177,6 +193,18 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.adaptiveThinking === b.adaptiveThinking &&
     a.worktreeMissing === b.worktreeMissing
   );
+}
+
+/** True when the snapshot lists exactly the tasks already in state (field-equal). */
+function sameBackgroundTasks(
+  current: Readonly<Record<string, BackgroundActivityTask>>,
+  snapshot: BackgroundActivityTask[],
+): boolean {
+  if (Object.keys(current).length !== snapshot.length) return false;
+  return snapshot.every((t) => {
+    const c = current[t.id];
+    return c !== undefined && c.kind === t.kind && c.description === t.description && c.startedAt === t.startedAt;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -338,6 +366,28 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
 
     case 'compact.done':
       return state.compacting ? { ...state, compacting: false } : state;
+
+    case 'background.upsert':
+      return {
+        ...state,
+        backgroundTasks: { ...state.backgroundTasks, [event.task.id]: event.task },
+      };
+
+    case 'background.ended': {
+      if (!(event.taskId in state.backgroundTasks)) return state;
+      const backgroundTasks = { ...state.backgroundTasks };
+      delete backgroundTasks[event.taskId];
+      return { ...state, backgroundTasks };
+    }
+
+    case 'background.snapshot': {
+      // chat.updated fires on every turn boundary — bail identity-stable when
+      // the snapshot matches so the composer doesn't re-render on churn.
+      if (sameBackgroundTasks(state.backgroundTasks, event.tasks)) return state;
+      const backgroundTasks: Record<string, BackgroundActivityTask> = {};
+      for (const task of event.tasks) backgroundTasks[task.id] = task;
+      return { ...state, backgroundTasks };
+    }
 
     case 'local.message.queued':
       return {
