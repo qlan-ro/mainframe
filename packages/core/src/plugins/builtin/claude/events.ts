@@ -69,9 +69,17 @@ function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown
           task_id: event.task_id as string,
           tool_use_id: event.tool_use_id as string | undefined,
           description: event.description as string | undefined,
+          task_type: event.task_type as string | undefined,
         },
         { claudeSessionId: session.state.chatId, realCwd: session.state.realProjectPath },
       );
+    }
+  } else if (event.subtype === 'task_updated') {
+    if (session.state.mainframeChatId) {
+      session.state.taskEvents.handleTaskUpdated(session.state.mainframeChatId, {
+        task_id: event.task_id as string,
+        status: event.status as string,
+      });
     }
   } else if (event.subtype === 'task_notification') {
     session.state.activeTasks.delete(event.task_id as string);
@@ -162,6 +170,15 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
   const tokensInput =
     (usage?.input_tokens || 0) + (usage?.cache_creation_input_tokens || 0) + (usage?.cache_read_input_tokens || 0);
   const tokensOutput = usage?.output_tokens || 0;
+  // Context size comes ONLY from the last parent assistant usage. The result
+  // event's own `usage` is the QueryEngine total accumulated across every API
+  // call in the turn (cache reads summed N times) — fine for cost accounting,
+  // wrong as a context size (#197). `null` tells the sink "unknown this turn".
+  const contextTokens = lastUsage
+    ? (lastUsage.input_tokens || 0) +
+      (lastUsage.cache_creation_input_tokens || 0) +
+      (lastUsage.cache_read_input_tokens || 0)
+    : null;
   session.state.lastAssistantUsage = undefined;
   session.clearInterruptTimer();
 
@@ -180,6 +197,7 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
           cache_read_input_tokens: usage.cache_read_input_tokens,
         }
       : undefined,
+    contextTokens,
     subtype: event.subtype as string | undefined,
     is_error: event.is_error as boolean | undefined,
   });

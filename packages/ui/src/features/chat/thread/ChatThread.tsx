@@ -11,6 +11,7 @@ import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
+import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
@@ -103,6 +104,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
               </ThreadPrimitive.ScrollToBottom>
 
               <div className="mx-auto w-full max-w-3xl px-5 pb-4">
+                <BackgroundActivityBar />
                 <GeneratingIndicator />
                 <Composer />
               </div>

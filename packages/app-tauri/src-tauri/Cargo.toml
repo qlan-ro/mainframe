@@ -33,7 +33,11 @@ dirs = "5"
 which = "6"
 portable-pty = "0.9"
 ureq = { version = "2", default-features = false, features = ["json"] }
-keyring = "3"
+# The platform credential-store backends are opt-in in keyring 3.x. Without an
+# explicit backend feature the crate silently falls back to an in-memory mock
+# store, so remote-daemon tokens never persist and every reconnect authenticates
+# with no token. Enable the real OS stores per platform.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 # Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
 # DOM inspection, IPC). Optional + behind the non-default `mcp-bridge` feature

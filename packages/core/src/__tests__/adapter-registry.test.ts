@@ -36,9 +36,10 @@ describe('ClaudeAdapter.listModels', () => {
   it('returns the hardcoded Claude model catalog', async () => {
     const adapter = new ClaudeAdapter();
     const models = await adapter.listModels();
-    expect(models.length).toBe(14);
+    expect(models.length).toBe(15);
     const ids = models.map((m) => m.id);
     expect(ids).toContain('default');
+    expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('claude-opus-4-6');
     expect(ids).toContain('opus[1m]');
     expect(ids).toContain('claude-sonnet-4-6');

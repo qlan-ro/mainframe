@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { chatToThreadCustom } from '../chat-to-thread-custom';
+import { activeSessionCustom, chatToThreadCustom } from '../chat-to-thread-custom';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -275,5 +275,46 @@ describe('chatToThreadCustom — custom.transcriptMissing', () => {
 
   it('is true when chat.transcriptMissing is true', () => {
     expect(chatToThreadCustom(makeChat({ transcriptMissing: true })).custom.transcriptMissing).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// activeSessionCustom — freshest custom for the ACTIVE thread-list item
+// ---------------------------------------------------------------------------
+
+describe('activeSessionCustom', () => {
+  const staleCustom = { ...chatToThreadCustom(makeChat()).custom };
+  const freshCustom = {
+    ...chatToThreadCustom(makeChat({ worktreePath: '/wt/feature-x', branchName: 'feature-x' })).custom,
+  };
+
+  it('returns undefined for no active item', () => {
+    expect(activeSessionCustom(undefined, [])).toBeUndefined();
+  });
+
+  it('returns the item custom when the item is keyed by its remoteId', () => {
+    const item = { id: 'chat-1', remoteId: 'chat-1', status: 'regular', custom: freshCustom };
+    expect(activeSessionCustom(item, [item])).toBe(freshCustom);
+  });
+
+  it('prefers the remoteId-keyed list entry over a stale __LOCALID_* item custom', () => {
+    // A thread created this app-run keeps its __LOCALID_* mapping id; reload()
+    // re-derives custom only under a NEW remoteId-keyed entry, so the active
+    // item's own custom goes permanently stale (worktree join never shows).
+    const localItem = { id: '__LOCALID_abc', remoteId: 'chat-1', status: 'regular', custom: staleCustom };
+    const freshEntry = { id: 'chat-1', remoteId: 'chat-1', status: 'regular', custom: freshCustom };
+    const result = activeSessionCustom(localItem, [localItem, freshEntry]);
+    expect(result).toBe(freshCustom);
+    expect(result?.worktreePath).toBe('/wt/feature-x');
+  });
+
+  it('falls back to the item custom when no remoteId-keyed entry exists yet', () => {
+    const localItem = { id: '__LOCALID_abc', remoteId: 'chat-1', status: 'regular', custom: staleCustom };
+    expect(activeSessionCustom(localItem, [localItem])).toBe(staleCustom);
+  });
+
+  it('returns undefined for a custom-less draft item', () => {
+    const draft = { id: '__LOCALID_new', status: 'new' };
+    expect(activeSessionCustom(draft, [draft])).toBeUndefined();
   });
 });

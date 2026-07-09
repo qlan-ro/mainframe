@@ -42,7 +42,7 @@ let setLastSessionIdSpy: ReturnType<typeof vi.fn>;
 let setLastForProjectSpy: ReturnType<typeof vi.fn>;
 let fakeThreadItems: Array<{
   id: string;
-  remoteId: string;
+  remoteId?: string;
   status?: string;
   custom?: { projectId?: string; updatedAt?: number };
 }>;
@@ -408,6 +408,69 @@ describe('useSessionListRouter — archiving the active session redirects off th
     fakeThreadItems = [
       { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
       { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10b. First-send handoff: adopt the created session as the active thread
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — first send adopts the created session (todo #210)', () => {
+  /** Boot on chat-A, then open a deliberate New draft. Returns the rerender fn. */
+  function startOnDraft() {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    mainThreadIdValue = '__LOCALID_new';
+    rerender();
+    switchSpy.mockClear();
+    return rerender;
+  }
+
+  it('switches to the new remote session once the reloaded list carries it', () => {
+    const rerender = startOnDraft();
+
+    // First send: initialize stamped remoteId on the draft entry, and the
+    // chat.created reload landed the canonical remote row — aui re-keys the
+    // list to it, stranding the selection on the custom-less draft.
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', remoteId: 'chat-new', status: 'regular' },
+      { id: 'chat-new', remoteId: 'chat-new', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-new');
+  });
+
+  it('does NOT switch while the created chat has not appeared in the list yet', () => {
+    const rerender = startOnDraft();
+
+    // remoteId stamped, but the reloaded list does not carry the chat yet.
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', remoteId: 'chat-new', status: 'regular' },
+    ];
+    rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT switch for a fresh draft with no remoteId when the list reloads', () => {
+    const rerender = startOnDraft();
+
+    // Unrelated reload (e.g. another window created a chat) while composing.
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', status: 'new' },
+      { id: 'chat-other', remoteId: 'chat-other', status: 'regular', custom: { projectId: 'p2', updatedAt: 5000 } },
     ];
     rerender();
 

@@ -10,10 +10,12 @@
  *   chat.notification / permission(notify) → unread.markUnread()
  *
  * On every active-thread change it also: clears the active chat's unread,
- * clears the project filter when the activated chat crosses projects, and
- * falls back to the most-recently-updated non-archived thread (desktop parity,
- * preferring the active project filter's sessions) when the active chat was
- * archived out from under us (blank surface if none remain).
+ * clears the project filter when the activated chat crosses projects, adopts
+ * the freshly created remote session when the first send strands the selection
+ * on the local draft (todo #210), and falls back to the most-recently-updated
+ * non-archived thread (desktop parity, preferring the active project filter's
+ * sessions) when the active chat was archived out from under us (blank surface
+ * if none remain).
  *
  * On boot it auto-opens the most-recently-updated session ONCE (desktop parity,
  * renderer `useAppInit`), so the app never starts on the empty new-thread picker
@@ -135,6 +137,17 @@ export function useSessionListRouter(): void {
       );
 
     if (onDraft) {
+      // First-send handoff (todo #210): the draft's initialize stamped a remoteId,
+      // and the chat.created reload re-keyed the list to the canonical remote item —
+      // stranding the selection on the orphaned local draft (custom-less → no launch
+      // scope → the Run surface empties; the sidebar shows the new session
+      // unselected). Adopt the remote item, exactly like the manual sidebar click.
+      const draftRemoteId = threadItems.find((t) => t.id === mainThreadId)?.remoteId;
+      if (draftRemoteId != null && items.some((t) => t.id === draftRemoteId)) {
+        void runtime.threads.switchToThread(draftRemoteId);
+        return;
+      }
+
       // Archive-induced empty state: aui `switchToNewThread()`s off the archived
       // thread, so we land on a fresh draft rather than staying on the (now
       // archived) session. If the real thread we just left is now archived, redirect
@@ -168,7 +181,7 @@ export function useSessionListRouter(): void {
     if (active.remoteId != null && active.remoteId !== mainThreadId) unreadStore.clearUnread(active.remoteId);
     rememberActiveSession(active);
     clearFilterOnCrossProject(active);
-  }, [mainThreadId, items, runtime]);
+  }, [mainThreadId, items, threadItems, runtime]);
 
   // Boot auto-select: open a session once the list first loads, so the app doesn't
   // land on the empty new-thread picker. Prefers the last session open before the

@@ -6,9 +6,9 @@
  * adapter word is dropped — the dot conveys the adapter; the Hint spells both out.
  * `part="status"`: the 8-segment context meter + percentage, in the header's
  * right group. No "Thinking" label/spinner — run state is the thread's own
- * running indicator, not a redundant header label. Background-tasks pill stays
- * deferred (no task feed in app-tauri yet). Renders nothing until the chat
- * config is loaded (drafts / blank surface).
+ * running indicator, not a redundant header label. Background work lives in
+ * the composer's BackgroundActivityBar, not here. Renders nothing until the
+ * chat config is loaded (drafts / blank surface).
  */
 import { cn } from '@/lib/utils';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';

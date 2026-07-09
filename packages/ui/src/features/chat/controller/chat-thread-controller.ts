@@ -195,15 +195,18 @@ export class ChatThreadController {
 
     this.dispatch({ type: 'history.loading' });
 
-    // Seed the composer config from REST so the toolbar isn't empty before the
-    // first chat.updated; thereafter chat.updated keeps state.chatConfig live.
-    if (!this.state.chatConfig) {
-      void getChat(this.port, this.daemonId)
-        .then((chat) => {
-          if (!this.disposed) this.dispatch({ type: 'chat.config.updated', chat });
-        })
-        .catch((err: unknown) => console.warn('[chat-controller] seed chat config failed', err));
-    }
+    // Seed the composer config + live background set from REST so neither is
+    // empty/stale before the first chat.updated. Fetched on every load (not
+    // just the first): a reattach after dormancy may have missed
+    // background_task.* events, and both reducer paths bail identity-stable
+    // when nothing changed.
+    void getChat(this.port, this.daemonId)
+      .then((chat) => {
+        if (this.disposed) return;
+        this.dispatch({ type: 'chat.config.updated', chat });
+        this.dispatch({ type: 'background.snapshot', tasks: chat?.backgroundActivity?.tasks ?? [] });
+      })
+      .catch((err: unknown) => console.warn('[chat-controller] seed chat config failed', err));
 
     const request = getChatMessages(this.port, this.daemonId)
       .then(({ messages, transcriptMissing }) => {

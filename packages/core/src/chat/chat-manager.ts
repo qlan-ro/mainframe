@@ -15,6 +15,7 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { ChatListFilters } from '../db/chats.js';
 import { nanoid } from 'nanoid';
+import { deriveBackgroundActivity, toActivityTask } from '@qlan-ro/mainframe-types';
 import { isWorktreePresent } from '../workspace/worktree.js';
 import { createChildLogger } from '../logger.js';
 import { MessageCache } from './message-cache.js';
@@ -82,6 +83,7 @@ export class ChatManager {
       (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
       (chatId) => this.clearAllQueuedForChat(chatId),
       (chatId) => this.getQueuedForChat(chatId),
+      this.tracker,
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
@@ -818,8 +820,16 @@ export class ChatManager {
 
   private enrichChat(chat: Chat): Chat {
     const hasPending = this.permissions.hasPending(chat.id);
-    chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
+    const liveTasks = this.tracker.listLive(chat.id);
+    // Live background work broadens the sidebar 'working' state, but never
+    // isRunning — the composer/thread indicator stays main-turn-only.
+    chat.displayStatus = hasPending
+      ? 'waiting'
+      : chat.processState === 'working' || liveTasks.length > 0
+        ? 'working'
+        : 'idle';
     chat.isRunning = chat.processState === 'working' && !hasPending;
+    chat.backgroundActivity = deriveBackgroundActivity(liveTasks.map(toActivityTask));
     chat.worktreeMissing = chat.worktreePath ? !isWorktreePresent(chat.worktreePath) : false;
     return chat;
   }

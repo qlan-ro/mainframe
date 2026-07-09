@@ -17,8 +17,12 @@ type RawChatRow = Omit<
   | 'ultracode'
   | 'adaptiveThinking'
   | 'transcriptMissing'
+  | 'lastContextTotalTokens'
+  | 'lastContextMaxTokens'
 > & {
   mentions: string;
+  lastContextTotalTokens: number | null;
+  lastContextMaxTokens: number | null;
   modifiedFiles: string;
   todos: string;
   pinned: number;
@@ -38,6 +42,7 @@ const CHAT_SELECT_FIELDS = `
   created_at as createdAt, updated_at as updatedAt,
   total_cost as totalCost, total_tokens_input as totalTokensInput,
   total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
+  last_context_total_tokens as lastContextTotalTokens, last_context_max_tokens as lastContextMaxTokens,
   mentions, modified_files as modifiedFiles,
   worktree_path as worktreePath, branch_name as branchName,
   process_state as processState, todos, pinned, effort,
@@ -174,6 +179,8 @@ export class ChatsRepository {
     totalTokensInput: { column: 'total_tokens_input' },
     totalTokensOutput: { column: 'total_tokens_output' },
     lastContextTokensInput: { column: 'last_context_tokens_input' },
+    lastContextTotalTokens: { column: 'last_context_total_tokens' },
+    lastContextMaxTokens: { column: 'last_context_max_tokens' },
     title: { column: 'title' },
     permissionMode: { column: 'permission_mode' },
     worktreePath: { column: 'worktree_path', transform: (v) => v ?? null },
@@ -360,6 +367,8 @@ export class ChatsRepository {
   private mapRow(row: RawChatRow): Chat {
     return {
       ...row,
+      lastContextTotalTokens: row.lastContextTotalTokens ?? undefined,
+      lastContextMaxTokens: row.lastContextMaxTokens ?? undefined,
       mentions: parseJsonColumn(row.mentions, []),
       modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
       worktreePath: row.worktreePath || undefined,
