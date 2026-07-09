@@ -1,22 +1,24 @@
 /**
- * WorkflowEditor — header + mode toggle + YAML pane + validation footer + save.
+ * WorkflowEditor — header + builder/YAML panes + validation footer + save.
  *
- * Builder and Split modes render WfBuilderPane (Task 15); any builder mutation
- * calls serializeWorkflow(model) → updates the YAML live.
+ * The builder is the single source of truth for both new and edit targets
+ * (Task 21 — the mode toggle and the "new workflows only" split are gone).
+ * Every builder mutation calls serializeWorkflow(model) to keep the
+ * read-only YAML pane live. Edit mode hydrates via useWorkflowHydration
+ * (Task 20); a malformed/comment-bearing file renders HydrationBanner
+ * instead of the panes.
  *
- * Scope note: builder is only available for NEW workflows (target.mode === 'new').
- * For edit mode, YAML→model reparse is reliable only server-side; we keep the
- * loaded YAML text as-is and default to yaml mode. The mode buttons still render
- * for visual consistency, but clicking Builder/Split in edit mode shows an
- * informational placeholder rather than clobbering the loaded YAML.
- *
- * Validation is debounced ~400ms via server. For new workflows, the id is derived
- * from the `name:` line in the YAML.
+ * Validation is debounced ~400ms via server. Validate/save error messages
+ * are mapped to the step rows they describe (wf-validate-map.ts); anything
+ * that maps to neither a zod index path nor a `step '<id>'` substring
+ * surfaces as a toast instead. For new workflows, the id is derived from
+ * the `name:` line in the YAML.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Zap, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as wfApi from '@/lib/api/workflows';
+import { mfToast } from '@/lib/toast';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useWorkflowsModal, type WfEditorTarget } from '../use-workflows-modal';
 import { useWorkflowsStore } from '../use-workflows-store';
@@ -27,8 +29,9 @@ import { useWorkflowHydration } from './use-workflow-hydration';
 import { serializeWorkflow } from './yaml-serialize';
 import { blankDraft } from './wf-stubs';
 import type { WfDraft } from './wf-draft-types';
-import { slug, deriveNameFromYaml, deriveWorkflowId } from './wf-slug';
-import { ModeToggle, ValidationFooter, type EditorMode, type ValidationResult } from './WfEditorChrome';
+import { slug, deriveWorkflowId } from './wf-slug';
+import { mapValidationErrorsToSteps, splitJoinedErrorMessage } from './wf-validate-map';
+import { ValidationFooter, type ValidationResult } from './WfEditorChrome';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,15 +52,13 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   const [model, setModel] = useState<WfDraft>(blankDraft);
   // New drafts start from the builder's blank model, serialized up front —
   // otherwise the YAML pane renders empty until the user makes a builder
-  // edit, which leaves "New workflow" unsavable (no valid YAML) if the user
-  // opens straight into Split/YAML mode without touching the builder first.
-  // Edit mode has no model yet (server YAML hydrates async — see
+  // edit, which leaves "New workflow" unsavable (no valid YAML). Edit mode
+  // has no model yet (server YAML hydrates async — see
   // use-workflow-hydration.ts), so it starts blank.
   const [yaml, setYaml] = useState(() => (isNew ? serializeWorkflow(blankDraft()) : ''));
-  // New workflows default to split view (builder + YAML); edit mode is YAML-only.
-  const [mode, setMode] = useState<EditorMode>(isNew ? 'split' : 'yaml');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { closeEditor } = useWorkflowsModal();
@@ -66,11 +67,13 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   // to the active session's project (see deriveWorkflowId in wf-slug.ts).
   const { projectId: activeProjectId } = useActiveIdentity();
 
-  const filename = `${slug(isNew ? model.name : deriveNameFromYaml(yaml)) || 'workflow'}.yaml`;
+  const filename = `${slug(model.name) || 'workflow'}.yaml`;
 
-  // Debounced validation
+  // Debounced validation. `draftForErrors` is the model this validation run
+  // was scheduled against — passed explicitly rather than read from state,
+  // since state could have moved on by the time the debounce fires.
   const scheduleValidation = useCallback(
-    (value: string) => {
+    (value: string, draftForErrors: WfDraft) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         void wfApi
@@ -78,6 +81,12 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
           .then((result) => {
             setValidation(result);
             setValidationError(null);
+            setStepErrors(
+              mapValidationErrorsToSteps(
+                result.errors.map((e) => e.message),
+                draftForErrors,
+              ).stepErrors,
+            );
           })
           .catch((err: unknown) => {
             // The request itself failed (network error, or the daemon rejected
@@ -87,6 +96,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
             console.warn('[WorkflowEditor] validateYaml error:', err);
             setValidation(null);
             setValidationError(message);
+            setStepErrors(mapValidationErrorsToSteps(splitJoinedErrorMessage(message), draftForErrors).stepErrors);
           });
       }, DEBOUNCE_MS);
     },
@@ -99,12 +109,12 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   // useWorkflowHydration below and doesn't need this.
   // Mount-only: run once against the initializer's value. Every later edit
   // already reschedules validation via handleModelChange, so this
-  // intentionally does not depend on `yaml`/`scheduleValidation`.
+  // intentionally does not depend on `yaml`/`model`/`scheduleValidation`.
   useEffect(() => {
-    if (isNew) scheduleValidation(yaml);
+    if (isNew) scheduleValidation(yaml, model);
   }, []);
 
-  /** Builder mutation: re-serialize the model to YAML and validate. */
+  /** Builder mutation (and hydration): re-serialize the model to YAML and validate. */
   const handleModelChange = useCallback(
     (nextModel: WfDraft) => {
       setModel(nextModel);
@@ -112,7 +122,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       setYaml(nextYaml);
       setValidation(null);
       setValidationError(null);
-      scheduleValidation(nextYaml);
+      scheduleValidation(nextYaml, nextModel);
     },
     [scheduleValidation],
   );
@@ -131,11 +141,15 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
       closeEditor();
       void loadAll(port);
     } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       console.warn('[WorkflowEditor] save failed:', err);
+      const { stepErrors: mapped, unmapped } = mapValidationErrorsToSteps(splitJoinedErrorMessage(message), model);
+      if (Object.keys(mapped).length > 0) setStepErrors((prev) => ({ ...prev, ...mapped }));
+      mfToast.error('Workflow save failed', { description: unmapped.length > 0 ? unmapped.join('\n') : message });
     } finally {
       setSaving(false);
     }
-  }, [validation, saving, target, yaml, model.scope, activeProjectId, port, closeEditor, loadAll]);
+  }, [validation, saving, target, yaml, model, activeProjectId, port, closeEditor, loadAll]);
 
   return (
     <div data-testid="workflows-editor" className="flex h-full min-h-0 flex-col bg-mf-window font-sans">
@@ -154,7 +168,6 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
           {isNew ? 'New workflow' : 'Edit workflow'}
         </span>
         <span className="flex-1" />
-        <ModeToggle mode={mode} setMode={setMode} />
         <button
           type="button"
           data-testid="workflows-editor-cancel"
@@ -186,24 +199,12 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
           <HydrationBanner reason={banner.reason} rawYaml={banner.rawYaml} onConvert={banner.onConvert} />
         ) : (
           <>
-            {(mode === 'builder' || mode === 'split') && (
-              <div className={cn('min-w-0 flex-1', mode === 'split' ? 'border-r border-border' : '')}>
-                {isNew ? (
-                  <WfBuilderPane model={model} onChange={handleModelChange} />
-                ) : (
-                  // Edit mode: reliable YAML→model reparse is deferred to a future task.
-                  // The builder shows an informational message rather than clobbering the YAML.
-                  <div className="flex h-full items-center justify-center p-8 text-body text-muted-foreground">
-                    Visual builder is available for new workflows. Edit mode uses YAML only.
-                  </div>
-                )}
-              </div>
-            )}
-            {(mode === 'yaml' || mode === 'split') && (
-              <div className="min-w-0 flex-1">
-                <WfYamlPane yaml={yaml} validation={validation} filename={filename} />
-              </div>
-            )}
+            <div className="min-w-0 flex-1 border-r border-border">
+              <WfBuilderPane model={model} onChange={handleModelChange} errors={stepErrors} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <WfYamlPane yaml={yaml} validation={validation} filename={filename} />
+            </div>
           </>
         )}
       </div>

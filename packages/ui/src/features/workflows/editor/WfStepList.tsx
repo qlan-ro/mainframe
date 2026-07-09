@@ -23,6 +23,8 @@ export interface WfStepListProps {
   draft: WfDraft;
   path: WfStepPath;
   onRootChange: (nextRootSteps: WfStep[]) => void;
+  /** Validate/save errors keyed by step id (Task 21) — threaded to every row, including nested ones. */
+  errors?: Record<string, string>;
 }
 
 /** A stable, non-index add-button testid suffix: the owning step's domain id + arm/branch selector. */
@@ -40,7 +42,7 @@ function ownerTestIdSuffix(draft: WfDraft, path: WfStepPath): string {
   return `${owner?.id ?? 'unknown'}-${selector}`;
 }
 
-export function WfStepList({ draft, path, onRootChange }: WfStepListProps): React.ReactElement {
+export function WfStepList({ draft, path, onRootChange, errors }: WfStepListProps): React.ReactElement {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const steps = getStepsAtPath(draft.steps, path);
   const addTestId =
@@ -63,9 +65,11 @@ export function WfStepList({ draft, path, onRootChange }: WfStepListProps): Reac
             scope={scopeForPath(draft, rowPath)}
             onPatch={(patch) => onRootChange(patchStepAtPath(draft.steps, rowPath, patch))}
             onRemove={() => onRootChange(removeStepAtPath(draft.steps, rowPath))}
+            error={errors?.[step.id]}
             draft={draft}
             path={rowPath}
             onRootChange={onRootChange}
+            errors={errors}
           />
         );
       })}

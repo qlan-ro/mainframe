@@ -165,4 +165,19 @@ describe('WfbStepRow', () => {
     fireEvent.click(screen.getByTestId('workflows-config-set1-set-add'));
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ set: expect.objectContaining({ value: null }) }));
   });
+
+  it('renders no error badge when `error` is absent', () => {
+    const step: WfStep = { id: 'e0', kind: 'set', set: { value: null } };
+    render(<WfbStepRow step={step} index={0} onRemove={vi.fn()} />);
+    expect(screen.queryByTestId('workflows-builder-step-error-e0')).not.toBeInTheDocument();
+  });
+
+  it('renders a red error badge and the message in the (auto-opened) expander when `error` is set', () => {
+    const step: WfStep = { id: 'e1', kind: 'set', set: { value: null } };
+    render(<WfbStepRow step={step} index={0} onRemove={vi.fn()} error="must have exactly one kind" />);
+    expect(screen.getByTestId('workflows-builder-step-error-e1')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-builder-step-error-message-e1')).toHaveTextContent(
+      'must have exactly one kind',
+    );
+  });
 });

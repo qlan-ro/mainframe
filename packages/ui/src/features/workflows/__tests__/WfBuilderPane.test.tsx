@@ -227,4 +227,54 @@ describe('WfBuilderPane', () => {
     expect(within(root).getByText('Steps')).toBeInTheDocument();
     expect(within(root).getByText('Outputs')).toBeInTheDocument();
   });
+
+  it('renders a Vars section header', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
+    const root = screen.getByTestId('workflows-builder');
+    expect(within(root).getByText('Vars')).toBeInTheDocument();
+  });
+
+  it('add-var button renders with data-testid', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
+    expect(screen.getByTestId('workflows-builder-add-var')).toBeInTheDocument();
+  });
+
+  it('clicking add-var calls onChange with a new var', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('workflows-builder-add-var'));
+    expect(onChange).toHaveBeenCalledOnce();
+    const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
+    expect(updatedModel.vars).toHaveLength(1);
+  });
+
+  it('shows an existing var as a key/value row and edits propagate to onChange', () => {
+    const onChange = vi.fn();
+    const draft = { ...makeBlankDraft(), vars: [{ key: 'greeting', value: 'hi' }] };
+    render(<WfBuilderPane model={draft} onChange={onChange} />);
+    expect(screen.getByDisplayValue('greeting')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('hi')).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('hi'), { target: { value: 'hello' } });
+    expect(onChange).toHaveBeenCalledOnce();
+    const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
+    expect(updatedModel.vars[0]).toEqual({ key: 'greeting', value: 'hello' });
+  });
+
+  it('removing a var calls onChange with the var removed', () => {
+    const onChange = vi.fn();
+    const draft = { ...makeBlankDraft(), vars: [{ key: 'greeting', value: 'hi' }] };
+    render(<WfBuilderPane model={draft} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /remove var/i }));
+    expect(onChange).toHaveBeenCalledOnce();
+    const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
+    expect(updatedModel.vars).toHaveLength(0);
+  });
+
+  it('threads an `errors` map down to the matching step row', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeDraftWithTriggerAndStep()} onChange={onChange} errors={{ q1: 'bad step' }} />);
+    expect(screen.getByTestId('workflows-builder-step-error-q1')).toBeInTheDocument();
+  });
 });

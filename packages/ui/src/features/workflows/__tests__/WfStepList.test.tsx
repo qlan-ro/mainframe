@@ -98,4 +98,14 @@ describe('WfStepList', () => {
     expect(paths).toContainEqual([0]);
     expect(paths).toContainEqual([0, 0]);
   });
+
+  it('threads the `errors` map down to a nested row inside a choose arm', () => {
+    const draft = chooseDraft();
+    render(<WfStepList draft={draft} path={[]} onRootChange={vi.fn()} errors={{ s0: 'bad step' }} />);
+
+    fireEvent.click(screen.getByTestId('workflows-builder-step-configure-c1'));
+
+    expect(screen.getByTestId('workflows-builder-step-error-s0')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflows-builder-step-error-s1')).not.toBeInTheDocument();
+  });
 });

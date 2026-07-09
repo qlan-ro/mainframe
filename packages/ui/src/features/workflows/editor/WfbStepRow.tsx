@@ -8,7 +8,7 @@
  * branches) is added on top by `WfStepList`, which wraps this component.
  */
 import { useEffect, useRef, useState } from 'react';
-import { GripVertical, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { GripVertical, SlidersHorizontal, Trash2, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { getKindMeta } from '../glyphs';
@@ -25,10 +25,13 @@ interface WfbStepRowProps {
   onPatch?: (patch: Partial<WfStep>) => void;
   onRemove: () => void;
   scope?: WfScopeSource[];
+  /** A validate/save error addressed to this step (Task 21) — renders a red badge + expander message. */
+  error?: string;
   /** Recursion hooks (Task 14) — only used to nest a `WfStepList` for composite kinds. */
   draft?: WfDraft;
   path?: WfStepPath;
   onRootChange?: (steps: WfStep[]) => void;
+  errors?: Record<string, string>;
 }
 
 // ── Summary helper ────────────────────────────────────────────────────────────
@@ -61,9 +64,16 @@ interface WfbNestedCompositeProps {
   draft?: WfDraft;
   path?: WfStepPath;
   onRootChange?: (steps: WfStep[]) => void;
+  errors?: Record<string, string>;
 }
 
-function WfbNestedComposite({ step, draft, path, onRootChange }: WfbNestedCompositeProps): React.ReactElement | null {
+function WfbNestedComposite({
+  step,
+  draft,
+  path,
+  onRootChange,
+  errors,
+}: WfbNestedCompositeProps): React.ReactElement | null {
   if (!draft || !path || !onRootChange) return null;
 
   if (step.kind === 'choose') {
@@ -74,7 +84,7 @@ function WfbNestedComposite({ step, draft, path, onRootChange }: WfbNestedCompos
             <div className="mb-[6px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
               {arm.else ? 'Else' : `Arm ${k}`}
             </div>
-            <WfStepList draft={draft} path={[...path, { arm: k }]} onRootChange={onRootChange} />
+            <WfStepList draft={draft} path={[...path, { arm: k }]} onRootChange={onRootChange} errors={errors} />
           </div>
         ))}
       </div>
@@ -84,7 +94,7 @@ function WfbNestedComposite({ step, draft, path, onRootChange }: WfbNestedCompos
   if (step.kind === 'foreach') {
     return (
       <div className="mt-[8px] border-t border-border pt-[10px] pl-[14px]">
-        <WfStepList draft={draft} path={path} onRootChange={onRootChange} />
+        <WfStepList draft={draft} path={path} onRootChange={onRootChange} errors={errors} />
       </div>
     );
   }
@@ -95,7 +105,7 @@ function WfbNestedComposite({ step, draft, path, onRootChange }: WfbNestedCompos
         {Object.keys(step.branches).map((name) => (
           <div key={name} className="pl-[14px]">
             <div className="mb-[6px] text-micro font-bold uppercase tracking-wide text-mf-text-3">{name}</div>
-            <WfStepList draft={draft} path={[...path, { branch: name }]} onRootChange={onRootChange} />
+            <WfStepList draft={draft} path={[...path, { branch: name }]} onRootChange={onRootChange} errors={errors} />
           </div>
         ))}
       </div>
@@ -113,9 +123,11 @@ export function WfbStepRow({
   onPatch,
   onRemove,
   scope = [],
+  error,
   draft,
   path,
   onRootChange,
+  errors,
 }: WfbStepRowProps): React.ReactElement {
   const meta = getKindMeta(step.kind);
   const Icon = meta.Icon;
@@ -127,6 +139,12 @@ export function WfbStepRow({
   useEffect(() => {
     if (configOpen) panelRef.current?.scrollIntoView({ block: 'nearest' });
   }, [configOpen]);
+
+  // Surface a mapped validate/save error immediately — the user shouldn't
+  // have to guess which row to expand.
+  useEffect(() => {
+    if (error) setConfigOpen(true);
+  }, [error]);
 
   return (
     <div
@@ -154,6 +172,17 @@ export function WfbStepRow({
 
         {/* Summary */}
         <span className="shrink-0 font-mono text-micro text-mf-text-3">{summary}</span>
+
+        {/* Validate/save error badge (Task 21) */}
+        {error && (
+          <span
+            data-testid={`workflows-builder-step-error-${step.id ?? String(index)}`}
+            className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full bg-mf-destructive-tint px-[7px] text-micro font-bold text-destructive"
+          >
+            <TriangleAlert size={10} aria-hidden />
+            Error
+          </span>
+        )}
 
         {/* Configure expand toggle — prototype line 345-347 */}
         <Hint label="Configure step">
@@ -189,8 +218,16 @@ export function WfbStepRow({
       {/* Configure panel */}
       {configOpen && (
         <div ref={panelRef} className="border-t border-border pt-[2px] pr-[12px] pb-[12px] pl-[30px]">
+          {error && (
+            <p
+              data-testid={`workflows-builder-step-error-message-${step.id ?? String(index)}`}
+              className="mb-[8px] text-caption font-medium text-destructive"
+            >
+              {error}
+            </p>
+          )}
           <WfStepConfigForm step={step} onPatch={onPatch ?? (() => {})} scope={scope} />
-          <WfbNestedComposite step={step} draft={draft} path={path} onRootChange={onRootChange} />
+          <WfbNestedComposite step={step} draft={draft} path={path} onRootChange={onRootChange} errors={errors} />
         </div>
       )}
     </div>

@@ -1,50 +1,16 @@
 /**
- * WfEditorChrome — WorkflowEditor's mode toggle bar + validation footer.
+ * WfEditorChrome — WorkflowEditor's validation footer.
  *
  * Extracted from WorkflowEditor.tsx to keep it under the file-size limit.
- * Purely presentational; all state lives in WorkflowEditor.
+ * Purely presentational; all state lives in WorkflowEditor. The mode toggle
+ * that used to live here was dropped in Task 21 — the builder and the
+ * read-only YAML pane both render at once now, so there's no mode to pick.
  */
-import { SlidersHorizontal, Columns2, Code, Check, TriangleAlert } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-export type EditorMode = 'builder' | 'split' | 'yaml';
+import { Check, TriangleAlert } from 'lucide-react';
 
 export interface ValidationResult {
   valid: boolean;
   errors: Array<{ message: string }>;
-}
-
-// ── Mode toggle bar ───────────────────────────────────────────────────────────
-
-const MODES: Array<{ id: EditorMode; label: string; Icon: typeof SlidersHorizontal }> = [
-  { id: 'builder', label: 'Builder', Icon: SlidersHorizontal },
-  { id: 'split', label: 'Split', Icon: Columns2 },
-  { id: 'yaml', label: 'YAML', Icon: Code },
-];
-
-export function ModeToggle({ mode, setMode }: { mode: EditorMode; setMode: (m: EditorMode) => void }) {
-  return (
-    <div className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">
-      {MODES.map(({ id, label, Icon }) => {
-        const on = mode === id;
-        return (
-          <button
-            key={id}
-            data-testid={`workflows-editor-mode-${id}`}
-            type="button"
-            onClick={() => setMode(id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-label font-medium',
-              on ? 'bg-card font-semibold text-foreground shadow-sm' : 'text-mf-text-3 hover:text-foreground',
-            )}
-          >
-            <Icon size={12} className={on ? 'text-primary' : 'text-mf-text-3'} aria-hidden />
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 // ── Validation footer ─────────────────────────────────────────────────────────

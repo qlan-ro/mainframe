@@ -34,7 +34,21 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: mockUseActiveIdentity,
 }));
 
+// Use a factory with no outer-scope vars so hoisting works correctly.
+vi.mock('@/lib/toast', () => {
+  const errorFn = vi.fn();
+  return {
+    mfToast: Object.assign(vi.fn(), {
+      success: vi.fn(),
+      error: errorFn,
+      warning: vi.fn(),
+      info: vi.fn(),
+    }),
+  };
+});
+
 import * as wfApi from '@/lib/api/workflows';
+import { mfToast } from '@/lib/toast';
 import { useWorkflowsModal } from '@/features/workflows/use-workflows-modal';
 import { useWorkflowsStore } from '@/features/workflows/use-workflows-store';
 import { WorkflowEditor } from '@/features/workflows/editor/WorkflowEditor';
@@ -236,11 +250,85 @@ steps:
     expect(wfApi.putWorkflow).toHaveBeenCalledWith(PORT, 'global:my-automation', expect.any(String));
   });
 
-  it('mode toggle buttons render for builder/split/yaml', () => {
+  it('renders both the builder and the read-only YAML preview at once, with no mode toggle', () => {
     renderEditor({ mode: 'new' });
-    expect(screen.getByTestId('workflows-editor-mode-builder')).toBeInTheDocument();
-    expect(screen.getByTestId('workflows-editor-mode-split')).toBeInTheDocument();
-    expect(screen.getByTestId('workflows-editor-mode-yaml')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-builder')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-editor-yaml')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflows-editor-mode-builder')).not.toBeInTheDocument();
+  });
+
+  it('opening an edit target hydrates the builder, dropping the "new workflows only" placeholder', async () => {
+    renderEditor({ mode: 'edit', workflowId: 'global:greet' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(screen.getByTestId('workflows-builder')).toBeInTheDocument();
+    expect(screen.queryByText(/available for new workflows/i)).not.toBeInTheDocument();
+  });
+
+  it('a builder mutation in edit mode updates the read-only YAML preview live', async () => {
+    renderEditor({ mode: 'edit', workflowId: 'global:greet' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'renamed' } });
+    expect(screen.getByTestId('workflows-editor-yaml').textContent).toContain('name: renamed');
+  });
+
+  it('maps a primary index-path validate error to the nested step it addresses, not by id substring', async () => {
+    const NESTED_YAML = `version: 1
+name: wf
+steps:
+  - id: first
+    set:
+      v: 1
+  - id: route
+    choose:
+      - when: "true"
+        steps:
+          - id: gather
+            set:
+              v: 2
+      - else: true
+        steps: []
+`;
+    vi.mocked(wfApi.getWorkflowSource).mockResolvedValue({ summary: MOCK_SUMMARY, yaml: NESTED_YAML });
+    vi.mocked(wfApi.validateYaml).mockRejectedValue(new Error('steps.1.choose.0.steps.0: must have exactly one kind'));
+    renderEditor({ mode: 'edit', workflowId: 'global:wf' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    fireEvent.click(screen.getByTestId('workflows-builder-step-configure-route'));
+    expect(screen.getByTestId('workflows-builder-step-error-gather')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflows-builder-step-error-first')).not.toBeInTheDocument();
+  });
+
+  it("falls back to the `step '<id>'` substring when no index path is present", async () => {
+    vi.mocked(wfApi.validateYaml).mockResolvedValue({
+      valid: false,
+      errors: [{ message: `'x' is not in scope (step 'say')` }],
+    });
+    renderEditor({ mode: 'edit', workflowId: 'global:greet' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(screen.getByTestId('workflows-builder-step-error-say')).toBeInTheDocument();
+  });
+
+  it('shows a toast when a save failure message maps to no step at all', async () => {
+    renderEditor({ mode: 'new' });
+    fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'greet' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    vi.mocked(wfApi.putWorkflow).mockRejectedValue(new Error('Unrecognized key: "credential"'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('workflows-editor-save'));
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(mfToast.error).toHaveBeenCalledWith('Workflow save failed', expect.anything());
   });
 
   it('Cancel calls closeEditor', () => {
