@@ -290,6 +290,104 @@ describe('groupToolCallParts', () => {
   });
 });
 
+describe('groupToolCallParts — parent boundaries', () => {
+  it('ends an explore run when the next tool belongs to a different parent', () => {
+    // Subagent burst (tagged t1) followed by the main agent's own explore tool.
+    // The wrapper must stay single-parented so groupTaskChildren can nest it.
+    const parts = [tcTagged('Read', 'r1', 't1'), tcTagged('Grep', 'g1', 't1'), tc('Grep', 'g2')];
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(2);
+    const group = result[0]!;
+    if (group.type !== '_tool_group') throw new Error('expected _tool_group');
+    expect(group.parentToolUseId).toBe('t1');
+    expect(group.items.map((i) => i.toolCallId)).toEqual(['r1', 'g1']);
+    expect((result[1] as PartEntry & { type: 'tool-call' }).toolCallId).toBe('g2');
+    expect((result[1] as PartEntry & { type: 'tool-call' }).parentToolUseId).toBeUndefined();
+  });
+
+  it('keeps a main-agent explore solo when followed by a tagged subagent burst', () => {
+    const parts = [tc('Read', 'r0'), tcTagged('Read', 'r1', 't1'), tcTagged('Grep', 'g1', 't1')];
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(2);
+    expect((result[0] as PartEntry & { type: 'tool-call' }).toolCallId).toBe('r0');
+    const group = result[1]!;
+    if (group.type !== '_tool_group') throw new Error('expected _tool_group');
+    expect(group.parentToolUseId).toBe('t1');
+    expect(group.items.map((i) => i.toolCallId)).toEqual(['r1', 'g1']);
+  });
+
+  it('accumulates task progress per parentToolUseId: one tagged entry + one untagged entry', () => {
+    const parts = [
+      tc('Task', 't1'),
+      tcTagged('TaskCreate', 'p1', 't1'),
+      tc('TaskCreate', 'p0'),
+      tcTagged('TaskUpdate', 'p3', 't1'),
+      tc('TaskUpdate', 'p2'),
+    ];
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(3);
+    expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Task');
+
+    const tagged = result[1]!;
+    if (tagged.type !== '_task_progress') throw new Error('expected _task_progress');
+    expect(tagged.parentToolUseId).toBe('t1');
+    expect(tagged.items.map((i) => i.toolCallId)).toEqual(['p1', 'p3']);
+
+    const untagged = result[2]!;
+    if (untagged.type !== '_task_progress') throw new Error('expected _task_progress');
+    expect(untagged.parentToolUseId).toBeUndefined();
+    expect(untagged.items.map((i) => i.toolCallId)).toEqual(['p0', 'p2']);
+  });
+});
+
+describe('groupTaskChildren — partitioning', () => {
+  it('routes interleaved children of parallel Tasks to their own task groups, none top-level', () => {
+    const parts = [
+      tc('Task', 'tA'),
+      tc('Task', 'tB'),
+      tcTagged('Bash', 'a1', 'tA', 'out-a1'),
+      tcTagged('Bash', 'b1', 'tB', 'out-b1'),
+      tcTagged('Read', 'a2', 'tA'),
+    ];
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(2);
+    const groupA = result[0]!;
+    const groupB = result[1]!;
+    if (groupA.type !== '_task_group') throw new Error('expected _task_group');
+    if (groupB.type !== '_task_group') throw new Error('expected _task_group');
+    expect(groupA.toolCallId).toBe('tA');
+    expect(groupA.children.map((c) => (c as PartEntry & { type: 'tool-call' }).toolCallId)).toEqual(['a1', 'a2']);
+    expect(groupB.toolCallId).toBe('tB');
+    expect(groupB.children.map((c) => (c as PartEntry & { type: 'tool-call' }).toolCallId)).toEqual(['b1']);
+  });
+
+  it('groups children that arrive after an untagged main tool in the same turn', () => {
+    const parts = [tc('Task', 't1'), tc('Bash', 'm1'), tcTagged('Bash', 'c1', 't1'), tcTagged('Read', 'c2', 't1')];
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(2);
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
+    expect(group.toolCallId).toBe('t1');
+    expect(group.children.map((c) => (c as PartEntry & { type: 'tool-call' }).toolCallId)).toEqual(['c1', 'c2']);
+    expect((result[1] as PartEntry & { type: 'tool-call' }).toolCallId).toBe('m1');
+  });
+
+  it('drops parts tagged with an unknown parent id instead of rendering them top-level', () => {
+    const parts = [tc('Task', 't1'), tcTagged('Bash', 'c1', 't1'), tcTagged('Bash', 'x1', 'toolu_unknown')];
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(1);
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
+    expect(group.children.map((c) => (c as PartEntry & { type: 'tool-call' }).toolCallId)).toEqual(['c1']);
+  });
+});
+
 describe('with empty categories (no grouping)', () => {
   it('passes all tool calls through ungrouped', () => {
     const parts = [tc('Read', 'r1'), tc('Grep', 'g1'), tc('TodoWrite', 'h1')];
@@ -348,8 +446,8 @@ describe('groupTaskChildren', () => {
     expect(group.taskArgs).toEqual({ description: 'do stuff' });
   });
 
-  it('stops grouping at an untagged entry', () => {
-    // Bash is tagged for t1; the untagged Edit terminates the run.
+  it('keeps untagged entries top-level alongside the task group', () => {
+    // Bash is tagged for t1; the untagged text and Edit stay in the main flow.
     const parts = [tc('Task', 't1'), tcTagged('Bash', 'b1', 't1'), text('middle'), tc('Edit', 'e1')];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
@@ -365,7 +463,7 @@ describe('groupTaskChildren', () => {
     expect(children[0]!).toEqual(tcTagged('Bash', 'b1', 't1'));
   });
 
-  it('stops grouping at a child tagged for a different parent', () => {
+  it('routes children tagged for different parents to their own task groups', () => {
     const parts = [tc('Task', 't1'), tcTagged('Bash', 'b1', 't1'), tc('Task', 't2'), tcTagged('Read', 'r1', 't2')];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
