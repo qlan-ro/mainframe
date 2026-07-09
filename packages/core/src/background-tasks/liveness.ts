@@ -56,6 +56,11 @@ export async function runLivenessSweep(args: SweepArgs): Promise<void> {
     }
     set.add(task.id);
 
+    // lsof-writer liveness only holds for bash tasks (the shell keeps the
+    // spool file open). Agents/workflows run inside the CLI and have no
+    // writer — probing them would false-stop live work. They close via
+    // task_notification bookends or endAllRunning on CLI exit.
+    if (task.kind !== 'bash') continue;
     if (now - task.startedAt < GRACE_MS) continue;
     if (!task.outputPath) {
       log.warn({ chatId, taskId: task.id }, 'liveness skip: no outputPath');

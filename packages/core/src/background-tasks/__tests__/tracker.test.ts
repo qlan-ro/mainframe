@@ -7,6 +7,7 @@ function makeTask(
 ): Omit<BackgroundTask, 'startedAt' | 'endedAt' | 'status' | 'lastOutputLine' | 'summary' | 'usage' | 'outputPath'> {
   return {
     id: 'task-1',
+    kind: 'bash',
     toolName: 'Bash',
     toolUseId: 'tu-1',
     command: 'pnpm dev',
@@ -91,6 +92,7 @@ describe('BackgroundTaskTracker', () => {
       tracker.on('background_task.ended', () => local.push({ kind: 'ended' }));
       tracker.adopt('chat-a', {
         id: 'rec-1',
+        kind: 'bash',
         toolName: 'Bash',
         toolUseId: '',
         command: '<recovered>',
@@ -113,6 +115,7 @@ describe('BackgroundTaskTracker', () => {
     it('replaces an existing entry on adopt', () => {
       tracker.adopt('chat-a', {
         id: 'rec-1',
+        kind: 'bash',
         toolName: 'Bash',
         toolUseId: '',
         command: 'a',
@@ -128,6 +131,7 @@ describe('BackgroundTaskTracker', () => {
       });
       tracker.adopt('chat-a', {
         id: 'rec-1',
+        kind: 'bash',
         toolName: 'Bash',
         toolUseId: '',
         command: 'b',
@@ -148,9 +152,21 @@ describe('BackgroundTaskTracker', () => {
 
   describe('listAllRunning', () => {
     it('returns every running task across all chats with the chatId attached', () => {
-      tracker.start('chat-a', { id: 't1', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' }, '/p/a-t1');
-      tracker.start('chat-a', { id: 't2', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' }, '/p/a-t2');
-      tracker.start('chat-b', { id: 't1', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' }, '/p/b-t1');
+      tracker.start(
+        'chat-a',
+        { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        '/p/a-t1',
+      );
+      tracker.start(
+        'chat-a',
+        { id: 't2', kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        '/p/a-t2',
+      );
+      tracker.start(
+        'chat-b',
+        { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        '/p/b-t1',
+      );
       tracker.end('chat-a', 't2', { status: 'completed', outputPath: '/p/a-t2', summary: '', usage: null });
       const all = tracker
         .listAllRunning()
@@ -164,12 +180,12 @@ describe('BackgroundTaskTracker', () => {
     it('stores and reads pids per (chatId, taskId)', () => {
       tracker.start(
         'chat-a',
-        { id: 't1', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
         '/p/t1.out',
       );
       tracker.start(
         'chat-b',
-        { id: 't1', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
         '/p/t1.out',
       );
       tracker.setPid('chat-a', 't1', 111);
@@ -182,7 +198,7 @@ describe('BackgroundTaskTracker', () => {
     it('removeChat clears the pid map slice for that chat', () => {
       tracker.start(
         'chat-a',
-        { id: 't1', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
         '/p/t1.out',
       );
       tracker.setPid('chat-a', 't1', 111);
@@ -191,11 +207,76 @@ describe('BackgroundTaskTracker', () => {
     });
   });
 
+  describe('background work kinds + live set', () => {
+    it('stamps the kind from the start seed', () => {
+      tracker.start('chat-a', makeTask({ id: 'a-1', kind: 'agent' }), '/tmp/a-1.output');
+      expect(tracker.get('chat-a', 'a-1')!.kind).toBe('agent');
+    });
+
+    it('listLive returns only running tasks for the chat', () => {
+      tracker.start('chat-a', makeTask({ id: 't1' }), '/p/t1');
+      tracker.start('chat-a', makeTask({ id: 't2', kind: 'agent' }), '/p/t2');
+      tracker.start('chat-b', makeTask({ id: 't3' }), '/p/t3');
+      tracker.end('chat-a', 't1', { status: 'completed', outputPath: '/p/t1', summary: '', usage: null });
+      expect(tracker.listLive('chat-a').map((t) => t.id)).toEqual(['t2']);
+      expect(tracker.listLive('chat-b').map((t) => t.id)).toEqual(['t3']);
+      expect(tracker.listLive('chat-none')).toEqual([]);
+    });
+
+    it('upserts on duplicate start of a running task: no double count, keeps startedAt, emits updated', () => {
+      tracker.start('chat-a', makeTask({ id: 'dup', description: 'first' }), '/p/dup');
+      const startedAt = tracker.get('chat-a', 'dup')!.startedAt;
+      events.length = 0;
+      tracker.on('background_task.updated', (chatId, task) => events.push({ kind: 'updated', chatId, task }));
+
+      tracker.start('chat-a', makeTask({ id: 'dup', description: 'second' }), '/p/dup-again');
+
+      expect(tracker.listLive('chat-a')).toHaveLength(1);
+      const task = tracker.get('chat-a', 'dup')!;
+      expect(task.startedAt).toBe(startedAt);
+      expect(task.description).toBe('second');
+      expect(events.map((e) => e.kind)).toEqual(['updated']);
+    });
+
+    it('re-registers fresh (emits started) when the previous entry with the same id is terminal', () => {
+      tracker.start('chat-a', makeTask({ id: 'reuse' }), '/p/reuse');
+      tracker.end('chat-a', 'reuse', { status: 'stopped', outputPath: '', summary: 'CLI exited', usage: null });
+      events.length = 0;
+
+      tracker.start('chat-a', makeTask({ id: 'reuse' }), '/p/reuse');
+
+      expect(tracker.get('chat-a', 'reuse')!.status).toBe('running');
+      expect(events.map((e) => e.kind)).toEqual(['started']);
+    });
+
+    it('endAllRunning stops every running task, emits ended per task, and skips terminal ones', () => {
+      tracker.start('chat-a', makeTask({ id: 'r1' }), '/p/r1');
+      tracker.start('chat-a', makeTask({ id: 'r2', kind: 'agent' }), '/p/r2');
+      tracker.start('chat-a', makeTask({ id: 'done' }), '/p/done');
+      tracker.end('chat-a', 'done', { status: 'completed', outputPath: '', summary: '', usage: null });
+      events.length = 0;
+
+      const ended = tracker.endAllRunning('chat-a');
+
+      expect(ended).toBe(2);
+      expect(tracker.listLive('chat-a')).toEqual([]);
+      expect(tracker.get('chat-a', 'r1')!.status).toBe('stopped');
+      expect(tracker.get('chat-a', 'r2')!.status).toBe('stopped');
+      expect(tracker.get('chat-a', 'done')!.status).toBe('completed');
+      expect(events.map((e) => `${e.kind}:${e.task.id}`).sort()).toEqual(['ended:r1', 'ended:r2']);
+    });
+
+    it('endAllRunning on an unknown chat is a no-op returning 0', () => {
+      expect(tracker.endAllRunning('chat-ghost')).toBe(0);
+      expect(events).toEqual([]);
+    });
+  });
+
   describe('start(outputPath)', () => {
     it('stamps the deterministic outputPath at start time', () => {
       tracker.start(
         'chat-a',
-        { id: 't9', toolName: 'Bash', toolUseId: 'u9', command: 'pnpm dev', description: 'dev server' },
+        { id: 't9', kind: 'bash', toolName: 'Bash', toolUseId: 'u9', command: 'pnpm dev', description: 'dev server' },
         '/tmp/claude-501/-Users-x-proj/sess/tasks/t9.output',
       );
       expect(tracker.get('chat-a', 't9')!.outputPath).toBe('/tmp/claude-501/-Users-x-proj/sess/tasks/t9.output');

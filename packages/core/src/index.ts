@@ -90,6 +90,9 @@ async function main(): Promise<void> {
   backgroundTasks.on('background_task.started', (chatId, task) => {
     broadcastEvent({ type: 'background_task.started', chatId, task });
   });
+  backgroundTasks.on('background_task.updated', (chatId, task) => {
+    broadcastEvent({ type: 'background_task.updated', chatId, task });
+  });
   backgroundTasks.on('background_task.ended', (chatId, task) => {
     broadcastEvent({ type: 'background_task.ended', chatId, task });
   });

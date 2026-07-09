@@ -69,9 +69,17 @@ function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown
           task_id: event.task_id as string,
           tool_use_id: event.tool_use_id as string | undefined,
           description: event.description as string | undefined,
+          task_type: event.task_type as string | undefined,
         },
         { claudeSessionId: session.state.chatId, realCwd: session.state.realProjectPath },
       );
+    }
+  } else if (event.subtype === 'task_updated') {
+    if (session.state.mainframeChatId) {
+      session.state.taskEvents.handleTaskUpdated(session.state.mainframeChatId, {
+        task_id: event.task_id as string,
+        status: event.status as string,
+      });
     }
   } else if (event.subtype === 'task_notification') {
     session.state.activeTasks.delete(event.task_id as string);

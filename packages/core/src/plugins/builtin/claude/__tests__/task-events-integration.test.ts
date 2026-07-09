@@ -61,6 +61,41 @@ describe('task event chain — Mainframe chat id is used (not Claude session id)
     expect(tracker.list('claude-session-abc')).toEqual([]);
   });
 
+  it('task_started threads task_type through to the tracked kind', () => {
+    const { session, tracker } = makeSession('mf-chat-7');
+    const sink = makeSink();
+
+    send(session, sink, { type: 'system', subtype: 'init', session_id: 'claude-session-k' });
+    send(session, sink, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'agent-1',
+      tool_use_id: 'tu-a',
+      description: 'reviewer subagent',
+      task_type: 'local_agent',
+    });
+
+    expect(tracker.get('mf-chat-7', 'agent-1')!.kind).toBe('agent');
+  });
+
+  it('task_updated with a terminal status ends the task', () => {
+    const { session, tracker } = makeSession('mf-chat-8');
+    const sink = makeSink();
+
+    send(session, sink, { type: 'system', subtype: 'init', session_id: 'claude-session-u' });
+    send(session, sink, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task-u',
+      tool_use_id: 'tu-u',
+      description: 'bg agent',
+      task_type: 'local_agent',
+    });
+    send(session, sink, { type: 'system', subtype: 'task_updated', task_id: 'task-u', status: 'failed' });
+
+    expect(tracker.get('mf-chat-8', 'task-u')!.status).toBe('failed');
+  });
+
   it('tracker.list(mainframeChatId) reflects completion after task_notification arrives', () => {
     const { session, tracker } = makeSession('mf-chat-99');
     const sink = makeSink();
