@@ -239,9 +239,9 @@ describe('message resilience across daemon restart', () => {
 
     expect(json.success).toBe(true);
 
-    // REST now returns DisplayMessage[] which groups consecutive assistant turns.
-    // All 10 text blocks should be present (merged into grouped turns).
-    const allTexts = json.data.flatMap((m: any) =>
+    // REST now returns { messages, transcriptMissing }; messages groups
+    // consecutive assistant turns. All 10 text blocks should be present.
+    const allTexts = json.data.messages.flatMap((m: any) =>
       m.content.filter((c: any) => c.type === 'text').map((c: any) => c.text),
     );
     for (let i = 1; i <= 10; i++) {
