@@ -16,10 +16,23 @@ function desugarIf(step: Record<string, unknown>): Record<string, unknown> {
   return { ...rest, choose: arms };
 }
 
-/** Recursively desugar if/then/else throughout a steps array. */
+/**
+ * Accept `form:` as a canonical alias and normalize to the internal question StepDef.
+ * If `question:` is ALSO present, do nothing -- overwriting it would silently discard
+ * one body for an authoring mistake that should be rejected. Leaving both keys means
+ * stepSchema's `.strict()` rejects the step for the stray, unrecognized `form` key,
+ * exactly as it already does today for any step with an unrecognized top-level key.
+ */
+function desugarForm(step: Record<string, unknown>): Record<string, unknown> {
+  if (!('form' in step) || 'question' in step) return step;
+  const { form, ...rest } = step;
+  return { ...rest, question: form };
+}
+
+/** Recursively desugar if/then/else and form/question sugar throughout a steps array. */
 function desugarSteps(steps: unknown[]): unknown[] {
   return steps.map((rawStep) => {
-    const step = desugarIf(rawStep as Record<string, unknown>);
+    const step = desugarForm(desugarIf(rawStep as Record<string, unknown>));
     return desugarStepChildren(step);
   });
 }

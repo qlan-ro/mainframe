@@ -27,6 +27,8 @@ const questionFieldSchema = z.object({
   when: z.object({ key: idSchema, equals: z.string() }).optional(),
 });
 
+// `form:` is the canonical authoring alias for `question:`; parse.ts desugars it
+// before validation, so the schema keeps a single `question` kind key.
 const KIND_KEYS = ['connector', 'agent', 'question', 'choose', 'foreach', 'parallel', 'call', 'set'] as const;
 
 // stepSchema is recursive (choose.steps, foreach.steps, parallel branches)
