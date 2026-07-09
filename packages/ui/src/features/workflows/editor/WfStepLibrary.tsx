@@ -13,7 +13,7 @@
 import { X, Layers, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
-import { getKindMetaByModel } from '../glyphs';
+import { getKindMeta } from '../glyphs';
 import type { WfStep } from './yaml-serialize';
 
 // ── Doc metadata ──────────────────────────────────────────────────────────────
@@ -27,13 +27,8 @@ interface KindDoc {
 }
 
 /**
- * Per-kind documentation shown in each card.
- * Keys use the model's WfStep['kind'] values:
- *   prototype "service" → model "service" (connector kind in glyphs.ts maps separately)
- *   prototype "value"   → model "set"
- *   prototype "branch"  → model "branch"
- *   prototype "loop"    → model "loop"
- *   prototype "subflow" → model "subflow"
+ * Per-kind documentation shown in each card. Keys use the canonical
+ * WfStep['kind'] values (matching KIND_META in glyphs.ts).
  */
 const KIND_DOC: Record<string, KindDoc> = {
   agent: {
@@ -48,7 +43,7 @@ const KIND_DOC: Record<string, KindDoc> = {
     produces: 'Whatever the action returns.',
     config: ['connector.action', 'arguments (typed by schema)', 'credential label'],
   },
-  question: {
+  form: {
     flow: 'leaf',
     blurb: 'Ask the user and wait. Becomes a pending interaction, answerable on desktop or mobile.',
     produces: 'The answer — one value per field.',
@@ -60,13 +55,13 @@ const KIND_DOC: Record<string, KindDoc> = {
     produces: 'The value, referenceable as ${name}.',
     config: ['name', 'expression'],
   },
-  branch: {
+  choose: {
     flow: 'control',
     blurb: 'Run one of several paths based on a condition — often a prior step’s output.',
     produces: 'Whatever the taken arm produces.',
     config: ['arms, each with a when-condition'],
   },
-  loop: {
+  foreach: {
     flow: 'control',
     blurb: 'Run a body once per item — one step fans into N iterations at runtime.',
     produces: 'A result per item.',
@@ -78,7 +73,7 @@ const KIND_DOC: Record<string, KindDoc> = {
     produces: 'Each lane’s result.',
     config: ['named lanes, each a sub-sequence'],
   },
-  subflow: {
+  call: {
     flow: 'control',
     blurb: 'Run an entire other workflow as a step; creates a linked child run.',
     produces: 'The sub-workflow’s outputs.',
@@ -98,12 +93,12 @@ const LIB_GROUPS: LibGroup[] = [
   {
     label: 'Do work',
     sub: 'Leaf steps — one unit of work',
-    kinds: ['agent', 'service', 'question', 'set'],
+    kinds: ['agent', 'service', 'form', 'set'],
   },
   {
     label: 'Control flow',
     sub: 'Shape the run — these nest other steps',
-    kinds: ['branch', 'loop', 'parallel', 'subflow'],
+    kinds: ['choose', 'foreach', 'parallel', 'call'],
   },
 ];
 
@@ -117,9 +112,7 @@ interface WfStepTypeCardProps {
 
 function WfStepTypeCard({ kind, onAdd, onClose }: WfStepTypeCardProps): React.ReactElement {
   const doc = KIND_DOC[kind];
-  // WfStepLibrary passes MODEL kinds (branch/loop/subflow/service); resolve
-  // through the alias table to the canonical KIND_META key.
-  const meta = getKindMetaByModel(kind);
+  const meta = getKindMeta(kind);
   const Icon = meta.Icon;
   const isControl = doc?.flow === 'control';
 

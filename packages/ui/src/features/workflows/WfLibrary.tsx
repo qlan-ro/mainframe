@@ -8,7 +8,7 @@
  * expose declared inputs; that is deferred to when the daemon adds that field).
  */
 import React, { useMemo, useState } from 'react';
-import { Plus, Play, Pencil, Calendar, Zap, Globe } from 'lucide-react';
+import { Plus, Play, Pencil, Calendar, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { useWorkflowsStore } from './use-workflows-store';
@@ -20,7 +20,7 @@ import type { WorkflowSummary, WorkflowRunSummary } from '@qlan-ro/mainframe-typ
 
 // ── Trigger kind → icon + default label map ────────────────────────────────────
 
-type TriggerKind = 'manual' | 'schedule' | 'event' | 'webhook';
+type TriggerKind = 'manual' | 'schedule' | 'event';
 
 const TRIGGER_META: Record<
   TriggerKind,
@@ -29,7 +29,6 @@ const TRIGGER_META: Record<
   manual: { Icon: Play, label: 'Manual' },
   schedule: { Icon: Calendar, label: 'Schedule' },
   event: { Icon: Zap, label: 'Event' },
-  webhook: { Icon: Globe, label: 'Webhook' },
 };
 
 // ── Trigger chips ──────────────────────────────────────────────────────────────

@@ -51,6 +51,21 @@ export const KIND_META: Record<string, KindMeta> = {
     label: 'Question',
     colorClass: 'text-mf-wf-kind-question', // dedicated token — no named-Tailwind match
   },
+  // Builder-authored `form:` step (parse.ts desugars it to `question:` on
+  // disk). Reuses the question color token; keep `question` untouched above —
+  // run views resolve THAT key for the daemon's run-tree kind.
+  form: {
+    Icon: MessageSquare,
+    label: 'Form',
+    colorClass: 'text-mf-wf-kind-question',
+  },
+  // Builder-authored `service:` step kind; the daemon's run-tree emits
+  // `connector` (below) for the same construct.
+  service: {
+    Icon: Plug,
+    label: 'Service',
+    colorClass: 'text-mf-wf-violet',
+  },
   set: {
     Icon: CircleDot,
     label: 'Value',
@@ -87,31 +102,6 @@ export const DEFAULT_KIND_META: KindMeta = {
 
 export function getKindMeta(kind: string): KindMeta {
   return KIND_META[kind] ?? DEFAULT_KIND_META;
-}
-
-/**
- * Maps a WfStep model kind (as used by WfStepLibrary / the editor) to its
- * canonical KIND_META key (as used by RunTreeNode / WfKindChip / WfStepNode).
- * The model and canonical vocabularies diverge for the control-flow kinds:
- * model `branch`/`loop`/`subflow` correspond to canonical `choose`/`foreach`/`call`,
- * and model `service` corresponds to canonical `connector`.
- */
-export const KIND_ALIAS: Record<string, string> = {
-  service: 'connector',
-  branch: 'choose',
-  loop: 'foreach',
-  subflow: 'call',
-};
-
-/**
- * Resolves kind metadata from a WfStep MODEL kind (e.g. 'branch', 'loop',
- * 'subflow', 'service') by translating it through KIND_ALIAS to the
- * canonical KIND_META key. Use this in WfStepLibrary; callers that already
- * hold a canonical kind (from RunTreeNode) should keep using getKindMeta.
- */
-export function getKindMetaByModel(modelKind: string): KindMeta {
-  const canonicalKind = KIND_ALIAS[modelKind] ?? modelKind;
-  return KIND_META[canonicalKind] ?? DEFAULT_KIND_META;
 }
 
 // ── Status metadata ────────────────────────────────────────────────────────────

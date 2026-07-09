@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { GripVertical, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
-import { getKindMetaByModel } from '../glyphs';
+import { getKindMeta } from '../glyphs';
 import type { WfStep } from './yaml-serialize';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -29,20 +29,20 @@ interface WfbStepRowProps {
 
 function stepSummary(step: WfStep): string {
   switch (step.kind) {
-    case 'question':
-      return `${(step.fields ?? []).length} fields${step.timeout ? ` · ${step.timeout.afterMinutes}m timeout` : ''}`;
+    case 'form':
+      return `${step.form.fields.length} fields${step.form.timeout ? ` · ${step.form.timeout.afterMinutes}m timeout` : ''}`;
     case 'service':
-      return `${step.connector ?? '?'}.${step.action ?? '?'}`;
+      return step.connector;
     case 'agent':
       return 'agent session';
     case 'parallel':
-      return `${(step.lanes ?? []).length} lanes`;
-    case 'branch':
-      return `${(step.arms ?? []).length} arms`;
-    case 'loop':
-      return `for each ${step.over ?? 'item'}`;
-    case 'subflow':
-      return step.ref ?? 'workflow';
+      return `${Object.keys(step.branches).length} branches`;
+    case 'choose':
+      return `${step.arms.length} arms`;
+    case 'foreach':
+      return `for each ${step.over}`;
+    case 'call':
+      return step.ref;
     default:
       return 'value';
   }
@@ -51,10 +51,10 @@ function stepSummary(step: WfStep): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps): React.ReactElement {
-  const meta = getKindMetaByModel(step.kind);
+  const meta = getKindMeta(step.kind);
   const Icon = meta.Icon;
   const summary = stepSummary(step);
-  const title = step.title ?? meta.label;
+  const title = step.name ?? meta.label;
   const [configOpen, setConfigOpen] = useState(false);
 
   return (

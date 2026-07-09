@@ -6,7 +6,7 @@
  * - renders the catalog root with data-testid="workflows-steplib"
  * - renders all 8 step-kind cards (one per kind) in two groups
  * - group labels "Do work" and "Control flow" are present
- * - each card has data-testid="workflows-steplib-{kind}" (using model kinds)
+ * - each card has data-testid="workflows-steplib-{kind}" (using canonical kinds)
  * - clicking a card calls onAdd with the correct kind
  * - clicking a card calls onClose
  */
@@ -34,16 +34,16 @@ describe('WfStepLibrary', () => {
 
   it('renders all 8 step-kind cards with data-testid per kind', () => {
     render(<WfStepLibrary onAdd={vi.fn()} onClose={vi.fn()} />);
-    // Do-work kinds (model kinds)
+    // Do-work kinds (canonical kinds)
     expect(screen.getByTestId('workflows-steplib-agent')).toBeInTheDocument();
     expect(screen.getByTestId('workflows-steplib-service')).toBeInTheDocument();
-    expect(screen.getByTestId('workflows-steplib-question')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-steplib-form')).toBeInTheDocument();
     expect(screen.getByTestId('workflows-steplib-set')).toBeInTheDocument();
     // Control-flow kinds
-    expect(screen.getByTestId('workflows-steplib-branch')).toBeInTheDocument();
-    expect(screen.getByTestId('workflows-steplib-loop')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-steplib-choose')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-steplib-foreach')).toBeInTheDocument();
     expect(screen.getByTestId('workflows-steplib-parallel')).toBeInTheDocument();
-    expect(screen.getByTestId('workflows-steplib-subflow')).toBeInTheDocument();
+    expect(screen.getByTestId('workflows-steplib-call')).toBeInTheDocument();
   });
 
   it('clicking the agent card calls onAdd("agent") and onClose', () => {
@@ -65,12 +65,12 @@ describe('WfStepLibrary', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('clicking the question card calls onAdd("question") and onClose', () => {
+  it('clicking the form card calls onAdd("form") and onClose', () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
     render(<WfStepLibrary onAdd={onAdd} onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('workflows-steplib-question'));
-    expect(onAdd).toHaveBeenCalledWith('question');
+    fireEvent.click(screen.getByTestId('workflows-steplib-form'));
+    expect(onAdd).toHaveBeenCalledWith('form');
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -83,21 +83,21 @@ describe('WfStepLibrary', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('clicking the branch card calls onAdd("branch") and onClose', () => {
+  it('clicking the choose card calls onAdd("choose") and onClose', () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
     render(<WfStepLibrary onAdd={onAdd} onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('workflows-steplib-branch'));
-    expect(onAdd).toHaveBeenCalledWith('branch');
+    fireEvent.click(screen.getByTestId('workflows-steplib-choose'));
+    expect(onAdd).toHaveBeenCalledWith('choose');
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('clicking the loop card calls onAdd("loop") and onClose', () => {
+  it('clicking the foreach card calls onAdd("foreach") and onClose', () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
     render(<WfStepLibrary onAdd={onAdd} onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('workflows-steplib-loop'));
-    expect(onAdd).toHaveBeenCalledWith('loop');
+    fireEvent.click(screen.getByTestId('workflows-steplib-foreach'));
+    expect(onAdd).toHaveBeenCalledWith('foreach');
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -110,12 +110,12 @@ describe('WfStepLibrary', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('clicking the subflow card calls onAdd("subflow") and onClose', () => {
+  it('clicking the call card calls onAdd("call") and onClose', () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
     render(<WfStepLibrary onAdd={onAdd} onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('workflows-steplib-subflow'));
-    expect(onAdd).toHaveBeenCalledWith('subflow');
+    fireEvent.click(screen.getByTestId('workflows-steplib-call'));
+    expect(onAdd).toHaveBeenCalledWith('call');
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -131,12 +131,12 @@ describe('WfStepLibrary', () => {
     expect(leafChips.length).toBeGreaterThan(0);
   });
 
-  it('renders "Control flow" tag on branch card', () => {
+  it('renders "Control flow" tag on choose card', () => {
     render(<WfStepLibrary onAdd={vi.fn()} onClose={vi.fn()} />);
-    const branchCard = screen.getByTestId('workflows-steplib-branch');
-    // The "Control flow" tag lives inside the branch card
+    const chooseCard = screen.getByTestId('workflows-steplib-choose');
+    // The "Control flow" tag lives inside the choose card
     // (the group header also uses the text, so check within the card)
-    expect(branchCard).toBeInTheDocument();
+    expect(chooseCard).toBeInTheDocument();
   });
 
   it('calls onClose when the close button is clicked', () => {
@@ -146,16 +146,16 @@ describe('WfStepLibrary', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('branch card shows the Branch label and GitBranch icon meta, not Service/Plug', () => {
+  it('choose card shows the Branch label and GitBranch icon meta, not Service/Plug', () => {
     render(<WfStepLibrary onAdd={vi.fn()} onClose={vi.fn()} />);
-    const card = screen.getByTestId('workflows-steplib-branch');
+    const card = screen.getByTestId('workflows-steplib-choose');
     expect(card.textContent).toContain('Branch');
     expect(card.textContent).not.toContain('Service');
   });
 
-  it('loop card shows Loop, subflow card shows Sub-workflow', () => {
+  it('foreach card shows Loop, call card shows Sub-workflow', () => {
     render(<WfStepLibrary onAdd={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByTestId('workflows-steplib-loop').textContent).toContain('Loop');
-    expect(screen.getByTestId('workflows-steplib-subflow').textContent).toContain('Sub-workflow');
+    expect(screen.getByTestId('workflows-steplib-foreach').textContent).toContain('Loop');
+    expect(screen.getByTestId('workflows-steplib-call').textContent).toContain('Sub-workflow');
   });
 });

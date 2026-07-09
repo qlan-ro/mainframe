@@ -5,7 +5,40 @@
  * StatusMeta.tone vocabulary getStepStatusMeta already exposes.
  */
 import { describe, it, expect } from 'vitest';
-import { iterChipTint, getStepStatusMeta } from '@/features/workflows/glyphs';
+import { iterChipTint, getStepStatusMeta, getKindMeta } from '@/features/workflows/glyphs';
+
+describe('kind glyphs after alias removal', () => {
+  it('resolves the builder service kind directly', () => {
+    expect(getKindMeta('service').label).toBe('Service');
+  });
+  it('still resolves the daemon run-tree connector kind', () => {
+    expect(getKindMeta('connector').label).toBe('Service');
+  });
+  it('resolves canonical control-flow kinds', () => {
+    expect(getKindMeta('choose').label).toBe('Branch');
+    expect(getKindMeta('foreach').label).toBe('Loop');
+    expect(getKindMeta('call').label).toBe('Sub-workflow');
+    expect(getKindMeta('form').label).toBe('Form');
+  });
+  it('leaves the run-view question kind labeled Question (NOT relabeled to Form)', () => {
+    // Regression guard: the daemon's run tree emits kind `question` for the
+    // authored form step AND for runtime agent-emitted question cards, which
+    // must keep reading "Question". Adding `form` for the builder must not
+    // touch the existing `question` entry — that is the whole point of the
+    // form/question naming split.
+    expect(getKindMeta('question').label).toBe('Question');
+  });
+  it('no longer exports KIND_ALIAS or getKindMetaByModel', async () => {
+    // Runtime check on the module namespace — NOT a type-level `@ts-expect-error`
+    // property-access check, which is always type-legal on an index-signature
+    // type (`Record<string, KindMeta>`) and would leave the directive unused,
+    // failing typecheck with "Unused '@ts-expect-error' directive" instead of
+    // proving the export is gone.
+    const mod: Record<string, unknown> = await import('@/features/workflows/glyphs');
+    expect(mod.KIND_ALIAS).toBeUndefined();
+    expect(mod.getKindMetaByModel).toBeUndefined();
+  });
+});
 
 describe('iterChipTint', () => {
   it('maps tone "success" to the success border/bg tint', () => {

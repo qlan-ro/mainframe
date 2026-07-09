@@ -8,7 +8,7 @@
  * Ported from WfBuilderPane in 19-wfeditor.jsx; tokens → Tailwind v4.
  */
 import { useState } from 'react';
-import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, Globe, BoltIcon, Plus } from 'lucide-react';
+import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, BoltIcon, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { stubStep, stubTrigger } from './yaml-serialize';
@@ -48,14 +48,12 @@ const TRIGGER_ICON_MAP: Record<string, typeof Play> = {
   manual: Play,
   schedule: Calendar,
   event: BoltIcon,
-  webhook: Globe,
 };
 
 const TRIGGER_LABEL_MAP: Record<string, string> = {
   manual: 'Manual',
   schedule: 'Schedule',
   event: 'Event',
-  webhook: 'Webhook',
 };
 
 interface TriggerRowProps {

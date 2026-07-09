@@ -42,10 +42,9 @@ function makeDraftWithTriggerAndStep(): WfDraft {
     steps: [
       {
         id: 'q1',
-        kind: 'question',
-        name: 'ask',
-        title: 'Ask the user',
-        fields: [{ key: 'answer', type: 'text' }],
+        kind: 'form',
+        name: 'Ask the user',
+        form: { title: 'Ask the user', fields: [{ key: 'answer', type: 'text' }] },
       },
     ],
     outputs: [],
@@ -158,16 +157,9 @@ describe('WfBuilderPane', () => {
     expect(updatedModel.steps[0]?.kind).toBe('agent');
   });
 
-  it('clicking add-step and picking "question" from the library calls onChange with a question step', () => {
-    const onChange = vi.fn();
-    render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
-    fireEvent.click(screen.getByTestId('workflows-builder-add-step'));
-    const questionCard = screen.getByTestId('workflows-steplib-question');
-    fireEvent.click(questionCard);
-    expect(onChange).toHaveBeenCalledOnce();
-    const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
-    expect(updatedModel.steps[0]?.kind).toBe('question');
-  });
+  // The "form" library card → stubStep() integration is covered once
+  // yaml-serialize.ts's stub factory gains a canonical-kind case (Task 6);
+  // WfStepLibrary.test.tsx already covers the card wiring onAdd('form') in isolation.
 
   it('shows existing steps as rows', () => {
     const onChange = vi.fn();

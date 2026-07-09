@@ -208,13 +208,6 @@ describe('WfLibrary', () => {
     expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Manual/i);
   });
 
-  it('renders "Webhook" chip label for webhook triggers', () => {
-    const wf: WorkflowSummary = { ...globalWf, triggers: [{ kind: 'webhook' }] };
-    seedStore([wf]);
-    render(<WfLibrary port={31415} />);
-    expect(screen.getByTestId(`workflows-library-row-${wf.id}`).textContent).toMatch(/Webhook/i);
-  });
-
   // ── Project scope pill resolves the real project name ──────────────────────
 
   it('project-scoped row shows the resolved project name, not the literal "Project"', () => {

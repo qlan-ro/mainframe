@@ -14,9 +14,6 @@ import { Calendar, Play, BoltIcon } from 'lucide-react';
 import type { WfTrigger } from './yaml-serialize';
 
 // ── Trigger kind metadata ─────────────────────────────────────────────────────
-// Note: 'webhook' remains a valid WfTrigger['kind'] in the model/serializer —
-// it is intentionally omitted from this add-trigger menu (design offers only
-// manual/schedule/event here).
 
 const TRIGGER_KINDS: Array<{
   kind: WfTrigger['kind'];
