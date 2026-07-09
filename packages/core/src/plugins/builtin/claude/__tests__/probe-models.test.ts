@@ -31,4 +31,21 @@ describe('extractProbePayload', () => {
     };
     expect(extractProbePayload(event)?.resolvedModel).toBeUndefined();
   });
+
+  it('carries each entry own resolvedModel onto the mapped model', () => {
+    const event = {
+      type: 'control_response',
+      response: {
+        response: {
+          models: [
+            { value: 'sonnet', displayName: 'Sonnet', resolvedModel: 'claude-sonnet-5' },
+            { value: 'claude-sonnet-5', displayName: 'Sonnet 5' },
+          ],
+        },
+      },
+    };
+    const out = extractProbePayload(event);
+    expect(out?.models[0]?.resolvedModel).toBe('claude-sonnet-5');
+    expect(out?.models[1]?.resolvedModel).toBeUndefined();
+  });
 });

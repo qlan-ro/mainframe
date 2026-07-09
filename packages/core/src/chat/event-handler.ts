@@ -359,18 +359,27 @@ function buildSessionSink(
       const queueRemaining = refsAfter.length;
       const nextProcessState: 'idle' | 'working' = queueRemaining > 0 ? 'working' : 'idle';
 
+      // Context size: prefer the adapter's explicit per-turn report
+      // (`contextTokens`; null = "unknown this turn — keep the stored value").
+      // Legacy adapters without the field fall back to the turn's usage, but a
+      // zero must never clobber a real stored size (synthetic/EMPTY_USAGE turns).
+      const contextTokens = data.contextTokens === undefined ? tokensInput : data.contextTokens;
+      const contextUpdate = contextTokens != null && contextTokens > 0 ? { lastContextTokensInput: contextTokens } : {};
+
       db.chats.update(chatId, {
         totalCost: newCost,
         totalTokensInput: newInput,
         totalTokensOutput: newOutput,
-        lastContextTokensInput: tokensInput,
+        ...contextUpdate,
         processState: nextProcessState,
         updatedAt: now,
       });
       active.chat.totalCost = newCost;
       active.chat.totalTokensInput = newInput;
       active.chat.totalTokensOutput = newOutput;
-      active.chat.lastContextTokensInput = tokensInput;
+      if (contextUpdate.lastContextTokensInput != null) {
+        active.chat.lastContextTokensInput = contextUpdate.lastContextTokensInput;
+      }
       active.chat.processState = nextProcessState;
       active.chat.updatedAt = now;
 
@@ -513,6 +522,22 @@ function buildSessionSink(
     },
 
     onContextUsage(usage: ContextUsage) {
+      // Persist the CLI's own totals so the meter survives reloads and
+      // dormant-chat turns instead of regressing to a catalog-window guess
+      // (#197). `chat.updated` is broadcast ungated (unlike chat.contextUsage,
+      // which only reaches subscribers), so unsubscribed clients converge too.
+      if (usage.maxTokens > 0) {
+        db.chats.update(chatId, {
+          lastContextTotalTokens: usage.totalTokens,
+          lastContextMaxTokens: usage.maxTokens,
+        });
+        const active = getActiveChat(chatId);
+        if (active) {
+          active.chat.lastContextTotalTokens = usage.totalTokens;
+          active.chat.lastContextMaxTokens = usage.maxTokens;
+          emitEvent({ type: 'chat.updated', chat: active.chat });
+        }
+      }
       emitEvent({ type: 'chat.contextUsage', chatId, ...usage });
     },
 

@@ -103,6 +103,12 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'last_context_tokens_input')) {
     db.exec('ALTER TABLE chats ADD COLUMN last_context_tokens_input INTEGER DEFAULT 0');
   }
+  if (!cols.some((c) => c.name === 'last_context_total_tokens')) {
+    db.exec('ALTER TABLE chats ADD COLUMN last_context_total_tokens INTEGER');
+  }
+  if (!cols.some((c) => c.name === 'last_context_max_tokens')) {
+    db.exec('ALTER TABLE chats ADD COLUMN last_context_max_tokens INTEGER');
+  }
   if (!cols.some((c) => c.name === 'todos')) {
     db.exec('ALTER TABLE chats ADD COLUMN todos TEXT');
   }
@@ -114,7 +120,8 @@ export function initializeSchema(db: Database.Database): void {
   }
   if (!cols.some((c) => c.name === 'fast')) db.exec('ALTER TABLE chats ADD COLUMN fast INTEGER');
   if (!cols.some((c) => c.name === 'ultracode')) db.exec('ALTER TABLE chats ADD COLUMN ultracode INTEGER');
-  if (!cols.some((c) => c.name === 'adaptive_thinking')) db.exec('ALTER TABLE chats ADD COLUMN adaptive_thinking INTEGER');
+  if (!cols.some((c) => c.name === 'adaptive_thinking'))
+    db.exec('ALTER TABLE chats ADD COLUMN adaptive_thinking INTEGER');
   if (!cols.some((c) => c.name === 'detected_prs')) {
     db.exec("ALTER TABLE chats ADD COLUMN detected_prs TEXT DEFAULT '[]'");
   }
