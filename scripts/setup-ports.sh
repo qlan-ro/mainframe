@@ -36,6 +36,7 @@ MAINFRAME_DATA_DIR=$MAINFRAME_DATA_DIR
 
 # Vite-prefixed mirrors so import.meta.env exposes them to the renderer.
 # Without these the renderer falls back to the production daemon port (31415).
+VITE_DAEMON_PORT=$DAEMON_PORT
 VITE_DAEMON_HTTP_PORT=$DAEMON_PORT
 VITE_DAEMON_WS_PORT=$DAEMON_PORT
 EOF
@@ -52,6 +53,14 @@ echo "Installing dependencies…"
 echo ""
 echo "Building @qlan-ro/mainframe-types…"
 (cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-types build)
+
+# --minimal: browser-mode test runs need only ports + install + types
+# (daemon runs from source via tsx; Vite serves the renderer from source).
+if [ "${1:-}" = "--minimal" ]; then
+  echo ""
+  echo "Minimal setup complete (skipped core/electron builds)."
+  exit 0
+fi
 
 echo ""
 echo "Building @qlan-ro/mainframe-core…"

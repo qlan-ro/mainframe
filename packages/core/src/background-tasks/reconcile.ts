@@ -35,6 +35,7 @@ function buildRecoveredSnapshot(taskId: string, fp: string, st: Stats, writers: 
   const running = writers.length > 0;
   return {
     id: taskId,
+    kind: 'bash', // only bash tasks spool to disk, so only they can be recovered
     toolName: 'Bash',
     toolUseId: '',
     command: '<recovered>',

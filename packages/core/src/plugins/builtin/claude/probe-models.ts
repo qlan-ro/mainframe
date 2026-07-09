@@ -38,6 +38,7 @@ export function mapModelInfo(info: CliModelInfo): AdapterModel {
   }
   const model: AdapterModel = { id: info.value, label };
   if (info.description) model.description = info.description;
+  if (typeof info.resolvedModel === 'string') model.resolvedModel = info.resolvedModel;
   if (info.supportedEffortLevels?.length) {
     model.supportedEfforts = info.supportedEffortLevels;
     if (info.supportedEffortLevels.includes('xhigh')) model.supportsUltracode = true;

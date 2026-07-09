@@ -44,24 +44,13 @@ export interface TaskGroupEntry {
   parentToolUseId?: string;
 }
 
-/** All task-progress tools accumulated into a single progress feed entry. */
+/** Task-progress tools accumulated into one progress feed entry per parent. */
 export interface TaskProgressEntry {
   type: '_task_progress';
   toolCallId: string;
   items: TaskProgressItem[];
   result: 'accumulated';
   parentToolUseId?: string;
-}
-
-/**
- * Returns a parentToolUseId only if every item in the group shares the same
- * non-empty value. Used to propagate the tag onto virtual wrappers
- * (`_tool_group`, `_task_progress`) so groupTaskChildren can match them.
- */
-function sharedParentToolUseId(items: ReadonlyArray<{ parentToolUseId?: string }>): string | undefined {
-  const first = items[0]?.parentToolUseId;
-  if (!first) return undefined;
-  return items.every((it) => it.parentToolUseId === first) ? first : undefined;
 }
 
 export type PartEntry =
@@ -83,21 +72,27 @@ export type PartEntry =
 
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,
- * and accumulate task progress tools into a single _TaskProgress entry.
+ * and accumulate task progress tools into one _TaskProgress entry per parent.
  * Categories are adapter-declared — pass the adapter's ToolCategories instance.
  */
 export function groupToolCallParts(parts: PartEntry[], categories: ToolCategories): PartEntry[] {
   const result: PartEntry[] = [];
-  const taskItems: TaskProgressItem[] = [];
-  let taskInsertIndex = -1;
+  // Progress tools accumulate per parentToolUseId (undefined = main agent), so
+  // a subagent's progress feed stays single-parented and can nest inside its
+  // task group instead of merging with the main agent's into one mixed entry.
+  const progressBuckets = new Map<string | undefined, ProgressBucket>();
   let i = 0;
 
-  // Accumulate a progress tool into the single _TaskProgress entry, anchoring
-  // its insert position at the first one seen. Shared by the main loop and the
+  // Accumulate a progress tool into its parent's bucket, anchoring the bucket's
+  // insert position at the first one seen. Shared by the main loop and the
   // explore look-ahead so the item schema lives in one place.
   const collectTaskItem = (p: Extract<PartEntry, { type: 'tool-call' }>): void => {
-    if (taskInsertIndex === -1) taskInsertIndex = result.length;
-    taskItems.push({
+    let bucket = progressBuckets.get(p.parentToolUseId);
+    if (!bucket) {
+      bucket = { insertIndex: result.length, items: [] };
+      progressBuckets.set(p.parentToolUseId, bucket);
+    }
+    bucket.items.push({
       toolCallId: p.toolCallId,
       toolName: p.toolName,
       args: p.args,
@@ -119,7 +114,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
     // Collect task progress tools for accumulated display. Checked BEFORE the
     // hidden suppression: adapters mark the V2 task tools as both `hidden` (so
     // they never render as raw tool cards) and `progress` (so they surface as a
-    // single _TaskProgress entry). Progress must win, or they'd be dropped.
+    // _TaskProgress entry). Progress must win, or they'd be dropped.
     if (isTaskProgressTool(part.toolName, categories)) {
       collectTaskItem(part);
       i++;
@@ -132,49 +127,8 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
       continue;
     }
 
-    // Collect consecutive explore tools into a group
     if (isExploreTool(part.toolName, categories)) {
-      const group: PartEntry[] = [part];
-      let j = i + 1;
-      while (j < parts.length) {
-        const next = parts[j]!;
-        if (next.type !== 'tool-call') break;
-        if (isExploreTool(next.toolName, categories)) {
-          group.push(next);
-        } else if (isTaskProgressTool(next.toolName, categories)) {
-          // A progress tool inside the run is accumulated, not dropped.
-          collectTaskItem(next);
-        } else if (!isHiddenToolPart(next.toolName, next.category, categories)) {
-          break;
-        }
-        // hidden tools within the run are skipped
-        j++;
-      }
-
-      if (group.length >= 2) {
-        const items: ToolGroupItem[] = group.map((g) => {
-          const tc = g as PartEntry & { type: 'tool-call' };
-          return {
-            toolName: tc.toolName,
-            toolCallId: tc.toolCallId,
-            args: tc.args,
-            result: tc.result,
-            isError: tc.isError,
-            ...(tc.parentToolUseId && { parentToolUseId: tc.parentToolUseId }),
-          };
-        });
-        const wrapperParent = sharedParentToolUseId(items);
-        result.push({
-          type: '_tool_group',
-          toolCallId: (group[0] as PartEntry & { type: 'tool-call' }).toolCallId,
-          items,
-          result: 'grouped',
-          ...(wrapperParent && { parentToolUseId: wrapperParent }),
-        });
-      } else {
-        result.push(group[0]!);
-      }
-      i = j;
+      i = collectExploreRun(parts, i, result, categories, collectTaskItem);
       continue;
     }
 
@@ -183,66 +137,133 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
     i++;
   }
 
-  // Insert accumulated task progress at the position of the first task tool
-  if (taskItems.length > 0) {
-    const wrapperParent = sharedParentToolUseId(taskItems);
-    const entry: TaskProgressEntry = {
-      type: '_task_progress',
-      toolCallId: taskItems[0]!.toolCallId,
-      items: taskItems,
-      result: 'accumulated',
-      ...(wrapperParent && { parentToolUseId: wrapperParent }),
-    };
-    result.splice(taskInsertIndex >= 0 ? taskInsertIndex : result.length, 0, entry);
-  }
-
+  spliceProgressEntries(result, progressBuckets);
   return result;
 }
 
+interface ProgressBucket {
+  insertIndex: number;
+  items: TaskProgressItem[];
+}
+
 /**
- * Wraps a subagent tool call together with all subsequent parts tagged with a matching
- * `parentToolUseId` into a single _TaskGroup virtual entry so they render nested under
- * the subagent header. Stops as soon as a part carries no tag or a different one.
+ * Collects the run of consecutive explore tools starting at `start` into a
+ * `_tool_group` (pushed bare when the run has one member) and returns the index
+ * of the first part after the run. A part whose parentToolUseId differs from
+ * the run's first tool ends the run, so a subagent's explore burst never merges
+ * with the main agent's (or another subagent's) adjacent tools.
+ */
+function collectExploreRun(
+  parts: PartEntry[],
+  start: number,
+  result: PartEntry[],
+  categories: ToolCategories,
+  collectTaskItem: (p: Extract<PartEntry, { type: 'tool-call' }>) => void,
+): number {
+  const first = parts[start] as Extract<PartEntry, { type: 'tool-call' }>;
+  const runParent = first.parentToolUseId;
+  const group: Array<Extract<PartEntry, { type: 'tool-call' }>> = [first];
+  let j = start + 1;
+  while (j < parts.length) {
+    const next = parts[j]!;
+    if (next.type !== 'tool-call') break;
+    if (next.parentToolUseId !== runParent) break;
+    if (isExploreTool(next.toolName, categories)) {
+      group.push(next);
+    } else if (isTaskProgressTool(next.toolName, categories)) {
+      // A progress tool inside the run is accumulated, not dropped.
+      collectTaskItem(next);
+    } else if (!isHiddenToolPart(next.toolName, next.category, categories)) {
+      break;
+    }
+    // hidden tools within the run are skipped
+    j++;
+  }
+
+  if (group.length >= 2) {
+    result.push({
+      type: '_tool_group',
+      toolCallId: first.toolCallId,
+      items: group.map((tc) => ({
+        toolName: tc.toolName,
+        toolCallId: tc.toolCallId,
+        args: tc.args,
+        result: tc.result,
+        isError: tc.isError,
+        ...(tc.parentToolUseId && { parentToolUseId: tc.parentToolUseId }),
+      })),
+      result: 'grouped',
+      ...(runParent && { parentToolUseId: runParent }),
+    });
+  } else {
+    result.push(first);
+  }
+  return j;
+}
+
+/**
+ * Splices one `_task_progress` entry per parent bucket into `result`, each at
+ * the position where that parent's first progress tool was seen. Ascending
+ * insert order with an offset keeps every recorded index valid as earlier
+ * splices shift the array.
+ */
+function spliceProgressEntries(result: PartEntry[], buckets: Map<string | undefined, ProgressBucket>): void {
+  const ordered = [...buckets.entries()].sort((a, b) => a[1].insertIndex - b[1].insertIndex);
+  let offset = 0;
+  for (const [parentId, bucket] of ordered) {
+    result.splice(bucket.insertIndex + offset, 0, {
+      type: '_task_progress',
+      toolCallId: bucket.items[0]!.toolCallId,
+      items: bucket.items,
+      result: 'accumulated',
+      ...(parentId && { parentToolUseId: parentId }),
+    });
+    offset++;
+  }
+}
+
+/**
+ * Partitions a turn's parts into per-Task buckets: every part tagged with a
+ * subagent tool-call's id nests under that Task as a `_task_group` child,
+ * regardless of position — parallel Tasks interleave their children, and a
+ * Task's children can arrive after unrelated main-agent parts. Untagged parts
+ * stay top-level in order. A tag matching no Task in this turn is subagent
+ * content whose parent is not visible here (nested-Task grandchildren) — it is
+ * dropped, never rendered in the main flow.
  * Categories are adapter-declared — pass the adapter's ToolCategories instance.
  */
 export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories): PartEntry[] {
-  const result: PartEntry[] = [];
-  let i = 0;
-
-  while (i < parts.length) {
-    const part = parts[i]!;
-
-    if (part.type === 'tool-call' && isSubagentTool(part.toolName, categories)) {
-      const agentToolUseId = part.toolCallId;
-      const children: PartEntry[] = [];
-      let j = i + 1;
-      while (j < parts.length) {
-        const next = parts[j]!;
-        // Only collect parts tagged as belonging to THIS Agent.
-        if (next.parentToolUseId !== agentToolUseId) break;
-        children.push(next);
-        j++;
-      }
-
-      if (children.length > 0) {
-        result.push({
-          type: '_task_group',
-          toolCallId: part.toolCallId,
-          taskArgs: part.args,
-          children,
-          result: part.result,
-          isError: part.isError,
-        });
-        i = j;
-      } else {
-        result.push(part);
-        i++;
-      }
-    } else {
-      result.push(part);
-      i++;
+  const groups = new Map<string, TaskGroupEntry>();
+  for (const part of parts) {
+    if (part.type === 'tool-call' && !part.parentToolUseId && isSubagentTool(part.toolName, categories)) {
+      groups.set(part.toolCallId, {
+        type: '_task_group',
+        toolCallId: part.toolCallId,
+        taskArgs: part.args,
+        children: [],
+        result: part.result,
+        isError: part.isError,
+      });
     }
   }
 
-  return result;
+  const result: PartEntry[] = [];
+  const bareTasks = new Map<string, PartEntry>();
+  for (const part of parts) {
+    if (part.type === 'tool-call' && !part.parentToolUseId && groups.has(part.toolCallId)) {
+      bareTasks.set(part.toolCallId, part);
+      result.push(groups.get(part.toolCallId)!);
+      continue;
+    }
+    if (part.parentToolUseId) {
+      groups.get(part.parentToolUseId)?.children.push(part);
+      continue;
+    }
+    result.push(part);
+  }
+
+  // A Task that gathered no children renders as its original bare tool-call.
+  return result.map((p) =>
+    p.type === '_task_group' && p.children.length === 0 ? (bareTasks.get(p.toolCallId) ?? p) : p,
+  );
 }

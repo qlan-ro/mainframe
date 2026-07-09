@@ -65,6 +65,100 @@ describe('EventHandler token accumulation', () => {
   });
 });
 
+describe('EventHandler context-size persistence (#197)', () => {
+  let db: any;
+  let messages: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let activeChats: Map<string, any>;
+
+  const chatId = 'chat-ctx';
+
+  beforeEach(() => {
+    db = {
+      chats: { update: vi.fn(), get: vi.fn(), addSkillFile: vi.fn().mockReturnValue(false) },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    messages = new MessageCache();
+    permissions = new PermissionManager();
+    emitEvent = vi.fn();
+    activeChats = new Map();
+    activeChats.set(chatId, {
+      chat: {
+        id: chatId,
+        totalCost: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
+        lastContextTokensInput: 347_000,
+        processState: 'working',
+      },
+      session: null,
+    });
+  });
+
+  function makeSink(): SessionSink {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    return handler.buildSink(chatId, createRespondToPermission());
+  }
+
+  it('uses contextTokens (not the cumulative usage) for lastContextTokensInput', () => {
+    const sink = makeSink();
+    sink.onResult({
+      total_cost_usd: 0,
+      usage: { input_tokens: 900_000, output_tokens: 10 },
+      contextTokens: 150_000,
+    });
+    expect(activeChats.get(chatId)!.chat.lastContextTokensInput).toBe(150_000);
+    expect(db.chats.update).toHaveBeenCalledWith(chatId, expect.objectContaining({ lastContextTokensInput: 150_000 }));
+  });
+
+  it('preserves the stored context size when contextTokens is null (unknown this turn)', () => {
+    const sink = makeSink();
+    sink.onResult({ total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 }, contextTokens: null });
+    expect(activeChats.get(chatId)!.chat.lastContextTokensInput).toBe(347_000);
+    const updateArg = db.chats.update.mock.calls.find(([id]: [string]) => id === chatId)?.[1];
+    expect(updateArg).not.toHaveProperty('lastContextTokensInput');
+  });
+
+  it('falls back to usage input_tokens for adapters that do not report contextTokens', () => {
+    const sink = makeSink();
+    sink.onResult({ total_cost_usd: 0, usage: { input_tokens: 1_000 } });
+    expect(activeChats.get(chatId)!.chat.lastContextTokensInput).toBe(1_000);
+  });
+
+  it('does not clobber the stored context size with a zero legacy usage', () => {
+    const sink = makeSink();
+    sink.onResult({ total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } });
+    expect(activeChats.get(chatId)!.chat.lastContextTokensInput).toBe(347_000);
+  });
+
+  it('persists live totals from onContextUsage and re-broadcasts the chat', () => {
+    const sink = makeSink();
+    sink.onContextUsage({ totalTokens: 151_000, maxTokens: 967_000, percentage: 16 });
+
+    expect(db.chats.update).toHaveBeenCalledWith(
+      chatId,
+      expect.objectContaining({ lastContextTotalTokens: 151_000, lastContextMaxTokens: 967_000 }),
+    );
+    const chat = activeChats.get(chatId)!.chat;
+    expect(chat.lastContextTotalTokens).toBe(151_000);
+    expect(chat.lastContextMaxTokens).toBe(967_000);
+
+    const types = emitEvent.mock.calls.map(([e]: [any]) => e.type);
+    expect(types).toContain('chat.contextUsage');
+    expect(types).toContain('chat.updated');
+  });
+
+  it('does not persist an onContextUsage report without a usable maxTokens', () => {
+    const sink = makeSink();
+    sink.onContextUsage({ totalTokens: 1_000, maxTokens: 0, percentage: 0 });
+    expect(db.chats.update).not.toHaveBeenCalled();
+    const types = emitEvent.mock.calls.map(([e]: [any]) => e.type);
+    expect(types).toContain('chat.contextUsage');
+  });
+});
+
 describe('EventHandler adapterId stamping', () => {
   let db: any;
   let messages: MessageCache;

@@ -17,17 +17,27 @@ default).
   spawns the daemon itself.
 - Engine: `tauri-mcp` (the WKWebView has no CDP). Dev builds compile the
   bridge in (`pnpm tauri:dev` → `cargo tauri dev --features mcp-bridge`).
-- Launch (inline):
-  `cd packages/app-tauri && pnpm tauri:dev > /tmp/mf-tauri-dev.log 2>&1 &`
-  (background; first run compiles Rust — allow up to 10 minutes).
-- Wait-for-Ready: Vite responds at `http://localhost:${VITE_PORT:-5174}`
-  (use `localhost`, NOT `127.0.0.1` — Vite binds IPv6 `::1`), then the app
-  appears in the bridge's `list_devices`. On timeout read
-  `/tmp/mf-tauri-dev.log`.
+- Launch: `script: .agents/launch-test-tauri.sh` — run it EXACTLY ONCE. It
+  owns fresh-worktree provisioning (provision:node / bundle:daemon), the
+  isolated env (`DAEMON_PORT=31500`, `MAINFRAME_DATA_DIR=~/.mainframe_dev`;
+  refuses 31415), the background `tauri:dev` (first run compiles Rust, up to
+  10 min), and the readiness wait. It blocks until ready and prints `READY` +
+  facts (ports, APP_URL, LOG), or exits 1 with the log tail — do not
+  re-launch on failure, read the printed tail.
+- After READY: confirm the app appears in the bridge's `list_devices`.
 - Diff paths: `packages/app-tauri/`, `packages/ui/`.
-- Gotcha: dev launch configs may pin `DAEMON_PORT=31500` and
-  `MAINFRAME_DATA_DIR=~/.mainframe_dev` — a separate daemon from the
-  production one on 31415.
+- Bridge quirks (verified 2026-07-09): selector-based tools
+  (`webview_find_element`, selector-mode `webview_interact`,
+  `webview_keyboard`, `webview_wait_for`) can throw
+  `window.__MCP__.resolveRef is not a function` — fall back to
+  `webview_execute_js` for lookups/typing (native value setter +
+  `dispatchEvent('input')`) and coordinate `webview_interact` clicks.
+  `webview_dom_snapshot` selectors must resolve to a single small container
+  (broad multi-match selectors blow the token limit). `webview_wait_for`
+  cannot evaluate `:not()` compound selectors.
+- The in-app project picker is unrelated to which worktree's binary runs —
+  a target project sitting on a different git branch is NOT a wrong-build
+  signal; the shell/daemon code is built from this worktree regardless.
 
 ### Target: electron
 
@@ -35,6 +45,50 @@ default).
   backed by the local Node daemon. Everything below (Environment, Cleanup,
   Launch script, Wait-for-Ready, Engines) belongs to this target.
 - Diff paths: `packages/app-electron/`, `packages/ui/`.
+
+### Target: browser (cheapest — use when NO scenario is native-required)
+
+- Type: `web-spa` — the shared `packages/ui` renderer in a plain browser +
+  the daemon from source. No Electron, no Rust: bring-up 1–2 min.
+- Launch: `script: .agents/launch-test-browser.sh` — blocks until ready,
+  prints `READY` + `APP_URL`.
+- Engine: `playwright-cli` fresh browser (`open --headed $APP_URL`) — full
+  selector/ref support, no bridge quirks, no pinned CDP port.
+- Eligibility: chosen by the skill's cheapest-sufficient-target rule — every
+  scenario in the set must be renderer/daemon-only. **Native surfaces that
+  do NOT exist here** (any scenario touching them forces a native target):
+  preview child webviews, PTY terminal, window chrome/traffic lights, native
+  menus/tray/file dialogs, any Tauri-command-backed feature. Runtime-fidelity
+  caveat: this is not the shipped WKWebView/Electron runtime — compositing
+  and shell-specific rendering bugs will not reproduce; run a periodic
+  full-native pass for that.
+
+## Fleet
+
+Limits for multi-branch runs (consumed by the skill's Fleet Mode):
+
+- **Per-target caps: `electron` max 1, `tauri` max 1, `browser` max 4.**
+  Electron's CDP port is pinned to `9222` (not isolated by setup-ports.sh);
+  the tauri-mcp bridge reliably tracks one dev app at a time (and dies while
+  a preview child webview is mounted — see Gotchas). Browser runs have no
+  singleton (fresh browser per run, isolated ports) and are light
+  (daemon + Vite only) — they run genuinely in parallel.
+- **Max parallel runs: 4 total**, but at most one tauri + one electron at a
+  time (their full builds thrash the machine; browser runs are cheap).
+- **Prefer the browser target.** Native builds are slow and heavy; the
+  browser target (vite + daemon, no cargo) is the default path for
+  renderer/daemon-only scenario sets — reserve tauri/electron for genuinely
+  native surfaces.
+- Daemon/Vite ports and `MAINFRAME_DATA_DIR=~/.mainframe_dev` are isolated
+  per run by `scripts/setup-ports.sh`, so parallel runs don't collide there —
+  but they DO share `~/.mainframe_dev`; scenarios that assert on global DB
+  state (project/chat counts) belong in sequential runs.
+- **Process kills in a fleet:** the Cleanup section below matches ANY
+  `mainframe-core/desktop run dev` process — including live test runs — so
+  it runs exactly once (orchestrator, before any env exists). Per-branch
+  teardown uses the Stop / Restart section, which is scoped to that
+  worktree's own `.env` ports and is parallel-safe.
+- Protected port `31415` applies to every run, always.
 
 ## Protected Ports
 
@@ -65,49 +119,14 @@ Production defaults (never used here): `DAEMON_PORT=31415`, `VITE_PORT=5173`,
 
 ## Cleanup (Kill Stale Dev Processes)
 
-Previous sessions leave orphaned pnpm wrappers, daemons, Vite servers, and Electron instances across worktrees. Kill them — but respect the Protected Ports above.
-
-```bash
-# 1. Kill all mainframe-core dev wrappers (skip anything on port 31415)
-pids=$(ps ax -o pid,command | grep 'mainframe-core run dev' | grep -v grep | awk '{print $1}')
-for pid in $pids; do
-  if ! lsof -iTCP:31415 -sTCP:LISTEN -a -p $pid 2>/dev/null | grep -q LISTEN; then
-    pkill -9 -P $pid 2>/dev/null
-    kill -9 $pid 2>/dev/null
-  fi
-done
-
-# 2. Kill mainframe-desktop dev wrappers (Vite + Electron dev instances)
-pids=$(ps ax -o pid,command | grep 'mainframe-desktop run dev' | grep -v grep | awk '{print $1}')
-for pid in $pids; do
-  pkill -9 -P $pid 2>/dev/null
-  kill -9 $pid 2>/dev/null
-done
-
-# 3. Kill CDP port 9222 (dev Electron)
-lsof -ti :9222 2>/dev/null | xargs kill -9 2>/dev/null
-
-sleep 2
-
-# 4. Retry if anything survived
-remaining=$(ps ax -o pid,command | grep 'mainframe-\(core\|desktop\) run dev' | grep -v grep | awk '{print $1}')
-if [ -n "$remaining" ]; then
-  echo "WARNING: processes still alive after kill: $remaining — retrying"
-  echo "$remaining" | xargs kill -9 2>/dev/null
-  sleep 2
-fi
-
-if lsof -ti :9222 2>/dev/null; then
-  echo "WARNING: port 9222 still held — force killing"
-  lsof -ti :9222 | xargs kill -9 2>/dev/null
-  sleep 1
-fi
-
-# Final check — fail loudly if still occupied
-if ps ax -o pid,command | grep 'mainframe-\(core\|desktop\) run dev' | grep -v grep | grep -q .; then
-  echo "ERROR: could not kill all dev processes — manual intervention needed"
-fi
 ```
+script: .agents/cleanup-test.sh
+```
+
+Run the script exactly as-is — it kills stale `run dev` wrappers and CDP
+9222 while skipping anything on the protected port 31415, retries once, and
+exits nonzero if processes survive. Fleet runs execute it exactly once
+(orchestrator), never per-branch.
 
 **Never use `pkill -f "mainframe"` unfiltered** — it can hit the production app. The commands above specifically target `run dev` processes and skip anything on port 31415.
 
@@ -117,48 +136,28 @@ fi
 script: .agents/launch-test.sh
 ```
 
-Run the script EXACTLY ONCE. On readiness-poll timeout, read the log file — do
-not re-launch.
+Run the script EXACTLY ONCE. It owns the full electron bring-up: isolated
+ports via `scripts/setup-ports.sh` (never the protected prod `31415`),
+`pnpm install` + full build, daemon (`LOG_LEVEL=debug`), desktop (Vite +
+Electron, CDP on `9222`), the shared `packages/ui` renderer dev server, and
+the readiness wait. It **blocks until ready** and prints `READY` + facts
+(ports, CDP_URL, log paths), or exits 1 with the failing component's log
+tail — do not re-launch on failure, read the printed tail.
 
-`launch-test.sh` owns the full project bring-up and is the place to tweak how
-the app starts for testing. It:
-
-1. runs `scripts/setup-ports.sh` — allocates **isolated** free ports (daemon
-   `31416–32416`, Vite `5174–6174`, never the protected prod port `31415`),
-   writes `.env` with the `VITE_DAEMON_*` mirrors (without which the renderer
-   falls back to the prod daemon), then `pnpm install` + full build of all
-   three packages;
-2. sources the isolated `.env`;
-3. starts the daemon (`LOG_LEVEL=debug`, log → `/tmp/mf-daemon-<port>.log`);
-4. starts desktop (Vite + Electron with CDP on `9222`, log →
-   `/tmp/mf-desktop-<port>.log`);
-5. prints `DAEMON_PORT` / `VITE_PORT` / `CDP_URL` / log paths for the readiness
-   report.
-
-Because step 1 already does a full install + build, the dispatching
+Because the script already does a full install + build, the dispatching
 `prepare-worktree` subagent does **not** need a separate build step for this
-project — the script is authoritative. Default ports (`31415`/`5173`) are never
-used; isolation here is what prevents the production-daemon / sibling-worktree
-port clashes that otherwise derail the start.
+project — the script is authoritative.
 
 ## Wait for Ready
 
-```bash
-# Daemon
-for i in $(seq 1 20); do
-  curl -s http://127.0.0.1:$DAEMON_PORT/api/projects > /dev/null 2>&1 && break
-  sleep 0.5
-done
+The launch scripts own the readiness wait — a caller never re-implements it.
+Declarative facts the engines need after `READY`:
 
-# Electron CDP
-for i in $(seq 1 30); do
-  curl -s http://localhost:9222/json/version > /dev/null 2>&1 && break
-  sleep 0.5
-done
-curl -s http://localhost:9222/json/version
-```
-
-Daemon ready when `/api/projects` responds. App ready when `/json/version` returns JSON containing `webSocketDebuggerUrl`.
+- Daemon HTTP: `http://127.0.0.1:$DAEMON_PORT/api/projects` responds.
+- Electron CDP: `http://localhost:9222/json/version` returns JSON with
+  `webSocketDebuggerUrl`.
+- Tauri: Vite at `http://localhost:$VITE_PORT` (`localhost`, not
+  `127.0.0.1`), app present in the bridge's `list_devices`.
 
 ## Test Engines
 
@@ -176,23 +175,69 @@ CDP endpoint: `http://localhost:9222`
 - Run command: `cd packages/e2e && npx playwright test tests/99-adhoc-*.spec.ts --workers=1 --reporter=list`
 - Throwaway — delete the file after reporting results, never commit.
 
+## Seeding & Fixtures
+
+**Hand-authored replay fixtures (preferred for rendering/derived-state
+scenarios).** The e2e mock-cli plugin (`packages/e2e/plugins/mock-cli`, see
+its `DESIGN.md`) replays an NDJSON event fixture through a real adapter —
+full live event path (all SessionSink callbacks incl. `onSubagentChild`), no
+API calls, fully deterministic. **Write fixtures by hand — no LLM run
+needed:**
+
+- Format (one JSON per line): `{"dir":"in","method":"sendMessage","args":["<text>"]}`
+  marks a user send (positional — reply N answers send N);
+  `{"dir":"out","method":"<sink method>","args":[<verbatim sink-signature args>],"delayMs":N}`
+  is what the fake CLI emits; `"fx"` lines apply file effects.
+- Authoring guards: start from an existing fixture in
+  `packages/e2e/fixtures/recordings/` (permissions, compaction, attachments,
+  bash exit codes, …) and take payload shapes from
+  `docs/adapters/claude/PROTOCOL_REVERSED.md` or `packages/core`'s own test
+  fixtures — never invent event shapes; a fixture the daemon would never
+  receive proves nothing.
+- Replay wiring: build the plugin (esbuild, per
+  `packages/e2e/fixtures/daemon.ts`), copy it into
+  `<data-dir>/plugins/mock-cli`, run the daemon with `E2E_MODE=mock
+  E2E_RECORDINGS_DIR=<dir with your fixture>`, create the chat with the mock
+  adapterId.
+- `E2E_MODE=record` also exists (tees a real CLI session to a fixture) but is
+  a shape-sampling aid, not the default path — it reintroduces live-LLM cost
+  and nondeterminism.
+
+Rules learned from live runs (2026-07-09 fleet):
+
+- **Never use `/tmp` as a throwaway project path** for transcript/session-path
+  scenarios on macOS — the CLI encodes the `/private` realpath while the
+  daemon stores the symlinked path, and they never match. Use `~/Projects/...`.
+- **Seed session state through the running app, not SQLite.** Writing
+  `claude_session_id`/`transcript_missing` directly to the DB is invisible to
+  the daemon's in-memory `activeChats` cache — send a real message instead.
+- **File-watch/external-edit fixtures** must live outside any dev server's
+  watched root (use repo-root docs, not `packages/*/src`) or HMR of the app
+  under test confounds the check.
+- **Register the worktree as a project first** (`POST /api/projects
+  {"path": "<worktree>"}`) before any file-surface testing — the pre-existing
+  "mainframe" project points at the main checkout, and file edits through it
+  silently target the wrong filesystem path.
+- `~/.mainframe_dev` accumulates real project registrations across runs;
+  non-mainframe launch configs failing to start (`command not found`) is a
+  PATH/env artifact, not a bug — the config's presence in the picker is the
+  signal, not whether its process binds.
+
 ## Stop / Restart
 
-Kill by port. **Never kill just Electron** — that leaves the daemon and Vite dangling.
-
-```bash
-source .env
-lsof -ti :$DAEMON_PORT :$VITE_PORT :9222 2>/dev/null | xargs kill -9 2>/dev/null
-
-sleep 2
-for port in $DAEMON_PORT $VITE_PORT 9222; do
-  if lsof -ti :$port 2>/dev/null; then
-    echo "Port $port still held — retrying kill"
-    lsof -ti :$port | xargs kill -9 2>/dev/null
-  fi
-done
-sleep 1
 ```
+script: .agents/stop-test.sh [port ...]
+```
+
+Port-scoped, parallel-safe teardown of one run — defaults to this checkout's
+`.env` ports + CDP 9222; pass explicit ports to override. Refuses the
+protected port 31415; exits nonzero if a port stays held. Never kill just
+Electron — the script kills the full port set for exactly this run.
+
+**Tauri caveat:** killing `$DAEMON_PORT` also takes the parent `app-tauri`
+process (shared socket). At teardown that is intended; never use this
+mid-run hoping for a daemon-only restart — relaunch the app properly
+instead.
 
 Then re-run the **Launch** section.
 

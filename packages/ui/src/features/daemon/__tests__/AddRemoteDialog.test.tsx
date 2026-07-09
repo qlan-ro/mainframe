@@ -279,6 +279,32 @@ describe('AddRemoteDialog — invalid code', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Behavior 3b — pairing succeeds server-side but local token storage fails
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — local storage failure after successful pairing', () => {
+  it('shows the storage error notice and does NOT show the Paired success state', async () => {
+    const user = userEvent.setup();
+    mockAdd.mockRejectedValue(new Error('keychain write failed'));
+
+    const onDone = vi.fn();
+    render(<AddRemoteDialog open mode="add" onClose={vi.fn()} onDone={onDone} />);
+
+    await advanceToStep1(user);
+    await typeCode(user, VALID_CODE);
+
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('daemon-add-storage-error')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Paired')).not.toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Behavior 4 — network error (PairingError 'network')
 // ---------------------------------------------------------------------------
 

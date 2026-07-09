@@ -161,7 +161,9 @@ function convertAssistantEntry(
       if (block.type === 'text') {
         contentBlocks.push({ type: 'text', text: block.text || '' });
       } else if (block.type === 'thinking') {
-        contentBlocks.push({ type: 'thinking', thinking: block.thinking || '' });
+        // Hidden-thinking models emit signature-only blocks with empty prose — skip them.
+        const thinking = (block.thinking as string) || '';
+        if (thinking.trim()) contentBlocks.push({ type: 'thinking', thinking });
       } else if (block.type === 'tool_use') {
         contentBlocks.push({
           type: 'tool_use',
