@@ -14,7 +14,7 @@ import { X, Layers, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { getKindMeta } from '../glyphs';
-import type { WfStep } from './yaml-serialize';
+import type { WfStep } from './wf-draft-types';
 
 // ── Doc metadata ──────────────────────────────────────────────────────────────
 

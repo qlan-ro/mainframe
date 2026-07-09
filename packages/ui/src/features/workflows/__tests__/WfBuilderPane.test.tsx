@@ -16,7 +16,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { WfBuilderPane } from '@/features/workflows/editor/WfBuilderPane';
 import { serializeWorkflow } from '@/features/workflows/editor/yaml-serialize';
-import type { WfDraft } from '@/features/workflows/editor/yaml-serialize';
+import type { WfDraft } from '@/features/workflows/editor/wf-draft-types';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,7 @@ function makeBlankDraft(): WfDraft {
     scope: 'project',
     triggers: [],
     inputs: [],
+    vars: [],
     steps: [],
     outputs: [],
   };
@@ -39,6 +40,7 @@ function makeDraftWithTriggerAndStep(): WfDraft {
     scope: 'global',
     triggers: [{ kind: 'manual' }],
     inputs: [],
+    vars: [],
     steps: [
       {
         id: 'q1',

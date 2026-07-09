@@ -11,11 +11,11 @@ import { useState } from 'react';
 import { Zap, SlidersHorizontal, Layers, CircleDot, X, Play, Calendar, BoltIcon, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
-import { stubStep, stubTrigger } from './yaml-serialize';
+import { stubStep, stubTrigger } from './wf-stubs';
 import { WfbAddTrigger } from './WfbDropdowns';
 import { WfbStepRow } from './WfbStepRow';
 import { WfStepLibrary } from './WfStepLibrary';
-import type { WfDraft, WfTrigger, WfStep } from './yaml-serialize';
+import type { WfDraft, WfTrigger, WfStep } from './wf-draft-types';
 
 // ── WfbSection ────────────────────────────────────────────────────────────────
 
@@ -61,10 +61,21 @@ interface TriggerRowProps {
   onRemove: () => void;
 }
 
+function triggerDetail(trigger: WfTrigger): string {
+  switch (trigger.kind) {
+    case 'schedule':
+      return trigger.label ?? trigger.cron;
+    case 'event':
+      return trigger.on;
+    case 'manual':
+      return 'started by hand';
+  }
+}
+
 function TriggerRow({ trigger, onRemove }: TriggerRowProps): React.ReactElement {
   const TriggerIcon = TRIGGER_ICON_MAP[trigger.kind] ?? Play;
   const label = TRIGGER_LABEL_MAP[trigger.kind] ?? trigger.kind;
-  const detail = trigger.label ?? trigger.cron ?? trigger.event ?? trigger.path ?? 'started by hand';
+  const detail = triggerDetail(trigger);
 
   return (
     <div className="flex items-center gap-[9px] rounded-md border border-border bg-card px-[10px] py-[8px]">
@@ -120,30 +131,30 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
     patch({ steps: model.steps.filter((_, k) => k !== i) });
   }
 
-  function setStepTitle(i: number, title: string): void {
+  function setStepName(i: number, name: string): void {
     const steps = model.steps.slice();
-    steps[i] = { ...steps[i]!, title };
+    steps[i] = { ...steps[i]!, name };
     patch({ steps });
   }
 
   function addOutput(): void {
-    const newOutput = { name: `output${(model.outputs ?? []).length + 1}`, expr: '${ ... }' };
-    patch({ outputs: [...(model.outputs ?? []), newOutput] });
+    const newOutput = { name: `output${model.outputs.length + 1}`, expr: '${ ... }' };
+    patch({ outputs: [...model.outputs, newOutput] });
   }
 
   function removeOutput(i: number): void {
-    patch({ outputs: (model.outputs ?? []).filter((_, k) => k !== i) });
+    patch({ outputs: model.outputs.filter((_, k) => k !== i) });
   }
 
   function setOutputField(i: number, partial: { name?: string; expr?: string }): void {
-    const outputs = [...(model.outputs ?? [])];
+    const outputs = [...model.outputs];
     outputs[i] = { ...outputs[i]!, ...partial };
     patch({ outputs });
   }
 
   function addInput(): void {
-    const newInput = { name: `input${(model.inputs ?? []).length + 1}`, type: 'string' };
-    patch({ inputs: [...(model.inputs ?? []), newInput] });
+    const newInput = { name: `input${model.inputs.length + 1}`, type: 'string' };
+    patch({ inputs: [...model.inputs, newInput] });
   }
 
   return (
@@ -217,7 +228,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
         <WfbSection
           Icon={SlidersHorizontal}
           title="Inputs"
-          count={(model.inputs ?? []).length}
+          count={model.inputs.length}
           action={
             <button
               type="button"
@@ -228,9 +239,9 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
             </button>
           }
         >
-          {(model.inputs ?? []).length > 0 ? (
+          {model.inputs.length > 0 ? (
             <div className="flex flex-col gap-1">
-              {(model.inputs ?? []).map((inp, i) => (
+              {model.inputs.map((inp, i) => (
                 <div key={i} className="flex items-center gap-[8px] py-[6px] font-mono text-caption">
                   <span className="font-semibold text-foreground">{inp.name}</span>
                   <span className="inline-flex h-[17px] items-center rounded-[3px] bg-muted px-[7px] font-semibold text-muted-foreground">
@@ -252,7 +263,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
                 key={s.id ?? i}
                 step={s}
                 index={i}
-                onTitle={(t) => setStepTitle(i, t)}
+                onTitle={(t) => setStepName(i, t)}
                 onRemove={() => removeStep(i)}
               />
             ))}
@@ -287,7 +298,7 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
         <WfbSection
           Icon={CircleDot}
           title="Outputs"
-          count={(model.outputs ?? []).length}
+          count={model.outputs.length}
           action={
             <button
               type="button"
@@ -299,9 +310,9 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
             </button>
           }
         >
-          {(model.outputs ?? []).length > 0 ? (
+          {model.outputs.length > 0 ? (
             <div className="flex flex-col gap-[6px]">
-              {(model.outputs ?? []).map((o, i) => (
+              {model.outputs.map((o, i) => (
                 <div key={i} className="flex items-center gap-[8px]">
                   <input
                     type="text"

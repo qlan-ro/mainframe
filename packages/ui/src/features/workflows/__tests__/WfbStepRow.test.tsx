@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { WfbStepRow } from '@/features/workflows/editor/WfbStepRow';
-import type { WfStep } from '@/features/workflows/editor/yaml-serialize';
+import type { WfStep } from '@/features/workflows/editor/wf-draft-types';
 
 function chooseStep(): WfStep {
   return { id: 'b1', kind: 'choose', arms: [{ when: 'true', steps: [] }] };

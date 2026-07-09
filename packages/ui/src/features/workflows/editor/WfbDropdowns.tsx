@@ -11,7 +11,7 @@
  */
 import { useState } from 'react';
 import { Calendar, Play, BoltIcon } from 'lucide-react';
-import type { WfTrigger } from './yaml-serialize';
+import type { WfTrigger } from './wf-draft-types';
 
 // ── Trigger kind metadata ─────────────────────────────────────────────────────
 

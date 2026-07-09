@@ -22,8 +22,9 @@ import { useWorkflowsModal, type WfEditorTarget } from '../use-workflows-modal';
 import { useWorkflowsStore } from '../use-workflows-store';
 import { WfYamlPane } from './WfYamlPane';
 import { WfBuilderPane } from './WfBuilderPane';
-import { serializeWorkflow, blankDraft } from './yaml-serialize';
-import type { WfDraft } from './yaml-serialize';
+import { serializeWorkflow } from './yaml-serialize';
+import { blankDraft } from './wf-stubs';
+import type { WfDraft } from './wf-draft-types';
 import { slug, deriveNameFromYaml, deriveWorkflowId } from './wf-slug';
 import { ModeToggle, ValidationFooter, type EditorMode, type ValidationResult } from './WfEditorChrome';
 
