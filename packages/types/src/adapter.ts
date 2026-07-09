@@ -18,6 +18,15 @@ export interface SessionResult {
     cache_creation_input_tokens?: number;
     cache_read_input_tokens?: number;
   };
+  /**
+   * Tokens occupying the context window at the turn's last model call
+   * (input + cache tokens of the final parent assistant message).
+   * `null` = the adapter knows the size is unknown this turn (e.g. error
+   * turn with no assistant usage) — do NOT estimate it from `usage`, which
+   * may be a cumulative multi-call total. Absent (undefined) = legacy
+   * adapter; `usage` remains the best available approximation.
+   */
+  contextTokens?: number | null;
   subtype?: string;
   result?: string;
   is_error?: boolean;
@@ -218,6 +227,8 @@ export interface AdapterModel {
   id: string;
   label: string;
   description?: string;
+  /** Concrete model id an alias entry currently resolves to (CLI probe, per-entry). */
+  resolvedModel?: string;
   contextWindow?: number;
   isDefault?: boolean;
   /** Dynamic, per-model. Empty/absent → model has no effort control. */
