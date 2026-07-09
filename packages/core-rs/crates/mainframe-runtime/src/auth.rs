@@ -1,11 +1,15 @@
-//! Ported from `src/auth/*`.
-//!
-//! TODO(port): token generation/validation (`src/auth/token.ts`,
-//! `src/auth/validate-authed-token.ts`) is not yet ported. `/health` is on the
-//! `publicPaths` allowlist (see `docs/rust-port/CONTRACT/routes.json`) and does
-//! not require auth, so the scaffold daemon has no auth-gated routes yet.
+//! Ported from `src/auth/index.ts` (re-exports).
 
-// PORT STATUS: src/auth/* (not yet ported)
-// confidence: low
-// todos: 1
-// notes: empty placeholder module; real port deferred to Phase 3 (server: HTTP + WS).
+pub mod token;
+pub mod validate_authed_token;
+
+pub use token::{TokenPayload, generate_pairing_code, generate_token, validate_token};
+pub use validate_authed_token::{DeviceLookup, validate_authed_token};
+
+// PORT STATUS: src/auth/index.ts (2 lines)
+// confidence: high
+// todos: 0
+// notes: index.ts re-exports generateToken/validateToken/generatePairingCode +
+// the TokenPayload type. validateAuthedToken is imported directly in the TS tree
+// (not via index.ts); it is re-exported here for ergonomics alongside its
+// `DeviceLookup` trait (the port's stand-in for the `DevicesRepository` argument).
