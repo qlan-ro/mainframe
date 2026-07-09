@@ -1,91 +1,83 @@
-//! Integration test for Task 1.3: boots the real axum app on an ephemeral
-//! port, issues a raw HTTP GET against `/health`, asserts the JSON shape
-//! against `docs/rust-port/fixtures/route.health.json`, then triggers
-//! graceful shutdown.
+//! Boot smoke test: assembles the same AppCtx the daemon's `main` builds (Db
+//! actor + real services + broadcast + WS registry), serves `build_app` on an
+//! ephemeral port with connect-info, and asserts `/health`'s wire shape, then
+//! shuts down gracefully.
 //!
-//! Uses a hand-rolled HTTP/1.1 client over `tokio::net::TcpStream` rather
-//! than an HTTP client crate: no HTTP client is in the workspace dependency
-//! allowlist, and adding one is out of scope for this scaffold (see
-//! blockers in the task report).
-//!
-//! `unwrap`/`expect` are allowed throughout this file: it is entirely test
-//! code (integration tests are only ever built under `cargo test`), matching
-//! the RUST RULES exemption for `#[cfg(test)]` code.
+//! Integration tests are only built under `cargo test`, so `unwrap`/`expect` are
+//! permitted here (RUST RULES `#[cfg(test)]` exemption).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_server::http::{AppState, build_router};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use dashmap::DashMap;
+use mainframe_db::DatabaseManager;
+use mainframe_server::ctx::{AppCtx, GitFactory, Services};
+use mainframe_server::db::Db;
+use mainframe_server::{build_app, spawn_broadcast_pump};
+use mainframe_services::attachment::AttachmentStore;
+use mainframe_services::files::FileWatcherService;
+use mainframe_services::push::PushService;
+use mainframe_types::events::DaemonEvent;
 
 #[tokio::test]
 async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
-    let state = AppState {
+    let data_dir = tempfile::tempdir().unwrap();
+    let db = Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:"))).unwrap();
+    let (broadcast, _keepalive) = tokio::sync::broadcast::channel::<DaemonEvent>(64);
+    let watcher_tx = broadcast.clone();
+    let ctx = Arc::new(AppCtx {
+        db,
+        git: GitFactory,
+        services: Services {
+            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+            push: Arc::new(PushService::new()),
+            watcher: Arc::new(FileWatcherService::new(move |event| {
+                let _ = watcher_tx.send(event);
+            })),
+        },
+        broadcast,
+        data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
+        auth_secret: None,
         tunnel_url: None,
-    };
-    let app = build_router(state);
+        ws_clients: Arc::new(DashMap::new()),
+    });
+    spawn_broadcast_pump(Arc::clone(&ctx));
 
+    let app = build_app(Arc::clone(&ctx));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let server = tokio::spawn(async move {
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async {
-                let _ = shutdown_rx.await;
-            })
-            .await
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(async {
+            let _ = shutdown_rx.await;
+        })
+        .await
     });
 
-    let body = http_get(addr, "/health").await;
-    let json: serde_json::Value =
-        serde_json::from_str(&body).expect("response body must be valid JSON");
-
+    let json: serde_json::Value = reqwest::get(format!("http://{addr}/health"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(json["status"], "ok");
     assert_eq!(json["version"], "0.0.0-test");
     assert!(json["tunnelUrl"].is_null());
-    // Byte-shape parity with Node's Date.toISOString(): millis precision + `Z`
-    // (e.g. 2026-07-08T10:15:30.000Z), never micros or a `+00:00` offset.
-    let timestamp = json["timestamp"]
-        .as_str()
-        .expect("timestamp must be a string");
-    assert!(
-        timestamp.ends_with('Z'),
-        "timestamp must be Z-suffixed UTC: {timestamp}"
-    );
-    assert_eq!(
-        timestamp.len(),
-        24,
-        "timestamp must be millis-precision ISO-8601: {timestamp}"
-    );
-    assert_eq!(
-        &timestamp[19..20],
-        ".",
-        "timestamp must have a fractional-second separator: {timestamp}"
-    );
+    let ts = json["timestamp"].as_str().expect("timestamp is a string");
+    assert!(ts.ends_with('Z'), "millis+Z ISO-8601: {ts}");
+    assert_eq!(ts.len(), 24, "millis precision: {ts}");
+    assert_eq!(&ts[19..20], ".");
 
     let _ = shutdown_tx.send(());
     server
         .await
         .unwrap()
         .expect("server task must exit cleanly after graceful shutdown");
-}
-
-async fn http_get(addr: std::net::SocketAddr, path: &str) -> String {
-    let mut stream = TcpStream::connect(addr).await.unwrap();
-    let request = format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
-    stream.write_all(request.as_bytes()).await.unwrap();
-
-    let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).await.unwrap();
-    let raw = String::from_utf8_lossy(&raw);
-
-    let (headers, body) = raw
-        .split_once("\r\n\r\n")
-        .expect("HTTP response must have a header/body separator");
-    assert!(
-        headers.starts_with("HTTP/1.1 200"),
-        "expected 200 OK, got: {headers}"
-    );
-    body.to_string()
 }

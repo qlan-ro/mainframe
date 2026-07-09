@@ -15,8 +15,14 @@ path = "src/main.rs"
 tokio = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
+dashmap = { workspace = true }
 mainframe-server = { workspace = true }
 mainframe-runtime = { workspace = true }
+mainframe-db = { workspace = true }
+mainframe-services = { workspace = true }
+mainframe-types = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+reqwest = { workspace = true }
+tempfile = { workspace = true }
