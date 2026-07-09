@@ -2,18 +2,18 @@
  * WfbStepRow — a single step row in the visual builder.
  *
  * Shows: drag handle (decorative), kind icon chip, inline-editable title,
- * summary text, Configure (expand) toggle, and a remove button.
- *
- * Composite sub-lane nesting (parallel lanes, branch arms, loop body) is
- * DEFERRED — the open/closed panel body renders a simple placeholder for now.
- * The prototype's full nested WfbMiniStep render requires a recursive component
- * that also accepts lane/arm/step mutation callbacks; scoped to a follow-up pass.
+ * summary text, Configure (expand) toggle, and a remove button. The
+ * Configure panel mounts `WfStepConfigForm` for the step's own fields;
+ * nested composite child rendering (choose arms, foreach body, parallel
+ * branches) is added on top by `WfStepList`, which wraps this component.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GripVertical, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { getKindMeta } from '../glyphs';
+import { WfStepConfigForm } from './config/WfStepConfigForm';
+import type { WfScopeSource } from './config/wf-scope';
 import type { WfStep } from './wf-draft-types';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -21,8 +21,9 @@ import type { WfStep } from './wf-draft-types';
 interface WfbStepRowProps {
   step: WfStep;
   index: number;
-  onTitle?: (title: string) => void;
+  onPatch?: (patch: Partial<WfStep>) => void;
   onRemove: () => void;
+  scope?: WfScopeSource[];
 }
 
 // ── Summary helper ────────────────────────────────────────────────────────────
@@ -50,12 +51,17 @@ function stepSummary(step: WfStep): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps): React.ReactElement {
+export function WfbStepRow({ step, index, onPatch, onRemove, scope = [] }: WfbStepRowProps): React.ReactElement {
   const meta = getKindMeta(step.kind);
   const Icon = meta.Icon;
   const summary = stepSummary(step);
   const title = step.name ?? meta.label;
   const [configOpen, setConfigOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (configOpen) panelRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [configOpen]);
 
   return (
     <div
@@ -77,7 +83,7 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
           data-testid={`workflows-builder-step-title-${step.id ?? String(index)}`}
           type="text"
           value={title}
-          onChange={(e) => onTitle?.(e.target.value)}
+          onChange={(e) => onPatch?.({ name: e.target.value })}
           className="min-w-0 flex-1 border-none bg-transparent p-0 text-body font-semibold text-foreground outline-none placeholder:text-muted-foreground"
         />
 
@@ -115,15 +121,10 @@ export function WfbStepRow({ step, index, onTitle, onRemove }: WfbStepRowProps):
         </Hint>
       </div>
 
-      {/* Configure panel — DEFERRED: full composite sub-lane nesting (parallel lanes,
-          branch arms, loop body with nested WfbMiniStep rows and mutation callbacks)
-          is scoped to a follow-up pass. Currently shows a placeholder for non-composite
-          steps, and nothing for composite steps (they expose sub-lanes in the main view). */}
+      {/* Configure panel */}
       {configOpen && (
-        <div className="border-t border-border pt-[2px] pr-[12px] pb-[12px] pl-[30px]">
-          <p className="text-caption text-mf-text-3">
-            Configure panel for <span className="font-semibold text-foreground">{meta.label}</span> step.
-          </p>
+        <div ref={panelRef} className="border-t border-border pt-[2px] pr-[12px] pb-[12px] pl-[30px]">
+          <WfStepConfigForm step={step} onPatch={onPatch ?? (() => {})} scope={scope} />
         </div>
       )}
     </div>

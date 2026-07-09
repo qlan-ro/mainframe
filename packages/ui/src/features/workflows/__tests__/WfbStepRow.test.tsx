@@ -1,17 +1,34 @@
 /**
- * WfbStepRow — TDD test for kind-icon resolution.
+ * WfbStepRow — TDD test for kind-icon resolution, plus (Task 13) the
+ * onPatch-driven config form mount.
  *
  * WfbStepRow receives canonical v2 kinds (choose/foreach/call/service) and
  * resolves them directly via getKindMeta — the model and canonical
  * vocabularies no longer diverge (KIND_ALIAS/getKindMetaByModel removed).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { WfbStepRow } from '@/features/workflows/editor/WfbStepRow';
 import type { WfStep } from '@/features/workflows/editor/wf-draft-types';
 
+vi.mock('@/features/workflows/editor/config/AgentConfigSlot', () => ({
+  AgentConfigSlot: ({ onPatch }: { onPatch: (patch: Partial<WfStep>) => void }) => (
+    <input data-testid="mock-agent-prompt" onChange={(e) => onPatch({ agent: { prompt: e.target.value } })} />
+  ),
+}));
+
+vi.mock('@/features/workflows/editor/config/FormFieldsSlot', () => ({
+  FormFieldsSlot: ({ onPatch }: { onPatch: (patch: Partial<WfStep>) => void }) => (
+    <input data-testid="mock-form-fields" onChange={(e) => onPatch({ form: { title: e.target.value, fields: [] } })} />
+  ),
+}));
+
 function chooseStep(): WfStep {
   return { id: 'b1', kind: 'choose', arms: [{ when: 'true', steps: [] }] };
+}
+
+function openConfigure(id: string): void {
+  fireEvent.click(screen.getByTestId(`workflows-builder-step-configure-${id}`));
 }
 
 describe('WfbStepRow', () => {
@@ -44,5 +61,85 @@ describe('WfbStepRow', () => {
     render(<WfbStepRow step={step} index={0} onRemove={vi.fn()} />);
     const titleInput = screen.getByTestId('workflows-builder-step-title-svc1') as HTMLInputElement;
     expect(titleInput.value).toBe('Service');
+  });
+
+  it('typing into the title input calls onPatch with a name patch, not onTitle', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'svc2', kind: 'service', connector: 'files.append' };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    fireEvent.change(screen.getByTestId('workflows-builder-step-title-svc2'), { target: { value: 'Renamed' } });
+    expect(onPatch).toHaveBeenCalledWith({ name: 'Renamed' });
+  });
+
+  it('opens the config form for an "agent" step and patches through the mocked slot', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'a1', kind: 'agent', agent: { prompt: 'x' } };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('a1');
+    fireEvent.change(screen.getByTestId('mock-agent-prompt'), { target: { value: 'Describe the task' } });
+    expect(onPatch).toHaveBeenCalledWith({ agent: { prompt: 'Describe the task' } });
+  });
+
+  it('opens the config form for a "form" step and patches through the mocked slot', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'f1', kind: 'form', form: { title: '', fields: [] } };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('f1');
+    fireEvent.change(screen.getByTestId('mock-form-fields'), { target: { value: 'Ask something' } });
+    expect(onPatch).toHaveBeenCalledWith({ form: { title: 'Ask something', fields: [] } });
+  });
+
+  it('opens the config form for a "service" step and patches the connector field', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 's1', kind: 'service', connector: 'files.append' };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('s1');
+    fireEvent.change(screen.getByTestId('workflows-config-s1-connector'), { target: { value: 'slack.post' } });
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ connector: 'slack.post' }));
+  });
+
+  it('opens the config form for a "choose" step and patches an arm\'s when-condition', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'c1', kind: 'choose', arms: [{ when: 'true', steps: [] }] };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('c1');
+    fireEvent.change(screen.getByTestId('workflows-config-c1-arm-0-when'), { target: { value: 'x > 1' } });
+    expect(onPatch).toHaveBeenCalledWith({ arms: [{ when: 'x > 1', steps: [] }] });
+  });
+
+  it('opens the config form for a "foreach" step and patches the over field', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'l2', kind: 'foreach', over: '', as: 'item', steps: [] };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('l2');
+    fireEvent.change(screen.getByTestId('workflows-config-l2-over'), { target: { value: '${ items }' } });
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ over: '${ items }' }));
+  });
+
+  it('opens the config form for a "parallel" step and patches a branch name', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'p1', kind: 'parallel', branches: { a: [], b: [] } };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('p1');
+    fireEvent.change(screen.getByTestId('workflows-config-p1-branch-a-name'), { target: { value: 'renamed' } });
+    expect(onPatch).toHaveBeenCalledWith({ branches: { renamed: [], b: [] } });
+  });
+
+  it('opens the config form for a "call" step and patches the ref field', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'call1', kind: 'call', ref: 'ship-work' };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('call1');
+    fireEvent.change(screen.getByTestId('workflows-config-call1-ref'), { target: { value: 'other-workflow' } });
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ ref: 'other-workflow' }));
+  });
+
+  it('opens the config form for a "set" step and patches the set map', () => {
+    const onPatch = vi.fn();
+    const step: WfStep = { id: 'set1', kind: 'set', set: { value: null } };
+    render(<WfbStepRow step={step} index={0} onPatch={onPatch} onRemove={vi.fn()} />);
+    openConfigure('set1');
+    fireEvent.click(screen.getByTestId('workflows-config-set1-set-add'));
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ set: expect.objectContaining({ value: null }) }));
   });
 });

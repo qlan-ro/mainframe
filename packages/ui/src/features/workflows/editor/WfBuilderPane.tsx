@@ -15,6 +15,7 @@ import { stubStep, stubTrigger } from './wf-stubs';
 import { WfbAddTrigger } from './WfbDropdowns';
 import { WfbStepRow } from './WfbStepRow';
 import { WfStepLibrary } from './WfStepLibrary';
+import { scopeForPath } from './config/wf-scope';
 import type { WfDraft, WfTrigger, WfStep } from './wf-draft-types';
 
 // ── WfbSection ────────────────────────────────────────────────────────────────
@@ -131,9 +132,9 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
     patch({ steps: model.steps.filter((_, k) => k !== i) });
   }
 
-  function setStepName(i: number, name: string): void {
+  function onStepPatch(i: number, stepPatch: Partial<WfStep>): void {
     const steps = model.steps.slice();
-    steps[i] = { ...steps[i]!, name };
+    steps[i] = { ...steps[i]!, ...stepPatch } as WfStep;
     patch({ steps });
   }
 
@@ -263,8 +264,9 @@ export function WfBuilderPane({ model, onChange }: WfBuilderPaneProps): React.Re
                 key={s.id ?? i}
                 step={s}
                 index={i}
-                onTitle={(t) => setStepName(i, t)}
+                onPatch={(p) => onStepPatch(i, p)}
                 onRemove={() => removeStep(i)}
+                scope={scopeForPath(model, [i])}
               />
             ))}
             {model.steps.length === 0 && <p className="px-0.5 py-1 text-caption text-mf-text-3">No steps yet.</p>}
