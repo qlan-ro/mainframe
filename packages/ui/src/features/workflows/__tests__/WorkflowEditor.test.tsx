@@ -109,6 +109,37 @@ describe('WorkflowEditor', () => {
     expect(screen.getByText('Edit workflow')).toBeInTheDocument();
   });
 
+  it('renders a hydration banner for a schema-invalid workflow file, not the panes', async () => {
+    vi.mocked(wfApi.getWorkflowSource).mockResolvedValue({ summary: MOCK_SUMMARY, yaml: 'not: [valid' });
+    renderEditor({ mode: 'edit', workflowId: 'global:greet' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(screen.getByTestId('workflows-hydration-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflows-editor-yaml')).not.toBeInTheDocument();
+  });
+
+  it('renders a Convert button for a comments-only file and hydrates the model on click', async () => {
+    const COMMENTED_YAML = `version: 1
+name: greet
+steps:
+  - id: say
+    set:
+      msg: "hi" # note
+`;
+    vi.mocked(wfApi.getWorkflowSource).mockResolvedValue({ summary: MOCK_SUMMARY, yaml: COMMENTED_YAML });
+    renderEditor({ mode: 'edit', workflowId: 'global:greet' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    const convertBtn = screen.getByTestId('workflows-hydration-banner-convert');
+    await act(async () => {
+      fireEvent.click(convertBtn);
+    });
+    expect(screen.queryByTestId('workflows-hydration-banner')).not.toBeInTheDocument();
+    expect(screen.getByTestId('workflows-editor-yaml').textContent).toContain('name: greet');
+  });
+
   it('editing the builder triggers validateYaml after debounce', async () => {
     renderEditor({ mode: 'new' });
     fireEvent.change(screen.getByTestId('workflows-builder-name'), { target: { value: 'greet' } });

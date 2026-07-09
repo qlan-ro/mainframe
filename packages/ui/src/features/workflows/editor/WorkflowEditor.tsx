@@ -22,6 +22,8 @@ import { useWorkflowsModal, type WfEditorTarget } from '../use-workflows-modal';
 import { useWorkflowsStore } from '../use-workflows-store';
 import { WfYamlPane } from './WfYamlPane';
 import { WfBuilderPane } from './WfBuilderPane';
+import { HydrationBanner } from './HydrationBanner';
+import { useWorkflowHydration } from './use-workflow-hydration';
 import { serializeWorkflow } from './yaml-serialize';
 import { blankDraft } from './wf-stubs';
 import type { WfDraft } from './wf-draft-types';
@@ -49,8 +51,8 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   // otherwise the YAML pane renders empty until the user makes a builder
   // edit, which leaves "New workflow" unsavable (no valid YAML) if the user
   // opens straight into Split/YAML mode without touching the builder first.
-  // Edit mode has no model yet (server YAML loads async below), so it starts
-  // blank and is populated by the load effect.
+  // Edit mode has no model yet (server YAML hydrates async — see
+  // use-workflow-hydration.ts), so it starts blank.
   const [yaml, setYaml] = useState(() => (isNew ? serializeWorkflow(blankDraft()) : ''));
   // New workflows default to split view (builder + YAML); edit mode is YAML-only.
   const [mode, setMode] = useState<EditorMode>(isNew ? 'split' : 'yaml');
@@ -65,23 +67,6 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
   const { projectId: activeProjectId } = useActiveIdentity();
 
   const filename = `${slug(isNew ? model.name : deriveNameFromYaml(yaml)) || 'workflow'}.yaml`;
-
-  // Load YAML from server for edit mode
-  useEffect(() => {
-    if (target.mode !== 'edit') return;
-    let cancelled = false;
-    wfApi
-      .getWorkflowSource(port, target.workflowId)
-      .then((res) => {
-        if (!cancelled) setYaml(res.yaml);
-      })
-      .catch((err: unknown) => {
-        console.warn('[WorkflowEditor] failed to load source:', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [port, target]);
 
   // Debounced validation
   const scheduleValidation = useCallback(
@@ -110,8 +95,8 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
 
   // New drafts: validate the initial serialized blank draft immediately, so
   // "Create" isn't stuck disabled ("Validating…" forever) until the user
-  // edits the builder. Edit mode's own load effect above reads server YAML
-  // asynchronously and doesn't need this.
+  // edits the builder. Edit mode hydrates (and validates) asynchronously via
+  // useWorkflowHydration below and doesn't need this.
   // Mount-only: run once against the initializer's value. Every later edit
   // already reschedules validation via handleModelChange, so this
   // intentionally does not depend on `yaml`/`scheduleValidation`.
@@ -131,6 +116,11 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
     },
     [scheduleValidation],
   );
+
+  // Edit mode: load the daemon's YAML and hydrate it into the draft model
+  // (Task 20). A malformed/comment-bearing file renders a banner instead —
+  // see HydrationBanner and use-workflow-hydration.ts.
+  const { banner } = useWorkflowHydration(port, target, handleModelChange);
 
   const handleSave = useCallback(async () => {
     if (!validation?.valid || saving) return;
@@ -192,23 +182,29 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
 
       {/* panes */}
       <div className="flex min-h-0 flex-1">
-        {(mode === 'builder' || mode === 'split') && (
-          <div className={cn('min-w-0 flex-1', mode === 'split' ? 'border-r border-border' : '')}>
-            {isNew ? (
-              <WfBuilderPane model={model} onChange={handleModelChange} />
-            ) : (
-              // Edit mode: reliable YAML→model reparse is deferred to a future task.
-              // The builder shows an informational message rather than clobbering the YAML.
-              <div className="flex h-full items-center justify-center p-8 text-body text-muted-foreground">
-                Visual builder is available for new workflows. Edit mode uses YAML only.
+        {banner ? (
+          <HydrationBanner reason={banner.reason} rawYaml={banner.rawYaml} onConvert={banner.onConvert} />
+        ) : (
+          <>
+            {(mode === 'builder' || mode === 'split') && (
+              <div className={cn('min-w-0 flex-1', mode === 'split' ? 'border-r border-border' : '')}>
+                {isNew ? (
+                  <WfBuilderPane model={model} onChange={handleModelChange} />
+                ) : (
+                  // Edit mode: reliable YAML→model reparse is deferred to a future task.
+                  // The builder shows an informational message rather than clobbering the YAML.
+                  <div className="flex h-full items-center justify-center p-8 text-body text-muted-foreground">
+                    Visual builder is available for new workflows. Edit mode uses YAML only.
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-        {(mode === 'yaml' || mode === 'split') && (
-          <div className="min-w-0 flex-1">
-            <WfYamlPane yaml={yaml} validation={validation} filename={filename} />
-          </div>
+            {(mode === 'yaml' || mode === 'split') && (
+              <div className="min-w-0 flex-1">
+                <WfYamlPane yaml={yaml} validation={validation} filename={filename} />
+              </div>
+            )}
+          </>
         )}
       </div>
 
