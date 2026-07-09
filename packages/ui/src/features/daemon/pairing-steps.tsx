@@ -80,7 +80,7 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
 // Step1Body
 // ---------------------------------------------------------------------------
 
-export type Step1Phase = 'idle' | 'confirming' | 'invalid' | 'done' | 'unreachable';
+export type Step1Phase = 'idle' | 'confirming' | 'invalid' | 'done' | 'unreachable' | 'storage';
 
 export interface Step1BodyProps {
   lockedUrl: string;
@@ -122,6 +122,13 @@ export function Step1Body({
       {isInvalid && (
         <NoticeCard kind="error" testId="daemon-add-error">
           That code didn&apos;t work
+        </NoticeCard>
+      )}
+
+      {phase === 'storage' && (
+        <NoticeCard kind="error" testId="daemon-add-storage-error">
+          Paired, but couldn&apos;t save the credential to this device&apos;s keychain. The connection won&apos;t
+          persist — check Keychain access and try again.
         </NoticeCard>
       )}
 
