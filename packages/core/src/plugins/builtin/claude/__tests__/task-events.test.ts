@@ -105,6 +105,65 @@ describe('ClaudeTaskEvents', () => {
     expect(tracker.get('chat-a', 't-6')!.status).toBe('stopped');
   });
 
+  describe('background work kind mapping', () => {
+    it('maps local_bash → bash', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'b1', description: 'x', task_type: 'local_bash' }, CTX);
+      expect(tracker.get('chat-a', 'b1')!.kind).toBe('bash');
+    });
+
+    it('maps local_agent → agent', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'a1', description: 'x', task_type: 'local_agent' }, CTX);
+      expect(tracker.get('chat-a', 'a1')!.kind).toBe('agent');
+    });
+
+    it('maps remote agents and teammates → agent', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'a2', description: 'x', task_type: 'remote_agent' }, CTX);
+      te.handleTaskStarted('chat-a', { task_id: 'a3', description: 'x', task_type: 'teammate' }, CTX);
+      expect(tracker.get('chat-a', 'a2')!.kind).toBe('agent');
+      expect(tracker.get('chat-a', 'a3')!.kind).toBe('agent');
+    });
+
+    it('maps local_workflow → workflow', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'w1', description: 'x', task_type: 'local_workflow' }, CTX);
+      expect(tracker.get('chat-a', 'w1')!.kind).toBe('workflow');
+    });
+
+    it('maps an unknown task_type → other', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'o1', description: 'x', task_type: 'local_quantum' }, CTX);
+      expect(tracker.get('chat-a', 'o1')!.kind).toBe('other');
+    });
+
+    it('falls back to bash when task_type is missing but a Bash tool_use was captured', () => {
+      te.captureToolUse('tu-k', { name: 'Bash', input: { command: 'pnpm dev', run_in_background: true } });
+      te.handleTaskStarted('chat-a', { task_id: 'k1', tool_use_id: 'tu-k', description: 'dev' }, CTX);
+      expect(tracker.get('chat-a', 'k1')!.kind).toBe('bash');
+    });
+
+    it('maps missing task_type with no captured tool_use → other', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'k2', description: 'x' }, CTX);
+      expect(tracker.get('chat-a', 'k2')!.kind).toBe('other');
+    });
+  });
+
+  describe('handleTaskUpdated', () => {
+    it('ends the task on a terminal status', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'u1', description: 'x', task_type: 'local_agent' }, CTX);
+      te.handleTaskUpdated('chat-a', { task_id: 'u1', status: 'completed' });
+      expect(tracker.get('chat-a', 'u1')!.status).toBe('completed');
+    });
+
+    it('ignores a non-terminal status (task stays running)', () => {
+      te.handleTaskStarted('chat-a', { task_id: 'u2', description: 'x', task_type: 'local_agent' }, CTX);
+      te.handleTaskUpdated('chat-a', { task_id: 'u2', status: 'running' });
+      expect(tracker.get('chat-a', 'u2')!.status).toBe('running');
+    });
+
+    it('ignores an unknown task_id', () => {
+      te.handleTaskUpdated('chat-a', { task_id: 'ghost', status: 'completed' });
+      expect(tracker.get('chat-a', 'ghost')).toBeNull();
+    });
+  });
+
   it('threads deterministic outputPath into tracker.start', () => {
     const trackerStart = vi.fn();
     const tracker = { start: trackerStart, end: vi.fn() } as unknown as BackgroundTaskTracker;

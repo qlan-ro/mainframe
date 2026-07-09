@@ -4,7 +4,11 @@ import * as lsofMod from '../lsof.js';
 import { BackgroundTaskTracker } from '../tracker.js';
 
 function seedRunning(tracker: BackgroundTaskTracker, chatId: string, id: string, outputPath: string) {
-  tracker.start(chatId, { id, toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' }, outputPath);
+  tracker.start(
+    chatId,
+    { id, kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+    outputPath,
+  );
 }
 
 describe('runLivenessSweep (one tick)', () => {
@@ -72,6 +76,21 @@ describe('runLivenessSweep (one tick)', () => {
     await runLivenessSweep({ tracker, missMap, now: taskStart + 160_000, forceWake: false });
     expect(getMissCount(missMap, 'c1', 't1')).toBe(0);
     expect(tracker.getPid('c1', 't1')).toBe(555);
+  });
+
+  it('non-bash kinds are exempt: an agent task is never lsof-probed or swept', async () => {
+    tracker.start(
+      'c1',
+      { id: 'a1', kind: 'agent', toolName: 'Bash', toolUseId: 'u', command: '', description: 'subagent' },
+      '/p/a1.out',
+    );
+    const taskStart = tracker.get('c1', 'a1')!.startedAt;
+    const detailed = vi.spyOn(lsofMod, 'lsofWritersDetailed').mockResolvedValue({ ok: true, pids: [] });
+
+    await runLivenessSweep({ tracker, missMap, now: taskStart + 100_000, forceWake: true });
+
+    expect(detailed).not.toHaveBeenCalled();
+    expect(tracker.get('c1', 'a1')!.status).toBe('running');
   });
 });
 

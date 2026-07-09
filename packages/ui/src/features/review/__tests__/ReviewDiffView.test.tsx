@@ -104,7 +104,7 @@ describe('ReviewDiffView', () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
     render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
 
-    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+    await screen.findByTestId('cm-diff-editor-stub');
 
     const submit = screen.getByTestId('review-comment-submit');
     expect((submit as HTMLButtonElement).disabled).toBe(true);
@@ -114,7 +114,7 @@ describe('ReviewDiffView', () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
     render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
 
-    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+    await screen.findByTestId('cm-diff-editor-stub');
 
     // Simulate a line click in CmDiffEditor
     capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });
@@ -127,7 +127,7 @@ describe('ReviewDiffView', () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
     render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
 
-    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+    await screen.findByTestId('cm-diff-editor-stub');
 
     capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });
 
@@ -142,7 +142,7 @@ describe('ReviewDiffView', () => {
     const onAppend = vi.fn();
     render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={onAppend} />);
 
-    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+    await screen.findByTestId('cm-diff-editor-stub');
 
     // Simulate clicking line 3 in CmDiffEditor
     capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });

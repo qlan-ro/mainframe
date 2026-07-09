@@ -25,7 +25,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Hint } from '@/components/ui/hint';
-import { sessionCustomOf } from '../sessions/view-model/chat-to-thread-custom';
+import { activeSessionCustom } from '../sessions/view-model/chat-to-thread-custom';
 import { useBranchActions } from './use-branch-actions';
 import { useWorktreeSession } from './use-worktree-session';
 import { BranchPopoverListPane } from './BranchPopoverListPane';
@@ -72,7 +72,7 @@ export function BranchPopover({
 }: BranchPopoverProps) {
   // Resolve adapterId from the active thread's custom — falls back to 'claude'.
   const adapterId = useAuiState((s) => {
-    const custom = sessionCustomOf(s.threadListItem?.custom);
+    const custom = activeSessionCustom(s.threadListItem, s.threads.threadItems);
     return custom?.adapterId ?? DEFAULT_ADAPTER_ID;
   });
 

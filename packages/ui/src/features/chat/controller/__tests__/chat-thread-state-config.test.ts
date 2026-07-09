@@ -65,4 +65,42 @@ describe('reduceChatThreadState — chat.config.updated', () => {
     expect(after.messageOrder).toEqual([]);
     expect(after.interactions).toBe(before.interactions);
   });
+
+  it('adopts a chat that differs only in worktreePath/branchName (worktree join)', () => {
+    const joined = {
+      ...chat,
+      worktreePath: '/wt/feature-x',
+      branchName: 'feature-x',
+    } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withFirst = reduceChatThreadState(base, { type: 'chat.config.updated', chat });
+    const afterJoin = reduceChatThreadState(withFirst, { type: 'chat.config.updated', chat: joined });
+
+    expect(afterJoin.chatConfig).toBe(joined);
+    expect(afterJoin.chatConfig?.worktreePath).toBe('/wt/feature-x');
+    expect(afterJoin.chatConfig?.branchName).toBe('feature-x');
+  });
+
+  it('adopts a chat whose worktree was detached (worktreePath cleared)', () => {
+    const isolated = { ...chat, worktreePath: '/wt/feature-x', branchName: 'feature-x' } as unknown as Chat;
+    const detached = { ...chat, worktreePath: undefined, branchName: undefined } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withIsolated = reduceChatThreadState(base, { type: 'chat.config.updated', chat: isolated });
+    const afterDetach = reduceChatThreadState(withIsolated, { type: 'chat.config.updated', chat: detached });
+
+    expect(afterDetach.chatConfig).toBe(detached);
+    expect(afterDetach.chatConfig?.worktreePath).toBeUndefined();
+  });
+
+  it('still ignores identity-irrelevant churn (same config object fields)', () => {
+    const churn = { ...chat, totalCost: 42 } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withFirst = reduceChatThreadState(base, { type: 'chat.config.updated', chat });
+    const afterChurn = reduceChatThreadState(withFirst, { type: 'chat.config.updated', chat: churn });
+
+    expect(afterChurn.chatConfig).toBe(chat);
+  });
 });

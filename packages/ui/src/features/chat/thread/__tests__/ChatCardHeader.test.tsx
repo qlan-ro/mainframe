@@ -5,7 +5,7 @@ import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
 let fakeState: any = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
 vi.mock('@assistant-ui/react', () => ({
-  useAuiState: (sel: (s: any) => unknown) => sel(fakeState),
+  useAuiState: (sel: (s: any) => unknown) => sel({ threads: { threadItems: [] }, ...fakeState }),
 }));
 
 const mockEmit = vi.fn();

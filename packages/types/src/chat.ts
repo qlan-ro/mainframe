@@ -1,4 +1,5 @@
 import type { SessionMention } from './context.js';
+import type { BackgroundActivity } from './background-task.js';
 import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
 import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
@@ -49,6 +50,14 @@ export interface Chat {
   totalTokensInput: number;
   totalTokensOutput: number;
   lastContextTokensInput: number;
+  /**
+   * Last CLI-reported context usage (`get_context_usage` after each turn):
+   * tokens in the window / usable window size. This is the authoritative pair
+   * for the context meter when no live report is in memory — unlike
+   * `lastContextTokensInput` ÷ a catalog window, which is a guess.
+   */
+  lastContextTotalTokens?: number;
+  lastContextMaxTokens?: number;
   contextFiles?: string[];
   mentions?: SessionMention[];
   modifiedFiles?: string[];
@@ -57,6 +66,8 @@ export interface Chat {
   processState?: 'working' | 'idle' | null;
   displayStatus?: 'idle' | 'working' | 'waiting';
   isRunning?: boolean;
+  /** Live background work (agents/bash/workflows) — derived per response, never persisted. */
+  backgroundActivity?: BackgroundActivity;
   worktreeMissing?: boolean;
   todos?: TodoItem[];
   pinned?: boolean;

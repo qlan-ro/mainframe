@@ -221,22 +221,31 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
     try {
       const { token } = await confirmPairing(targetUrl, trimmedCode, device.trim() || 'This Mac');
 
+      // Pairing succeeded server-side; a failure below is LOCAL token storage
+      // (the host keyring). Surface it as its own phase instead of reporting
+      // "Paired" — a tokenless entry silently fails the WebSocket auth.
       let addedId: string | undefined;
-      if (mode === 'add') {
-        const host = parseRemoteUrl(targetUrl).host;
-        const label = host.split('.')[0] ?? 'New server';
-        const meta: DaemonMeta = {
-          id: crypto.randomUUID(),
-          kind: 'remote',
-          label,
-          host,
-          device: device.trim() || 'This Mac',
-          paired: 'Just now',
-        };
-        await registry.add(meta, token);
-        addedId = meta.id;
-      } else if (target != null) {
-        await getHost().daemons.setToken(target.id, token);
+      try {
+        if (mode === 'add') {
+          const host = parseRemoteUrl(targetUrl).host;
+          const label = host.split('.')[0] ?? 'New server';
+          const meta: DaemonMeta = {
+            id: crypto.randomUUID(),
+            kind: 'remote',
+            label,
+            host,
+            device: device.trim() || 'This Mac',
+            paired: 'Just now',
+          };
+          await registry.add(meta, token);
+          addedId = meta.id;
+        } else if (target != null) {
+          await getHost().daemons.setToken(target.id, token);
+        }
+      } catch (storageErr) {
+        console.warn('[settings/AddRemoteDialog] token storage failed', storageErr);
+        setStep1Phase('storage');
+        return;
       }
 
       setStep1Phase('done');
