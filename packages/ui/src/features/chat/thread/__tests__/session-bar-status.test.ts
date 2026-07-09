@@ -114,6 +114,35 @@ describe('deriveContextPct — token-based fallback', () => {
 });
 
 // ---------------------------------------------------------------------------
+// deriveContextPct — persisted CLI truth beats the catalog guess (#197)
+// ---------------------------------------------------------------------------
+
+describe('deriveContextPct — persisted CLI totals (via chat.config.updated)', () => {
+  it('uses persistedTotal/persistedMax, not lastContextTokensInput/catalog window', () => {
+    // The stuck-at-100% bug: 151k real tokens, catalog window wrongly 200k
+    // (real claude-sonnet-5 window is ~967k usable). The persisted CLI totals
+    // must win: 151_000 / 967_000 ≈ 16%, not min(100, 151/200) = 76%.
+    const state = reduceChatThreadState(createChatThreadState('c1'), {
+      type: 'chat.config.updated',
+      chat: makeChat({
+        lastContextTokensInput: 151_000,
+        lastContextTotalTokens: 151_000,
+        lastContextMaxTokens: 967_000,
+      }),
+    });
+    expect(deriveContextPct(state, 200_000)).toBe(16);
+  });
+
+  it('still falls back to the catalog estimate when the chat has no persisted totals', () => {
+    const state = reduceChatThreadState(createChatThreadState('c1'), {
+      type: 'chat.config.updated',
+      chat: makeChat({ lastContextTokensInput: 50_000 }),
+    });
+    expect(deriveContextPct(state, 200_000)).toBe(25);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // deriveContextPct — null when no data
 // ---------------------------------------------------------------------------
 

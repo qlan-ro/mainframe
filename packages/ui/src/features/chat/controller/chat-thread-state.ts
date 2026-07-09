@@ -151,6 +151,17 @@ function removePending(state: ChatThreadState, clientId: string): ChatThreadStat
   return { ...state, pendingUserMessages };
 }
 
+/**
+ * The chat row's persisted CLI-reported context usage (daemon persists it from
+ * `get_context_usage` after each turn), mapped to the contextUsage slice shape.
+ * Null when the chat has never reported (legacy rows, codex).
+ */
+function persistedContextUsage(chat: Chat): ChatThreadState['contextUsage'] {
+  const { lastContextTotalTokens: total, lastContextMaxTokens: max } = chat;
+  if (total == null || max == null || max <= 0) return null;
+  return { percentage: (total / max) * 100, totalTokens: total, maxTokens: max };
+}
+
 /** True when every composer-toolbar field of two chats is equal (ignores cost/token/updatedAt churn). */
 function sameComposerConfig(a: Chat | null, b: Chat): boolean {
   return (
@@ -209,11 +220,27 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'chat.id.adopted':
       return state.chatId === event.chatId ? state : { ...state, chatId: event.chatId };
 
-    case 'chat.config.updated':
+    case 'chat.config.updated': {
       // chat.updated also fires for cost/token/updatedAt churn during a run.
       // Only adopt a new identity when a composer-relevant field actually changed,
-      // so the toolbar doesn't re-render on every broadcast.
-      return sameComposerConfig(state.chatConfig, event.chat) ? state : { ...state, chatConfig: event.chat };
+      // so the toolbar doesn't re-render on every broadcast. The persisted
+      // context totals are adopted separately: they keep the meter truthful on
+      // controller seed and after turns completed while this chat was dormant
+      // (chat.contextUsage only reaches subscribers; chat.updated is ungated).
+      const persisted = persistedContextUsage(event.chat);
+      const sameUsage =
+        persisted == null ||
+        (state.contextUsage != null &&
+          state.contextUsage.totalTokens === persisted.totalTokens &&
+          state.contextUsage.maxTokens === persisted.maxTokens);
+      const sameConfig = sameComposerConfig(state.chatConfig, event.chat);
+      if (sameConfig && sameUsage) return state;
+      return {
+        ...state,
+        chatConfig: sameConfig ? state.chatConfig : event.chat,
+        contextUsage: sameUsage ? state.contextUsage : persisted,
+      };
+    }
 
     case 'message.added':
       return upsertMessage(state, event.message);

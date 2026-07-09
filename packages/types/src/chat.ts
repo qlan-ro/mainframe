@@ -49,6 +49,14 @@ export interface Chat {
   totalTokensInput: number;
   totalTokensOutput: number;
   lastContextTokensInput: number;
+  /**
+   * Last CLI-reported context usage (`get_context_usage` after each turn):
+   * tokens in the window / usable window size. This is the authoritative pair
+   * for the context meter when no live report is in memory — unlike
+   * `lastContextTokensInput` ÷ a catalog window, which is a guess.
+   */
+  lastContextTotalTokens?: number;
+  lastContextMaxTokens?: number;
   contextFiles?: string[];
   mentions?: SessionMention[];
   modifiedFiles?: string[];
