@@ -32,7 +32,11 @@ vi.mock('node:child_process', async () => {
 });
 
 function seed(tracker: BackgroundTaskTracker, chatId: string, id: string, outputPath: string) {
-  tracker.start(chatId, { id, toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' }, outputPath);
+  tracker.start(
+    chatId,
+    { id, kind: 'bash', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+    outputPath,
+  );
 }
 
 describe('killTasksForChat (CLI + OS, no sweep)', () => {

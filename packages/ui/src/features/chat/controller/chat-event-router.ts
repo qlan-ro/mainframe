@@ -38,6 +38,10 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
   // handleDaemonEvent below still maps chat.updated → run.started/stopped.
   if (event.type === 'chat.updated' && event.chat.id === chatId) {
     host.dispatch({ type: 'chat.config.updated', chat: event.chat });
+    // Server-authoritative resync of the live background set: enrichChat stamps
+    // `backgroundActivity` on every broadcast, so a missed background_task.*
+    // event self-heals at the next turn boundary. Absent field = nothing live.
+    host.dispatch({ type: 'background.snapshot', tasks: event.chat.backgroundActivity?.tasks ?? [] });
   }
 
   // Non-fatal: the CLI reported the workspace is untrusted. Surface an actionable

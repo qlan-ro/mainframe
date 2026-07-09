@@ -5,6 +5,7 @@
  * All expected values are hardcoded. No reducer logic is re-derived here.
  */
 import { describe, it, expect } from 'vitest';
+import type { Chat } from '@qlan-ro/mainframe-types';
 import { createChatThreadState, reduceChatThreadState } from '../chat-thread-state';
 
 const CHAT_ID = 'c1';
@@ -78,6 +79,75 @@ describe('reduceChatThreadState — context.usage', () => {
     expect(after.runState).toEqual({ type: 'idle' });
     expect(after.compacting).toBe(false);
     expect(after.interactions).toBe(before.interactions);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat.config.updated — persisted context adoption (#197)
+// ---------------------------------------------------------------------------
+
+describe('reduceChatThreadState — chat.config.updated adopts persisted context usage', () => {
+  const persistedChat = {
+    id: CHAT_ID,
+    adapterId: 'claude',
+    lastContextTokensInput: 151_000,
+    lastContextTotalTokens: 151_000,
+    lastContextMaxTokens: 967_000,
+  } as unknown as Chat;
+
+  it('seeds contextUsage from the chat persisted totals when none is in memory', () => {
+    const before = createChatThreadState(CHAT_ID);
+    const after = reduceChatThreadState(before, { type: 'chat.config.updated', chat: persistedChat });
+
+    expect(after.contextUsage).toEqual({
+      percentage: (151_000 / 967_000) * 100,
+      totalTokens: 151_000,
+      maxTokens: 967_000,
+    });
+  });
+
+  it('updates a stale in-memory contextUsage when newer persisted totals arrive (dormant-chat turn)', () => {
+    const base = createChatThreadState(CHAT_ID);
+    const withLive = reduceChatThreadState(base, {
+      type: 'context.usage',
+      percentage: 5,
+      totalTokens: 50_000,
+      maxTokens: 967_000,
+    });
+    const after = reduceChatThreadState(withLive, { type: 'chat.config.updated', chat: persistedChat });
+
+    expect(after.contextUsage?.totalTokens).toBe(151_000);
+    expect(after.contextUsage?.maxTokens).toBe(967_000);
+  });
+
+  it('keeps the live contextUsage object when the persisted totals match it', () => {
+    const base = createChatThreadState(CHAT_ID);
+    const withLive = reduceChatThreadState(base, {
+      type: 'context.usage',
+      percentage: 15.6,
+      totalTokens: 151_000,
+      maxTokens: 967_000,
+    });
+    const after = reduceChatThreadState(withLive, { type: 'chat.config.updated', chat: persistedChat });
+
+    expect(after.contextUsage).toBe(withLive.contextUsage);
+  });
+
+  it('leaves contextUsage untouched when the chat has no persisted totals', () => {
+    const chatWithout = { id: CHAT_ID, adapterId: 'claude', lastContextTokensInput: 10_000 } as unknown as Chat;
+    const base = createChatThreadState(CHAT_ID);
+    const after = reduceChatThreadState(base, { type: 'chat.config.updated', chat: chatWithout });
+
+    expect(after.contextUsage).toBeNull();
+    expect(after.chatConfig).toBe(chatWithout);
+  });
+
+  it('returns the SAME state reference when neither config nor persisted totals changed', () => {
+    const base = createChatThreadState(CHAT_ID);
+    const first = reduceChatThreadState(base, { type: 'chat.config.updated', chat: persistedChat });
+    const again = reduceChatThreadState(first, { type: 'chat.config.updated', chat: { ...persistedChat } });
+
+    expect(again).toBe(first);
   });
 });
 

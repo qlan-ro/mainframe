@@ -650,6 +650,76 @@ describe('handleStderr', () => {
   });
 });
 
+describe('handleStdout — context-token capture (#197)', () => {
+  function sendAssistant(session: ClaudeSession, sink: SessionSink, event: Record<string, unknown>) {
+    handleStdout(session, Buffer.from(JSON.stringify({ type: 'assistant', ...event }) + '\n'), sink);
+  }
+  function sendResult(session: ClaudeSession, sink: SessionSink, event: Record<string, unknown> = {}) {
+    handleStdout(session, Buffer.from(JSON.stringify({ type: 'result', subtype: 'success', ...event }) + '\n'), sink);
+  }
+
+  it('reports contextTokens from the last parent assistant usage (input + cache tokens)', () => {
+    const session = createSession();
+    const sink = createSink();
+    sendAssistant(session, sink, {
+      message: {
+        content: [{ type: 'text', text: 'hi' }],
+        usage: { input_tokens: 1, output_tokens: 9, cache_creation_input_tokens: 2, cache_read_input_tokens: 3 },
+      },
+    });
+    sendResult(session, sink);
+    expect(sink.onResult).toHaveBeenCalledWith(expect.objectContaining({ contextTokens: 6 }));
+  });
+
+  it('ignores subagent assistant usage (parent_tool_use_id) for context tokens', () => {
+    const session = createSession();
+    const sink = createSink();
+    sendAssistant(session, sink, {
+      parent_tool_use_id: 'toolu_task_1',
+      message: {
+        content: [{ type: 'text', text: 'subagent' }],
+        usage: { input_tokens: 50_000, output_tokens: 10, cache_read_input_tokens: 100_000 },
+      },
+    });
+    sendResult(session, sink);
+    expect(sink.onResult).toHaveBeenCalledWith(expect.objectContaining({ contextTokens: null }));
+  });
+
+  it('does not let a synthetic zero-usage assistant message clobber the captured usage', () => {
+    const session = createSession();
+    const sink = createSink();
+    sendAssistant(session, sink, {
+      message: {
+        content: [{ type: 'text', text: 'real' }],
+        usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 300 },
+      },
+    });
+    sendAssistant(session, sink, {
+      message: {
+        model: '<synthetic>',
+        content: [{ type: 'text', text: 'synthetic' }],
+        usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+      },
+    });
+    sendResult(session, sink);
+    expect(sink.onResult).toHaveBeenCalledWith(expect.objectContaining({ contextTokens: 400 }));
+  });
+
+  it('never uses the result event cumulative usage as a context size', () => {
+    const session = createSession();
+    const sink = createSink();
+    // No assistant usage captured this turn — the result's own `usage` is the
+    // QueryEngine total across ALL API calls, not a context size.
+    sendResult(session, sink, { usage: { input_tokens: 500, output_tokens: 200, cache_read_input_tokens: 900_000 } });
+    expect(sink.onResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextTokens: null,
+        usage: expect.objectContaining({ output_tokens: 200 }),
+      }),
+    );
+  });
+});
+
 describe('handleStdout — subagent result isolation (#141)', () => {
   it('does not call onResult for a result event with parent_tool_use_id (subagent turn)', () => {
     const session = createSession();
