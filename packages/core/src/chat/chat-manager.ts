@@ -1,5 +1,6 @@
 import type {
   Chat,
+  ChatHistoryPayload,
   ChatMessage,
   ControlRequest,
   ControlResponse,
@@ -36,6 +37,13 @@ import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
 import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
 import { writeWorkspaceTrust } from '../plugins/builtin/claude/trust-store.js';
+import { reconcileTranscriptPresence } from './transcript-presence.js';
+import {
+  continueHere,
+  continueInProjectRoot,
+  recreateChatWorktree,
+  type DegradedRecoveryDeps,
+} from './degraded-recovery.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -120,7 +128,12 @@ export class ChatManager {
       emitEvent: (event) => this.emitEvent(event),
       applyTuning: (chatId) => this.applyTuning(chatId),
     });
-    this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
+    this.externalSessions = new ExternalSessionService(
+      this.db,
+      this.adapters,
+      (e) => this.emitEvent(e),
+      (chat) => this.reconcileTranscript(chat),
+    );
     this.idleScanner = new IdleSessionScanner(this.activeChats);
     this.idleScanner.start();
   }
@@ -259,6 +272,12 @@ export class ChatManager {
       this.emitEvent({ type: 'message.added', chatId, message: errorMsg });
       this.eventHandler.emitDisplay(chatId);
       return;
+    }
+
+    // Transcript gone + no live CLI: `--resume` would target a dead session id.
+    // Apply the same reset as the card's "Continue here" so this send spawns fresh.
+    if (chat?.transcriptMissing && !this.activeChats.get(chatId)?.session?.isSpawned) {
+      await this.continueHere(chatId);
     }
 
     // Wait for any in-flight interrupt to finish before checking spawn state.
@@ -695,12 +714,59 @@ export class ChatManager {
     }
   }
 
-  async getDisplayMessages(chatId: string): Promise<DisplayMessage[]> {
+  /**
+   * Display history + transcript presence in one typed result, so the REST
+   * route (and the UI) can tell an empty thread from a deleted transcript.
+   * Reconciling here persists flag flips and broadcasts `chat.updated`.
+   */
+  async getDisplayMessages(chatId: string): Promise<ChatHistoryPayload> {
     const raw = await this.getMessages(chatId);
     const chat = this.getChat(chatId);
     const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
     const categories = adapter?.getToolCategories?.();
-    return prepareMessagesForClient(raw, categories);
+    const transcriptMissing = chat ? await this.reconcileTranscript(chat) : false;
+    return { messages: prepareMessagesForClient(raw, categories), transcriptMissing };
+  }
+
+  /** Reconcile the persisted transcriptMissing flag against the transcript file on disk. */
+  async reconcileTranscript(chat: Chat): Promise<boolean> {
+    return reconcileTranscriptPresence(
+      {
+        db: this.db,
+        adapters: this.adapters,
+        emitEvent: (e) => this.emitEvent(e),
+        syncChatFields: (id, partial) => this.syncChatFields(id, partial),
+      },
+      chat,
+    );
+  }
+
+  private recoveryDeps(): DegradedRecoveryDeps {
+    return {
+      db: this.db,
+      getActiveChat: (id) => this.activeChats.get(id),
+      syncChatFields: (id, partial) => this.syncChatFields(id, partial),
+      emitChatUpdated: (id) => this.emitChatUpdated(id),
+      clearMessages: (id) => {
+        this.messages.delete(id);
+        this.eventHandler.clearDisplayCache(id);
+      },
+    };
+  }
+
+  /** Forget the dead CLI session so the next send spawns fresh in the same chat row. */
+  async continueHere(chatId: string): Promise<void> {
+    return continueHere(this.recoveryDeps(), chatId);
+  }
+
+  /** Detach the chat from its deleted worktree and rebind it to the project root. */
+  async continueInProjectRoot(chatId: string): Promise<void> {
+    return continueInProjectRoot(this.recoveryDeps(), chatId);
+  }
+
+  /** Re-add the deleted worktree at its stored path from the stored branch (409 when branch gone). */
+  async recreateWorktree(chatId: string): Promise<void> {
+    return recreateChatWorktree(this.recoveryDeps(), chatId);
   }
 
   isChatRunning(chatId: string): boolean {

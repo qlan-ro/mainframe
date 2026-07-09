@@ -114,7 +114,8 @@ export function initializeSchema(db: Database.Database): void {
   }
   if (!cols.some((c) => c.name === 'fast')) db.exec('ALTER TABLE chats ADD COLUMN fast INTEGER');
   if (!cols.some((c) => c.name === 'ultracode')) db.exec('ALTER TABLE chats ADD COLUMN ultracode INTEGER');
-  if (!cols.some((c) => c.name === 'adaptive_thinking')) db.exec('ALTER TABLE chats ADD COLUMN adaptive_thinking INTEGER');
+  if (!cols.some((c) => c.name === 'adaptive_thinking'))
+    db.exec('ALTER TABLE chats ADD COLUMN adaptive_thinking INTEGER');
   if (!cols.some((c) => c.name === 'detected_prs')) {
     db.exec("ALTER TABLE chats ADD COLUMN detected_prs TEXT DEFAULT '[]'");
   }
@@ -124,6 +125,9 @@ export function initializeSchema(db: Database.Database): void {
   }
   if (!cols.some((c) => c.name === 'session_file_path')) {
     db.exec('ALTER TABLE chats ADD COLUMN session_file_path TEXT');
+  }
+  if (!cols.some((c) => c.name === 'transcript_missing')) {
+    db.exec('ALTER TABLE chats ADD COLUMN transcript_missing INTEGER DEFAULT 0');
   }
 
   const sdkChats = db.prepare("SELECT COUNT(*) as n FROM chats WHERE adapter_id = 'claude-sdk'").get() as { n: number };

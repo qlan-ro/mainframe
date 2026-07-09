@@ -16,7 +16,26 @@ export class ExternalSessionService {
     private db: DatabaseManager,
     private adapters: AdapterRegistry,
     private emitEvent: (event: DaemonEvent) => void,
+    /** ChatManager.reconcileTranscript — flags chats whose transcript vanished (degraded-chat sweep). */
+    private reconcileTranscript?: (chat: Chat) => Promise<boolean>,
   ) {}
+
+  /**
+   * Reconcile transcript presence for every non-archived chat of the project
+   * that has a CLI session id, so the sidebar degraded marker appears without
+   * the chat being opened. Runs on the same cadence as the auto-scan.
+   */
+  async sweepTranscriptPresence(projectId: string): Promise<void> {
+    if (!this.reconcileTranscript) return;
+    const candidates = this.db.chats.list(projectId).filter((c) => c.status !== 'archived' && c.claudeSessionId);
+    for (const chat of candidates) {
+      try {
+        await this.reconcileTranscript(chat);
+      } catch (err) {
+        logger.warn({ err, chatId: chat.id }, 'transcript presence sweep failed');
+      }
+    }
+  }
 
   /** Page of importable external sessions merged and sorted across all adapters for a project. */
   async scanPage(projectId: string, offset: number, limit: number): Promise<ExternalSessionPage> {
@@ -121,11 +140,13 @@ export class ExternalSessionService {
     this.stopAutoScan(projectId);
 
     this.emitCount(projectId).catch((err) => logger.warn({ err, projectId }, 'Initial external session scan failed'));
+    void this.sweepTranscriptPresence(projectId);
 
     const interval = setInterval(() => {
       this.emitCount(projectId).catch((err) =>
         logger.warn({ err, projectId }, 'Periodic external session scan failed'),
       );
+      void this.sweepTranscriptPresence(projectId);
     }, SCAN_INTERVAL_MS);
 
     this.scanIntervals.set(projectId, interval);

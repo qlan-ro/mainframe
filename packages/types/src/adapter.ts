@@ -353,6 +353,17 @@ export interface Adapter {
   ): Promise<ExternalSessionPage>;
 
   /**
+   * Whether the CLI's transcript for `sessionId` still exists on disk.
+   * Returns `null` when presence cannot be determined (e.g. the adapter's own
+   * registry is unreadable) — callers must treat `null` as "don't flag".
+   */
+  isTranscriptPresent?(
+    sessionId: string,
+    projectPath: string,
+    sessionFilePath?: string | null,
+  ): Promise<boolean | null>;
+
+  /**
    * Factory for an adapter-specific plan-mode action handler.
    *
    * Returns `unknown` here to avoid a core→types dependency cycle — core casts

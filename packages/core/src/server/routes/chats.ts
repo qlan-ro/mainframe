@@ -95,8 +95,8 @@ export function chatRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/chats/:id/messages',
     asyncHandler(async (req: Request, res: Response) => {
-      const messages = await ctx.chats.getDisplayMessages(param(req, 'id'));
-      res.json({ success: true, data: messages });
+      const history = await ctx.chats.getDisplayMessages(param(req, 'id'));
+      res.json({ success: true, data: history });
     }),
   );
 
