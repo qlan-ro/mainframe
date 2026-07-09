@@ -132,6 +132,13 @@ pub fn daemons_remove(data_dir: Option<String>, id: String) {
 }
 
 /// Returns the keyring token for a daemon, or `None` if absent or unavailable.
+///
+/// Deliberately lenient (unlike `daemon_token_set`): a read failure logs and
+/// returns `None` rather than propagating, so a transient keyring hiccup on
+/// boot/daemon-switch degrades to a token-less connect (surfaced by the WS
+/// auth reject) instead of hard-blocking the app. The loud path is on write,
+/// where a failure means pairing did not actually persist and must not be
+/// reported as success.
 #[tauri::command]
 pub fn daemon_token_get(id: String) -> Option<String> {
     match keyring::Entry::new(KEYRING_SERVICE, &id) {
@@ -139,30 +146,28 @@ pub fn daemon_token_get(id: String) -> Option<String> {
             Ok(token) => Some(token),
             Err(keyring::Error::NoEntry) => None,
             Err(e) => {
-                tracing::warn!(id = %id, err = %e, "daemon_token_get: keyring read failed");
+                tracing::error!(id = %id, err = %e, "daemon_token_get: keyring read failed");
                 None
             }
         },
         Err(e) => {
-            tracing::warn!(id = %id, err = %e, "daemon_token_get: failed to open keyring entry");
+            tracing::error!(id = %id, err = %e, "daemon_token_get: failed to open keyring entry");
             None
         }
     }
 }
 
-/// Stores a token for a daemon in the OS keyring. Logs on failure.
+/// Stores a token for a daemon in the OS keyring.
+///
+/// Returns `Err` on failure so the caller (pairing) fails loudly instead of
+/// reporting a paired-but-tokenless state that silently breaks the WebSocket.
 #[tauri::command]
-pub fn daemon_token_set(id: String, token: String) {
-    match keyring::Entry::new(KEYRING_SERVICE, &id) {
-        Ok(entry) => {
-            if let Err(e) = entry.set_password(&token) {
-                tracing::warn!(id = %id, err = %e, "daemon_token_set: keyring write failed");
-            }
-        }
-        Err(e) => {
-            tracing::warn!(id = %id, err = %e, "daemon_token_set: failed to open keyring entry");
-        }
-    }
+pub fn daemon_token_set(id: String, token: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &id)
+        .map_err(|e| format!("open keyring entry: {e}"))?;
+    entry
+        .set_password(&token)
+        .map_err(|e| format!("write token to keyring: {e}"))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
