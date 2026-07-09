@@ -5,23 +5,40 @@
  * modal" scenario is already covered by sidebar-chrome.spec.ts ("workflows button
  * opens the workflows modal") — not re-asserted here, only used as a precondition.
  *
+ * Adapted for the visual-first editor flip (docs/plans/2026-07-09-workflow-step-config-plan.md
+ * Phase 8, "the flip — LAST"). Every workflow, new or on-disk, now opens in the
+ * visual builder — the new/existing mode split and the `workflows-editor-mode-*`
+ * toggle are gone (`WfEditorChrome.tsx`). `WfYamlPane` is a READ-ONLY generated
+ * preview (`serializeWorkflow(model)` rendered via `ShikiCode`, no `<textarea>`,
+ * no `onChange`) — assertions against it use `toContainText`/regex, never
+ * `toHaveValue`. The serializer was rewritten on the `yaml` npm package
+ * (`yaml-serialize.ts`); emitted formatting differs from the old hand-rolled
+ * emitter (plain unquoted scalars where possible, block-style nested maps —
+ * e.g. `set:\n  value: null` instead of `set: { value: null }`) — expected
+ * strings below were derived by running the actual serializer, not guessed.
+ *
+ * Because the builder always slugifies the `name:` field on the way to YAML
+ * (`wf-slug.ts`'s `slug()`), the visual editor can no longer produce a
+ * schema-invalid `name:` — the old "invalid name" scenario is impossible
+ * through the UI now. It's replaced below by an out-of-range `retry.attempts`
+ * (schema.ts: `z.number().int().min(1).max(10)`), which the Retry-attempts
+ * number field (no client-side min/max) can still produce — same intent
+ * (a parse-level/400 schema violation, distinct from `verifyWorkflow`'s
+ * semantic/200 errors), reachable via the builder instead of raw YAML entry.
+ *
  * Fixed since the previous pass: `editor/yaml-serialize.ts`'s `serializeWorkflow()`
  * no longer emits a top-level `scope:` line (was colliding with the daemon's
  * `.strict()` `workflowSchema`, which has no `scope` field) — a builder-built
  * document now parses and can reach a savable state. `WorkflowEditor.tsx`'s
  * `scheduleValidation` also now sets `validationError` (surfaced via the
  * `workflows-editor-validation-error` testid in `WfEditorChrome.tsx`) on a
- * thrown `validateYaml()` request instead of silently swallowing it — see the
- * "Editor" describe below for both the success path and the validation-error
- * path (an invalid `name:`, which the daemon rejects at parse time — a 400 —
- * distinct from `verifyWorkflow`'s semantic errors, which return 200 with a
- * `{valid:false, errors:[...]}` body rendered in the normal footer instead).
+ * thrown `validateYaml()` request instead of silently swallowing it.
  *
  * Also fixed since the previous pass (commit 48c89cd3): the YAML pane no
  * longer renders empty on first open of a new draft — `WorkflowEditor.tsx`
  * now initializes `yaml` from `serializeWorkflow(blankDraft())` — see "New
- * workflow opens a blank editor in split mode" below for the updated
- * assertion.
+ * workflow opens with the builder and a live YAML preview" below for the
+ * updated assertion.
  *
  * The "Runs" and "Needs you" describes below still seed workflows directly via
  * `PUT /api/workflows/:id` with hand-written YAML (the same REST path
@@ -36,12 +53,18 @@
  *   workflows-nav-<needs|runs|library> — WorkflowsView.tsx left nav
  *   workflows-library / -new / -scope-<all|project|global>
  *   workflows-library-row/-run/-edit-<wf.id>
- *   workflows-editor / -close / -cancel / -save / -mode-<builder|split|yaml>
+ *   workflows-editor / -close / -cancel / -save     — no mode toggle anymore
  *   workflows-builder / -name / -description / -scope-<global|project>
- *   workflows-builder-add-step / -add-trigger / -add-output
- *   workflows-steplib / -steplib-<kind>
+ *   workflows-builder-add-step / -add-trigger / -add-output / -add-var
+ *   workflows-steplib / -steplib-<kind>              — kind in agent/service/form/set/choose/foreach/parallel/call
  *   workflows-builder-step-<id> / -title-<id> / -configure-<id> / -remove-<id>
- *   workflows-editor-yaml             — WfYamlPane.tsx textarea
+ *   workflows-builder-step-error-<id> / -error-message-<id> — Task 21 validate→step-row mapping
+ *   workflows-builder-add-step-<ownerId>             — WfStepList.tsx nested add-step (choose arm / foreach body / parallel branch)
+ *   workflows-config-<stepid>-<field>                — WfFieldControl.tsx per-kind config form fields
+ *   workflows-config-<stepid>-advanced-toggle        — WfStepConfigForm.tsx Advanced collapsible (retry/onFailure/output live inside)
+ *   workflows-editor-yaml             — WfYamlPane.tsx, READ-ONLY generated preview (ShikiCode <pre>, no textarea)
+ *   workflows-editor-yaml-copy        — WfYamlPane.tsx copy-to-clipboard button
+ *   workflows-hydration-banner / -message / -convert / -yaml — HydrationBanner.tsx (unparseable or comment-bearing on-disk file)
  *   workflows-run-row-<run.id> / workflows-runs-filter-<id>
  *   workflows-run-back / -cancel / -banner / -parent-link
  *   workflows-step-<stepPath> / -<stepPath>-pip / -chat-<stepPath>
@@ -52,6 +75,8 @@
  * Testids referenced only by role/text (no data-testid on the element):
  *   per-trigger-kind popover option buttons (WfbDropdowns.tsx) — "Remove trigger" /
  *   "Schedule" etc. are plain buttons with an aria-label or visible text only.
+ *   Output-row name/expr inputs (WfbOutputRow.tsx) — no data-testid, targeted by
+ *   placeholder ("name" / "${ step.output.field }"); same as WfbVarRow.tsx.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -160,7 +185,7 @@ test.describe('§workflows Library', () => {
     await expect(projectRow).toBeVisible();
   });
 
-  test('New workflow opens a blank editor in split mode', async () => {
+  test('New workflow opens with the builder and a live YAML preview', async () => {
     const { page } = app;
     await page.getByTestId('workflows-library-new').click();
 
@@ -173,10 +198,14 @@ test.describe('§workflows Library', () => {
     // YAML pane now initializes from `serializeWorkflow(blankDraft())`
     // (`useState(() => (isNew ? serializeWorkflow(blankDraft()) : ''))`)
     // instead of an empty string, so "Create" is savable even before the user
-    // touches the builder. This was previously asserted as an empty string —
-    // stale, now that the underlying bug is fixed. Assert the actual
-    // serialized blank-draft YAML (version + placeholder name + empty steps).
-    await expect(page.getByTestId('workflows-editor-yaml')).toHaveValue('version: 1\nname: untitled\n\nsteps:');
+    // touches the builder. `WfYamlPane` is now a read-only preview (no
+    // `<textarea>`/`toHaveValue`) — assert its rendered text instead. An empty
+    // draft's `steps: []` also confirms the new serializer (`yaml` package)
+    // renders an empty array inline, not the old emitter's `steps:` + nothing.
+    const yamlPane = page.getByTestId('workflows-editor-yaml');
+    await expect(yamlPane).toContainText('version: 1');
+    await expect(yamlPane).toContainText('name: untitled');
+    await expect(yamlPane).toContainText('steps: []');
   });
 
   test('Cancel discards the draft and returns to the library with no new row', async () => {
@@ -237,13 +266,17 @@ test.describe('§workflows Editor', () => {
 
     const stepTitleInput = page.getByTestId(/^workflows-builder-step-title-set_/);
     await expect(stepTitleInput).toBeVisible({ timeout: 5_000 });
+    const stepId = (await stepTitleInput.getAttribute('data-testid'))!.replace('workflows-builder-step-title-', '');
 
-    // Configure toggle exists but only renders a placeholder for 'set' steps today
-    // (WfbStepRow.tsx: composite/per-kind config panels are DEFERRED) — exercise
-    // the toggle itself, don't assert real field editing that doesn't exist yet.
-    const configureBtn = page.getByTestId(/^workflows-builder-step-configure-set_/);
+    // Configure toggle now opens a real per-kind config form (Phase 8 flip) —
+    // 'set' steps get WfKvEditor (step-descriptors.ts) seeded from the stub's
+    // `set: { value: null }` (wf-stubs.ts), one row keyed 'value'. Exercise the
+    // toggle AND assert the real form renders, then close it again.
+    const configureBtn = page.getByTestId(`workflows-builder-step-configure-${stepId}`);
     await configureBtn.click();
-    await expect(page.getByText('Configure panel for')).toBeVisible();
+    const setKvEditor = page.getByTestId(`workflows-config-${stepId}-set`);
+    await expect(setKvEditor).toBeVisible();
+    await expect(page.getByTestId(`workflows-config-${stepId}-set-row-0-key`)).toHaveValue('value');
     await configureBtn.click();
 
     await page.getByTestId('workflows-builder-add-trigger').click();
@@ -260,21 +293,27 @@ test.describe('§workflows Editor', () => {
     // scope-toggle button's own active-state styling instead (its only
     // observable effect; also a no-op click since `project` is already
     // `blankDraft()`'s default, but still exercises the control).
+    //
+    // Expected strings below were derived by running the actual serializer
+    // (`yaml` package, `defaultStringType: 'PLAIN'`) against an equivalent
+    // model, not guessed — it renders block-style nested maps and only quotes
+    // scalars that need it, unlike the old hand-rolled flow-style emitter.
     const yamlPane = page.getByTestId('workflows-editor-yaml');
-    await expect(yamlPane).toHaveValue(/name: my-deploy-flow/);
+    await expect(yamlPane).toContainText(/name: my-deploy-flow/);
     await expect(page.getByTestId('workflows-builder-scope-project')).toHaveClass(/bg-card/);
-    await expect(yamlPane).toHaveValue(/description: "Ships the thing"/);
-    await expect(yamlPane).toHaveValue(/set: \{ value: null \}/);
-    await expect(yamlPane).toHaveValue(/- schedule: \{ cron: "0 9 \* \* \*", on_missed: run_once \}/);
-    await expect(yamlPane).toHaveValue(/outputs:\n {2}output1: "\$\{ \.\.\. \}"/);
+    await expect(yamlPane).toContainText(/description: Ships the thing/);
+    await expect(yamlPane).toContainText(/set:\s*\n\s*value: null/);
+    await expect(yamlPane).toContainText(/schedule:\s*\n\s*cron: 0 9 \* \* \*\s*\n\s*on_missed: run_once/);
+    await expect(yamlPane).toContainText(/outputs:\s*\n\s*output1: \$\{ \.\.\. \}/);
 
-    // Remove-trigger control has no testid (WfBuilderPane.tsx TriggerRow) — there
-    // are now 2 rows (default manual + the schedule just added, in that DOM
-    // order); .last() targets the schedule row just added. Removing it drops the
-    // whole `triggers:` section (serializeWorkflow only emits schedule/event
-    // triggers — a manual-only draft serializes no `triggers:` key at all).
+    // Remove-trigger control has no testid (WfBuilderPane.tsx TriggerRow) —
+    // blankDraft() starts with zero triggers, so the schedule just added is
+    // the only row; .last() still targets it unambiguously. Removing it drops
+    // the whole `triggers:` section (serializeWorkflow only emits
+    // schedule/event triggers — a manual-only/empty draft serializes no
+    // `triggers:` key at all).
     await page.getByRole('button', { name: 'Remove trigger' }).last().click();
-    await expect(yamlPane).not.toHaveValue(/schedule:/);
+    await expect(yamlPane).not.toContainText(/schedule:/);
   });
 
   test('a builder-built workflow with a name and one step becomes savable and appears in the library', async () => {
@@ -307,39 +346,59 @@ test.describe('§workflows Editor', () => {
     await expect(page.getByTestId('workflows-library-row-global:my-safe-flow')).toBeVisible({ timeout: 10_000 });
   });
 
-  test('an invalid `name:` fails schema parsing and surfaces via workflows-editor-validation-error', async () => {
+  // Replaces the old "an invalid `name:` fails schema parsing" scenario: the
+  // builder always slugifies `name:` on the way to YAML (`wf-slug.ts`), so a
+  // schema-invalid name is no longer reachable through the visual editor.
+  // `retry.attempts` (schema.ts: `z.number().int().min(1).max(10)`) has no
+  // client-side min/max on its number field (WfFieldControl.tsx), so it can
+  // still produce the same class of error — a parse-level (400) schema
+  // violation, distinct from `verifyWorkflow`'s semantic (200) errors covered
+  // by the dangling-output-reference test below — reachable via the builder.
+  // Also exercises Task 21's error→step-row mapping: `parseStepAddressedMessage`
+  // resolves the zod path `steps.0.retry.attempts` to this step's row.
+  test('an out-of-range retry-attempts value fails schema parsing and maps to the step row', async () => {
     const { page } = app;
     await page.getByTestId('workflows-library-new').click();
     await expect(page.getByTestId('workflows-editor')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('workflows-editor-mode-yaml').click();
 
-    // idSchema (packages/core/src/workflows/dsl/schema.ts) is `/^[a-zA-Z0-9_-]+$/` — a
-    // name with spaces/punctuation fails schema parsing (a 400 from POST /validate),
-    // distinct from a semantic error like the dangling-reference case below (which
-    // parses fine and returns 200 with `{valid:false, errors:[...]}`).
-    const yamlPane = page.getByTestId('workflows-editor-yaml');
-    const invalidNameYaml =
-      'version: 1\nname: "not a valid name!"\nsteps:\n  - id: set_value\n    set: { message: "hi" }\n';
-    await yamlPane.fill(invalidNameYaml);
+    await page.getByTestId('workflows-builder-name').fill('Bad Retry Flow');
+    await page.getByTestId('workflows-builder-add-step').click();
+    await expect(page.getByTestId('workflows-steplib')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('workflows-steplib-set').click();
+
+    const stepTitleInput = page.getByTestId(/^workflows-builder-step-title-set_/);
+    await expect(stepTitleInput).toBeVisible({ timeout: 5_000 });
+    const stepId = (await stepTitleInput.getAttribute('data-testid'))!.replace('workflows-builder-step-title-', '');
+
+    await page.getByTestId(`workflows-builder-step-configure-${stepId}`).click();
+    await page.getByTestId(`workflows-config-${stepId}-advanced-toggle`).click();
+    await page.getByTestId(`workflows-config-${stepId}-attempts`).fill('0');
 
     const errorFooter = page.getByTestId('workflows-editor-validation-error');
     await expect(errorFooter).toBeVisible({ timeout: 10_000 });
-    await expect(errorFooter).toContainText('name');
+    await expect(errorFooter).toContainText('retry.attempts');
     await expect(page.getByTestId('workflows-editor-save')).toBeDisabled();
+
+    // Task 21: the same message maps to the addressed step's row, not just the footer.
+    await expect(page.getByTestId(`workflows-builder-step-error-${stepId}`)).toBeVisible();
   });
 
-  test('a dangling output reference in YAML mode surfaces a real validation error and blocks save', async () => {
+  test('a dangling output reference surfaces a real validation error and blocks save', async () => {
     const { page } = app;
     await page.getByTestId('workflows-editor-cancel').click();
     await expect(page.getByTestId('workflows-editor')).toHaveCount(0, { timeout: 5_000 });
     await page.getByTestId('workflows-library-new').click();
     await expect(page.getByTestId('workflows-editor')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('workflows-editor-mode-yaml').click();
 
-    const yamlPane = page.getByTestId('workflows-editor-yaml');
-    const invalidYaml =
-      'version: 1\nname: e2e-invalid-ref\nsteps:\n  - id: set_value\n    set: { message: "hi" }\noutputs:\n  bogus: "${ ghost_step.field }"\n';
-    await yamlPane.fill(invalidYaml);
+    await page.getByTestId('workflows-builder-name').fill('e2e-invalid-ref');
+    await page.getByTestId('workflows-builder-add-step').click();
+    await expect(page.getByTestId('workflows-steplib')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('workflows-steplib-set').click();
+
+    // WfbOutputRow.tsx has no data-testid on its inputs (see header note) —
+    // targeted by placeholder, matching the one row just added.
+    await page.getByTestId('workflows-builder-add-output').click();
+    await page.getByPlaceholder('${ step.output.field }').fill('${ ghost_step.field }');
 
     await expect(page.getByText('is not in scope')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('workflows-editor-save')).toBeDisabled();
