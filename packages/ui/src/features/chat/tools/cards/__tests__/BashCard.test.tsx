@@ -33,6 +33,7 @@ vi.mock('@/features/chat/tools/ToolResultExpand', () => ({
 // ---------------------------------------------------------------------------
 
 import { BashCard } from '../BashCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,11 +140,23 @@ describe('BashCard', () => {
     expect(screen.getByTestId('chat-bash-trigger')).toBeInTheDocument();
   });
 
-  it('trigger is disabled when there is no result', () => {
-    renderCard(makePart({ args: { command: 'ls' }, result: undefined }));
-    // CollapsibleTrigger receives disabled={true} → Radix renders a disabled button
+  it('trigger is disabled when the command finished with no output', () => {
+    // result === '' → completed, but nothing to show and no longer running.
+    renderCard(makePart({ args: { command: 'touch f' }, result: '' }));
     const trigger = screen.getByTestId('chat-bash-trigger');
     expect(trigger).toBeDisabled();
+  });
+
+  it('trigger is ENABLED while the command is still running (result === undefined) (#208)', () => {
+    renderCard(makePart({ args: { command: 'sleep 1' }, result: undefined }));
+    const trigger = screen.getByTestId('chat-bash-trigger');
+    expect(trigger).not.toBeDisabled();
+  });
+
+  it('expands to show the running command in the output body while result is pending (#208)', () => {
+    renderCard(makePart({ args: { command: 'pnpm build' }, result: undefined }));
+    fireEvent.click(screen.getByTestId('chat-bash-trigger'));
+    expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('pnpm build');
   });
 
   // --- Output body content ---
@@ -165,6 +178,12 @@ describe('BashCard', () => {
     fireEvent.click(trigger);
     const output = screen.getByTestId('chat-bash-output');
     expect(output).toHaveTextContent('hello');
+  });
+
+  it('does not nest a vertical scroll container in the terminal body (single overflow owner)', () => {
+    renderCard(makePart({ args: { command: 'echo hi' }, result: 'hi\nexit 0', isError: false }));
+    fireEvent.click(screen.getByTestId('chat-bash-trigger'));
+    expect(nestedVerticalScrollers(screen.getByTestId('chat-bash-card'))).toHaveLength(0);
   });
 
   it('shows the command as a prompt line inside the output body', () => {
