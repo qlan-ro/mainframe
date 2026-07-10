@@ -20,11 +20,14 @@ pub mod git;
 pub mod git_chat;
 pub mod git_write;
 pub mod health;
+pub mod launch;
+pub mod lsp_routes;
 pub mod projects;
 pub mod search;
 pub mod settings;
 pub mod skills;
 pub mod tags;
+pub mod tunnel;
 pub mod worktree;
 
 // PORT STATUS: src/server/routes/index.ts (mount table)

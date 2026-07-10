@@ -27,16 +27,27 @@ use crate::respond::{fail, ok};
 use crate::routes::projects::parse_body;
 
 async fn context(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // getChat/project resolution ports over db; getSessionContext itself is the
-    // context-tracker facade method not yet on the Rust ChatManager.
+    // getChat/project 404 resolution ports over db (effectivePath reads the raw
+    // worktreePath, so enrichment is irrelevant here); getSessionContext needs the
+    // AdapterRegistry + AttachmentStore that only the ChatManager holds.
     let lookup = id.clone();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(_)) => {}
+    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+        Ok(Some(chat)) => chat,
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Err(err) => return crate::async_err::internal_error("get chat", &err),
-    }
-    tracing::warn!(chat_id = %id, "getSessionContext is a Phase-4 seam (ChatManager.getSessionContext unavailable)");
-    fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed")
+    };
+    let project_id = chat.project_id.clone();
+    let project = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
+        Ok(Some(project)) => project,
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Err(err) => return crate::async_err::internal_error("get project", &err),
+    };
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(chat_id = %id, "getSessionContext needs ChatManager (unwired)");
+        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
+    };
+    let effective_path = chat.worktree_path.clone().unwrap_or(project.path);
+    ok(cm.get_session_context(&id, &effective_path).await)
 }
 
 #[derive(Deserialize)]
@@ -109,11 +120,16 @@ async fn add_mention(
         path: b.path,
         timestamp: now_iso8601(),
     };
-    // Persist via db; the TS ctx.chats.addMention also emits a context event —
-    // TODO(port-phase4): emit once the ChatManager context-tracker facade lands.
-    let (cid, m) = (id, mention.clone());
-    if let Err(err) = ctx.db.call(move |db| db.chats.add_mention(&cid, &m)).await {
-        return crate::async_err::internal_error("add mention", &err);
+    // `ChatManager.addMention` persists the mention AND emits `context.updated`.
+    // When the manager is unwired (Phase-3 harness) the db write is the load-bearing
+    // effect; the WS emit is skipped (no broadcast bus without the manager).
+    if let Some(cm) = ctx.chat_manager.as_ref() {
+        cm.add_mention(&id, mention.clone());
+    } else {
+        let (cid, m) = (id, mention.clone());
+        if let Err(err) = ctx.db.call(move |db| db.chats.add_mention(&cid, &m)).await {
+            return crate::async_err::internal_error("add mention", &err);
+        }
     }
     ok(mention)
 }
@@ -178,9 +194,10 @@ mod tests {
 
 // PORT STATUS: src/server/routes/context.ts (3 endpoints, 93 lines)
 // confidence: medium
-// todos: 2
+// todos: 0
 // notes: session-file ported fully (db chat/project + resolve_readable_path + async
-// read_to_string). mentions persists via db.chats.add_mention and returns the
-// nanoid mention; the TS event emit is a TODO(port) pending the context-tracker
-// facade method. context (getSessionContext) is a Phase-4 seam mirroring
-// projects::remove — the facade method is not yet on the Rust ChatManager.
+// read_to_string). context (getSessionContext) is now a real facade call: the db
+// resolves the chat/project 404s (effectivePath reads the raw worktreePath, so
+// enrichment is irrelevant) and the ChatManager's get_session_context runs the
+// context-tracker read. mentions calls the facade addMention (persist + emit
+// context.updated) when wired, else the db write (harness); returns the nanoid mention.

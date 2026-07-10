@@ -2,16 +2,14 @@
 //! title/pinned/tuning/effort PATCH, unarchive, messages/display-messages,
 //! session-files and tool-result.
 //!
-//! Reads that the TS `ctx.chats.{listFiltered,listChats,getChat}` delegate 1:1 to
-//! `this.db.chats` are ported straight over `ctx.db.chats` (behaviourally
-//! identical). The pinned/tuning/effort PATCH routes mutate `ctx.db.chats.update`
-//! directly in TS too, so they port fully; the optional `ctx.chats?.syncChatFields
-//! ?.()`/`applyTuning?.()`/`emitChatUpdated?.()` follow-ups are best-effort in TS
-//! (`?.`) and are skipped here because those delegating methods are not yet on the
-//! Rust `ChatManager` facade (see PORT STATUS). Routes that require live-session
-//! orchestration absent from the facade (archive, getDisplayMessages,
-//! getMessagesFromDisk, getPendingPermission, unarchive) are Phase-4 seams
-//! mirroring `projects::remove`.
+//! Reads (`listFiltered`/`listChats`/`getChat`) route through the ChatManager
+//! facade when it is wired (enriched: displayStatus/isRunning/worktreeMissing),
+//! else the raw `ctx.db.chats` path (Phase-3 harness). The pinned/tuning/effort
+//! PATCH routes persist via `ctx.db.chats.update` then run the TS `applyChatTuning`
+//! follow-ups (`syncChatFields` + fire-and-forget `applyTuning` + `emitChatUpdated`)
+//! through the facade when wired. Live-session-orchestration routes (archive,
+//! getDisplayMessages, getMessagesFromDisk, getPendingPermission, unarchive) call the
+//! real facade methods, falling back to the failure envelope when it is unavailable.
 
 use std::sync::Arc;
 
@@ -23,6 +21,8 @@ use axum::response::Response;
 use axum::routing::{get, patch, post};
 use serde::Deserialize;
 
+use mainframe_adapter_claude::messages::session_files::extract_session_file_paths;
+use mainframe_chat::chat_manager::ChatFieldsPartial;
 use mainframe_chat::event_handler::compute_session_file_path;
 use mainframe_db::chats::ChatListFilters;
 use mainframe_types::adapter::EffortLevel;
@@ -66,10 +66,21 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
         None => None,
     };
     let synth: Vec<String> = q.synthetic.as_deref().map(split_csv).unwrap_or_default();
+    let has_worktree = synth.iter().any(|s| s == "has-worktree");
+    // The facade enriches (displayStatus/isRunning/worktreeMissing); the db path is
+    // the Phase-3 harness fallback (chat_manager unwired) and returns raw rows.
+    if let Some(cm) = ctx.chat_manager.as_ref() {
+        return ok(cm.list_filtered(
+            q.project.as_deref(),
+            tags_all.as_deref(),
+            has_worktree,
+            true,
+        ));
+    }
     let filters = ChatListFilters {
         project_id: q.project,
         tags_all,
-        has_worktree: synth.iter().any(|s| s == "has-worktree"),
+        has_worktree,
         include_archived: true,
     };
     match ctx
@@ -86,6 +97,9 @@ async fn list_for_project(
     State(ctx): State<Arc<AppCtx>>,
     Path(project_id): Path<String>,
 ) -> Response {
+    if let Some(cm) = ctx.chat_manager.as_ref() {
+        return ok(cm.list_chats(&project_id));
+    }
     match ctx.db.call(move |db| db.chats.list(&project_id)).await {
         Ok(chats) => ok(chats),
         Err(err) => crate::async_err::internal_error("list project chats", &err),
@@ -93,6 +107,12 @@ async fn list_for_project(
 }
 
 async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+    if let Some(cm) = ctx.chat_manager.as_ref() {
+        return match cm.get_chat(&id) {
+            Some(chat) => ok(chat),
+            None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+        };
+    }
     match ctx.db.call(move |db| db.chats.get(&id)).await {
         Ok(Some(chat)) => ok(chat),
         Ok(None) => fail(StatusCode::NOT_FOUND, "Chat not found"),
@@ -121,13 +141,11 @@ async fn archive(
 }
 
 async fn messages(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // TODO(port-phase4): ctx.chats.getDisplayMessages(id) reads the MessageCache
-    // display projection; the `get_display_messages` facade method is not yet on
-    // the Rust ChatManager (message-cache accessors land with the server-integration
-    // phase). Seam mirroring projects::remove.
-    let _ = &ctx;
-    tracing::warn!(chat_id = %id, "getDisplayMessages is a Phase-4 seam (ChatManager.getDisplayMessages unavailable)");
-    fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed")
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(chat_id = %id, "getDisplayMessages needs ChatManager (unwired)");
+        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
+    };
+    ok(cm.get_display_messages(&id).await)
 }
 
 async fn pending_permission(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
@@ -217,11 +235,22 @@ async fn set_pinned(
     {
         return crate::async_err::internal_error("update pinned", &err);
     }
-    match ctx.db.call(move |db| db.chats.get(&id)).await {
-        Ok(Some(chat)) => ok(chat),
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => crate::async_err::internal_error("get chat", &err),
+    let lookup = id.clone();
+    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+        Ok(Some(chat)) => chat,
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    };
+    if let Some(cm) = ctx.chat_manager.as_ref() {
+        cm.sync_chat_fields(
+            &id,
+            ChatFieldsPartial {
+                pinned: Some(pinned),
+                ..Default::default()
+            },
+        );
     }
+    ok(chat)
 }
 
 fn parse_effort_field(v: &serde_json::Value) -> Result<Option<EffortLevel>, ()> {
@@ -262,20 +291,45 @@ fn tuning_update(
     Ok(update)
 }
 
+/// Build the `ChatFieldsPartial` the facade cache-sync needs from a db tuning patch.
+/// The tri-state columns line up 1:1 (`pinned` is not a tuning field here).
+fn tuning_partial(update: &mainframe_db::chats::ChatUpdate) -> ChatFieldsPartial {
+    ChatFieldsPartial {
+        effort: update.effort,
+        fast: update.fast,
+        ultracode: update.ultracode,
+        adaptive_thinking: update.adaptive_thinking,
+        pinned: None,
+    }
+}
+
+/// Persist the RAW tuning partial (tri-state), fetch the chat, then run the facade
+/// follow-ups — `syncChatFields` (mirror the cache), fire-and-forget `applyTuning`
+/// (live re-apply, no-op without a session), `emitChatUpdated` (broadcast). Mirrors
+/// the TS `applyChatTuning`.
 async fn apply_and_return(
     ctx: &Arc<AppCtx>,
     id: String,
     update: mainframe_db::chats::ChatUpdate,
 ) -> Response {
+    let partial = tuning_partial(&update);
     let cid = id.clone();
     if let Err(err) = ctx.db.call(move |db| db.chats.update(&cid, &update)).await {
         return crate::async_err::internal_error("update tuning", &err);
     }
-    match ctx.db.call(move |db| db.chats.get(&id)).await {
-        Ok(Some(chat)) => ok(chat),
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => crate::async_err::internal_error("get chat", &err),
+    let lookup = id.clone();
+    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+        Ok(Some(chat)) => chat,
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    };
+    if let Some(cm) = ctx.chat_manager.clone() {
+        cm.sync_chat_fields(&id, partial);
+        let (apply_cm, apply_id) = (cm.clone(), id.clone());
+        tokio::spawn(async move { apply_cm.apply_tuning(&apply_id).await });
+        cm.emit_chat_updated(&id);
     }
+    ok(chat)
 }
 
 async fn set_tuning(
@@ -336,12 +390,15 @@ async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
 }
 
 async fn session_files(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // TODO(port-phase4): ctx.chats.getMessagesFromDisk(id) loads the on-disk JSONL
-    // history so subagent file changes absent from the in-memory cache are included;
-    // the disk history loader is not yet on the Rust ChatManager facade. Seam.
-    let _ = &ctx;
-    tracing::warn!(chat_id = %id, "session-files is a Phase-4 seam (ChatManager.getMessagesFromDisk unavailable)");
-    fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed")
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(chat_id = %id, "getMessagesFromDisk needs ChatManager (unwired)");
+        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
+    };
+    // Load from disk to include subagent file changes absent from the in-memory
+    // cache during an active session.
+    let messages = cm.get_messages_from_disk(&id).await;
+    let files = extract_session_file_paths(&messages);
+    ok(serde_json::json!({ "files": files }))
 }
 
 fn tool_use_id_ok(id: &str) -> bool {
@@ -660,14 +717,13 @@ mod tests {
 
 // PORT STATUS: src/server/routes/chats.ts (13 endpoints, 295 lines)
 // confidence: medium
-// todos: 5
-// notes: Reads (list/listFiltered, listChats, getChat) + pinned/tuning/effort PATCH
-// + tool-result ported fully over ctx.db.chats (+ compute_session_file_path /
-// read_tool_result_from_jsonl helpers). title uses the facade rename when the
-// ChatManager is wired, else a db title write (Phase-3 harness). archive /
-// getDisplayMessages (messages) / getMessagesFromDisk (session-files) /
-// getPendingPermission / unarchive need ChatManager facade methods not yet ported
-// (message-cache + disk-history accessors land in the server-integration phase) —
-// Phase-4 seams mirroring projects::remove; see blockers. The optional TS
-// `syncChatFields?/applyTuning?/emitChatUpdated?` follow-ups on the tuning PATCHes
-// are `?.` best-effort in TS and skipped (not on the facade).
+// todos: 0
+// notes: Reads (list/listFiltered, listChats, getChat) route through the ChatManager
+// facade (enriched: displayStatus/isRunning/worktreeMissing) when wired, else the raw
+// db path (Phase-3 harness). archive / getDisplayMessages (messages) /
+// getMessagesFromDisk (session-files) / getPendingPermission / unarchive are now real
+// facade calls. pinned/tuning/effort PATCH + tool-result port over ctx.db.chats
+// (+ compute_session_file_path / read_tool_result_from_jsonl / extract_session_file_paths
+// helpers); the tuning/pinned PATCHes run the TS `applyChatTuning` follow-ups
+// (syncChatFields + fire-and-forget applyTuning + emitChatUpdated) when the manager is
+// wired. title uses the facade rename when wired, else a db title write.

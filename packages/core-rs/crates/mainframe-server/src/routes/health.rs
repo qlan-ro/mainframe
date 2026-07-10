@@ -27,9 +27,9 @@ pub async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> 
         status: "ok",
         version: ctx.version.clone(),
         timestamp: mainframe_runtime::time::now_iso8601(),
-        // ctx.tunnelUrl ?? getTunnelUrl?.() ?? null — Phase 3 has no live tunnel,
-        // so this is the boot value (None) until the Phase-4 tunnel routes set it.
-        tunnel_url: ctx.tunnel_url.clone(),
+        // ctx.tunnelUrl ?? getTunnelUrl?.() ?? null — interior-mutable, so this
+        // reflects the daemon-tunnel boot start and the tunnel routes' setTunnelUrl.
+        tunnel_url: ctx.tunnel_url(),
     })
 }
 

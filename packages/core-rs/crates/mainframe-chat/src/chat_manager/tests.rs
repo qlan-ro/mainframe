@@ -19,6 +19,7 @@ struct StoreDeps {
     updates: Mutex<Vec<(String, ChatUpdate)>>,
     order: Arc<Mutex<Vec<String>>>,
     project_removed: Mutex<Vec<String>>,
+    mentions: Mutex<Vec<(String, String)>>,
 }
 
 impl StoreDeps {
@@ -85,6 +86,21 @@ impl ChatManagerDeps for StoreDeps {
     }
     fn chats_list_all(&self) -> Vec<Chat> {
         self.store.lock().unwrap().values().cloned().collect()
+    }
+    fn chats_list_filtered(
+        &self,
+        _project_id: Option<&str>,
+        _tags_all: Option<&[String]>,
+        _has_worktree: bool,
+        _include_archived: bool,
+    ) -> Vec<Chat> {
+        self.store.lock().unwrap().values().cloned().collect()
+    }
+    fn chats_add_mention(&self, chat_id: &str, mention: &mainframe_types::context::SessionMention) {
+        self.mentions
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), mention.name.clone()));
     }
     fn chats_reset_working_to_idle(&self) -> i64 {
         let mut count = 0;
@@ -175,6 +191,24 @@ impl ChatManagerDeps for StoreDeps {
         _chat_id: &'a str,
     ) -> BoxFuture<'a, Option<mainframe_types::chat::ResolvedTuning>> {
         Box::pin(async { None })
+    }
+    fn get_session_context<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _project_path: &'a str,
+        _session: Option<Arc<dyn AdapterSession>>,
+        _adapter_id: Option<String>,
+    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
+        Box::pin(async {
+            mainframe_types::context::SessionContext {
+                global_files: Vec::new(),
+                project_files: Vec::new(),
+                mentions: Vec::new(),
+                attachments: Vec::new(),
+                modified_files: Vec::new(),
+                skill_files: Vec::new(),
+            }
+        })
     }
     fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
     fn generate_title<'a>(
@@ -771,6 +805,105 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
         deps.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
     );
+}
+
+// ── Task 5.4 facade methods ──────────────────────────────────────────────────
+
+use mainframe_types::adapter::EffortLevel;
+use mainframe_types::context::{MentionKind, MentionSource, SessionMention};
+
+#[tokio::test]
+async fn sync_chat_fields_mirrors_tuning_onto_the_cached_active_chat() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), false),
+        RecSession::new("c1", false, true),
+    );
+
+    mgr.sync_chat_fields(
+        "c1",
+        ChatFieldsPartial {
+            effort: Some(Some(EffortLevel::High)),
+            fast: Some(Some(true)),
+            pinned: Some(true),
+            ..Default::default()
+        },
+    );
+
+    let chat = mgr.get_active("c1").unwrap().lock().unwrap().chat.clone();
+    assert_eq!(chat.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(chat.fast, Some(Some(true)));
+    assert_eq!(chat.pinned, Some(true));
+    // Untouched fields stay unchanged.
+    assert_eq!(chat.ultracode, test_chat("c1").ultracode);
+}
+
+#[tokio::test]
+async fn notify_worktree_deleted_emits_only_for_matching_worktree() {
+    let mut with_wt = test_chat("c1");
+    with_wt.worktree_path = Some("/wt/x".to_string());
+    let without = test_chat("c2");
+    let deps = StoreDeps::with_chats(vec![with_wt, without]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.notify_worktree_deleted("/wt/x");
+
+    let updated: Vec<String> = deps
+        .events()
+        .into_iter()
+        .filter_map(|e| match e {
+            DaemonEvent::ChatUpdated { chat, .. } => Some(chat.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(updated, vec!["c1".to_string()]);
+}
+
+#[tokio::test]
+async fn add_mention_persists_and_emits_context_updated() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.add_mention(
+        "c1",
+        SessionMention {
+            id: "m1".to_string(),
+            kind: MentionKind::File,
+            source: MentionSource::User,
+            name: "foo.rs".to_string(),
+            path: Some("src/foo.rs".to_string()),
+            timestamp: "2026-07-10T00:00:00.000Z".to_string(),
+        },
+    );
+
+    assert_eq!(
+        deps.mentions.lock().unwrap().as_slice(),
+        &[("c1".to_string(), "foo.rs".to_string())]
+    );
+    assert!(
+        deps.events()
+            .iter()
+            .any(|e| matches!(e, DaemonEvent::ContextUpdated { chat_id, .. } if chat_id == "c1"))
+    );
+}
+
+#[tokio::test]
+async fn get_effective_path_falls_back_to_the_project_root() {
+    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let mgr = ChatManager::new(deps);
+    // test_chat has no worktree → project root from projects_get_path.
+    assert_eq!(mgr.get_effective_path("c1").as_deref(), Some("/tmp/test"));
+    assert_eq!(mgr.get_effective_path("missing"), None);
+}
+
+#[tokio::test]
+async fn get_messages_is_empty_without_a_claude_session() {
+    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let mgr = ChatManager::new(deps);
+    assert!(mgr.get_messages("c1").await.is_empty());
 }
 
 // Keep ChatStatus referenced (used by test_chat defaults).

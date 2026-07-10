@@ -14,6 +14,7 @@
 use std::sync::Arc;
 
 use mainframe_adapter_api::BoxFuture;
+use mainframe_launch::LaunchRegistry;
 
 /// The launch-process control surface the `ChatManager` needs before it tears
 /// down a worktree (`chats.setStopLaunchProcesses` in `index.ts`). Mirrors the
@@ -58,11 +59,39 @@ pub fn default_launch_stopper() -> Arc<dyn LaunchStopper> {
     Arc::new(NoopLaunchStopper)
 }
 
-// PORT STATUS: (new — Phase-5 launch seam for chat/index.ts setStopLaunchProcesses)
+/// The production `LaunchStopper`, backed by the real `LaunchRegistry` (Task 5.5).
+/// Mirrors `chats.setStopLaunchProcesses(async (projectId, projectPath) => {
+/// const m = launchRegistry.get(projectId, projectPath); if (m) await m.stopAll();
+/// })` in `index.ts`.
+pub struct RegistryLaunchStopper {
+    registry: Arc<LaunchRegistry>,
+}
+
+impl RegistryLaunchStopper {
+    pub fn new(registry: Arc<LaunchRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+impl LaunchStopper for RegistryLaunchStopper {
+    fn stop_launch_processes<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        // `if (m)` guard: no manager for this scope → nothing to stop.
+        let manager = self.registry.get(project_id, effective_path)?;
+        Some(Box::pin(async move {
+            manager.stop_all().await;
+        }))
+    }
+}
+
+// PORT STATUS: (launch seam for chat/index.ts setStopLaunchProcesses)
 // confidence: high
-// todos: 1
-// notes: Only `mainframe-launch` is genuinely unported among the subsystems the
-// ChatManager touches, so it is the only seam here (NoopLaunchStopper → None,
-// matching the TS `if (m)` guard when no launch manager exists). notifications /
-// per-chat todos / push are already ported and wired to the real impls in
-// chat_deps.rs, not stubbed.
+// todos: 0
+// notes: Task 5.5 wired the real RegistryLaunchStopper over mainframe-launch's
+// LaunchRegistry (get(projectId, path) → if Some, stop_all()), matching the TS
+// `setStopLaunchProcesses` closure exactly. NoopLaunchStopper stays as the
+// route-unit/test fallback (→ None, the `if (m)` guard with no manager).
+// notifications / per-chat todos / push are ported + wired in chat_deps.rs.

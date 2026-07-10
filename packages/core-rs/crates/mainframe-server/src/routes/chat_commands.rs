@@ -1,13 +1,12 @@
 //! Ported from `src/server/routes/chat-commands.ts` — chat create + config PATCH
 //! + interrupt/resume/trust-workspace commands + queue edit/cancel.
 //!
-//! interrupt/resume and queue edit/cancel port over the `ChatManager` facade
-//! (present) and are gated on the manager being wired. create
-//! (createChatWithDefaults, on the lifecycle manager), config PATCH
-//! (updateChatConfig, on the config manager) and trust-workspace are Phase-4
-//! seams — those facade methods are not yet on the Rust ChatManager (they land in
-//! the server-integration phase). Existence is still checked against `ctx.db.chats`
-//! so 404s are honoured before the seam.
+//! create (createChatWithDefaults), config PATCH (updateChatConfig),
+//! interrupt/resume and queue edit/cancel all port over the `ChatManager` facade
+//! (present) and are gated on the manager being wired. trust-workspace remains a
+//! seam — `writeWorkspaceTrust` is unported (the claude trust store lives in the
+//! adapter-claude crate, whose skeleton is not yet filled). Existence is checked
+//! against `ctx.db.chats` so 404s are honoured before the seam.
 
 use std::sync::Arc;
 
@@ -18,6 +17,8 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{patch, post};
 use serde::Deserialize;
+
+use mainframe_types::settings::ExecutionMode;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
@@ -85,28 +86,60 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     ok(chat)
 }
 
+/// `UpdateChatConfigBody` (ws-schemas): every field optional; `permissionMode`
+/// is `z.enum(EXECUTION_MODES)` (no `plan`), so it maps to `ExecutionMode`.
+#[derive(Deserialize)]
+struct UpdateChatConfigBody {
+    #[serde(rename = "adapterId")]
+    adapter_id: Option<String>,
+    model: Option<String>,
+    #[serde(rename = "permissionMode")]
+    permission_mode: Option<ExecutionMode>,
+    #[serde(rename = "planMode")]
+    plan_mode: Option<bool>,
+}
+
 async fn update_config(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    // Body must at least be a valid object (mirrors the TS validate()).
-    if parse_body::<serde_json::Value>(&body)
-        .map(|v| !v.is_object())
-        .unwrap_or(true)
-    {
+    // validate(UpdateChatConfigBody, ...): a non-object body or a bad
+    // permissionMode enum fails the parse → 400, mirroring the TS Zod refine.
+    let Some(cfg) = parse_body::<UpdateChatConfigBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
-    }
+    };
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
         Err(resp) => return resp,
     }
-    tracing::warn!(chat_id = %id, "updateChatConfig is a Phase-4 seam (ChatManager.updateChatConfig unavailable)");
-    fail(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "updateChatConfig unavailable",
-    )
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(chat_id = %id, "updateChatConfig is a Phase-4 seam (ChatManager unavailable)");
+        return fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "updateChatConfig unavailable",
+        );
+    };
+    match cm
+        .update_chat_config(
+            &id,
+            cfg.adapter_id,
+            cfg.model,
+            cfg.permission_mode,
+            cfg.plan_mode,
+        )
+        .await
+    {
+        Ok(()) => match cm.get_chat(&id) {
+            Some(chat) => ok(chat),
+            None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+        },
+        Err(err) => {
+            tracing::error!(chat_id = %id, %err, "updateChatConfig failed");
+            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        }
+    }
 }
 
 /// Shared command scaffold: 404 when the chat is unknown, else run + okEmpty.
@@ -288,12 +321,16 @@ mod tests {
 }
 
 // PORT STATUS: src/server/routes/chat-commands.ts (7 endpoints, 96 lines)
-// confidence: medium
-// todos: 2
-// notes: create (createChatWithDefaults) + interrupt/resume/queue-edit/queue-cancel
-// port over the ChatManager facade — all self-gate on ctx.chat_manager, now wired
-// at boot (Task 4.6c), so they are live. config PATCH (updateChatConfig, config
-// manager) and trust-workspace still need facade methods not yet ported → seams
-// mirroring projects::remove, but the db existence 404 is honoured first. Zod
+// confidence: high
+// todos: 1
+// notes: create (createChatWithDefaults) + config PATCH (updateChatConfig) +
+// interrupt/resume/queue-edit/queue-cancel port over the ChatManager facade —
+// all self-gate on ctx.chat_manager, wired at boot (Task 4.6c), so they are live.
+// updateChatConfig parses UpdateChatConfigBody (permissionMode is
+// z.enum(EXECUTION_MODES) → ExecutionMode, no `plan`), delegates to
+// ChatManager.update_chat_config (chat_manager.rs), then returns ok(get_chat(id)),
+// matching TS. trust-workspace stays a seam: writeWorkspaceTrust is unported (the
+// claude trust store is a skeleton in mainframe-adapter-claude, a DONE crate
+// outside this task's ownership) — the db existence 404 is honoured first. Zod
 // enum/refine 400 messages are approximated; the both-or-neither worktree refine
 // string matches TS.

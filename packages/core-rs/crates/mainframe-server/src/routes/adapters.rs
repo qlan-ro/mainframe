@@ -58,10 +58,15 @@ mod tests {
                 mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
             ),
             chat_manager: None,
+            launch_registry: None,
+            tunnel_manager: None,
+            lsp_manager: None,
+            plugin_manager: None,
             data_dir: std::env::temp_dir(),
             version: "0.0.0-test".into(),
+            port: 0,
             auth_secret: None,
-            tunnel_url: None,
+            tunnel_url: Arc::new(std::sync::RwLock::new(None)),
             ws_clients: Arc::new(DashMap::new()),
         })
     }

@@ -29,12 +29,15 @@ use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::{
     ChatManager, ChatManagerDeps, ChatUpdate, ProcessedAttachments,
 };
-use mainframe_chat::context_tracker::{ContextDb, extract_mentions_from_text};
+use mainframe_chat::context_tracker::{
+    AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
+};
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_chat::title_generator::generate_title;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::attachment::AttachmentStore;
+use mainframe_services::attachment::attachment_store::AttachmentKind;
 use mainframe_services::notifications::notification_config::{
     read_notification_config, should_notify_permission,
 };
@@ -43,7 +46,9 @@ use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{AdapterModel, DetectedPr, SessionOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, ResolvedTuning, TodoItem};
-use mainframe_types::context::{SessionMention, SkillFileEntry};
+use mainframe_types::context::{
+    SessionAttachment, SessionAttachmentKind, SessionMention, SkillFileEntry,
+};
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::broadcast;
@@ -179,6 +184,34 @@ impl ChatManagerDeps for DaemonChatDeps {
         self.db
             .call_blocking(|d| d.chats.list_all())
             .unwrap_or_default()
+    }
+
+    fn chats_list_filtered(
+        &self,
+        project_id: Option<&str>,
+        tags_all: Option<&[String]>,
+        has_worktree: bool,
+        include_archived: bool,
+    ) -> Vec<Chat> {
+        let filters = mainframe_db::chats::ChatListFilters {
+            project_id: project_id.map(str::to_string),
+            tags_all: tags_all.map(<[String]>::to_vec),
+            has_worktree,
+            include_archived,
+        };
+        self.db
+            .call_blocking(move |d| d.chats.list_filtered(&filters))
+            .unwrap_or_default()
+    }
+
+    fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention) {
+        let (id, mention) = (chat_id.to_string(), mention.clone());
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.add_mention(&id, &mention))
+        {
+            tracing::warn!(%err, chat_id, "chats.add_mention failed");
+        }
     }
 
     fn chats_reset_working_to_idle(&self) -> i64 {
@@ -342,6 +375,33 @@ impl ChatManagerDeps for DaemonChatDeps {
         Box::pin(async move {
             let deps = RtDeps { db, adapters };
             resolve_tuning_for_chat(&deps, chat_id).await
+        })
+    }
+
+    fn get_session_context<'a>(
+        &'a self,
+        chat_id: &'a str,
+        project_path: &'a str,
+        session: Option<Arc<dyn AdapterSession>>,
+        adapter_id: Option<String>,
+    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
+        Box::pin(async move {
+            let ctx_db = CtxDbHandle {
+                db: self.db.clone(),
+            };
+            let lister = AttachmentListerHandle {
+                store: Arc::clone(&self.attachments),
+            };
+            get_session_context(
+                chat_id,
+                project_path,
+                &ctx_db,
+                &self.adapters,
+                session.as_ref(),
+                Some(&lister),
+                adapter_id.as_deref(),
+            )
+            .await
         })
     }
 
@@ -563,6 +623,37 @@ impl ContextDb for CtxDbHandle {
     }
 }
 
+/// Bridges `AttachmentStore::list` (returns `StoredAttachmentMeta`) to the
+/// context-tracker's `AttachmentLister` (wants `SessionAttachment`). The stored
+/// meta is a structural superset of `SessionAttachment` (drops `materializedPath`);
+/// the TS passes the metas straight through, so this mirrors that projection.
+struct AttachmentListerHandle {
+    store: Arc<AttachmentStore>,
+}
+
+impl AttachmentLister for AttachmentListerHandle {
+    fn list<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<SessionAttachment>> {
+        Box::pin(async move {
+            self.store
+                .list(chat_id)
+                .await
+                .into_iter()
+                .map(|m| SessionAttachment {
+                    id: m.id,
+                    name: m.name,
+                    media_type: m.media_type,
+                    size_bytes: m.size_bytes,
+                    kind: match m.kind {
+                        AttachmentKind::Image => SessionAttachmentKind::Image,
+                        AttachmentKind::File => SessionAttachmentKind::File,
+                    },
+                    original_path: m.original_path,
+                })
+                .collect()
+        })
+    }
+}
+
 /// Unpersisted `Chat` stub for the (near-impossible) `db.chats.create` failure —
 /// mirrors the shape `ChatsRepository::create` returns on success.
 fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&str>) -> Chat {
@@ -614,7 +705,10 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
 // SYNC-DB BRIDGE (Db::call_blocking) — one WAL connection. notifications / per-chat
 // todos / push / mentions / tuning / title / kill / worktree-remove are wired to
 // the real ported helpers (RtDeps + CtxDbHandle bridge the generic helper trait
-// bounds through the actor). Seams (TODO(port)): processAttachments
+// bounds through the actor). Task 5.4 added chats_list_filtered (translates to the db
+// ChatListFilters), chats_add_mention (db write), and get_session_context (runs the
+// context-tracker read with the AdapterRegistry + an AttachmentListerHandle over the
+// AttachmentStore). Seams (TODO(port)): processAttachments
 // (attachment-processor unported), scanLoadedHistory (pr-detection unported + no
 // session handle), applyCodexProviderTuning (codex-only session method, Phase 5),
 // stopLaunchProcesses (LaunchStopper seam, Phase 5). chats_create is infallible
