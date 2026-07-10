@@ -1073,7 +1073,19 @@ impl ChatManager {
             );
             let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
-            self.lifecycle.do_generate_title(chat_id, content).await;
+            // TS fires `doGenerateTitle(...).catch(...)` WITHOUT awaiting: title
+            // generation shells out to the CLI, so awaiting it here would both stall
+            // the send and shift its `chat.updated` ahead of the turn's result/
+            // contextUsage events. Spawn it so the emission lands after the turn,
+            // matching Node's stream ordering.
+            let lifecycle = self.lifecycle.clone();
+            let chat_id_owned = chat_id.to_string();
+            let content_owned = content.to_string();
+            tokio::spawn(async move {
+                lifecycle
+                    .do_generate_title(&chat_id_owned, &content_owned)
+                    .await;
+            });
         }
 
         let now = now_iso8601();

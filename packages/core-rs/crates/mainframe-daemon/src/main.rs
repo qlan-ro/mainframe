@@ -2,8 +2,9 @@
 //!
 //! Phase-4 boot: enrichPath → config → auth secret → DB (actor handle) →
 //! BackgroundTaskTracker → AdapterRegistry (claude+codex, static seed, refresh) →
-//! services → broadcast → HTTP/WS server, then background-task reconcile + the
-//! liveness scheduler + the adapter catalog refresh, with graceful
+//! services → broadcast → HTTP/WS server, then background-task reconcile +
+//! worktree-relationship backfill + the liveness scheduler + the adapter catalog
+//! refresh, with graceful
 //! SIGINT/SIGTERM shutdown (adapters.killAll + liveness.stop). The ChatManager,
 //! plugins, launch, tunnel, and workflows boot steps stay TODO(port) — the
 //! ChatManager needs a `ChatManagerDeps` impl blocked on a sync-DB bridge (see
@@ -215,6 +216,7 @@ async fn main() {
         interval_ms: None,
     });
     spawn_reconcile(db.clone(), Arc::clone(&background_tasks));
+    spawn_worktree_backfill(db.clone());
 
     // allowRefresh() gates a pre-configure probe; refreshAll enriches
     // installed/version/models per adapter and emits. Non-blocking.
@@ -303,6 +305,45 @@ fn spawn_reconcile(db: Db, tracker: Arc<BackgroundTaskTracker>) {
             validator: None,
         })
         .await;
+    });
+}
+
+/// Non-blocking worktree relationship backfill (index.ts `backfillWorktreeRelationships`).
+/// Existing worktree-derived projects must get their `parent_project_id` linked at
+/// boot. The git enumeration is async and can't run inside the DB actor's sync
+/// closure, so the projects are read on the actor, the parent links computed via
+/// `git worktree list`, then the writes applied back on the actor. Fire-and-forget:
+/// a failure must never block serving requests.
+fn spawn_worktree_backfill(db: Db) {
+    tokio::spawn(async move {
+        let projects = match db.call(|d| d.projects.list()).await {
+            Ok(projects) => projects,
+            Err(err) => {
+                tracing::warn!(%err, "Worktree relationship backfill failed");
+                return;
+            }
+        };
+        let links = mainframe_services::workspace::compute_worktree_parent_links(&projects).await;
+        if links.is_empty() {
+            return;
+        }
+        let result = db
+            .call(move |d| {
+                for (child_id, parent_id) in &links {
+                    tracing::info!(
+                        module = "worktree-backfill",
+                        child_id = %child_id,
+                        parent_id = %parent_id,
+                        "Backfilling worktree relationship"
+                    );
+                    d.projects.set_parent_project(child_id, parent_id)?;
+                }
+                Ok(())
+            })
+            .await;
+        if let Err(err) = result {
+            tracing::warn!(%err, "Worktree relationship backfill failed");
+        }
     });
 }
 
@@ -446,7 +487,10 @@ async fn shutdown_signal() {
 // WRITE bridge is unwired), allows + fires refreshAll. BackgroundTaskTracker
 // events bridge to the broadcast; reconcile runs over a pre-fetched read snapshot
 // (ReconcileDb is sync, actor is async — snapshot avoids a sync-DB bridge);
-// liveness scheduler started + stopped on shutdown. chat_manager is now wired via
+// backfillWorktreeRelationships runs post-listen as an actor read→git-compute→
+// actor-write bridge (compute_worktree_parent_links is DB-free so the async git
+// enumeration stays outside the actor closure); liveness scheduler started +
+// stopped on shutdown. chat_manager is now wired via
 // build_chat_manager (Task 4.6c): DaemonChatDeps reaches the single WAL connection
 // through Db::call_blocking (the sync-DB bridge) and injects the ported services;
 // recover_stale_working_state runs at boot. Shutdown runs chats.dispose +

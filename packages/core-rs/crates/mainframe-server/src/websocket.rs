@@ -121,8 +121,13 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
             client_id: client_id.clone(),
         },
     );
-    // TODO(port-phase4): stream adapter-replay events (buildConnectReplayEvents
-    // over live adapter snapshots) after connection.ready.
+    // Replay each probed adapter's model catalog so a fresh connection's store is
+    // authoritative (the renderer resets on connect). The live probe broadcast
+    // fires once at boot, before any client connects, so a reconnecting client
+    // would otherwise never learn the catalog. Mirrors buildConnectReplayEvents.
+    for event in build_connect_replay_events(&ctx.adapter_registry.get_snapshots()) {
+        send(&out_tx, &event);
+    }
 
     // File-watch state is touched only by this task (inbound handling + close),
     // so it stays task-local — no lock needed (tsv PER_ENTITY, single-owner).
@@ -433,6 +438,28 @@ fn fanout(clients: &WsClients, event: &DaemonEvent) {
     }
 }
 
+/// Events replayed to a client the moment it connects (ported from
+/// `adapter-replay.ts`). Only probed catalogs carry a live model list worth
+/// replaying; a fallback/unprobed adapter is skipped.
+fn build_connect_replay_events(
+    snapshots: &[mainframe_types::adapter::AdapterInfo],
+) -> Vec<DaemonEvent> {
+    use mainframe_types::adapter::CatalogSource;
+    snapshots
+        .iter()
+        .filter_map(|s| match (s.catalog_source, s.models_revision) {
+            (Some(CatalogSource::Probed), Some(models_revision)) => {
+                Some(DaemonEvent::AdapterModelsUpdated {
+                    adapter_id: s.id.clone(),
+                    models: s.models.clone(),
+                    models_revision,
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
     match serde_json::to_string(event) {
         Ok(payload) => {
@@ -462,7 +489,7 @@ fn warn_permission_respond_seam() {
 
 // PORT STATUS: src/server/websocket.ts (+ ws-file-watch wiring, ws-schemas seam)
 // confidence: medium
-// todos: 2
+// todos: 1
 // notes: Single-task-per-connection select! (write task folded in) because
 // splitting axum's WebSocket needs futures_util (off-allowlist) — see the header.
 // Chat subscriptions = shared Mutex<HashSet> (read by fan-out, tsv PER_ENTITY);
@@ -474,5 +501,6 @@ fn warn_permission_respond_seam() {
 // self-gate on ctx.chat_manager: while it is None (ChatManager construction is a
 // documented daemon-boot blocker) they degrade to empty snapshot / warn-once +
 // ignore, exactly the pre-4.6b behavior the ws_integration tests pin. Once boot
-// sets Some(..) the wired paths run. TODO(port-phase4): adapter-replay after
-// connection.ready. TODO(port-phase5): LSP upgrade route.
+// sets Some(..) the wired paths run. Adapter-replay (buildConnectReplayEvents over
+// the live registry snapshots) streams right after connection.ready so a
+// reconnecting client's catalog is authoritative. TODO(port-phase5): LSP upgrade route.

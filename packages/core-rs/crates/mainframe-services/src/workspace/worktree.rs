@@ -150,12 +150,31 @@ pub async fn backfill_worktree_relationships(
     projects: &ProjectsRepository,
 ) -> Result<(), WorktreeError> {
     let all_projects = projects.list()?;
+    for (child_id, parent_id) in compute_worktree_parent_links(&all_projects).await {
+        tracing::info!(
+            module = "worktree-backfill",
+            child_id = %child_id,
+            parent_id = %parent_id,
+            "Backfilling worktree relationship"
+        );
+        projects.set_parent_project(&child_id, &parent_id)?;
+    }
+    Ok(())
+}
+
+/// Git-only phase of the worktree backfill: over a snapshot of every project,
+/// return the `(child_id, parent_id)` parent links that should be persisted. No
+/// DB access, so a caller whose DB lives behind an async actor (the daemon) can
+/// bridge the project read and the `set_parent_project` writes itself — a
+/// `&ProjectsRepository` can't be held across the async `git worktree list` calls.
+pub async fn compute_worktree_parent_links(all_projects: &[Project]) -> Vec<(String, String)> {
     let path_to_id: HashMap<String, String> = all_projects
         .iter()
         .map(|p| (p.path.clone(), p.id.clone()))
         .collect();
 
-    for project in &all_projects {
+    let mut links = Vec::new();
+    for project in all_projects {
         if has_parent(project) {
             continue;
         }
@@ -168,18 +187,11 @@ pub async fn backfill_worktree_relationships(
                 && let Some(child) = all_projects.iter().find(|p| &p.id == child_id)
                 && !has_parent(child)
             {
-                tracing::info!(
-                    module = "worktree-backfill",
-                    child_id = %child_id,
-                    parent_id = %project.id,
-                    path = %wt.path,
-                    "Backfilling worktree relationship"
-                );
-                projects.set_parent_project(child_id, &project.id)?;
+                links.push((child_id.clone(), project.id.clone()));
             }
         }
     }
-    Ok(())
+    links
 }
 
 /// Truthy check on `project.parentProjectId` (`string | null | undefined`):

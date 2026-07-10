@@ -5,8 +5,8 @@ pub mod worktree;
 
 pub use session_files::{get_claude_project_dir, move_session_files};
 pub use worktree::{
-    WorktreeEntry, WorktreeInfo, backfill_worktree_relationships, create_worktree, get_worktrees,
-    is_worktree_present, parse_worktree_list, remove_worktree,
+    WorktreeEntry, WorktreeInfo, backfill_worktree_relationships, compute_worktree_parent_links,
+    create_worktree, get_worktrees, is_worktree_present, parse_worktree_list, remove_worktree,
 };
 
 // PORT STATUS: src/workspace/index.ts (2 lines)

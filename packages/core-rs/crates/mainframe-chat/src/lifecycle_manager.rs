@@ -136,6 +136,30 @@ struct Guards {
     interrupting: HashMap<String, Arc<Notify>>,
 }
 
+/// Join an in-flight single-flight `Notify` without a lost wakeup. `notify_waiters`
+/// stores no permit and only wakes waiters already registered at the call, so the
+/// naive `clone → drop lock → notified().await` races the owner's `remove +
+/// notify_waiters` and can hang forever (the TS twin awaited a level-triggered
+/// Promise). Register the waiter (`enable`) BEFORE re-reading the map, then await
+/// only while the SAME `Notify` is still in flight (`Arc::ptr_eq` guards against an
+/// ABA where a newer generation claimed the slot under the same key).
+async fn join_flight(
+    guards: &Arc<Mutex<Guards>>,
+    existing: Arc<Notify>,
+    select: impl Fn(&Guards) -> Option<&Arc<Notify>>,
+) {
+    let notified = existing.notified();
+    tokio::pin!(notified);
+    notified.as_mut().enable();
+    let still_in_flight = {
+        let g = guards.lock().unwrap_or_else(|e| e.into_inner());
+        select(&g).is_some_and(|current| Arc::ptr_eq(current, &existing))
+    };
+    if still_in_flight {
+        notified.await;
+    }
+}
+
 pub struct ChatLifecycleManager<D: LifecycleManagerDeps + 'static> {
     deps: Arc<D>,
     active_chats: ActiveChatRegistry,
@@ -333,7 +357,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
         let notify = match action {
             Flight::Await(existing) => {
-                existing.notified().await;
+                join_flight(&self.guards, existing, |g| g.loading.get(chat_id)).await;
                 return;
             }
             Flight::Skip => return,
@@ -358,7 +382,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .get(chat_id)
             .cloned();
         if let Some(n) = n {
-            n.notified().await;
+            join_flight(&self.guards, n, |g| g.loading.get(chat_id)).await;
         }
     }
 
@@ -372,7 +396,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .get(chat_id)
             .cloned();
         if let Some(n) = n {
-            n.notified().await;
+            join_flight(&self.guards, n, |g| g.starting.get(chat_id)).await;
             true
         } else {
             false
@@ -412,7 +436,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
         let notify = match action {
             Flight::Await(existing) => {
-                existing.notified().await;
+                join_flight(&self.guards, existing, |g| g.starting.get(chat_id)).await;
                 return;
             }
             Flight::Skip => return, // start_chat never claims Skip
@@ -503,7 +527,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .get(chat_id)
             .cloned();
         if let Some(n) = n {
-            n.notified().await;
+            join_flight(&self.guards, n, |g| g.interrupting.get(chat_id)).await;
         }
     }
 
@@ -1160,6 +1184,54 @@ mod tests {
             DaemonEvent::LaunchScopeReleased { effective_path, .. } if effective_path == "/proj"
         )));
     }
+
+    // ── join_flight lost-wakeup regression ───────────────────────────────────
+    // The owner removes the slot + notify_waiters BEFORE the awaiter registers.
+    // `notify_waiters` stores no permit, so a bare `notified().await` would hang
+    // forever; join_flight's enable-then-recheck must observe the empty slot and
+    // return instead of parking on a wakeup that already fired.
+    #[tokio::test]
+    async fn join_flight_returns_when_slot_already_completed() {
+        let guards = Arc::new(Mutex::new(Guards::default()));
+        let n = Arc::new(Notify::new());
+        guards
+            .lock()
+            .unwrap()
+            .loading
+            .insert("c1".to_string(), n.clone());
+        guards.lock().unwrap().loading.remove("c1");
+        n.notify_waiters();
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            join_flight(&guards, n.clone(), |g| g.loading.get("c1")),
+        )
+        .await
+        .expect("join_flight hung after a completed single-flight (lost wakeup)");
+    }
+
+    // A waiter that registers while the slot is live must still be woken when the
+    // owner later completes (remove + notify_waiters).
+    #[tokio::test]
+    async fn join_flight_wakes_when_owner_completes_after_registration() {
+        let guards = Arc::new(Mutex::new(Guards::default()));
+        let n = Arc::new(Notify::new());
+        guards
+            .lock()
+            .unwrap()
+            .loading
+            .insert("c1".to_string(), n.clone());
+        let g2 = guards.clone();
+        let n2 = n.clone();
+        let waiter =
+            tokio::spawn(async move { join_flight(&g2, n2, |g| g.loading.get("c1")).await });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        guards.lock().unwrap().loading.remove("c1");
+        n.notify_waiters();
+        tokio::time::timeout(Duration::from_secs(1), waiter)
+            .await
+            .expect("waiter never woke after owner completed")
+            .unwrap();
+    }
 }
 
 // PORT STATUS: src/chat/lifecycle-manager.ts (530 lines)
@@ -1168,8 +1240,10 @@ mod tests {
 // notes: activeChats registry is the shared `Arc<DashMap<_, Arc<Mutex<ActiveChat>>>>`,
 // notes: messages/permissions shared `Arc<Mutex<..>>`. loadingChats/startingChats/
 // notes: interruptingChats single-flight → per-chat `Notify` maps (rule 9; no
-// notes: futures::Shared in the workspace); the 50ms interrupt poll → a spawned
-// notes: tokio poll task that notify_waiters on exit/5s. killTasksForChat +
+// notes: futures::Shared in the workspace). Awaiters use `join_flight`: enable the
+// notes: Notified BEFORE re-reading the map (ptr_eq) so the owner's remove +
+// notes: notify_waiters is never lost (Notify stores no permit). The 50ms interrupt
+// notes: poll → a spawned tokio poll task that notify_waiters on exit/5s. killTasksForChat +
 // notes: removeWorktree are routed through deps seams so archive stays observable and
 // notes: decoupled from git/spool I/O (tests assert order). doLoadChat's
 // notes: Claude-specific mention/PR-URL history scan is relocated to the injected
