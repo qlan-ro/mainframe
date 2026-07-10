@@ -71,10 +71,18 @@ export class CodexAdapter implements Adapter {
   }
 
   async listModels(): Promise<AdapterModel[]> {
+    return this.loadModels('codex');
+  }
+
+  async probeModels(executablePath?: string): Promise<AdapterModel[] | null> {
+    return this.loadModels(executablePath ?? 'codex');
+  }
+
+  private async loadModels(executable: string): Promise<AdapterModel[]> {
     if (this.cachedModels) return this.cachedModels;
     let client: JsonRpcClient | null = null;
     try {
-      client = await this.spawnTempAppServer();
+      client = await this.spawnTempAppServer(executable);
       const result = await client.request<ModelListResult>('model/list');
       const models = result.data.filter((m) => !m.hidden).map(mapCodexModel);
       if (models.length > 0) this.cachedModels = models; // don't cache transient failures (empty)
@@ -128,8 +136,8 @@ export class CodexAdapter implements Adapter {
     return isCodexTranscriptPresent(sessionId);
   }
 
-  private async spawnTempAppServer(): Promise<JsonRpcClient> {
-    const child = spawn('codex', ['app-server'], {
+  private async spawnTempAppServer(executable: string): Promise<JsonRpcClient> {
+    const child = spawn(executable, ['app-server'], {
       detached: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
