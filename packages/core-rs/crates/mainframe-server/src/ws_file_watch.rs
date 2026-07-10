@@ -73,7 +73,9 @@ impl WsFileWatch {
 
         if !self.file_subscriptions.contains(&resolved) {
             self.file_subscriptions.insert(resolved.clone());
-            file_watcher.subscribe(&resolved);
+            // Key/emit by the realpath (client contract); watch the original path
+            // so notify's macOS FSEvents backend actually fires (see subscribe).
+            file_watcher.subscribe(&resolved, absolute_path);
         }
         self.requested_to_resolved.insert(
             composite_key(requested_path, project_id, chat_id),
