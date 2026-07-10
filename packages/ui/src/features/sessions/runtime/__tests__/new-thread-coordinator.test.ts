@@ -20,13 +20,24 @@ vi.mock('../new-thread-ready-store', () => ({
   },
 }));
 
+// Mock enableWorktree (pendingWorktree carry) and the toast raised on its failure.
+vi.mock('../../../../lib/api/git', () => ({
+  enableWorktree: vi.fn().mockResolvedValue(undefined),
+}));
+const toastErrorSpy = vi.fn();
+vi.mock('../../../../lib/toast', () => ({
+  mfToast: { error: (...args: unknown[]) => toastErrorSpy(...args) },
+}));
+
 // Import AFTER the mock is registered so the module under test picks up the mock.
 import { createForLocal } from '../new-thread-coordinator';
 import { createChat, setChatTuning, setChatConfig } from '../../../../lib/api/chats';
+import { enableWorktree } from '../../../../lib/api/git';
 
 const mockCreateChat = createChat as MockedFunction<typeof createChat>;
 const mockSetChatTuning = setChatTuning as MockedFunction<typeof setChatTuning>;
 const mockSetChatConfig = setChatConfig as MockedFunction<typeof setChatConfig>;
+const mockEnableWorktree = enableWorktree as MockedFunction<typeof enableWorktree>;
 
 // ---------------------------------------------------------------------------
 // Reset draft-config singleton state + mock call counts between cases
@@ -268,5 +279,52 @@ describe('new-thread-coordinator — permissionMode omission fix', () => {
     const result = await createForLocal('__LOCALID_b', 31415);
 
     expect(result).toEqual({ remoteId: 'chat-1' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pendingWorktree — a "New" worktree chosen pre-send is created right after
+// the chat (enable-worktree is chat-scoped, so it can't run on a draft)
+// ---------------------------------------------------------------------------
+
+describe('new-thread-coordinator — pendingWorktree is created right after the chat', () => {
+  it('calls enableWorktree(port, chatId, baseBranch, branchName) and omits pendingWorktree from the createChat body', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feat/new' },
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-55' } as Chat);
+
+    const result = await createForLocal('__LOCALID_a', 31415);
+
+    expect(result).toEqual({ remoteId: 'chat-55' });
+    expect(mockEnableWorktree).toHaveBeenCalledExactlyOnceWith(31415, 'chat-55', 'main', 'feat/new');
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect('pendingWorktree' in body).toBe(false);
+  });
+
+  it('does NOT call enableWorktree when the draft has no pendingWorktree', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-56' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockEnableWorktree).not.toHaveBeenCalled();
+  });
+
+  it('still resolves and raises an error toast when enableWorktree fails (session falls back to the main repo)', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feat/new' },
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-57' } as Chat);
+    mockEnableWorktree.mockRejectedValueOnce(new Error('branch exists'));
+
+    const result = await createForLocal('__LOCALID_a', 31415);
+
+    expect(result).toEqual({ remoteId: 'chat-57' });
+    expect(toastErrorSpy).toHaveBeenCalled();
   });
 });
