@@ -4,7 +4,7 @@
  *
  *   [grip] [▶ surface icon] [tab pills…] [+] ……… [split▸][split▾][close]
  *
- * Each tab carries a STATIC type glyph (eye = preview webview, scroll-text =
+ * Each tab carries a STATIC type glyph (eye = preview webview, square-terminal =
  * console/logs process, terminal = shell, file = a Files guest) that never
  * changes with run state; a launch-config tab whose process is live adds a
  * separate red Stop between the title and its close (toolbar parity, #206). The
