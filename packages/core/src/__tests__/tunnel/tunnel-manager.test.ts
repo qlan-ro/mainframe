@@ -364,6 +364,32 @@ describe('TunnelManager registry tracking', () => {
 
     expect(registry.removed).toContain(4242);
   });
+
+  // stopAll is the daemon-shutdown reap path (SIGINT/SIGTERM/uncaughtException):
+  // every tracked child must be SIGTERM'd and dropped from the registry, or it
+  // orphans and re-parents to PID 1 (the prod incident this fix addresses).
+  it('stopAll kills every running tunnel and forgets each pid', async () => {
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+    const daemonKill = vi.fn();
+    const previewKill = vi.fn();
+    const tunnels = (manager as unknown as { tunnels: Map<string, unknown> }).tunnels;
+    tunnels.set('daemon', { process: { kill: daemonKill, pid: 100 }, url: 'https://a.trycloudflare.com', ready: true });
+    tunnels.set('preview:Dev', {
+      process: { kill: previewKill, pid: 200 },
+      url: 'https://b.trycloudflare.com',
+      ready: true,
+    });
+
+    manager.stopAll();
+    await Promise.resolve();
+
+    expect(daemonKill).toHaveBeenCalledWith('SIGTERM');
+    expect(previewKill).toHaveBeenCalledWith('SIGTERM');
+    expect(registry.removed).toEqual(expect.arrayContaining([100, 200]));
+    expect(manager.getUrl('daemon')).toBeNull();
+    expect(manager.getUrl('preview:Dev')).toBeNull();
+  });
 });
 
 describe('TunnelManager.start timeout interaction with DNS wait', () => {
