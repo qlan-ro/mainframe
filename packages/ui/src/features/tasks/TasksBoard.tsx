@@ -142,8 +142,9 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
         todos={todos}
       />
 
-      {/* Body */}
-      {loading ? (
+      {/* Body — only blank to the loading state on the first load; a refetch
+          (e.g. reopening the modal) keeps the previous list rendered. */}
+      {loading && todos.length === 0 ? (
         <div
           data-testid="tasks-board-loading"
           className="flex-1 flex items-center justify-center text-caption text-muted-foreground"
