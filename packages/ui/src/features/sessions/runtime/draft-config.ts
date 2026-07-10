@@ -31,6 +31,12 @@ export interface DraftCfg {
   adaptiveThinking?: boolean | null;
   worktreePath?: string;
   branchName?: string;
+  /**
+   * A "New" worktree chosen pre-send. It cannot be created yet (enable-worktree
+   * is chat-scoped and no daemon chat exists), so the coordinator runs
+   * enable-worktree right after createChat on first send.
+   */
+  pendingWorktree?: { baseBranch: string; branchName: string };
 }
 
 interface DraftConfigState {
