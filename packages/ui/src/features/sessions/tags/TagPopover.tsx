@@ -211,7 +211,7 @@ export function TagPopover({
               {error}
             </div>
           )}
-          <div className="max-h-56 overflow-y-auto mt-1">
+          <div className="mf-thin-scrollbar max-h-56 overflow-y-auto mt-1">
             {filtered.map((t) =>
               renaming === t.name ? (
                 <Input
