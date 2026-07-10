@@ -132,4 +132,21 @@ describe('DaemonWsClient — boot race (unseeded active daemon)', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
+
+  it('keeps waiting through a still-unseeded notification (no socket, no re-subscribe loop)', () => {
+    client.setPort(31415);
+    client.connect();
+
+    // Set iteration visits listeners added during the notify loop — an
+    // unguarded listener that cancels + reconnects on an unseeded target
+    // re-subscribes inside that loop and never terminates.
+    setActiveDaemon({ ...UNSEEDED });
+
+    expect(FakeWebSocket.instances).toHaveLength(0);
+
+    setActiveDaemon(SEEDED_LOCAL);
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0]?.url).toBe('ws://127.0.0.1:31415');
+  });
 });

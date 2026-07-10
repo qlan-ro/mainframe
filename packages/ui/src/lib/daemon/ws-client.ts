@@ -206,7 +206,10 @@ export class DaemonWsClient {
   /** Defer the connect until setActiveDaemon() delivers a seeded target. */
   private connectWhenSeeded(): void {
     if (this.seedWaitUnsub) return;
-    this.seedWaitUnsub = subscribeActiveDaemon(() => {
+    // Ignore unseeded notifications: reacting to one would re-subscribe inside
+    // setActiveDaemon's listener iteration (Sets visit entries added mid-loop).
+    this.seedWaitUnsub = subscribeActiveDaemon((t) => {
+      if (!isSeededTarget(t.baseUrl)) return;
       this.cancelSeedWait();
       this.connect();
     });
