@@ -31,6 +31,11 @@ notify = "6"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# Pairing QR in the daemon's `pair` subcommand (Phase 5).
+qrcode = "0.14"
+# NOTE: the workflow engine (serde_yaml/cron/jsonata) is deliberately NOT ported
+# yet — the TS workflows feature is not stable. mainframe-workflows stays an
+# empty crate; its deps are added when the feature stabilizes.
 # Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
 tempfile = "3"
 

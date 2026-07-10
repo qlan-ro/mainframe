@@ -872,10 +872,9 @@ starts (raise a blocker if you need it sooner; do not add it locally).
 | `dirs` | home-dir resolution (`os.homedir()` equivalent) | in workspace |
 | `reqwest` (rustls-tls, json) | HTTP client: push delivery (Phase 2), workflow HTTP connector (Phase 5) | in workspace |
 | `tempfile` | **dev-dependency only** — temp dirs/files in db/git/fs tests | in workspace |
+| `qrcode` | pairing QR in the daemon `pair` subcommand | in workspace |
 | `anyhow` | **binary crate top level only** (verify gate exempts the `mainframe-daemon` crate, forbids it elsewhere) | in workspace |
-| `serde_yaml` | workflow DSL | deferred → Phase 5 (`mainframe-workflows`) |
-| `cron` | workflow schedule triggers | deferred → Phase 5 |
-| `qrcode` | pairing QR | deferred → Phase 3 (`mainframe-server` auth/pairing) |
+| `serde_yaml`, `cron`, `jsonata-rs` | workflow engine | **deferred indefinitely** — the TS workflows feature is not stable; `mainframe-workflows` stays an empty crate and `/api/workflows*` is a documented gap until it stabilizes |
 | `futures` | stream/select combinators | deferred (added with the first crate that needs it) |
 
 **Open dependency decisions (blockers, not local calls):**
