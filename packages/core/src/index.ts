@@ -82,9 +82,6 @@ async function main(): Promise<void> {
   // otherwise those chats look "running" and new messages queue forever.
   chats.recoverStaleWorkingState();
   const tunnelRegistry = new FileTunnelRegistry(join(getDataDir(), 'cloudflared-tunnels.json'));
-  // Reap cloudflared children a previous daemon crash/kill orphaned before we
-  // spawn new ones — the sweep clears the registry so this run starts clean.
-  await sweepStrayTunnels(tunnelRegistry).catch((err) => logger.warn({ err }, 'Stray cloudflared tunnel sweep failed'));
   const cloudflaredPath = (await resolveCloudflaredPath()) ?? undefined;
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event), {
     registry: tunnelRegistry,
@@ -179,6 +176,15 @@ async function main(): Promise<void> {
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
 
   await server.start(config.port);
+
+  // Reap cloudflared children a previous daemon crash/kill orphaned, pruning
+  // their records. This MUST run after the port bind: the bind is the daemon's
+  // only single-instance guard, so a duplicate launch against the same data dir
+  // fails with EADDRINUSE above instead of sweeping the live daemon's tunnels.
+  // It still precedes every tunnel spawn (daemon tunnel below, preview tunnels
+  // are user-triggered).
+  await sweepStrayTunnels(tunnelRegistry).catch((err) => logger.warn({ err }, 'Stray cloudflared tunnel sweep failed'));
+
   // Bind the real WS broadcast AND feed daemon events to the workflow engine.
   // All event sources (chats, launchRegistry, tunnelManager, backgroundTasks,
   // pluginManager) use the broadcastEvent closure by reference, so every event
