@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
+import { realpath } from 'node:fs/promises';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
@@ -107,16 +108,21 @@ export class LaunchManager {
    * Persist a spawned launch pid so a crashed daemon's next startup sweep can
    * reap its process group. Launch children are detached group leaders, so the
    * sweep needs the exact argv + cwd to reject a reused pid (see process/sweep).
+   *
+   * The cwd is recorded as a realpath: the sweep compares it against `lsof`,
+   * which reports the resolved path, so a symlinked spawn cwd (every /tmp path
+   * on macOS is /private/tmp) would otherwise fail the guard and leak the orphan.
    */
-  private recordSpawn(name: string, pid: number | undefined, executable: string, args: string[]): void {
+  private async recordSpawn(name: string, pid: number | undefined, executable: string, args: string[]): Promise<void> {
     if (pid == null || !this.childRegistry) return;
-    this.childRegistry
+    const cwd = await realpath(this.projectPath).catch(() => this.projectPath);
+    await this.childRegistry
       .add({
         pid,
         kind: 'launch',
         command: executable,
         args,
-        cwd: this.projectPath,
+        cwd,
         group: true,
         label: `${this.projectId}:${name}`,
         spawnedAt: Date.now(),
@@ -161,8 +167,6 @@ export class LaunchManager {
         ...(config.env ?? {}),
       },
     });
-
-    this.recordSpawn(config.name, child.pid, executable, config.runtimeArgs);
 
     const managed: ManagedProcess = { process: child, status: 'starting' };
     this.processes.set(config.name, managed);
@@ -270,6 +274,11 @@ export class LaunchManager {
         reject(err);
       });
     });
+
+    // Record only after spawn is confirmed (pid valid) but BEFORE the long
+    // port-readiness wait below — that wait is the window in which a daemon
+    // crash would orphan this child, so its reap record must already be durable.
+    await this.recordSpawn(config.name, child.pid, executable, config.runtimeArgs);
 
     // If a port is configured, wait until the server is actually listening before
     // emitting 'running'. This prevents clients from loading a URL too early.

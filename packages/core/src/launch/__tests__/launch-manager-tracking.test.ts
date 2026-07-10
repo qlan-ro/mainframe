@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import type { ManagedChildEntry, ChildRegistryPort, ManagedChildKind } from '../../process/index.js';
 
@@ -65,6 +68,23 @@ describe('LaunchManager registry tracking', () => {
         label: 'proj-1:dev',
       }),
     ]);
+  });
+
+  it('records the realpath-resolved cwd so it matches the OS-reported cwd (macOS /tmp → /private/tmp)', async () => {
+    // The sweep compares the recorded cwd against `lsof`, which reports the
+    // realpath. A symlinked spawn cwd (every /tmp path on macOS) must be
+    // resolved at record time or the guard rejects our own orphan and it lives.
+    const dir = await mkdtemp(join(tmpdir(), 'launch-cwd-'));
+    const real = await realpath(dir);
+    try {
+      const { LaunchManager } = await import('../launch-manager.js');
+      const registry = new RecordingRegistry();
+      const manager = new LaunchManager('proj-1', dir, vi.fn(), undefined, registry);
+      await manager.start(makeConfig());
+      expect(registry.added[0]!.cwd).toBe(real);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('records the resolved absolute path for a relative executable', async () => {
