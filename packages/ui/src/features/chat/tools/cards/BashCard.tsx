@@ -63,10 +63,7 @@ function TerminalBody({ command, resultText, isError, chatId, toolCallId, trunca
       {truncated && chatId && toolCallId ? (
         <ToolResultExpand chatId={chatId} toolUseId={toolCallId} truncatedContent={resultText} fullBytes={fullBytes} />
       ) : (
-        <pre
-          data-testid="chat-bash-output"
-          className="font-mono text-caption overflow-x-auto whitespace-pre-wrap max-h-[400px] overflow-y-auto"
-        >
+        <pre data-testid="chat-bash-output" className="font-mono text-caption overflow-x-auto whitespace-pre-wrap">
           <span className="text-mf-term-green">$ </span>
           <span className="text-mf-term-fg">{command}</span>
           {'\n'}

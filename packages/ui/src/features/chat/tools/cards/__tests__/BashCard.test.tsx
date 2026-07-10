@@ -33,6 +33,7 @@ vi.mock('@/features/chat/tools/ToolResultExpand', () => ({
 // ---------------------------------------------------------------------------
 
 import { BashCard } from '../BashCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,6 +166,12 @@ describe('BashCard', () => {
     fireEvent.click(trigger);
     const output = screen.getByTestId('chat-bash-output');
     expect(output).toHaveTextContent('hello');
+  });
+
+  it('does not nest a vertical scroll container in the terminal body (single overflow owner)', () => {
+    renderCard(makePart({ args: { command: 'echo hi' }, result: 'hi\nexit 0', isError: false }));
+    fireEvent.click(screen.getByTestId('chat-bash-trigger'));
+    expect(nestedVerticalScrollers(screen.getByTestId('chat-bash-card'))).toHaveLength(0);
   });
 
   it('shows the command as a prompt line inside the output body', () => {
