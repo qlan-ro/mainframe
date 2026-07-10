@@ -47,7 +47,7 @@ function CodePreview({ text }: CodePreviewProps) {
   return (
     <pre
       data-testid="read-card-code-preview"
-      className="bg-mf-code-bg font-mono text-caption leading-normal text-mf-code-fg overflow-auto max-h-[300px] whitespace-pre px-3 py-2"
+      className="bg-mf-code-bg font-mono text-caption leading-normal text-mf-code-fg overflow-x-auto whitespace-pre px-3 py-2"
     >
       {text}
     </pre>

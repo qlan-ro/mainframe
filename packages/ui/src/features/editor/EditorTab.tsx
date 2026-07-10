@@ -23,6 +23,7 @@ import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { lspClientManager, getLspLanguage } from '@/lib/lsp';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
+import { DiskConflictBanner, SaveErrorBanner } from './editor-banners';
 import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
 import { useFileWatchReload } from './use-file-watch-reload';
@@ -229,6 +230,9 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
+      {/* Above ViewerRouter so BOTH code branches (plain + markdown) show them. */}
+      {saveError !== null && <SaveErrorBanner message={saveError} />}
+      {diskConflict !== null && <DiskConflictBanner onReload={reloadFromDisk} onKeepMine={keepMine} />}
       <ViewerRouter
         path={path}
         renderCode={() =>
@@ -248,36 +252,6 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
                   className="flex-shrink-0 bg-mf-tab-bar px-3 py-0.5 text-caption text-mf-text-3"
                 >
                   Read-only
-                </div>
-              )}
-              {saveError !== null && (
-                <div
-                  data-testid="editor-tab-save-error"
-                  className="flex-shrink-0 bg-mf-destructive-tint px-3 py-1 text-caption text-destructive"
-                >
-                  Save failed: {saveError}
-                </div>
-              )}
-              {diskConflict !== null && (
-                <div
-                  data-testid="editor-tab-disk-conflict"
-                  className="flex flex-shrink-0 items-center gap-2 bg-mf-warning-tint px-3 py-1 text-caption text-mf-warning"
-                >
-                  <span className="flex-1">File changed on disk</span>
-                  <button
-                    data-testid="editor-tab-reload"
-                    onClick={reloadFromDisk}
-                    className="rounded px-2 py-0.5 hover:opacity-80"
-                  >
-                    Reload
-                  </button>
-                  <button
-                    data-testid="editor-tab-keep-mine"
-                    onClick={keepMine}
-                    className="rounded px-2 py-0.5 hover:opacity-80"
-                  >
-                    Keep mine
-                  </button>
                 </div>
               )}
               <EditorContextMenu

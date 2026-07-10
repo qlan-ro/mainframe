@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SkillLoadedCard } from '../SkillLoadedCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ── Wrapper ───────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,16 @@ describe('SkillLoadedCard — expandable behavior', () => {
     );
     fireEvent.click(screen.getByTestId('chat-skill-loaded-pill'));
     expect(screen.getByText('skill body text here')).toBeInTheDocument();
+  });
+
+  it('does not nest a vertical scroll container in the expanded content (single overflow owner)', () => {
+    const { container } = render(
+      <Wrap>
+        <SkillLoadedCard skillName="test-skill" path="/p" content={'line 1\nline 2\nline 3'} />
+      </Wrap>,
+    );
+    fireEvent.click(screen.getByTestId('chat-skill-loaded-pill'));
+    expect(nestedVerticalScrollers(container)).toHaveLength(0);
   });
 
   it('clicking the pill a second time collapses the content', () => {

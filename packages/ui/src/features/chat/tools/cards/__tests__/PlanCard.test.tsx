@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { PlanCard } from '../PlanCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +71,12 @@ describe('PlanCard', () => {
   it('renders the card root with data-testid="chat-plan-card"', () => {
     renderCard(makePart({}));
     expect(screen.getByTestId('chat-plan-card')).toBeInTheDocument();
+  });
+
+  it('does not nest a vertical scroll container in the plan body (single overflow owner)', () => {
+    renderCard(makePart({ result: 'Step 1: implement\nStep 2: test', isError: false }));
+    // Body is open by default when a result is present.
+    expect(nestedVerticalScrollers(screen.getByTestId('chat-plan-card'))).toHaveLength(0);
   });
 
   // --- Header label always visible ---
