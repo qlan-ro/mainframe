@@ -39,6 +39,18 @@ describe('processMatchesBinary', () => {
   it('rejects an unrelated command that happens to reuse the pid', () => {
     expect(processMatchesBinary('/usr/bin/postgres -D /data', BIN)).toBe(false);
   });
+
+  it('matches a bare invocation of the recorded binary with no arguments', () => {
+    expect(processMatchesBinary(BIN, BIN)).toBe(true);
+  });
+
+  it('rejects a sibling binary whose path merely has the recorded path as a prefix', () => {
+    expect(processMatchesBinary(`${BIN}-updater tunnel run`, BIN)).toBe(false);
+  });
+
+  it('rejects a command that only references the recorded path as an argument', () => {
+    expect(processMatchesBinary(`/usr/bin/tail -f ${BIN}.log`, BIN)).toBe(false);
+  });
 });
 
 describe('sweepStrayTunnels', () => {
@@ -92,6 +104,17 @@ describe('sweepStrayTunnels', () => {
     expect(kill).toHaveBeenCalledTimes(1);
     expect(kill).toHaveBeenCalledWith(1, 'SIGTERM');
     expect(result).toEqual({ total: 3, reaped: 1, skipped: 2 });
+  });
+
+  it('leaves the registry intact and reaps nothing on win32 (no ps to inspect pids)', async () => {
+    const registry = new FakeRegistry([entry(1), entry(2)]);
+    const kill = vi.fn();
+    const processCommand = vi.fn(async () => `${BIN} tunnel --url http://localhost:4173`);
+    const result = await sweepStrayTunnels(registry, { processCommand, kill, platform: 'win32' });
+    expect(kill).not.toHaveBeenCalled();
+    expect(processCommand).not.toHaveBeenCalled();
+    expect(registry.cleared).toBe(false);
+    expect(result).toEqual({ total: 2, reaped: 0, skipped: 2 });
   });
 
   it('clears the registry and does nothing when there are no entries', async () => {
