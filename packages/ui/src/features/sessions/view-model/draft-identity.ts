@@ -69,16 +69,23 @@ export interface ScopeCache {
  * for the SAME item keeps the file tree / chip / run scope lit through the
  * handoff. A different item never inherits the cache (a fresh draft slot or a
  * real thread must resolve on its own).
+ *
+ * `discarded` (isDraftDiscarded for the slot) disambiguates the bridge from an
+ * explicit ✕ discard: the user can stay parked on the cleared slot (the discard
+ * return target was the slot itself, or there were zero sessions to switch to),
+ * which is indistinguishable from the first-send gap by state alone. A
+ * discarded slot gets the raw empty scope, never the cache.
  */
 export function bridgeScopeGap(
   cache: ScopeCache | null,
   itemId: string | null,
   raw: ActiveScope,
+  discarded = false,
 ): { scope: ActiveScope; cache: ScopeCache | null } {
   if (itemId != null && raw.projectId != null) {
     return { scope: raw, cache: { itemId, scope: raw } };
   }
-  if (itemId != null && cache != null && cache.itemId === itemId) {
+  if (itemId != null && cache != null && cache.itemId === itemId && !discarded) {
     return { scope: cache.scope, cache };
   }
   return { scope: raw, cache: null };

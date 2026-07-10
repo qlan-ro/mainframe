@@ -15,6 +15,7 @@ import { renderHook } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { useDraftConfigStore, setDraftConfig } from '../runtime/draft-config';
+import { useDiscardedDraftStore, markDraftDiscarded } from '../new-thread/discarded-drafts';
 
 interface FakeItem {
   id: string;
@@ -61,6 +62,7 @@ const LIVE_CUSTOM = {
 
 beforeEach(() => {
   useDraftConfigStore.setState({ drafts: new Map() });
+  useDiscardedDraftStore.setState({ ids: new Set() });
   fakeAuiState = { threadListItem: undefined, threads: { threadItems: [] } };
 });
 
@@ -173,5 +175,25 @@ describe('useActiveIdentity — first-send gap continuity', () => {
     rerender();
 
     expect(result.current.projectId).toBeUndefined();
+  });
+
+  it('drops the bridged identity when the parked slot was explicitly discarded', () => {
+    // ✕ discard clears the draft and marks the slot discarded, but the user can
+    // stay parked on it (returnThreadId pointed at the slot itself, or there
+    // are zero sessions to switch to). The first-send bridge must not keep the
+    // discarded project's scope alive on that slot.
+    const item: FakeItem = { id: '__LOCALID_d', status: 'new' };
+    fakeAuiState = { threadListItem: item, threads: { threadItems: [item] } };
+    setDraftConfig('__LOCALID_d', { projectId: 'proj-b', adapterId: 'codex' });
+
+    const { result, rerender } = renderHook(() => useActiveIdentity());
+    expect(result.current.projectId).toBe('proj-b');
+
+    useDraftConfigStore.setState({ drafts: new Map() });
+    markDraftDiscarded('__LOCALID_d');
+    rerender();
+
+    expect(result.current.projectId).toBeUndefined();
+    expect(result.current.projectName).toBe('Mainframe');
   });
 });

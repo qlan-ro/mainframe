@@ -131,4 +131,21 @@ describe('bridgeScopeGap — first-send gap continuity', () => {
     expect(scope).toEqual({});
     expect(cache).toBeNull();
   });
+
+  it('does NOT serve the cached scope for a slot the user explicitly discarded', () => {
+    // Explicit ✕ discard, user stays parked on the cleared slot (returnThreadId
+    // pointed at the slot itself, or zero sessions to switch to) — the bridge
+    // must not keep the discarded project alive.
+    const cache: ScopeCache = { itemId: '__LOCALID_1', scope: resolved };
+    const { scope, cache: next } = bridgeScopeGap(cache, '__LOCALID_1', {}, true);
+    expect(scope).toEqual({});
+    expect(next).toBeNull();
+  });
+
+  it('still resolves a fresh scope on a previously-discarded slot (marker outlives a re-arm race)', () => {
+    const fresh = { projectId: 'p2', adapterId: 'codex' };
+    const { scope, cache } = bridgeScopeGap(null, '__LOCALID_1', fresh, true);
+    expect(scope).toBe(fresh);
+    expect(cache).toEqual({ itemId: '__LOCALID_1', scope: fresh });
+  });
 });

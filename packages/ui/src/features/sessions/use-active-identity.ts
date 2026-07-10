@@ -18,6 +18,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { useProjects } from './use-projects';
 import { activeSessionCustom } from './view-model/chat-to-thread-custom';
 import { useActiveDraftConfig } from './use-active-draft-config';
+import { useDiscardedDraftStore } from './new-thread/discarded-drafts';
 import { resolveActiveScope, bridgeScopeGap, type ScopeCache } from './view-model/draft-identity';
 
 export interface ActiveIdentity {
@@ -46,8 +47,12 @@ export function useActiveIdentity(): ActiveIdentity {
   const localId = useAuiState((s) => s.threadListItem?.id ?? null);
   const draft = useActiveDraftConfig();
 
+  // An explicitly discarded (✕) slot must not be bridged — the user may stay
+  // parked on it, and the gap-bridge alone can't tell that from a first send.
+  const discarded = useDiscardedDraftStore((s) => localId != null && s.ids.has(localId));
+
   const cacheRef = useRef<ScopeCache | null>(null);
-  const bridged = bridgeScopeGap(cacheRef.current, localId, resolveActiveScope(custom, draft));
+  const bridged = bridgeScopeGap(cacheRef.current, localId, resolveActiveScope(custom, draft), discarded);
   useEffect(() => {
     cacheRef.current = bridged.cache;
   });
