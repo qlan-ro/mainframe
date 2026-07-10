@@ -210,7 +210,7 @@ export interface CollaborationMode {
 }
 
 export interface CollaborationModeSettings {
-  model: string;
+  model?: string;
   reasoning_effort?: string | null;
   developer_instructions?: string | null;
 }

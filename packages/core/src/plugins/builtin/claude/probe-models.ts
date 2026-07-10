@@ -55,6 +55,12 @@ export interface ProbeResult {
   resolvedModel?: string;
 }
 
+function removeConcreteDefaultDuplicate(models: AdapterModel[]): AdapterModel[] {
+  const defaultModel = models.find((model) => model.isDefault);
+  if (!defaultModel?.resolvedModel) return models;
+  return models.filter((model) => model === defaultModel || model.resolvedModel !== defaultModel.resolvedModel);
+}
+
 /**
  * Parse the (possibly double-wrapped) `initialize` control_response.
  *
@@ -70,7 +76,7 @@ export function extractProbePayload(event: Record<string, unknown>): ProbeResult
   const payload = ((response?.response as Record<string, unknown>) ?? response) as Record<string, unknown> | undefined;
   const rawModels = payload?.models;
   if (!Array.isArray(rawModels)) return null;
-  const models = (rawModels as CliModelInfo[]).map(mapModelInfo);
+  const models = removeConcreteDefaultDuplicate((rawModels as CliModelInfo[]).map(mapModelInfo));
   const defaultEntry = (rawModels as CliModelInfo[]).find((m) => m.value === 'default');
   const resolvedModel = typeof defaultEntry?.resolvedModel === 'string' ? defaultEntry.resolvedModel : undefined;
   return { models, resolvedModel };

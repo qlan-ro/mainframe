@@ -40,4 +40,15 @@ describe('buildTurnConfig', () => {
     expect(cfg.personality).toBeUndefined();
     expect(cfg.summary).toBeUndefined();
   });
+
+  it.each([undefined, ''])('omits the model setting when no model is selected (%s)', (model) => {
+    const cfg = buildTurnConfig(
+      { effort: 'high', fast: false, ultracode: false, adaptiveThinking: false },
+      {},
+      model,
+      'default',
+    );
+
+    expect(cfg.collaborationMode.settings).not.toHaveProperty('model');
+  });
 });

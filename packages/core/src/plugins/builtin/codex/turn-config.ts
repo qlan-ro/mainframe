@@ -30,14 +30,14 @@ export interface CodexTurnConfig {
 export function buildTurnConfig(
   tuning: ResolvedTuning,
   codex: CodexProviderTuning,
-  modelId: string,
+  modelId: string | undefined,
   mode: 'plan' | 'default',
 ): CodexTurnConfig {
   const cfg: CodexTurnConfig = {
     collaborationMode: {
       mode,
       settings: {
-        model: modelId,
+        ...(modelId ? { model: modelId } : {}),
         reasoning_effort: tuning.effort as string | null,
         developer_instructions: null,
       },

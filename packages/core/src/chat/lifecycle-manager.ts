@@ -18,6 +18,7 @@ import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
 import { getProviderConfig } from '../settings/provider-config.js';
+import { normalizeSavedDefaultModel } from '../settings/model-default.js';
 
 const log = createChildLogger('chat:lifecycle');
 
@@ -113,7 +114,10 @@ export class ChatLifecycleManager {
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
       const defaultPlanMode = this.deps.db.settings.get('provider', `${adapterId}.defaultPlanMode`);
 
-      if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
+      if (!effectiveModel && defaultModel) {
+        const models = this.deps.adapters.getSnapshots().find((snapshot) => snapshot.id === adapterId)?.models ?? [];
+        effectiveModel = normalizeSavedDefaultModel(defaultModel, models);
+      }
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
       if (defaultPlanMode === 'true') effectivePlanMode = true;
     }
