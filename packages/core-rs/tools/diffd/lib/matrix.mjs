@@ -49,6 +49,45 @@ export function buildMatrix(m) {
     { id: 'attach-get-seeded', method: 'GET', path: `/api/chats/${chat}/attachments/${m.attachmentId}`, cat: 'read' },
     { id: 'attach-get-404', method: 'GET', path: `/api/chats/${chat}/attachments/does-not-exist`, cat: 'read' },
 
+    // ---- Phase-5 read surfaces (facade task made these seams real) --------
+    // chats / context / worktree read routes (the ChatManager facade is live).
+    // chats-list / chats-for-project are order-SENSITIVE: both TS (db/chats.ts)
+    // and Rust (mainframe-db/chats.rs) sort `ORDER BY pinned DESC, updated_at DESC`
+    // (list_all adds a `rowid DESC` tiebreaker), so a set-sort would mask a real
+    // chat-ordering regression. Only files-list/worktree-list stay `unordered`.
+    { id: 'chats-list', method: 'GET', path: '/api/chats', cat: 'read' },
+    { id: 'chats-for-project', method: 'GET', path: `/api/projects/${git}/chats`, cat: 'read' },
+    { id: 'chat-get-happy', method: 'GET', path: `/api/chats/${chat}`, cat: 'read' },
+    { id: 'chat-get-404', method: 'GET', path: '/api/chats/does-not-exist', cat: 'read' },
+    { id: 'chat-messages-happy', method: 'GET', path: `/api/chats/${chat}/messages`, cat: 'read' },
+    { id: 'chat-pending-permission', method: 'GET', path: `/api/chats/${chat}/pending-permission`, cat: 'read' },
+    { id: 'chat-session-files', method: 'GET', path: `/api/chats/${chat}/session-files`, cat: 'read' },
+    { id: 'chat-context-happy', method: 'GET', path: `/api/chats/${chat}/context`, cat: 'read' },
+    { id: 'worktree-list-happy', method: 'GET', path: `/api/projects/${git}/git/worktrees`, cat: 'read', unordered: true },
+
+    // launch read routes — configs (disk parse/echo) + status (empty statuses).
+    { id: 'launch-configs-happy', method: 'GET', path: `/api/projects/${plain}/launch/configs`, cat: 'read' },
+    { id: 'launch-configs-404', method: 'GET', path: '/api/projects/bogus/launch/configs', cat: 'read' },
+    { id: 'launch-status-idle', method: 'GET', path: `/api/projects/${plain}/launch/status`, cat: 'read' },
+
+    // tunnel status/config — read-only; NO cloudflared is started (start/stop
+    // are deliberately not probed: they shell out to a real `cloudflared`).
+    { id: 'tunnel-status', method: 'GET', path: '/api/tunnel/status', cat: 'read' },
+    { id: 'tunnel-config', method: 'GET', path: '/api/tunnel/config', cat: 'read' },
+
+    // plugins listing (nested PluginManager router) + lsp languages.
+    { id: 'plugins-list', method: 'GET', path: '/api/plugins', cat: 'read', unordered: true },
+    { id: 'lsp-languages-happy', method: 'GET', path: '/api/lsp/languages', query: { projectId: git }, cat: 'read', unordered: true },
+    { id: 'lsp-languages-400', method: 'GET', path: '/api/lsp/languages', cat: 'read' },
+
+    // workflows — DELIBERATE, DOCUMENTED gap: the TS workflow feature is unstable
+    // and intentionally NOT ported (scope decision 2026-07-10). Node mounts these
+    // (real 200/503); the Rust daemon leaves them unmounted (404). Classified
+    // EXPECTED(gap) in diffd.mjs, never counted as a divergence.
+    { id: 'workflows-list', method: 'GET', path: '/api/workflows', cat: 'read', gap: true },
+    { id: 'workflow-connectors', method: 'GET', path: '/api/workflow-connectors', cat: 'read', gap: true },
+    { id: 'workflow-credentials', method: 'GET', path: '/api/workflow-credentials', cat: 'read', gap: true },
+
     // ---- mutation parity probes -------------------------------------------
     { id: 'device-activity', method: 'POST', path: '/api/device/activity', body: { state: 'active' }, cat: 'mut' },
 
@@ -95,11 +134,21 @@ export function buildMatrix(m) {
       },
     },
 
+    // launch start → status(running) → stop → status(stopped). Drives a real
+    // child process on the plain project's seeded launch.json (`diffd-probe`).
+    // Each `stop` awaits child exit, so the child never outlives the phase.
+    { id: 'launch-start', method: 'POST', path: `/api/projects/${plain}/launch/diffd-probe/start`, cat: 'mut' },
+    { id: 'launch-status-running', method: 'GET', path: `/api/projects/${plain}/launch/status`, cat: 'mut' },
+    { id: 'launch-start-404', method: 'POST', path: '/api/projects/bogus/launch/diffd-probe/start', cat: 'mut' },
+    { id: 'launch-start-missing-config', method: 'POST', path: `/api/projects/${plain}/launch/no-such-config/start`, cat: 'mut' },
+    { id: 'launch-stop', method: 'POST', path: `/api/projects/${plain}/launch/diffd-probe/stop`, cat: 'mut' },
+    { id: 'launch-status-stopped', method: 'GET', path: `/api/projects/${plain}/launch/status`, cat: 'mut' },
+
     // LAST: projects DELETE probe. It targets a dedicated, chat-less throwaway
     // project (registered here, per-daemon id) so the only post-run divergence is
     // the single projects row — deleting a seeded project would also cascade its
-    // chats, muddying the comparison. Node removes the row (200); Rust returns the
-    // Phase-4/5 ChatManager seam 500 and keeps it, making the seam explicit.
+    // chats, muddying the comparison. The ChatManager facade is live in both
+    // daemons now, so both remove the row (200) and the projects tables converge.
     { id: 'projects-create-throwaway', method: 'POST', path: '/api/projects', body: { path: `${m.plainProj}/diffd-throwaway` }, cat: 'mut', dbAffect },
     {
       id: 'projects-delete',

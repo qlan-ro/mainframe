@@ -29,6 +29,30 @@ function buildPlainProject(dir) {
   fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'notes.txt'), 'plain project notes\n');
   fs.writeFileSync(path.join(dir, 'docs', 'guide.md'), '# guide\n');
+  // A trivial, deterministic launch config for the launch configs/status/start/
+  // stop probes. `node` is the only allowlisted executable guaranteed present
+  // (the daemons run on Node); the setInterval keeps the child alive until the
+  // matrix stops it. `port: null` avoids a real TCP bind — no cross-phase port
+  // race and no 60s port-readiness wait — so `start` reaches `running` on spawn.
+  fs.mkdirSync(path.join(dir, '.mainframe'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, '.mainframe', 'launch.json'),
+    JSON.stringify(
+      {
+        version: '1.0',
+        configurations: [
+          {
+            name: 'diffd-probe',
+            runtimeExecutable: 'node',
+            runtimeArgs: ['-e', 'setInterval(() => {}, 1000000)'],
+            port: null,
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 async function projectIdByPath(base, wantPath) {

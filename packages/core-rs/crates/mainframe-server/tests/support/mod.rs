@@ -53,10 +53,15 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
             mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
         ),
         chat_manager: None,
+        launch_registry: None,
+        tunnel_manager: None,
+        lsp_manager: None,
+        plugin_manager: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
+        port: 0,
         auth_secret,
-        tunnel_url: None,
+        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
     });
     spawn_broadcast_pump(Arc::clone(&ctx));

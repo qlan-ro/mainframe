@@ -133,6 +133,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "bytemuck"
+version = "1.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6aedf8ae72766347502cf3cb4f41cf5e9cc37d28bee90f1fdaaae15f9cf9424"
+
+[[package]]
+name = "byteorder-lite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
 name = "bytes"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -720,6 +732,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.25.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
+dependencies = [
+ "bytemuck",
+ "byteorder-lite",
+ "moxcms",
+ "num-traits",
+]
+
+[[package]]
 name = "inotify"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -949,10 +973,14 @@ dependencies = [
  "mainframe-adapter-codex",
  "mainframe-background-tasks",
  "mainframe-db",
+ "mainframe-launch",
+ "mainframe-lsp",
+ "mainframe-plugins",
  "mainframe-runtime",
  "mainframe-server",
  "mainframe-services",
  "mainframe-types",
+ "qrcode",
  "reqwest",
  "serde_json",
  "tempfile",
@@ -1000,28 +1028,51 @@ dependencies = [
 name = "mainframe-launch"
 version = "0.0.0"
 dependencies = [
+ "dashmap",
+ "dirs",
  "mainframe-types",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "mainframe-lsp"
 version = "0.0.0"
 dependencies = [
+ "dashmap",
  "mainframe-types",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "mainframe-plugins"
 version = "0.0.0"
 dependencies = [
+ "axum",
+ "dashmap",
  "mainframe-adapter-api",
+ "mainframe-runtime",
+ "mainframe-services",
  "mainframe-types",
+ "nanoid",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1058,6 +1109,9 @@ dependencies = [
  "mainframe-chat",
  "mainframe-db",
  "mainframe-git",
+ "mainframe-launch",
+ "mainframe-lsp",
+ "mainframe-plugins",
  "mainframe-runtime",
  "mainframe-services",
  "mainframe-types",
@@ -1159,6 +1213,16 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "moxcms"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
+dependencies = [
+ "num-traits",
+ "pxfm",
 ]
 
 [[package]]
@@ -1297,6 +1361,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pxfm"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+dependencies = [
+ "image",
 ]
 
 [[package]]
@@ -1836,7 +1915,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

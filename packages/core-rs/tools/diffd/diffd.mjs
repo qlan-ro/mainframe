@@ -25,29 +25,44 @@ const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), '../../../../..')
 const RUST_DIR = path.join(REPO_ROOT, 'packages', 'core-rs');
 const NODE_DIST = path.join(REPO_ROOT, 'packages', 'core', 'dist', 'index.js');
 const RUST_BIN = path.join(RUST_DIR, 'target', 'debug', 'mainframe-daemon');
-const REPORT = path.join(REPO_ROOT, 'docs', 'rust-port', 'DIFF-REPORT-phase3.md');
+const REPORT = path.join(REPO_ROOT, 'docs', 'rust-port', 'DIFF-REPORT-phase5.md');
 
 const blockers = [];
 const skipped = [];
 const cleanups = [];
 
-// Divergences whose cause is understood: either the documented Phase-4/5 seam
-// or a systematic deviation to resolve uniformly (not piecemeal here). Keyed by
-// route id / `table:rowKey`; presence downgrades DIVERGENT → the tagged verdict.
+// Divergences whose cause is understood: a systematic deviation to resolve
+// uniformly (not piecemeal here) or a documented, deliberate gap. Keyed by route
+// id / `table:rowKey`; presence downgrades DIVERGENT → the tagged verdict.
+//
+// The Phase-3 `settings-providers` (resolvedExecutable) and `projects-delete`
+// (ChatManager.removeProject) masks are gone: both seams are now live in the
+// Rust daemon (adapter registry + ChatManager facade), so those routes are
+// expected IDENTICAL and any residual difference is a real divergence to fix.
 const KNOWN_ROUTE = {
   'settings-providers':
-    'EXPECTED(phase4): `resolvedExecutable` enrichment is the documented Phase-4/5 adapter-registry seam (get_providers PORT STATUS note). Rust omits the field until adapter probing lands.',
-  'projects-delete':
-    'EXPECTED(phase4): DELETE /api/projects/:id calls ChatManager.removeProject (stop live sessions + tear down worktrees) before deleting the row. ChatManager is the Phase-4/5 seam, so Rust returns the failure-path 500 and never removes the row; Node returns 200 and deletes it.',
+    'DEVIATION: Node echoes the persisted `provider.<adapter>.executablePath` setting (a side effect of adapter resolution) inside each provider block; the Rust adapter registry computes `resolvedExecutable` for the response but deliberately does not persist executablePath (get_providers PORT STATUS — no write-back), so that field is absent. Host-dependent (only appears when an adapter is installed and resolves); `resolvedExecutable` itself matches.',
+  'lsp-languages-happy':
+    'DEVIATION: `installed` for the BUNDLED servers (typescript, python) is true in Node — `resolveCommand` finds the npm package via `require.resolve` in the dev `node_modules` — but false in Rust: the registry\'s `bundled_root` is an explicit `TODO(port)` (unwired until the Tauri sidecar node_modules layout is finalized), so bundled servers never resolve. External servers (java/`command -v`) match. Host-dependent: on a machine without the bundled packages in node_modules, Node also reports false → IDENTICAL.',
+  // Node structural-typing leaks: the JS runtime returns MORE than the declared
+  // canonical type, and the strongly-typed Rust port emits exactly the declared
+  // shape. Replicating these would mean adding undeclared fields to the single
+  // canonical `@qlan-ro/mainframe-types` shapes — a discipline violation — so the
+  // port omits them by design. Flagged for user triage in the report.
+  'chats-list':
+    'DEVIATION: Node emits an extra raw snake_case `adaptive_thinking` key alongside the canonical `adaptiveThinking`. `CHAT_SELECT_FIELDS` selects `adaptive_thinking` unaliased and `mapRow` spreads `...row`, leaking the raw column; the canonical `Chat` type declares only `adaptiveThinking`, which the Rust port emits (and matches).',
+  'chats-for-project':
+    'DEVIATION: see chats-list — the Node `...row` leaky-spread emits an extra raw `adaptive_thinking` key that the canonical `Chat` type does not declare.',
+  'chat-get-happy':
+    'DEVIATION: see chats-list — the Node `...row` leaky-spread emits an extra raw `adaptive_thinking` key that the canonical `Chat` type does not declare.',
+  'chat-context-happy':
+    'DEVIATION: Node leaks `materializedPath` (a host-local absolute FS path) on each attachment — `getSessionContext` returns `attachmentStore.list()` (`StoredAttachmentMeta`, which carries materializedPath) but the canonical `SessionAttachment` type declares only {id,name,mediaType,sizeBytes,kind,originalPath?}. The Rust port emits the declared `SessionAttachment` shape; the leaked path is intentionally not reproduced.',
 };
 // Understood DB-row divergences. Matched by predicate because the exact key is
 // host-dependent (which adapter resolves varies with the installed toolchain).
 function classifyDb(table, key, kind) {
   if (table === 'settings' && /^provider\.[^.]+\.executablePath$/.test(key) && kind === 'only-node') {
-    return 'EXPECTED(phase4): Node persists resolved adapter executable paths (resolveAdapterExecutableCached side-effect); Rust adapter probing is Phase-4, so the row is never written. The specific adapter/key and row count vary with the host toolchain.';
-  }
-  if (table === 'projects' && kind === 'only-rust') {
-    return 'EXPECTED(phase4): the projects-delete probe removes the throwaway project via ChatManager.removeProject (Node 200). Rust returns the Phase-4/5 seam 500 and keeps the row, so the deleted project survives only on the Rust side.';
+    return 'DEVIATION: Node persists resolved adapter executable paths (resolveAdapterExecutableCached side-effect); the Rust adapter registry computes `resolvedExecutable` for the response but deliberately does not persist it (get_providers PORT STATUS note — no write-back), so the row exists only on the Node side. Host-dependent: the specific adapter/key and row count vary with the installed toolchain.';
   }
   return null;
 }
@@ -138,13 +153,19 @@ async function main() {
   const rustPhase = await runPhase('rust', rustCmd, rustDir, path.join(workRoot, 'rust-daemon.log'));
 
   skipped.push(
-    'Phase-4/5 route groups are out of scope and not mounted in the Rust daemon (per the phase guard): chats CRUD, chat-commands, context, worktree, launch, external-sessions, background-tasks, adapters/agents/skills, lsp, tunnel, workflows, workflow-admin, and the plugins mount.',
-    'WS chat handlers (message.send / permission.respond) — Phase-4/5.',
-    'files-list ordering is compared as a set: raw directory-walk order is runtime/OS-dependent (Node recursion vs Rust stack) and unspecified by the contract; the file SET matches.',
+    'The workflow feature is DELIBERATELY NOT PORTED (scope decision 2026-07-10 — the TS workflows implementation is unstable). GET /api/workflows, /api/workflow-connectors, /api/workflow-credentials ARE probed and classified EXPECTED(gap): Node mounts them (real 200/503), the Rust daemon leaves them unmounted (404). The workflow-admin mutations and workflow.* DaemonEvents are not probed for the same reason.',
+    'External-sessions / background-tasks / adapters-agents-skills mutation flows and the plugin sub-routes (todos CRUD) are not probed here: they either shell out to the real claude CLI (covered by the live soak) or need bespoke fixtures. The listing/read seams ARE probed (plugins listing, lsp languages, launch configs/status, tunnel status/config).',
+    'tunnel start/stop are NOT probed: they shell out to a real `cloudflared` binary and reach the network — non-deterministic and side-effectful. Only the read-only status/config routes are compared.',
+    'WS chat handlers (message.send / permission.respond) — covered by the live soak (soak.mjs), not the route matrix.',
+    'files-list / worktree list ordering is compared as a set: raw directory-walk order is runtime/OS-dependent (Node recursion vs Rust stack) and unspecified by the contract; the element SET matches. chats-list / chats-for-project are compared ORDER-SENSITIVELY — both TS and Rust sort `ORDER BY pinned DESC, updated_at DESC` (list_all adds `rowid DESC`), so a set-sort would mask a real ordering regression.',
+    'plugins listing: the OUTER `/api/plugins` array is compared as a set — the Rust PluginManager stores loaded plugins in a DashMap (non-deterministic iteration order), so the plugin order is not stable. But each plugin\'s NESTED panels are now insertion-ordered (Vec, not HashMap — mirroring the TS Map<panelId,event>), so the legacy `.panel` (= panels[0]) and `.panels[]` are deterministic and compared in order. The plugin SET + per-plugin content (claude/codex with no panel key, todos with its `quick-create` action + 2 panels) match; panel ids are volatile nanoids (normalized).',
+    'GET /api/projects/:id/suggestions is a GENUINE non-workflows gap (NOT probed): Node mounts it (200; churn + TODO-scan suggestions), the Rust daemon leaves it unmounted (routes/mod.rs — the suggestions builder + route are unported). This is a real functional gap tracked as an open non-workflows item, distinct from the deliberate workflow gap above.',
+    'GET /api/chats/:id/session-file (singular) is live in Rust (context.rs) but NOT probed: only the plural /session-files is in the matrix. session-file mirrors the same db chat/project + resolve_readable_path logic as session-files, so it is low-risk; adding a probe is a follow-up.',
     'git-write remote ops (fetch, pull, push) are not probed: they require a live upstream remote, which the seed repo has none of — the result is non-deterministic (network/remote state) rather than a wire-parity question.',
     'git-write merge / rebase / abort are not probed: each needs a hand-built divergent/conflicted branch state to exercise meaningfully; without it both daemons short-circuit identically and the probe asserts nothing. git-write update-all fans out over the same remote ops.',
     'git-chat commit / push are not probed for parity: a real commit embeds the wall-clock author/committer time, which differs between the sequential Node and Rust phases (distinct SHAs/dates) and is not a wire divergence; push additionally needs a remote. status / stage / unstage / diff-since-main (deterministic, read/index-only) ARE probed.',
-    'DELETE /api/projects/:id IS probed (projects-delete) and classified EXPECTED(phase4): it is the ChatManager.removeProject seam — Node removes the row (200), Rust returns the seam 500 (row kept).',
+    'DELETE /api/projects/:id IS probed (projects-delete): the ChatManager facade is now live in both daemons, so both remove the row (200) and the projects tables converge.',
+    'launch start/stop ARE probed against a seeded, port-less `node` sleep config on the plain project; each `stop` awaits child exit so no process outlives the phase. A port-bearing / preview config is not started (it would bind a real TCP port and, when nothing listens, block on the 60s readiness wait); port parsing/echo is covered by the launch-config unit tests.',
   );
   const report = compare(nodePhase, rustPhase, { nodeDir, rustDir, workRoot });
   writeReport(report);
@@ -168,6 +189,15 @@ function compare(nodePhase, rustPhase, dirs) {
     }
     let verdict = 'IDENTICAL';
     let detail = '';
+    if (step.gap) {
+      // Deliberate, documented gap: the workflow feature is intentionally not
+      // ported (scope decision 2026-07-10). Node mounts the route (real 200/503);
+      // the Rust daemon leaves it unmounted (404). Recorded, never a divergence.
+      verdict = 'EXPECTED(gap)';
+      detail = `Node ${a.status} vs Rust ${b.status} — deliberate: workflow engine not ported; route unmounted in Rust.`;
+      rows.push({ id: step.id, cat: step.cat, method: step.method, status: `${a.status}/${b.status}`, verdict, detail });
+      continue;
+    }
     if (a.status !== b.status) {
       verdict = 'DIVERGENT';
       detail = `status ${a.status} → ${b.status}`;
@@ -208,9 +238,14 @@ function keyRows(table, list, reps) {
 }
 
 /** Sort an envelope's `data` array in place for order-insensitive routes. */
+/** Sort the list an order-insensitive route returns. Envelope routes carry it in
+ *  `.data`; the PluginManager listing returns a bare `{ plugins: [...] }` whose
+ *  order is unspecified (the Rust registry is a DashMap — non-deterministic
+ *  iteration, even run-to-run), so sort that array too. */
 function sortData(body) {
-  const arr = body?.data;
-  if (Array.isArray(arr)) arr.sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y)));
+  const cmp = (x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y));
+  if (Array.isArray(body?.data)) body.data.sort(cmp);
+  if (Array.isArray(body?.plugins)) body.plugins.sort(cmp);
 }
 
 function compareTables(nt, rt, nReps, rReps) {
@@ -251,13 +286,16 @@ function writeReport({ rows, dbRows }) {
   const real = rows.filter((r) => isReal(r.verdict));
   const esc = (s) => String(s).replace(/\|/g, '\\|');
   const lines = [];
-  lines.push('# Phase-3 Differential Report (Node vs Rust daemon)', '');
+  lines.push('# Phase-5 Differential Report (Node vs Rust daemon)', '');
   lines.push(`Generated by \`packages/core-rs/tools/diffd/diffd.mjs\`. Routes compared: ${rows.length}. ` +
-    `Identical: ${identical}. Expected Phase-4 gaps: ${expected}. Known deviations: ${deviation}. ` +
+    `Identical: ${identical}. Expected/deliberate gaps: ${expected}. Known deviations: ${deviation}. ` +
     `Unexplained divergences: ${real.length}.`, '');
+  lines.push('Covers the Phase-3 route matrix plus the Phase-5 surfaces: launch (configs/status/start/stop), ' +
+    'tunnel status/config, plugins listing, lsp languages, and the now-live chats / context / worktree read ' +
+    'seams. The workflow routes are a deliberate, documented gap (EXPECTED(gap)).', '');
   lines.push('Verdicts: **IDENTICAL** (byte-equal after normalizing timestamps / ids / durations / paths / SHAs), ' +
-    '**EXPECTED** (documented Phase-4/5 seam), **DEVIATION** (understood, resolve uniformly), ' +
-    '**DIVERGENT** (unexplained — needs a fix).', '');
+    '**EXPECTED(gap)** (deliberate, documented gap — workflow engine not ported), ' +
+    '**DEVIATION** (understood, resolve uniformly), **DIVERGENT** (unexplained — needs a fix).', '');
   if (blockers.length) {
     lines.push('## Blockers', '');
     for (const b of blockers) lines.push(`- ${b}`);
@@ -271,9 +309,10 @@ function writeReport({ rows, dbRows }) {
   lines.push('> Host-dependent: the Node daemon persists resolved adapter executable paths ' +
     '(`provider.<adapter>.executablePath`) as a side effect of adapter resolution, so the ' +
     '`settings` row count and any `provider.*.executablePath` rows vary with the toolchain ' +
-    'installed on the machine that generated this report. Those rows are classified ' +
-    'EXPECTED(phase4) (Rust adapter probing is Phase-4) and never counted as divergences; the ' +
-    'row totals below are therefore not byte-reproducible across hosts.', '');
+    'installed on the machine that generated this report. The Rust adapter registry computes ' +
+    '`resolvedExecutable` for the response but deliberately does not persist it, so those rows ' +
+    'are classified DEVIATION and never counted as divergences; the row totals below are ' +
+    'therefore not byte-reproducible across hosts.', '');
   lines.push('| Table | Rows (node/rust) | Verdict | First divergence |', '|---|---|---|---|');
   for (const r of dbRows) {
     lines.push(`| ${r.table} | ${r.rows} | ${r.verdict} | ${esc(r.detail) || '—'} |`);

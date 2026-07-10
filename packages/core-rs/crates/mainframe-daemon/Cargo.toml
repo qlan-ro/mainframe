@@ -17,6 +17,9 @@ axum = { workspace = true }
 tracing = { workspace = true }
 dashmap = { workspace = true }
 dirs = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+qrcode = { workspace = true }
 mainframe-server = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
@@ -26,8 +29,9 @@ mainframe-adapter-api = { workspace = true }
 mainframe-adapter-claude = { workspace = true }
 mainframe-adapter-codex = { workspace = true }
 mainframe-background-tasks = { workspace = true }
+mainframe-launch = { workspace = true }
+mainframe-plugins = { workspace = true }
+mainframe-lsp = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
-reqwest = { workspace = true }
 tempfile = { workspace = true }

@@ -21,7 +21,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::ctx::AppCtx;
 use crate::middleware::auth::auth_middleware;
 use crate::routes;
-use crate::websocket::ws_handler;
+use crate::websocket::{lsp_ws_handler, ws_handler};
 
 /// 30mb JSON body limit — matches `express.json({ limit: '30mb' })`.
 const BODY_LIMIT_BYTES: usize = 30 * 1024 * 1024;
@@ -30,7 +30,7 @@ const BODY_LIMIT_BYTES: usize = 30 * 1024 * 1024;
 /// the Phase-3 route modules) sit behind the auth middleware; the WS upgrade at
 /// `/` authenticates itself; CORS and the body limit wrap everything.
 pub fn build_app(ctx: Arc<AppCtx>) -> Router {
-    let http = Router::new()
+    let mut http = Router::new()
         .route("/health", get(routes::health::get_health))
         .merge(routes::auth::router())
         .merge(routes::device::router())
@@ -57,6 +57,21 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::adapters::router())
         .merge(routes::agents::router())
         .merge(routes::skills::router())
+        // Task 5.5 route modules: launch (per-project process control), tunnel
+        // (cloudflared), and the LSP language-status endpoint.
+        .merge(routes::launch::router())
+        .merge(routes::tunnel::router())
+        .merge(routes::lsp_routes::router());
+
+    // Plugin routes — the PluginManager owns a parent router (listing + per-plugin
+    // sub-routers) mounted under `/api/plugins`, behind the auth layer like the TS
+    // `app.use('/api/plugins', pluginManager.router)`. Its state is already applied
+    // (Router<()>), so it nests as a service.
+    if let Some(plugin_manager) = ctx.plugin_manager.as_ref() {
+        http = http.nest_service("/api/plugins", plugin_manager.router());
+    }
+
+    let http = http
         // Explicit 404 fallback so the auth layer also covers unmatched paths —
         // Express's `app.use(authMiddleware)` runs before the router's 404, so a
         // non-loopback caller without a token gets 401 (not 404) on any path.
@@ -68,6 +83,9 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // WS upgrade — authenticates via the token query param (never the auth
         // layer, which reads the Authorization header).
         .route("/", any(ws_handler))
+        // LSP WS upgrade (`/lsp/:projectId/:language`) — self-authenticates like
+        // the generic WS route, then proxies to the spawned language server.
+        .route("/lsp/{project_id}/{language}", any(lsp_ws_handler))
         .layer(RequestBodyLimitLayer::new(BODY_LIMIT_BYTES))
         // CORS is the outermost layer so `OPTIONS` is answered (204) before auth.
         .layer(from_fn(cors_middleware))
@@ -170,5 +188,8 @@ mod tests {
 // realized by net::client_ip (peer from ConnectInfo). TODO(port): the global
 // thrown-error→500 envelope has no Rust analogue (handlers return Responses;
 // unexpected errors map via async_err::internal_error); 404 is axum's default.
-// Phase 4/5 routers (chats, adapters, plugins mount, lsp, tunnel, …) are mounted
-// here as they land.
+// Task 5.5 mounted the remaining surfaces: launch/tunnel/lsp route modules behind
+// auth, the PluginManager router nested at /api/plugins (nest_service — its state is
+// pre-applied), and the self-authenticating `/lsp/:projectId/:language` WS upgrade
+// alongside the generic `/` WS route. Workflows stay deliberately unmounted
+// (SCOPE DECISION 2026-07-10).

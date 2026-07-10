@@ -18,19 +18,27 @@
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, Once, PoisonError};
 
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{ConnectInfo, Query, State};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use dashmap::DashMap;
 use mainframe_chat::chat_manager::CommandMeta;
+use mainframe_lsp::lsp_connection::attach_client_with_capture;
+use mainframe_lsp::{
+    ChatStore, ClientRef, LspConnectionHandler, LspServerHandle, ProjectStore, ReattachAction,
+    UpgradeOutcome, bridge_ws_to_process, cached_initialize_reply, classify_reattach_first,
+};
+use mainframe_types::chat::{Chat, Project};
 use mainframe_types::events::{ClientEvent, DaemonEvent};
 use serde::Deserialize;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::ctx::AppCtx;
+use crate::db::Db;
 use crate::middleware::auth::validate_device_token;
 use crate::net::{client_ip, is_localhost};
 use crate::ws_file_watch::{WsFileWatch, resolve_subscribe_base, validate_relative};
@@ -92,11 +100,236 @@ pub(crate) async fn ws_handler(
         }
     }
 
-    // TODO(port-phase5): LSP upgrades (`/lsp/{projectId}/{language}`) are handled
-    // before the generic WS handler in the TS server. Here they are simply not
-    // mounted, so `/lsp/...` rejects cleanly with a 404 until the LSP port lands.
+    // LSP upgrades (`/lsp/:projectId/:language`) are a separate axum route
+    // (`lsp_ws_handler`); this handler only serves the generic client WS at `/`.
     let ctx = Arc::clone(&ctx);
     upgrade.on_upgrade(move |socket| handle_socket(socket, ctx))
+}
+
+/// `?token=`/`?chatId=` on the LSP upgrade URL.
+#[derive(Debug, Deserialize)]
+pub(crate) struct LspWsQuery {
+    token: Option<String>,
+    #[serde(rename = "chatId")]
+    chat_id: Option<String>,
+}
+
+/// Read-only `ProjectStore` over the DB actor (parity with `db.projects.get`).
+struct DbProjectStore {
+    db: Db,
+}
+
+impl ProjectStore for DbProjectStore {
+    fn get_project(&self, project_id: &str) -> Option<Project> {
+        let id = project_id.to_string();
+        self.db
+            .call_blocking(move |d| d.projects.get(&id))
+            .ok()
+            .flatten()
+    }
+}
+
+/// Read-only `ChatStore` over the DB actor (parity with `chats.getChat`).
+struct DbChatStore {
+    db: Db,
+}
+
+impl ChatStore for DbChatStore {
+    fn get_chat(&self, chat_id: &str) -> Option<Chat> {
+        let id = chat_id.to_string();
+        self.db
+            .call_blocking(move |d| d.chats.get(&id))
+            .ok()
+            .flatten()
+    }
+}
+
+/// The `/lsp/:projectId/:language` WS route handler. Self-authenticates (token
+/// query param unless loopback), validates + spawns the language server via the
+/// `LspConnectionHandler`, then bridges the accepted socket to the child process.
+/// Mirrors the `server.on('upgrade')` LSP branch in `websocket.ts`.
+pub(crate) async fn lsp_ws_handler(
+    State(ctx): State<Arc<AppCtx>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path((project_id, language)): Path<(String, String)>,
+    Query(query): Query<LspWsQuery>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
+    let ip = client_ip(&peer.ip().to_string(), forwarded);
+    let secret = ctx.auth_secret.clone();
+
+    if is_ws_auth_required(&ip, secret.as_deref()) {
+        let authed = match (query.token, secret) {
+            (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
+                .await
+                .is_some(),
+            _ => false,
+        };
+        if !authed {
+            tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
+            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+        }
+    }
+
+    let Some(manager) = ctx.lsp_manager.clone() else {
+        // No LSP manager wired — the `/lsp/...` route has nothing to serve.
+        return (StatusCode::NOT_FOUND, "Not Found").into_response();
+    };
+
+    let handler = LspConnectionHandler::with_chats(
+        Arc::clone(&manager),
+        Arc::new(DbProjectStore { db: ctx.db.clone() }),
+        Arc::new(DbChatStore { db: ctx.db.clone() }),
+    );
+    match handler
+        .handle_upgrade(&project_id, &language, query.chat_id.as_deref())
+        .await
+    {
+        UpgradeOutcome::Reject(status_line) => reject_response(status_line),
+        UpgradeOutcome::Proceed(handle) => {
+            let manager = Arc::clone(&manager);
+            upgrade.on_upgrade(move |socket| {
+                drive_lsp_socket(socket, handle, manager, project_id, language)
+            })
+        }
+    }
+}
+
+/// Map the raw HTTP status line the LSP handler returns onto an axum response.
+fn reject_response(status_line: &str) -> Response {
+    let status = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse::<u16>().ok())
+        .and_then(|code| StatusCode::from_u16(code).ok())
+        .unwrap_or(StatusCode::BAD_GATEWAY);
+    status.into_response()
+}
+
+/// Bridge an accepted LSP WebSocket to its spawned language-server child, mirroring
+/// `onConnection` in `lsp-connection.ts`: cancel the idle reaper, attach the client
+/// (first-connect capture vs reconnect replay), relay frames both ways, and on
+/// disconnect detach + restart the idle timer.
+async fn drive_lsp_socket(
+    mut socket: WebSocket,
+    handle: Arc<LspServerHandle>,
+    manager: Arc<mainframe_lsp::LspManager>,
+    project_id: String,
+    language: String,
+) {
+    let reattach = handle.has_initialize_result();
+    tracing::info!(
+        project_id,
+        language,
+        reattach,
+        "LSP WebSocket client connected"
+    );
+    manager.cancel_idle_timer(&handle);
+
+    // Client → process (incoming) and process → client (outgoing) channels, plus a
+    // ClientRef the manager can close (server exit / replacement).
+    let (incoming_tx, incoming_rx) = mpsc::unbounded_channel::<String>();
+    let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<String>();
+    let open = Arc::new(AtomicBool::new(true));
+    let (close_tx, mut close_rx) = mpsc::unbounded_channel::<(u16, String)>();
+    handle.set_client(Some(ClientRef::new(Arc::clone(&open), close_tx)));
+
+    // First-connect: bridge immediately with init-result capture. Reconnect: defer
+    // the bridge until the client's init handshake replays from cache.
+    let mut incoming_rx = Some(incoming_rx);
+    let mut bridge_started = false;
+    if !reattach && let Some(rx) = incoming_rx.take() {
+        attach_client_with_capture(&handle, rx, outgoing_tx.clone());
+        bridge_started = true;
+    }
+
+    let key = format!("{project_id}:{language}");
+    loop {
+        tokio::select! {
+            incoming = socket.recv() => {
+                match incoming {
+                    Some(Ok(Message::Text(text))) => {
+                        let text = text.to_string();
+                        if reattach && !bridge_started {
+                            match classify_reattach_first(&text) {
+                                ReattachAction::ReplayInitialize { id } => {
+                                    if let Some(result) = handle.initialize_result() {
+                                        tracing::info!(project_id, language, "Replaying cached initialize result for reconnecting client");
+                                        let _ = outgoing_tx.send(cached_initialize_reply(&id, &result));
+                                    }
+                                }
+                                ReattachAction::SkipInitialized => {
+                                    bridge_started = start_reattach_bridge(&handle, &mut incoming_rx, &outgoing_tx);
+                                }
+                                ReattachAction::Forward => {
+                                    bridge_started = start_reattach_bridge(&handle, &mut incoming_rx, &outgoing_tx);
+                                    if bridge_started {
+                                        let _ = incoming_tx.send(text);
+                                    }
+                                }
+                            }
+                        } else {
+                            let _ = incoming_tx.send(text);
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(_)) => {}
+                    Some(Err(_)) => break,
+                }
+            }
+            outbound = outgoing_rx.recv() => {
+                match outbound {
+                    Some(payload) => {
+                        if socket.send(Message::Text(payload.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+            closed = close_rx.recv() => {
+                if let Some((code, reason)) = closed {
+                    let _ = socket
+                        .send(Message::Close(Some(CloseFrame { code, reason: reason.into() })))
+                        .await;
+                }
+                break;
+            }
+        }
+    }
+
+    // Disconnect: detach the client + restart the idle reaper (onConnection close).
+    tracing::info!(project_id, language, "LSP WebSocket client disconnected");
+    open.store(false, std::sync::atomic::Ordering::SeqCst);
+    handle.set_cleanup(None);
+    handle.set_client(None);
+    manager.start_idle_timer(&key, &handle);
+}
+
+/// Start the plain (no-capture) reattach bridge when the child's stdio is still
+/// available. Returns whether the bridge started. The current `mainframe-lsp` seam
+/// consumes the child's stdout/stderr on the first attach, so a reconnect after the
+/// first bridge was torn down cannot re-proxy — flagged as a known LSP-reattach gap.
+fn start_reattach_bridge(
+    handle: &Arc<LspServerHandle>,
+    incoming_rx: &mut Option<mpsc::UnboundedReceiver<String>>,
+    outgoing_tx: &mpsc::UnboundedSender<String>,
+) -> bool {
+    let (Some(rx), Some(stdout), Some(stderr)) = (
+        incoming_rx.take(),
+        handle.take_stdout(),
+        handle.take_stderr(),
+    ) else {
+        tracing::warn!(
+            "LSP reattach: child stdio unavailable (consumed by prior bridge) — cannot re-proxy"
+        );
+        return false;
+    };
+    let bridge = bridge_ws_to_process(rx, outgoing_tx.clone(), handle.stdin_tx(), stdout, stderr);
+    handle.set_cleanup(Some(bridge));
+    true
 }
 
 /// Drive one accepted connection: register it, send `connection.ready`, then
@@ -503,4 +736,10 @@ fn warn_permission_respond_seam() {
 // ignore, exactly the pre-4.6b behavior the ws_integration tests pin. Once boot
 // sets Some(..) the wired paths run. Adapter-replay (buildConnectReplayEvents over
 // the live registry snapshots) streams right after connection.ready so a
-// reconnecting client's catalog is authoritative. TODO(port-phase5): LSP upgrade route.
+// reconnecting client's catalog is authoritative. Task 5.5 added lsp_ws_handler:
+// the `/lsp/:projectId/:language` route self-authenticates, validates+spawns via
+// LspConnectionHandler (Db-backed ProjectStore/ChatStore), and drives the socket ↔
+// child bridge (first-connect capture via attach_client_with_capture; reconnect
+// replays the cached initialize + re-bridges). KNOWN GAP: the mainframe-lsp seam
+// consumes the child's stdout/stderr on first attach, so a reconnect after the
+// first bridge tore down cannot re-proxy (start_reattach_bridge warns) — flagged.

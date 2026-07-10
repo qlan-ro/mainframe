@@ -41,12 +41,17 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
         broadcast,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
+        port: 0,
         auth_secret: None,
-        tunnel_url: None,
+        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
         adapter_registry: Arc::new(AdapterRegistry::new()),
         background_tasks: Arc::new(BackgroundTaskTracker::new()),
         chat_manager: None,
+        launch_registry: None,
+        tunnel_manager: None,
+        lsp_manager: None,
+        plugin_manager: None,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));
 

@@ -11,12 +11,17 @@
 //! the notes trailer); plugins/launch/tunnel/workflows are unported crates.
 #![forbid(unsafe_code)]
 
+mod builtin_plugins;
+mod cli;
+mod plugin_host_db;
+
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
+use crate::plugin_host_db::DaemonPluginHostDb;
 use mainframe_adapter_api::resolve_executable::{
     ResolverDeps, SettingsWriter, resolve_adapter_executable,
 };
@@ -28,10 +33,15 @@ use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
 };
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
+use mainframe_launch::{BroadcastFn, LaunchRegistry, TunnelManager, TunnelStartOptions};
+use mainframe_lsp::{LspManager, LspRegistry};
+use mainframe_plugins::event_bus::PublicDaemonBus;
+use mainframe_plugins::manager::PluginManagerDeps;
+use mainframe_plugins::{EmitSink, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
-    build_app, build_chat_manager, default_launch_stopper, spawn_broadcast_pump,
+    RegistryLaunchStopper, build_app, build_chat_manager, spawn_broadcast_pump,
 };
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
@@ -96,6 +106,28 @@ fn enrich_path() {
 
 #[tokio::main]
 async fn main() {
+    // `--version`/`version` is answered before logging init (early-flags.ts): no
+    // pino/logger noise on stdout, no daemon graph loaded. `pair`/`status` are thin
+    // HTTP clients against the running daemon.
+    match std::env::args().nth(1).as_deref() {
+        Some("--version") | Some("-v") | Some("version") => {
+            println!("mainframe {DAEMON_VERSION}");
+            return;
+        }
+        Some("pair") => return cli::pair::run_pair().await,
+        Some("status") => return cli::status::run_status().await,
+        Some("update") => {
+            // update.ts (self-update) is a packaging concern, not part of Task 5.5.
+            eprintln!("  `mainframe update` is not available in this build.");
+            std::process::exit(1);
+        }
+        _ => {}
+    }
+    run_daemon().await;
+}
+
+/// The daemon boot (`main()` in `index.ts`).
+async fn run_daemon() {
     let _log_guard = mainframe_runtime::logging::init();
 
     enrich_path();
@@ -128,6 +160,21 @@ async fn main() {
     let watcher = FileWatcherService::new(move |event| {
         let _ = watcher_tx.send(event);
     });
+
+    // A fire-and-forget `BroadcastFn` over the same channel (index.ts's late-bound
+    // `broadcastEvent` closure) — launch/tunnel events fan out to WS via the pump.
+    let event_bcast = broadcast.clone();
+    let on_event: BroadcastFn = Arc::new(move |event| {
+        let _ = event_bcast.send(event);
+    });
+
+    // Tunnel + launch managers (index.ts: new TunnelManager → new LaunchRegistry).
+    // The registry shares the tunnel manager so preview launches can expose URLs.
+    let tunnel_manager = Arc::new(TunnelManager::new(Some(Arc::clone(&on_event))));
+    let launch_registry = Arc::new(LaunchRegistry::new(
+        Arc::clone(&on_event),
+        Some(Arc::clone(&tunnel_manager)),
+    ));
 
     // Registries + adapters. ClaudeAdapter needs the tracker (background-task
     // ownership); both adapters register before the static snapshot seed so
@@ -172,11 +219,63 @@ async fn main() {
         Arc::clone(&services.push),
         GitFactory,
         broadcast.clone(),
-        default_launch_stopper(),
+        Arc::new(RegistryLaunchStopper::new(Arc::clone(&launch_registry))),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
     // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.
     chats.recover_stale_working_state();
+
+    // LSP: registry (bundled server configs) + the per-(project,language) manager.
+    // Constructed in `createServerManager` in the TS; the Rust daemon owns it.
+    // The TS twin resolved bundled servers (typescript-language-server, pyright)
+    // via `require.resolve` + `process.execPath`; the Rust daemon has no Node
+    // module resolver, so the packaging layer injects the bundled `node` binary +
+    // `node_modules` root through env. When unset (dev / run-from-source) bundled
+    // TS/Python resolve to None and only external servers (jdtls) spawn — matching
+    // the old behaviour. TODO(port): confirm these names against the finalized
+    // Tauri sidecar layout and verify on a packaged macOS/Windows build.
+    let lsp_registry = {
+        let registry = LspRegistry::new();
+        match (
+            std::env::var("MAINFRAME_BUNDLED_NODE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            std::env::var("MAINFRAME_BUNDLED_LSP_ROOT")
+                .ok()
+                .filter(|s| !s.is_empty()),
+        ) {
+            (Some(node), Some(root)) => {
+                info!(node, root, "LSP: bundled node servers configured");
+                registry.with_bundled(node, root)
+            }
+            _ => registry,
+        }
+    };
+    let lsp_manager = Arc::new(LspManager::new(Arc::new(lsp_registry)));
+
+    // PluginManager (index.ts: new PluginManager + loadBuiltin claude/codex/todos).
+    // Adapters are registered directly on the AdapterRegistry above, so the plugin
+    // deps take `adapters: None`; the builtin manifests populate GET /api/plugins.
+    let daemon_bus = Arc::new(PublicDaemonBus::new());
+    let plugin_emit_bcast = broadcast.clone();
+    let plugin_emit: EmitSink = Arc::new(move |event| {
+        let _ = plugin_emit_bcast.send(event);
+    });
+    let plugin_host_db: Arc<dyn PluginHostDb> = Arc::new(DaemonPluginHostDb::new(db.clone()));
+    let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
+        host_db: plugin_host_db,
+        daemon_bus,
+        emit: plugin_emit,
+        adapters: None,
+    }));
+    if let Err(err) = builtin_plugins::load_builtin_plugins(&plugin_manager, &data_dir).await {
+        tracing::error!(%err, "failed to load builtin plugins");
+    }
+    // index.ts also calls `pluginManager.loadAll()` here to discover user-installed
+    // plugins under `data_dir/plugins`. That on-disk discovery path (the `_require`
+    // JS loader + the consent/trust flow) is a deliberate v1 omission per §2.9/§5
+    // (see manager.rs) — the Rust PluginManager is builtin-only, so there is no
+    // `load_all` to call. User-installed plugins are not loaded in v1.
 
     let ctx = Arc::new(AppCtx {
         db: db.clone(),
@@ -185,12 +284,17 @@ async fn main() {
         broadcast: broadcast.clone(),
         data_dir,
         version: DAEMON_VERSION.to_string(),
+        port,
         auth_secret,
-        tunnel_url: None,
+        tunnel_url: Arc::new(RwLock::new(None)),
         ws_clients: Arc::new(dashmap::DashMap::new()),
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),
         chat_manager: Some(Arc::clone(&chats)),
+        launch_registry: Some(Arc::clone(&launch_registry)),
+        tunnel_manager: Some(Arc::clone(&tunnel_manager)),
+        lsp_manager: Some(Arc::clone(&lsp_manager)),
+        plugin_manager: Some(Arc::clone(&plugin_manager)),
     });
 
     spawn_broadcast_pump(Arc::clone(&ctx));
@@ -226,6 +330,30 @@ async fn main() {
         refresh_adapters.refresh_all().await;
     });
 
+    // Daemon tunnel (index.ts): auto-start when configured (opt-in), else adopt a
+    // pre-configured URL. Failure is non-fatal — the daemon serves loopback anyway.
+    if config.tunnel == Some(true) {
+        let options = config.tunnel_token.clone().map(|token| TunnelStartOptions {
+            token: Some(token),
+            url: config.tunnel_url.clone(),
+        });
+        match tunnel_manager.start(port, "daemon", options).await {
+            Ok(url) => {
+                ctx.set_tunnel_url(Some(url.clone()));
+                info!(tunnel_url = %url, "Daemon tunnel started");
+                tracing::warn!(
+                    "Daemon is publicly accessible via tunnel — do not share this URL in untrusted environments"
+                );
+            }
+            Err(err) => {
+                tracing::error!(%err, "Failed to start daemon tunnel — continuing without tunnel");
+            }
+        }
+    } else if let Some(url) = config.tunnel_url.clone() {
+        ctx.set_tunnel_url(Some(url.clone()));
+        info!(tunnel_url = %url, "Using configured tunnel URL (no auto-start)");
+    }
+
     info!("Daemon ready");
 
     let service = app.into_make_service_with_connect_info::<SocketAddr>();
@@ -237,14 +365,20 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // Ordered shutdown (index.ts `shutdown`): the still-unported steps
-    // (workflows.stop, pluginManager.unloadAll, launchRegistry.stopAll,
-    // tunnelManager.stopAll) are skipped; chats.dispose + adapters.killAll +
-    // liveness.stop run.
+    // Ordered shutdown (index.ts `shutdown`): workflows.stop() → chats.dispose →
+    // plugins.unloadAll → adapters.killAll → launch.stopAll → tunnel.stopAll →
+    // liveness.stop → server.stop → db.close. workflows.stop() is deliberately
+    // skipped (SCOPE DECISION 2026-07-10 — workflows unported); the HTTP server is
+    // already stopped (axum::serve returned above), and lspManager.shutdownAll is
+    // part of that server-stop step in the TS.
     info!("Shutting down...");
     chats.dispose();
+    plugin_manager.unload_all();
     adapters.kill_all();
+    launch_registry.stop_all().await;
+    tunnel_manager.stop_all();
     liveness.stop();
+    lsp_manager.shutdown_all().await;
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
 }
 
@@ -475,8 +609,9 @@ async fn shutdown_signal() {
     info!("shutdown signal received, draining in-flight requests");
 }
 
-// PORT STATUS: src/index.ts (Phase-4 boot: adapters/background-tasks/reconcile/
-// liveness + ChatManager wired; plugins/launch/tunnel/workflows deferred)
+// PORT STATUS: src/index.ts (full boot: adapters/background-tasks/reconcile/
+// liveness + ChatManager + launch/tunnel/plugins/lsp wired; workflows deliberately
+// unported per SCOPE DECISION 2026-07-10)
 // confidence: medium
 // todos: 3
 // notes: enrichPath probes the login shell (execFileSync exception) but cannot
@@ -490,8 +625,21 @@ async fn shutdown_signal() {
 // backfillWorktreeRelationships runs post-listen as an actor read→git-compute→
 // actor-write bridge (compute_worktree_parent_links is DB-free so the async git
 // enumeration stays outside the actor closure); liveness scheduler started +
-// stopped on shutdown. chat_manager is now wired via
-// build_chat_manager (Task 4.6c): DaemonChatDeps reaches the single WAL connection
-// through Db::call_blocking (the sync-DB bridge) and injects the ported services;
-// recover_stale_working_state runs at boot. Shutdown runs chats.dispose +
-// adapters.killAll + liveness.stop; the unported unload/stopAll steps are skipped.
+// stopped on shutdown. chat_manager wired via build_chat_manager (Task 4.6c) with a
+// RegistryLaunchStopper over the real LaunchRegistry. Task 5.5 wired: TunnelManager
+// + LaunchRegistry (BroadcastFn over the channel), LspRegistry/LspManager,
+// PluginManager (DaemonPluginHostDb over the Db actor; claude/codex/todos builtins
+// via builtin_plugins::load_builtin_plugins — adapters stay on the AdapterRegistry,
+// their plugin activate is a no-op for the GET /api/plugins listing). index.ts's
+// pluginManager.loadAll() (on-disk user-plugin discovery under data_dir/plugins) is
+// a DELIBERATE v1 omission per §2.9/§5 — the PluginManager is builtin-only and has
+// no load_all; user-installed plugins are not loaded (disclosed at the boot step).
+// LspRegistry::with_bundled is wired from MAINFRAME_BUNDLED_NODE +
+// MAINFRAME_BUNDLED_LSP_ROOT (the packaging layer's node sidecar + node_modules
+// root; TS used require.resolve + process.execPath). Unset in dev → bundled
+// TS/Python resolve to None, only external jdtls spawns. Daemon tunnel
+// auto-start (opt-in) sets the /health URL. CLI: --version/version answered before
+// logging init; pair/status are loopback HTTP clients (cli module); update is not
+// ported. Shutdown order matches index.ts: chats.dispose → plugins.unload_all →
+// adapters.kill_all → launch.stop_all → tunnel.stop_all → liveness.stop →
+// lsp.shutdown_all (server.stop) → db drop; workflows.stop() deliberately skipped.
