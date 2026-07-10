@@ -1,0 +1,44 @@
+# @qlan-ro/mainframe-ui
+
+## 2.0.0-rc.4
+
+### Minor Changes
+
+- [#425](https://github.com/qlan-ro/mainframe/pull/425) [`0e747c2`](https://github.com/qlan-ro/mainframe/commit/0e747c29e5c69b915df5157812c3841318d74385) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Surface background work (subagents, background bash tasks, workflows) in the working indicator: the tracker registers every CLI task kind, `enrichChat` broadens the sidebar 'working' state and attaches a `backgroundActivity` payload, drain turns re-enter 'working', and a new BackgroundActivityBar chip above the composer lists live tasks.
+
+- [#424](https://github.com/qlan-ro/mainframe/pull/424) [`280edfc`](https://github.com/qlan-ro/mainframe/commit/280edfca572c06095b89d775cf866c76a81f280f) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Detect deleted CLI transcripts and unify degraded-chat recovery: a persisted `transcriptMissing` flag (new `transcript_missing` column) reconciled on history load and on the periodic scan, a typed `{ messages, transcriptMissing }` history payload, recovery routes (recreate-worktree, continue-here, continue-in-project-root), and one degraded-chat card in the thread replacing the composer worktree banner, with a unified sidebar marker.
+
+### Patch Changes
+
+- [#440](https://github.com/qlan-ro/mainframe/pull/440) [`7164eb1`](https://github.com/qlan-ro/mainframe/commit/7164eb161e7a0d295bf61aef8f894e9b8c4bc237) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix chat-transcript links doing nothing in the Tauri shell. The `opener:allow-open-url` capability was a bare permission string, which enables the command but grants no URL scope, so tauri-plugin-opener rejected every click. Scope it to http/https/mailto/tel plus the app schemes the markdown renderer linkifies (slack, vscode, cursor, zed, figma, linear, notion, …), and add a release-safety test that fails if the scope regresses to the bare string.
+
+- [#439](https://github.com/qlan-ro/mainframe/pull/439) [`31746db`](https://github.com/qlan-ro/mainframe/commit/31746db8e4bcc7cd2a9188077e2ec8bcb0b87a78) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Console launch tabs use the SquareTerminal glyph (CLI console) instead of ScrollText
+
+- [#429](https://github.com/qlan-ro/mainframe/pull/429) [`107cff9`](https://github.com/qlan-ro/mainframe/commit/107cff978b41e8ffe0ec0eeebefd0577368e047e) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the double vertical scrollbar on chat tool cards: Bash, Read, Edit, Write, Plan, Search, Skill, and Schedule cards no longer nest their own `overflow-y-auto` region inside the thread viewport, so only the thread scrolls vertically while wide code and terminal lines still scroll horizontally.
+
+- [#435](https://github.com/qlan-ro/mainframe/pull/435) [`2b65fc4`](https://github.com/qlan-ro/mainframe/commit/2b65fc440997fb91bcc901e45734e185ac2a4151) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Reflect a new session's worktree and branch choice before the first message is sent.
+
+  A new-session draft has no daemon chat yet, so the titlebar branch chip, worktree popover, and file tree used to fall back to the project root while you composed — hiding the branch you picked. The active identity now resolves from the seeded draft config, so those surfaces show the chosen branch and worktree pre-send, and the choice carries into chat creation on first send: an existing worktree attaches with the new chat, and a new worktree is created before the CLI spawns.
+
+- [#420](https://github.com/qlan-ro/mainframe/pull/420) [`8c3c4b1`](https://github.com/qlan-ro/mainframe/commit/8c3c4b1cd1abdc012eaebfa41ad56180d3a9d56f) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the editor jumping to the top when an open file is refreshed after an external change: applyValueUpdate now dispatches a minimal diff instead of replacing the whole document, so CodeMirror's scroll anchoring and selection mapping survive the reload.
+
+- [#423](https://github.com/qlan-ro/mainframe/pull/423) [`9c724e6`](https://github.com/qlan-ro/mainframe/commit/9c724e6d3a87433b5e59ccab2b7064dde602772b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the context meter over-reporting (stuck near 100%): persist the CLI-reported context totals on the chat row and prefer them over the catalog-window estimate; resolve probed model windows via each entry's own resolvedModel; stop subagent, synthetic zero-usage, and cumulative result usage from corrupting the stored context size.
+
+- [#436](https://github.com/qlan-ro/mainframe/pull/436) [`a5afda5`](https://github.com/qlan-ro/mainframe/commit/a5afda52bf5d0951f3efb7e19e1f7f4c8307b77f) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the preview and external-file surfaces: out-of-project chat file paths now open read-only instead of erroring, reopened external files stay read-only, and the Tauri preview child-webview no longer races or leaks orphans on rapid create/destroy or device-toggle remounts.
+
+- [#421](https://github.com/qlan-ro/mainframe/pull/421) [`b1e1798`](https://github.com/qlan-ro/mainframe/commit/b1e179861f28e988a5a666252534c5110de88392) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the empty preview surface after starting a New Session: the first send now selects the newly created session automatically, so a running preview on the same project/branch re-attaches without a manual sidebar click.
+
+- [#438](https://github.com/qlan-ro/mainframe/pull/438) [`761367d`](https://github.com/qlan-ro/mainframe/commit/761367db526cc999dd8488ad24148ebe7a073bff) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix dark-theme scrollbars: declare color-scheme and repair the mf-thin-scrollbar styling so surfaces no longer paint a white native track.
+
+- [#434](https://github.com/qlan-ro/mainframe/pull/434) [`f6b4b36`](https://github.com/qlan-ro/mainframe/commit/f6b4b36d2a330b8da39dd27acc1f5894b1005613) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Surface a Stop in the toolbar for any running launch config, even one started outside the toolbar.
+
+- [#437](https://github.com/qlan-ro/mainframe/pull/437) [`ec7cca7`](https://github.com/qlan-ro/mainframe/commit/ec7cca73c60c238cec57f5e1606377a21751314b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Refetch todos when the Tasks modal or quick-add opens so it shows current data instead of boot-time statuses.
+
+- [#428](https://github.com/qlan-ro/mainframe/pull/428) [`7127094`](https://github.com/qlan-ro/mainframe/commit/7127094834d0d13a3920ccaf8fa9cac4de0018ee) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Batch of chat and editor fixes: make console log output selectable, keep the thinking indicator inline after the last message, allow expanding in-progress bash tool cards, prefill the composer when running a todo in a session, and add an agent-annotation comment gutter to the diff viewer.
+
+- [#422](https://github.com/qlan-ro/mainframe/pull/422) [`db6a25d`](https://github.com/qlan-ro/mainframe/commit/db6a25d4f1725447842b5ad35df152d6854caeda) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the worktree chip icons staying stale after joining or creating a worktree: the composer config mirror now adopts chat updates that change only worktreePath/branchName, and the shell identity (titlebar branch chip, chat header, branch popover) re-derives custom from the remoteId-keyed thread entry so sessions created in the current app run update too.
+
+- [#433](https://github.com/qlan-ro/mainframe/pull/433) [`f2fa02c`](https://github.com/qlan-ro/mainframe/commit/f2fa02c9312719951eef2f2a7384deb1476f98ef) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Keep live file-watching reliable and stop a spurious boot-time CSP error. The editor now re-subscribes its file watches on every WebSocket reconnect and the daemon re-arms watchers after inode-replacing (atomic) saves, so external edits keep reaching the open editor and the disk-conflict banner now also shows for markdown files. The client no longer opens a doomed `ws://127.0.0.1:0` connection before the daemon target is seeded.
+
+- Updated dependencies [[`b717a3f`](https://github.com/qlan-ro/mainframe/commit/b717a3fe7313ec68efff25cdf6b1fe5c7eca9d52), [`0e747c2`](https://github.com/qlan-ro/mainframe/commit/0e747c29e5c69b915df5157812c3841318d74385), [`08c03b1`](https://github.com/qlan-ro/mainframe/commit/08c03b1686ed860c340629975b9bdcd7d324c9aa), [`280edfc`](https://github.com/qlan-ro/mainframe/commit/280edfca572c06095b89d775cf866c76a81f280f), [`9c724e6`](https://github.com/qlan-ro/mainframe/commit/9c724e6d3a87433b5e59ccab2b7064dde602772b), [`a5afda5`](https://github.com/qlan-ro/mainframe/commit/a5afda52bf5d0951f3efb7e19e1f7f4c8307b77f)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.4
