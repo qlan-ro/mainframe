@@ -95,7 +95,8 @@ function LogLines({ entries, scrollRef }: { entries: LogEntry[]; scrollRef: Reac
   return (
     <div
       ref={scrollRef}
-      className="min-h-0 flex-1 overflow-y-auto pl-[12px] pr-[12px] pt-0 pb-[10px] font-mono text-caption leading-relaxed"
+      data-testid="run-console-log-lines"
+      className="mf-editor-selectable min-h-0 flex-1 overflow-y-auto pl-[12px] pr-[12px] pt-0 pb-[10px] font-mono text-caption leading-relaxed"
     >
       {entries.length === 0 ? (
         <span className="text-muted-foreground">No output yet.</span>

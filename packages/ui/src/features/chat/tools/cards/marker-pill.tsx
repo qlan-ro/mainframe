@@ -121,7 +121,6 @@ export function MarkerPre({ children, muted = false }: { children: React.ReactNo
     <pre
       className={cn(
         'font-mono text-caption whitespace-pre-wrap break-words leading-snug',
-        'max-h-80 overflow-y-auto',
         muted ? 'text-mf-text-3' : 'text-foreground',
       )}
     >

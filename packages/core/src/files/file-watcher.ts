@@ -6,6 +6,8 @@ import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 const log = createChildLogger('file-watcher');
 
 const DEBOUNCE_MS = 200;
+/** Grace delay before the second re-watch attempt when the path is briefly absent mid-replace. */
+const REARM_RETRY_MS = 100;
 
 type BroadcastFn = (event: DaemonEvent) => void;
 
@@ -36,24 +38,60 @@ export class FileWatcherService {
       return;
     }
 
+    const watcher = this.openWatcher(absolutePath);
+    if (!watcher) return;
+
+    const entry: WatchEntry = { watcher, refCount: 1, debounceTimer: null };
+    this.watchers.set(absolutePath, entry);
+    log.debug({ path: absolutePath }, 'file watch started');
+  }
+
+  private openWatcher(absolutePath: string): FSWatcher | null {
     let watcher: FSWatcher;
     try {
-      watcher = watch(absolutePath, { persistent: false }, (_eventType) => {
+      watcher = watch(absolutePath, { persistent: false }, (eventType) => {
+        // Atomic saves (rename-over: sed -i, most editors, agent Edit tools)
+        // replace the inode; the kernel watch follows the OLD inode and goes
+        // permanently silent. Re-arm so the watch tracks the path.
+        if (eventType === 'rename') this.rearm(absolutePath);
         this.scheduleEmit(absolutePath);
       });
     } catch (err) {
       log.warn({ err, path: absolutePath }, 'failed to start file watcher');
-      return;
+      return null;
     }
 
     watcher.on('error', (err) => {
       log.warn({ err, path: absolutePath }, 'file watcher error');
       this.cleanup(absolutePath);
     });
+    return watcher;
+  }
 
-    const entry: WatchEntry = { watcher, refCount: 1, debounceTimer: null };
-    this.watchers.set(absolutePath, entry);
-    log.debug({ path: absolutePath }, 'file watch started');
+  private rearm(absolutePath: string): void {
+    const entry = this.watchers.get(absolutePath);
+    if (!entry) return;
+    try {
+      entry.watcher.close();
+    } catch (err) {
+      log.warn({ err, path: absolutePath }, 'error closing file watcher during re-arm');
+    }
+    const next = this.openWatcher(absolutePath);
+    if (next) {
+      entry.watcher = next;
+      return;
+    }
+    // The path can be briefly absent mid-replace — retry once before giving up.
+    setTimeout(() => {
+      if (this.watchers.get(absolutePath) !== entry) return;
+      const retry = this.openWatcher(absolutePath);
+      if (retry) {
+        entry.watcher = retry;
+        return;
+      }
+      log.warn({ path: absolutePath }, 'file watch lost after rename (path gone) — cleaning up');
+      this.cleanup(absolutePath);
+    }, REARM_RETRY_MS);
   }
 
   unsubscribe(absolutePath: string): void {

@@ -7,11 +7,26 @@
  * - Exposes only what Phase 1 needs: connect, subscribe, send, onEvent, disconnect
  */
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
-import { getActiveDaemon } from './active-daemon';
+import { getActiveDaemon, subscribeActiveDaemon } from './active-daemon';
+import { FileWatchRegistry, type FileWatchContext } from './ws-file-watch-registry';
 
 type EventHandler = (event: DaemonEvent) => void;
 type ConnectionListener = () => void;
 type FileChangeListener = () => void;
+
+/**
+ * The active-daemon singleton boots with the placeholder `http://127.0.0.1:0`
+ * until the first successful /health poll seeds the real target. A target with
+ * an explicit port 0 is that placeholder — connecting to it is always wrong
+ * (ws://…:0 is a guaranteed CSP violation on every fresh load).
+ */
+function isSeededTarget(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).port !== '0';
+  } catch {
+    return false;
+  }
+}
 
 export class DaemonWsClient {
   private ws: WebSocket | null = null;
@@ -22,10 +37,9 @@ export class DaemonWsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionalClose = false;
-  /** Maps requestedPath → resolvedPath, populated from subscribe:file:ack */
-  private filePathMap = new Map<string, string>();
-  /** Maps requestedPath → set of listeners */
-  private fileListeners = new Map<string, Set<FileChangeListener>>();
+  /** Non-null while a connect() is deferred waiting for the target to be seeded. */
+  private seedWaitUnsub: (() => void) | null = null;
+  private fileWatch = new FileWatchRegistry();
 
   /** Call once before connect() — the port comes from getDaemonPort() in the Tauri bridge. */
   setPort(port: number): void {
@@ -45,14 +59,23 @@ export class DaemonWsClient {
     this.intentionalClose = false;
 
     const t = getActiveDaemon();
+    if (!isSeededTarget(t.baseUrl)) {
+      this.connectWhenSeeded();
+      return;
+    }
+    this.cancelSeedWait();
     const wsBase = t.baseUrl.replace(/^http/, 'ws');
     const url = t.token ? `${wsBase}?token=${encodeURIComponent(t.token)}` : wsBase;
     const socket = new WebSocket(url);
     this.ws = socket;
+    this.attachSocketHandlers(socket);
+  }
 
+  private attachSocketHandlers(socket: WebSocket): void {
     socket.onopen = () => {
       this.reconnectAttempts = 0;
       this.flushPending();
+      this.resubscribeFiles();
       this.notifyConnectionListeners();
     };
 
@@ -76,7 +99,7 @@ export class DaemonWsClient {
       }
       const data = parsed as DaemonEvent;
       this.handlers.forEach((h) => h(data));
-      this.handleFileWatchEvent(data);
+      this.fileWatch.handleEvent(data);
     };
 
     socket.onclose = () => {
@@ -93,6 +116,7 @@ export class DaemonWsClient {
 
   disconnect(): void {
     this.intentionalClose = true;
+    this.cancelSeedWait();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -119,9 +143,13 @@ export class DaemonWsClient {
     }
     // Never silently drop: a lost message.send / permission.respond looks like
     // success while the daemon never received it. Buffer and let the
-    // (re)connection flush it (`flushPending` runs on `onopen`). A CONNECTING
-    // socket flushes on its own; an absent/CLOSED one needs a reconnect kick.
+    // (re)connection flush it (`flushPending` runs on `onopen`).
     this.pendingMessages.push(event);
+    this.kickReconnect();
+  }
+
+  /** A CONNECTING socket opens on its own; an absent/CLOSED one needs a kick. */
+  private kickReconnect(): void {
     if (
       !this.intentionalClose &&
       this.port != null &&
@@ -140,56 +168,33 @@ export class DaemonWsClient {
     this.send({ type: 'unsubscribe', chatId });
   }
 
-  subscribeFile(path: string, context?: { projectId?: string; chatId?: string }): void {
-    this.send({ type: 'subscribe:file', path, ...context });
-  }
-
-  unsubscribeFile(path: string, context?: { projectId?: string; chatId?: string }): void {
-    this.filePathMap.delete(path);
-    this.send({ type: 'unsubscribe:file', path, ...context });
-  }
-
   /**
-   * Register a listener for changes to `path`. Returns an unsubscribe fn.
-   *
-   * The daemon REALPATHs the subscribed path; `file:changed` carries the
-   * resolved path. An ack (`subscribe:file:ack`) maps requestedPath →
-   * resolvedPath so we can route the resolved path back to listeners keyed
-   * by the original requested path.
+   * File watches are per-connection state on the daemon (wiped when the socket
+   * closes), so subscribe/unsubscribe frames are NOT buffered like send():
+   * the registry is replayed wholesale by resubscribeFiles() on every open.
    */
-  onFileChange(path: string, listener: FileChangeListener): () => void {
-    let listeners = this.fileListeners.get(path);
-    if (!listeners) {
-      listeners = new Set();
-      this.fileListeners.set(path, listeners);
+  subscribeFile(path: string, context?: FileWatchContext): void {
+    const frame = this.fileWatch.subscribe(path, context);
+    if (!frame) return;
+    if (this.connected) {
+      this.send(frame);
+    } else {
+      this.kickReconnect();
     }
-    listeners.add(listener);
-    return () => {
-      const set = this.fileListeners.get(path);
-      if (set) {
-        set.delete(listener);
-        if (set.size === 0) this.fileListeners.delete(path);
-      }
-    };
   }
 
-  private handleFileWatchEvent(data: DaemonEvent): void {
-    if (data.type === 'subscribe:file:ack') {
-      this.filePathMap.set(data.requestedPath, data.resolvedPath);
-      return;
-    }
-    if (data.type === 'file:changed') {
-      const resolvedPath = data.path;
-      // Find all requested paths that resolved to this path and invoke listeners.
-      for (const [requestedPath, mapped] of this.filePathMap) {
-        if (mapped === resolvedPath) {
-          const listeners = this.fileListeners.get(requestedPath);
-          if (listeners) {
-            listeners.forEach((fn) => fn());
-          }
-        }
-      }
-    }
+  unsubscribeFile(path: string, context?: FileWatchContext): void {
+    const frame = this.fileWatch.unsubscribe(path, context);
+    if (frame && this.connected) this.send(frame);
+  }
+
+  private resubscribeFiles(): void {
+    for (const frame of this.fileWatch.replayFrames()) this.send(frame);
+  }
+
+  /** Register a listener for changes to `path`. Returns an unsubscribe fn. */
+  onFileChange(path: string, listener: FileChangeListener): () => void {
+    return this.fileWatch.addListener(path, listener);
   }
 
   private flushPending(): void {
@@ -199,6 +204,23 @@ export class DaemonWsClient {
 
   private notifyConnectionListeners(): void {
     this.connectionListeners.forEach((fn) => fn());
+  }
+
+  /** Defer the connect until setActiveDaemon() delivers a seeded target. */
+  private connectWhenSeeded(): void {
+    if (this.seedWaitUnsub) return;
+    // Ignore unseeded notifications: reacting to one would re-subscribe inside
+    // setActiveDaemon's listener iteration (Sets visit entries added mid-loop).
+    this.seedWaitUnsub = subscribeActiveDaemon((t) => {
+      if (!isSeededTarget(t.baseUrl)) return;
+      this.cancelSeedWait();
+      this.connect();
+    });
+  }
+
+  private cancelSeedWait(): void {
+    this.seedWaitUnsub?.();
+    this.seedWaitUnsub = null;
   }
 
   private scheduleReconnect(): void {

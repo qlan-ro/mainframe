@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ScheduleWakeupCard, CronCreateCard, CronDeleteCard, CronListCard, MonitorCard } from '../SchedulePillCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 import type { ToolCallMessagePartProps, ToolCallMessagePartStatus } from '@assistant-ui/react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -271,6 +272,12 @@ describe('CronListCard — done state', () => {
     fireEvent.click(pill);
     expect(screen.getByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('job-2')).toBeInTheDocument();
+  });
+
+  it('does not nest a vertical scroll container in the expanded job list (single overflow owner)', () => {
+    const { container } = renderCronList();
+    fireEvent.click(screen.getByTestId('chat-schedule-cronlist-pill'));
+    expect(nestedVerticalScrollers(container)).toHaveLength(0);
   });
 
   it('renders "Listing schedules…" in pending state', () => {

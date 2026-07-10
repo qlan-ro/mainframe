@@ -126,7 +126,7 @@ function buildBody(kind: ScheduleKind, parsed: unknown, text: string): React.Rea
     const jobs = Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
     if (jobs.length === 0) return null;
     return (
-      <div className="flex flex-col gap-1.5 font-mono text-caption text-mf-text-3 max-h-72 overflow-y-auto">
+      <div className="flex flex-col gap-1.5 font-mono text-caption text-mf-text-3">
         {jobs.map((j) => (
           <div key={String(j['id'] ?? '')}>
             <div>

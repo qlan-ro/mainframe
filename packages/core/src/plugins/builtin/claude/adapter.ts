@@ -16,6 +16,7 @@ import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
+import { generateClaudeTitle } from './title-generator.js';
 import { isClaudeTranscriptPresent } from './transcript.js';
 import { ClaudePlanModeHandler } from './plan-mode-handler.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
@@ -240,6 +241,10 @@ export class ClaudeAdapter implements Adapter {
       session.kill().catch((err) => log.warn({ err }, 'failed to kill claude session during killAll'));
     }
     this.sessions.clear();
+  }
+
+  generateTitle(content: string, binary: string): Promise<string | null> {
+    return generateClaudeTitle(content, binary);
   }
 
   async listSkills(projectPath: string): Promise<Skill[]> {

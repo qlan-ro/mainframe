@@ -2,7 +2,7 @@ import type { Chat, DaemonEvent, ExternalSession, ExternalSessionPage } from '@q
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createChildLogger } from '../logger.js';
-import { deriveTitleFromMessage, generateTitle } from './title-generator.js';
+import { deriveTitleFromMessage } from './title-generator.js';
 
 const logger = createChildLogger('chat:external-sessions');
 
@@ -126,8 +126,11 @@ export class ExternalSessionService {
     const disabled = this.db.settings.get('general', 'titleGeneration.disabled');
     if (disabled === 'true') return;
 
+    const adapter = this.adapters.get(adapterId);
+    if (!adapter?.generateTitle) return; // deterministic title (set at import time) stands
+
     const binary = this.db.settings.get('provider', `${adapterId}.titleBinary`) || 'claude';
-    const title = await generateTitle(content, binary);
+    const title = await adapter.generateTitle(content, binary);
     if (!title) return;
 
     chat.title = title;
