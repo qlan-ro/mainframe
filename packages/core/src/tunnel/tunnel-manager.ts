@@ -2,8 +2,11 @@ import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { Resolver } from 'node:dns/promises';
+import { isAbsolute } from 'node:path';
 import { createChildLogger } from '../logger.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import { NoopTunnelRegistry } from './tunnel-registry.js';
+import type { TunnelRegistryPort } from './tunnel-registry.js';
 
 const log = createChildLogger('tunnel');
 
@@ -21,6 +24,12 @@ const DNS_TIMEOUT_MS = 45_000;
 export interface TunnelStartOptions {
   token?: string;
   url?: string;
+}
+
+export interface TunnelManagerOptions {
+  registry?: TunnelRegistryPort;
+  /** Absolute cloudflared path to spawn; a bare name is spawned but never tracked. */
+  cloudflaredPath?: string;
 }
 
 interface ManagedTunnel {
@@ -41,9 +50,31 @@ export class TunnelManager {
   private tunnels = new Map<string, ManagedTunnel>();
   private verifiedAt = new Map<string, VerifyResult>();
   private broadcast: BroadcastFn;
+  private registry: TunnelRegistryPort;
+  private cloudflaredPath: string;
 
-  constructor(broadcast?: BroadcastFn) {
+  constructor(broadcast?: BroadcastFn, options?: TunnelManagerOptions) {
     this.broadcast = broadcast ?? (() => {});
+    this.registry = options?.registry ?? new NoopTunnelRegistry();
+    this.cloudflaredPath = options?.cloudflaredPath ?? 'cloudflared';
+  }
+
+  /**
+   * Persist a spawned cloudflared pid so a crashed daemon's next startup sweep
+   * can reap it. Only absolute paths are tracked — reaping a bare-name match
+   * could kill an unrelated user process after PID reuse.
+   */
+  private recordSpawn(label: string, child: ChildProcess): void {
+    const pid = child.pid;
+    if (pid == null || !isAbsolute(this.cloudflaredPath)) return;
+    this.registry
+      .add({ pid, label, binPath: this.cloudflaredPath, spawnedAt: Date.now() })
+      .catch((err) => log.warn({ err, label, pid }, 'failed to record tunnel pid'));
+  }
+
+  private forgetSpawn(pid: number | undefined): void {
+    if (pid == null) return;
+    this.registry.remove(pid).catch((err) => log.warn({ err, pid }, 'failed to forget tunnel pid'));
   }
 
   static parseUrl(line: string): string | null {
@@ -64,9 +95,11 @@ export class TunnelManager {
         ? ['tunnel', 'run', '--token', options.token!]
         : ['tunnel', '--url', `http://localhost:${port}`];
 
-      const child = spawn('cloudflared', args, {
+      const child = spawn(this.cloudflaredPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
+      const pid = child.pid;
+      this.recordSpawn(label, child);
 
       let done = false;
       let pendingUrl: string | null = isNamed ? (options.url ?? null) : null;
@@ -140,6 +173,7 @@ export class TunnelManager {
       if (child.stderr) scanStream(child.stderr);
 
       child.once('error', (err: NodeJS.ErrnoException) => {
+        this.forgetSpawn(pid);
         if (done) return;
         done = true;
         clearTimeout(timeout);
@@ -152,6 +186,7 @@ export class TunnelManager {
       });
 
       child.once('exit', (code) => {
+        this.forgetSpawn(pid);
         if (!done) {
           done = true;
           clearTimeout(timeout);
@@ -171,6 +206,7 @@ export class TunnelManager {
     const tunnel = this.tunnels.get(label);
     if (!tunnel) return;
     tunnel.process.kill('SIGTERM');
+    this.forgetSpawn(tunnel.process.pid);
     this.tunnels.delete(label);
     log.info({ label }, 'tunnel stopped');
     this.broadcast({ type: 'tunnel:status', state: 'stopped', label });

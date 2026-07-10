@@ -16,19 +16,37 @@ vi.mock('node:dns/promises', () => ({
 
 // Imported after the mocks above so TunnelManager picks up the mocked deps.
 const { TunnelManager } = await import('../../tunnel/tunnel-manager.js');
+import type { TunnelRegistryEntry, TunnelRegistryPort } from '../../tunnel/tunnel-registry.js';
 
 type MockChild = NodeJS.EventEmitter & {
   stdout: PassThrough;
   stderr: PassThrough;
   kill: ReturnType<typeof vi.fn>;
+  pid?: number;
 };
 
-function makeMockChild(): MockChild {
+function makeMockChild(pid?: number): MockChild {
   const child = new EventEmitter() as MockChild;
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
   child.kill = vi.fn();
+  child.pid = pid;
   return child;
+}
+
+class RecordingRegistry implements TunnelRegistryPort {
+  added: TunnelRegistryEntry[] = [];
+  removed: number[] = [];
+  async add(entry: TunnelRegistryEntry): Promise<void> {
+    this.added.push(entry);
+  }
+  async remove(pid: number): Promise<void> {
+    this.removed.push(pid);
+  }
+  async list(): Promise<TunnelRegistryEntry[]> {
+    return [];
+  }
+  async clear(): Promise<void> {}
 }
 
 describe('TunnelManager.parseUrl', () => {
@@ -262,6 +280,89 @@ describe('TunnelManager broadcast callbacks', () => {
   it('works without a broadcast callback (no-op constructor)', () => {
     const manager = new TunnelManager();
     expect(() => manager.stop('nonexistent')).not.toThrow();
+  });
+});
+
+describe('TunnelManager registry tracking', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('spawns the injected absolute cloudflared path', () => {
+    const child = makeMockChild(4242);
+    spawnMock.mockReturnValue(child);
+    const manager = new TunnelManager(undefined, { cloudflaredPath: '/abs/bin/cloudflared' });
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+
+    expect(spawnMock).toHaveBeenCalledWith('/abs/bin/cloudflared', expect.any(Array), expect.any(Object));
+  });
+
+  it('records the spawned pid with its absolute binary path', () => {
+    const child = makeMockChild(4242);
+    spawnMock.mockReturnValue(child);
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+
+    expect(registry.added).toEqual([
+      expect.objectContaining({ pid: 4242, label: 'preview:Dev', binPath: '/abs/bin/cloudflared' }),
+    ]);
+  });
+
+  it('does not record when the cloudflared path is a bare name (unsafe to reap)', () => {
+    const child = makeMockChild(4242);
+    spawnMock.mockReturnValue(child);
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry }); // defaults to bare 'cloudflared'
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+
+    expect(spawnMock).toHaveBeenCalledWith('cloudflared', expect.any(Array), expect.any(Object));
+    expect(registry.added).toEqual([]);
+  });
+
+  it('does not record when the child has no pid', () => {
+    const child = makeMockChild(undefined);
+    spawnMock.mockReturnValue(child);
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+
+    expect(registry.added).toEqual([]);
+  });
+
+  it('removes the pid from the registry when the tunnel process exits', () => {
+    const child = makeMockChild(4242);
+    spawnMock.mockReturnValue(child);
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+    child.emit('exit', 0);
+
+    expect(registry.removed).toContain(4242);
+  });
+
+  it('removes the pid from the registry when stop() is called', async () => {
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+    (manager as unknown as { tunnels: Map<string, unknown> }).tunnels.set('preview:Dev', {
+      process: { kill: vi.fn(), pid: 4242 },
+      url: 'https://x.trycloudflare.com',
+      ready: true,
+    });
+
+    manager.stop('preview:Dev');
+    await Promise.resolve();
+
+    expect(registry.removed).toContain(4242);
   });
 });
 
