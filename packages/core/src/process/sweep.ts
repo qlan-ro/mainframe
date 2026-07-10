@@ -6,6 +6,11 @@ import type { ChildRegistryPort, ManagedChildEntry } from './child-registry.js';
 const log = createChildLogger('child-sweep');
 
 const PS_TIMEOUT_MS = 5_000;
+const SIGTERM_GRACE_MS = 2_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export interface SweepDeps {
   /** Full command line of a running pid, or null when the pid is not alive. */
@@ -21,6 +26,8 @@ export interface SweepDeps {
   kill: (pid: number, signal: NodeJS.Signals, group: boolean) => boolean;
   /** Platform whose process-inspection tooling the sweep needs; win32 has no `ps`. */
   platform?: NodeJS.Platform;
+  /** ms to wait after SIGTERM before re-checking liveness and escalating to SIGKILL (tests pass 0). */
+  graceMs?: number;
 }
 
 export interface SweepResult {
@@ -63,6 +70,17 @@ function matchesEntry(entry: ManagedChildEntry, command: string | null, cwd: str
   if (command == null) return false;
   if (entry.group) return processMatchesLaunch(command, cwd, entry);
   return processMatchesBinary(command, entry.command);
+}
+
+/**
+ * Re-read a pid's identity to decide whether the orphan (or its still-matching
+ * group) survived our SIGTERM. Re-verifies the full command + cwd guard so a pid
+ * reused during the grace window is treated as gone, never SIGKILLed.
+ */
+async function orphanStillMatches(entry: ManagedChildEntry, deps: SweepDeps): Promise<boolean> {
+  const command = await deps.processCommand(entry.pid);
+  const cwd = command != null && entry.group ? await deps.processCwd(entry.pid) : null;
+  return matchesEntry(entry, command, cwd);
 }
 
 export function defaultProcessCommand(pid: number): Promise<string | null> {
@@ -122,8 +140,9 @@ export const defaultSweepDeps: SweepDeps = {
  * pidfile registry and, for each recorded pid still alive whose identity still
  * matches what we recorded (guarding against PID reuse), kills it — the pid for
  * tunnels, the whole process GROUP for detached launch trees so wrapper
- * grandchildren (pnpm → vite → esbuild) die with it. Every record it handles is
- * pruned: a reaped orphan, a dead pid, or a pid reused by another process.
+ * grandchildren (pnpm → vite → esbuild) die with it. Delivery is escalated
+ * SIGTERM → (grace) → SIGKILL for anything that ignores the term. Every record it
+ * handles is pruned: a reaped orphan, a dead pid, or a pid reused by another process.
  *
  * A record is kept only when the orphan is still alive but the kill failed (e.g.
  * EPERM on a root-owned orphan): dropping it would discard the sole record of a
@@ -173,15 +192,28 @@ export async function sweepStrayChildren(
     } catch (err) {
       log.warn({ err, pid: entry.pid }, 'sweep kill threw');
     }
-    if (killed) {
-      reaped += 1;
-      await registry.remove(entry.pid);
-    } else {
+    if (!killed) {
       log.warn(
         { pid: entry.pid, kind: entry.kind, label: entry.label },
         'kept child registry entry: kill failed, orphan may still be alive',
       );
+      continue;
     }
+
+    // `kill` reports signal delivery, not death. Mirror stop()'s TERM→KILL
+    // ladder: after a grace period, SIGKILL an orphan (or its still-matching
+    // group) that ignored or slow-handled SIGTERM before pruning its only record.
+    await delay(deps.graceMs ?? SIGTERM_GRACE_MS);
+    if (await orphanStillMatches(entry, deps)) {
+      log.warn({ pid: entry.pid, kind: entry.kind, label: entry.label }, 'orphan survived SIGTERM, sending SIGKILL');
+      try {
+        deps.kill(entry.pid, 'SIGKILL', entry.group);
+      } catch (err) {
+        log.warn({ err, pid: entry.pid }, 'sweep SIGKILL threw');
+      }
+    }
+    reaped += 1;
+    await registry.remove(entry.pid);
   }
 
   return { total: entries.length, reaped, skipped: entries.length - reaped };

@@ -33,6 +33,20 @@ class FakeRegistry extends NoopChildRegistry {
   }
 }
 
+/**
+ * Models a process that reports `command` for the sweep's identity guard, then
+ * disappears (the sweep's post-SIGTERM liveness re-check sees null) — the normal
+ * "dies on SIGTERM" path, so the sweep never escalates to SIGKILL.
+ */
+function diesOnSigterm(commands: Record<number, string | null>): (pid: number) => Promise<string | null> {
+  const seen = new Set<number>();
+  return async (pid: number) => {
+    if (seen.has(pid)) return null;
+    seen.add(pid);
+    return commands[pid] ?? null;
+  };
+}
+
 describe('processMatchesBinary', () => {
   it('matches the exact recorded binary path', () => {
     expect(processMatchesBinary(`${BIN} tunnel --url http://localhost:4173`, BIN)).toBe(true);
@@ -71,9 +85,10 @@ describe('sweepStrayChildren', () => {
     const registry = new FakeRegistry([tunnel(4242)]);
     const kill = vi.fn(() => true);
     const result = await sweepStrayChildren(registry, {
-      processCommand: async () => `${BIN} tunnel --url http://localhost:4173`,
+      processCommand: diesOnSigterm({ 4242: `${BIN} tunnel --url http://localhost:4173` }),
       processCwd: async () => null,
       kill,
+      graceMs: 0,
     });
     expect(kill).toHaveBeenCalledWith(4242, 'SIGTERM', false);
     expect(result).toEqual({ total: 1, reaped: 1, skipped: 0 });
@@ -84,10 +99,57 @@ describe('sweepStrayChildren', () => {
     const registry = new FakeRegistry([launch(5000)]);
     const kill = vi.fn(() => true);
     const result = await sweepStrayChildren(registry, {
+      processCommand: diesOnSigterm({ 5000: `${PNPM} run dev` }),
+      processCwd: async () => CWD,
+      kill,
+      graceMs: 0,
+    });
+    expect(kill).toHaveBeenCalledWith(5000, 'SIGTERM', true);
+    expect(result).toEqual({ total: 1, reaped: 1, skipped: 0 });
+    expect(registry.remaining()).toEqual([]);
+  });
+
+  it('escalates to SIGKILL on the group when a launch orphan survives SIGTERM, then prunes', async () => {
+    const registry = new FakeRegistry([launch(5000)]);
+    const kill = vi.fn(() => true);
+    const result = await sweepStrayChildren(registry, {
+      // Immortal: still reports the matching command after SIGTERM.
       processCommand: async () => `${PNPM} run dev`,
       processCwd: async () => CWD,
       kill,
+      graceMs: 0,
     });
+    expect(kill).toHaveBeenNthCalledWith(1, 5000, 'SIGTERM', true);
+    expect(kill).toHaveBeenNthCalledWith(2, 5000, 'SIGKILL', true);
+    expect(result).toEqual({ total: 1, reaped: 1, skipped: 0 });
+    expect(registry.remaining()).toEqual([]);
+  });
+
+  it('does not escalate to SIGKILL when the orphan exits on SIGTERM', async () => {
+    const registry = new FakeRegistry([launch(5000)]);
+    const kill = vi.fn(() => true);
+    await sweepStrayChildren(registry, {
+      processCommand: diesOnSigterm({ 5000: `${PNPM} run dev` }),
+      processCwd: async () => CWD,
+      kill,
+      graceMs: 0,
+    });
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(kill).toHaveBeenCalledWith(5000, 'SIGTERM', true);
+  });
+
+  it('never SIGKILLs a pid reused during the grace window (identity re-verified before escalation)', async () => {
+    const registry = new FakeRegistry([launch(5000)]);
+    const kill = vi.fn(() => true);
+    let call = 0;
+    const result = await sweepStrayChildren(registry, {
+      // Our orphan at the identity guard, an unrelated program after SIGTERM.
+      processCommand: async () => (call++ === 0 ? `${PNPM} run dev` : '/usr/bin/postgres -D /data'),
+      processCwd: async () => CWD,
+      kill,
+      graceMs: 0,
+    });
+    expect(kill).toHaveBeenCalledTimes(1);
     expect(kill).toHaveBeenCalledWith(5000, 'SIGTERM', true);
     expect(result).toEqual({ total: 1, reaped: 1, skipped: 0 });
     expect(registry.remaining()).toEqual([]);
@@ -100,6 +162,7 @@ describe('sweepStrayChildren', () => {
       processCommand: async () => '/usr/bin/postgres -D /data',
       processCwd: async () => '/var/lib/postgres',
       kill,
+      graceMs: 0,
     });
     expect(kill).not.toHaveBeenCalled();
     expect(result).toEqual({ total: 1, reaped: 0, skipped: 1 });
@@ -113,6 +176,7 @@ describe('sweepStrayChildren', () => {
       processCommand: async () => `${PNPM} run dev`,
       processCwd: async () => '/Users/me/other',
       kill,
+      graceMs: 0,
     });
     expect(kill).not.toHaveBeenCalled();
     expect(registry.remaining()).toEqual([]);
@@ -125,6 +189,7 @@ describe('sweepStrayChildren', () => {
       processCommand: async () => null,
       processCwd: async () => null,
       kill,
+      graceMs: 0,
     });
     expect(kill).not.toHaveBeenCalled();
     expect(result).toEqual({ total: 1, reaped: 0, skipped: 1 });
@@ -134,15 +199,15 @@ describe('sweepStrayChildren', () => {
   it('reaps matching entries out of a mixed tunnel/launch set and prunes every handled record', async () => {
     const registry = new FakeRegistry([tunnel(1), launch(2), launch(3)]);
     const kill = vi.fn(() => true);
-    const commands: Record<number, string | null> = {
-      1: `${BIN} tunnel --url http://localhost:4173`,
-      2: `${PNPM} run dev`,
-      3: '/opt/other/thing', // reused pid
-    };
     const result = await sweepStrayChildren(registry, {
-      processCommand: async (pid) => commands[pid] ?? null,
+      processCommand: diesOnSigterm({
+        1: `${BIN} tunnel --url http://localhost:4173`,
+        2: `${PNPM} run dev`,
+        3: '/opt/other/thing', // reused pid
+      }),
       processCwd: async () => CWD,
       kill,
+      graceMs: 0,
     });
     expect(kill).toHaveBeenCalledTimes(2);
     expect(kill).toHaveBeenCalledWith(1, 'SIGTERM', false);
@@ -174,6 +239,7 @@ describe('sweepStrayChildren', () => {
       processCommand: async () => `${PNPM} run dev`,
       processCwd: async () => CWD,
       kill,
+      graceMs: 0,
     });
     expect(kill).toHaveBeenCalledWith(5000, 'SIGTERM', true);
     expect(result).toEqual({ total: 1, reaped: 0, skipped: 1 });
@@ -187,9 +253,10 @@ describe('sweepStrayChildren', () => {
       return true;
     });
     const result = await sweepStrayChildren(registry, {
-      processCommand: async () => `${PNPM} run dev`,
+      processCommand: diesOnSigterm({ 1: `${PNPM} run dev`, 2: `${PNPM} run dev` }),
       processCwd: async () => CWD,
       kill,
+      graceMs: 0,
     });
     expect(result).toEqual({ total: 2, reaped: 1, skipped: 1 });
     expect(registry.remaining()).toEqual([1]);
@@ -200,9 +267,10 @@ describe('sweepStrayChildren', () => {
     const kill = vi.fn(() => true);
     const processCwd = vi.fn(async () => null);
     await sweepStrayChildren(registry, {
-      processCommand: async () => `${BIN} tunnel run`,
+      processCommand: diesOnSigterm({ 1: `${BIN} tunnel run` }),
       processCwd,
       kill,
+      graceMs: 0,
     });
     expect(processCwd).not.toHaveBeenCalled();
   });

@@ -40,6 +40,11 @@ function makeConfig(over: Partial<LaunchConfiguration> = {}): LaunchConfiguratio
   return { name: 'dev', runtimeExecutable: 'pnpm', runtimeArgs: ['run', 'dev'], port: null, url: null, ...over };
 }
 
+/** Stub for the live-command reader the sweep compares against (`ps -o command=`). */
+function reader(output: string | null): (pid: number) => Promise<string | null> {
+  return vi.fn(async () => output);
+}
+
 describe('LaunchManager registry tracking', () => {
   beforeEach(() => {
     spawnMock.mockReset();
@@ -50,10 +55,15 @@ describe('LaunchManager registry tracking', () => {
     vi.restoreAllMocks();
   });
 
-  it('records the spawned launch child as a detached group with full argv and cwd', async () => {
+  it('records the live post-shebang command line as identity, not the recorded executable', async () => {
+    // The kernel rewrites argv for a #! script: spawning `pnpm` shows
+    // `node /opt/homebrew/bin/pnpm run dev` in `ps`, which is what the sweep
+    // compares against. Recording the bare executable would never match, so the
+    // sweep would prune the record without reaping and leak the dev-server tree.
     const { LaunchManager } = await import('../launch-manager.js');
     const registry = new RecordingRegistry();
-    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry);
+    const live = 'node /opt/homebrew/bin/pnpm run dev';
+    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry, reader(live));
 
     await manager.start(makeConfig());
 
@@ -61,8 +71,8 @@ describe('LaunchManager registry tracking', () => {
       expect.objectContaining({
         pid: 12345,
         kind: 'launch',
-        command: 'pnpm',
-        args: ['run', 'dev'],
+        command: live,
+        args: [],
         cwd: '/tmp/project',
         group: true,
         label: 'proj-1:dev',
@@ -79,7 +89,7 @@ describe('LaunchManager registry tracking', () => {
     try {
       const { LaunchManager } = await import('../launch-manager.js');
       const registry = new RecordingRegistry();
-      const manager = new LaunchManager('proj-1', dir, vi.fn(), undefined, registry);
+      const manager = new LaunchManager('proj-1', dir, vi.fn(), undefined, registry, reader('node /pnpm run dev'));
       await manager.start(makeConfig());
       expect(registry.added[0]!.cwd).toBe(real);
     } finally {
@@ -87,10 +97,13 @@ describe('LaunchManager registry tracking', () => {
     }
   });
 
-  it('records the resolved absolute path for a relative executable', async () => {
+  it('falls back to the resolved executable + argv when the live command line is unavailable', async () => {
+    // If `ps` can't read the pid (already exited, or a sandbox denies it), keep
+    // a best-effort record from what we spawned — the resolved absolute path for
+    // a relative executable — rather than dropping the reap record entirely.
     const { LaunchManager } = await import('../launch-manager.js');
     const registry = new RecordingRegistry();
-    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry);
+    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry, reader(null));
 
     await manager.start(makeConfig({ runtimeExecutable: './gradlew', runtimeArgs: ['bootRun'] }));
 
@@ -100,7 +113,14 @@ describe('LaunchManager registry tracking', () => {
   it('forgets the pid when the launch process exits', async () => {
     const { LaunchManager } = await import('../launch-manager.js');
     const registry = new RecordingRegistry();
-    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry);
+    const manager = new LaunchManager(
+      'proj-1',
+      '/tmp/project',
+      vi.fn(),
+      undefined,
+      registry,
+      reader('node /pnpm run dev'),
+    );
 
     const child = makeMockChild();
     spawnMock.mockReturnValueOnce(child);
@@ -113,7 +133,14 @@ describe('LaunchManager registry tracking', () => {
   it('forgets the pid when the launch process errors', async () => {
     const { LaunchManager } = await import('../launch-manager.js');
     const registry = new RecordingRegistry();
-    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry);
+    const manager = new LaunchManager(
+      'proj-1',
+      '/tmp/project',
+      vi.fn(),
+      undefined,
+      registry,
+      reader('node /pnpm run dev'),
+    );
 
     const child = Object.assign(new EventEmitter(), {
       pid: 999,
@@ -132,7 +159,14 @@ describe('LaunchManager registry tracking', () => {
   it('kills the process group and forgets the pid on stop()', async () => {
     const { LaunchManager } = await import('../launch-manager.js');
     const registry = new RecordingRegistry();
-    const manager = new LaunchManager('proj-1', '/tmp/project', vi.fn(), undefined, registry);
+    const manager = new LaunchManager(
+      'proj-1',
+      '/tmp/project',
+      vi.fn(),
+      undefined,
+      registry,
+      reader('node /pnpm run dev'),
+    );
 
     const child = makeMockChild(7777);
     spawnMock.mockReturnValueOnce(child);
