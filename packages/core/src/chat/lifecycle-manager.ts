@@ -11,7 +11,6 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
-import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
 import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/claude/pr-detection.js';
 import type { MessageCache } from './message-cache.js';
@@ -345,10 +344,13 @@ export class ChatLifecycleManager {
     if (disabled === 'true') return;
 
     const adapterId = active.chat.adapterId;
+    const adapter = this.deps.adapters.get(adapterId);
+    if (!adapter?.generateTitle) return; // deterministic title (set on first message) stands
+
     const binary = this.deps.db.settings.get('provider', `${adapterId}.titleBinary`) || 'claude';
 
     try {
-      const title = await generateTitle(content, binary);
+      const title = await adapter.generateTitle(content, binary);
       if (title) {
         active.chat.title = title;
         this.deps.db.chats.update(chatId, { title });

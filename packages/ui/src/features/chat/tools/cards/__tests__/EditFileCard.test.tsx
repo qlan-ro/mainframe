@@ -28,6 +28,7 @@ vi.mock('@/store/surface-intents', () => ({
 
 import { EditFileCard } from '../EditFileCard';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -286,6 +287,26 @@ describe('EditFileCard', () => {
   it('renders the card root with data-testid="chat-edit-card"', () => {
     renderCard(makePart({ args: { file_path: 'f.ts', old_string: '', new_string: '' } }));
     expect(screen.getByTestId('chat-edit-card')).toBeInTheDocument();
+  });
+
+  // --- Single overflow owner (todo #198: no double scrollbar) ---
+
+  it('does not nest a vertical scroll container in the diff body (single overflow owner)', () => {
+    const structuredResult = {
+      content: 'OK',
+      structuredPatch: [
+        { oldStart: 10, oldLines: 1, newStart: 10, newLines: 1, lines: ['-const x = 1;', '+const x = 42;'] },
+      ],
+    };
+    renderCard(
+      makePart({
+        args: { file_path: 'src/app.ts', old_string: 'const x = 1;', new_string: 'const x = 42;' },
+        result: structuredResult,
+        isError: false,
+      }),
+    );
+    const card = screen.getByTestId('chat-edit-card');
+    expect(nestedVerticalScrollers(card)).toHaveLength(0);
   });
 });
 
