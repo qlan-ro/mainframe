@@ -53,9 +53,15 @@ export function usePreviewGeometry({ handle, anchorRef, containerRef, active, st
     const observer = new ResizeObserver(() => scheduleRefit());
     if (containerRef.current) observer.observe(containerRef.current);
     if (anchorRef.current) observer.observe(anchorRef.current);
+    // A window resize can REPOSITION the panel without changing the anchor's
+    // size (the flex delta absorbed elsewhere) — the ResizeObserver never fires
+    // and the native webview stays glued at its old window-relative rect.
+    const onWindowResize = () => scheduleRefit();
+    window.addEventListener('resize', onWindowResize);
     scheduleRefit();
     return () => {
       observer.disconnect();
+      window.removeEventListener('resize', onWindowResize);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, [anchorRef, containerRef, status, handle]);
