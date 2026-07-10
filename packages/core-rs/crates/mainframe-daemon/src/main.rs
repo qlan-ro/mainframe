@@ -29,7 +29,9 @@ use mainframe_background_tasks::reconcile::{
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
-use mainframe_server::{build_app, spawn_broadcast_pump};
+use mainframe_server::{
+    build_app, build_chat_manager, default_launch_stopper, spawn_broadcast_pump,
+};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
@@ -156,6 +158,25 @@ async fn main() {
         watcher: Arc::new(watcher),
     };
 
+    // ChatManager: constructed after the AdapterRegistry + BackgroundTaskTracker
+    // (its DB accessors reach the single WAL connection through the Db actor's
+    // sync bridge; launch/todos/notifications wire through the ported services and
+    // the LaunchStopper seam). Boot-order match: `new ChatManager(...)` then
+    // `recoverStaleWorkingState()` in index.ts.
+    let chats = build_chat_manager(
+        db.clone(),
+        Arc::clone(&adapters),
+        Arc::clone(&background_tasks),
+        Arc::clone(&services.attachments),
+        Arc::clone(&services.push),
+        GitFactory,
+        broadcast.clone(),
+        default_launch_stopper(),
+    );
+    // No in-memory CLI sessions survive a restart, so reset any persisted
+    // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.
+    chats.recover_stale_working_state();
+
     let ctx = Arc::new(AppCtx {
         db: db.clone(),
         git: GitFactory,
@@ -168,13 +189,7 @@ async fn main() {
         ws_clients: Arc::new(dashmap::DashMap::new()),
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),
-        // TODO(port): ChatManager construction needs a `ChatManagerDeps` impl. Its
-        // DB accessors are synchronous over a `!Send` `DatabaseManager` (only the
-        // async `Db` actor is available — no sanctioned sync bridge), and several
-        // methods (stop_launch_processes, update_todos, notifications) depend on
-        // unported crates (launch, plugins/todos). Left `None`; the chat routes +
-        // WS message.send/permission.respond seams gracefully degrade until wired.
-        chat_manager: None,
+        chat_manager: Some(Arc::clone(&chats)),
     });
 
     spawn_broadcast_pump(Arc::clone(&ctx));
@@ -220,10 +235,12 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // Ordered shutdown (index.ts `shutdown`): the unported steps (workflows.stop,
-    // chats.dispose, pluginManager.unloadAll, launchRegistry.stopAll,
-    // tunnelManager.stopAll) are skipped; adapters.killAll + liveness.stop run.
+    // Ordered shutdown (index.ts `shutdown`): the still-unported steps
+    // (workflows.stop, pluginManager.unloadAll, launchRegistry.stopAll,
+    // tunnelManager.stopAll) are skipped; chats.dispose + adapters.killAll +
+    // liveness.stop run.
     info!("Shutting down...");
+    chats.dispose();
     adapters.kill_all();
     liveness.stop();
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
@@ -418,7 +435,7 @@ async fn shutdown_signal() {
 }
 
 // PORT STATUS: src/index.ts (Phase-4 boot: adapters/background-tasks/reconcile/
-// liveness wired; ChatManager/plugins/launch/tunnel/workflows deferred)
+// liveness + ChatManager wired; plugins/launch/tunnel/workflows deferred)
 // confidence: medium
 // todos: 3
 // notes: enrichPath probes the login shell (execFileSync exception) but cannot
@@ -429,8 +446,8 @@ async fn shutdown_signal() {
 // WRITE bridge is unwired), allows + fires refreshAll. BackgroundTaskTracker
 // events bridge to the broadcast; reconcile runs over a pre-fetched read snapshot
 // (ReconcileDb is sync, actor is async — snapshot avoids a sync-DB bridge);
-// liveness scheduler started + stopped on shutdown. chat_manager stays None: a
-// production ChatManagerDeps needs a sync-DB bridge (its DB accessors are sync
-// over the !Send DatabaseManager) + unported crates (launch/plugins-todos/
-// notifications) — a blocker. Shutdown runs adapters.killAll + liveness.stop; the
-// unported dispose/unload/stopAll steps are skipped.
+// liveness scheduler started + stopped on shutdown. chat_manager is now wired via
+// build_chat_manager (Task 4.6c): DaemonChatDeps reaches the single WAL connection
+// through Db::call_blocking (the sync-DB bridge) and injects the ported services;
+// recover_stale_working_state runs at boot. Shutdown runs chats.dispose +
+// adapters.killAll + liveness.stop; the unported unload/stopAll steps are skipped.

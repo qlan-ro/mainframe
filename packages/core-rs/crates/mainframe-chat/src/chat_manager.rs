@@ -698,6 +698,31 @@ impl ChatManager {
             .await
     }
 
+    /// `createChatWithDefaults` — like `create_chat` but fills unset model/mode/
+    /// plan-mode from the adapter's persisted provider defaults. Backs
+    /// `POST /api/chats`.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_chat_with_defaults(
+        &self,
+        project_id: &str,
+        adapter_id: &str,
+        model: Option<&str>,
+        permission_mode: Option<&str>,
+        worktree_path: Option<&str>,
+        branch_name: Option<&str>,
+    ) -> Chat {
+        self.lifecycle
+            .create_chat_with_defaults(
+                project_id,
+                adapter_id,
+                model,
+                permission_mode,
+                worktree_path,
+                branch_name,
+            )
+            .await
+    }
+
     pub async fn resume_chat(&self, chat_id: &str) {
         self.lifecycle.resume_chat(chat_id).await;
     }

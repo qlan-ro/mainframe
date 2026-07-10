@@ -89,6 +89,42 @@ impl Db {
             )),
         }
     }
+
+    /// Synchronous sibling of [`Db::call`]: dispatches `f` onto the DB thread and
+    /// **blocks** the caller until the result comes back over a `std::sync::mpsc`
+    /// channel. This is the SYNC-DB BRIDGE that lets the `ChatManager`'s
+    /// synchronous `ChatManagerDeps` accessors (`chats_get`, `chats_update`, …)
+    /// reach the single WAL connection without ever opening a second one — the
+    /// closure runs on the *same* thread that owns the `DatabaseManager`, so its
+    /// better-sqlite3-style single-threaded semantics are preserved exactly.
+    ///
+    /// Safety / deadlock note: the DB worker is a dedicated **OS** thread, never a
+    /// tokio worker, so blocking a tokio worker here can never starve the actor —
+    /// the actor makes progress independently and unblocks us. This must **never**
+    /// be called from within a closure already running on the DB thread (that
+    /// would wait on the thread for itself); every `ChatManagerDeps` caller runs
+    /// on a tokio task, so that invariant holds. The TS daemon blocks its single
+    /// event loop for the whole synchronous DB call, so briefly blocking one of N
+    /// tokio workers is strictly cheaper and behaviourally faithful.
+    pub fn call_blocking<F, R>(&self, f: F) -> Result<R, DbError>
+    where
+        F: FnOnce(&DatabaseManager) -> Result<R, DbError> + Send + 'static,
+        R: Send + 'static,
+    {
+        let (res_tx, res_rx) = std::sync::mpsc::channel::<Result<R, DbError>>();
+        let job: Job = Box::new(move |db| {
+            let _ = res_tx.send(f(db));
+        });
+        self.tx
+            .send(job)
+            .map_err(|_| DbError::Message("database worker unavailable".into()))?;
+        match res_rx.recv() {
+            Ok(result) => result,
+            Err(_) => Err(DbError::Message(
+                "database worker dropped the request".into(),
+            )),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -111,6 +147,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn call_blocking_bridges_a_sync_call_onto_the_actor() {
+        // The SYNC-DB BRIDGE the ChatManagerDeps accessors use: a synchronous call
+        // dispatched onto the actor thread, blocking the caller for the result.
+        // Runs under the current-thread runtime and does not deadlock because the
+        // DB worker is a separate OS thread.
+        let db = open_in_memory();
+        let created = db
+            .call_blocking(|d| d.projects.create("/tmp/sync-bridge", Some("Sync")))
+            .unwrap();
+        let id = created.id.clone();
+        let fetched = db.call_blocking(move |d| d.projects.get(&id)).unwrap();
+        assert_eq!(
+            fetched.map(|p| p.path),
+            Some("/tmp/sync-bridge".to_string())
+        );
+    }
+
+    #[tokio::test]
     async fn spawn_surfaces_open_errors() {
         // An unwriteable path makes DatabaseManager::open fail; spawn returns Err.
         let result = Db::spawn(|| {
@@ -130,4 +184,7 @@ mod tests {
 // single-threaded semantics and the tsv's "single connection / spawn_blocking"
 // directive. `mpsc::UnboundedSender` is Send+Sync+Clone so `Db` (and therefore
 // AppCtx) is Send+Sync. Worker-death folds into DbError so route handlers keep a
-// single `?`. Open errors surface synchronously via a std oneshot.
+// single `?`. Open errors surface synchronously via a std oneshot. Task 4.6c adds
+// `call_blocking` (the SYNC-DB BRIDGE): the synchronous ChatManagerDeps accessors
+// dispatch onto this same actor thread and block on a std::sync::mpsc — one WAL
+// connection, no second writer, faithful to better-sqlite3's blocking semantics.

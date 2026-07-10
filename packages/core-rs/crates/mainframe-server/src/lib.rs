@@ -4,6 +4,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod async_err;
+pub mod chat_deps;
+pub mod chat_seams;
 pub mod ctx;
 pub mod db;
 pub mod fs_utils;
@@ -18,6 +20,8 @@ pub mod websocket;
 pub mod ws_file_watch;
 pub mod ws_schemas;
 
+pub use chat_deps::build_chat_manager;
+pub use chat_seams::{LaunchStopper, default_launch_stopper};
 pub use ctx::{AppCtx, GitFactory, Services};
 pub use db::Db;
 pub use http::build_app;

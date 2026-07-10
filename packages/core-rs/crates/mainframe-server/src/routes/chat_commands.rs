@@ -20,7 +20,7 @@ use axum::routing::{patch, post};
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok_empty};
+use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
 
 async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
@@ -37,6 +37,9 @@ struct CreateChatBody {
     project_id: Option<String>,
     #[serde(rename = "adapterId")]
     adapter_id: Option<String>,
+    model: Option<String>,
+    #[serde(rename = "permissionMode")]
+    permission_mode: Option<String>,
     #[serde(rename = "worktreePath")]
     worktree_path: Option<String>,
     #[serde(rename = "branchName")]
@@ -62,14 +65,24 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
             "worktreePath and branchName must be provided together",
         );
     }
-    // TODO(port-phase4): ctx.chats.createChatWithDefaults(...) lives on the
-    // lifecycle manager; not yet on the Rust ChatManager facade. Seam.
-    let _ = (&ctx, &project_id, &adapter_id);
-    tracing::warn!(%project_id, %adapter_id, "createChat is a Phase-4 seam (ChatManager.createChatWithDefaults unavailable)");
-    fail(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "createChatWithDefaults unavailable",
-    )
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(%project_id, %adapter_id, "createChat is a Phase-4 seam (ChatManager unavailable)");
+        return fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "createChatWithDefaults unavailable",
+        );
+    };
+    let chat = cm
+        .create_chat_with_defaults(
+            &project_id,
+            &adapter_id,
+            b.model.as_deref(),
+            b.permission_mode.as_deref(),
+            b.worktree_path.as_deref(),
+            b.branch_name.as_deref(),
+        )
+        .await;
+    ok(chat)
 }
 
 async fn update_config(
@@ -276,11 +289,11 @@ mod tests {
 
 // PORT STATUS: src/server/routes/chat-commands.ts (7 endpoints, 96 lines)
 // confidence: medium
-// todos: 3
-// notes: interrupt/resume/queue-edit/queue-cancel port over the ChatManager facade
-// (gated on it being wired; Phase-3 harness leaves it None → seam). create
-// (createChatWithDefaults, lifecycle), config PATCH (updateChatConfig, config
-// manager) and trust-workspace need facade methods not yet ported → Phase-4 seams
+// todos: 2
+// notes: create (createChatWithDefaults) + interrupt/resume/queue-edit/queue-cancel
+// port over the ChatManager facade — all self-gate on ctx.chat_manager, now wired
+// at boot (Task 4.6c), so they are live. config PATCH (updateChatConfig, config
+// manager) and trust-workspace still need facade methods not yet ported → seams
 // mirroring projects::remove, but the db existence 404 is honoured first. Zod
 // enum/refine 400 messages are approximated; the both-or-neither worktree refine
 // string matches TS.
