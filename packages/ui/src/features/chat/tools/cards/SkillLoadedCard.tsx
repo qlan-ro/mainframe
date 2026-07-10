@@ -59,9 +59,7 @@ export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoa
       )}
       {open && expandable && (
         <MarkerBody>
-          <div className="max-h-[360px] overflow-y-auto">
-            <MarkerPre muted>{content}</MarkerPre>
-          </div>
+          <MarkerPre muted>{content}</MarkerPre>
         </MarkerBody>
       )}
     </MarkerWrap>

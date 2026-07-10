@@ -21,6 +21,9 @@
    CLASSIC · LIGHT (default) — warm paper, iOS-blue accent
    ──────────────────────────────────────────────────────────────────────── */
 :root {
+  /* Tells the engine to paint native scrollbars/form controls light. */
+  color-scheme: light;
+
   /* ── Radius (shadcn derives sm/md/lg/xl from --radius) ──
      Prototype scale: xs 4 · sm 6 · md 8 · lg 11 · xl 13. Base = md. */
   --radius: 0.5rem; /* 8px */
@@ -210,6 +213,10 @@
    (Redesigned 2026-06-12: was warm charcoal + shared blue.)
    ──────────────────────────────────────────────────────────────────────── */
 .dark {
+  /* Without this WebKit paints native scrollbar chrome (the white track) light
+     on dark surfaces; must flip with the .dark theme toggle. */
+  color-scheme: dark;
+
   --background: #262835;
   --foreground: #f2f2f8;
   --card: #212330;
@@ -1072,7 +1079,9 @@ code {
    Replaces the default browser scrollbar without taking over the native
    autoscroll Viewport (radix ScrollArea via asChild doesn't bind to it). */
 .mf-thin-scrollbar {
-  scrollbar-width: thin;
+  /* Deliberately NO scrollbar-width: thin — modern WebKit/Chromium honor it and
+     thereby DISABLE the ::-webkit-scrollbar rules below, falling back to native
+     (light) chrome. scrollbar-color stays as the Firefox/standards path. */
   scrollbar-color: transparent transparent;
 }
 .mf-thin-scrollbar:hover {

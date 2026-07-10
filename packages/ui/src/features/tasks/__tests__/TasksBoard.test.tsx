@@ -20,11 +20,13 @@ import userEvent from '@testing-library/user-event';
 const mockSetView = vi.fn();
 const mockSetSort = vi.fn();
 const mockSetFilters = vi.fn();
+let mockTodos: import('@/lib/api/todos').Todo[] = [];
+let mockLoading = false;
 
 vi.mock('../use-todos-store', () => ({
   useTodosStore: vi.fn(() => ({
-    todos: [],
-    loading: false,
+    todos: mockTodos,
+    loading: mockLoading,
     filters: { types: [], priorities: [], labels: [], search: '' },
     sort: { key: 'priority', dir: 'asc' },
     view: 'list',
@@ -49,6 +51,30 @@ vi.mock('../TaskBoardView', () => ({
 // ---------------------------------------------------------------------------
 
 import { TasksBoard } from '../TasksBoard';
+import type { Todo } from '@/lib/api/todos';
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): Todo {
+  return {
+    project_id: 'proj-1',
+    title: 'Default title',
+    body: '',
+    status: 'open',
+    type: 'feature',
+    priority: 'medium',
+    labels: [],
+    assignees: [],
+    milestone: null,
+    dependencies: [],
+    order_index: 0,
+    created_at: '2026-06-01T00:00:00.000Z',
+    updated_at: '2026-06-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Render helper
@@ -61,6 +87,8 @@ function renderBoard(onClose = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockTodos = [];
+  mockLoading = false;
 });
 
 describe('TasksBoard — root testid', () => {
@@ -98,6 +126,24 @@ describe('TasksBoard — segmented view switch + new button still render', () =>
     expect(screen.getByTestId('tasks-view-list')).toBeTruthy();
     expect(screen.getByTestId('tasks-view-board')).toBeTruthy();
     expect(screen.getByTestId('tasks-board-new')).toBeTruthy();
+  });
+});
+
+describe('TasksBoard — loading does not blank the board on refetch (todo #225)', () => {
+  it('shows the loading placeholder only on the first load (no todos yet)', () => {
+    mockLoading = true;
+    mockTodos = [];
+    renderBoard();
+    expect(screen.getByTestId('tasks-board-loading')).toBeTruthy();
+    expect(screen.queryByTestId('task-list-view-stub')).toBeNull();
+  });
+
+  it('keeps the previous list rendered while a refetch is in flight (todos present)', () => {
+    mockLoading = true;
+    mockTodos = [makeTodo({ id: 'todo-1', number: 1, status: 'open' })];
+    renderBoard();
+    expect(screen.queryByTestId('tasks-board-loading')).toBeNull();
+    expect(screen.getByTestId('task-list-view-stub')).toBeTruthy();
   });
 });
 

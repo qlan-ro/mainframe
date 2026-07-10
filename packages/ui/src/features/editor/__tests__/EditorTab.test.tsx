@@ -553,6 +553,29 @@ describe('EditorTab — live disk-change reload (D4)', () => {
     expect(screen.queryByTestId('editor-tab-keep-mine')).toBeNull();
   });
 
+  it('DIRTY buffer + file-change on a MARKDOWN file → conflict banner appears (not just code files)', async () => {
+    activeIdentityState.projectId = 'proj-d4-md';
+    activeIdentityState.chatId = 'chat-d4-md';
+    activeIdentityState.projectPath = '/project';
+    mockBufferDirty = true;
+    vi.mocked(getProjectFile).mockResolvedValue('disk content v2');
+
+    render(<EditorTab tabId="tab-d4-md" path="/project/notes.md" />);
+    await screen.findByTestId('markdown-editor-mock');
+
+    await act(async () => {
+      fireFileChange('/project/notes.md');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The banner must render for markdown files too — the markdown branch
+    // previously skipped it, silently swallowing external-change conflicts.
+    expect(screen.getByTestId('editor-tab-disk-conflict')).toBeTruthy();
+    expect(screen.getByTestId('editor-tab-reload')).toBeTruthy();
+    expect(screen.getByTestId('editor-tab-keep-mine')).toBeTruthy();
+  });
+
   it('Keep-mine button dismisses the banner without applying disk content', async () => {
     activeIdentityState.projectId = 'proj-d4-keep';
     activeIdentityState.chatId = 'chat-d4-keep';

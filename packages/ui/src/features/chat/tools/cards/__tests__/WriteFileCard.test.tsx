@@ -27,6 +27,7 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 
 import { WriteFileCard } from '../WriteFileCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -188,6 +189,18 @@ describe('WriteFileCard', () => {
 
     // AllAddLines renders each content line — 'hello world' is the only line
     expect(screen.getByText('hello world')).toBeInTheDocument();
+  });
+
+  it('does not nest a vertical scroll container in the expanded body (single overflow owner)', async () => {
+    renderCard(
+      makePart({
+        args: { file_path: 'src/new.ts', content: 'hello world' },
+        result: 'OK',
+        isError: false,
+      }),
+    );
+    await userEvent.click(screen.getByTestId('chat-write-trigger'));
+    expect(nestedVerticalScrollers(screen.getByTestId('chat-write-card'))).toHaveLength(0);
   });
 
   it('collapses body again when trigger is clicked a second time', async () => {

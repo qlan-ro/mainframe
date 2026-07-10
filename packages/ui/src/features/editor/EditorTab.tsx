@@ -23,8 +23,8 @@ import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { lspClientManager, getLspLanguage } from '@/lib/lsp';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
+import { DiskConflictBanner, ReadOnlyBanner, SaveErrorBanner } from './editor-banners';
 import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
-import { EditorBanners } from './EditorBanners';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
 import { SaveStatusChip } from './SaveStatusChip';
 import { useFileWatchReload } from './use-file-watch-reload';
@@ -232,6 +232,9 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
+      {/* Above ViewerRouter so BOTH code branches (plain + markdown) show them. */}
+      {saveError !== null && <SaveErrorBanner message={saveError} />}
+      {diskConflict !== null && <DiskConflictBanner onReload={reloadFromDisk} onKeepMine={keepMine} />}
       <ViewerRouter
         path={path}
         renderCode={() =>
@@ -245,14 +248,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
             />
           ) : (
             <ViewerShell path={path} status={`Ln ${cursorPos.ln}, Col ${cursorPos.col}`} actions={saveStatusChip}>
-              <EditorBanners
-                readOnly={effectiveReadOnly}
-                external={isExternal}
-                saveError={saveError}
-                diskConflict={diskConflict}
-                onReload={reloadFromDisk}
-                onKeepMine={keepMine}
-              />
+              {effectiveReadOnly && <ReadOnlyBanner external={isExternal} />}
               <EditorContextMenu
                 filePath={path}
                 viewRef={viewRef}

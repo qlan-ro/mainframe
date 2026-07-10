@@ -75,9 +75,7 @@ function WriteCardBody({
 }: WriteCardBodyProps) {
   return (
     <div className="border-t border-border">
-      <div className="max-h-[300px] overflow-y-auto">
-        {hunks ? <DiffFromPatch hunks={hunks} /> : <AllAddLines content={content} />}
-      </div>
+      {hunks ? <DiffFromPatch hunks={hunks} /> : <AllAddLines content={content} />}
       {hasError && (
         <div className="border-t border-border px-3 py-1.5 bg-mf-diff-del-bg">
           {showExpand ? (
