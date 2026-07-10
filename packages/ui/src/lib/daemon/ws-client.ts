@@ -7,11 +7,25 @@
  * - Exposes only what Phase 1 needs: connect, subscribe, send, onEvent, disconnect
  */
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
-import { getActiveDaemon } from './active-daemon';
+import { getActiveDaemon, subscribeActiveDaemon } from './active-daemon';
 
 type EventHandler = (event: DaemonEvent) => void;
 type ConnectionListener = () => void;
 type FileChangeListener = () => void;
+
+/**
+ * The active-daemon singleton boots with the placeholder `http://127.0.0.1:0`
+ * until the first successful /health poll seeds the real target. A target with
+ * an explicit port 0 is that placeholder — connecting to it is always wrong
+ * (ws://…:0 is a guaranteed CSP violation on every fresh load).
+ */
+function isSeededTarget(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).port !== '0';
+  } catch {
+    return false;
+  }
+}
 
 export class DaemonWsClient {
   private ws: WebSocket | null = null;
@@ -22,6 +36,8 @@ export class DaemonWsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionalClose = false;
+  /** Non-null while a connect() is deferred waiting for the target to be seeded. */
+  private seedWaitUnsub: (() => void) | null = null;
   /** Maps requestedPath → resolvedPath, populated from subscribe:file:ack */
   private filePathMap = new Map<string, string>();
   /** Maps requestedPath → set of listeners */
@@ -45,6 +61,11 @@ export class DaemonWsClient {
     this.intentionalClose = false;
 
     const t = getActiveDaemon();
+    if (!isSeededTarget(t.baseUrl)) {
+      this.connectWhenSeeded();
+      return;
+    }
+    this.cancelSeedWait();
     const wsBase = t.baseUrl.replace(/^http/, 'ws');
     const url = t.token ? `${wsBase}?token=${encodeURIComponent(t.token)}` : wsBase;
     const socket = new WebSocket(url);
@@ -93,6 +114,7 @@ export class DaemonWsClient {
 
   disconnect(): void {
     this.intentionalClose = true;
+    this.cancelSeedWait();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -199,6 +221,20 @@ export class DaemonWsClient {
 
   private notifyConnectionListeners(): void {
     this.connectionListeners.forEach((fn) => fn());
+  }
+
+  /** Defer the connect until setActiveDaemon() delivers a seeded target. */
+  private connectWhenSeeded(): void {
+    if (this.seedWaitUnsub) return;
+    this.seedWaitUnsub = subscribeActiveDaemon(() => {
+      this.cancelSeedWait();
+      this.connect();
+    });
+  }
+
+  private cancelSeedWait(): void {
+    this.seedWaitUnsub?.();
+    this.seedWaitUnsub = null;
   }
 
   private scheduleReconnect(): void {

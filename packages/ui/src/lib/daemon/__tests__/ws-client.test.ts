@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import { setActiveDaemon } from '../active-daemon';
 import { DaemonWsClient } from '../ws-client';
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,8 @@ beforeEach(() => {
   // The source guards on `WebSocket.OPEN`, `WebSocket.CONNECTING` etc. as
   // static properties. vi.stubGlobal replaces the global constructor so those
   // statics are available via `WebSocket.OPEN` in the module under test.
+  // connect() refuses the unseeded boot placeholder (:0) — seed a real target.
+  setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:31415', token: null });
 });
 
 afterEach(() => {
