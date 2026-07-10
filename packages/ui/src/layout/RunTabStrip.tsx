@@ -5,11 +5,13 @@
  *   [grip] [▶ surface icon] [tab pills…] [+] ……… [split▸][split▾][close]
  *
  * Each tab carries a type glyph (eye = preview webview, play = console process,
- * terminal = shell, file = a Files guest). The `+` opens a popover (New terminal
- * + the launch configs) rather than spawning a terminal directly.
+ * terminal = shell, file = a Files guest); a launch-config tab whose process is
+ * live shows a red Stop in that glyph slot instead (toolbar parity, #206). The
+ * `+` opens a popover (New terminal + launch configs), not a bare terminal.
  *
  * data-testid:
  *   run-tab-<id> / run-tab-close-<id>     — each tab + its close button
+ *   run-tab-stop-<id>                     — Stop a live launch-config tab
  *   run-surface-drag                      — surface drag grip (primary pane)
  *   run-tab-strip-add-<paneId>            — the + trigger
  *   run-pane-new-terminal-<paneId>        — "New terminal" menu row
@@ -19,7 +21,8 @@
  *   run-pane-close-<paneId>               — un-split (secondary pane)
  */
 import { useState } from 'react';
-import { Eye, FileText, GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, Plus, Terminal, X } from 'lucide-react';
+import { Eye, GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, Plus, Terminal, X } from 'lucide-react';
+import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuDivider, MenuEmpty, MenuLabel, MenuRow } from '@/components/ui/menu';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
@@ -28,72 +31,21 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { useSurfaceDragStore } from './use-surface-drag';
+import { RunTabPill } from './RunTabPill';
 import { Hint } from '@/components/ui/hint';
-import type { RunPane, RunTab } from '@/store/run-pane';
+import type { RunPane } from '@/store/run-pane';
 
 const ACTION_BTN =
   'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
 
-function tabGlyph(tab: RunTab, isActive: boolean) {
-  // Inactive → muted (text3); active → the tab type's own accent color.
-  const color = !isActive
-    ? 'text-mf-text-3'
-    : tab.kind === 'terminal'
-      ? 'text-mf-term-cyan'
-      : tab.kind === 'preview' || tab.kind === 'console'
-        ? 'text-mf-surface-run'
-        : 'text-foreground';
-  const cls = `flex-shrink-0 ${color}`;
-  if (tab.kind === 'preview') return <Eye size={11} className={cls} />;
-  if (tab.kind === 'console') return <Play size={11} fill="currentColor" className={cls} />;
-  if (tab.kind === 'terminal') return <Terminal size={11} className={cls} />;
-  return <FileText size={11} className={cls} />;
+interface RunAddMenuProps {
+  paneId: string;
+  configs: LaunchConfiguration[];
+  onLaunch: (config: LaunchConfiguration) => void;
 }
 
-function RunTabPill({ pane, tab }: { pane: RunPane; tab: RunTab }) {
-  const activateRunTab = useLayoutStore((s) => s.activateRunTab);
-  const closeRunTab = useLayoutStore((s) => s.closeRunTab);
-  const isActive = tab.id === pane.active;
-  return (
-    <div
-      data-testid={`run-tab-${tab.id}`}
-      role="tab"
-      aria-selected={isActive}
-      onClick={() => activateRunTab(pane.id, tab.id)}
-      className={[
-        'group flex h-[26px] min-w-0 max-w-[160px] flex-shrink-0 cursor-pointer select-none items-center gap-[6px] pl-[9px] pr-[6px]',
-        'rounded-[7px] tracking-tight transition-colors duration-[120ms]',
-        isActive
-          ? 'bg-mf-chip font-semibold text-foreground'
-          : 'font-medium text-mf-text-3 hover:bg-accent hover:text-foreground',
-      ].join(' ')}
-    >
-      {tabGlyph(tab, isActive)}
-      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-caption leading-none">
-        {tab.title}
-      </span>
-      <Hint label={`Close ${tab.title}`}>
-        <button
-          data-testid={`run-tab-close-${tab.id}`}
-          type="button"
-          className={`inline-flex h-[14px] w-[14px] flex-shrink-0 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-[120ms] hover:bg-accent group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            closeRunTab(pane.id, tab.id);
-          }}
-        >
-          <X size={9} />
-        </button>
-      </Hint>
-    </div>
-  );
-}
-
-function RunAddMenu({ paneId }: { paneId: string }) {
+function RunAddMenu({ paneId, configs, onLaunch }: RunAddMenuProps) {
   const [open, setOpen] = useState(false);
-  const { projectId, chatId } = useActiveIdentity();
-  const port = useDaemonPort();
-  const { configs, handleLaunch } = useLaunchActions(port, projectId ?? undefined, chatId ?? undefined);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -140,7 +92,7 @@ function RunAddMenu({ paneId }: { paneId: string }) {
               hint={cfg.preview ? 'preview' : 'process'}
               onClick={() => {
                 setOpen(false);
-                handleLaunch(cfg);
+                onLaunch(cfg);
               }}
             />
           ))
@@ -157,6 +109,17 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
   const runIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'run'));
   const closePane = useLayoutStore((s) => s.closePane);
   const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
+
+  // The active session's launch scope drives both the add-menu (start) and each
+  // tab's Stop. RunSurface renders only tabs matching this scope, so the active
+  // identity is the right scope for start/stop (launch stop MUST pass chatId).
+  const { projectId, chatId } = useActiveIdentity();
+  const port = useDaemonPort();
+  const { configs, scopeStatuses, handleLaunch, handleStop } = useLaunchActions(
+    port,
+    projectId ?? undefined,
+    chatId ?? undefined,
+  );
 
   return (
     <div className="flex h-[36px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]">
@@ -176,11 +139,18 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
 
       <div className="flex h-full min-w-0 flex-initial items-center gap-[2px] overflow-x-auto pr-[2px] [scrollbar-width:none]">
         {pane.tabs.map((t) => (
-          <RunTabPill key={t.id} pane={pane} tab={t} />
+          <RunTabPill
+            key={t.id}
+            pane={pane}
+            tab={t}
+            configs={configs}
+            scopeStatuses={scopeStatuses}
+            onStop={handleStop}
+          />
         ))}
       </div>
 
-      <RunAddMenu paneId={pane.id} />
+      <RunAddMenu paneId={pane.id} configs={configs} onLaunch={handleLaunch} />
 
       <div className="flex-1" />
 
