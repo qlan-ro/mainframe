@@ -8,7 +8,20 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+axum = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+nanoid = { workspace = true }
+dashmap = { workspace = true }
+tracing = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-runtime = { workspace = true }
+mainframe-services = { workspace = true }
 mainframe-adapter-api = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+reqwest = { workspace = true }
