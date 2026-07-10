@@ -4,9 +4,10 @@
  *
  *   [grip] [▶ surface icon] [tab pills…] [+] ……… [split▸][split▾][close]
  *
- * Each tab carries a type glyph (eye = preview webview, play = console process,
- * terminal = shell, file = a Files guest); a launch-config tab whose process is
- * live shows a red Stop in that glyph slot instead (toolbar parity, #206). The
+ * Each tab carries a STATIC type glyph (eye = preview webview, scroll-text =
+ * console/logs process, terminal = shell, file = a Files guest) that never
+ * changes with run state; a launch-config tab whose process is live adds a
+ * separate red Stop between the title and its close (toolbar parity, #206). The
  * `+` opens a popover (New terminal + launch configs), not a bare terminal.
  *
  * data-testid:

@@ -1,13 +1,17 @@
 /**
- * RunTabPill — one tab in the Run surface strip: a leading type glyph, the tab
- * title, and a hover close (×). A launch-config tab (console/preview — the only
- * tabs carrying `config`) whose process is live flips its glyph into a red Stop,
- * mirroring the toolbar's Stop (todo #206); clicking it stops the config via the
- * same daemon call the toolbar uses, without closing the tab.
+ * RunTabPill — one tab in the Run surface strip: a STATIC type glyph, the tab
+ * title, an optional Stop, and a hover close (×). The leading glyph identifies
+ * the tab TYPE and never changes with the process's running/stopped state:
+ * console (logs-only launch) = scroll-text, preview webview = eye, terminal =
+ * terminal, Files guest = file. A launch-config tab (console/preview — the only
+ * tabs carrying `config`) whose process is live shows a red Stop as a SEPARATE
+ * control between the title and the close, mirroring the toolbar's Stop (todo
+ * #206); clicking it stops the config via the same daemon call the toolbar uses,
+ * without closing the tab.
  *
  * data-testid: run-tab-<id> / run-tab-stop-<id> / run-tab-close-<id>.
  */
-import { Eye, FileText, Play, Square, Terminal, X } from 'lucide-react';
+import { Eye, FileText, ScrollText, Square, Terminal, X } from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
@@ -25,7 +29,7 @@ function tabGlyph(tab: RunTab, isActive: boolean) {
         : 'text-foreground';
   const cls = `flex-shrink-0 ${color}`;
   if (tab.kind === 'preview') return <Eye size={11} className={cls} />;
-  if (tab.kind === 'console') return <Play size={11} fill="currentColor" className={cls} />;
+  if (tab.kind === 'console') return <ScrollText size={11} className={cls} />;
   if (tab.kind === 'terminal') return <Terminal size={11} className={cls} />;
   return <FileText size={11} className={cls} />;
 }
@@ -62,7 +66,11 @@ export function RunTabPill({ pane, tab, configs, scopeStatuses, onStop }: RunTab
           : 'font-medium text-mf-text-3 hover:bg-accent hover:text-foreground',
       ].join(' ')}
     >
-      {live && config ? (
+      {tabGlyph(tab, isActive)}
+      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-caption leading-none">
+        {tab.title}
+      </span>
+      {live && config && (
         <Hint label={`Stop ${tab.title}`}>
           <button
             data-testid={`run-tab-stop-${tab.id}`}
@@ -76,12 +84,7 @@ export function RunTabPill({ pane, tab, configs, scopeStatuses, onStop }: RunTab
             <Square size={9} className="text-destructive" fill="currentColor" />
           </button>
         </Hint>
-      ) : (
-        tabGlyph(tab, isActive)
       )}
-      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-caption leading-none">
-        {tab.title}
-      </span>
       <Hint label={`Close ${tab.title}`}>
         <button
           data-testid={`run-tab-close-${tab.id}`}

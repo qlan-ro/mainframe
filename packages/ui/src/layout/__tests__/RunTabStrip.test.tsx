@@ -1,10 +1,14 @@
 /**
  * RunTabStrip — strip height regression (finding 15.5: FilesTabStrip/RunTabStrip/
  * ChatCardHeader must share one uniform 36px strip height, matching the design's
- * `SurfaceTabStrip` and chat surface header, both height:36) plus the running-
- * config Stop affordance (todo #206 part 2): a launch-config tab whose process is
- * live must flip its leading glyph into a red Stop button, consistent with the
- * toolbar's Stop, without disturbing the tab's close (×) control.
+ * `SurfaceTabStrip` and chat surface header, both height:36) plus the tab-type
+ * glyph + running-config Stop affordance (todo #206, revised per user feedback):
+ *
+ * The tab's leading glyph is a STATIC type identifier — it never flips with the
+ * process's running/stopped state. Each of the three launch/terminal tab kinds
+ * carries its own glyph: console (logs) = scroll-text, preview = eye, terminal =
+ * terminal. A live launch-config tab additionally shows a red Stop button as a
+ * SEPARATE control between the label and the close (×), not in the glyph slot.
  */
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,7 +45,15 @@ const cfg = (name: string, over: Partial<LaunchConfiguration> = {}): LaunchConfi
   ({ name, runtimeExecutable: 'pnpm', runtimeArgs: [], port: null, url: null, ...over }) as LaunchConfiguration;
 
 const consoleTab = { id: 'console-Sleeper-abcd', kind: 'console' as const, title: 'Sleeper', config: 'Sleeper' };
+const previewTab = { id: 'preview-Web-abcd', kind: 'preview' as const, title: 'Web', config: 'Web' };
+const terminalTab = { id: 'term-1', kind: 'terminal' as const, title: 'zsh' };
 const paneWith = (tabs: RunPane['tabs']): RunPane => ({ id: 'pane-1', tabs, active: tabs[0]?.id ?? null });
+
+/** The lucide glyph name(s) inside a single tab pill (scoped, not the surface icon). */
+const pillGlyphs = (root: HTMLElement, tabId: string): string[] =>
+  Array.from(root.querySelector(`[data-testid="run-tab-${tabId}"]`)!.querySelectorAll('svg.lucide'))
+    .flatMap((svg) => Array.from(svg.classList))
+    .filter((c) => c.startsWith('lucide-') && c !== 'lucide-square');
 
 beforeEach(() => {
   launch.configs = [];
@@ -60,12 +72,49 @@ describe('RunTabStrip — strip height', () => {
   });
 });
 
+describe('RunTabStrip — static type glyph (independent of run state)', () => {
+  it('console (logs) tab keeps its scroll-text glyph whether stopped or running — never Play, never flips to Square', () => {
+    launch.configs = [cfg('Sleeper')];
+
+    launch.scopeStatuses = { Sleeper: 'stopped' };
+    const idle = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
+    expect(pillGlyphs(idle.container, consoleTab.id)).toContain('lucide-scroll-text');
+    expect(pillGlyphs(idle.container, consoleTab.id)).not.toContain('lucide-play');
+    idle.unmount();
+
+    launch.scopeStatuses = { Sleeper: 'running' };
+    const live = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
+    // The static glyph stays put while running — it no longer flips into the Stop.
+    expect(pillGlyphs(live.container, consoleTab.id)).toContain('lucide-scroll-text');
+  });
+
+  it('preview tab keeps its Eye glyph whether stopped or running', () => {
+    launch.configs = [cfg('Web', { preview: true } as Partial<LaunchConfiguration>)];
+
+    launch.scopeStatuses = { Web: 'stopped' };
+    const idle = render(<RunTabStrip pane={paneWith([previewTab])} primary />);
+    expect(pillGlyphs(idle.container, previewTab.id)).toContain('lucide-eye');
+    idle.unmount();
+
+    launch.scopeStatuses = { Web: 'running' };
+    const live = render(<RunTabStrip pane={paneWith([previewTab])} primary />);
+    expect(pillGlyphs(live.container, previewTab.id)).toContain('lucide-eye');
+  });
+
+  it('terminal tab shows the static Terminal glyph', () => {
+    const { container } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    expect(pillGlyphs(container, terminalTab.id)).toContain('lucide-terminal');
+  });
+});
+
 describe('RunTabStrip — running-config Stop affordance', () => {
-  it('renders a Stop button on a launch-config tab whose process is running', () => {
+  it('renders a Stop button ALONGSIDE the static glyph on a running launch-config tab', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'running' };
-    const { queryByTestId } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
+    const { queryByTestId, container } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
     expect(queryByTestId(`run-tab-stop-${consoleTab.id}`)).not.toBeNull();
+    // The type glyph is NOT displaced by the Stop.
+    expect(pillGlyphs(container, consoleTab.id)).toContain('lucide-scroll-text');
   });
 
   it('treats a "starting" config as live (Stop shown)', () => {
@@ -95,8 +144,8 @@ describe('RunTabStrip — running-config Stop affordance', () => {
   it('a terminal tab never shows a Stop button even if a same-named config is live', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'running' };
-    const terminalTab = { id: 'term-1', kind: 'terminal' as const, title: 'zsh' };
-    const { queryByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    const term = { id: 'term-1', kind: 'terminal' as const, title: 'zsh' };
+    const { queryByTestId } = render(<RunTabStrip pane={paneWith([term])} primary />);
     expect(queryByTestId('run-tab-stop-term-1')).toBeNull();
   });
 });
