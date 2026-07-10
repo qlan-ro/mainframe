@@ -48,6 +48,10 @@ interface VerifyResult {
 
 export class TunnelManager {
   private tunnels = new Map<string, ManagedTunnel>();
+  // Children spawned but not yet promoted into `tunnels` (URL parsed + connection
+  // registered). They live here for the up-to-45s start window so stopAll can
+  // reap a mid-start child on shutdown instead of orphaning it to PID 1.
+  private pending = new Set<ChildProcess>();
   private verifiedAt = new Map<string, VerifyResult>();
   private broadcast: BroadcastFn;
   private registry: TunnelRegistryPort;
@@ -100,6 +104,7 @@ export class TunnelManager {
       });
       const pid = child.pid;
       this.recordSpawn(label, child);
+      this.pending.add(child);
 
       let done = false;
       let pendingUrl: string | null = isNamed ? (options.url ?? null) : null;
@@ -126,6 +131,7 @@ export class TunnelManager {
         const url = pendingUrl;
         const tunnel: ManagedTunnel = { process: child, url, ready: false };
         this.tunnels.set(label, tunnel);
+        this.pending.delete(child);
         clearTimeout(timeout);
         log.info({ label, url, port }, 'tunnel connected, waiting for DNS propagation…');
         this.broadcast({ type: 'tunnel:status', state: 'ready', label, url, dnsVerified: false });
@@ -174,6 +180,7 @@ export class TunnelManager {
 
       child.once('error', (err: NodeJS.ErrnoException) => {
         this.forgetSpawn(pid);
+        this.pending.delete(child);
         if (done) return;
         done = true;
         clearTimeout(timeout);
@@ -187,6 +194,7 @@ export class TunnelManager {
 
       child.once('exit', (code) => {
         this.forgetSpawn(pid);
+        this.pending.delete(child);
         if (!done) {
           done = true;
           clearTimeout(timeout);
@@ -216,6 +224,13 @@ export class TunnelManager {
     for (const label of this.tunnels.keys()) {
       this.stop(label);
     }
+    // Reap children still mid-start: they aren't in `tunnels` yet, so the loop
+    // above misses them. Their own exit handler prunes `pending` afterwards.
+    for (const child of this.pending) {
+      child.kill('SIGTERM');
+      this.forgetSpawn(child.pid);
+    }
+    this.pending.clear();
   }
 
   getUrl(label: string): string | null {

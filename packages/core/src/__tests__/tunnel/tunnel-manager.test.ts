@@ -390,6 +390,43 @@ describe('TunnelManager registry tracking', () => {
     expect(manager.getUrl('daemon')).toBeNull();
     expect(manager.getUrl('preview:Dev')).toBeNull();
   });
+
+  // A child spawned but still mid-start (URL not yet parsed / connection not yet
+  // registered) never enters this.tunnels, so a naive stopAll would leave it
+  // running — it re-parents to PID 1 and keeps the public quick tunnel alive.
+  it('stopAll kills a child still mid-start (before URL/registration) and forgets its pid', async () => {
+    const child = makeMockChild(4242);
+    spawnMock.mockReturnValue(child);
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+    // No stdout/stderr lines emitted → the tunnel is still pending.
+
+    manager.stopAll();
+    await Promise.resolve();
+
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(registry.removed).toContain(4242);
+  });
+
+  it('stopAll does not re-kill a child once it has finished starting', async () => {
+    const child = makeMockChild(4242);
+    spawnMock.mockReturnValue(child);
+    const registry = new RecordingRegistry();
+    const manager = new TunnelManager(undefined, { registry, cloudflaredPath: '/abs/bin/cloudflared' });
+
+    manager.start(4173, 'preview:Dev').catch(() => {});
+    child.stdout.emit('data', Buffer.from('https://abc-def.trycloudflare.com\n'));
+    child.stdout.emit('data', Buffer.from('Registered tunnel connection\n'));
+    await Promise.resolve();
+
+    manager.stopAll();
+    await Promise.resolve();
+
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+  });
 });
 
 describe('TunnelManager.start timeout interaction with DNS wait', () => {
