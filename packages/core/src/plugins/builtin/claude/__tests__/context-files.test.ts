@@ -9,14 +9,14 @@ function tmp(prefix: string): string {
 }
 
 describe('collectClaudeContextFiles', () => {
-  it('reports the global CLAUDE.md under ~/.claude, not as a bare basename', () => {
+  it('reports the global CLAUDE.md as an absolute ~/.claude path the daemon can open', () => {
     const home = tmp('home-');
     mkdirSync(join(home, '.claude'), { recursive: true });
     writeFileSync(join(home, '.claude', 'CLAUDE.md'), 'global rules');
 
     const { global } = collectClaudeContextFiles(tmp('proj-'), home);
 
-    expect(global).toEqual([{ path: '~/.claude/CLAUDE.md', content: 'global rules', source: 'global' }]);
+    expect(global).toEqual([{ path: join(home, '.claude', 'CLAUDE.md'), content: 'global rules', source: 'global' }]);
   });
 
   it('reports project files with project-relative paths (root and .claude/)', () => {

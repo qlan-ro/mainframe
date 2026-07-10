@@ -18,11 +18,13 @@ export function collectClaudeContextFiles(
   const global: ContextFile[] = [];
   const globalDir = path.join(homeDir, '.claude');
   for (const name of CONTEXT_FILE_NAMES) {
-    const content = readIfPresent(path.join(globalDir, name));
+    const abs = path.join(globalDir, name);
+    const content = readIfPresent(abs);
     if (content !== null) {
-      // Display the real global location so it can't be mistaken for a
-      // same-named project file (#222).
-      global.push({ path: `~/.claude/${name}`, content, source: 'global' });
+      // Absolute path (not a `~`-prefixed string): the daemon's GET /files route
+      // whitelists absolute paths under ~/.claude, and it distinguishes a global
+      // CLAUDE.md from a same-named project one — the UI never expands `~` (#222).
+      global.push({ path: abs, content, source: 'global' });
     }
   }
 
