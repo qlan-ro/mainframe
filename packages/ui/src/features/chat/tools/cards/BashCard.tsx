@@ -106,17 +106,22 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
 
   const { text: resultText, fullBytes } = resolveResultText(result);
   const hasOutput = Boolean(resultText);
+  // A running command (no result yet) is expandable too, so the streaming
+  // output — and the full command — are visible mid-run, not only once it
+  // finishes (#208).
+  const isRunning = result === undefined;
+  const canExpand = hasOutput || isRunning;
 
   return (
     <Collapsible data-testid="chat-bash-card" defaultOpen={false}>
       <div className={cn(cardStyle(result, isError))}>
         <CollapsibleTrigger
           data-testid="chat-bash-trigger"
-          disabled={!hasOutput}
+          disabled={!canExpand}
           className={cn(
             'flex w-full items-center gap-2 px-3 py-[7px] text-left',
             'hover:bg-accent transition-colors',
-            !hasOutput && 'cursor-default',
+            !canExpand && 'cursor-default',
           )}
         >
           <FamilyTile color="var(--mf-tool-bash)" bg="var(--mf-tool-bash-tint)">
@@ -154,7 +159,7 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
           </Tooltip>
         )}
 
-        {hasOutput && (
+        {canExpand && (
           <CollapsibleContent>
             <TerminalBody
               command={command}
