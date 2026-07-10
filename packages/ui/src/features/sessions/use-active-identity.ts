@@ -33,6 +33,8 @@ export interface ActiveIdentity {
   worktreePath?: string;
   /** Absolute path to the active project root (for path normalization). */
   projectPath?: string;
+  /** Worktree isolation for the branch chip — true for a pending pre-send choice too. */
+  isWorktree: boolean;
 }
 
 export function useActiveIdentity(): ActiveIdentity {
@@ -61,5 +63,6 @@ export function useActiveIdentity(): ActiveIdentity {
     chatId,
     worktreePath: scope.worktreePath,
     projectPath: project?.path,
+    isWorktree: scope.isWorktree ?? false,
   };
 }

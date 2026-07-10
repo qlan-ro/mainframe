@@ -20,12 +20,19 @@ export interface ActiveScope {
   adapterId?: string;
   branchName?: string;
   worktreePath?: string;
+  /** Worktree isolation for the branch chip — includes a pending pre-send choice. */
+  isWorktree?: boolean;
 }
 
 /**
  * Resolve the active scope: a live session's custom wins wholesale (never mix a
  * draft into it — the draft belongs to a different, not-yet-created thread
  * state); the draft fills in only when no custom exists.
+ *
+ * A draft's pending NEW worktree resolves its branch + isWorktree (the chip
+ * shows the chosen isolation, matching the attach case) but never a
+ * worktreePath — the directory doesn't exist until first send, so path-scoped
+ * surfaces (file tree, launch scope) must keep reading the project root.
  */
 export function resolveActiveScope(custom: SessionCustom | undefined, draft: DraftCfg | undefined): ActiveScope {
   if (custom) {
@@ -34,17 +41,19 @@ export function resolveActiveScope(custom: SessionCustom | undefined, draft: Dra
       adapterId: custom.adapterId,
       branchName: custom.branchName,
       worktreePath: custom.worktreePath,
+      isWorktree: custom.worktreePath != null,
     };
   }
   if (draft) {
     return {
       projectId: draft.projectId,
       adapterId: draft.adapterId,
-      branchName: draft.branchName,
+      branchName: draft.branchName ?? draft.pendingWorktree?.branchName,
       worktreePath: draft.worktreePath,
+      isWorktree: draft.worktreePath != null || draft.pendingWorktree != null,
     };
   }
-  return {};
+  return { isWorktree: false };
 }
 
 /** Last resolved scope, keyed by the thread item it was resolved for. */

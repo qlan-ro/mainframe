@@ -111,6 +111,23 @@ describe('useActiveIdentity — seeded draft resolves the project scope pre-send
 
     expect(result.current.worktreePath).toBe('/wt/feat');
     expect(result.current.branchName).toBe('feat/x');
+    expect(result.current.isWorktree).toBe(true);
+  });
+
+  it('surfaces a pending NEW worktree as branch + isWorktree, with no worktreePath', () => {
+    const item: FakeItem = { id: '__LOCALID_d', status: 'new' };
+    fakeAuiState = { threadListItem: item, threads: { threadItems: [item] } };
+    setDraftConfig('__LOCALID_d', {
+      projectId: 'proj-a',
+      adapterId: 'claude',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feat/pending' },
+    });
+
+    const { result } = renderHook(() => useActiveIdentity());
+
+    expect(result.current.branchName).toBe('feat/pending');
+    expect(result.current.isWorktree).toBe(true);
+    expect(result.current.worktreePath).toBeUndefined();
   });
 
   it('stays empty for a custom-less draft with NO seeded config (picker not resolved yet)', () => {

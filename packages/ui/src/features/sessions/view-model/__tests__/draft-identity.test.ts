@@ -36,14 +36,19 @@ function makeDraft(overrides?: Partial<DraftCfg>): DraftCfg {
 }
 
 describe('resolveActiveScope — custom wins wholesale', () => {
-  it('returns all four scope fields from custom when present', () => {
+  it('returns all scope fields from custom when present', () => {
     const custom = makeCustom({ branchName: 'main', worktreePath: '/wt/live' });
     expect(resolveActiveScope(custom, makeDraft())).toEqual({
       projectId: 'proj-live',
       adapterId: 'claude',
       branchName: 'main',
       worktreePath: '/wt/live',
+      isWorktree: true,
     });
+  });
+
+  it('derives isWorktree=false from a custom without a worktree', () => {
+    expect(resolveActiveScope(makeCustom(), undefined).isWorktree).toBe(false);
   });
 
   it('never mixes draft fields into a live custom (undefined custom fields stay undefined)', () => {
@@ -61,17 +66,32 @@ describe('resolveActiveScope — draft fallback for a not-yet-created thread', (
       adapterId: 'codex',
       branchName: undefined,
       worktreePath: undefined,
+      isWorktree: false,
     });
   });
 
-  it('surfaces a pre-send worktree attach (worktreePath + branchName) from the draft', () => {
+  it('surfaces a pre-send worktree attach (worktreePath + branchName + isWorktree) from the draft', () => {
     const scope = resolveActiveScope(undefined, makeDraft({ worktreePath: '/wt/feat', branchName: 'feat/y' }));
     expect(scope.worktreePath).toBe('/wt/feat');
     expect(scope.branchName).toBe('feat/y');
+    expect(scope.isWorktree).toBe(true);
+  });
+
+  it('surfaces a pending NEW worktree as the draft branch, without fabricating a path', () => {
+    // The worktree does not exist until first send — the chip shows the chosen
+    // branch (intent, matching the attach case) but no path-scoped surface
+    // (file tree, launch scope) may point at a directory that isn't there yet.
+    const scope = resolveActiveScope(
+      undefined,
+      makeDraft({ pendingWorktree: { baseBranch: 'main', branchName: 'feat/pending' } }),
+    );
+    expect(scope.branchName).toBe('feat/pending');
+    expect(scope.isWorktree).toBe(true);
+    expect(scope.worktreePath).toBeUndefined();
   });
 
   it('returns an empty scope when neither custom nor draft exists', () => {
-    expect(resolveActiveScope(undefined, undefined)).toEqual({});
+    expect(resolveActiveScope(undefined, undefined)).toEqual({ isWorktree: false });
   });
 });
 
