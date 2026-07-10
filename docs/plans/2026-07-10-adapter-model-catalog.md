@@ -358,3 +358,54 @@ git log --oneline origin/main..HEAD
 ```
 
 Expected: clean worktree on `fix/adapter-model-catalog` with design, implementation, tests, and changeset commits.
+
+### Task 5: Normalize Stale Saved Provider Defaults
+
+**Files:**
+- Create: `packages/core/src/settings/model-default.ts`
+- Create: `packages/core/src/settings/__tests__/model-default.test.ts`
+- Modify: `packages/core/src/chat/lifecycle-manager.ts`
+- Modify: `packages/core/src/__tests__/chat/create-on-worktree.test.ts`
+- Modify: `packages/core/src/server/routes/settings.ts`
+- Modify: `packages/core/src/__tests__/routes/settings.test.ts`
+
+**Step 1: Write failing resolver tests**
+
+Cover three cases: preserve a matching model id, preserve any value while the catalog is empty, and return `undefined` for an id absent from a non-empty catalog.
+
+**Step 2: Run the resolver test and verify it fails**
+
+Expected: FAIL because the resolver does not exist.
+
+**Step 3: Implement the pure resolver**
+
+```ts
+export function normalizeSavedDefaultModel(
+  configuredModel: string | undefined,
+  models: AdapterModel[],
+): string | undefined {
+  if (!configuredModel || models.length === 0) return configuredModel;
+  return models.some((model) => model.id === configuredModel) ? configuredModel : undefined;
+}
+```
+
+**Step 4: Write failing integration tests**
+
+Assert that provider-settings responses omit stale defaults once a non-empty catalog is available, and that `createChatWithDefaults` does not pass a stale saved id to `createChat`. Retain valid defaults and values observed during an empty catalog.
+
+**Step 5: Apply the resolver at both boundaries**
+
+Read the adapter snapshot synchronously from `AdapterRegistry.getSnapshots()`, normalize the saved value, and leave explicit per-chat model selections unchanged.
+
+**Step 6: Run focused settings and lifecycle tests**
+
+```bash
+node node_modules/vitest/vitest.mjs run \
+  src/settings/__tests__/model-default.test.ts \
+  src/__tests__/routes/settings.test.ts \
+  src/__tests__/chat/create-on-worktree.test.ts
+```
+
+**Step 7: Update the existing changeset and rerun final verification**
+
+Mention stale provider-default normalization, then rerun formatting, focused adapter/settings tests, core typecheck, core build, and live catalog probes.

@@ -7,6 +7,7 @@ PR #395 materialized adapter catalogs so daemon startup never waits for a CLI pr
 1. Codex model discovery launches the bare `codex` command instead of the executable path resolved by the registry. A packaged desktop process can verify the configured binary but fail the subsequent catalog probe, leaving the UI on its empty fallback.
 2. A chat without an explicit Codex model becomes an empty string inside collaboration settings. Codex CLI 0.144.1 rejects that value for ChatGPT accounts instead of treating it as the account default.
 3. Claude CLI 2.1.206 returns both `default` and `opus[1m]`, and both resolve to `claude-opus-4-8[1m]`. Rendering both produces duplicate Opus 4.8 rows.
+4. Saved provider defaults can outlive catalog identifiers. A stored `claude.defaultModel = opus` no longer matches the live catalog, so a new chat persists the stale id and the composer can render a synthetic lowercase `opus` row until an authoritative catalog arrives.
 
 The current Claude catalog exposes 1M Default/Opus, Fable, and Sonnet selectors, plus a 200k Haiku selector. Sonnet 5's usable window was live-verified at 967k tokens after the CLI reserve. The catalog does not expose separate 200k Opus or Sonnet selectors.
 
@@ -36,13 +37,20 @@ When a chat has no explicit model, Mainframe will omit the model field from Code
 
 Codex can then choose the default supported by the authenticated account. Explicit model selections continue to pass through unchanged.
 
+### Normalize stale provider defaults
+
+When a saved provider default is absent from a non-empty adapter catalog, Mainframe will treat it as unset. Provider-settings responses will omit the stale value so the UI selects the catalog's `isDefault` entry, and new-chat creation will avoid persisting or spawning with the stale id.
+
+An empty catalog is not authoritative. Mainframe will preserve the saved value until at least one model is available, preventing transient discovery failures from discarding a potentially valid preference.
+
 ## Data Flow
 
 1. The registry resolves and verifies an adapter executable after executable-path backfill.
 2. Claude or Codex probes that exact executable.
 3. Claude maps the live response, retains the default alias, and removes only its concrete duplicate.
 4. The registry publishes the normalized live catalog with a newer revision.
-5. New Codex chats with no selected model omit model configuration; chats with a selection send the selected identifier.
+5. Settings reads and chat creation validate saved defaults against the available catalog.
+6. New Codex chats with no selected model omit model configuration; chats with a selection send the selected identifier.
 
 ## Error Handling
 
@@ -60,6 +68,7 @@ Focused tests will cover:
 - Codex live discovery launches the provided executable path.
 - Codex thread start, thread resume, turn start, and collaboration settings omit an absent model.
 - Explicit Codex model selection remains unchanged.
+- Stale saved defaults are omitted when the catalog is non-empty, while valid defaults and values observed during an empty catalog are preserved.
 
 Core typechecking and the affected adapter test files will run after implementation.
 
