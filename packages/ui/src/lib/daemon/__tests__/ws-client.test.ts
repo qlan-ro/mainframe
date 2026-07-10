@@ -361,6 +361,88 @@ describe('DaemonWsClient — H5: file-watch API', () => {
     expect(listener).toHaveBeenCalledOnce(); // still just once
   });
 
+  // Daemon file subscriptions are per-connection state (WsFileWatch is wiped in
+  // ws.on('close')). The client must re-send subscribe:file for every live watch
+  // whenever a new socket opens, or file:changed silently stops after a reconnect.
+  describe('resubscription across reconnects', () => {
+    function reconnect(client: DaemonWsClient, oldSocket: FakeWebSocket): FakeWebSocket {
+      oldSocket.readyState = FakeWebSocket.CLOSED;
+      client.connect();
+      const next = lastSocket();
+      openSocket(next);
+      return next;
+    }
+
+    it('re-sends subscribe:file for each live watch when a new socket opens', () => {
+      const { client, socket } = setupConnectedClient();
+      client.subscribeFile('src/a.ts', { projectId: 'p1', chatId: 'c1' });
+      client.subscribeFile('/abs/b.ts');
+
+      const next = reconnect(client, socket);
+
+      expect(next.sendSpy.mock.calls.map((c) => c[0])).toEqual(
+        expect.arrayContaining([
+          JSON.stringify({ type: 'subscribe:file', path: 'src/a.ts', projectId: 'p1', chatId: 'c1' }),
+          JSON.stringify({ type: 'subscribe:file', path: '/abs/b.ts' }),
+        ]),
+      );
+    });
+
+    it('does NOT resubscribe a watch that was unsubscribed before the reconnect', () => {
+      const { client, socket } = setupConnectedClient();
+      client.subscribeFile('src/a.ts', { projectId: 'p1' });
+      client.unsubscribeFile('src/a.ts', { projectId: 'p1' });
+
+      const next = reconnect(client, socket);
+
+      expect(next.sendSpy.mock.calls.map((c) => c[0])).not.toContain(
+        JSON.stringify({ type: 'subscribe:file', path: 'src/a.ts', projectId: 'p1' }),
+      );
+    });
+
+    it('refcounts duplicate watches: one wire frame, survives one unsubscribe, dies on the last', () => {
+      const { client, socket } = setupConnectedClient();
+      client.subscribeFile('src/a.ts', { projectId: 'p1' });
+      client.subscribeFile('src/a.ts', { projectId: 'p1' });
+      // Only one subscribe frame goes over the wire.
+      expect(socket.sendSpy).toHaveBeenCalledOnce();
+
+      client.unsubscribeFile('src/a.ts', { projectId: 'p1' });
+      // Still one holder — no unsubscribe frame yet, and the watch survives a reconnect.
+      expect(socket.sendSpy).toHaveBeenCalledOnce();
+      const second = reconnect(client, socket);
+      expect(second.sendSpy.mock.calls.map((c) => c[0])).toContain(
+        JSON.stringify({ type: 'subscribe:file', path: 'src/a.ts', projectId: 'p1' }),
+      );
+
+      second.sendSpy.mockClear();
+      client.unsubscribeFile('src/a.ts', { projectId: 'p1' });
+      // Last holder gone — unsubscribe frame sent, no resubscribe on the next socket.
+      expect(second.sendSpy).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'unsubscribe:file', path: 'src/a.ts', projectId: 'p1' }),
+      );
+      const third = reconnect(client, second);
+      expect(third.sendSpy.mock.calls.map((c) => c[0])).not.toContain(
+        JSON.stringify({ type: 'subscribe:file', path: 'src/a.ts', projectId: 'p1' }),
+      );
+    });
+
+    it('keeps routing file:changed to listeners after a reconnect re-ack', () => {
+      const { client, socket } = setupConnectedClient();
+      const listener = vi.fn();
+      client.subscribeFile('src/a.ts', { projectId: 'p1' });
+      client.onFileChange('src/a.ts', listener);
+
+      const next = reconnect(client, socket);
+      next.onmessage?.({
+        data: JSON.stringify({ type: 'subscribe:file:ack', requestedPath: 'src/a.ts', resolvedPath: '/real/a.ts' }),
+      });
+      next.onmessage?.({ data: JSON.stringify({ type: 'file:changed', path: '/real/a.ts' }) });
+
+      expect(listener).toHaveBeenCalledOnce();
+    });
+  });
+
   // Fix 4: unsubscribeFile must clean up filePathMap to prevent stale routing
   it('unsubscribeFile removes the requestedPath entry from the internal path map', () => {
     const { client, socket } = setupConnectedClient();
