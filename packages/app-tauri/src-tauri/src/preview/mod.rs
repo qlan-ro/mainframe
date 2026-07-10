@@ -192,8 +192,16 @@ pub async fn preview_create(
     window: tauri::Window,
     manager: State<'_, PreviewManager>,
 ) -> Result<(), String> {
-    // Idempotent: already registered → just navigate.
+    // Idempotent: already registered → adopt the existing webview. Re-apply the
+    // caller's bounds and show it first: the surviving webview may carry stale
+    // geometry/visibility (e.g. adopted after the renderer lost its handle), and
+    // a bare navigate would leave it glued at the old rect or hidden.
     if manager.has(&tab_id) {
+        manager.with_webview(&tab_id, |wv| {
+            let _ = wv.set_position(tauri::LogicalPosition::new(bounds.x, bounds.y));
+            let _ = wv.set_size(tauri::LogicalSize::new(bounds.w, bounds.h));
+            let _ = wv.show();
+        });
         return preview_navigate(tab_id, url, manager).await;
     }
 

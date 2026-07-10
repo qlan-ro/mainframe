@@ -4,6 +4,17 @@
  * dirty-buffer disk conflict on a markdown file is never silently swallowed.
  */
 
+export function ReadOnlyBanner({ external }: { external: boolean }) {
+  return (
+    <div
+      data-testid="editor-tab-readonly"
+      className="flex-shrink-0 bg-mf-tab-bar px-3 py-0.5 text-caption text-mf-text-3"
+    >
+      {external ? 'Read-only — outside the project' : 'Read-only'}
+    </div>
+  );
+}
+
 export function SaveErrorBanner({ message }: { message: string }) {
   return (
     <div

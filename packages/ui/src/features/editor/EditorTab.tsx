@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewerShell } from '@/features/viewers/ViewerShell';
 import type { EditorView } from '@codemirror/view';
 import { useHost } from '@/lib/host';
-import { getProjectFile, saveProjectFile } from '@/lib/api/files';
+import { getFileForView, saveProjectFile } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { inferLanguage } from '@/lib/editor/file-types';
@@ -23,9 +23,10 @@ import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { lspClientManager, getLspLanguage } from '@/lib/lsp';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
-import { DiskConflictBanner, SaveErrorBanner } from './editor-banners';
+import { DiskConflictBanner, ReadOnlyBanner, SaveErrorBanner } from './editor-banners';
 import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
+import { SaveStatusChip } from './SaveStatusChip';
 import { useFileWatchReload } from './use-file-watch-reload';
 import { useLspDocument } from './use-lsp-document';
 
@@ -38,30 +39,9 @@ interface EditorTabProps {
 
 type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { status: 'error'; message: string };
 
-/** Save-status chip shown in the ViewerShell header actions slot. */
-function SaveStatusChip({ dirty }: { dirty: boolean }) {
-  if (dirty) {
-    return (
-      <span
-        data-testid="editor-save-status"
-        className="rounded-[4px] bg-mf-warning-tint px-[5px] py-[1px] font-mono text-micro text-mf-warning"
-      >
-        ● unsaved
-      </span>
-    );
-  }
-  return (
-    <span
-      data-testid="editor-save-status"
-      className="rounded-[4px] bg-mf-success-tint px-[5px] py-[1px] font-mono text-micro text-mf-success"
-    >
-      ● saved
-    </span>
-  );
-}
-
 export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
+  const [isExternal, setIsExternal] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ ln: number; col: number }>({ ln: 1, col: 1 });
   const host = useHost();
@@ -99,13 +79,15 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   // File-watch live reload (D4): subscribe to disk changes and apply them
   // silently (clean buffer) or via the conflict banner (dirty buffer).
+  // Watch only after the load resolved: before that we don't yet know whether
+  // the path is external (watching an out-of-project path would just 403).
   const {
     diskConflict,
     reload: reloadFromDisk,
     keepMine,
   } = useFileWatchReload({
     path,
-    enabled: !!projectId,
+    enabled: !!projectId && !isExternal && loadState.status === 'ready',
     port,
     projectId,
     chatId,
@@ -113,14 +95,24 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     onSilentReload: handleSilentReload,
   });
 
+  // The preview tab slot reuses this component instance across path changes —
+  // never carry the previous file's external flag onto the next one.
+  useEffect(() => {
+    setIsExternal(false);
+  }, [path]);
+
   // Load file content — read the cache ONCE inside the effect (not subscribed)
   // so that keystrokes (setBuffer → new buffer object) do not re-run this
   // effect. Project files load via the daemon (worktree-aware; resolves
-  // repo-relative tree paths AND absolute chat-card paths). Falls back to the
-  // Tauri bridge only when there is no active project.
+  // repo-relative tree paths AND absolute chat-card paths); absolute paths the
+  // daemon rejects as outside the project fall back to the read-only external
+  // endpoint. Falls back to the Tauri bridge only when there is no active project.
   useEffect(() => {
     const cached = useEditorStore.getState().getBuffer(path);
     if (cached) {
+      // Only project files are ever cached (external loads skip setBuffer
+      // below), so a cache hit is always an editable project buffer.
+      setIsExternal(false);
       setLoadState({ status: 'ready', value: cached.value });
       return;
     }
@@ -128,15 +120,21 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     let cancelled = false;
     setLoadState({ status: 'loading' });
 
-    const load = projectId ? getProjectFile(port, projectId, path, chatId) : host.fs.readFile(path);
+    const load = projectId
+      ? getFileForView(port, projectId, path, chatId)
+      : host.fs.readFile(path).then((content) => ({ content, external: false }));
     load
-      .then((content) => {
+      .then(({ content, external }) => {
         if (cancelled) return;
         if (content == null) {
           setLoadState({ status: 'error', message: 'File not found or unreadable' });
           return;
         }
-        setBuffer(path, content, false);
+        setIsExternal(external);
+        // External files never enter the buffer cache: buffers persist
+        // globally, and the cache-hit path above renders them editable — a
+        // cached external file would reopen WITHOUT its read-only guard.
+        if (!external) setBuffer(path, content, false);
         setLoadState({ status: 'ready', value: content });
       })
       .catch((err: unknown) => {
@@ -163,14 +161,17 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     };
   }, []);
 
-  const lspLanguage = projectId ? getLspLanguage(path) : null;
+  // External files live outside the project: no LSP, no watch, no save.
+  const effectiveReadOnly = readOnly || isExternal;
+  const lspProjectId = isExternal ? undefined : projectId;
+  const lspLanguage = lspProjectId ? getLspLanguage(path) : null;
   const loadedValue = loadState.status === 'ready' ? loadState.value : null;
 
   // LSP lifecycle: ensure-client (with startup-race fix + identity reset),
   // ensure-document-open, and CM6 extension builder.
   const { lspReady, extraExtensions } = useLspDocument({
     path,
-    projectId,
+    projectId: lspProjectId,
     projectPath,
     chatId,
     loadedValue,
@@ -191,7 +192,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   const handleSave = useCallback(
     (value: string) => {
-      if (readOnly) return;
+      if (readOnly || isExternal) return;
       if (!projectId) return;
       saveProjectFile(port, projectId, path, value, chatId)
         .then(() => {
@@ -204,7 +205,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
           setSaveError(msg);
         });
     },
-    [port, projectId, path, chatId, setBuffer, readOnly],
+    [port, projectId, path, chatId, setBuffer, readOnly, isExternal],
   );
 
   if (loadState.status === 'loading') {
@@ -225,8 +226,9 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   const language = inferLanguage(path);
 
-  // Save status chip for the ViewerShell header actions slot.
-  const saveStatusChip = <SaveStatusChip dirty={isDirty} />;
+  // Save status chip for the ViewerShell header actions slot. Meaningless for a
+  // read-only buffer (nothing can ever be unsaved), so omit it there.
+  const saveStatusChip = effectiveReadOnly ? null : <SaveStatusChip dirty={isDirty} />;
 
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
@@ -242,18 +244,11 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
               path={path}
               onChange={handleChange}
               onSave={handleSave}
-              readOnly={readOnly}
+              readOnly={effectiveReadOnly}
             />
           ) : (
             <ViewerShell path={path} status={`Ln ${cursorPos.ln}, Col ${cursorPos.col}`} actions={saveStatusChip}>
-              {readOnly && (
-                <div
-                  data-testid="editor-tab-readonly"
-                  className="flex-shrink-0 bg-mf-tab-bar px-3 py-0.5 text-caption text-mf-text-3"
-                >
-                  Read-only
-                </div>
-              )}
+              {effectiveReadOnly && <ReadOnlyBanner external={isExternal} />}
               <EditorContextMenu
                 filePath={path}
                 viewRef={viewRef}
@@ -263,7 +258,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
                 <CmEditorWithComments
                   value={loadState.value}
                   language={language}
-                  readOnly={readOnly}
+                  readOnly={effectiveReadOnly}
                   onChange={handleChange}
                   onSave={handleSave}
                   onCursorChange={handleCursorChange}
