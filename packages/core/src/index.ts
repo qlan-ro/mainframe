@@ -17,7 +17,7 @@ import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
 import { LaunchRegistry } from './launch/index.js';
-import { TunnelManager } from './tunnel/index.js';
+import { TunnelManager, FileTunnelRegistry, sweepStrayTunnels, resolveCloudflaredPath } from './tunnel/index.js';
 import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import codexManifest from './plugins/builtin/codex/manifest.json' with { type: 'json' };
@@ -81,7 +81,15 @@ async function main(): Promise<void> {
   // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
   // otherwise those chats look "running" and new messages queue forever.
   chats.recoverStaleWorkingState();
-  const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
+  const tunnelRegistry = new FileTunnelRegistry(join(getDataDir(), 'cloudflared-tunnels.json'));
+  // Reap cloudflared children a previous daemon crash/kill orphaned before we
+  // spawn new ones — the sweep clears the registry so this run starts clean.
+  await sweepStrayTunnels(tunnelRegistry).catch((err) => logger.warn({ err }, 'Stray cloudflared tunnel sweep failed'));
+  const cloudflaredPath = (await resolveCloudflaredPath()) ?? undefined;
+  const tunnelManager = new TunnelManager((event) => broadcastEvent(event), {
+    registry: tunnelRegistry,
+    cloudflaredPath,
+  });
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
   // Forward tracker emissions through the late-bound broadcastEvent closure.
@@ -245,6 +253,8 @@ async function main(): Promise<void> {
   process.on('uncaughtException', (err) => {
     logger.fatal({ err }, 'Uncaught exception');
     adapters.killAll();
+    // Kill tracked cloudflared children too, or they orphan and re-parent to PID 1.
+    tunnelManager.stopAll();
     launchRegistry.stopAll().finally(() => process.exit(1));
     // Hard deadline: exit even if stopAll hangs
     setTimeout(() => process.exit(1), 5_000).unref();
