@@ -1,0 +1,844 @@
+//! Ported from `src/tunnel/tunnel-manager.ts`.
+//!
+//! Spawns `cloudflared` per label, scans its stdout/stderr for the
+//! `*.trycloudflare.com` URL and the "Registered tunnel connection" line, then
+//! waits for DNS propagation before resolving. Emits `tunnel:status` DaemonEvents
+//! at each phase and exposes `verify()` (a cached `/health` probe). The TS uses
+//! two regexes and a `node:dns` resolver pinned to 1.1.1.1; no `regex` crate is
+//! allowlisted (both patterns are hand-scanned) and no DNS resolver crate is
+//! (system resolution via `tokio::net::lookup_host` stands in — see TODO(port)).
+//!
+//! CONCURRENCY.tsv: `tunnels` = `Arc<DashMap<String, ManagedTunnel>>` keyed by
+//! label; `verifiedAt` = `Arc<DashMap<String, VerifyResult>>` (30s TTL cache).
+
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use dashmap::DashMap;
+use mainframe_types::events::{DaemonEvent, TunnelState};
+use serde::Deserialize;
+use tokio::io::{AsyncBufReadExt, BufReader, Lines};
+use tokio::process::{ChildStderr, ChildStdout, Command};
+use tokio::time::sleep;
+
+/// Fire-and-forget DaemonEvent sink (TS `broadcast?: (event) => void`).
+pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
+
+const REGISTERED_MARKER: &str = "Registered tunnel connection";
+const CLOUDFLARED_NOT_FOUND: &str = "cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
+
+/// Named/quick-tunnel start options (TS `TunnelStartOptions`).
+#[derive(Debug, Clone, Default)]
+pub struct TunnelStartOptions {
+    pub token: Option<String>,
+    pub url: Option<String>,
+}
+
+/// Tunable timings + binary path. Defaults match the TS constants; tests shrink
+/// the timings and point `cloudflared_bin` at a stand-in script.
+#[derive(Debug, Clone)]
+pub struct TunnelConfig {
+    pub cloudflared_bin: String,
+    pub start_timeout: Duration,
+    pub dns_poll: Duration,
+    pub dns_timeout: Duration,
+    pub verify_timeout: Duration,
+    pub verify_cache_ttl: Duration,
+}
+
+impl Default for TunnelConfig {
+    fn default() -> Self {
+        Self {
+            cloudflared_bin: "cloudflared".to_string(),
+            start_timeout: Duration::from_millis(45_000),
+            dns_poll: Duration::from_millis(1_000),
+            // Cloudflare's first-time DNS propagation routinely takes 20–30s.
+            dns_timeout: Duration::from_millis(45_000),
+            verify_timeout: Duration::from_millis(5_000),
+            verify_cache_ttl: Duration::from_millis(30_000),
+        }
+    }
+}
+
+struct ManagedTunnel {
+    pid: Option<u32>,
+    url: String,
+    ready: bool,
+}
+
+struct VerifyResult {
+    reachable: bool,
+    checked_at: Instant,
+}
+
+#[derive(Deserialize)]
+struct HealthBody {
+    status: Option<String>,
+}
+
+pub struct TunnelManager {
+    tunnels: Arc<DashMap<String, ManagedTunnel>>,
+    verified_at: Arc<DashMap<String, VerifyResult>>,
+    broadcast: BroadcastFn,
+    config: TunnelConfig,
+    client: reqwest::Client,
+}
+
+impl TunnelManager {
+    pub fn new(broadcast: Option<BroadcastFn>) -> Self {
+        Self::with_config(broadcast, TunnelConfig::default())
+    }
+
+    pub fn with_config(broadcast: Option<BroadcastFn>, config: TunnelConfig) -> Self {
+        Self {
+            tunnels: Arc::new(DashMap::new()),
+            verified_at: Arc::new(DashMap::new()),
+            broadcast: broadcast.unwrap_or_else(|| Arc::new(|_event| {})),
+            config,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    /// Extract a `https://<label>.trycloudflare.com` URL from a log line, or
+    /// `None`. Mirrors `/https:\/\/[a-z0-9-]+\.trycloudflare\.com/` — the label
+    /// class is `[a-z0-9-]` (no `.`), so it stops at the first dot.
+    pub fn parse_url(line: &str) -> Option<String> {
+        let mut search_from = 0;
+        while let Some(rel) = line[search_from..].find("https://") {
+            let start = search_from + rel;
+            let after = &line[start + "https://".len()..];
+            let label_len: usize = after
+                .chars()
+                .take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-')
+                .map(char::len_utf8)
+                .sum();
+            if label_len > 0 {
+                let rest = &after[label_len..];
+                if rest.starts_with(".trycloudflare.com") {
+                    let label = &after[..label_len];
+                    return Some(format!("https://{label}.trycloudflare.com"));
+                }
+            }
+            search_from = start + "https://".len();
+        }
+        None
+    }
+
+    pub async fn start(
+        &self,
+        port: u16,
+        label: &str,
+        options: Option<TunnelStartOptions>,
+    ) -> Result<String, String> {
+        // Kill any existing tunnel for this label to prevent leaks.
+        self.stop(label);
+
+        let options = options.unwrap_or_default();
+        let is_named = options.token.is_some();
+
+        self.broadcast(DaemonEvent::TunnelStatus {
+            state: TunnelState::Starting,
+            label: label.to_string(),
+            url: None,
+            dns_verified: None,
+            error: None,
+        });
+
+        let args: Vec<String> = if is_named {
+            vec![
+                "tunnel".to_string(),
+                "run".to_string(),
+                "--token".to_string(),
+                options.token.clone().unwrap_or_default(),
+            ]
+        } else {
+            vec![
+                "tunnel".to_string(),
+                "--url".to_string(),
+                format!("http://localhost:{port}"),
+            ]
+        };
+
+        let mut child = match Command::new(&self.config.cloudflared_bin)
+            .args(&args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(err) => {
+                let message = if err.kind() == std::io::ErrorKind::NotFound {
+                    CLOUDFLARED_NOT_FOUND.to_string()
+                } else {
+                    err.to_string()
+                };
+                self.broadcast(DaemonEvent::TunnelStatus {
+                    state: TunnelState::Error,
+                    label: label.to_string(),
+                    url: None,
+                    dns_verified: None,
+                    error: Some(message.clone()),
+                });
+                return Err(message);
+            }
+        };
+
+        let pid = child.id();
+        let mut out_lines = child.stdout.take().map(|s| BufReader::new(s).lines());
+        let mut err_lines = child.stderr.take().map(|s| BufReader::new(s).lines());
+
+        let mut pending_url: Option<String> = if is_named { options.url.clone() } else { None };
+        let mut registered = false;
+
+        let start_deadline = sleep(self.config.start_timeout);
+        tokio::pin!(start_deadline);
+
+        // Phase 1: wait for URL + registration (or timeout / early exit).
+        loop {
+            if pending_url.is_some() && registered {
+                break;
+            }
+            tokio::select! {
+                line = next_line_stdout(&mut out_lines) => {
+                    if let Some(line) = line {
+                        self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
+                    }
+                }
+                line = next_line_stderr(&mut err_lines) => {
+                    if let Some(line) = line {
+                        self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
+                    }
+                }
+                () = &mut start_deadline => {
+                    kill_pid(pid, "-TERM");
+                    let msg = format!(
+                        "Tunnel \"{label}\" timed out after {}ms",
+                        self.config.start_timeout.as_millis()
+                    );
+                    self.broadcast(DaemonEvent::TunnelStatus {
+                        state: TunnelState::Error,
+                        label: label.to_string(),
+                        url: None,
+                        dns_verified: None,
+                        error: Some(msg.clone()),
+                    });
+                    return Err(msg);
+                }
+                status = child.wait() => {
+                    return Err(self.on_exit_before_ready(label, status));
+                }
+            }
+        }
+
+        // Phase 2: connected. Register the tunnel, then wait for DNS while still
+        // watching for an early exit (which rejects, per the TS `!done` branch).
+        let url = pending_url.unwrap_or_default();
+        self.tunnels.insert(
+            label.to_string(),
+            ManagedTunnel {
+                pid,
+                url: url.clone(),
+                ready: false,
+            },
+        );
+        tracing::info!(target: "tunnel", label, url, port, "tunnel connected, waiting for DNS propagation…");
+        self.broadcast(DaemonEvent::TunnelStatus {
+            state: TunnelState::Ready,
+            label: label.to_string(),
+            url: Some(url.clone()),
+            dns_verified: Some(false),
+            error: None,
+        });
+
+        tokio::select! {
+            dns_ok = self.wait_for_dns(&url) => {
+                if let Some(mut tunnel) = self.tunnels.get_mut(label) {
+                    tunnel.ready = true;
+                }
+                if dns_ok {
+                    tracing::info!(target: "tunnel", label, url, "tunnel ready (DNS verified)");
+                } else {
+                    tracing::warn!(target: "tunnel", label, url, "tunnel DNS verification timed out, emitting anyway");
+                }
+                self.broadcast(DaemonEvent::TunnelStatus {
+                    state: TunnelState::DnsVerified,
+                    label: label.to_string(),
+                    url: Some(url.clone()),
+                    dns_verified: Some(dns_ok),
+                    error: None,
+                });
+                self.spawn_exit_watcher(label.to_string(), child);
+                Ok(url)
+            }
+            status = child.wait() => {
+                Err(self.on_exit_before_ready(label, status))
+            }
+        }
+    }
+
+    fn scan_line(
+        &self,
+        line: &str,
+        is_named: bool,
+        label: &str,
+        pending_url: &mut Option<String>,
+        registered: &mut bool,
+    ) {
+        if !is_named
+            && pending_url.is_none()
+            && let Some(url) = Self::parse_url(line)
+        {
+            tracing::debug!(target: "tunnel", label, url, "tunnel URL received, waiting for connection registration…");
+            *pending_url = Some(url);
+        }
+        if !*registered && line.contains(REGISTERED_MARKER) {
+            tracing::debug!(target: "tunnel", label, "tunnel connection registered");
+            *registered = true;
+        }
+    }
+
+    fn on_exit_before_ready(
+        &self,
+        label: &str,
+        status: std::io::Result<std::process::ExitStatus>,
+    ) -> String {
+        let code = status
+            .ok()
+            .and_then(|s| s.code())
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let msg = format!("Tunnel \"{label}\" process exited before ready (code {code})");
+        self.broadcast(DaemonEvent::TunnelStatus {
+            state: TunnelState::Error,
+            label: label.to_string(),
+            url: None,
+            dns_verified: None,
+            error: Some(msg.clone()),
+        });
+        msg
+    }
+
+    /// Post-ready exit handling (TS `child.once('exit')` `else` branch): remove
+    /// the tunnel and broadcast `stopped` when the established child dies.
+    fn spawn_exit_watcher(&self, label: String, mut child: tokio::process::Child) {
+        let tunnels = self.tunnels.clone();
+        let broadcast = self.broadcast.clone();
+        tokio::spawn(async move {
+            let status = child.wait().await;
+            let code = status.ok().and_then(|s| s.code());
+            tracing::info!(target: "tunnel", label = %label, code = ?code, "tunnel process exited");
+            tunnels.remove(&label);
+            broadcast(DaemonEvent::TunnelStatus {
+                state: TunnelState::Stopped,
+                label,
+                url: None,
+                dns_verified: None,
+                error: None,
+            });
+        });
+    }
+
+    pub fn stop(&self, label: &str) {
+        let Some((_, tunnel)) = self.tunnels.remove(label) else {
+            return;
+        };
+        kill_pid(tunnel.pid, "-TERM");
+        tracing::info!(target: "tunnel", label, "tunnel stopped");
+        self.broadcast(DaemonEvent::TunnelStatus {
+            state: TunnelState::Stopped,
+            label: label.to_string(),
+            url: None,
+            dns_verified: None,
+            error: None,
+        });
+    }
+
+    pub fn stop_all(&self) {
+        let labels: Vec<String> = self.tunnels.iter().map(|e| e.key().clone()).collect();
+        for label in labels {
+            self.stop(&label);
+        }
+    }
+
+    pub fn get_url(&self, label: &str) -> Option<String> {
+        self.tunnels.get(label).map(|t| t.url.clone())
+    }
+
+    pub async fn verify(&self, label: &str) -> bool {
+        if let Some(cached) = self.verified_at.get(label)
+            && cached.checked_at.elapsed() < self.config.verify_cache_ttl
+        {
+            tracing::debug!(target: "tunnel", label, reachable = cached.reachable, "verify cache hit");
+            return cached.reachable;
+        }
+
+        let url = {
+            let Some(tunnel) = self.tunnels.get(label) else {
+                return false;
+            };
+            if !tunnel.ready {
+                return false;
+            }
+            tunnel.url.clone()
+        };
+
+        match self
+            .client
+            .get(format!("{url}/health"))
+            .timeout(self.config.verify_timeout)
+            .send()
+            .await
+        {
+            Ok(res) => {
+                if !res.status().is_success() {
+                    tracing::debug!(target: "tunnel", label, status = res.status().as_u16(), "verify failed: non-200");
+                    self.verified_at.insert(
+                        label.to_string(),
+                        VerifyResult {
+                            reachable: false,
+                            checked_at: Instant::now(),
+                        },
+                    );
+                    return false;
+                }
+                match res.json::<HealthBody>().await {
+                    Ok(body) => {
+                        let reachable = body.status.as_deref() == Some("ok");
+                        tracing::debug!(target: "tunnel", label, reachable, "verify result");
+                        self.verified_at.insert(
+                            label.to_string(),
+                            VerifyResult {
+                                reachable,
+                                checked_at: Instant::now(),
+                            },
+                        );
+                        reachable
+                    }
+                    // Non-JSON body → TS `await res.json()` throws → outer catch →
+                    // false, and (unlike the non-200 path) no cache write.
+                    Err(err) => {
+                        tracing::debug!(target: "tunnel", label, ?err, "verify failed: network error");
+                        false
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::debug!(target: "tunnel", label, ?err, "verify failed: network error");
+                false
+            }
+        }
+    }
+
+    /// Poll system DNS until the tunnel hostname resolves. Returns `true` on
+    /// resolution, `false` on timeout (TS `waitForDns` resolve/reject).
+    async fn wait_for_dns(&self, url: &str) -> bool {
+        let hostname = extract_hostname(url);
+        let start = Instant::now();
+        loop {
+            if start.elapsed() > self.config.dns_timeout {
+                return false;
+            }
+            if let Ok(mut addrs) = tokio::net::lookup_host((hostname.as_str(), 443u16)).await
+                && addrs.next().is_some()
+            {
+                return true;
+            }
+            sleep(self.config.dns_poll).await;
+        }
+    }
+
+    fn broadcast(&self, event: DaemonEvent) {
+        (self.broadcast)(event);
+    }
+}
+
+/// Signal a pid by shelling out to `kill` (house style — no `libc`/`nix`).
+fn kill_pid(pid: Option<u32>, flag: &'static str) {
+    let Some(pid) = pid else {
+        return;
+    };
+    tokio::spawn(async move {
+        let _ = Command::new("kill")
+            .arg(flag)
+            .arg(pid.to_string())
+            .status()
+            .await;
+    });
+}
+
+fn extract_hostname(url: &str) -> String {
+    let after = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+    after.split(['/', ':']).next().unwrap_or(after).to_string()
+}
+
+async fn next_line_stdout(lines: &mut Option<Lines<BufReader<ChildStdout>>>) -> Option<String> {
+    match lines {
+        Some(l) => match l.next_line().await {
+            Ok(Some(line)) => Some(line),
+            _ => {
+                *lines = None;
+                None
+            }
+        },
+        None => std::future::pending().await,
+    }
+}
+
+async fn next_line_stderr(lines: &mut Option<Lines<BufReader<ChildStderr>>>) -> Option<String> {
+    match lines {
+        Some(l) => match l.next_line().await {
+            Ok(Some(line)) => Some(line),
+            _ => {
+                *lines = None;
+                None
+            }
+        },
+        None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    fn recorder() -> (BroadcastFn, Arc<Mutex<Vec<DaemonEvent>>>) {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = events.clone();
+        let f: BroadcastFn = Arc::new(move |ev| sink.lock().unwrap().push(ev));
+        (f, events)
+    }
+
+    fn stopped_broadcasts(events: &Arc<Mutex<Vec<DaemonEvent>>>) -> usize {
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    DaemonEvent::TunnelStatus {
+                        state: TunnelState::Stopped,
+                        ..
+                    }
+                )
+            })
+            .count()
+    }
+
+    // --- parseUrl ---
+
+    #[test]
+    fn parse_url_extracts_from_a_log_line() {
+        let line = "2024-01-01T00:00:00Z INF | Your quick Tunnel has been created! Visit it at:  https://abc-def-ghi.trycloudflare.com";
+        assert_eq!(
+            TunnelManager::parse_url(line).as_deref(),
+            Some("https://abc-def-ghi.trycloudflare.com")
+        );
+    }
+
+    #[test]
+    fn parse_url_extracts_from_a_plain_line() {
+        let line = "https://some-tunnel-name.trycloudflare.com";
+        assert_eq!(
+            TunnelManager::parse_url(line).as_deref(),
+            Some("https://some-tunnel-name.trycloudflare.com")
+        );
+    }
+
+    #[test]
+    fn parse_url_returns_none_when_absent() {
+        assert_eq!(TunnelManager::parse_url("2024 INF Starting tunnel"), None);
+    }
+
+    #[test]
+    fn parse_url_returns_none_for_http() {
+        assert_eq!(
+            TunnelManager::parse_url("http://abc-def.trycloudflare.com"),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_url_returns_none_for_a_different_domain() {
+        assert_eq!(
+            TunnelManager::parse_url("https://example.cloudflare.com"),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_url_returns_none_for_empty_string() {
+        assert_eq!(TunnelManager::parse_url(""), None);
+    }
+
+    // --- lifecycle ---
+
+    #[tokio::test]
+    async fn get_url_returns_none_for_unknown_label() {
+        let manager = TunnelManager::new(None);
+        assert_eq!(manager.get_url("daemon"), None);
+        assert_eq!(manager.get_url("preview:Dev Server"), None);
+    }
+
+    #[tokio::test]
+    async fn stop_is_a_no_op_for_unknown_label() {
+        let manager = TunnelManager::new(None);
+        manager.stop("nonexistent"); // must not panic
+    }
+
+    #[tokio::test]
+    async fn stop_all_is_a_no_op_when_no_tunnels_running() {
+        let manager = TunnelManager::new(None);
+        manager.stop_all(); // must not panic
+    }
+
+    // --- broadcast callbacks ---
+
+    #[tokio::test]
+    async fn broadcasts_stopped_when_stop_called_for_a_running_tunnel() {
+        let (broadcast, events) = recorder();
+        let manager = TunnelManager::new(Some(broadcast));
+        manager.tunnels.insert(
+            "daemon".to_string(),
+            ManagedTunnel {
+                pid: None,
+                url: "https://test.trycloudflare.com".to_string(),
+                ready: true,
+            },
+        );
+        events.lock().unwrap().clear();
+        manager.stop("daemon");
+        let evs = events.lock().unwrap();
+        assert_eq!(evs.len(), 1);
+        assert!(matches!(
+            &evs[0],
+            DaemonEvent::TunnelStatus { state: TunnelState::Stopped, label, .. } if label == "daemon"
+        ));
+    }
+
+    #[tokio::test]
+    async fn does_not_broadcast_when_stop_called_for_unknown_label() {
+        let (broadcast, events) = recorder();
+        let manager = TunnelManager::new(Some(broadcast));
+        manager.stop("nonexistent");
+        assert!(events.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn works_without_a_broadcast_callback() {
+        let manager = TunnelManager::new(None);
+        manager.stop("nonexistent"); // must not panic
+    }
+
+    // --- verify (canned local HTTP server) ---
+
+    /// Serve `count`-bounded canned HTTP responses, returning the base URL and a
+    /// shared hit counter. Each connection gets one response with `Connection:
+    /// close` so reqwest opens a fresh connection per request.
+    async fn serve_canned(
+        status_line: &'static str,
+        body: &'static str,
+    ) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits2 = hits.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                hits2.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 1024];
+                let _ = socket.read(&mut buf).await;
+                let response = format!(
+                    "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+        (format!("http://{addr}"), hits)
+    }
+
+    fn insert_ready(manager: &TunnelManager, label: &str, url: &str) {
+        manager.tunnels.insert(
+            label.to_string(),
+            ManagedTunnel {
+                pid: None,
+                url: url.to_string(),
+                ready: true,
+            },
+        );
+    }
+
+    #[tokio::test]
+    async fn verify_false_when_no_tunnel() {
+        let manager = TunnelManager::new(None);
+        assert!(!manager.verify("daemon").await);
+    }
+
+    #[tokio::test]
+    async fn verify_false_when_not_ready_without_fetching() {
+        let (base, hits) = serve_canned("200 OK", "{\"status\":\"ok\"}").await;
+        let manager = TunnelManager::new(None);
+        manager.tunnels.insert(
+            "daemon".to_string(),
+            ManagedTunnel {
+                pid: None,
+                url: base,
+                ready: false,
+            },
+        );
+        assert!(!manager.verify("daemon").await);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn verify_true_when_health_is_200_and_status_ok() {
+        let (base, _hits) = serve_canned("200 OK", "{\"status\":\"ok\"}").await;
+        let manager = TunnelManager::new(None);
+        insert_ready(&manager, "daemon", &base);
+        assert!(manager.verify("daemon").await);
+    }
+
+    #[tokio::test]
+    async fn verify_false_on_network_error() {
+        // Point at a closed port (nothing listening) → reqwest connect error.
+        let manager = TunnelManager::new(None);
+        insert_ready(&manager, "daemon", "http://127.0.0.1:1");
+        assert!(!manager.verify("daemon").await);
+    }
+
+    #[tokio::test]
+    async fn verify_false_on_non_200() {
+        let (base, _hits) = serve_canned("502 Bad Gateway", "Bad Gateway").await;
+        let manager = TunnelManager::new(None);
+        insert_ready(&manager, "daemon", &base);
+        assert!(!manager.verify("daemon").await);
+    }
+
+    #[tokio::test]
+    async fn verify_false_when_body_status_not_ok() {
+        let (base, _hits) = serve_canned("200 OK", "{\"status\":\"error\"}").await;
+        let manager = TunnelManager::new(None);
+        insert_ready(&manager, "daemon", &base);
+        assert!(!manager.verify("daemon").await);
+    }
+
+    #[tokio::test]
+    async fn verify_caches_success_within_ttl() {
+        let (base, hits) = serve_canned("200 OK", "{\"status\":\"ok\"}").await;
+        let manager = TunnelManager::new(None);
+        insert_ready(&manager, "daemon", &base);
+        assert!(manager.verify("daemon").await);
+        assert!(manager.verify("daemon").await);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn verify_refetches_after_cache_ttl() {
+        let (base, hits) = serve_canned("200 OK", "{\"status\":\"ok\"}").await;
+        let config = TunnelConfig {
+            verify_cache_ttl: Duration::from_millis(30),
+            ..TunnelConfig::default()
+        };
+        let manager = TunnelManager::with_config(None, config);
+        insert_ready(&manager, "daemon", &base);
+        assert!(manager.verify("daemon").await);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+        sleep(Duration::from_millis(50)).await;
+        assert!(manager.verify("daemon").await);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    // --- start: DNS wait outlasts the (post-connection cleared) start timeout ---
+
+    /// Write an executable stand-in for `cloudflared` that prints the URL + the
+    /// registration line, then sleeps so the child stays alive.
+    fn write_fake_cloudflared(dir: &std::path::Path) -> String {
+        let script = dir.join("fake-cloudflared.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\necho 'https://abc-def.trycloudflare.com'\necho 'Registered tunnel connection'\nsleep 100\n",
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script.to_string_lossy().into_owned()
+    }
+
+    #[tokio::test]
+    async fn start_resolves_with_url_when_dns_outlasts_the_start_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_fake_cloudflared(dir.path());
+        let (broadcast, events) = recorder();
+        // start_timeout is short, but must NOT fire once connected; DNS never
+        // resolves (fake host) so the grace path resolves with the URL anyway.
+        let config = TunnelConfig {
+            cloudflared_bin: bin,
+            start_timeout: Duration::from_millis(3_000),
+            dns_poll: Duration::from_millis(20),
+            dns_timeout: Duration::from_millis(150),
+            ..TunnelConfig::default()
+        };
+        let manager = TunnelManager::with_config(Some(broadcast), config);
+
+        let url = manager.start(3000, "daemon", None).await.unwrap();
+        assert_eq!(url, "https://abc-def.trycloudflare.com");
+
+        // A dns_verified{dnsVerified:false} status was broadcast (grace path).
+        {
+            let evs = events.lock().unwrap();
+            assert!(evs.iter().any(|e| matches!(
+                e,
+                DaemonEvent::TunnelStatus {
+                    state: TunnelState::DnsVerified,
+                    dns_verified: Some(false),
+                    ..
+                }
+            )));
+        }
+
+        // Tunnel is registered and marked ready; clean up the sleeping child.
+        assert_eq!(
+            manager.get_url("daemon").as_deref(),
+            Some("https://abc-def.trycloudflare.com")
+        );
+        manager.stop("daemon");
+        // stop() broadcasts stopped; the killed child's watcher broadcasts a
+        // second stopped shortly after (faithful to the TS double-broadcast).
+        sleep(Duration::from_millis(50)).await;
+        assert!(stopped_broadcasts(&events) >= 1);
+    }
+}
+
+// PORT STATUS: src/tunnel/tunnel-manager.ts (245 lines)
+// confidence: medium
+// todos: 1
+// notes: cloudflared spawn (tokio::process, kill_on_drop) + line scan for the
+// trycloudflare URL (hand-scanned, no regex) and the "Registered tunnel
+// connection" marker. The TS callback state machine is linearized: Phase 1
+// select loop (stdout/stderr lines vs start-timeout vs early-exit) → Phase 2
+// select (waitForDns vs early-exit), so the start timeout is naturally "cleared"
+// once connected (regression the 45s-timeout test pins). Post-ready exit → a
+// spawned watcher removes the tunnel + broadcasts stopped (the `!done ? reject :
+// delete+stopped` split preserved). stop() shells out to `kill` (house style) and
+// the killed child's watcher re-broadcasts stopped (faithful double-broadcast).
+// verify() = reqwest GET /health with the 30s TTL cache (non-200 caches false;
+// non-JSON/network error returns false without caching). TODO(port): waitForDns
+// uses tokio::net::lookup_host (system resolver) — the TS pins 1.1.1.1 via
+// node:dns Resolver; the specific-resolver behavior is lost (see blockers).
+// Tunnel/verify tests use real spawned processes / a canned local HTTP server,
+// not code mocks.
