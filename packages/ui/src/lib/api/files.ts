@@ -102,6 +102,12 @@ export interface ViewFileResult {
 }
 
 /**
+ * Absolute-path test matching the daemon HOST's semantics (not the renderer's):
+ * POSIX (`/…`), Windows drive-letter (`C:\…` / `C:/…`), or UNC (`\\server\…`).
+ */
+const isAbsolutePath = (p: string): boolean => p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
+
+/**
  * Read a file for VIEWING: tries the project route first (worktree-aware,
  * editable), and when the daemon rejects an absolute path as outside the
  * project, falls back to the read-only external endpoint. Relative escapes
@@ -122,7 +128,7 @@ export async function getFileForView(
     return { content, external: false };
   } catch (err) {
     const outside = err instanceof Error && err.message === 'Path outside project';
-    if (!outside || !path.startsWith('/')) throw err;
+    if (!outside || !isAbsolutePath(path)) throw err;
     const content = await getExternalFile(port, path, encoding);
     return { content, external: true };
   }

@@ -104,6 +104,35 @@ describe('getFileForView', () => {
     expect(secondUrl).toContain('encoding=base64');
   });
 
+  it('falls back for a Windows drive-letter absolute path', async () => {
+    fetchMock()
+      .mockResolvedValueOnce(apiErrorResponse('Path outside project'))
+      .mockResolvedValueOnce(okResponse({ path: 'C:\\Users\\u\\shot.png', content: 'win' }));
+
+    const result = await getFileForView(31415, 'proj-1', 'C:\\Users\\u\\shot.png', 'chat-1');
+
+    expect(result).toEqual({ content: 'win', external: true });
+    expect(fetchMock()).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back for a UNC absolute path', async () => {
+    fetchMock()
+      .mockResolvedValueOnce(apiErrorResponse('Path outside project'))
+      .mockResolvedValueOnce(okResponse({ path: '\\\\server\\share\\doc.txt', content: 'unc' }));
+
+    const result = await getFileForView(31415, 'proj-1', '\\\\server\\share\\doc.txt');
+
+    expect(result).toEqual({ content: 'unc', external: true });
+    expect(fetchMock()).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT fall back for a Windows relative escape (..\\..)', async () => {
+    fetchMock().mockResolvedValue(apiErrorResponse('Path outside project'));
+
+    await expect(getFileForView(31415, 'proj-1', '..\\..\\secrets.txt')).rejects.toThrow('Path outside project');
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+  });
+
   it('does NOT fall back for a relative path escape (../..)', async () => {
     fetchMock().mockResolvedValue(apiErrorResponse('Path outside project'));
 
