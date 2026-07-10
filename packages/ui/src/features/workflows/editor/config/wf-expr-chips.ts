@@ -8,7 +8,7 @@
  */
 import { Decoration, EditorView, WidgetType } from '@codemirror/view';
 import type { DecorationSet } from '@codemirror/view';
-import { StateField } from '@codemirror/state';
+import { StateEffect, StateField } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import type { WfScopeSource } from './wf-scope';
 
@@ -63,6 +63,7 @@ export function buildChipDecorations(doc: string, scope: WfScopeSource[]): WfChi
         : { from, to, label: GENERIC_LABEL, tone: GENERIC_TONE };
     });
   } catch {
+    /* expected: chips must never throw into CM rendering; degrading to no chips is intentional */
     return [];
   }
 }
@@ -129,21 +130,35 @@ function buildDecorationSet(doc: string, scope: WfScopeSource[]): DecorationSet 
 }
 
 /**
+ * Dispatched to force the chip StateField to rebuild without a doc change —
+ * e.g. when an upstream step is renamed and the scope callback now resolves
+ * different labels for expressions already sitting untouched in this field.
+ */
+export const scopeRefreshEffect = StateEffect.define<void>();
+
+/**
+ * StateField backing `chipExtension`, exported separately so callers (and
+ * tests) can dispatch `scopeRefreshEffect` against a known field reference.
+ */
+export function createChipField(getScope: () => WfScopeSource[]): StateField<DecorationSet> {
+  return StateField.define<DecorationSet>({
+    create(state) {
+      return buildDecorationSet(state.doc.toString(), getScope());
+    },
+    update(value, tr) {
+      const needsRebuild = tr.docChanged || tr.effects.some((e) => e.is(scopeRefreshEffect));
+      if (!needsRebuild) return value.map(tr.changes);
+      return buildDecorationSet(tr.state.doc.toString(), getScope());
+    },
+    provide: (f) => [EditorView.decorations.from(f), EditorView.atomicRanges.of((view) => view.state.field(f))],
+  });
+}
+
+/**
  * CM6 extension wiring atomic `${...}` chip widgets: `EditorView.decorations`
  * renders them, `EditorView.atomicRanges` makes cursor motion / delete
  * commands treat each one as a single unit.
  */
 export function chipExtension(getScope: () => WfScopeSource[]): Extension {
-  const field = StateField.define<DecorationSet>({
-    create(state) {
-      return buildDecorationSet(state.doc.toString(), getScope());
-    },
-    update(value, tr) {
-      if (!tr.docChanged) return value.map(tr.changes);
-      return buildDecorationSet(tr.state.doc.toString(), getScope());
-    },
-    provide: (f) => [EditorView.decorations.from(f), EditorView.atomicRanges.of((view) => view.state.field(f))],
-  });
-
-  return [field];
+  return [createChipField(getScope)];
 }

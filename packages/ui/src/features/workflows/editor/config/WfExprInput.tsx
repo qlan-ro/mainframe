@@ -9,7 +9,7 @@
  * done as plain string surgery on `value`, so it works even while the CM6
  * chunk is still loading.
  */
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,9 @@ interface ChipEdit {
   from: number;
   to: number;
   text: string;
+  /** `value` at click time — the editor stays editable while this box is open, so
+   * from/to can go stale; a mismatch here means the field moved on underneath us. */
+  valueSnapshot: string;
 }
 
 function EditorFallback({ multiline, testId }: { multiline?: boolean; testId: string }): React.ReactElement {
@@ -73,11 +76,21 @@ export function WfExprInput({ value, onChange, scope, multiline, testId }: WfExp
   }
 
   function handleChipClick(from: number, to: number): void {
-    setChipEdit({ from, to, text: value.slice(from, to) });
+    setChipEdit({ from, to, text: value.slice(from, to), valueSnapshot: value });
   }
 
+  // The main editor stays live while the chip-edit box is open; if `value`
+  // moved on underneath it, from/to no longer point at the clicked chip —
+  // close the box rather than splice at stale offsets.
+  useEffect(() => {
+    if (chipEdit && chipEdit.valueSnapshot !== value) setChipEdit(null);
+  }, [value, chipEdit]);
+
   function saveChipEdit(): void {
-    if (!chipEdit) return;
+    if (!chipEdit || chipEdit.valueSnapshot !== value) {
+      setChipEdit(null);
+      return;
+    }
     onChange(value.slice(0, chipEdit.from) + chipEdit.text + value.slice(chipEdit.to));
     setCursorHint(chipEdit.from + chipEdit.text.length);
     setChipEdit(null);

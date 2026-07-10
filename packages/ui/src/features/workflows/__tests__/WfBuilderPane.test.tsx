@@ -235,6 +235,21 @@ describe('WfBuilderPane', () => {
     expect(within(root).getByText('Vars')).toBeInTheDocument();
   });
 
+  it('add-input button renders with data-testid', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
+    expect(screen.getByTestId('workflows-builder-add-input')).toBeInTheDocument();
+  });
+
+  it('clicking add-input calls onChange with a new input', () => {
+    const onChange = vi.fn();
+    render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('workflows-builder-add-input'));
+    expect(onChange).toHaveBeenCalledOnce();
+    const updatedModel = onChange.mock.calls[0]?.[0] as WfDraft;
+    expect(updatedModel.inputs).toHaveLength(1);
+  });
+
   it('add-var button renders with data-testid', () => {
     const onChange = vi.fn();
     render(<WfBuilderPane model={makeBlankDraft()} onChange={onChange} />);

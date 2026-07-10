@@ -9,7 +9,7 @@
  */
 import YAML from 'yaml';
 import type { WfArm, WfDraft, WfInput, WfOutput, WfStep, WfTrigger, WfVar } from './wf-draft-types';
-import { slug } from './wf-slug';
+import { ID_PATTERN, slug } from './wf-slug';
 
 // ── Trigger / input / var / output maps ──────────────────────────────────────
 
@@ -95,7 +95,9 @@ export function draftToObject(d: WfDraft): Record<string, unknown> {
   const triggers = d.triggers.map(triggerToObject).filter((t): t is Record<string, unknown> => t !== undefined);
   return {
     version: 1,
-    name: slug(d.name),
+    // A hydrated name that's already a valid daemon id (e.g. `Release_Candidate`)
+    // must round-trip verbatim; only free-text builder input needs slugging.
+    name: ID_PATTERN.test(d.name) ? d.name : slug(d.name),
     description: d.description || undefined,
     triggers: triggers.length > 0 ? triggers : undefined,
     inputs: inputsToObject(d.inputs),

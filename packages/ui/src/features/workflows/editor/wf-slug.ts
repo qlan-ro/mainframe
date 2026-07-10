@@ -2,9 +2,16 @@
  * wf-slug — shared name-slugification helpers for the workflow editor.
  *
  * The daemon's `workflowSchema.name` is validated against `idSchema`
- * (`/^[a-zA-Z0-9_-]+$/`); both the builder's derived filename/id and the
- * YAML serializer's `name:` line must emit a slug, never raw display text.
+ * (`/^[a-zA-Z0-9_-]+$/`, mirrored here as `ID_PATTERN`). The builder's
+ * derived filename/id always slugs (they're routing/filesystem concerns).
+ * The YAML serializer's `name:` line only slugs when the draft's name
+ * doesn't already satisfy `ID_PATTERN` — a hydrated name like
+ * `Release_Candidate` is valid under the daemon schema and must round-trip
+ * unchanged; only free-text names typed in the builder need slugging.
  */
+
+/** Mirrors core's `workflowSchema` `idSchema` regex (`packages/core/src/workflows/dsl/schema.ts`). */
+export const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /** Slugify a workflow name for use as the id segment / YAML `name:` value. */
 export function slug(name: string): string {

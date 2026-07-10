@@ -176,6 +176,7 @@ export function WfBuilderPane({ model, onChange, errors }: WfBuilderPaneProps): 
           action={
             <button
               type="button"
+              data-testid="workflows-builder-add-input"
               onClick={addInput}
               className="text-caption font-semibold text-primary hover:underline"
             >

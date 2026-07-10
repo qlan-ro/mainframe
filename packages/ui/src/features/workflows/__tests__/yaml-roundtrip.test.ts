@@ -26,6 +26,18 @@ describe('YAML round-trip', () => {
     expect(() => parseWorkflowYaml(serializeWorkflow(r.draft))).not.toThrow();
   });
 
+  it('preserves an uppercase/underscore hydrated name through parse -> serialize', () => {
+    const onDisk = ['version: 1', 'name: Release_Candidate', 'steps:', '  - id: a', '    set: { x: 1 }'].join('\n');
+    const hydrated = parseWorkflowToDraft(onDisk);
+    expect(hydrated.ok).toBe(true);
+    if (!hydrated.ok) return;
+    expect(hydrated.draft.name).toBe('Release_Candidate');
+
+    const reparsed = parseWorkflowToDraft(serializeWorkflow(hydrated.draft));
+    expect(reparsed.ok).toBe(true);
+    if (reparsed.ok) expect(reparsed.draft.name).toBe('Release_Candidate');
+  });
+
   it('preserves agent.worktree through hydrate -> form-edit -> serialize', () => {
     const onDisk = [
       'version: 1',

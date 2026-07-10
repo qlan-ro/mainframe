@@ -16,7 +16,7 @@ import { EditorView, drawSelection, keymap } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { applyValueUpdate, externalValueUpdate } from '@/lib/editor/apply-value-update';
 import { cn } from '@/lib/utils';
-import { chipExtension } from './wf-expr-chips';
+import { chipExtension, scopeRefreshEffect } from './wf-expr-chips';
 import type { WfScopeSource } from './wf-scope';
 
 export interface WfExprInputEditorProps {
@@ -103,6 +103,15 @@ export function WfExprInputEditor({
     };
     // Mount-only: value/cursorHint are synced imperatively by the effect below.
   }, [multiline]);
+
+  // The chip StateField only rebuilds on tr.docChanged; when an upstream step
+  // is renamed, `scope` gets a new identity but this field's doc is untouched,
+  // so force a decoration rebuild via scopeRefreshEffect (wf-expr-chips.ts).
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: scopeRefreshEffect.of() });
+  }, [scope]);
 
   useEffect(() => {
     const view = viewRef.current;

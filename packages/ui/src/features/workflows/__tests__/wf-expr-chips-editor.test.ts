@@ -6,9 +6,19 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { cursorCharLeft, deleteCharBackward } from '@codemirror/commands';
-import { chipExtension } from '@/features/workflows/editor/config/wf-expr-chips';
+import { chipExtension, createChipField, scopeRefreshEffect } from '@/features/workflows/editor/config/wf-expr-chips';
+import type { WfScopeSource } from '@/features/workflows/editor/config/wf-scope';
 
 const scope = [{ kind: 'step', id: 'triage', label: 'Output of triage', expr: '${ steps.triage.output }' }] as const;
+
+/** Reads every rendered chip label back off the decoration widgets' DOM, in doc order. */
+function chipLabels(view: EditorView, field: ReturnType<typeof createChipField>): Array<string | undefined> {
+  const labels: Array<string | undefined> = [];
+  view.state.field(field).between(0, view.state.doc.length, (_from, _to, deco) => {
+    labels.push((deco.spec.widget as { toDOM(): HTMLElement }).toDOM().textContent ?? undefined);
+  });
+  return labels;
+}
 
 const zeroRect: DOMRect = {
   x: 0,
@@ -65,5 +75,35 @@ describe('chipExtension atomic behavior (real EditorView + real commands)', () =
 
   it('does not throw mounting a view for an unclosed ${', () => {
     expect(() => makeView('Fix ${ steps.triage.output now', 5)).not.toThrow();
+  });
+});
+
+describe('scopeRefreshEffect', () => {
+  it('rebuilds chip labels when dispatched, even with no doc change', () => {
+    let currentScope: WfScopeSource[] = [...scope] as WfScopeSource[];
+    const field = createChipField(() => currentScope);
+    const doc = 'Fix ${ steps.triage.output } now';
+    const state = EditorState.create({ doc, extensions: [field] });
+    const view = new EditorView({ state, parent: document.createElement('div') });
+
+    expect(chipLabels(view, field)).toEqual(['Output of triage']);
+
+    currentScope = [{ kind: 'step', id: 'triage', label: 'Triage result', expr: '${ steps.triage.output }' }];
+    view.dispatch({ effects: scopeRefreshEffect.of() });
+
+    expect(chipLabels(view, field)).toEqual(['Triage result']);
+  });
+
+  it('leaves decorations unchanged when neither the doc nor scope refresh fires', () => {
+    let currentScope: WfScopeSource[] = [...scope] as WfScopeSource[];
+    const field = createChipField(() => currentScope);
+    const doc = 'Fix ${ steps.triage.output } now';
+    const state = EditorState.create({ doc, extensions: [field] });
+    const view = new EditorView({ state, parent: document.createElement('div') });
+
+    currentScope = [{ kind: 'step', id: 'triage', label: 'Triage result', expr: '${ steps.triage.output }' }];
+    view.dispatch({ selection: { anchor: 0 } });
+
+    expect(chipLabels(view, field)).toEqual(['Output of triage']);
   });
 });

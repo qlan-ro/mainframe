@@ -29,6 +29,16 @@ describe('serializeWorkflow', () => {
     expect(obj.name).toBe('my-flow');
   });
 
+  it('preserves a name that already matches the id pattern verbatim', () => {
+    const obj = parseYaml(serializeWorkflow({ ...draft, name: 'Release_Candidate' }));
+    expect(obj.name).toBe('Release_Candidate');
+  });
+
+  it('still slugs a free-text name that does not match the id pattern', () => {
+    const obj = parseYaml(serializeWorkflow({ ...draft, name: 'My Flow' }));
+    expect(obj.name).toBe('my-flow');
+  });
+
   it('emits the event trigger as a canonical object, not a bare string', () => {
     const obj = parseYaml(serializeWorkflow(draft));
     expect(obj.triggers[0].event).toEqual({ on: 'chat.completed', workflow: 'x' });
