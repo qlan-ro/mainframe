@@ -11,4 +11,18 @@ workspace = true
 tokio = { workspace = true }
 dashmap = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+nanoid = { workspace = true }
+dirs = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-runtime = { workspace = true }
+mainframe-adapter-api = { workspace = true }
+mainframe-display = { workspace = true }
+mainframe-services = { workspace = true }
+mainframe-background-tasks = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
