@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { deriveLaunchRunControl, NO_CONFIGS_LABEL } from '../derive-launch-control';
+import { deriveLaunchRunControl, isLaunchStatusLive, NO_CONFIGS_LABEL } from '../derive-launch-control';
 
 const cfg = (name: string, over: Partial<LaunchConfiguration> = {}): LaunchConfiguration =>
   ({ name, runtimeExecutable: 'pnpm', runtimeArgs: [], port: null, url: null, ...over }) as LaunchConfiguration;
@@ -102,5 +102,21 @@ describe('deriveLaunchRunControl', () => {
     const ctrl = deriveLaunchRunControl(CONFIGS, statuses({ Preview: 'running' }), 'deleted-config');
     expect(ctrl.mode).toBe('running');
     expect(ctrl.target).toBe(C);
+  });
+});
+
+// The Run-surface tab strip and the toolbar picker row both need the same
+// "is this config live?" check per-config (todo #206 part 2). Reuse this rather
+// than re-hardcoding the running/starting literals.
+describe('isLaunchStatusLive', () => {
+  it('running and starting are live', () => {
+    expect(isLaunchStatusLive('running')).toBe(true);
+    expect(isLaunchStatusLive('starting')).toBe(true);
+  });
+
+  it('stopped / failed / undefined are not live', () => {
+    expect(isLaunchStatusLive('stopped')).toBe(false);
+    expect(isLaunchStatusLive('failed')).toBe(false);
+    expect(isLaunchStatusLive(undefined)).toBe(false);
   });
 });

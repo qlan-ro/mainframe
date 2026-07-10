@@ -31,6 +31,16 @@ export const NO_CONFIGS_LABEL = 'No Launch Configurations';
 
 const LIVE_STATUSES: ReadonlySet<LaunchProcessStatus> = new Set<LaunchProcessStatus>(['running', 'starting']);
 
+/**
+ * Whether a single config's process status counts as live (running or starting).
+ * The one place the running/starting literals live — reused by the toolbar picker
+ * row and the Run-surface tab strip so a live config's Stop is consistent
+ * everywhere. Treats an absent status as stopped.
+ */
+export function isLaunchStatusLive(status: LaunchProcessStatus | undefined): boolean {
+  return LIVE_STATUSES.has(status ?? 'stopped');
+}
+
 export function deriveLaunchRunControl(
   configs: LaunchConfiguration[],
   scopeStatuses: Record<string, LaunchProcessStatus>,
@@ -40,7 +50,7 @@ export function deriveLaunchRunControl(
     (selectedConfigName ? configs.find((c) => c.name === selectedConfigName) : undefined) ?? configs[0];
   if (!startTarget) return { mode: 'empty', label: NO_CONFIGS_LABEL };
 
-  const isLive = (name: string) => LIVE_STATUSES.has(scopeStatuses[name] ?? 'stopped');
+  const isLive = (name: string) => isLaunchStatusLive(scopeStatuses[name]);
   const runningTarget = isLive(startTarget.name) ? startTarget : configs.find((c) => isLive(c.name));
 
   if (runningTarget) return { mode: 'running', target: runningTarget, label: runningTarget.name };

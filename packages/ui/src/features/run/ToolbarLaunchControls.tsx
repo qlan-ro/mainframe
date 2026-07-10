@@ -24,7 +24,7 @@ import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuDivider, MenuEmpty, MenuRow, menuItemVariants } from '@/components/ui/menu';
 import { useLaunchActions } from './use-launch-actions';
-import { deriveLaunchRunControl } from './derive-launch-control';
+import { deriveLaunchRunControl, isLaunchStatusLive } from './derive-launch-control';
 
 interface ToolbarLaunchControlsProps {
   port: number;
@@ -148,7 +148,7 @@ interface LaunchPickerRowProps {
  * doesn't also select).
  */
 function LaunchPickerRow({ config, status, selected, onSelect, onStart, onStop }: LaunchPickerRowProps) {
-  const live = status === 'running' || status === 'starting';
+  const live = isLaunchStatusLive(status);
   const TypeIcon = config.preview ? Eye : Terminal;
 
   return (
