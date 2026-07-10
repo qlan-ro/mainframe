@@ -1,13 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 
-const getProjectFile = vi.fn();
-const getProjectFileBase64 = vi.fn();
+const getFileForView = vi.fn();
 let identity: { projectId: string | null; chatId: string | null } = { projectId: null, chatId: null };
 
 vi.mock('@/lib/api/files', () => ({
-  getProjectFile: (...a: unknown[]) => getProjectFile(...a),
-  getProjectFileBase64: (...a: unknown[]) => getProjectFileBase64(...a),
+  getFileForView: (...a: unknown[]) => getFileForView(...a),
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 1 }));
 vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => identity }));
@@ -16,8 +14,7 @@ import { ViewerRouter } from '../viewer-router';
 
 describe('ViewerRouter — file loads are daemon-only', () => {
   beforeEach(() => {
-    getProjectFile.mockReset();
-    getProjectFileBase64.mockReset();
+    getFileForView.mockReset();
     identity = { projectId: null, chatId: null };
   });
 
@@ -25,21 +22,31 @@ describe('ViewerRouter — file loads are daemon-only', () => {
     render(<ViewerRouter path="/abs/photo.png" />);
     await screen.findByText('No project context for this file');
     // Critically: it must NOT have attempted any read at all.
-    expect(getProjectFileBase64).not.toHaveBeenCalled();
-    expect(getProjectFile).not.toHaveBeenCalled();
+    expect(getFileForView).not.toHaveBeenCalled();
   });
 
   it('reads a binary file through the daemon when a project is active', async () => {
     identity = { projectId: 'p1', chatId: 'c1' };
-    getProjectFileBase64.mockResolvedValueOnce('Zm9v');
+    getFileForView.mockResolvedValueOnce({ content: 'Zm9v', external: false });
     render(<ViewerRouter path="photo.png" />);
-    await waitFor(() => expect(getProjectFileBase64).toHaveBeenCalledWith(1, 'p1', 'photo.png', 'c1'));
+    await waitFor(() => expect(getFileForView).toHaveBeenCalledWith(1, 'p1', 'photo.png', 'c1', { base64: true }));
   });
 
   it('reads a text file through the daemon when a project is active', async () => {
     identity = { projectId: 'p1', chatId: 'c1' };
-    getProjectFile.mockResolvedValueOnce('a,b\n1,2');
+    getFileForView.mockResolvedValueOnce({ content: 'a,b\n1,2', external: false });
     render(<ViewerRouter path="data.csv" />);
-    await waitFor(() => expect(getProjectFile).toHaveBeenCalledWith(1, 'p1', 'data.csv', 'c1'));
+    await waitFor(() => expect(getFileForView).toHaveBeenCalledWith(1, 'p1', 'data.csv', 'c1', { base64: false }));
+  });
+
+  it('renders an out-of-project image served by the external fallback', async () => {
+    identity = { projectId: 'p1', chatId: 'c1' };
+    getFileForView.mockResolvedValueOnce({ content: 'Zm9v', external: true });
+    render(<ViewerRouter path="/tmp/mf-annot.png" />);
+    await waitFor(() =>
+      expect(getFileForView).toHaveBeenCalledWith(1, 'p1', '/tmp/mf-annot.png', 'c1', { base64: true }),
+    );
+    // The image viewer mounts with a data URL — no error state.
+    await waitFor(() => expect(screen.queryByText(/Path outside project/)).toBeNull());
   });
 });

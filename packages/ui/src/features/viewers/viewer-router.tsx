@@ -16,7 +16,7 @@
  * viewer works unchanged against a remote daemon.
  */
 import { type ReactNode, useEffect, useState } from 'react';
-import { getProjectFile, getProjectFileBase64 } from '@/lib/api/files';
+import { getFileForView } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ImageViewer } from './ImageViewer';
@@ -116,11 +116,12 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
         }
 
         // Binary kinds (image, pdf) need base64; text kinds need UTF-8.
+        // Absolute paths outside the project (e.g. a chat tool-card pointing
+        // at /tmp) fall back to the daemon's read-only external endpoint —
+        // viewers are inherently read-only, so nothing else changes.
         const isBinary = kind === 'image' || kind === 'pdf';
 
-        const raw = isBinary
-          ? await getProjectFileBase64(port, projectId, path, chatId)
-          : await getProjectFile(port, projectId, path, chatId);
+        const { content: raw } = await getFileForView(port, projectId, path, chatId, { base64: isBinary });
 
         if (cancelled) return;
 

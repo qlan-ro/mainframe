@@ -30,6 +30,7 @@ import type { ComponentProps } from 'react';
 
 vi.mock('@/lib/api/files', () => ({
   getProjectFile: vi.fn().mockResolvedValue('content'),
+  getFileForView: vi.fn().mockResolvedValue({ content: 'content', external: false }),
   saveProjectFile: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
@@ -218,7 +219,7 @@ vi.mock('@/features/viewers/ViewerShell', () => ({
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 import { EditorTab } from '../EditorTab';
-import { saveProjectFile, getProjectFile } from '@/lib/api/files';
+import { saveProjectFile, getProjectFile, getFileForView } from '@/lib/api/files';
 import { setHostForTesting, resetHostForTesting } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
@@ -241,6 +242,7 @@ beforeEach(async () => {
   mockOnFileChange.mockClear();
   mockApplyValueUpdate.mockClear();
   vi.mocked(getProjectFile).mockResolvedValue('content');
+  vi.mocked(getFileForView).mockResolvedValue({ content: 'content', external: false });
   // Reset LSP call-order tracker.
   lspCallOrder.length = 0;
   // Reset initLspPort and ensureClient mocks.
@@ -695,5 +697,60 @@ describe('EditorTab — handleSave respects current readOnly (MINOR finding)', (
     });
 
     expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
+  });
+});
+
+describe('EditorTab — external read-only files (#205)', () => {
+  const EXT_PATH = '/tmp/outside/notes.txt';
+
+  function mockExternalIdentity() {
+    activeIdentityState.projectId = 'proj-ext';
+    activeIdentityState.chatId = 'chat-ext';
+    activeIdentityState.projectPath = '/project';
+    vi.mocked(getFileForView).mockResolvedValue({ content: 'external content', external: true });
+  }
+
+  it('forces readOnly on CmEditorWithComments and labels the banner "outside the project"', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-1" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(capturedCmEditorProps[capturedCmEditorProps.length - 1]?.readOnly).toBe(true);
+    const indicator = await screen.findByTestId('editor-tab-readonly');
+    expect(indicator.textContent).toContain('outside the project');
+  });
+
+  it('never calls saveProjectFile for an external file', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-2" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    await act(async () => {
+      lastProps?.onSave?.('attempted save');
+    });
+    expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
+  });
+
+  it('does not register a file watch for an external file', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-3" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(mockSubscribeFile).not.toHaveBeenCalledWith(EXT_PATH);
+  });
+
+  it('keeps an external markdown file read-only in MarkdownEditorTab', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-4" path="/tmp/outside/README.md" />);
+    await screen.findByTestId('markdown-editor-mock');
+    expect(capturedMarkdownProps[capturedMarkdownProps.length - 1]?.readOnly).toBe(true);
+  });
+
+  it('keeps a contained project file fully editable (external:false)', async () => {
+    activeIdentityState.projectId = 'proj-in';
+    activeIdentityState.chatId = 'chat-in';
+    activeIdentityState.projectPath = '/project';
+    render(<EditorTab tabId="tab-ext-5" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(capturedCmEditorProps[capturedCmEditorProps.length - 1]?.readOnly).toBe(false);
+    expect(screen.queryByTestId('editor-tab-readonly')).toBeNull();
   });
 });
