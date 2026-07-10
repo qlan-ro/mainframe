@@ -110,6 +110,9 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   useEffect(() => {
     const cached = useEditorStore.getState().getBuffer(path);
     if (cached) {
+      // Only project files are ever cached (external loads skip setBuffer
+      // below), so a cache hit is always an editable project buffer.
+      setIsExternal(false);
       setLoadState({ status: 'ready', value: cached.value });
       return;
     }
@@ -128,7 +131,10 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
           return;
         }
         setIsExternal(external);
-        setBuffer(path, content, false);
+        // External files never enter the buffer cache: buffers persist
+        // globally, and the cache-hit path above renders them editable — a
+        // cached external file would reopen WITHOUT its read-only guard.
+        if (!external) setBuffer(path, content, false);
         setLoadState({ status: 'ready', value: content });
       })
       .catch((err: unknown) => {

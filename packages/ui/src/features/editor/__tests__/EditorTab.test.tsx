@@ -753,4 +753,26 @@ describe('EditorTab — external read-only files (#205)', () => {
     expect(capturedCmEditorProps[capturedCmEditorProps.length - 1]?.readOnly).toBe(false);
     expect(screen.queryByTestId('editor-tab-readonly')).toBeNull();
   });
+
+  // Regression: buffers persist globally, and the load effect's cache-hit path
+  // renders them editable. Caching an external file would therefore resurface
+  // it WITHOUT the read-only banner on reopen — external loads must never
+  // enter the buffer cache.
+  it('does NOT cache an external file in the editor store (read-only survives reopen)', async () => {
+    mockExternalIdentity();
+    editorState.setBuffer.mockClear();
+    render(<EditorTab tabId="tab-ext-6" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(editorState.setBuffer).not.toHaveBeenCalled();
+  });
+
+  it('still caches a contained project file on load', async () => {
+    activeIdentityState.projectId = 'proj-in-cache';
+    activeIdentityState.chatId = 'chat-in-cache';
+    activeIdentityState.projectPath = '/project';
+    editorState.setBuffer.mockClear();
+    render(<EditorTab tabId="tab-ext-7" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(editorState.setBuffer).toHaveBeenCalledWith('/project/src/app.js', 'content', false);
+  });
 });
