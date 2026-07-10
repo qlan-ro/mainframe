@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { existsSync } from 'node:fs';
 import { relative, isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import type {
@@ -85,19 +86,49 @@ export async function getSessionContext(
 /**
  * Drop repeated skill entries. The same skill can be persisted under two paths
  * (a live probe hitting a real SKILL.md vs. a batch re-extraction falling back
- * to a conventional path), so path-only dedup lets duplicates through (#222).
- * Keyed on the display name, which the DB normalizes to the skill's leaf.
+ * to a conventional `~/.claude/skills/<leaf>/SKILL.md` stub), which path-only
+ * dedup lets through (#222). Display-name-only dedup over-corrects: two genuinely
+ * different skills that share a leaf name (e.g. a personal `tdd` and a plugin
+ * `superpowers:tdd`) would collapse, hiding one that was actually used.
+ *
+ * So within a same-display-name group we let on-disk existence break the tie:
+ * keep every entry whose file exists (distinct real skills survive), and drop
+ * the non-existent fallback stubs. When nothing in the group exists, keep the
+ * first so the skill name still surfaces. `pathExists` is injectable for tests.
  */
-export function dedupeSkillFiles(skills: SkillFileEntry[]): SkillFileEntry[] {
-  const seen = new Set<string>();
+export function dedupeSkillFiles(
+  skills: SkillFileEntry[],
+  pathExists: (p: string) => boolean = existsSync,
+): SkillFileEntry[] {
+  const byPath = dedupeSkillsByPath(skills);
+  const keyOf = (s: SkillFileEntry) => s.displayName || s.path;
+
+  const exists = new Map<string, boolean>();
+  for (const s of byPath) exists.set(s.path, pathExists(s.path));
+  const groupHasReal = new Set<string>();
+  for (const s of byPath) if (exists.get(s.path)) groupHasReal.add(keyOf(s));
+
+  const keptFallbackKey = new Set<string>();
   const out: SkillFileEntry[] = [];
-  for (const skill of skills) {
-    const key = skill.displayName || skill.path;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(skill);
+  for (const s of byPath) {
+    const key = keyOf(s);
+    if (groupHasReal.has(key)) {
+      if (exists.get(s.path)) out.push(s);
+    } else if (!keptFallbackKey.has(key)) {
+      keptFallbackKey.add(key);
+      out.push(s);
+    }
   }
   return out;
+}
+
+function dedupeSkillsByPath(skills: SkillFileEntry[]): SkillFileEntry[] {
+  const seen = new Set<string>();
+  return skills.filter((s) => {
+    if (seen.has(s.path)) return false;
+    seen.add(s.path);
+    return true;
+  });
 }
 
 /**
