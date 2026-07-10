@@ -177,6 +177,11 @@ CDP endpoint: `http://localhost:9222`
 
 ## Seeding & Fixtures
 
+**Reverting a seeded chat:** there is no `DELETE /api/chats/:id` (returns
+404). Delete the seeded chat's row directly from the SQLite DB in the run's
+isolated data dir (`$MAINFRAME_DATA_DIR/mainframe.db` — dev runs use
+`~/.mainframe_dev`, never `~/.mainframe`).
+
 **Hand-authored replay fixtures (preferred for rendering/derived-state
 scenarios).** The e2e mock-cli plugin (`packages/e2e/plugins/mock-cli`, see
 its `DESIGN.md`) replays an NDJSON event fixture through a real adapter —
