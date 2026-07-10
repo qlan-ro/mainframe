@@ -340,6 +340,15 @@ export interface Adapter {
   killAll(): void;
   getToolCategories?(): import('./display.js').ToolCategories;
 
+  /**
+   * Generate a friendly chat title from the first user message, via a cheap
+   * one-shot model call. `binary` is the resolved CLI path from the
+   * `<adapterId>.titleBinary` setting. Adapters without a cheap, side-effect-free
+   * title model omit this — callers then keep the deterministic truncated title
+   * (`deriveTitleFromMessage`) rather than cross-spawning another vendor's CLI.
+   */
+  generateTitle?(content: string, binary: string): Promise<string | null>;
+
   getContextFiles?(projectPath: string): {
     global: import('./context.js').ContextFile[];
     project: import('./context.js').ContextFile[];

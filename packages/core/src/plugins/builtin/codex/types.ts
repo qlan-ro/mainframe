@@ -100,26 +100,6 @@ export interface ThreadReadResult {
   };
 }
 
-export interface ThreadListParams {
-  cwd?: string;
-  archived?: boolean;
-}
-
-export interface ThreadSummary {
-  id: string;
-  name: string | null;
-  preview: string;
-  cwd: string;
-  modelProvider: string;
-  model: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface ThreadListResult {
-  data: ThreadSummary[];
-}
-
 // --- Turn ---
 
 export interface TurnStartParams {

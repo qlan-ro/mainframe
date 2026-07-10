@@ -38,6 +38,10 @@ export function synthesizeDraftChat(id: string, d: DraftCfg): Chat {
     fast: d.fast ?? null,
     ultracode: d.ultracode ?? null,
     adaptiveThinking: d.adaptiveThinking ?? null,
+    // A pre-send worktree attach — carried so the worktree trigger/panel and the
+    // titlebar chip reflect the choice before the chat exists (todo #223).
+    worktreePath: d.worktreePath,
+    branchName: d.branchName,
     worktreeMissing: false,
   };
 }

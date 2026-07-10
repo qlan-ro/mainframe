@@ -28,6 +28,8 @@
  */
 import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';
 import { createChat, setChatConfig, setChatTuning } from '../../../lib/api/chats';
+import { enableWorktree } from '../../../lib/api/git';
+import { mfToast } from '../../../lib/toast';
 import { getDraftConfig, clearDraftConfig, type DraftCfg } from './draft-config';
 import { useNewThreadReady } from './new-thread-ready-store';
 
@@ -51,6 +53,27 @@ async function applyDraftTuning(port: number, chatId: string, cfg: DraftCfg): Pr
     if (cfg.planMode != null) await setChatConfig(port, chatId, { planMode: cfg.planMode });
   } catch (err) {
     console.warn('[new-thread-coordinator] applyDraftTuning failed', { chatId, err });
+  }
+}
+
+/**
+ * Create the "New" worktree chosen pre-send (WorktreePopover on a draft) —
+ * enable-worktree is chat-scoped, so it can only run once the chat exists,
+ * BEFORE the first send spawns the CLI (so it spawns in the worktree cwd).
+ * Best-effort: on failure the session continues in the main repo, surfaced
+ * with an error toast (the popover that reported errors inline is long gone).
+ */
+async function applyPendingWorktree(port: number, chatId: string, cfg: DraftCfg): Promise<void> {
+  if (!cfg.pendingWorktree) return;
+  const { baseBranch, branchName } = cfg.pendingWorktree;
+  try {
+    await enableWorktree(port, chatId, baseBranch, branchName);
+  } catch (err) {
+    console.warn('[new-thread-coordinator] applyPendingWorktree failed', { chatId, err });
+    mfToast.error(`Couldn't create worktree "${branchName}"`, {
+      description: 'The session continues in the main repository.',
+      chatId,
+    });
   }
 }
 
@@ -80,8 +103,10 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
     ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
   })
     .then(async (chat: Chat) => {
-      // Carry the draft fields createChat can't take (planMode/effort/features)
-      // onto the new chat BEFORE the first send spawns the CLI.
+      // Carry the draft fields createChat can't take (a pending new worktree,
+      // planMode/effort/features) onto the new chat BEFORE the first send
+      // spawns the CLI.
+      await applyPendingWorktree(port, chat.id, cfg);
       await applyDraftTuning(port, chat.id, cfg);
       // Created — the draft is consumed and the cache entry can be evicted so a
       // future recycled localId starts fresh. The reactive ready flag is cleared

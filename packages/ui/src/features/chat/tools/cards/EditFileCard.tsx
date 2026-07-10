@@ -103,13 +103,11 @@ function EditCardBody({
 }: EditCardBodyProps) {
   return (
     <div className="border-t border-border">
-      <div className="max-h-[300px] overflow-y-auto">
-        {displayHunks ? (
-          <DiffFromPatch hunks={displayHunks} />
-        ) : (
-          <DiffFallback oldStr={oldString} newStr={newString} startLine={null} />
-        )}
-      </div>
+      {displayHunks ? (
+        <DiffFromPatch hunks={displayHunks} />
+      ) : (
+        <DiffFallback oldStr={oldString} newStr={newString} startLine={null} />
+      )}
       {hasError && (
         <div className="border-t border-border px-3 py-1.5 bg-mf-diff-del-bg">
           {showExpand ? (

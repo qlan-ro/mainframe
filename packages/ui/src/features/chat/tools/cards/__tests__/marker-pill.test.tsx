@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { MarkerPill, MarkerWrap, MarkerBody, MarkerCapsLabel, MarkerPre } from '../marker-pill';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -176,5 +177,10 @@ describe('MarkerPre', () => {
   it('renders preformatted content', () => {
     render(<MarkerPre>const x = 1;</MarkerPre>);
     expect(screen.getByText('const x = 1;')).toBeInTheDocument();
+  });
+
+  it('is not its own vertical scroll container (single overflow owner — todo #198)', () => {
+    const { container } = render(<MarkerPre>{'line 1\nline 2'}</MarkerPre>);
+    expect(nestedVerticalScrollers(container)).toHaveLength(0);
   });
 });

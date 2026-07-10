@@ -21,20 +21,16 @@
  * Hint-inside-asChild-trigger trap in `NewSessionPickerPopover`).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuiState } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Hint } from '@/components/ui/hint';
-import { activeSessionCustom } from '../sessions/view-model/chat-to-thread-custom';
 import { useBranchActions } from './use-branch-actions';
-import { useWorktreeSession } from './use-worktree-session';
+import { useNewSessionAction } from './use-new-session-action';
 import { BranchPopoverListPane } from './BranchPopoverListPane';
 import { BranchPopoverOverlay } from './BranchPopoverOverlay';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 
 type View = 'list' | 'new-branch' | 'conflict' | 'rename';
-
-const DEFAULT_ADAPTER_ID = 'claude';
 
 // Each panel (list, submenu, overlay) is its own card; the popover container is
 // bare so the list + submenu read as two separate cards with a gap (13-popover
@@ -70,12 +66,6 @@ export function BranchPopover({
   children,
   triggerLabel,
 }: BranchPopoverProps) {
-  // Resolve adapterId from the active thread's custom — falls back to 'claude'.
-  const adapterId = useAuiState((s) => {
-    const custom = activeSessionCustom(s.threadListItem, s.threads.threadItems);
-    return custom?.adapterId ?? DEFAULT_ADAPTER_ID;
-  });
-
   const {
     branches,
     conflictFiles,
@@ -171,15 +161,8 @@ export function BranchPopover({
     [handleCreateBranch, goToList, onBranchChanged],
   );
 
-  const newSession = useWorktreeSession(port, projectId, adapterId);
-
-  const handleNewSession = useCallback(
-    (dirName: string, branchName?: string) => {
-      void newSession(dirName, branchName);
-      onOpenChange(false);
-    },
-    [newSession, onOpenChange],
-  );
+  const closePopover = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const handleNewSession = useNewSessionAction(port, projectId, closePopover);
 
   const handleDeleteWorktreeAction = useCallback(
     async (dirName: string, branchName?: string): Promise<boolean> => {
