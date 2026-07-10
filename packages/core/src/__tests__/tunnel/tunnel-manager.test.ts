@@ -16,7 +16,7 @@ vi.mock('node:dns/promises', () => ({
 
 // Imported after the mocks above so TunnelManager picks up the mocked deps.
 const { TunnelManager } = await import('../../tunnel/tunnel-manager.js');
-import type { TunnelRegistryEntry, TunnelRegistryPort } from '../../tunnel/tunnel-registry.js';
+import type { ManagedChildEntry, ChildRegistryPort, ManagedChildKind } from '../../process/index.js';
 
 type MockChild = NodeJS.EventEmitter & {
   stdout: PassThrough;
@@ -34,16 +34,19 @@ function makeMockChild(pid?: number): MockChild {
   return child;
 }
 
-class RecordingRegistry implements TunnelRegistryPort {
-  added: TunnelRegistryEntry[] = [];
+class RecordingRegistry implements ChildRegistryPort {
+  added: ManagedChildEntry[] = [];
   removed: number[] = [];
-  async add(entry: TunnelRegistryEntry): Promise<void> {
+  async add(entry: ManagedChildEntry): Promise<void> {
     this.added.push(entry);
   }
   async remove(pid: number): Promise<void> {
     this.removed.push(pid);
   }
-  async list(): Promise<TunnelRegistryEntry[]> {
+  async list(): Promise<ManagedChildEntry[]> {
+    return [];
+  }
+  async listByKind(_kind: ManagedChildKind): Promise<ManagedChildEntry[]> {
     return [];
   }
   async clear(): Promise<void> {}
@@ -311,7 +314,13 @@ describe('TunnelManager registry tracking', () => {
     manager.start(4173, 'preview:Dev').catch(() => {});
 
     expect(registry.added).toEqual([
-      expect.objectContaining({ pid: 4242, label: 'preview:Dev', binPath: '/abs/bin/cloudflared' }),
+      expect.objectContaining({
+        pid: 4242,
+        kind: 'tunnel',
+        label: 'preview:Dev',
+        command: '/abs/bin/cloudflared',
+        group: false,
+      }),
     ]);
   });
 

@@ -17,7 +17,8 @@ import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
 import { LaunchRegistry } from './launch/index.js';
-import { TunnelManager, FileTunnelRegistry, sweepStrayTunnels, resolveCloudflaredPath } from './tunnel/index.js';
+import { TunnelManager, resolveCloudflaredPath } from './tunnel/index.js';
+import { FileChildRegistry, sweepStrayChildren } from './process/index.js';
 import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import codexManifest from './plugins/builtin/codex/manifest.json' with { type: 'json' };
@@ -81,13 +82,16 @@ async function main(): Promise<void> {
   // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
   // otherwise those chats look "running" and new messages queue forever.
   chats.recoverStaleWorkingState();
-  const tunnelRegistry = new FileTunnelRegistry(join(getDataDir(), 'cloudflared-tunnels.json'));
+  // One pidfile registry, shared by the tunnel and launch managers (a `kind`
+  // field distinguishes their records), so a single startup sweep can reap every
+  // child a crashed daemon leaked.
+  const childRegistry = new FileChildRegistry(join(getDataDir(), 'managed-children.json'));
   const cloudflaredPath = (await resolveCloudflaredPath()) ?? undefined;
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event), {
-    registry: tunnelRegistry,
+    registry: childRegistry,
     cloudflaredPath,
   });
-  const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
+  const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager, childRegistry);
 
   // Forward tracker emissions through the late-bound broadcastEvent closure.
   // The closure captures broadcastEvent by reference, so by the time tracker
@@ -177,13 +181,13 @@ async function main(): Promise<void> {
 
   await server.start(config.port);
 
-  // Reap cloudflared children a previous daemon crash/kill orphaned, pruning
-  // their records. This MUST run after the port bind: the bind is the daemon's
-  // only single-instance guard, so a duplicate launch against the same data dir
-  // fails with EADDRINUSE above instead of sweeping the live daemon's tunnels.
-  // It still precedes every tunnel spawn (daemon tunnel below, preview tunnels
-  // are user-triggered).
-  await sweepStrayTunnels(tunnelRegistry).catch((err) => logger.warn({ err }, 'Stray cloudflared tunnel sweep failed'));
+  // Reap tunnel AND launch children a previous daemon crash/kill orphaned,
+  // pruning their records. This MUST run after the port bind: the bind is the
+  // daemon's only single-instance guard, so a duplicate launch against the same
+  // data dir fails with EADDRINUSE above instead of sweeping the live daemon's
+  // children. It still precedes every tunnel spawn (daemon tunnel below; preview
+  // and launch children are user-triggered).
+  await sweepStrayChildren(childRegistry).catch((err) => logger.warn({ err }, 'Stray child process sweep failed'));
 
   // Bind the real WS broadcast AND feed daemon events to the workflow engine.
   // All event sources (chats, launchRegistry, tunnelManager, backgroundTasks,

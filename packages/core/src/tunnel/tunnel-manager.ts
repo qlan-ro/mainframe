@@ -5,8 +5,8 @@ import { Resolver } from 'node:dns/promises';
 import { isAbsolute } from 'node:path';
 import { createChildLogger } from '../logger.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
-import { NoopTunnelRegistry } from './tunnel-registry.js';
-import type { TunnelRegistryPort } from './tunnel-registry.js';
+import { NoopChildRegistry } from '../process/index.js';
+import type { ChildRegistryPort } from '../process/index.js';
 
 const log = createChildLogger('tunnel');
 
@@ -27,7 +27,7 @@ export interface TunnelStartOptions {
 }
 
 export interface TunnelManagerOptions {
-  registry?: TunnelRegistryPort;
+  registry?: ChildRegistryPort;
   /** Absolute cloudflared path to spawn; a bare name is spawned but never tracked. */
   cloudflaredPath?: string;
 }
@@ -54,12 +54,12 @@ export class TunnelManager {
   private pending = new Set<ChildProcess>();
   private verifiedAt = new Map<string, VerifyResult>();
   private broadcast: BroadcastFn;
-  private registry: TunnelRegistryPort;
+  private registry: ChildRegistryPort;
   private cloudflaredPath: string;
 
   constructor(broadcast?: BroadcastFn, options?: TunnelManagerOptions) {
     this.broadcast = broadcast ?? (() => {});
-    this.registry = options?.registry ?? new NoopTunnelRegistry();
+    this.registry = options?.registry ?? new NoopChildRegistry();
     this.cloudflaredPath = options?.cloudflaredPath ?? 'cloudflared';
   }
 
@@ -72,7 +72,16 @@ export class TunnelManager {
     const pid = child.pid;
     if (pid == null || !isAbsolute(this.cloudflaredPath)) return;
     this.registry
-      .add({ pid, label, binPath: this.cloudflaredPath, spawnedAt: Date.now() })
+      .add({
+        pid,
+        kind: 'tunnel',
+        command: this.cloudflaredPath,
+        args: [],
+        cwd: null,
+        group: false,
+        label,
+        spawnedAt: Date.now(),
+      })
       .catch((err) => log.warn({ err, label, pid }, 'failed to record tunnel pid'));
   }
 

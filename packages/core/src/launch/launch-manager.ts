@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
+import type { ChildRegistryPort } from '../process/index.js';
 import { LaunchProcessState, type LaunchOutputEntry } from './launch-process-state.js';
 
 const log = createChildLogger('launch');
@@ -99,7 +100,34 @@ export class LaunchManager {
     private projectPath: string,
     private onEvent: (event: DaemonEvent) => void,
     private tunnelManager?: TunnelManager,
+    private childRegistry?: ChildRegistryPort,
   ) {}
+
+  /**
+   * Persist a spawned launch pid so a crashed daemon's next startup sweep can
+   * reap its process group. Launch children are detached group leaders, so the
+   * sweep needs the exact argv + cwd to reject a reused pid (see process/sweep).
+   */
+  private recordSpawn(name: string, pid: number | undefined, executable: string, args: string[]): void {
+    if (pid == null || !this.childRegistry) return;
+    this.childRegistry
+      .add({
+        pid,
+        kind: 'launch',
+        command: executable,
+        args,
+        cwd: this.projectPath,
+        group: true,
+        label: `${this.projectId}:${name}`,
+        spawnedAt: Date.now(),
+      })
+      .catch((err) => log.warn({ err, name, pid }, 'failed to record launch pid'));
+  }
+
+  private forgetSpawn(pid: number | undefined): void {
+    if (pid == null || !this.childRegistry) return;
+    this.childRegistry.remove(pid).catch((err) => log.warn({ err, pid }, 'failed to forget launch pid'));
+  }
 
   async start(config: LaunchConfiguration): Promise<void> {
     if (this.processes.has(config.name)) {
@@ -133,6 +161,8 @@ export class LaunchManager {
         ...(config.env ?? {}),
       },
     });
+
+    this.recordSpawn(config.name, child.pid, executable, config.runtimeArgs);
 
     const managed: ManagedProcess = { process: child, status: 'starting' };
     this.processes.set(config.name, managed);
@@ -173,6 +203,7 @@ export class LaunchManager {
     });
 
     child.on('exit', (code) => {
+      this.forgetSpawn(child.pid);
       if (code !== 0 && stderrTail.length > 0) {
         log.warn({ name: config.name, pid: child.pid, code, stderr: stderrTail.join('\n') }, 'launch process failed');
       } else {
@@ -212,6 +243,7 @@ export class LaunchManager {
         resolve();
       });
       child.once('error', (err: NodeJS.ErrnoException) => {
+        this.forgetSpawn(child.pid);
         log.warn(
           {
             name: config.name,
