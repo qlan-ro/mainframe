@@ -37,6 +37,7 @@ vi.mock('@/features/chat/tools/ToolResultExpand', () => ({
 // ---------------------------------------------------------------------------
 
 import { ReadFileCard } from '../ReadFileCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Minimal wrapper so Radix Tooltip doesn't warn
@@ -153,6 +154,21 @@ describe('ReadFileCard — done state', () => {
       </Wrap>,
     );
     expect(screen.getByTestId('read-card-root')).toBeInTheDocument();
+  });
+
+  it('does not nest a vertical scroll container in the code preview (single overflow owner)', () => {
+    render(
+      <Wrap>
+        <ReadFileCard
+          {...baseProps}
+          args={{ file_path: '/a/b/c.ts', from: 1 }}
+          result={'alpha\nbeta'}
+          isError={false}
+        />
+      </Wrap>,
+    );
+    fireEvent.click(screen.getByTestId('read-card-trigger'));
+    expect(nestedVerticalScrollers(screen.getByTestId('read-card-root'))).toHaveLength(0);
   });
 });
 

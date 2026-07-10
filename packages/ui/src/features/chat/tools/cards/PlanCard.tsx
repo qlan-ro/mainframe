@@ -76,7 +76,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
             <div className="ml-5 border-l border-border py-1">
               <pre
                 data-testid="chat-plan-body"
-                className="text-caption font-mono text-muted-foreground whitespace-pre-wrap px-3 max-h-[200px] overflow-y-auto"
+                className="text-caption font-mono text-muted-foreground whitespace-pre-wrap px-3"
               >
                 {resultText}
               </pre>
