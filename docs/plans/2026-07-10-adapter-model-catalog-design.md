@@ -8,7 +8,7 @@ PR #395 materialized adapter catalogs so daemon startup never waits for a CLI pr
 2. A chat without an explicit Codex model becomes an empty string inside collaboration settings. Codex CLI 0.144.1 rejects that value for ChatGPT accounts instead of treating it as the account default.
 3. Claude CLI 2.1.206 returns both `default` and `opus[1m]`, and both resolve to `claude-opus-4-8[1m]`. Rendering both produces duplicate Opus 4.8 rows.
 
-The current Claude catalog exposes 1M Default/Opus and Fable selectors, plus 200k Sonnet and Haiku selectors. It does not expose a separate 200k Opus selector.
+The current Claude catalog exposes 1M Default/Opus, Fable, and Sonnet selectors, plus a 200k Haiku selector. Sonnet 5's usable window was live-verified at 967k tokens after the CLI reserve. The catalog does not expose separate 200k Opus or Sonnet selectors.
 
 ## Decisions
 
