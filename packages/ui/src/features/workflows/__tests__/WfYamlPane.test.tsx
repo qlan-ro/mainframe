@@ -57,6 +57,24 @@ describe('WfYamlPane', () => {
     expect(screen.getByText('2 issues')).toBeInTheDocument();
   });
 
+  it('settles to an issue-count chip (not "Validating…") when the validate request itself failed', () => {
+    render(
+      <WfYamlPane
+        yaml={SAMPLE_YAML}
+        validation={null}
+        validationError={`steps: Too small: expected array to have >=1 items`}
+        filename="greet.yaml"
+      />,
+    );
+    expect(screen.queryByText('Validating…')).not.toBeInTheDocument();
+    expect(screen.getByText('1 issue')).toBeInTheDocument();
+  });
+
+  it('shows Validating… only while there is no settled validation and no validate error', () => {
+    render(<WfYamlPane yaml={SAMPLE_YAML} validation={null} filename="greet.yaml" />);
+    expect(screen.getByText('Validating…')).toBeInTheDocument();
+  });
+
   it('copies the yaml to the clipboard when the copy button is clicked', async () => {
     render(<WfYamlPane yaml={SAMPLE_YAML} validation={null} filename="greet.yaml" />);
     fireEvent.click(screen.getByTestId('workflows-editor-yaml-copy'));

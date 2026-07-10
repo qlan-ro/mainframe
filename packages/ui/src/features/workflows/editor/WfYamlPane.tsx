@@ -11,6 +11,7 @@ import { FileText, Check, TriangleAlert, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShikiCode } from '@/lib/shiki-tokens';
 import { Hint } from '@/components/ui/hint';
+import { splitJoinedErrorMessage } from './wf-validate-map';
 
 interface ValidationResult {
   valid: boolean;
@@ -20,6 +21,13 @@ interface ValidationResult {
 interface WfYamlPaneProps {
   yaml: string;
   validation: ValidationResult | null;
+  /**
+   * Set when the validate request itself failed (network error, or the
+   * daemon rejected it outright — e.g. HTTP 400 for a schema violation).
+   * Must settle the header chip the same as a 2xx invalid result — leaving
+   * it null here is why the chip used to hang on "Validating…" forever.
+   */
+  validationError?: string | null;
   filename: string;
 }
 
@@ -59,9 +67,11 @@ function YamlCopyButton({ yaml }: { yaml: string }): React.ReactElement {
   );
 }
 
-export function WfYamlPane({ yaml, validation, filename }: WfYamlPaneProps): React.ReactElement {
-  const valid = validation?.valid ?? null;
-  const errorCount = validation?.errors.length ?? 0;
+export function WfYamlPane({ yaml, validation, validationError, filename }: WfYamlPaneProps): React.ReactElement {
+  const valid = validationError ? false : (validation?.valid ?? null);
+  const errorCount = validationError
+    ? splitJoinedErrorMessage(validationError).length
+    : (validation?.errors.length ?? 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-mf-code-bg">

@@ -75,7 +75,11 @@ export function WfExprInput({ value, onChange, scope, multiline, testId }: WfExp
     setPickerOpen(false);
   }
 
+  // A chip click opens the raw-edit box exclusively — if the variable picker
+  // happened to be open (e.g. left over from typing `${` elsewhere in the
+  // field before clicking an existing chip), close it so the two don't stack.
   function handleChipClick(from: number, to: number): void {
+    setPickerOpen(false);
     setChipEdit({ from, to, text: value.slice(from, to), valueSnapshot: value });
   }
 
@@ -113,7 +117,7 @@ export function WfExprInput({ value, onChange, scope, multiline, testId }: WfExp
             />
           </Suspense>
         </div>
-        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+        <Popover open={pickerOpen && !chipEdit} onOpenChange={setPickerOpen}>
           <PopoverTrigger asChild>
             <Button
               type="button"

@@ -203,7 +203,7 @@ export function WorkflowEditor({ port, target }: WorkflowEditorProps): React.Rea
               <WfBuilderPane model={model} onChange={handleModelChange} errors={stepErrors} />
             </div>
             <div className="min-w-0 flex-1">
-              <WfYamlPane yaml={yaml} validation={validation} filename={filename} />
+              <WfYamlPane yaml={yaml} validation={validation} validationError={validationError} filename={filename} />
             </div>
           </>
         )}

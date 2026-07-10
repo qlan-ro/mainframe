@@ -115,6 +115,11 @@ describe('WorkflowEditor save/validate', () => {
     });
     expect(screen.getByTestId('workflows-editor-validation-error')).toHaveTextContent('Unrecognized key: "scope"');
     expect(screen.getByTestId('workflows-editor-save')).toBeDisabled();
+    // The YAML-pane header chip must settle too — it used to hang on
+    // "Validating…" forever because it only read `validation` (always null
+    // on a validate-request failure), never `validationError`.
+    expect(screen.queryByText('Validating…')).not.toBeInTheDocument();
+    expect(screen.getByText('1 issue')).toBeInTheDocument();
   });
 
   it('a project-scoped draft derives its id from the active session project', async () => {

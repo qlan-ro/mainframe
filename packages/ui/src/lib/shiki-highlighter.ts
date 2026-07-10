@@ -164,7 +164,7 @@ export async function getShikiHighlighter(): Promise<{ highlighter: Highlighter;
     const themeAtInit = theme;
     highlighterPromise = createHighlighter({
       themes: [buildWarmChromeTheme()],
-      langs: SUPPORTED_SET as unknown as BundledLanguage[],
+      langs: Array.from(SUPPORTED_SET) as BundledLanguage[],
     }).catch((err) => {
       console.warn('[shiki-highlighter] init failed', err);
       highlighterPromise = null;
