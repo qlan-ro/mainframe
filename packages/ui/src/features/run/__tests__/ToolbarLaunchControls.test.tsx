@@ -279,4 +279,28 @@ describe('ToolbarLaunchControls', () => {
       expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('preview-app');
     });
   });
+
+  // The visual heart of #206: the button must RENDER a stop square, not a green
+  // play triangle, whenever the scope is live. A stale green ▶ here is exactly
+  // the reported "doubled icon" (it sat beside the Run-surface rail glyph).
+  // lucide-react tags its glyphs `lucide-square` (Stop) / `lucide-play` (Play).
+
+  it('main-toolbar-play renders a STOP square (not a green play) when a non-selected config is running', async () => {
+    mockProcessStatuses = { [SCOPE_KEY]: { 'preview-app': 'running' } };
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    const play = await screen.findByTestId('main-toolbar-play');
+    await waitFor(() => expect(play).not.toBeDisabled());
+    expect(play.querySelector('.lucide-square')).toBeTruthy();
+    expect(play.querySelector('.lucide-play')).toBeNull();
+  });
+
+  it('main-toolbar-play renders a PLAY triangle (not a stop) when nothing in scope is running', async () => {
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    const play = await screen.findByTestId('main-toolbar-play');
+    await waitFor(() => expect(play).not.toBeDisabled());
+    expect(play.querySelector('.lucide-play')).toBeTruthy();
+    expect(play.querySelector('.lucide-square')).toBeNull();
+  });
 });
