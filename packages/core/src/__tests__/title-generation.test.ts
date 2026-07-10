@@ -4,6 +4,7 @@ import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { MockBaseAdapter } from './helpers/mock-adapter.js';
 import { MockBaseSession } from './helpers/mock-session.js';
+import { generateClaudeTitle } from '../plugins/builtin/claude/title-generator.js';
 import type { ChatMessage, AdapterSession, SessionOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 // ── Mock adapter & DB (infrastructure, not what we're testing) ──────
@@ -26,6 +27,12 @@ class MockAdapter extends MockBaseAdapter {
   override createSession(options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this.id, options.projectPath);
     return this.currentSession;
+  }
+
+  // These are integration tests of the real Claude CLI title path, exercised
+  // through the adapter dispatch — delegate to the same spawn the claude adapter uses.
+  generateTitle(content: string, binary: string): Promise<string | null> {
+    return generateClaudeTitle(content, binary);
   }
 }
 
