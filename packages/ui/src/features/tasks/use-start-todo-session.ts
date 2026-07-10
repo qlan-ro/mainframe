@@ -41,7 +41,10 @@ export function useStartTodoSession(
       // Reload the thread list so the new remote chat appears before switching.
       await runtime.threads.reload();
       // chatId IS the remoteId; switchToThread resolves it via threadIdMap.
-      runtime.threads.switchToThread(chatId);
+      // Await it: the switch is async (mainThreadId only catches up when it
+      // resolves), so prefilling before it lands would setText on the previously
+      // active thread's composer and open the new chat blank (#212).
+      await runtime.threads.switchToThread(chatId);
       // Prefill the new chat's composer — NOT auto-sent (parity with desktop).
       aui.composer().setText(initialMessage);
     },
