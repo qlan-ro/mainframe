@@ -173,8 +173,8 @@ which side it landed on.
 
 | TS source | Rust target | Status |
 |---|---|---|
-| `packages/core/src/messages/display-pipeline.ts` | `mainframe-display::display_pipeline` | todo |
-| `packages/core/src/messages/display-helpers.ts` | `mainframe-display::display_helpers` | todo |
+| `packages/core/src/messages/display-pipeline.ts` | `mainframe-adapter-claude::messages::display_pipeline` (REASSIGNED from `mainframe-display` — imports Claude-specific `message_grouping`/`display_helpers`/`task_subject_backfill`; keeping it in `mainframe-display` forms a Cargo cycle) | ported |
+| `packages/core/src/messages/display-helpers.ts` | `mainframe-adapter-claude::messages::display_helpers` (REASSIGNED from `mainframe-display` — imports Claude-specific `message_parsing`/`parse_ask_user_question`/`GroupedMessage`; the display crate keeps a compiling empty module) | ported |
 | `packages/core/src/messages/tool-categorization.ts` | `mainframe-display::tool_categorization` | todo |
 | `packages/core/src/messages/tool-grouping.ts` | `mainframe-display::tool_grouping` | todo |
 | `packages/core/src/messages/truncate-tool-content.ts` | `mainframe-display::truncate_tool_content` | todo |
@@ -186,6 +186,7 @@ which side it landed on.
 | TS source | Rust target | Status |
 |---|---|---|
 | `packages/core/src/adapters/index.ts` | `mainframe-adapter-api::lib` (Adapter/AdapterSession/SessionSink traits, ControlRequest/Response) | todo |
+| `packages/core/src/chat/plan-mode-actions.ts` (RELOCATED) | `mainframe-adapter-api::plan_mode_actions` (`PlanModeActionHandler`/`PlanActionContext`/`PlanChatUpdate`) — orchestrator move out of `mainframe-chat` (§2.10) to break the adapter→chat inversion | ported |
 | `packages/core/src/adapters/resolve-executable.ts` | `mainframe-adapter-api::resolve_executable` | todo |
 | `packages/core/src/testing/recording-format.ts` | `mainframe-adapter-api::testing::recording_format` | todo |
 | `packages/core/src/testing/recording-sink.ts` | `mainframe-adapter-api::testing::recording_sink` | todo |
@@ -203,37 +204,37 @@ note that in each trailer.
 
 | TS source | Rust target | Status |
 |---|---|---|
-| `packages/core/src/plugins/builtin/claude/adapter.ts` | `mainframe-adapter-claude::adapter` | todo |
+| `packages/core/src/plugins/builtin/claude/adapter.ts` | `mainframe-adapter-claude::adapter` | ported |
 | `packages/core/src/plugins/builtin/claude/index.ts` | `mainframe-adapter-claude::lib` (re-exports) | todo |
 | `packages/core/src/plugins/builtin/claude/constants.ts` | `mainframe-adapter-claude::constants` | todo |
-| `packages/core/src/plugins/builtin/claude/session.ts` | `mainframe-adapter-claude::session` | todo |
-| `packages/core/src/plugins/builtin/claude/session-control.ts` | `mainframe-adapter-claude::session_control` | todo |
-| `packages/core/src/plugins/builtin/claude/events.ts` | `mainframe-adapter-claude::events` | todo |
-| `packages/core/src/plugins/builtin/claude/assistant-event.ts` | `mainframe-adapter-claude::assistant_event` | todo |
-| `packages/core/src/plugins/builtin/claude/user-event.ts` | `mainframe-adapter-claude::user_event` | todo |
-| `packages/core/src/plugins/builtin/claude/task-events.ts` | `mainframe-adapter-claude::task_events` | todo |
-| `packages/core/src/plugins/builtin/claude/history.ts` | `mainframe-adapter-claude::history` | todo |
-| `packages/core/src/plugins/builtin/claude/history-converters.ts` | `mainframe-adapter-claude::history_converters` | todo |
-| `packages/core/src/plugins/builtin/claude/history-subagents.ts` | `mainframe-adapter-claude::history_subagents` | todo |
-| `packages/core/src/plugins/builtin/claude/history-tool-result.ts` | `mainframe-adapter-claude::history_tool_result` | todo |
-| `packages/core/src/plugins/builtin/claude/external-sessions.ts` | `mainframe-adapter-claude::external_sessions` | todo |
-| `packages/core/src/plugins/builtin/claude/external-session-cache.ts` | `mainframe-adapter-claude::external_session_cache` | todo |
-| `packages/core/src/plugins/builtin/claude/external-session-enrich.ts` | `mainframe-adapter-claude::external_session_enrich` | todo |
-| `packages/core/src/plugins/builtin/claude/external-session-paths.ts` | `mainframe-adapter-claude::external_session_paths` | todo |
-| `packages/core/src/plugins/builtin/claude/frontmatter.ts` | `mainframe-adapter-claude::frontmatter` | todo |
-| `packages/core/src/plugins/builtin/claude/plan-mode-handler.ts` | `mainframe-adapter-claude::plan_mode_handler` | todo |
+| `packages/core/src/plugins/builtin/claude/session.ts` | `mainframe-adapter-claude::session` | ported |
+| `packages/core/src/plugins/builtin/claude/session-control.ts` | `mainframe-adapter-claude::session_control` | ported |
+| `packages/core/src/plugins/builtin/claude/events.ts` | `mainframe-adapter-claude::events` | ported |
+| `packages/core/src/plugins/builtin/claude/assistant-event.ts` | `mainframe-adapter-claude::assistant_event` | ported |
+| `packages/core/src/plugins/builtin/claude/user-event.ts` | `mainframe-adapter-claude::user_event` | ported |
+| `packages/core/src/plugins/builtin/claude/task-events.ts` | `mainframe-adapter-claude::task_events` | ported |
+| `packages/core/src/plugins/builtin/claude/history.ts` | `mainframe-adapter-claude::history` | ported |
+| `packages/core/src/plugins/builtin/claude/history-converters.ts` | `mainframe-adapter-claude::history_converters` | ported |
+| `packages/core/src/plugins/builtin/claude/history-subagents.ts` | `mainframe-adapter-claude::history_subagents` | ported |
+| `packages/core/src/plugins/builtin/claude/history-tool-result.ts` | `mainframe-adapter-claude::history_tool_result` | ported |
+| `packages/core/src/plugins/builtin/claude/external-sessions.ts` | `mainframe-adapter-claude::external_sessions` | ported |
+| `packages/core/src/plugins/builtin/claude/external-session-cache.ts` | `mainframe-adapter-claude::external_session_cache` | ported |
+| `packages/core/src/plugins/builtin/claude/external-session-enrich.ts` | `mainframe-adapter-claude::external_session_enrich` | ported |
+| `packages/core/src/plugins/builtin/claude/external-session-paths.ts` | `mainframe-adapter-claude::external_session_paths` | ported |
+| `packages/core/src/plugins/builtin/claude/frontmatter.ts` | `mainframe-adapter-claude::frontmatter` | ported |
+| `packages/core/src/plugins/builtin/claude/plan-mode-handler.ts` | `mainframe-adapter-claude::plan_mode_handler` | ported |
 | `packages/core/src/plugins/builtin/claude/pr-detection.ts` | `mainframe-adapter-claude::pr_detection` | todo |
 | `packages/core/src/plugins/builtin/claude/probe-models.ts` | `mainframe-adapter-claude::probe_models` | todo |
-| `packages/core/src/plugins/builtin/claude/skills.ts` | `mainframe-adapter-claude::skills` | todo |
-| `packages/core/src/plugins/builtin/claude/skill-path.ts` | `mainframe-adapter-claude::skill_path` | todo |
+| `packages/core/src/plugins/builtin/claude/skills.ts` | `mainframe-adapter-claude::skills` | ported |
+| `packages/core/src/plugins/builtin/claude/skill-path.ts` | `mainframe-adapter-claude::skill_path` | ported |
 | `packages/core/src/plugins/builtin/claude/trust-store.ts` | `mainframe-adapter-claude::trust_store` | todo |
 | `packages/core/src/plugins/builtin/claude/tuning.ts` | `mainframe-adapter-claude::tuning` | todo |
-| `packages/core/src/messages/message-parsing.ts` | `mainframe-adapter-claude::messages::message_parsing` | todo |
-| `packages/core/src/messages/message-grouping.ts` | `mainframe-adapter-claude::messages::message_grouping` | todo |
-| `packages/core/src/messages/parse-ask-user-question.ts` | `mainframe-adapter-claude::messages::parse_ask_user_question` | todo |
+| `packages/core/src/messages/message-parsing.ts` | `mainframe-adapter-claude::messages::message_parsing` | ported |
+| `packages/core/src/messages/message-grouping.ts` | `mainframe-adapter-claude::messages::message_grouping` | ported |
+| `packages/core/src/messages/parse-ask-user-question.ts` | `mainframe-adapter-claude::messages::parse_ask_user_question` | ported |
 | `packages/core/src/messages/read-tool-result-from-jsonl.ts` | `mainframe-adapter-claude::messages::read_tool_result_from_jsonl` | todo |
 | `packages/core/src/messages/session-files.ts` | `mainframe-adapter-claude::messages::session_files` | todo |
-| `packages/core/src/messages/task-subject-backfill.ts` | `mainframe-adapter-claude::messages::task_subject_backfill` | todo |
+| `packages/core/src/messages/task-subject-backfill.ts` | `mainframe-adapter-claude::messages::task_subject_backfill` | ported |
 
 **Sacred:** the stream-json event shapes, spawn args, stdin `control_request`
 envelopes, SIGTERM→SIGKILL + 10s SIGINT interrupt semantics, and JSONL history
@@ -288,24 +289,24 @@ Port in dependency order (leaves first, `chat_manager` last):
 
 | TS source | Rust target | Status |
 |---|---|---|
-| `packages/core/src/chat/types.ts` | `mainframe-chat::types` | todo |
-| `packages/core/src/chat/message-cache.ts` | `mainframe-chat::message_cache` | todo |
-| `packages/core/src/chat/display-emitter.ts` | `mainframe-chat::display_emitter` | todo |
-| `packages/core/src/chat/context-tracker.ts` | `mainframe-chat::context_tracker` | todo |
-| `packages/core/src/chat/permission-manager.ts` | `mainframe-chat::permission_manager` | todo |
-| `packages/core/src/chat/permission-handler.ts` | `mainframe-chat::permission_handler` | todo |
-| `packages/core/src/chat/plan-mode-actions.ts` | `mainframe-chat::plan_mode_actions` | todo |
-| `packages/core/src/chat/plan-mode-handler.ts` | `mainframe-chat::plan_mode_handler` | todo |
-| `packages/core/src/chat/config-manager.ts` | `mainframe-chat::config_manager` | todo |
-| `packages/core/src/chat/resolve-tuning.ts` | `mainframe-chat::resolve_tuning` | todo |
-| `packages/core/src/chat/resolve-tuning-for-chat.ts` | `mainframe-chat::resolve_tuning_for_chat` | todo |
+| `packages/core/src/chat/types.ts` | `mainframe-chat::types` | ported |
+| `packages/core/src/chat/message-cache.ts` | `mainframe-chat::message_cache` | ported |
+| `packages/core/src/chat/display-emitter.ts` | `mainframe-chat::display_emitter` | ported |
+| `packages/core/src/chat/context-tracker.ts` | `mainframe-chat::context_tracker` | ported |
+| `packages/core/src/chat/permission-manager.ts` | `mainframe-chat::permission_manager` | ported |
+| `packages/core/src/chat/permission-handler.ts` | `mainframe-chat::permission_handler` | ported |
+| `packages/core/src/chat/plan-mode-actions.ts` | `mainframe-adapter-api::plan_mode_actions` (RELOCATED from `mainframe-chat` by orchestrator — the `PlanModeActionHandler`/`PlanActionContext` trait pair moved into the adapter-contract crate to break the adapter→chat layering inversion; adapters implement `PlanModeActionHandler`, chat implements `PlanActionContext`) | ported |
+| `packages/core/src/chat/plan-mode-handler.ts` | `mainframe-chat::plan_mode_handler` | ported |
+| `packages/core/src/chat/config-manager.ts` | `mainframe-chat::config_manager` | ported |
+| `packages/core/src/chat/resolve-tuning.ts` | `mainframe-chat::resolve_tuning` | ported |
+| `packages/core/src/chat/resolve-tuning-for-chat.ts` | `mainframe-chat::resolve_tuning_for_chat` | ported |
 | `packages/core/src/chat/attachment-processor.ts` | `mainframe-chat::attachment_processor` | todo |
-| `packages/core/src/chat/idle-scanner.ts` | `mainframe-chat::idle_scanner` | todo |
-| `packages/core/src/chat/title-generator.ts` | `mainframe-chat::title_generator` | todo |
-| `packages/core/src/chat/external-session-service.ts` | `mainframe-chat::external_session_service` | todo |
-| `packages/core/src/chat/event-handler.ts` | `mainframe-chat::event_handler` | todo |
-| `packages/core/src/chat/lifecycle-manager.ts` | `mainframe-chat::lifecycle_manager` | todo |
-| `packages/core/src/chat/chat-manager.ts` | `mainframe-chat::chat_manager` | todo |
+| `packages/core/src/chat/idle-scanner.ts` | `mainframe-chat::idle_scanner` | ported |
+| `packages/core/src/chat/title-generator.ts` | `mainframe-chat::title_generator` | ported |
+| `packages/core/src/chat/external-session-service.ts` | `mainframe-chat::external_session_service` | ported |
+| `packages/core/src/chat/event-handler.ts` | `mainframe-chat::event_handler` | ported |
+| `packages/core/src/chat/lifecycle-manager.ts` | `mainframe-chat::lifecycle_manager` | ported |
+| `packages/core/src/chat/chat-manager.ts` | `mainframe-chat::chat_manager` | ported |
 | `packages/core/src/chat/index.ts` | `mainframe-chat::lib` (re-exports) | todo |
 
 The permission queue stays **FIFO per chat**. Per-chat mutable state (queue,
@@ -318,15 +319,15 @@ lock). See §3's EventEmitter and lock idioms.
 
 | TS source | Rust target | Status |
 |---|---|---|
-| `packages/core/src/background-tasks/tracker.ts` | `mainframe-background-tasks::tracker` | todo |
-| `packages/core/src/background-tasks/spool-root.ts` | `mainframe-background-tasks::spool_root` | todo |
-| `packages/core/src/background-tasks/spool-walker.ts` | `mainframe-background-tasks::spool_walker` | todo |
-| `packages/core/src/background-tasks/spool-validator.ts` | `mainframe-background-tasks::spool_validator` | todo |
-| `packages/core/src/background-tasks/kill.ts` | `mainframe-background-tasks::kill` (process-group kill) | todo |
-| `packages/core/src/background-tasks/lsof.ts` | `mainframe-background-tasks::lsof` | todo |
-| `packages/core/src/background-tasks/liveness.ts` | `mainframe-background-tasks::liveness` | todo |
-| `packages/core/src/background-tasks/reconcile.ts` | `mainframe-background-tasks::reconcile` | todo |
-| `packages/core/src/background-tasks/encoding.ts` | `mainframe-background-tasks::encoding` | todo |
+| `packages/core/src/background-tasks/tracker.ts` | `mainframe-background-tasks::tracker` | ported |
+| `packages/core/src/background-tasks/spool-root.ts` | `mainframe-background-tasks::spool_root` | ported |
+| `packages/core/src/background-tasks/spool-walker.ts` | `mainframe-background-tasks::spool_walker` | ported |
+| `packages/core/src/background-tasks/spool-validator.ts` | `mainframe-background-tasks::spool_validator` | ported |
+| `packages/core/src/background-tasks/kill.ts` | `mainframe-background-tasks::kill` (process-group kill) | ported |
+| `packages/core/src/background-tasks/lsof.ts` | `mainframe-background-tasks::lsof` | ported |
+| `packages/core/src/background-tasks/liveness.ts` | `mainframe-background-tasks::liveness` | ported |
+| `packages/core/src/background-tasks/reconcile.ts` | `mainframe-background-tasks::reconcile` | ported |
+| `packages/core/src/background-tasks/encoding.ts` | `mainframe-background-tasks::encoding` | ported |
 
 ### 2.12 `mainframe-launch` — launcher + tunnels
 

@@ -10,5 +10,21 @@ workspace = true
 [dependencies]
 tokio = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+nanoid = { workspace = true }
+dirs = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-runtime = { workspace = true }
 mainframe-adapter-api = { workspace = true }
+mainframe-display = { workspace = true }
+mainframe-background-tasks = { workspace = true }
+mainframe-services = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+# test-util enables tokio's paused-clock helpers (advance / start_paused) used by
+# the session kill/stop-task and task-events TTL tests.
+tokio = { workspace = true, features = ["test-util"] }
