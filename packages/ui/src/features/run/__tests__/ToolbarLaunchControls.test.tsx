@@ -255,4 +255,28 @@ describe('ToolbarLaunchControls', () => {
     await waitFor(() => expect(stopLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'));
     expect(startLaunchConfig).not.toHaveBeenCalled();
   });
+
+  // ── todo #206: a NON-selected config is running ──────────────────────────
+  // Selected defaults to "dev server" (configs[0], stopped) but "preview-app"
+  // is running. The run button must still offer a STOP (not a green Play), and
+  // the chip must surface the running config so the control is coherent.
+
+  it('run button shows STOP for a running NON-selected config and stops THAT config', async () => {
+    mockProcessStatuses = { [SCOPE_KEY]: { 'preview-app': 'running' } };
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    await waitFor(() => expect(screen.getByTestId('main-toolbar-play')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('main-toolbar-play'));
+    await waitFor(() => expect(stopLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'preview-app', 'chat-9'));
+    expect(startLaunchConfig).not.toHaveBeenCalled();
+  });
+
+  it('the chip label follows the running config when it is not the selected one', async () => {
+    mockProcessStatuses = { [SCOPE_KEY]: { 'preview-app': 'running' } };
+    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
+    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('preview-app');
+    });
+  });
 });
