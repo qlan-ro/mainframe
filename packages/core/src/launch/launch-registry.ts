@@ -1,5 +1,6 @@
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { TunnelManager } from '../tunnel/index.js';
+import type { ChildRegistryPort } from '../process/index.js';
 import { LaunchManager } from './launch-manager.js';
 
 export class LaunchRegistry {
@@ -8,6 +9,7 @@ export class LaunchRegistry {
   constructor(
     private onEvent: (event: DaemonEvent) => void,
     public tunnelManager?: TunnelManager,
+    private childRegistry?: ChildRegistryPort,
   ) {}
 
   get(projectId: string, projectPath: string): LaunchManager | undefined {
@@ -18,7 +20,7 @@ export class LaunchRegistry {
     const key = `${projectId}:${projectPath}`;
     let manager = this.managers.get(key);
     if (!manager) {
-      manager = new LaunchManager(projectId, projectPath, this.onEvent, this.tunnelManager);
+      manager = new LaunchManager(projectId, projectPath, this.onEvent, this.tunnelManager, this.childRegistry);
       this.managers.set(key, manager);
     }
     return manager;

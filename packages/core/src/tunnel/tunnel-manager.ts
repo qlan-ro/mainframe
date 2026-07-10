@@ -2,8 +2,11 @@ import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { Resolver } from 'node:dns/promises';
+import { isAbsolute } from 'node:path';
 import { createChildLogger } from '../logger.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import { NoopChildRegistry } from '../process/index.js';
+import type { ChildRegistryPort } from '../process/index.js';
 
 const log = createChildLogger('tunnel');
 
@@ -23,6 +26,12 @@ export interface TunnelStartOptions {
   url?: string;
 }
 
+export interface TunnelManagerOptions {
+  registry?: ChildRegistryPort;
+  /** Absolute cloudflared path to spawn; a bare name is spawned but never tracked. */
+  cloudflaredPath?: string;
+}
+
 interface ManagedTunnel {
   process: ChildProcess;
   url: string;
@@ -39,11 +48,46 @@ interface VerifyResult {
 
 export class TunnelManager {
   private tunnels = new Map<string, ManagedTunnel>();
+  // Children spawned but not yet promoted into `tunnels` (URL parsed + connection
+  // registered). They live here for the up-to-45s start window so stopAll can
+  // reap a mid-start child on shutdown instead of orphaning it to PID 1.
+  private pending = new Set<ChildProcess>();
   private verifiedAt = new Map<string, VerifyResult>();
   private broadcast: BroadcastFn;
+  private registry: ChildRegistryPort;
+  private cloudflaredPath: string;
 
-  constructor(broadcast?: BroadcastFn) {
+  constructor(broadcast?: BroadcastFn, options?: TunnelManagerOptions) {
     this.broadcast = broadcast ?? (() => {});
+    this.registry = options?.registry ?? new NoopChildRegistry();
+    this.cloudflaredPath = options?.cloudflaredPath ?? 'cloudflared';
+  }
+
+  /**
+   * Persist a spawned cloudflared pid so a crashed daemon's next startup sweep
+   * can reap it. Only absolute paths are tracked — reaping a bare-name match
+   * could kill an unrelated user process after PID reuse.
+   */
+  private recordSpawn(label: string, child: ChildProcess): void {
+    const pid = child.pid;
+    if (pid == null || !isAbsolute(this.cloudflaredPath)) return;
+    this.registry
+      .add({
+        pid,
+        kind: 'tunnel',
+        command: this.cloudflaredPath,
+        args: [],
+        cwd: null,
+        group: false,
+        label,
+        spawnedAt: Date.now(),
+      })
+      .catch((err) => log.warn({ err, label, pid }, 'failed to record tunnel pid'));
+  }
+
+  private forgetSpawn(pid: number | undefined): void {
+    if (pid == null) return;
+    this.registry.remove(pid).catch((err) => log.warn({ err, pid }, 'failed to forget tunnel pid'));
   }
 
   static parseUrl(line: string): string | null {
@@ -64,9 +108,12 @@ export class TunnelManager {
         ? ['tunnel', 'run', '--token', options.token!]
         : ['tunnel', '--url', `http://localhost:${port}`];
 
-      const child = spawn('cloudflared', args, {
+      const child = spawn(this.cloudflaredPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
+      const pid = child.pid;
+      this.recordSpawn(label, child);
+      this.pending.add(child);
 
       let done = false;
       let pendingUrl: string | null = isNamed ? (options.url ?? null) : null;
@@ -93,6 +140,7 @@ export class TunnelManager {
         const url = pendingUrl;
         const tunnel: ManagedTunnel = { process: child, url, ready: false };
         this.tunnels.set(label, tunnel);
+        this.pending.delete(child);
         clearTimeout(timeout);
         log.info({ label, url, port }, 'tunnel connected, waiting for DNS propagation…');
         this.broadcast({ type: 'tunnel:status', state: 'ready', label, url, dnsVerified: false });
@@ -140,6 +188,8 @@ export class TunnelManager {
       if (child.stderr) scanStream(child.stderr);
 
       child.once('error', (err: NodeJS.ErrnoException) => {
+        this.forgetSpawn(pid);
+        this.pending.delete(child);
         if (done) return;
         done = true;
         clearTimeout(timeout);
@@ -152,6 +202,8 @@ export class TunnelManager {
       });
 
       child.once('exit', (code) => {
+        this.forgetSpawn(pid);
+        this.pending.delete(child);
         if (!done) {
           done = true;
           clearTimeout(timeout);
@@ -171,6 +223,7 @@ export class TunnelManager {
     const tunnel = this.tunnels.get(label);
     if (!tunnel) return;
     tunnel.process.kill('SIGTERM');
+    this.forgetSpawn(tunnel.process.pid);
     this.tunnels.delete(label);
     log.info({ label }, 'tunnel stopped');
     this.broadcast({ type: 'tunnel:status', state: 'stopped', label });
@@ -180,6 +233,13 @@ export class TunnelManager {
     for (const label of this.tunnels.keys()) {
       this.stop(label);
     }
+    // Reap children still mid-start: they aren't in `tunnels` yet, so the loop
+    // above misses them. Their own exit handler prunes `pending` afterwards.
+    for (const child of this.pending) {
+      child.kill('SIGTERM');
+      this.forgetSpawn(child.pid);
+    }
+    this.pending.clear();
   }
 
   getUrl(label: string): string | null {

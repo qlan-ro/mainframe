@@ -1,9 +1,11 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
+import { realpath } from 'node:fs/promises';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
+import { defaultProcessCommand, type ChildRegistryPort } from '../process/index.js';
 import { LaunchProcessState, type LaunchOutputEntry } from './launch-process-state.js';
 
 const log = createChildLogger('launch');
@@ -99,7 +101,49 @@ export class LaunchManager {
     private projectPath: string,
     private onEvent: (event: DaemonEvent) => void,
     private tunnelManager?: TunnelManager,
+    private childRegistry?: ChildRegistryPort,
+    // Reads a pid's live command line (`ps -o command=`); injectable for tests.
+    private readProcessCommand: (pid: number) => Promise<string | null> = defaultProcessCommand,
   ) {}
+
+  /**
+   * Persist a spawned launch pid so a crashed daemon's next startup sweep can
+   * reap its process group. Launch children are detached group leaders, so the
+   * sweep needs the exact command line + cwd to reject a reused pid (see process/sweep).
+   *
+   * Identity is the child's LIVE command line, read from `ps` at spawn — not the
+   * argv we passed. The kernel rewrites argv for a `#!` script (spawning `pnpm`
+   * shows `node /usr/bin/pnpm run dev`), which is exactly what the sweep reads
+   * back, so recording our own argv would never match and the orphan would leak.
+   * If `ps` can't read the pid we fall back to the spawned argv (a weaker guard).
+   *
+   * The cwd is recorded as a realpath: the sweep compares it against `lsof`,
+   * which reports the resolved path, so a symlinked spawn cwd (every /tmp path
+   * on macOS is /private/tmp) would otherwise fail the guard and leak the orphan.
+   */
+  private async recordSpawn(name: string, pid: number | undefined, executable: string, args: string[]): Promise<void> {
+    if (pid == null || !this.childRegistry) return;
+    const cwd = await realpath(this.projectPath).catch(() => this.projectPath);
+    const live = await this.readProcessCommand(pid).catch(() => null);
+    const [command, recordedArgs] = live != null ? [live, [] as string[]] : [executable, args];
+    await this.childRegistry
+      .add({
+        pid,
+        kind: 'launch',
+        command,
+        args: recordedArgs,
+        cwd,
+        group: true,
+        label: `${this.projectId}:${name}`,
+        spawnedAt: Date.now(),
+      })
+      .catch((err) => log.warn({ err, name, pid }, 'failed to record launch pid'));
+  }
+
+  private forgetSpawn(pid: number | undefined): void {
+    if (pid == null || !this.childRegistry) return;
+    this.childRegistry.remove(pid).catch((err) => log.warn({ err, pid }, 'failed to forget launch pid'));
+  }
 
   async start(config: LaunchConfiguration): Promise<void> {
     if (this.processes.has(config.name)) {
@@ -173,6 +217,7 @@ export class LaunchManager {
     });
 
     child.on('exit', (code) => {
+      this.forgetSpawn(child.pid);
       if (code !== 0 && stderrTail.length > 0) {
         log.warn({ name: config.name, pid: child.pid, code, stderr: stderrTail.join('\n') }, 'launch process failed');
       } else {
@@ -212,6 +257,7 @@ export class LaunchManager {
         resolve();
       });
       child.once('error', (err: NodeJS.ErrnoException) => {
+        this.forgetSpawn(child.pid);
         log.warn(
           {
             name: config.name,
@@ -238,6 +284,11 @@ export class LaunchManager {
         reject(err);
       });
     });
+
+    // Record only after spawn is confirmed (pid valid) but BEFORE the long
+    // port-readiness wait below — that wait is the window in which a daemon
+    // crash would orphan this child, so its reap record must already be durable.
+    await this.recordSpawn(config.name, child.pid, executable, config.runtimeArgs);
 
     // If a port is configured, wait until the server is actually listening before
     // emitting 'running'. This prevents clients from loading a URL too early.
