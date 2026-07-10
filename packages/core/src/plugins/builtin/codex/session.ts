@@ -234,7 +234,7 @@ export class CodexSession implements AdapterSession {
     const turnCfg = buildTurnConfig(
       this.pendingTuning ?? DEFAULT_RESOLVED,
       this.codexProviderTuning,
-      this.pendingModel ?? '',
+      this.pendingModel,
       this.pendingPlanMode ? 'plan' : 'default',
     );
 

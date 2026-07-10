@@ -127,6 +127,7 @@ describe('CodexSession', () => {
     if (threadStartMsg.method === 'thread/start') {
       expect(threadStartMsg.params.approvalPolicy).toBe('never');
       expect(threadStartMsg.params.sandbox).toBe('danger-full-access');
+      expect(threadStartMsg.params).not.toHaveProperty('model');
       // Respond to thread/start
       proc.stdout.push(JSON.stringify({ id: threadStartMsg.id, result: { thread: { id: 'thr_1' } } }) + '\n');
       // Respond to thread/started notification
@@ -137,10 +138,75 @@ describe('CodexSession', () => {
     await vi.waitFor(() => expect(written.length).toBeGreaterThan(1));
     const lastMsg = JSON.parse(written[written.length - 1]!.trim());
     if (lastMsg.method === 'turn/start') {
+      expect(lastMsg.params).not.toHaveProperty('model');
+      expect(lastMsg.params.collaborationMode.settings).not.toHaveProperty('model');
       proc.stdout.push(
         JSON.stringify({ id: lastMsg.id, result: { turn: { id: 'turn_1', status: 'running' } } }) + '\n',
       );
     }
+
+    await sendPromise;
+  });
+
+  it('omits an unset model when resuming a thread', async () => {
+    const session = new CodexSession({
+      projectPath: '/tmp/project',
+      mainframeChatId: 'test-chat',
+      chatId: 'thread-existing',
+    });
+    const spawnPromise = session.spawn({}, createSink());
+    const proc = (spawn as unknown as ReturnType<typeof vi.fn>).mock.results[0]!.value;
+    proc.stdout.push(JSON.stringify({ id: 1, result: { userAgent: 'codex/1.0', codexHome: '/tmp' } }) + '\n');
+    await spawnPromise;
+
+    const written: string[] = [];
+    proc.stdin.write = vi.fn((data: string, _enc?: unknown, callback?: () => void) => {
+      written.push(data);
+      callback?.();
+      return true;
+    });
+
+    const sendPromise = session.sendMessage('hello');
+    await vi.waitFor(() => expect(written.length).toBeGreaterThan(0));
+    const resume = JSON.parse(written[0]!.trim());
+    expect(resume.method).toBe('thread/resume');
+    expect(resume.params).not.toHaveProperty('model');
+    proc.stdout.push(JSON.stringify({ id: resume.id, result: { thread: { id: 'thread-existing' } } }) + '\n');
+
+    await vi.waitFor(() => expect(written.length).toBeGreaterThan(1));
+    const turn = JSON.parse(written[1]!.trim());
+    expect(turn.params).not.toHaveProperty('model');
+    expect(turn.params.collaborationMode.settings).not.toHaveProperty('model');
+    proc.stdout.push(JSON.stringify({ id: turn.id, result: { turn: { id: 'turn-1', status: 'inProgress' } } }) + '\n');
+
+    await sendPromise;
+  });
+
+  it('sends an explicitly selected model in thread and turn requests', async () => {
+    const session = new CodexSession({ projectPath: '/tmp/project', mainframeChatId: 'test-chat' });
+    const spawnPromise = session.spawn({ model: 'gpt-5.6-sol' }, createSink());
+    const proc = (spawn as unknown as ReturnType<typeof vi.fn>).mock.results[0]!.value;
+    proc.stdout.push(JSON.stringify({ id: 1, result: { userAgent: 'codex/1.0', codexHome: '/tmp' } }) + '\n');
+    await spawnPromise;
+
+    const written: string[] = [];
+    proc.stdin.write = vi.fn((data: string, _enc?: unknown, callback?: () => void) => {
+      written.push(data);
+      callback?.();
+      return true;
+    });
+
+    const sendPromise = session.sendMessage('hello');
+    await vi.waitFor(() => expect(written.length).toBeGreaterThan(0));
+    const start = JSON.parse(written[0]!.trim());
+    expect(start.params.model).toBe('gpt-5.6-sol');
+    proc.stdout.push(JSON.stringify({ id: start.id, result: { thread: { id: 'thread-new' } } }) + '\n');
+
+    await vi.waitFor(() => expect(written.length).toBeGreaterThan(1));
+    const turn = JSON.parse(written[1]!.trim());
+    expect(turn.params.model).toBe('gpt-5.6-sol');
+    expect(turn.params.collaborationMode.settings.model).toBe('gpt-5.6-sol');
+    proc.stdout.push(JSON.stringify({ id: turn.id, result: { turn: { id: 'turn-1', status: 'inProgress' } } }) + '\n');
 
     await sendPromise;
   });
