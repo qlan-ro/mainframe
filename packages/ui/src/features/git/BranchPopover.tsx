@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Hint } from '@/components/ui/hint';
 import { activeSessionCustom } from '../sessions/view-model/chat-to-thread-custom';
+import { useActiveDraftConfig } from '../sessions/use-active-draft-config';
 import { useBranchActions } from './use-branch-actions';
 import { useWorktreeSession } from './use-worktree-session';
 import { BranchPopoverListPane } from './BranchPopoverListPane';
@@ -70,11 +71,11 @@ export function BranchPopover({
   children,
   triggerLabel,
 }: BranchPopoverProps) {
-  // Resolve adapterId from the active thread's custom — falls back to 'claude'.
-  const adapterId = useAuiState((s) => {
-    const custom = activeSessionCustom(s.threadListItem, s.threads.threadItems);
-    return custom?.adapterId ?? DEFAULT_ADAPTER_ID;
-  });
+  // Resolve adapterId from the active thread's custom, else the pre-send draft
+  // config (a __LOCALID_* thread has no custom yet) — falls back to 'claude'.
+  const customAdapterId = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems)?.adapterId);
+  const draft = useActiveDraftConfig();
+  const adapterId = customAdapterId ?? draft?.adapterId ?? DEFAULT_ADAPTER_ID;
 
   const {
     branches,

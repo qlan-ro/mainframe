@@ -120,6 +120,31 @@ describe('MainToolbar — branch chip', () => {
     expect(screen.getByTestId('main-toolbar-branch-wt').textContent?.trim()).toBe('wt');
   });
 
+  it('prefers the draft worktree branch over the live project-root branch when there is no chatId yet', async () => {
+    // A draft attached to a worktree has no daemon chat yet, so the live fetch
+    // can only see the project ROOT branch — the chip must show the worktree's.
+    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        branchName="feat/wt-draft"
+        isWorktree
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    await waitFor(() => expect(mockGetGitBranch).toHaveBeenCalled());
+    const chip = await screen.findByTestId('main-toolbar-branch');
+    expect(chip.textContent).toContain('feat/wt-draft');
+    expect(chip.getAttribute('data-worktree')).toBe('true');
+  });
+
   it('renders a disabled stub chip when a branch is persisted but no projectId is available', () => {
     render(
       <MainToolbar

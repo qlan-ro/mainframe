@@ -104,7 +104,10 @@ export function MainToolbar({
         console.warn('[MainToolbar] failed to refresh branch after popover write', err);
       });
   }, [port, projectId, chatId]);
-  const displayBranch = liveBranch ?? branchName;
+  // A worktree DRAFT (no chatId yet — the chat is created on first send) can't
+  // resolve its branch live: without a chatId the fetch reads the project ROOT.
+  // Trust the draft's own branch name there; every other state prefers live.
+  const displayBranch = isWorktree && !chatId ? (branchName ?? liveBranch) : (liveBranch ?? branchName);
 
   return (
     <div
