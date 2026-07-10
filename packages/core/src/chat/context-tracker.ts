@@ -1,6 +1,14 @@
 import { nanoid } from 'nanoid';
-import { relative, isAbsolute } from 'node:path';
-import type { SessionMention, SessionContext, ChatMessage, AdapterSession } from '@qlan-ro/mainframe-types';
+import { relative, isAbsolute, join } from 'node:path';
+import { homedir } from 'node:os';
+import type {
+  SessionMention,
+  SessionContext,
+  ChatMessage,
+  AdapterSession,
+  ContextFile,
+  SkillFileEntry,
+} from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
@@ -53,6 +61,8 @@ export async function getSessionContext(
 
   const toRelative = (p: string) => (isAbsolute(p) ? relative(projectPath, p) : p);
 
+  const dedupedFiles = dedupeContextFiles(globalFiles, projectFiles, projectPath);
+
   const rawMentions = db.chats.getMentions(chatId);
   const mentions = rawMentions.map((m) => ({
     ...m,
@@ -60,9 +70,70 @@ export async function getSessionContext(
   }));
   const attachments = (await attachmentStore?.list(chatId)) ?? [];
   const modifiedFiles = db.chats.getPlanFiles(chatId).map(toRelative);
-  const skillFiles = db.chats.getSkillFiles(chatId);
+  const skillFiles = dedupeSkillFiles(db.chats.getSkillFiles(chatId));
 
-  return { globalFiles, projectFiles, mentions, attachments, modifiedFiles, skillFiles };
+  return {
+    globalFiles: dedupedFiles.global,
+    projectFiles: dedupedFiles.project,
+    mentions,
+    attachments,
+    modifiedFiles,
+    skillFiles,
+  };
+}
+
+/**
+ * Drop repeated skill entries. The same skill can be persisted under two paths
+ * (a live probe hitting a real SKILL.md vs. a batch re-extraction falling back
+ * to a conventional path), so path-only dedup lets duplicates through (#222).
+ * Keyed on the display name, which the DB normalizes to the skill's leaf.
+ */
+export function dedupeSkillFiles(skills: SkillFileEntry[]): SkillFileEntry[] {
+  const seen = new Set<string>();
+  const out: SkillFileEntry[] = [];
+  for (const skill of skills) {
+    const key = skill.displayName || skill.path;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(skill);
+  }
+  return out;
+}
+
+/**
+ * Remove exact path repeats within each list and any project file that resolves
+ * to the same physical file as a global one (e.g. a session opened at the home
+ * dir, where .claude/CLAUDE.md IS the global CLAUDE.md) so it isn't listed twice
+ * (#222). Global entries are kept as canonical.
+ */
+export function dedupeContextFiles(
+  global: ContextFile[],
+  project: ContextFile[],
+  projectPath: string,
+  homeDir: string = homedir(),
+): { global: ContextFile[]; project: ContextFile[] } {
+  const dedupedGlobal = dedupeByPath(global);
+  const globalAbs = new Set(dedupedGlobal.map((f) => toAbsoluteContextPath(f.path, projectPath, homeDir)));
+  const dedupedProject = dedupeByPath(project).filter(
+    (f) => !globalAbs.has(toAbsoluteContextPath(f.path, projectPath, homeDir)),
+  );
+  return { global: dedupedGlobal, project: dedupedProject };
+}
+
+function dedupeByPath(files: ContextFile[]): ContextFile[] {
+  const seen = new Set<string>();
+  return files.filter((f) => {
+    if (seen.has(f.path)) return false;
+    seen.add(f.path);
+    return true;
+  });
+}
+
+function toAbsoluteContextPath(p: string, projectPath: string, homeDir: string): string {
+  if (p === '~') return homeDir;
+  if (p.startsWith('~/')) return join(homeDir, p.slice(2));
+  if (isAbsolute(p)) return p;
+  return join(projectPath, p);
 }
 
 export function extractLatestPlanFileFromMessages(messages: ChatMessage[]): string | null {
