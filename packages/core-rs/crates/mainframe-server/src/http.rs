@@ -44,6 +44,19 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
+        // Phase-4 route modules (Task 4.6a). Chat lifecycle + orchestration
+        // surfaces; the ChatManager-backed handlers self-gate on
+        // `ctx.chat_manager` and fall back to the TS failure-path envelope while
+        // the manager is unwired (its construction is a documented blocker).
+        .merge(routes::chats::router())
+        .merge(routes::chat_commands::router())
+        .merge(routes::context::router())
+        .merge(routes::worktree::router())
+        .merge(routes::external_sessions::router())
+        .merge(routes::background_tasks::router())
+        .merge(routes::adapters::router())
+        .merge(routes::agents::router())
+        .merge(routes::skills::router())
         // Explicit 404 fallback so the auth layer also covers unmatched paths —
         // Express's `app.use(authMiddleware)` runs before the router's 404, so a
         // non-loopback caller without a token gets 401 (not 404) on any path.

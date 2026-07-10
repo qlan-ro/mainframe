@@ -1,8 +1,9 @@
 //! Ported from `src/server/routes/commands.ts` — GET /api/commands.
 //!
 //! Returns the built-in mainframe commands from the services command registry.
-//! The TS also appends every registered adapter's `listCommands()`; the adapter
-//! registry is Phase 4/5 (not on `AppCtx`), so that union is a documented seam.
+//! The TS also appends every registered adapter's `listCommands()`; the ported
+//! `Adapter` trait has no `list_commands` method, so that union is blocked in the
+//! trait (a non-owned crate) and stays a documented seam.
 
 use std::sync::Arc;
 
@@ -17,10 +18,12 @@ use crate::respond::ok;
 
 async fn list(State(_ctx): State<Arc<AppCtx>>) -> Response {
     let commands = get_mainframe_commands();
-    // TODO(port-phase4/5): the TS appends `adapter.listCommands()` for every
-    // registered adapter (`ctx.adapters.getAll()`). AdapterRegistry is Phase 4/5
-    // and not on AppCtx yet, so only the built-in mainframe commands are returned
-    // here. See blockers.
+    // TODO(port): the TS appends `adapter.listCommands()` for every registered
+    // adapter (`ctx.adapters.getAll()`). The registry is now on AppCtx, but the
+    // ported `mainframe_adapter_api::Adapter` trait has no `list_commands` method
+    // (only Claude implements it in TS; codex does not), so it cannot be called
+    // through `Arc<dyn Adapter>`. Closing this union needs `list_commands` added to
+    // the Adapter trait (a non-owned crate) — a blocker. Built-ins only for now.
     ok(commands)
 }
 
@@ -32,5 +35,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
 // confidence: medium
 // todos: 1
 // notes: getMainframeCommands() → mainframe_services::commands::get_mainframe_commands.
-// The per-adapter listCommands() union is a Phase-4/5 seam (AdapterRegistry absent
-// from AppCtx); returned set is the built-in mainframe commands only.
+// The per-adapter listCommands() union stays a seam: the ported Adapter trait has
+// no list_commands method (only Claude implements it in TS), so it can't be called
+// through Arc<dyn Adapter>. Adding it to the trait (non-owned crate) is a blocker;
+// returned set is the built-in mainframe commands only.

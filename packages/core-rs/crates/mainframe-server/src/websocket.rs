@@ -25,6 +25,7 @@ use axum::extract::{ConnectInfo, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use dashmap::DashMap;
+use mainframe_chat::chat_manager::CommandMeta;
 use mainframe_types::events::{ClientEvent, DaemonEvent};
 use serde::Deserialize;
 use tokio::sync::{broadcast, mpsc};
@@ -185,15 +186,20 @@ async fn handle_client_event(
     match event {
         ClientEvent::Subscribe { chat_id } => {
             lock(subscriptions).insert(chat_id.clone());
-            // Node emits message.queued.snapshot (refs from getQueuedForChat, which
-            // is [] for a chat with no queue) BEFORE subscribe:ack. Verified in the
-            // TS ChatManager. TODO(port-phase4): populate refs from the live queue;
-            // Phase 3 always emits the empty snapshot the daemon sends today.
+            // Node emits message.queued.snapshot (refs from getQueuedForChat) BEFORE
+            // subscribe:ack (`sendQueuedSnapshot`). With the ChatManager unwired the
+            // queue is empty, so this degrades to the empty snapshot the daemon sent
+            // before; once `ctx.chat_manager` is Some the real refs flow through.
+            let refs = ctx
+                .chat_manager
+                .as_ref()
+                .map(|cm| cm.get_queued_for_chat(&chat_id))
+                .unwrap_or_default();
             send(
                 out_tx,
                 &DaemonEvent::MessageQueuedSnapshot {
                     chat_id: chat_id.clone(),
-                    refs: Vec::new(),
+                    refs,
                 },
             );
             send(out_tx, &DaemonEvent::SubscribeAck { chat_id });
@@ -220,9 +226,93 @@ async fn handle_client_event(
                 chat_id.as_deref(),
             );
         }
-        ClientEvent::MessageSend { .. } => warn_message_send_seam(),
-        ClientEvent::PermissionRespond { .. } => warn_permission_respond_seam(),
+        ClientEvent::MessageSend {
+            chat_id,
+            content,
+            attachment_ids,
+            metadata,
+        } => {
+            handle_message_send(ctx, out_tx, chat_id, content, attachment_ids, metadata).await;
+        }
+        ClientEvent::PermissionRespond { chat_id, response } => {
+            handle_permission_respond(ctx, out_tx, chat_id, response).await;
+        }
     }
+}
+
+/// `message.send` → `ChatManager.sendMessage(chatId, content, attachmentIds,
+/// metadata)`. A rejection lands in the TS `ws.on('message')` catch, which logs
+/// `ws message handler error` and replies with an `Internal error` frame — mirror
+/// both. Until `ctx.chat_manager` is wired the seam warns once and drops the send.
+async fn handle_message_send(
+    ctx: &Arc<AppCtx>,
+    out_tx: &mpsc::UnboundedSender<String>,
+    chat_id: String,
+    content: String,
+    attachment_ids: Option<Vec<String>>,
+    metadata: Option<mainframe_types::events::MessageSendMetadata>,
+) {
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        warn_message_send_seam();
+        return;
+    };
+    let command = metadata.and_then(|m| m.command).map(|c| CommandMeta {
+        name: c.name,
+        source: c.source,
+        args: c.args,
+    });
+    if let Err(err) = cm
+        .send_message(&chat_id, &content, attachment_ids.as_deref(), command)
+        .await
+    {
+        tracing::error!(%err, "ws message handler error");
+        send(
+            out_tx,
+            &DaemonEvent::Error {
+                chat_id: None,
+                error: "Internal error".to_string(),
+            },
+        );
+    }
+}
+
+/// `permission.respond` → `ChatManager.respondToPermission(chatId, response)`,
+/// bracketed by the same received/delivered info logs the TS handler emits. A
+/// rejection mirrors the TS catch (`Internal error` frame).
+async fn handle_permission_respond(
+    ctx: &Arc<AppCtx>,
+    out_tx: &mpsc::UnboundedSender<String>,
+    chat_id: String,
+    response: mainframe_types::adapter::ControlResponse,
+) {
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        warn_permission_respond_seam();
+        return;
+    };
+    let request_id = response.request_id.clone();
+    tracing::info!(
+        chat_id,
+        request_id = %request_id,
+        tool_name = ?response.tool_name,
+        behavior = ?response.behavior,
+        "permission.respond received from client"
+    );
+    if let Err(err) = cm.respond_to_permission(&chat_id, response).await {
+        tracing::error!(%err, "ws message handler error");
+        send(
+            out_tx,
+            &DaemonEvent::Error {
+                chat_id: None,
+                error: "Internal error".to_string(),
+            },
+        );
+        return;
+    }
+    tracing::info!(
+        chat_id,
+        request_id = %request_id,
+        "permission.respond delivered to adapter"
+    );
 }
 
 async fn handle_subscribe_file(
@@ -372,12 +462,17 @@ fn warn_permission_respond_seam() {
 
 // PORT STATUS: src/server/websocket.ts (+ ws-file-watch wiring, ws-schemas seam)
 // confidence: medium
-// todos: 3
+// todos: 2
 // notes: Single-task-per-connection select! (write task folded in) because
 // splitting axum's WebSocket needs futures_util (off-allowlist) — see the header.
 // Chat subscriptions = shared Mutex<HashSet> (read by fan-out, tsv PER_ENTITY);
 // file-watch state = task-local (single owner). Broadcast fan-out = one pump task
 // over broadcast::Receiver → per-client mpsc, with the exact chatId-scoped vs
-// connection-global gating. TODO(port-phase4): (1) adapter-replay after ready,
-// (2) real message.queued.snapshot refs, (3) message.send/permission.respond are
-// validate-parsed then warn-once + ignored. TODO(port-phase5): LSP upgrade route.
+// connection-global gating. message.send → ChatManager.sendMessage (attachments +
+// command meta), permission.respond → respondToPermission, and subscribe's
+// message.queued.snapshot (real getQueuedForChat refs) are all WIRED — they
+// self-gate on ctx.chat_manager: while it is None (ChatManager construction is a
+// documented daemon-boot blocker) they degrade to empty snapshot / warn-once +
+// ignore, exactly the pre-4.6b behavior the ws_integration tests pin. Once boot
+// sets Some(..) the wired paths run. TODO(port-phase4): adapter-replay after
+// connection.ready. TODO(port-phase5): LSP upgrade route.

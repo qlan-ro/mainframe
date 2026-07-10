@@ -2,10 +2,10 @@
 //!
 //! General GET/PUT and provider PUT port 1:1 over `ctx.db.settings`. GET
 //! providers assembles the DB-stored provider settings (skipPermissions→yolo,
-//! strip skipPermissions) but its `resolvedExecutable` enrichment and the
-//! adapter-registry union are a Phase-4/5 seam (AdapterRegistry and
-//! resolve-executable are not on `AppCtx` yet). The config-conflicts route reads
-//! the Claude settings file (needs no adapter layer), so it ports fully.
+//! strip skipPermissions), unions `ctx.adapter_registry.get_all()` ids, and
+//! attaches a `resolvedExecutable` per adapter via `resolve_adapter_executable`.
+//! The config-conflicts route reads the Claude settings file (needs no adapter
+//! layer), so it ports fully.
 
 use std::sync::Arc;
 
@@ -15,6 +15,9 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::get;
+use mainframe_adapter_api::resolve_executable::{
+    ResolverDeps, SettingsWriter, resolve_adapter_executable,
+};
 use mainframe_db::DbError;
 use mainframe_types::settings::{
     GeneralConfig, NotificationChatConfig, NotificationConfig, NotificationOtherConfig,
@@ -24,7 +27,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 
-use crate::ctx::AppCtx;
+use crate::ctx::{AppCtx, DefaultRunner};
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
 
@@ -277,12 +280,62 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
         }
         obj.remove("skipPermissions");
     }
-    // TODO(port-phase4/5): the TS also unions `ctx.adapters.getAll()` ids and
-    // attaches a `resolvedExecutable` per adapter via
-    // `resolveAdapterExecutableCached`. AdapterRegistry + resolve-executable are
-    // Phase 4/5 (not on AppCtx), so this response omits resolvedExecutable and any
-    // adapter with no stored settings. See blockers.
-    ok(Value::Object(providers))
+    // Union the stored-provider ids with every registered adapter id, then attach
+    // a `resolvedExecutable` per id (TS: `ctx.adapters.getAll()` ids +
+    // `resolveAdapterExecutableCached`). resolveAdapterExecutable reads only the
+    // `provider.<id>.executablePath` setting, so the already-fetched `raw` map
+    // backs a read-only SettingsWriter — no second db round-trip.
+    let mut ids: Vec<String> = providers.keys().cloned().collect();
+    for adapter in ctx.adapter_registry.get_all() {
+        let id = adapter.id().to_string();
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    let settings = RawProviderSettings { raw: &raw };
+    let mut out: Map<String, Value> = Map::new();
+    for id in ids {
+        let resolved = resolve_adapter_executable(
+            &id,
+            &ResolverDeps {
+                settings: &settings,
+                run: &DefaultRunner,
+                platform: None,
+            },
+        )
+        .await;
+        let mut entry = match providers.get(&id) {
+            Some(Value::Object(obj)) => obj.clone(),
+            _ => Map::new(),
+        };
+        entry.insert(
+            "resolvedExecutable".to_string(),
+            serde_json::to_value(&resolved).unwrap_or(Value::Null),
+        );
+        out.insert(id, Value::Object(entry));
+    }
+    // PERF(port): the TS memoizes resolution for 5s (`resolveAdapterExecutableCached`)
+    // to throttle a polled endpoint; this port resolves live per request (a `which`
+    // spawn per unconfigured adapter). Behavior is identical; only the memo is dropped.
+    ok(Value::Object(out))
+}
+
+/// Read-only `SettingsWriter` over an already-fetched `provider`-category map.
+/// `get` answers `provider.<id>.executablePath` lookups from the map; `set` is a
+/// no-op (the resolvedExecutable path never persists).
+struct RawProviderSettings<'a> {
+    raw: &'a std::collections::HashMap<String, String>,
+}
+
+impl SettingsWriter for RawProviderSettings<'_> {
+    fn get(&self, category: &str, key: &str) -> Option<String> {
+        if category == "provider" {
+            self.raw.get(key).cloned()
+        } else {
+            None
+        }
+    }
+    fn set(&self, _category: &str, _key: &str, _value: &str) {}
 }
 
 #[derive(Deserialize)]
@@ -466,13 +519,15 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 // PORT STATUS: src/server/routes/settings.ts (5 endpoints, 235 lines)
 // confidence: medium
-// todos: 1
+// todos: 0
 // notes: general GET/PUT (incl. the per-group notification salvage/merge) and
 // provider PUT port 1:1 over ctx.db.settings. UpdateProviderSettingsBody's enums
 // (each with the '' clear sentinel) validate via explicit allowed-set checks
 // (serde loose Option<String> body → in_enum); truthy→set / falsy→delete;
 // defaultMode also deletes skipPermissions. GET providers ports the DB grouping
-// (skipPermissions→yolo, strip skipPermissions) but its resolvedExecutable
-// enrichment + adapter-registry union are a Phase-4/5 seam (see blockers).
-// config-conflicts reads ~/.claude/settings.json via async tokio::fs (no sync
-// I/O) and matches JS truthiness (empty array still truthy) for allow/deny.
+// (skipPermissions→yolo, strip skipPermissions), unions ctx.adapter_registry ids,
+// and attaches resolvedExecutable per adapter via resolve_adapter_executable over
+// a read-only SettingsWriter backed by the fetched provider map (no 2nd db call).
+// PERF(port): the 5s resolve memo (resolveAdapterExecutableCached) is dropped —
+// each request resolves live. config-conflicts reads ~/.claude/settings.json via
+// async tokio::fs (no sync I/O) and matches JS truthiness for allow/deny.

@@ -11,6 +11,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use mainframe_adapter_api::AdapterRegistry;
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_db::DatabaseManager;
 use mainframe_server::ctx::{AppCtx, GitFactory, Services};
 use mainframe_server::db::Db;
@@ -42,6 +44,9 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
         auth_secret: None,
         tunnel_url: None,
         ws_clients: Arc::new(DashMap::new()),
+        adapter_registry: Arc::new(AdapterRegistry::new()),
+        background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        chat_manager: None,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));
 

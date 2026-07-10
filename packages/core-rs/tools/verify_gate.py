@@ -182,6 +182,35 @@ def is_test_dir_file(path: Path) -> bool:
     return "tests" in path.parts
 
 
+# A whole file is test-only when its owning module declares it under
+# `#[cfg(test)] mod <name>;`. The gate scans each `.rs` in isolation and cannot
+# see the parent's attribute, so resolve it: for `src/foo.rs`, look at the
+# sibling `mod.rs`/`lib.rs`/`main.rs` (or `<dir>.rs`) for a cfg(test)-gated
+# declaration of `mod foo;`. Idiomatic test-support files (e.g. a shared
+# `test_support.rs` behind `#[cfg(test)] mod test_support;`) are thus exempt
+# without weakening the ban for normal modules.
+_CFG_TEST_MOD = re.compile(r"#\[cfg\(test\)\]\s*(?:pub\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
+
+
+def is_cfg_test_module_file(path: Path) -> bool:
+    stem = path.stem
+    if stem in ("lib", "main", "mod"):
+        return False
+    parents = [
+        path.with_name("mod.rs"),
+        path.with_name("lib.rs"),
+        path.with_name("main.rs"),
+        path.parent.with_suffix(".rs"),
+    ]
+    for owner in parents:
+        if owner == path or not owner.is_file():
+            continue
+        for name in _CFG_TEST_MOD.findall(owner.read_text(encoding="utf-8")):
+            if name == stem:
+                return True
+    return False
+
+
 def test_block_line_mask(masked_lines: list[str]) -> list[bool]:
     """Returns, per line, whether that line is inside a #[cfg(test)] block (the
     attribute line through the matching close-brace of the following `mod … { }`).
@@ -217,7 +246,9 @@ def scan_file(path: Path) -> list[str]:
     raw_lines = text.splitlines()
     masked_lines = mask_code(text).splitlines()
     mask = test_block_line_mask(masked_lines)
-    file_is_test_exempt = is_test_dir_file(path) or is_main_boot(path)
+    file_is_test_exempt = (
+        is_test_dir_file(path) or is_main_boot(path) or is_cfg_test_module_file(path)
+    )
     anyhow_exempt = is_binary_crate(path)
 
     for idx, code in enumerate(masked_lines):

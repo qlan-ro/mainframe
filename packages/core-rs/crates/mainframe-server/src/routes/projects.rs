@@ -19,7 +19,7 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
+use crate::respond::{fail, ok, ok_empty};
 
 /// Parse `body` into `T`, treating an empty/whitespace body as `{}`. Returns
 /// `None` on malformed JSON or a type mismatch — the caller maps that to its
@@ -97,20 +97,24 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     }
 }
 
-async fn remove(State(_ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // TODO(port-phase4/5): the TS handler calls `ctx.chats.removeProject(id)`
-    // (ChatManager), which stops the project's live sessions and tears down its
-    // worktrees before deleting the row. ChatManager is Phase 4/5 and is not on
-    // `AppCtx` yet, so this endpoint cannot be honored in Phase 3. Reported as a
-    // blocker; wired once the chat manager lands.
-    tracing::warn!(
-        project_id = %id,
-        "DELETE /api/projects/:id is a Phase-4/5 seam (ChatManager.removeProject unavailable)"
-    );
-    fail(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Failed to remove project",
-    )
+async fn remove(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+    // The TS handler is `await ctx.chats.removeProject(id)` then `ok_empty()` —
+    // ChatManager.removeProject stops the project's live sessions and tears down
+    // its worktrees before deleting the row. When the ChatManager is unwired the
+    // teardown cannot run, so the endpoint keeps the TS failure-path 500 envelope
+    // (ChatManager construction is a documented blocker).
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(
+            project_id = %id,
+            "DELETE /api/projects/:id needs ChatManager.removeProject (unwired)"
+        );
+        return fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to remove project",
+        );
+    };
+    cm.remove_project(&id).await;
+    ok_empty()
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {

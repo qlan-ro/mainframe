@@ -48,6 +48,11 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
             watcher: Arc::new(watcher),
         },
         broadcast,
+        adapter_registry: Arc::new(mainframe_adapter_api::AdapterRegistry::new()),
+        background_tasks: Arc::new(
+            mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
+        ),
+        chat_manager: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
         auth_secret,
@@ -231,9 +236,13 @@ impl WsClient {
         serde_json::from_str(&text).expect("ws frame must be JSON")
     }
 
-    /// Read frames until one with `type == wanted` arrives (bounded).
+    /// Read frames until one with `type == wanted` arrives (bounded). The ceiling
+    /// is generous because the `file:changed` path rides the `notify` backend,
+    /// whose registration + event delivery latency balloons under the CPU
+    /// contention of the full parallel workspace test run; fast events still
+    /// return immediately.
     pub async fn wait_for(&mut self, wanted: &str) -> serde_json::Value {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
         loop {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
             let text = tokio::time::timeout(remaining, self.read_text())

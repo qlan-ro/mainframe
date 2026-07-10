@@ -24,6 +24,10 @@ mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
 mainframe-git = { workspace = true }
 mainframe-services = { workspace = true }
+mainframe-chat = { workspace = true }
+mainframe-adapter-api = { workspace = true }
+mainframe-adapter-claude = { workspace = true }
+mainframe-background-tasks = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

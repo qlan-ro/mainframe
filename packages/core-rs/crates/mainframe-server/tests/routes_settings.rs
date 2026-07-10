@@ -224,7 +224,7 @@ async fn provider_put_rejects_invalid_default_effort() {
     assert_eq!(body["success"], false);
 }
 
-// ── providers GET (DB-derivable part; resolvedExecutable is a Phase-4 seam) ────
+// ── providers GET (DB grouping + resolvedExecutable enrichment) ───────────────
 
 #[tokio::test]
 async fn provider_get_maps_skip_permissions_to_yolo() {
@@ -241,8 +241,13 @@ async fn provider_get_includes_adapter_with_only_stored_settings() {
     set_setting(&server, "provider", "ghost.defaultModel", "gpt-ghost").await;
     let body = get_json(&server, "/api/settings/providers").await;
     assert_eq!(body["data"]["ghost"]["defaultModel"], "gpt-ghost");
-    // Phase-4/5 seam: resolvedExecutable enrichment is not available.
-    assert!(body["data"]["ghost"]["resolvedExecutable"].is_null());
+    // resolvedExecutable is attached for every id (TS resolveAdapterExecutableCached).
+    // `ghost` is not a real CLI and has no configured path, so it resolves to the
+    // bare-name fallback (source "fallback", invalid).
+    let resolved = &body["data"]["ghost"]["resolvedExecutable"];
+    assert_eq!(resolved["source"], "fallback");
+    assert_eq!(resolved["valid"], false);
+    assert_eq!(resolved["path"], "ghost");
 }
 
 // ── notifications ────────────────────────────────────────────────────────────

@@ -79,11 +79,20 @@ async fn file_subscribe_absolute_acks_and_receives_file_changed() {
             .is_some_and(|p| p.ends_with("hello.ts"))
     );
 
-    // Let the notify backend settle, then mutate the file.
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    std::fs::write(&file, "// changed").unwrap();
+    // Re-write the file on a short cadence until the event arrives. Under the CPU
+    // contention of the full parallel workspace run the notify (FSEvents) watcher
+    // can register after the first write lands, dropping that single event; a
+    // periodic re-write guarantees a change occurs once the backend is live.
+    let writer_file = file.clone();
+    let writer = tokio::spawn(async move {
+        for i in 0.. {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let _ = std::fs::write(&writer_file, format!("// changed {i}"));
+        }
+    });
 
     let changed = ws.wait_for("file:changed").await;
+    writer.abort();
     assert!(
         changed["path"]
             .as_str()

@@ -4,10 +4,17 @@
 //! The 12 route modules below are EMPTY stubs in Task 3.1; the route agents fill
 //! their handlers. `http.rs` mounts them (see the mount table there).
 
+pub mod adapters;
+pub mod agents;
 pub mod attachments;
 pub mod auth;
+pub mod background_tasks;
+pub mod chat_commands;
+pub mod chats;
 pub mod commands;
+pub mod context;
 pub mod device;
+pub mod external_sessions;
 pub mod files;
 pub mod git;
 pub mod git_chat;
@@ -16,7 +23,9 @@ pub mod health;
 pub mod projects;
 pub mod search;
 pub mod settings;
+pub mod skills;
 pub mod tags;
+pub mod worktree;
 
 // PORT STATUS: src/server/routes/index.ts (mount table)
 // confidence: high
