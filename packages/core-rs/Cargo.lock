@@ -851,48 +851,90 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 name = "mainframe-adapter-api"
 version = "0.0.0"
 dependencies = [
+ "dashmap",
  "mainframe-types",
+ "serde",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "mainframe-adapter-claude"
 version = "0.0.0"
 dependencies = [
+ "chrono",
+ "dirs",
  "mainframe-adapter-api",
+ "mainframe-background-tasks",
+ "mainframe-display",
+ "mainframe-runtime",
+ "mainframe-services",
  "mainframe-types",
+ "nanoid",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "mainframe-adapter-codex"
 version = "0.0.0"
 dependencies = [
+ "chrono",
+ "dirs",
  "mainframe-adapter-api",
+ "mainframe-display",
+ "mainframe-runtime",
  "mainframe-types",
+ "nanoid",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "mainframe-background-tasks"
 version = "0.0.0"
 dependencies = [
+ "chrono",
+ "dashmap",
  "mainframe-types",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "mainframe-chat"
 version = "0.0.0"
 dependencies = [
+ "chrono",
  "dashmap",
+ "dirs",
+ "mainframe-adapter-api",
+ "mainframe-background-tasks",
+ "mainframe-display",
+ "mainframe-runtime",
+ "mainframe-services",
  "mainframe-types",
+ "nanoid",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -901,6 +943,11 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "dashmap",
+ "dirs",
+ "mainframe-adapter-api",
+ "mainframe-adapter-claude",
+ "mainframe-adapter-codex",
+ "mainframe-background-tasks",
  "mainframe-db",
  "mainframe-runtime",
  "mainframe-server",
@@ -1005,6 +1052,10 @@ dependencies = [
  "chrono",
  "dashmap",
  "dirs",
+ "mainframe-adapter-api",
+ "mainframe-adapter-claude",
+ "mainframe-background-tasks",
+ "mainframe-chat",
  "mainframe-db",
  "mainframe-git",
  "mainframe-runtime",
