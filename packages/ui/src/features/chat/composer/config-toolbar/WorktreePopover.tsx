@@ -25,6 +25,8 @@ import { MenuDivider, MenuLabel } from '@/components/ui/menu';
 import { enableWorktree, attachWorktree, getGitBranches, getProjectWorktrees } from '@/lib/api/git';
 import type { WorktreeEntry } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
+import { WorktreeDraftPanel } from './WorktreeDraftPanel';
 import { WorktreeNewForm } from './WorktreeNewForm';
 import { WorktreeTabBar, WorktreeExistingTab } from './WorktreeExistingTab';
 import type { WorktreeTab } from './WorktreeExistingTab';
@@ -67,6 +69,14 @@ export interface WorktreePopoverProps {
 export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
   const port = useDaemonPort();
 
+  // Draft mode (todo #223): a __LOCALID_* thread has no daemon chat, so the
+  // choice is stashed in the draft config — an existing-worktree attach rides
+  // the createChat payload; a new worktree is created by the coordinator right
+  // after createChat on first send. Never call the chat-scoped endpoints here.
+  const isLocalDraft = chat.id.startsWith('__LOCALID_');
+  const draft = useDraftConfig(isLocalDraft ? chat.id : null);
+  const pendingWorktree = draft?.pendingWorktree;
+
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState('');
   const [worktrees, setWorktrees] = useState<WorktreeEntry[]>([]);
@@ -107,6 +117,11 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
 
   const handleEnable = useCallback(
     async (baseBranch: string, branchName: string) => {
+      if (isLocalDraft) {
+        patchDraftConfig(chat.id, { pendingWorktree: { baseBranch, branchName } });
+        setOpen(false);
+        return;
+      }
       setSubmitting(true);
       setApiError(null);
       try {
@@ -118,15 +133,20 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
         setSubmitting(false);
       }
     },
-    [port, chat.id],
+    [port, chat.id, isLocalDraft],
   );
 
   const handleAttach = useCallback(
     async (wt: WorktreeEntry) => {
+      const branch = wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached';
+      if (isLocalDraft) {
+        patchDraftConfig(chat.id, { worktreePath: wt.path, branchName: branch });
+        setOpen(false);
+        return;
+      }
       setSubmitting(true);
       setApiError(null);
       try {
-        const branch = wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached';
         await attachWorktree(port, chat.id, wt.path, branch);
         setOpen(false);
       } catch (err: unknown) {
@@ -135,11 +155,18 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
         setSubmitting(false);
       }
     },
-    [port, chat.id],
+    [port, chat.id, isLocalDraft],
   );
 
+  // Cancel a stashed draft choice — the session starts in the main repo instead.
+  const handleDraftCancel = useCallback(() => {
+    patchDraftConfig(chat.id, { worktreePath: undefined, branchName: undefined, pendingWorktree: undefined });
+  }, [chat.id]);
+
   const isIsolated = Boolean(chat.worktreePath);
-  const branchLabel = isIsolated ? (chat.branchName ?? 'Worktree') : null;
+  const isPendingDraft = isLocalDraft && pendingWorktree != null;
+  const showIsolated = isIsolated || isPendingDraft;
+  const branchLabel = isIsolated ? (chat.branchName ?? 'Worktree') : isPendingDraft ? pendingWorktree.branchName : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -149,25 +176,25 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
             <button
               type="button"
               data-testid="composer-worktree-trigger"
-              aria-label={isIsolated ? `Worktree: ${branchLabel}` : 'Isolate in worktree'}
+              aria-label={showIsolated ? `Worktree: ${branchLabel}` : 'Isolate in worktree'}
               className={[
                 'relative flex h-[20px] w-[26px] shrink-0 items-center justify-center gap-[3px]',
                 'rounded-sm border-[0.5px] text-muted-foreground',
-                isIsolated ? 'border-mf-success text-mf-success' : 'border-border',
+                showIsolated ? 'border-mf-success text-mf-success' : 'border-border',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors focus-visible:outline-none',
               ].join(' ')}
             >
               <GitFork size={13} />
-              {isIsolated && (
+              {showIsolated && (
                 <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
               )}
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top">
-          {isIsolated ? `Worktree: ${branchLabel}` : 'Isolate session in a worktree'}
+          {showIsolated ? `Worktree: ${branchLabel}` : 'Isolate session in a worktree'}
         </TooltipContent>
       </Tooltip>
 
@@ -178,7 +205,9 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
         sideOffset={6}
         className="w-[280px] p-[5px]"
       >
-        {isIsolated ? (
+        {isLocalDraft && draft != null && showIsolated ? (
+          <WorktreeDraftPanel draft={draft} onCancel={handleDraftCancel} />
+        ) : isIsolated ? (
           <ActiveInfo chat={chat} />
         ) : loading ? (
           <div className="flex items-center justify-center py-[20px]">
