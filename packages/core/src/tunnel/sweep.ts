@@ -10,7 +10,12 @@ const PS_TIMEOUT_MS = 5_000;
 export interface SweepDeps {
   /** Full command line of a running pid, or null when the pid is not alive. */
   processCommand: (pid: number) => Promise<string | null>;
-  kill: (pid: number, signal: NodeJS.Signals) => void;
+  /**
+   * Deliver `signal` to `pid`. Returns true when the process was signalled or is
+   * already gone; false when the kill failed for any other reason (e.g. EPERM on
+   * an orphan owned by another user), which tells the sweep to keep the record.
+   */
+  kill: (pid: number, signal: NodeJS.Signals) => boolean;
   /** Platform whose process-inspection tooling the sweep needs; win32 has no `ps`. */
   platform?: NodeJS.Platform;
 }
@@ -46,15 +51,17 @@ export function defaultProcessCommand(pid: number): Promise<string | null> {
   });
 }
 
-export function defaultKill(pid: number, signal: NodeJS.Signals): void {
+export function defaultKill(pid: number, signal: NodeJS.Signals): boolean {
   try {
     process.kill(pid, signal);
+    return true;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
       log.debug({ pid, signal }, 'sweep kill: process already gone');
-    } else {
-      log.warn({ pid, signal, err }, 'sweep kill failed');
+      return true;
     }
+    log.warn({ pid, signal, err }, 'sweep kill failed');
+    return false;
   }
 }
 
@@ -66,8 +73,12 @@ export const defaultSweepDeps: SweepDeps = {
 /**
  * Reap cloudflared children orphaned by a previous daemon run. Reads the pidfile
  * registry, kills each recorded pid that is still alive AND still running the
- * exact binary we recorded (guarding against PID reuse), then clears the
- * registry so this run starts from a clean slate.
+ * exact binary we recorded (guarding against PID reuse), and prunes every record
+ * it handles — a reaped orphan, a dead pid, or a pid reused by another process.
+ *
+ * A record is kept only when the orphan is still alive but the kill failed (e.g.
+ * EPERM on a root-owned orphan): dropping it would discard the sole record of a
+ * live orphan, so we leave it for a future run or manual cleanup instead.
  *
  * On win32 there is no `ps` to inspect a pid's command line, so we cannot verify
  * identity before killing. Rather than blindly kill (PID reuse) or clear the
@@ -94,25 +105,35 @@ export async function sweepStrayTunnels(
 
   for (const entry of entries) {
     const command = await deps.processCommand(entry.pid);
-    if (command && processMatchesBinary(command, entry.binPath)) {
-      log.warn(
-        { pid: entry.pid, label: entry.label, binPath: entry.binPath },
-        'reaping stray cloudflared tunnel orphaned by a previous daemon run',
-      );
-      try {
-        deps.kill(entry.pid, 'SIGTERM');
-      } catch (err) {
-        log.warn({ err, pid: entry.pid }, 'sweep kill threw');
-      }
-      reaped += 1;
-    } else {
+    if (!command || !processMatchesBinary(command, entry.binPath)) {
       log.debug(
         { pid: entry.pid, label: entry.label, alive: command != null },
-        'skipping tunnel registry entry (process gone or not our cloudflared)',
+        'pruning tunnel registry entry (process gone or not our cloudflared)',
+      );
+      await registry.remove(entry.pid);
+      continue;
+    }
+
+    log.warn(
+      { pid: entry.pid, label: entry.label, binPath: entry.binPath },
+      'reaping stray cloudflared tunnel orphaned by a previous daemon run',
+    );
+    let killed = false;
+    try {
+      killed = deps.kill(entry.pid, 'SIGTERM');
+    } catch (err) {
+      log.warn({ err, pid: entry.pid }, 'sweep kill threw');
+    }
+    if (killed) {
+      reaped += 1;
+      await registry.remove(entry.pid);
+    } else {
+      log.warn(
+        { pid: entry.pid, label: entry.label },
+        'kept tunnel registry entry: kill failed, orphan may still be alive',
       );
     }
   }
 
-  await registry.clear();
   return { total: entries.length, reaped, skipped: entries.length - reaped };
 }
