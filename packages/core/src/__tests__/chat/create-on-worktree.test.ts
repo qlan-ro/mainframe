@@ -39,7 +39,7 @@ function makeDeps(overrides: Partial<LifecycleManagerDeps> = {}): LifecycleManag
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     } as any,
-    adapters: { get: vi.fn(), all: vi.fn().mockReturnValue([]) } as any,
+    adapters: { get: vi.fn(), all: vi.fn().mockReturnValue([]), getSnapshots: vi.fn().mockReturnValue([]) } as any,
     activeChats: new Map(),
     messages: { get: vi.fn(), set: vi.fn(), delete: vi.fn() } as any,
     permissions: {
@@ -187,5 +187,41 @@ describe('ChatLifecycleManager.createChatWithDefaults — worktree attachment', 
 
     expect(chat.planMode).toBe(true);
     expect(deps.db.chats.update).toHaveBeenCalledWith(chat.id, { planMode: true });
+  });
+
+  it('omits a saved default model absent from a non-empty catalog', async () => {
+    const deps = makeDeps({
+      db: {
+        chats: {
+          get: vi.fn(() => makeChat()),
+          create: vi.fn(() => makeChat()),
+          update: vi.fn(),
+        },
+        projects: { get: vi.fn() },
+        settings: {
+          get: vi.fn((category: string, key: string) =>
+            category === 'provider' && key === 'claude.defaultModel' ? 'opus' : undefined,
+          ),
+        },
+      } as any,
+      adapters: {
+        get: vi.fn(),
+        getSnapshots: vi.fn().mockReturnValue([
+          {
+            id: 'claude',
+            models: [
+              { id: 'default', label: 'Default - Opus 4.8', isDefault: true },
+              { id: 'sonnet', label: 'Sonnet 5' },
+            ],
+          },
+        ]),
+      } as any,
+    });
+    const lifecycle = new ChatLifecycleManager(deps);
+    const createChat = vi.spyOn(lifecycle, 'createChat');
+
+    await lifecycle.createChatWithDefaults('proj-1', 'claude');
+
+    expect(createChat).toHaveBeenCalledWith('proj-1', 'claude', undefined, undefined, undefined, undefined);
   });
 });

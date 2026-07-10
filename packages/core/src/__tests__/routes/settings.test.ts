@@ -26,7 +26,12 @@ function createMockContext(): RouteContext {
       },
     } as any,
     chats: { getChat: vi.fn(), on: vi.fn() } as any,
-    adapters: { get: vi.fn(), list: vi.fn(), getAll: vi.fn().mockReturnValue([]) } as any,
+    adapters: {
+      get: vi.fn(),
+      list: vi.fn(),
+      getAll: vi.fn().mockReturnValue([]),
+      getSnapshots: vi.fn().mockReturnValue([]),
+    } as any,
   };
 }
 
@@ -71,6 +76,29 @@ describe('settingRoutes', () => {
       // resolvedExecutable is now added per adapter; use toMatchObject to tolerate the new key
       expect(call.data.claude).toMatchObject({ defaultModel: 'opus', defaultMode: 'normal' });
       expect(call.data.gemini).toMatchObject({ defaultModel: 'pro' });
+    });
+
+    it('omits a saved default model absent from a non-empty catalog', async () => {
+      (ctx.db.settings.getByCategory as any).mockReturnValue({
+        'claude.defaultModel': 'opus',
+      });
+      (ctx.adapters.getSnapshots as any).mockReturnValue([
+        {
+          id: 'claude',
+          models: [
+            { id: 'default', label: 'Default - Opus 4.8', isDefault: true },
+            { id: 'sonnet', label: 'Sonnet 5' },
+          ],
+        },
+      ]);
+
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/settings/providers');
+      const res = mockRes();
+
+      await handler({ params: {}, query: {} }, res, vi.fn());
+
+      expect(res.json.mock.calls[0][0].data.claude.defaultModel).toBeUndefined();
     });
 
     it('maps legacy skipPermissions to defaultMode yolo', async () => {
