@@ -145,6 +145,33 @@ describe('MainToolbar — branch chip', () => {
     expect(chip.getAttribute('data-worktree')).toBe('true');
   });
 
+  it('disables the chip (no popover) for a pre-send worktree draft', async () => {
+    // Without a chatId, branch actions would run against the project ROOT while
+    // the chip advertises worktree isolation — the popover must stay off until
+    // the first send stamps the chatId.
+    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        branchName="feat/wt-draft"
+        isWorktree
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    const chip = await screen.findByTestId('main-toolbar-branch');
+    expect(chip).toBeDisabled();
+    expect(screen.queryByTestId('mock-branch-changed')).toBeNull();
+    // The pending worktree choice stays visible on the disabled chip.
+    expect(screen.getByTestId('main-toolbar-branch-wt').textContent?.trim()).toBe('wt');
+  });
+
   it('renders a disabled stub chip when a branch is persisted but no projectId is available', () => {
     render(
       <MainToolbar
