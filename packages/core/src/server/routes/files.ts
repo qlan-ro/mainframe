@@ -370,6 +370,7 @@ async function handleResolvePath(ctx: RouteContext, req: Request, res: Response)
 
 const ExternalFileQuery = z.object({
   path: z.string().min(1),
+  encoding: z.enum(['base64']).optional(),
 });
 
 /**
@@ -380,6 +381,9 @@ const BLOCKED_PREFIXES = ['/etc/shadow', '/etc/master.passwd', '/etc/sudoers'];
 
 const BLOCKED_PATTERNS = [
   /\/\.ssh\/id_/, // private SSH keys
+  /\/\.aws\/credentials$/,
+  /\/\.netrc$/,
+  /\/\.gnupg\//, // private keyrings
 ];
 
 function isBlockedExternalPath(resolved: string): boolean {
@@ -400,7 +404,7 @@ async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: 
     return;
   }
 
-  const requestedPath = parsed.data.path;
+  const { path: requestedPath, encoding } = parsed.data;
 
   // Check blocklist against the raw requested path first (before realpath) so that
   // attempts to access sensitive paths are rejected even when the file doesn't exist.
@@ -437,15 +441,21 @@ async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: 
     return;
   }
 
-  const MAX_SIZE = 2 * 1024 * 1024;
-  if (fileStat.size > MAX_SIZE) {
-    fail(res, 413, 'File too large (max 2MB)');
+  // Same limits as the project files route: binary viewers need more headroom.
+  const maxSize = encoding === 'base64' ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
+  if (fileStat.size > maxSize) {
+    fail(res, 413, `File too large (max ${maxSize / 1024 / 1024}MB)`);
     return;
   }
 
   try {
-    const content = await readFile(resolved, 'utf-8');
-    ok(res, { path: resolved, content });
+    if (encoding === 'base64') {
+      const buffer = await readFile(resolved);
+      ok(res, { path: resolved, content: buffer.toString('base64'), encoding: 'base64' });
+    } else {
+      const content = await readFile(resolved, 'utf-8');
+      ok(res, { path: resolved, content });
+    }
   } catch (err) {
     logger.warn({ err, path: resolved }, 'Failed to read external file');
     fail(res, 500, 'Failed to read file');

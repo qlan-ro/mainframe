@@ -22,3 +22,18 @@ export function makeToolPart(overrides: Partial<ToolCallMessagePartProps> = {}):
     ...overrides,
   };
 }
+
+/**
+ * Tool cards must not nest their own vertical scroll region inside the chat
+ * thread viewport — the viewport is the single overflow owner. A nested
+ * vertical scroller paints a second scrollbar beside the thread's (todo #198
+ * "double scrollbar"). Returns every descendant that would own vertical scroll.
+ * Horizontal-only scrollers (`overflow-x-auto`, for wide code lines) are allowed.
+ */
+export function nestedVerticalScrollers(root: HTMLElement): Element[] {
+  return Array.from(
+    root.querySelectorAll(
+      '[class~="overflow-y-auto"],[class~="overflow-y-scroll"],[class~="overflow-auto"],[class~="overflow-scroll"]',
+    ),
+  );
+}

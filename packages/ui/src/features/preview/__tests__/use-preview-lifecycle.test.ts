@@ -22,6 +22,7 @@ beforeEach(() => {
     onRegionSelect: vi.fn().mockReturnValue(() => {}),
     onNavigate: vi.fn().mockReturnValue(() => {}),
     refit: vi.fn(),
+    reanchor: vi.fn(),
     setDevice: vi.fn(),
     destroy: vi.fn(),
   };
@@ -151,7 +152,11 @@ it('calls handle.destroy when status transitions from running to stopped', async
         device: 'desktop',
       }),
     {
-      initialProps: { status: 'running', port: 3000 as number | null, resolvedUrl: 'http://localhost:3000' as string | null },
+      initialProps: {
+        status: 'running',
+        port: 3000 as number | null,
+        resolvedUrl: 'http://localhost:3000' as string | null,
+      },
       wrapper,
     },
   );
@@ -161,6 +166,69 @@ it('calls handle.destroy when status transitions from running to stopped', async
     rerender({ status: 'stopped', port: null, resolvedUrl: null });
   });
   expect(fakeHandle.destroy).toHaveBeenCalled();
+});
+
+it('calls handle.destroy when the scope entry drops (running → null)', async () => {
+  const anchorRef = { current: null };
+  const containerRef = { current: document.createElement('div') };
+  const { rerender } = renderHook(
+    (props: { status: string | null; port: number | null; resolvedUrl: string | null }) =>
+      usePreviewLifecycle({
+        status: props.status as Parameters<typeof usePreviewLifecycle>[0]['status'],
+        port: props.port,
+        resolvedUrl: props.resolvedUrl,
+        anchorRef,
+        containerRef,
+        projectId: 'p1',
+        device: 'desktop',
+      }),
+    {
+      initialProps: {
+        status: 'running' as string | null,
+        port: 3000 as number | null,
+        resolvedUrl: 'http://localhost:3000' as string | null,
+      },
+      wrapper,
+    },
+  );
+  await act(async () => {});
+  vi.mocked(fakeHandle.destroy).mockReset();
+  await act(async () => {
+    rerender({ status: null, port: null, resolvedUrl: null });
+  });
+  // Without the destroy the native webview stays composited over the app.
+  expect(fakeHandle.destroy).toHaveBeenCalled();
+});
+
+it('reanchors the handle when the anchor node changes while running', async () => {
+  const anchorA = document.createElement('div');
+  const anchorRef: { current: HTMLDivElement | null } = { current: anchorA };
+  const containerRef = { current: document.createElement('div') };
+  const { rerender } = renderHook(
+    (props: { device: 'desktop' | 'mobile' }) =>
+      usePreviewLifecycle({
+        status: 'running',
+        port: 3000,
+        resolvedUrl: 'http://localhost:3000',
+        anchorRef,
+        containerRef,
+        projectId: 'p1',
+        device: props.device,
+      }),
+    { initialProps: { device: 'desktop' as 'desktop' | 'mobile' }, wrapper },
+  );
+  await act(async () => {});
+  expect(fakeHost.preview.mount).toHaveBeenCalledWith(anchorA, expect.any(String), expect.anything());
+
+  // Device toggle: the body remounts the anchor as a different node.
+  const anchorB = document.createElement('div');
+  anchorRef.current = anchorB;
+  await act(async () => {
+    rerender({ device: 'mobile' });
+  });
+  expect(fakeHandle.reanchor).toHaveBeenCalledWith(anchorB);
+  // No second mount — the existing webview is re-pointed, not recreated.
+  expect(fakeHost.preview.mount).toHaveBeenCalledTimes(1);
 });
 
 it('does NOT mount when running but resolvedUrl is null (tunnel pending) and reports pendingTunnel', async () => {

@@ -4,16 +4,16 @@ import type {
   Adapter,
   AdapterModel,
   AdapterSession,
-  ExternalSession,
   ExternalSessionPage,
   SessionOptions,
 } from '@qlan-ro/mainframe-types';
 import { CodexSession } from './session.js';
 import { CodexPlanModeHandler } from './plan-mode-handler.js';
 import { isCodexTranscriptPresent } from './transcript.js';
+import { listExternalSessions } from './external-sessions.js';
 import { JsonRpcClient } from './jsonrpc.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
-import type { InitializeResult, ModelInfo, ModelListResult, ThreadListResult } from './types.js';
+import type { InitializeResult, ModelInfo, ModelListResult } from './types.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:adapter');
@@ -121,48 +121,7 @@ export class CodexAdapter implements Adapter {
     excludeSessionIds: string[],
     opts?: { offset?: number; limit?: number },
   ): Promise<ExternalSessionPage> {
-    let client: JsonRpcClient | null = null;
-    try {
-      client = await this.spawnTempAppServer();
-      const seen = new Set<string>();
-      const aggregated: ExternalSession[] = [];
-      try {
-        const result = await client.request<ThreadListResult>('thread/list', {
-          cwd: projectPath,
-          archived: false,
-        });
-        for (const t of result.data) {
-          if (seen.has(t.id)) continue;
-          seen.add(t.id);
-          aggregated.push({
-            sessionId: t.id,
-            adapterId: this.id,
-            projectPath,
-            firstPrompt: t.name ?? t.preview,
-            summary: t.name ?? t.preview,
-            createdAt: new Date(t.createdAt).toISOString(),
-            modifiedAt: new Date(t.updatedAt).toISOString(),
-            model: t.model,
-          });
-        }
-      } catch (err) {
-        log.warn({ err, projectPath }, 'codex: failed to list external sessions for path');
-      }
-      const excludeSet = new Set(excludeSessionIds);
-      const filtered = aggregated.filter((s) => !excludeSet.has(s.sessionId));
-      const offset = Math.max(0, opts?.offset ?? 0);
-      const limit = opts?.limit ?? 50;
-      const total = filtered.length;
-      if (limit <= 0) return { sessions: [], total, nextOffset: null };
-      const sessions = filtered.slice(offset, offset + limit);
-      const nextOffset = offset + limit < total ? offset + limit : null;
-      return { sessions, total, nextOffset };
-    } catch (err) {
-      log.warn({ err }, 'codex: failed to list external sessions');
-      return { sessions: [], total: 0, nextOffset: null };
-    } finally {
-      client?.close();
-    }
+    return listExternalSessions(projectPath, excludeSessionIds, opts);
   }
 
   async isTranscriptPresent(sessionId: string): Promise<boolean | null> {

@@ -66,9 +66,14 @@ beforeEach(() => {
   });
 });
 
-function fakeContainer(): HTMLElement {
+/** Flush the per-handle op chain (each op is a then-link; a macrotask drains them all). */
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+function fakeContainer(rect: Partial<DOMRect> = {}): HTMLElement {
   const el = document.createElement('div');
-  el.getBoundingClientRect = () => ({ left: 10, top: 20, width: 300, height: 400 }) as DOMRect;
+  el.getBoundingClientRect = () => ({ left: 10, top: 20, width: 300, height: 400, ...rect }) as DOMRect;
+  // Ops that read bounds skip detached anchors — tests need a connected node.
+  document.body.appendChild(el);
   return el;
 }
 
@@ -106,20 +111,93 @@ describe('mountTauriPreview', () => {
   it('destroy() calls previewDestroy', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     const handle = mountTauriPreview(fakeContainer(), 'http://x');
-    await Promise.resolve();
+    await flush();
     handle.destroy();
-    await Promise.resolve();
+    await flush();
     expect(previewDestroy).toHaveBeenCalledWith(expect.any(String));
   });
 
   it('setDevice re-issues previewSetBounds with the current container rect', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
-    const container = document.createElement('div');
-    container.getBoundingClientRect = () => ({ left: 5, top: 6, width: 320, height: 480 }) as DOMRect;
+    const container = fakeContainer({ left: 5, top: 6, width: 320, height: 480 });
     const handle = mountTauriPreview(container, 'http://x');
     previewSetBounds.mockClear();
     handle.setDevice('mobile');
+    await flush();
     expect(previewSetBounds).toHaveBeenCalledWith(expect.any(String), { x: 5, y: 6, w: 320, h: 480 });
+  });
+
+  it('queues setVisible behind previewCreate (never fires before the tab exists)', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    let resolveCreate: () => void = () => {};
+    previewCreate.mockReset().mockImplementation(
+      () =>
+        new Promise<void>((r) => {
+          resolveCreate = r;
+        }),
+    );
+    const handle = mountTauriPreview(fakeContainer(), 'http://x');
+    handle.setVisible(false);
+    await flush();
+    // create is still pending — the visibility op must wait for it.
+    expect(previewSetVisible).not.toHaveBeenCalled();
+    resolveCreate();
+    await flush();
+    expect(previewSetVisible).toHaveBeenCalledWith(expect.any(String), false);
+  });
+
+  it('queues destroy behind previewCreate (a raced destroy would orphan the webview)', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    let resolveCreate: () => void = () => {};
+    previewCreate.mockReset().mockImplementation(
+      () =>
+        new Promise<void>((r) => {
+          resolveCreate = r;
+        }),
+    );
+    const handle = mountTauriPreview(fakeContainer(), 'http://x');
+    handle.destroy();
+    await flush();
+    expect(previewDestroy).not.toHaveBeenCalled();
+    resolveCreate();
+    await flush();
+    expect(previewDestroy).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('keeps the op chain alive after a failed op', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    previewSetVisible.mockRejectedValueOnce(new Error('boom'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const handle = mountTauriPreview(fakeContainer(), 'http://x');
+    handle.setVisible(false);
+    handle.setVisible(true);
+    await flush();
+    expect(previewSetVisible).toHaveBeenCalledTimes(2);
+    expect(previewSetVisible).toHaveBeenLastCalledWith(expect.any(String), true);
+    warn.mockRestore();
+  });
+
+  it('reanchor() switches the bounds source for later refits', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    const handle = mountTauriPreview(fakeContainer(), 'http://x');
+    await flush();
+    const next = fakeContainer({ left: 50, top: 60, width: 230, height: 420 });
+    previewSetBounds.mockClear();
+    handle.reanchor?.(next);
+    await flush();
+    expect(previewSetBounds).toHaveBeenCalledWith(expect.any(String), { x: 50, y: 60, w: 230, h: 420 });
+  });
+
+  it('refit() skips a detached anchor instead of sending a 0-rect', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    const container = fakeContainer();
+    const handle = mountTauriPreview(container, 'http://x');
+    await flush();
+    container.remove();
+    previewSetBounds.mockClear();
+    handle.refit();
+    await flush();
+    expect(previewSetBounds).not.toHaveBeenCalled();
   });
 
   it('startRegionSelect evals the region installer for this tab', async () => {

@@ -5,11 +5,12 @@
  * `useLaunchActions`).
  *
  * Per the artboard `LaunchPicker`, a dropdown row click only SELECTS the config
- * (no tab, no start) while a separate per-row button starts/stops it; the
- * toolbar run button starts the selected config (or the first available), and
- * stops it while running. Starting (either button) is what opens the preview
- * tab. "Generate with Agent" is a gated placeholder until a config-generation
- * flow exists.
+ * (no tab, no start) while a separate per-row button starts/stops it. The
+ * toolbar run button (`deriveLaunchRunControl`) starts the selected config (or
+ * the first available), but switches to a Stop whenever ANY config in the scope
+ * is live — so a process started outside the toolbar is always stoppable here.
+ * Starting (either button) is what opens the preview tab. "Generate with Agent"
+ * is a gated placeholder until a config-generation flow exists.
  *
  * Scoped testids: main-toolbar-launch, main-toolbar-play,
  * main-toolbar-launch-config-<name>, main-toolbar-launch-{start,stop}-<name>,
@@ -23,6 +24,7 @@ import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuDivider, MenuEmpty, MenuRow, menuItemVariants } from '@/components/ui/menu';
 import { useLaunchActions } from './use-launch-actions';
+import { deriveLaunchRunControl, isLaunchStatusLive } from './derive-launch-control';
 
 interface ToolbarLaunchControlsProps {
   port: number;
@@ -35,14 +37,15 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
   const { configs, scopeStatuses, selectedConfigName, handleSelect, handleLaunch, handleStop, refetch } =
     useLaunchActions(port, projectId, chatId);
 
-  // The run button targets the selected config, falling back to the first one.
-  const runTarget: LaunchConfiguration | undefined =
-    (selectedConfigName ? configs.find((c) => c.name === selectedConfigName) : undefined) ?? configs[0];
-  const runStatus = runTarget ? (scopeStatuses[runTarget.name] ?? 'stopped') : 'stopped';
-  const running = runStatus === 'running' || runStatus === 'starting';
-  // With no configs the picker shows an explicit empty label and the run button
-  // (disabled via !runTarget below) sits inert next to it.
-  const label = selectedConfigName ?? 'No Launch Configurations';
+  // Derive the run/stop button from the ACTUAL scope status, not the selection
+  // alone: a config running outside the toolbar (boot reconcile, add-menu, or a
+  // later re-selection) must still surface its Stop here. See #206 and
+  // derive-launch-control.ts. `runTarget` is undefined only when there are no
+  // configs — the button then sits inert (disabled below).
+  const control = deriveLaunchRunControl(configs, scopeStatuses, selectedConfigName);
+  const running = control.mode === 'running';
+  const runTarget = control.target;
+  const label = control.label;
 
   const handleOpen = useCallback(
     (next: boolean) => {
@@ -145,7 +148,7 @@ interface LaunchPickerRowProps {
  * doesn't also select).
  */
 function LaunchPickerRow({ config, status, selected, onSelect, onStart, onStop }: LaunchPickerRowProps) {
-  const live = status === 'running' || status === 'starting';
+  const live = isLaunchStatusLive(status);
   const TypeIcon = config.preview ? Eye : Terminal;
 
   return (

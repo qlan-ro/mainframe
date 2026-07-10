@@ -81,6 +81,59 @@ export async function getProjectFileBase64(
   return data.content;
 }
 
+/**
+ * Read a file OUTSIDE any project root via the daemon's read-only external
+ * endpoint (`GET /api/files/external`). Absolute paths only. The daemon
+ * blocklists known-sensitive paths (SSH keys, shadow, sudoers, …) and rejects
+ * directories. There is deliberately NO write counterpart — external files are
+ * view-only.
+ */
+export async function getExternalFile(port: number, path: string, encoding?: 'base64'): Promise<string> {
+  const qs = new URLSearchParams({ path });
+  if (encoding) qs.set('encoding', encoding);
+  const data = await request<FileContentResponse>('GET', `${apiBase(port)}/api/files/external?${qs}`);
+  return data.content;
+}
+
+export interface ViewFileResult {
+  content: string;
+  /** True when the file was served by the read-only external endpoint. */
+  external: boolean;
+}
+
+/**
+ * Absolute-path test matching the daemon HOST's semantics (not the renderer's):
+ * POSIX (`/…`), Windows drive-letter (`C:\…` / `C:/…`), or UNC (`\\server\…`).
+ */
+const isAbsolutePath = (p: string): boolean => p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
+
+/**
+ * Read a file for VIEWING: tries the project route first (worktree-aware,
+ * editable), and when the daemon rejects an absolute path as outside the
+ * project, falls back to the read-only external endpoint. Relative escapes
+ * (`../..`) never fall back — only genuine absolute out-of-project paths do.
+ */
+export async function getFileForView(
+  port: number,
+  projectId: string,
+  path: string,
+  chatId?: string,
+  opts: { base64?: boolean } = {},
+): Promise<ViewFileResult> {
+  const encoding = opts.base64 ? ('base64' as const) : undefined;
+  try {
+    const content = encoding
+      ? await getProjectFileBase64(port, projectId, path, chatId)
+      : await getProjectFile(port, projectId, path, chatId);
+    return { content, external: false };
+  } catch (err) {
+    const outside = err instanceof Error && err.message === 'Path outside project';
+    if (!outside || !isAbsolutePath(path)) throw err;
+    const content = await getExternalFile(port, path, encoding);
+    return { content, external: true };
+  }
+}
+
 interface WriteFileResponse {
   path: string;
 }
