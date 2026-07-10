@@ -88,6 +88,9 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
               <DegradedChatCard />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
+              {/* Inline "thinking/working" indicator — sits after the last message,
+                  not pinned above the composer (#214). */}
+              <GeneratingIndicator />
               <ChatGateMount />
             </div>
 
@@ -105,7 +108,6 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
 
               <div className="mx-auto w-full max-w-3xl px-5 pb-4">
                 <BackgroundActivityBar />
-                <GeneratingIndicator />
                 <Composer />
               </div>
             </ThreadPrimitive.ViewportFooter>

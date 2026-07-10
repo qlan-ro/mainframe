@@ -70,6 +70,13 @@ describe('ConsolePane', () => {
     fireEvent.click(screen.getByTestId('run-console-clear'));
     expect(clearLogsForProcess).toHaveBeenCalledWith('proj-1:/repo', 'dev');
   });
+
+  it('opts the log output into text selection via the mf-editor-selectable class', async () => {
+    const { ConsolePane } = await import('../ConsolePane');
+    render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" />);
+    const lines = screen.getByTestId('run-console-log-lines');
+    expect(lines.classList.contains('mf-editor-selectable')).toBe(true);
+  });
 });
 
 describe('ConsolePane drawer variant', () => {
@@ -106,6 +113,14 @@ describe('ConsolePane drawer variant', () => {
     render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" variant="drawer" />);
     fireEvent.click(screen.getByTestId('run-console-drawer-toggle'));
     expect(screen.getByText('Starting server…')).toBeInTheDocument();
+  });
+
+  it('opts the expanded drawer log output into text selection', async () => {
+    const { ConsolePane } = await import('../ConsolePane');
+    render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" variant="drawer" />);
+    fireEvent.click(screen.getByTestId('run-console-drawer-toggle'));
+    const lines = screen.getByTestId('run-console-log-lines');
+    expect(lines.classList.contains('mf-editor-selectable')).toBe(true);
   });
 
   it('shows the last log line as tail when collapsed', async () => {

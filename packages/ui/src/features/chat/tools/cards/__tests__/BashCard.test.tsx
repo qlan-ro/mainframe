@@ -139,11 +139,23 @@ describe('BashCard', () => {
     expect(screen.getByTestId('chat-bash-trigger')).toBeInTheDocument();
   });
 
-  it('trigger is disabled when there is no result', () => {
-    renderCard(makePart({ args: { command: 'ls' }, result: undefined }));
-    // CollapsibleTrigger receives disabled={true} → Radix renders a disabled button
+  it('trigger is disabled when the command finished with no output', () => {
+    // result === '' → completed, but nothing to show and no longer running.
+    renderCard(makePart({ args: { command: 'touch f' }, result: '' }));
     const trigger = screen.getByTestId('chat-bash-trigger');
     expect(trigger).toBeDisabled();
+  });
+
+  it('trigger is ENABLED while the command is still running (result === undefined) (#208)', () => {
+    renderCard(makePart({ args: { command: 'sleep 1' }, result: undefined }));
+    const trigger = screen.getByTestId('chat-bash-trigger');
+    expect(trigger).not.toBeDisabled();
+  });
+
+  it('expands to show the running command in the output body while result is pending (#208)', () => {
+    renderCard(makePart({ args: { command: 'pnpm build' }, result: undefined }));
+    fireEvent.click(screen.getByTestId('chat-bash-trigger'));
+    expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('pnpm build');
   });
 
   // --- Output body content ---
