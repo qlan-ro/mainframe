@@ -68,7 +68,10 @@ export class DaemonWsClient {
     const url = t.token ? `${wsBase}?token=${encodeURIComponent(t.token)}` : wsBase;
     const socket = new WebSocket(url);
     this.ws = socket;
+    this.attachSocketHandlers(socket);
+  }
 
+  private attachSocketHandlers(socket: WebSocket): void {
     socket.onopen = () => {
       this.reconnectAttempts = 0;
       this.flushPending();
