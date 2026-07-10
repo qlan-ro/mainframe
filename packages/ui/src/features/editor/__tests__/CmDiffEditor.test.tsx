@@ -11,7 +11,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { EditorView } from '@codemirror/view';
 import { CmDiffEditor } from '../CmDiffEditor';
+import { buildCommentGutter } from '../inline-comments/comment-gutter';
 
 describe('CmDiffEditor', () => {
   it('renders the editor-diff root with .mf-editor-selectable', () => {
@@ -131,5 +133,41 @@ describe('CmDiffEditor', () => {
     const root = screen.getByTestId('editor-diff');
     // Both .cm-editor nodes must be present (one per pane)
     expect(root.querySelectorAll('.cm-editor').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('calls onViewReady with the modified pane EditorView (#213)', () => {
+    let view: EditorView | undefined;
+    render(
+      <CmDiffEditor
+        original={'a\n'}
+        modified={'b\n'}
+        language="plaintext"
+        path="/test/onviewready.txt"
+        onViewReady={(v) => {
+          view = v;
+        }}
+      />,
+    );
+    expect(view).toBeTruthy();
+    expect(typeof view!.dispatch).toBe('function');
+  });
+
+  it('installs extraExtensions on the modified pane — the annotation gutter reaches the MergeView (#213)', () => {
+    // Regression guard: MergeView builds each pane from `config.a/b.extensions`.
+    // The annotation gutter must be threaded through so the diff viewer gets the
+    // same gutter as the editor (not silently dropped like a pre-built state).
+    const gutterExt = buildCommentGutter({ onAddComment: () => {}, onOpenComment: () => {} });
+    render(
+      <CmDiffEditor
+        original={'a\nb\n'}
+        modified={'a\nB\n'}
+        language="plaintext"
+        path="/test/gutter-ext.txt"
+        extraExtensions={[gutterExt]}
+      />,
+    );
+    const root = screen.getByTestId('editor-diff');
+    // One comment gutter — installed only on the modified (b) pane.
+    expect(root.querySelectorAll('.cm-comment-gutter').length).toBe(1);
   });
 });

@@ -35,6 +35,7 @@ vi.mock('@/features/chat/tools/ToolResultExpand', () => ({
 // ---------------------------------------------------------------------------
 
 import { SearchCard } from '../SearchCard';
+import { nestedVerticalScrollers } from './_part-fixture';
 
 // ---------------------------------------------------------------------------
 // Wrapper — satisfies Radix Tooltip requirement
@@ -193,6 +194,16 @@ describe('SearchCard — done state (plain body)', () => {
       </Wrap>,
     );
     expect(screen.getByTestId('search-card-root')).toBeInTheDocument();
+  });
+
+  it('does not nest a vertical scroll container in the expanded body (single overflow owner)', () => {
+    render(
+      <Wrap>
+        <SearchCard {...baseProps} toolName="Glob" args={{ glob: '*.ts' }} result={'a.ts\nb.ts'} isError={false} />
+      </Wrap>,
+    );
+    fireEvent.click(screen.getByTestId('search-card-trigger'));
+    expect(nestedVerticalScrollers(screen.getByTestId('search-card-root'))).toHaveLength(0);
   });
 
   it('renders the plain body with the result text', () => {

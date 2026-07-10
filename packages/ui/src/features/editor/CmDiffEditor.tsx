@@ -15,7 +15,7 @@
  * (nextChange / prevChange in diff-nav.ts) always hold the live MergeView.
  */
 import { useEffect, useRef } from 'react';
-import { EditorState } from '@codemirror/state';
+import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { MergeView } from '@codemirror/merge';
 import type { LangPackId } from '@/lib/editor/file-types';
@@ -90,6 +90,19 @@ export interface CmDiffEditorProps {
    * behaviour is completely unchanged.
    */
   onLineSelect?: (sel: LineSelection) => void;
+  /**
+   * Optional extra CM6 extensions installed on the MODIFIED (right / b) pane —
+   * e.g. the inline-comment annotation gutter. Threaded through the MergeView's
+   * `config.b.extensions` (NOT a pre-built EditorState, which silently drops
+   * them) so the diff viewer can host the same gutter as the editor.
+   */
+  extraExtensions?: Extension[];
+  /**
+   * Called with the modified (b) pane's live EditorView once the MergeView
+   * mounts. Lets a parent (e.g. the comment-gutter host) dispatch effects and
+   * read state fields on the pane that carries `extraExtensions`.
+   */
+  onViewReady?: (view: EditorView) => void;
 }
 
 export function CmDiffEditor({
@@ -100,13 +113,21 @@ export function CmDiffEditor({
   onChunksChange,
   onStats,
   onLineSelect,
+  extraExtensions,
+  onViewReady,
 }: CmDiffEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
-  // Stable ref so the mount-only effect can always read the latest callback
-  // without needing to re-run (which would destroy/recreate the MergeView).
+  // Stable refs so the mount-only effect can always read the latest callback /
+  // extensions without needing to re-run (which would destroy/recreate the
+  // MergeView). extraExtensions is stable in practice (memoised by the comment
+  // gutter host), so it is applied once at mount like the base extensions.
   const onLineSelectRef = useRef(onLineSelect);
   onLineSelectRef.current = onLineSelect;
+  const onViewReadyRef = useRef(onViewReady);
+  onViewReadyRef.current = onViewReady;
+  const extraExtensionsRef = useRef(extraExtensions);
+  extraExtensionsRef.current = extraExtensions;
 
   // Drives both panes' theme compartment dark flag; re-renders on a mode flip.
   const mode = useTheme((s) => s.mode);
@@ -169,6 +190,8 @@ export function CmDiffEditor({
           bLang.of(langExt),
           bRo.of(EditorState.readOnly.of(readOnly)),
           bClickExt,
+          // Annotation gutter etc. — installed on the modified pane only (#213).
+          ...(extraExtensionsRef.current ?? []),
         ],
       },
       parent: hostRef.current,
@@ -196,6 +219,10 @@ export function CmDiffEditor({
     // The mv object itself is long-lived; diff-nav reads mv.chunks at call time,
     // so registering once at mount is sufficient.
     setActiveMergeView(mv);
+    // Hand the modified pane's live view to any host (e.g. the comment gutter)
+    // so it can dispatch effects / read state fields on the pane carrying
+    // extraExtensions.
+    onViewReadyRef.current?.(mv.b);
     // Report the initial chunk count synchronously after construction so that
     // parent controls (DiffHeader) can display an accurate count without
     // polling the global singleton or using a timer.
