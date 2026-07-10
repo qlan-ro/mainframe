@@ -10,4 +10,7 @@ workspace = true
 [dependencies]
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+dashmap = { workspace = true }
+serde = { workspace = true }
 mainframe-types = { workspace = true }
