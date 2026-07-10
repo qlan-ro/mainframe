@@ -7,7 +7,26 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "http://*" },
+        { "url": "https://*" },
+        { "url": "mailto:*" },
+        { "url": "tel:*" },
+        { "url": "slack://*" },
+        { "url": "vscode://*" },
+        { "url": "vscode-insiders://*" },
+        { "url": "cursor://*" },
+        { "url": "jetbrains://*" },
+        { "url": "idea://*" },
+        { "url": "zed://*" },
+        { "url": "figma://*" },
+        { "url": "linear://*" },
+        { "url": "notion://*" },
+        { "url": "discord://*" }
+      ]
+    },
     "notification:allow-notify",
     "notification:allow-is-permission-granted",
     "updater:default",

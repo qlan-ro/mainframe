@@ -6,7 +6,7 @@
  *
  * The tab's leading glyph is a STATIC type identifier — it never flips with the
  * process's running/stopped state. Each of the three launch/terminal tab kinds
- * carries its own glyph: console (logs) = scroll-text, preview = eye, terminal =
+ * carries its own glyph: console (cli) = square-terminal, preview = eye, terminal =
  * terminal. A live launch-config tab additionally shows a red Stop button as a
  * SEPARATE control between the label and the close (×), not in the glyph slot.
  */
@@ -73,19 +73,19 @@ describe('RunTabStrip — strip height', () => {
 });
 
 describe('RunTabStrip — static type glyph (independent of run state)', () => {
-  it('console (logs) tab keeps its scroll-text glyph whether stopped or running — never Play, never flips to Square', () => {
+  it('console (cli) tab keeps its square-terminal glyph whether stopped or running — never Play, never flips to Square', () => {
     launch.configs = [cfg('Sleeper')];
 
     launch.scopeStatuses = { Sleeper: 'stopped' };
     const idle = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
-    expect(pillGlyphs(idle.container, consoleTab.id)).toContain('lucide-scroll-text');
+    expect(pillGlyphs(idle.container, consoleTab.id)).toContain('lucide-square-terminal');
     expect(pillGlyphs(idle.container, consoleTab.id)).not.toContain('lucide-play');
     idle.unmount();
 
     launch.scopeStatuses = { Sleeper: 'running' };
     const live = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
     // The static glyph stays put while running — it no longer flips into the Stop.
-    expect(pillGlyphs(live.container, consoleTab.id)).toContain('lucide-scroll-text');
+    expect(pillGlyphs(live.container, consoleTab.id)).toContain('lucide-square-terminal');
   });
 
   it('preview tab keeps its Eye glyph whether stopped or running', () => {
@@ -114,7 +114,7 @@ describe('RunTabStrip — running-config Stop affordance', () => {
     const { queryByTestId, container } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
     expect(queryByTestId(`run-tab-stop-${consoleTab.id}`)).not.toBeNull();
     // The type glyph is NOT displaced by the Stop.
-    expect(pillGlyphs(container, consoleTab.id)).toContain('lucide-scroll-text');
+    expect(pillGlyphs(container, consoleTab.id)).toContain('lucide-square-terminal');
   });
 
   it('treats a "starting" config as live (Stop shown)', () => {
