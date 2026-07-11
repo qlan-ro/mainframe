@@ -256,8 +256,26 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            // Cmd+Q / updater relaunch can end the run loop WITHOUT destroying
+            // windows, skipping the Destroyed handler above — the daemon then
+            // outlives the app (the rc.2→rc.4 stale-daemon incident). RunEvent::Exit
+            // is the last event before process exit; kill() is idempotent, so a
+            // graceful window close having already run it is fine.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(h) = DAEMON.get() {
+                    h.kill();
+                }
+                if let Some(mgr) = app_handle.try_state::<TerminalManager>() {
+                    mgr.kill_all();
+                }
+                if let Some(mgr) = app_handle.try_state::<PreviewManager>() {
+                    mgr.kill_all();
+                }
+            }
+        });
 }
 
 fn boot_daemon(
