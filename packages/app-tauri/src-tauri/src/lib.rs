@@ -1,4 +1,5 @@
 mod commands;
+mod daemon_impl;
 mod log_sink;
 mod memory_logger;
 mod menu;
@@ -126,6 +127,9 @@ pub fn run() {
             daemons_remove,
             daemon_token_get,
             daemon_token_set,
+            // daemon-impl canary (MAINFRAME_DAEMON_IMPL) read/flip (Task 6.1)
+            daemon_impl::daemon_impl_get,
+            daemon_impl::daemon_impl_set,
         ])
         .setup(move |app| {
             // Build + set the native application menu. Errors are logged and the
@@ -249,7 +253,8 @@ fn boot_daemon(
 ) -> Result<sidecar::DaemonHandle, String> {
     // External daemon: the user (or a separate process) runs the daemon themselves
     // (MAINFRAME_EXTERNAL_DAEMON) — don't spawn; the renderer connects to it on
-    // daemon_port(). Mirrors the Electron `MAINFRAME_EXTERNAL_DAEMON` flag.
+    // daemon_port(). Mirrors the Electron `MAINFRAME_EXTERNAL_DAEMON` flag. Applies
+    // to both impls: the shell never spawns anything in EXTERNAL mode.
     if external_daemon() {
         tracing::info!(
             port = daemon_port(),
@@ -258,6 +263,21 @@ fn boot_daemon(
         return Ok(sidecar::DaemonHandle::external());
     }
 
+    // Canary: default Node (always-working path), opt into Rust via
+    // MAINFRAME_DAEMON_IMPL=rust or the persisted app setting.
+    let impl_ = daemon_impl::resolve_daemon_impl();
+    tracing::info!(daemon_impl = impl_.as_str(), "selected daemon implementation");
+    match impl_ {
+        daemon_impl::DaemonImpl::Node => boot_node_daemon(app, shell_env),
+        daemon_impl::DaemonImpl::Rust => boot_rust_daemon(app, shell_env),
+    }
+}
+
+/// Boot the legacy Node sidecar (`node <daemon_entry>`).
+fn boot_node_daemon(
+    app: &tauri::AppHandle,
+    shell_env: &std::collections::HashMap<String, String>,
+) -> Result<sidecar::DaemonHandle, String> {
     let shell_path = shell_env.get("PATH").map(|s| s.as_str());
     // Release: prefer the bundled, ABI-matched Node sidecar. Debug/dev: ALWAYS use
     // the system Node so live `packages/core` edits take effect — even if leftover
@@ -280,16 +300,126 @@ fn boot_daemon(
         node = %node_bin.display(),
         daemon = %daemon_entry.display(),
         port = daemon_port(),
-        "booting daemon sidecar"
+        "booting node daemon sidecar"
     );
 
     sidecar::spawn_daemon(sidecar::SidecarConfig {
-        node_bin,
-        daemon_entry,
+        program: sidecar::DaemonProgram::Node {
+            node_bin,
+            daemon_entry,
+        },
         shell_env: shell_env.clone(),
         daemon_port: daemon_port(),
         data_dir: None,
     })
+}
+
+/// Boot the Rust `mainframe-daemon` binary directly.
+///
+/// The daemon reads DAEMON_PORT + MAINFRAME_DATA_DIR from its own env; the
+/// login-shell env (incl. PATH) is passed through as the daemon's own env so it
+/// AND its adapter children inherit the resolved PATH. The bundled Node runtime
+/// and node_modules root are injected (release only) so the Rust daemon can
+/// launch the bundled TS/Python LSP servers — the Node runtime stays in the
+/// bundle while the canary exists, serving the LSP servers only under IMPL=rust.
+fn boot_rust_daemon(
+    app: &tauri::AppHandle,
+    shell_env: &std::collections::HashMap<String, String>,
+) -> Result<sidecar::DaemonHandle, String> {
+    let daemon_bin = resolve_rust_daemon_bin()?;
+
+    // Release: point the daemon at the bundled Node + node_modules for the LSP
+    // servers. Dev/run-from-source: unset → only external LSP servers (jdtls)
+    // spawn (matches the daemon's documented dev behaviour). Skipped in debug so
+    // leftover bundle artifacts next to a dev binary never leak into dev runs.
+    let (bundled_node, bundled_lsp_root) = if cfg!(debug_assertions) {
+        (None, None)
+    } else {
+        let node = sidecar::find_bundled_node();
+        let lsp_root = app
+            .path()
+            .resource_dir()
+            .ok()
+            .map(|d| d.join("daemon").join("node_modules"))
+            .filter(|p| p.exists());
+        (node, lsp_root)
+    };
+
+    tracing::info!(
+        daemon = %daemon_bin.display(),
+        port = daemon_port(),
+        bundled_node = ?bundled_node,
+        bundled_lsp_root = ?bundled_lsp_root,
+        "booting rust daemon sidecar"
+    );
+
+    sidecar::spawn_daemon(sidecar::SidecarConfig {
+        program: sidecar::DaemonProgram::Rust {
+            daemon_bin,
+            bundled_node,
+            bundled_lsp_root,
+        },
+        shell_env: shell_env.clone(),
+        daemon_port: daemon_port(),
+        data_dir: None,
+    })
+}
+
+/// Locate the Rust `mainframe-daemon` binary.
+///
+/// Precedence:
+///   1. `MAINFRAME_RUST_DAEMON_PATH` env override — dev / CI (both profiles).
+///   2. Bundled externalBin next to the exe — **release only**.
+///   3. Monorepo `packages/core-rs/target/{release,debug}/mainframe-daemon` — dev.
+///
+/// In debug the bundled binary is skipped so a stale packaged artifact never
+/// shadows a fresh `cargo build`. An explicit env override is always honored.
+fn resolve_rust_daemon_bin() -> Result<PathBuf, String> {
+    if let Ok(raw) = std::env::var("MAINFRAME_RUST_DAEMON_PATH") {
+        let path = PathBuf::from(&raw);
+        if path.exists() {
+            tracing::info!(path = %path.display(), "rust daemon resolved (env override)");
+            return Ok(path);
+        }
+        return Err(format!("MAINFRAME_RUST_DAEMON_PATH={raw} does not exist"));
+    }
+
+    if !cfg!(debug_assertions) {
+        if let Some(bundled) = sidecar::find_bundled_rust_daemon() {
+            tracing::info!(path = %bundled.display(), "rust daemon resolved (bundled)");
+            return Ok(bundled);
+        }
+    }
+
+    // Dev fallback: walk up to the monorepo root, prefer a release build.
+    let exe = std::env::current_exe().map_err(|e| format!("cannot determine exe path: {e}"))?;
+    let bin_name = format!("mainframe-daemon{}", std::env::consts::EXE_SUFFIX);
+    let mut dir = exe.as_path();
+    loop {
+        if dir.join("pnpm-workspace.yaml").exists() {
+            for profile in ["release", "debug"] {
+                let candidate = dir
+                    .join("packages/core-rs/target")
+                    .join(profile)
+                    .join(&bin_name);
+                if candidate.exists() {
+                    tracing::info!(path = %candidate.display(), "rust daemon resolved (monorepo)");
+                    return Ok(candidate);
+                }
+            }
+            return Err(format!(
+                "monorepo root at {} but no {bin_name} in packages/core-rs/target/{{release,debug}} — run `cargo build --release -p mainframe-daemon` in packages/core-rs or set MAINFRAME_RUST_DAEMON_PATH",
+                dir.display()
+            ));
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent,
+            None => break,
+        }
+    }
+
+    Err("could not locate monorepo root (pnpm-workspace.yaml) — set MAINFRAME_RUST_DAEMON_PATH"
+        .to_string())
 }
 
 /// Pure path-precedence selector (unit-testable, no AppHandle).

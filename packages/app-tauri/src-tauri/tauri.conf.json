@@ -41,7 +41,7 @@
       "providerShortName": null,
       "signingIdentity": null
     },
-    "externalBin": ["binaries/node"],
+    "externalBin": ["binaries/node", "binaries/mainframe-daemon"],
     "resources": {
       "resources/daemon": "daemon"
     }
