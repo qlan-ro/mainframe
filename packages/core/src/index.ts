@@ -15,7 +15,6 @@ import { backfillAdapterExecutables, defaultRun, resolveAdapterExecutable } from
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
-import { replaceStaleDaemon } from './server/stale-daemon.js';
 import { PluginManager } from './plugins/manager.js';
 import { LaunchRegistry } from './launch/index.js';
 import { TunnelManager, resolveCloudflaredPath } from './tunnel/index.js';
@@ -179,15 +178,6 @@ async function main(): Promise<void> {
   });
 
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
-
-  // An app update can orphan the previous install's daemon on our port; replace
-  // it (different version only) before binding. 'same-version' and 'foreign'
-  // occupants are left alone — the bind below then fails with EADDRINUSE, which
-  // start() now surfaces as a rejection instead of a silent crash.
-  const occupant = await replaceStaleDaemon(config.port);
-  if (occupant === 'replaced') {
-    logger.warn({ port: config.port }, 'Replaced a stale daemon from a previous install');
-  }
 
   await server.start(config.port);
 

@@ -103,8 +103,8 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     res.json({
       status: 'ok',
       version: DAEMON_VERSION,
-      // Lets a newer daemon identify (and replace) this process if it goes stale
-      // across an app update — see server/stale-daemon.ts.
+      // Identifies which process owns the port when diagnosing a stale/orphaned
+      // daemon (version + pid answer "who is serving me" with one curl).
       pid: process.pid,
       timestamp: new Date().toISOString(),
       tunnelUrl: ctx.tunnelUrl ?? getTunnelUrl?.() ?? null,
