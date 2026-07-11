@@ -37,11 +37,58 @@ impl DaemonHandle {
 
     pub fn kill(&self) {
         if let Ok(mut guard) = self.child.lock() {
-            if let Some(ref mut child) = *guard {
+            // take() empties the slot so the exit watcher knows this death was
+            // intentional; wait() reaps the child (no <defunct> zombie).
+            if let Some(mut child) = guard.take() {
                 let _ = child.kill();
+                let _ = child.wait();
                 tracing::info!("daemon sidecar killed");
             }
         }
+    }
+
+    /// Watch for the child dying on its own (bind failure, crash). Polls
+    /// `try_wait` so it never contends with `kill()` for more than an instant;
+    /// an empty slot means `kill()` already ran (or the daemon is external) and
+    /// the watcher just stops. On an unexpected exit the child is reaped, the
+    /// slot cleared (so `get_daemon_status` reports "exited", not a live pid),
+    /// and `on_exit` is invoked with the exit code.
+    pub fn watch_exit<F>(&self, on_exit: F)
+    where
+        F: FnOnce(Option<i32>) + Send + 'static,
+    {
+        let child = Arc::clone(&self.child);
+        std::thread::spawn(move || {
+            let mut on_exit = Some(on_exit);
+            loop {
+                {
+                    let mut guard = match child.lock() {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
+                    match guard.as_mut() {
+                        None => return, /* expected — killed on app exit or external daemon */
+                        Some(c) => match c.try_wait() {
+                            Ok(Some(status)) => {
+                                let code = status.code();
+                                *guard = None;
+                                drop(guard);
+                                if let Some(f) = on_exit.take() {
+                                    f(code);
+                                }
+                                return;
+                            }
+                            Ok(None) => {}
+                            Err(e) => {
+                                tracing::warn!(err = %e, "daemon exit watch failed");
+                                return;
+                            }
+                        },
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
     }
 
     pub fn pid(&self) -> Option<u32> {

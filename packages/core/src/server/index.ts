@@ -33,8 +33,14 @@ export function createServerManager(deps: ServerManagerDeps): ServerManager {
       _fileWatcher = new FileWatcherService((event) => _wsManager?.broadcastEvent(event));
       _wsManager = new WebSocketManager(httpServer, chats, lspHandler, _fileWatcher, db.devices, adapters);
 
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
+        // Without this, a bind failure (EADDRINUSE from a duplicate/stale daemon)
+        // is an unhandled 'error' event → uncaught exception → silent death.
+        const onBindError = (err: Error) => reject(err);
+        httpServer.once('error', onBindError);
         httpServer.listen(port, '127.0.0.1', () => {
+          httpServer.removeListener('error', onBindError);
+          httpServer.on('error', (err) => log.error({ err }, 'HTTP server error'));
           log.info({ port }, 'Mainframe daemon listening on http://127.0.0.1:%d', port);
           resolve();
         });

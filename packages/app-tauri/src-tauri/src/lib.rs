@@ -189,6 +189,19 @@ pub fn run() {
             // Store the handle for the lifetime of the app.
             if let Ok(handle) = daemon_result {
                 let _ = DAEMON.set(handle);
+                // Surface an unexpected daemon death (bind failure, crash) to the
+                // renderer — otherwise the UI keeps polling a port that may be
+                // owned by a stale daemon and everything skews silently.
+                if let Some(h) = DAEMON.get() {
+                    let app_handle = app.handle().clone();
+                    h.watch_exit(move |code| {
+                        let code_label = code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+                        tracing::error!(code = %code_label, "daemon sidecar exited unexpectedly");
+                        if let Some(win) = app_handle.get_webview_window("main") {
+                            let _ = win.emit("daemon:status", &format!("error:daemon exited (code {code_label})"));
+                        }
+                    });
+                }
             }
 
             // Start the OS-idle presence reporter (Plan 3, decision 4).
