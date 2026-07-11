@@ -42,6 +42,8 @@
     "scrollbar-dark-theme",
     "session-context-panel",
     "session-provider-icons-unread",
+    "sessions-sticky-scrollbar",
+    "stale-daemon-takeover",
     "stop-buttons",
     "subagent-grouping-fixes",
     "tauri-webview-cors-origin",
