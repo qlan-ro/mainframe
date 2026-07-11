@@ -66,6 +66,7 @@ mod tests {
             version: "0.0.0-test".into(),
             port: 0,
             auth_secret: None,
+            resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
             tunnel_url: Arc::new(std::sync::RwLock::new(None)),
             ws_clients: Arc::new(DashMap::new()),
         })

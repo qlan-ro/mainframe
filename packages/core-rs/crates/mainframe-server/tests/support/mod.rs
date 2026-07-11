@@ -61,6 +61,7 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
         version: "0.0.0-test".to_string(),
         port: 0,
         auth_secret,
+        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
     });

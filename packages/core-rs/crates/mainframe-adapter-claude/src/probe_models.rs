@@ -166,7 +166,7 @@ pub fn extract_probe_payload(event: &Value) -> Option<ProbeResult> {
 
 /// Spawn the CLI in stream-json mode, send an `initialize` control_request, and
 /// resolve with the first parsed model catalog (or `None` on error/timeout/exit).
-pub async fn probe_models(executable: &str) -> Option<ProbeResult> {
+pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
     let cwd = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     let mut child = match Command::new(executable)
         .args([
@@ -179,6 +179,7 @@ pub async fn probe_models(executable: &str) -> Option<ProbeResult> {
             "stdio",
         ])
         .current_dir(cwd)
+        .env("PATH", path)
         .env("FORCE_COLOR", "0")
         .env("NO_COLOR", "1")
         .env_remove("CLAUDECODE")

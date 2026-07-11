@@ -12,6 +12,7 @@ use mainframe_chat::chat_manager::ChatManager;
 use mainframe_launch::{LaunchRegistry, TunnelManager};
 use mainframe_lsp::LspManager;
 use mainframe_plugins::PluginManager;
+use mainframe_runtime::ResolvedPath;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
@@ -25,7 +26,21 @@ use crate::websocket::WsClients;
 /// injects. `resolveAdapterExecutable` (the settings `resolvedExecutable`
 /// enrichment and the daemon's refresh deps) takes `&dyn Runner`; this is the
 /// single production impl over `default_run` (`execFile` + 5s timeout).
-pub struct DefaultRunner;
+///
+/// Carries the boot-resolved login-shell `PATH` so `which`/`where` detection and
+/// version probes find CLIs outside the packaged app's bare `PATH` (the TS twin
+/// relied on `enrichPath` mutating `process.env.PATH`).
+#[derive(Default)]
+pub struct DefaultRunner {
+    pub path: Option<ResolvedPath>,
+}
+
+impl DefaultRunner {
+    #[must_use]
+    pub fn new(path: ResolvedPath) -> Self {
+        Self { path: Some(path) }
+    }
+}
 
 impl mainframe_adapter_api::resolve_executable::Runner for DefaultRunner {
     fn run(
@@ -34,8 +49,15 @@ impl mainframe_adapter_api::resolve_executable::Runner for DefaultRunner {
         args: Vec<String>,
         timeout_ms: Option<u64>,
     ) -> mainframe_adapter_api::BoxFuture<'_, mainframe_adapter_api::RunResult> {
+        let path = self.path.clone();
         Box::pin(async move {
-            mainframe_adapter_api::resolve_executable::default_run(&cmd, &args, timeout_ms).await
+            mainframe_adapter_api::resolve_executable::default_run(
+                &cmd,
+                &args,
+                timeout_ms,
+                path.as_deref(),
+            )
+            .await
         })
     }
 }
@@ -114,6 +136,10 @@ pub struct AppCtx {
     /// `AUTH_TOKEN_SECRET`. `None` disables auth entirely (middleware + WS
     /// upgrade become no-ops) — the exact `whenSecretUnset` contract.
     pub auth_secret: Option<String>,
+    /// The boot-resolved login-shell `PATH` (see `mainframe_runtime::ResolvedPath`).
+    /// Threaded into on-demand executable resolution (settings route) and any
+    /// route that spawns a CLI, mirroring the TS `enrichPath` env mutation.
+    pub resolved_path: ResolvedPath,
     /// `/health`'s `tunnelUrl`. Interior-mutable so the tunnel routes' `setTunnelUrl`
     /// and the boot-time daemon-tunnel start can update what `/health` reports —
     /// mirrors the mutated `ctx.tunnelUrl` closure in `http.ts`.
@@ -210,6 +236,7 @@ impl AppCtx {
             version: "0.0.0-test".into(),
             port: 0,
             auth_secret: None,
+            resolved_path: ResolvedPath::from_value("/usr/bin:/bin"),
             tunnel_url: Arc::new(RwLock::new(None)),
             ws_clients: Arc::new(DashMap::new()),
         })

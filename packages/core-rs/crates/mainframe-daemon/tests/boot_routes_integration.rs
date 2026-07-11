@@ -126,6 +126,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         version: "0.0.0-test".to_string(),
         port: 0,
         auth_secret: None,
+        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
         adapter_registry: Arc::new(AdapterRegistry::new()),

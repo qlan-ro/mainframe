@@ -80,6 +80,10 @@ pub struct LspRegistry {
     node_exec: Option<String>,
     /// Directory containing the bundled `node_modules` (was `require.resolve` root).
     bundled_root: Option<PathBuf>,
+    /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
+    /// external-server spawn so packaged builds find CLIs outside the bare launchd
+    /// `PATH` (mirrors the TS `enrichPath` env mutation). `None` = inherit.
+    resolved_path: Option<String>,
 }
 
 impl LspRegistry {
@@ -100,7 +104,23 @@ impl LspRegistry {
             extension_map,
             node_exec: None,
             bundled_root: None,
+            resolved_path: None,
         }
+    }
+
+    /// Inject the boot-resolved login-shell `PATH` (see
+    /// `mainframe_runtime::ResolvedPath`) used for external-server detection and
+    /// spawns.
+    #[must_use]
+    pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
+        self.resolved_path = Some(path.into());
+        self
+    }
+
+    /// The configured login-shell `PATH`, if any.
+    #[must_use]
+    pub fn resolved_path(&self) -> Option<&str> {
+        self.resolved_path.as_deref()
     }
 
     /// Inject the packaging locations for bundled node servers. The TS twin got
@@ -170,11 +190,12 @@ impl LspRegistry {
         // Shell is needed for the `command -v` builtin, but the command must be a
         // positional arg ($1) — never interpolated into the script — so it can't be
         // parsed as shell syntax.
-        match tokio::process::Command::new("/bin/sh")
-            .args(["-c", "command -v \"$1\"", "sh", &config.command])
-            .output()
-            .await
-        {
+        let mut probe = tokio::process::Command::new("/bin/sh");
+        probe.args(["-c", "command -v \"$1\"", "sh", &config.command]);
+        if let Some(path) = &self.resolved_path {
+            probe.env("PATH", path);
+        }
+        match probe.output().await {
             Ok(out) if out.status.success() => Some(ResolvedCommand {
                 command: config.command.clone(),
                 args: config.args.clone(),

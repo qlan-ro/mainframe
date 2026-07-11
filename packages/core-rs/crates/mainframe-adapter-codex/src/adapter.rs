@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::DateTime;
 use mainframe_adapter_api::{Adapter, AdapterError, AdapterSession, BoxFuture};
+use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, ExternalSession, ExternalSessionPage, SessionOptions,
 };
@@ -61,19 +62,24 @@ pub struct CodexAdapter {
     /// Model catalog is static per session; cache it so resolution doesn't respawn
     /// a temp app-server each time (CONCURRENCY.tsv 104).
     cached_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
+    /// Boot-resolved login-shell `PATH`, applied to every spawned `codex` CLI so
+    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
+    /// `enrichPath` env mutation).
+    resolved_path: ResolvedPath,
 }
 
 impl Default for CodexAdapter {
     fn default() -> Self {
-        Self::new()
+        Self::new(ResolvedPath::from_value("/usr/bin:/bin"))
     }
 }
 
 impl CodexAdapter {
-    pub fn new() -> Self {
+    pub fn new(resolved_path: ResolvedPath) -> Self {
         Self {
             sessions: Arc::new(Mutex::new(Vec::new())),
             cached_models: Arc::new(Mutex::new(None)),
+            resolved_path,
         }
     }
 
@@ -88,7 +94,7 @@ impl CodexAdapter {
         offset: Option<usize>,
         limit: Option<usize>,
     ) -> ExternalSessionPage {
-        let client = match spawn_temp_app_server(None, false).await {
+        let client = match spawn_temp_app_server(None, false, self.resolved_path.as_str()).await {
             Ok(c) => c,
             Err(err) => {
                 tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list external sessions");
@@ -173,7 +179,7 @@ impl CodexAdapter {
     }
 
     async fn spawn_temp(&self) -> Result<Arc<JsonRpcClient>, AdapterError> {
-        spawn_temp_app_server(None, false).await
+        spawn_temp_app_server(None, false, self.resolved_path.as_str()).await
     }
 }
 
@@ -189,9 +195,11 @@ impl Adapter for CodexAdapter {
     }
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        Box::pin(async {
+        let path = self.resolved_path.clone();
+        Box::pin(async move {
             match tokio::process::Command::new("codex")
                 .arg("--version")
+                .env("PATH", path.as_str())
                 .output()
                 .await
             {
@@ -202,9 +210,11 @@ impl Adapter for CodexAdapter {
     }
 
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
-        Box::pin(async {
+        let path = self.resolved_path.clone();
+        Box::pin(async move {
             match tokio::process::Command::new("codex")
                 .arg("--version")
+                .env("PATH", path.as_str())
                 .output()
                 .await
             {
@@ -279,7 +289,7 @@ impl Adapter for CodexAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        let session = Arc::new(CodexSession::new(options, None));
+        let session = Arc::new(CodexSession::new(options, None, self.resolved_path.clone()));
         let sessions = self.sessions.clone();
         let id = session.id().to_string();
         session.set_on_exit(Box::new(move || {

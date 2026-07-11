@@ -299,7 +299,7 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
             &id,
             &ResolverDeps {
                 settings: &settings,
-                run: &DefaultRunner,
+                run: &DefaultRunner::new(ctx.resolved_path.clone()),
                 platform: None,
             },
         )

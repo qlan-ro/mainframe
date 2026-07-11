@@ -40,6 +40,9 @@ pub trait ExternalSessionDeps: Send + Sync {
     fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate);
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
     fn emit_event(&self, event: DaemonEvent);
+    /// The boot-resolved login-shell `PATH`, applied to the title-generation CLI
+    /// spawn (mirrors the TS `enrichPath` env mutation).
+    fn resolved_path(&self) -> String;
     /// Adapter ids that support `listExternalSessions`, in registry order.
     fn external_session_adapter_ids(&self) -> Vec<String>;
     fn list_external_sessions<'a>(
@@ -338,7 +341,7 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         .settings_get("provider", &format!("{adapter_id}.titleBinary"))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "claude".to_string());
-    let Some(title) = generate_title(content, &binary).await? else {
+    let Some(title) = generate_title(content, &binary, &deps.resolved_path()).await? else {
         return Ok(());
     };
 

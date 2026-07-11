@@ -70,9 +70,25 @@ pub struct ResolverDeps<'a> {
 /// Default `run` implementation — spawns the child and captures stdout, never
 /// throwing (a spawn error or timeout maps to `{ ok: false }`). Mirrors the TS
 /// `defaultRun` (which resolves `{ ok: !err }` from `execFile`).
-pub async fn default_run(cmd: &str, args: &[String], timeout_ms: Option<u64>) -> RunResult {
+///
+/// `path` is the boot-resolved login-shell `PATH` (see
+/// `mainframe_runtime::ResolvedPath`). It must be threaded here so `which`/`where`
+/// detection and version probes find CLIs installed outside the packaged app's
+/// bare `PATH` — the TS twin relied on `enrichPath` having mutated
+/// `process.env.PATH`.
+pub async fn default_run(
+    cmd: &str,
+    args: &[String],
+    timeout_ms: Option<u64>,
+    path: Option<&str>,
+) -> RunResult {
     let dur = Duration::from_millis(timeout_ms.unwrap_or(5_000));
-    match tokio::time::timeout(dur, tokio::process::Command::new(cmd).args(args).output()).await {
+    let mut command = tokio::process::Command::new(cmd);
+    command.args(args);
+    if let Some(path) = path {
+        command.env("PATH", path);
+    }
+    match tokio::time::timeout(dur, command.output()).await {
         Ok(Ok(out)) => RunResult {
             ok: out.status.success(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -569,6 +585,7 @@ mod tests {
             "definitely-not-a-real-binary-xyz",
             &["--version".to_string()],
             Some(2_000),
+            None,
         )
         .await;
         assert!(!r.ok);

@@ -138,6 +138,21 @@ pub fn clean_env(source: &HashMap<String, String>) -> HashMap<String, String> {
     result
 }
 
+/// Compose a launch child's env exactly as `start` does: inject the boot-resolved
+/// login-shell `PATH` (mirrors the TS `enrichPath` mutation) into the daemon's
+/// process env, then run `clean_env`. When `MAINFRAME_ORIG_PATH` is present it
+/// still overrides the injected `PATH` inside `clean_env` (the standalone
+/// contract); when absent the resolved `PATH` reaches the child.
+fn compose_launch_env(
+    mut source: HashMap<String, String>,
+    resolved_path: Option<&str>,
+) -> HashMap<String, String> {
+    if let Some(path) = resolved_path {
+        source.insert("PATH".to_string(), path.to_string());
+    }
+    clean_env(&source)
+}
+
 struct ManagedProcess {
     status: Arc<Mutex<LaunchProcessStatus>>,
     pid: Option<u32>,
@@ -152,6 +167,10 @@ struct Inner {
     processes: DashMap<String, ManagedProcess>,
     state: LaunchProcessState,
     timings: LaunchTimings,
+    /// Boot-resolved login-shell `PATH` forwarded to launch children (mirrors the
+    /// TS `enrichPath` env mutation; `MAINFRAME_ORIG_PATH` still overrides it in
+    /// `clean_env`). `None` = inherit the daemon `PATH`.
+    resolved_path: Option<String>,
 }
 
 impl Inner {
@@ -185,12 +204,14 @@ impl LaunchManager {
         project_path: impl Into<String>,
         on_event: BroadcastFn,
         tunnel_manager: Option<Arc<TunnelManager>>,
+        resolved_path: Option<String>,
     ) -> Self {
         Self::with_timings(
             project_id,
             project_path,
             on_event,
             tunnel_manager,
+            resolved_path,
             LaunchTimings::default(),
         )
     }
@@ -200,6 +221,7 @@ impl LaunchManager {
         project_path: impl Into<String>,
         on_event: BroadcastFn,
         tunnel_manager: Option<Arc<TunnelManager>>,
+        resolved_path: Option<String>,
         timings: LaunchTimings,
     ) -> Self {
         Self {
@@ -211,6 +233,7 @@ impl LaunchManager {
                 processes: DashMap::new(),
                 state: LaunchProcessState::new(),
                 timings,
+                resolved_path,
             }),
         }
     }
@@ -240,8 +263,13 @@ impl LaunchManager {
             config.runtime_executable.clone()
         };
 
-        let source: HashMap<String, String> = std::env::vars().collect();
-        let mut env = clean_env(&source);
+        // Mirror the TS: `enrichPath` had mutated `process.env.PATH`, so the
+        // launch env snapshot saw the enriched value. Inject it here before
+        // `clean_env` so launch children resolve the user's toolchain when
+        // `MAINFRAME_ORIG_PATH` is absent (when present, `clean_env` still
+        // overrides `PATH` with the pristine value — the standalone contract).
+        let mut env =
+            compose_launch_env(std::env::vars().collect(), inner.resolved_path.as_deref());
         if let Some(port) = config.port {
             env.insert("PORT".to_string(), port.to_string());
         }
@@ -652,7 +680,7 @@ mod tests {
     }
 
     fn manager(events: BroadcastFn) -> LaunchManager {
-        LaunchManager::new("proj-1", "/tmp", events, None)
+        LaunchManager::new("proj-1", "/tmp", events, None, None)
     }
 
     // --- clean_env (MAINFRAME_ORIG_PATH contract) ---
@@ -703,6 +731,50 @@ mod tests {
         assert_eq!(env.get("LC_ALL").map(String::as_str), Some("C"));
         assert_eq!(env.get("LANG").map(String::as_str), Some("en_US.UTF-8"));
         assert_eq!(env.get("NPM_TOKEN"), None);
+    }
+
+    // --- compose_launch_env (the enrich-path → clean_env ordering `start` uses) ---
+
+    fn env_source(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn compose_injects_resolved_path_when_orig_absent() {
+        let source = env_source(&[("PATH", "/mainframe/bundled/bin:/usr/bin")]);
+        let env = compose_launch_env(source, Some("/opt/homebrew/bin:/usr/bin"));
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some("/opt/homebrew/bin:/usr/bin")
+        );
+    }
+
+    #[test]
+    fn compose_orig_path_overrides_injected_resolved_path() {
+        let source = env_source(&[
+            ("PATH", "/mainframe/bundled/bin:/usr/bin"),
+            ("MAINFRAME_ORIG_PATH", "/usr/bin:/usr/local/bin"),
+        ]);
+        let env = compose_launch_env(source, Some("/opt/homebrew/bin:/usr/bin"));
+        // The standalone contract wins even when a resolved PATH is injected.
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some("/usr/bin:/usr/local/bin")
+        );
+        assert_eq!(env.get("MAINFRAME_ORIG_PATH"), None);
+    }
+
+    #[test]
+    fn compose_inherits_daemon_path_when_no_resolved_path() {
+        let source = env_source(&[("PATH", "/usr/bin:/usr/local/bin")]);
+        let env = compose_launch_env(source, None);
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some("/usr/bin:/usr/local/bin")
+        );
     }
 
     // --- LaunchManager (real spawned processes) ---

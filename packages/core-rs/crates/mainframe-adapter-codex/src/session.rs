@@ -11,6 +11,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
+use mainframe_runtime::ResolvedPath;
+
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
     StopBackgroundTaskResult,
@@ -110,10 +112,18 @@ pub struct CodexSession {
     config: Arc<Mutex<PendingConfig>>,
     pid: AtomicI64,
     status: Arc<Mutex<AdapterProcessStatus>>,
+    /// Boot-resolved login-shell `PATH`, applied to the spawned `codex` CLI so
+    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
+    /// `enrichPath` env mutation).
+    resolved_path: ResolvedPath,
 }
 
 impl CodexSession {
-    pub fn new(options: SessionOptions, on_exit: Option<Box<dyn FnOnce() + Send>>) -> Self {
+    pub fn new(
+        options: SessionOptions,
+        on_exit: Option<Box<dyn FnOnce() + Send>>,
+        resolved_path: ResolvedPath,
+    ) -> Self {
         Self {
             id: nanoid!(),
             project_path: options.project_path,
@@ -126,6 +136,7 @@ impl CodexSession {
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
+            resolved_path,
         }
     }
 
@@ -181,14 +192,17 @@ fn initialize_params(with_capabilities: bool) -> Value {
     Value::Object(m)
 }
 
-/// Spawn a temporary `codex app-server`, perform the handshake, and return the
-/// ready client. Shared by `load_history` and the adapter's model/session listing.
-pub(crate) async fn spawn_temp_app_server(
+/// Build the configured (unspawned) `codex app-server` command. Extracted so the
+/// spawn-env contract — notably the boot-resolved login-shell `PATH` — is
+/// unit-testable without launching a real CLI.
+fn build_app_server_command(
+    executable: &str,
     cwd: Option<&Path>,
-    with_capabilities: bool,
-) -> Result<Arc<JsonRpcClient>, AdapterError> {
-    let mut cmd = tokio::process::Command::new("codex");
+    path: &str,
+) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(executable);
     cmd.arg("app-server")
+        .env("PATH", path)
         .env("FORCE_COLOR", "0")
         .env("NO_COLOR", "1")
         .stdin(std::process::Stdio::piped())
@@ -198,6 +212,17 @@ pub(crate) async fn spawn_temp_app_server(
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
+    cmd
+}
+
+/// Spawn a temporary `codex app-server`, perform the handshake, and return the
+/// ready client. Shared by `load_history` and the adapter's model/session listing.
+pub(crate) async fn spawn_temp_app_server(
+    cwd: Option<&Path>,
+    with_capabilities: bool,
+    path: &str,
+) -> Result<Arc<JsonRpcClient>, AdapterError> {
+    let mut cmd = build_app_server_command("codex", cwd, path);
     let child = cmd
         .spawn()
         .map_err(|e| AdapterError::Message(e.to_string()))?;
@@ -302,15 +327,11 @@ impl AdapterSession for CodexSession {
                 .executable_path
                 .clone()
                 .unwrap_or_else(|| "codex".to_string());
-            let mut cmd = tokio::process::Command::new(&executable);
-            cmd.arg("app-server")
-                .current_dir(&self.project_path)
-                .env("FORCE_COLOR", "0")
-                .env("NO_COLOR", "1")
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .kill_on_drop(true);
+            let mut cmd = build_app_server_command(
+                &executable,
+                Some(Path::new(&self.project_path)),
+                self.resolved_path.as_str(),
+            );
             let child = cmd
                 .spawn()
                 .map_err(|e| AdapterError::Message(e.to_string()))?;
@@ -638,7 +659,12 @@ impl AdapterSession for CodexSession {
                 return Ok(Vec::new());
             };
 
-            let temp = match spawn_temp_app_server(Some(Path::new(&self.project_path)), true).await
+            let temp = match spawn_temp_app_server(
+                Some(Path::new(&self.project_path)),
+                true,
+                self.resolved_path.as_str(),
+            )
+            .await
             {
                 Ok(c) => c,
                 Err(err) => {
@@ -833,6 +859,26 @@ async fn load_history_inner(
         &child_items_by_thread,
         &agent_meta_by_thread,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The boot-resolved login-shell PATH must land in the spawned `codex`
+    /// app-server command's env (the Phase-5 blocker: packaged apps otherwise
+    /// ENOENT).
+    #[test]
+    fn app_server_command_carries_the_resolved_path() {
+        let cmd = build_app_server_command("codex", None, "/opt/homebrew/bin:/usr/bin");
+        let path = cmd
+            .as_std()
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new("PATH"))
+            .and_then(|(_, v)| v)
+            .map(|v| v.to_string_lossy().into_owned());
+        assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
+    }
 }
 
 // PORT STATUS: src/plugins/builtin/codex/session.ts (445 lines)

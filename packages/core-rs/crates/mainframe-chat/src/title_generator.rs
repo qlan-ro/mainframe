@@ -21,7 +21,11 @@ pub fn derive_title_from_message(content: &str) -> String {
     format!("{head}\u{2026}")
 }
 
-pub async fn generate_title(content: &str, binary: &str) -> std::io::Result<Option<String>> {
+pub async fn generate_title(
+    content: &str,
+    binary: &str,
+    path: &str,
+) -> std::io::Result<Option<String>> {
     let message: String = content.chars().take(500).collect();
     let prompt = format!(
         "Generate a short title (2-5 words) for a coding chat that starts with this message.\nRules: Title case. No quotes. No punctuation. Be specific about the task.\nExamples: Auth Refactor, Fix Login Bug, Add Dark Mode Toggle, Optimize DB Queries\n\nMessage: {message}\n\nTitle:"
@@ -43,6 +47,7 @@ pub async fn generate_title(content: &str, binary: &str) -> std::io::Result<Opti
         "--max-turns",
         "1",
     ])
+    .env("PATH", path)
     .env("NO_COLOR", "1")
     .stdin(Stdio::null())
     .stdout(Stdio::piped())

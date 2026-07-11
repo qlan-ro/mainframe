@@ -32,6 +32,7 @@ use mainframe_adapter_api::{
     StopBackgroundTaskResult,
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
     AdapterProcess, AdapterProcessStatus, ControlBehavior, ControlDestination, ControlResponse,
     ControlUpdate, MessageUsage, SessionOptions, SessionSpawnOptions,
@@ -313,6 +314,31 @@ fn execution_mode_cli(mode: ExecutionMode) -> &'static str {
     }
 }
 
+/// Build the configured (unspawned) `claude` command. Extracted so the spawn-env
+/// contract — notably the boot-resolved login-shell `PATH` — is unit-testable
+/// without launching a real CLI.
+fn build_spawn_command(
+    executable: &str,
+    args: &[String],
+    project_path: &str,
+    resolved_path: &str,
+) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(executable);
+    cmd.args(args)
+        .current_dir(project_path)
+        .env("PATH", resolved_path)
+        .env("FORCE_COLOR", "0")
+        .env("NO_COLOR", "1")
+        // Unset CLAUDECODE so the child CLI doesn't refuse to start when the
+        // daemon itself runs inside a Claude Code session.
+        .env_remove("CLAUDECODE")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    cmd
+}
+
 /// Build the spawn argv (VERBATIM order) + the base (non-plan) permission mode.
 /// Extracted so `session-spawn-args.test.ts` can assert on it directly.
 fn build_args(options: &SessionSpawnOptions, resume: &Option<String>) -> (Vec<String>, String) {
@@ -371,6 +397,9 @@ pub struct ClaudeSession {
     pub(crate) state: Arc<Mutex<ClaudeSessionState>>,
     stdin_tx: Mutex<Option<StdinTx>>,
     weak_self: OnceLock<Weak<ClaudeSession>>,
+    /// Boot-resolved login-shell `PATH`, applied to the spawned CLI (mirrors the
+    /// TS `enrichPath` env mutation so packaged builds find `claude`).
+    resolved_path: ResolvedPath,
 }
 
 impl ClaudeSession {
@@ -378,6 +407,7 @@ impl ClaudeSession {
         options: SessionOptions,
         on_exit: Option<Box<dyn Fn() + Send + Sync>>,
         background_tasks: Arc<BackgroundTaskTracker>,
+        resolved_path: ResolvedPath,
     ) -> Self {
         let id = nanoid!();
         let control = Arc::new(ControlRequestChannel::new(id.clone()));
@@ -412,6 +442,7 @@ impl ClaudeSession {
             })),
             stdin_tx: Mutex::new(None),
             weak_self: OnceLock::new(),
+            resolved_path,
         }
     }
 
@@ -526,19 +557,13 @@ impl ClaudeSession {
             })?;
         self.state().real_project_path = real.to_string_lossy().to_string();
 
-        let mut child = tokio::process::Command::new(&executable)
-            .args(&args)
-            .current_dir(&self.project_path)
-            .env("FORCE_COLOR", "0")
-            .env("NO_COLOR", "1")
-            // Unset CLAUDECODE so the child CLI doesn't refuse to start when the
-            // daemon itself runs inside a Claude Code session.
-            .env_remove("CLAUDECODE")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()?;
+        let mut child = build_spawn_command(
+            &executable,
+            &args,
+            &self.project_path,
+            self.resolved_path.as_str(),
+        )
+        .spawn()?;
 
         let pid = child.id().unwrap_or(0);
         let closed = Arc::new(Notify::new());
@@ -1247,6 +1272,25 @@ impl AdapterSession for ClaudeSession {
 mod tests {
     use super::*;
 
+    /// The boot-resolved login-shell PATH must land in the spawned `claude`
+    /// command's env (the Phase-5 blocker: packaged apps otherwise ENOENT).
+    #[test]
+    fn spawn_command_carries_the_resolved_path() {
+        let cmd = build_spawn_command(
+            "claude",
+            &["--version".to_string()],
+            "/tmp",
+            "/opt/homebrew/bin:/usr/bin",
+        );
+        let path = cmd
+            .as_std()
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new("PATH"))
+            .and_then(|(_, v)| v)
+            .map(|v| v.to_string_lossy().into_owned());
+        assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
+    }
+
     fn session() -> Arc<ClaudeSession> {
         let s = Arc::new(ClaudeSession::new(
             SessionOptions {
@@ -1256,6 +1300,7 @@ mod tests {
             },
             None,
             Arc::new(BackgroundTaskTracker::new()),
+            ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
         s

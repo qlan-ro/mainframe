@@ -76,12 +76,32 @@ struct HealthBody {
     status: Option<String>,
 }
 
+/// Build the configured (unspawned) `cloudflared` command. Extracted so the
+/// spawn-env contract — notably the boot-resolved login-shell `PATH` — is
+/// unit-testable without launching a real tunnel.
+fn build_cloudflared_command(bin: &str, args: &[String], resolved_path: Option<&str>) -> Command {
+    let mut cmd = Command::new(bin);
+    cmd.args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    if let Some(path) = resolved_path {
+        cmd.env("PATH", path);
+    }
+    cmd
+}
+
 pub struct TunnelManager {
     tunnels: Arc<DashMap<String, ManagedTunnel>>,
     verified_at: Arc<DashMap<String, VerifyResult>>,
     broadcast: BroadcastFn,
     config: TunnelConfig,
     client: reqwest::Client,
+    /// Boot-resolved login-shell `PATH`, applied to the spawned `cloudflared` so
+    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
+    /// `enrichPath` env mutation). `None` = inherit the daemon `PATH`.
+    resolved_path: Option<String>,
 }
 
 impl TunnelManager {
@@ -96,7 +116,16 @@ impl TunnelManager {
             broadcast: broadcast.unwrap_or_else(|| Arc::new(|_event| {})),
             config,
             client: reqwest::Client::new(),
+            resolved_path: None,
         }
+    }
+
+    /// Inject the boot-resolved login-shell `PATH` (see
+    /// `mainframe_runtime::ResolvedPath`) applied to the `cloudflared` spawn.
+    #[must_use]
+    pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
+        self.resolved_path = Some(path.into());
+        self
     }
 
     /// Extract a `https://<label>.trycloudflare.com` URL from a log line, or
@@ -159,13 +188,12 @@ impl TunnelManager {
             ]
         };
 
-        let mut child = match Command::new(&self.config.cloudflared_bin)
-            .args(&args)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
+        let mut child = match build_cloudflared_command(
+            &self.config.cloudflared_bin,
+            &args,
+            self.resolved_path.as_deref(),
+        )
+        .spawn()
         {
             Ok(child) => child,
             Err(err) => {
@@ -512,6 +540,25 @@ mod tests {
         let sink = events.clone();
         let f: BroadcastFn = Arc::new(move |ev| sink.lock().unwrap().push(ev));
         (f, events)
+    }
+
+    /// The boot-resolved login-shell PATH must land in the spawned `cloudflared`
+    /// command's env (packaged apps otherwise ENOENT on homebrew-installed
+    /// `cloudflared`).
+    #[test]
+    fn cloudflared_command_carries_the_resolved_path() {
+        let cmd = build_cloudflared_command(
+            "cloudflared",
+            &["tunnel".to_string()],
+            Some("/opt/homebrew/bin:/usr/bin"),
+        );
+        let path = cmd
+            .as_std()
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new("PATH"))
+            .and_then(|(_, v)| v)
+            .map(|v| v.to_string_lossy().into_owned());
+        assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
     }
 
     fn stopped_broadcasts(events: &Arc<Mutex<Vec<DaemonEvent>>>) -> usize {

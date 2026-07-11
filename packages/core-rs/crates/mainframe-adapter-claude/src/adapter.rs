@@ -13,6 +13,7 @@ use mainframe_adapter_api::{
     Adapter, AdapterError, AdapterSession, BoxFuture, PlanModeActionHandler,
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, EffortLevel, SessionOptions};
 use mainframe_types::display::ToolCategories;
 
@@ -272,14 +273,19 @@ pub struct ClaudeAdapter {
     background_tasks: Arc<BackgroundTaskTracker>,
     sessions: Arc<Mutex<HashMap<String, Arc<ClaudeSession>>>>,
     dynamic_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
+    /// Boot-resolved login-shell `PATH`, applied to every spawned `claude` CLI so
+    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
+    /// `enrichPath` env mutation).
+    resolved_path: ResolvedPath,
 }
 
 impl ClaudeAdapter {
-    pub fn new(background_tasks: Arc<BackgroundTaskTracker>) -> Self {
+    pub fn new(background_tasks: Arc<BackgroundTaskTracker>, resolved_path: ResolvedPath) -> Self {
         Self {
             background_tasks,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             dynamic_models: Arc::new(Mutex::new(None)),
+            resolved_path,
         }
     }
 
@@ -291,7 +297,10 @@ impl ClaudeAdapter {
 
 impl Default for ClaudeAdapter {
     fn default() -> Self {
-        Self::new(Arc::new(BackgroundTaskTracker::new()))
+        Self::new(
+            Arc::new(BackgroundTaskTracker::new()),
+            ResolvedPath::from_value("/usr/bin:/bin"),
+        )
     }
 }
 
@@ -307,10 +316,12 @@ impl Adapter for ClaudeAdapter {
     }
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        Box::pin(async {
+        let path = self.resolved_path.clone();
+        Box::pin(async move {
             Ok(
                 match tokio::process::Command::new("claude")
                     .arg("--version")
+                    .env("PATH", path.as_str())
                     .output()
                     .await
                 {
@@ -322,9 +333,11 @@ impl Adapter for ClaudeAdapter {
     }
 
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
-        Box::pin(async {
+        let path = self.resolved_path.clone();
+        Box::pin(async move {
             match tokio::process::Command::new("claude")
                 .arg("--version")
+                .env("PATH", path.as_str())
                 .output()
                 .await
             {
@@ -358,9 +371,10 @@ impl Adapter for ClaudeAdapter {
         executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
         let dynamic = self.dynamic_models.clone();
+        let path = self.resolved_path.clone();
         Box::pin(async move {
             let exe = executable_path.unwrap_or_else(|| "claude".to_string());
-            if let Some(result) = crate::probe_models::probe_models(&exe).await {
+            if let Some(result) = crate::probe_models::probe_models(&exe, path.as_str()).await {
                 let enriched =
                     enrich_with_context_window(result.models, result.resolved_model.as_deref());
                 *dynamic.lock().unwrap_or_else(|e| e.into_inner()) = Some(enriched);
@@ -378,6 +392,7 @@ impl Adapter for ClaudeAdapter {
             options,
             None,
             self.background_tasks.clone(),
+            self.resolved_path.clone(),
         ));
         session.init_weak();
         let id = session.id.clone();

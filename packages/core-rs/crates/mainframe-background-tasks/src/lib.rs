@@ -16,6 +16,7 @@ pub mod kill;
 pub mod liveness;
 pub mod lsof;
 pub mod reconcile;
+pub mod spawn_env;
 pub mod spool_root;
 pub mod spool_validator;
 pub mod spool_walker;

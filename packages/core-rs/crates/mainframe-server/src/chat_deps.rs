@@ -35,6 +35,7 @@ use mainframe_chat::context_tracker::{
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_chat::title_generator::generate_title;
+use mainframe_runtime::ResolvedPath;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::attachment::attachment_store::AttachmentKind;
@@ -94,6 +95,9 @@ pub struct DaemonChatDeps {
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
+    /// Boot-resolved login-shell `PATH`, applied to the title-generation CLI spawn
+    /// (mirrors the TS `enrichPath` env mutation).
+    resolved_path: ResolvedPath,
 }
 
 impl ChatManagerDeps for DaemonChatDeps {
@@ -418,8 +422,9 @@ impl ChatManagerDeps for DaemonChatDeps {
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
+        let path = self.resolved_path.clone();
         Box::pin(async move {
-            match generate_title(content, binary).await {
+            match generate_title(content, binary, path.as_str()).await {
                 Ok(title) => title,
                 Err(err) => {
                     tracing::warn!(%err, "title generation failed");
@@ -511,6 +516,7 @@ pub fn build_chat_manager(
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
+    resolved_path: ResolvedPath,
 ) -> Arc<ChatManager> {
     let deps = Arc::new(DaemonChatDeps {
         db,
@@ -521,6 +527,7 @@ pub fn build_chat_manager(
         git,
         broadcast,
         launch,
+        resolved_path,
     });
     Arc::new(ChatManager::new(deps))
 }

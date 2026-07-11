@@ -18,7 +18,6 @@ mod plugin_host_db;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 use crate::plugin_host_db::DaemonPluginHostDb;
@@ -57,53 +56,6 @@ const DAEMON_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// resynced on their next event (see websocket::spawn_broadcast_pump).
 const BROADCAST_CAPACITY: usize = 1024;
 
-/// Resolve the login-shell `PATH` so spawned CLIs (claude/codex) match a user's
-/// interactive shell. Mirrors `enrichPath()`; `execFileSync` at boot is the
-/// sanctioned exception. TODO(port): the TS mutates `process.env.PATH`; under
-/// edition 2024 `std::env::set_var` is `unsafe` and this crate is
-/// `#![forbid(unsafe_code)]`, and the ported adapter spawns inherit the daemon
-/// env without a PATH-threading hook — so the resolved value is logged but not
-/// applied. Applying it needs an env-threading contract into the adapter spawn
-/// layer (blocker).
-fn enrich_path() {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    match Command::new(&shell)
-        .args(["-lic", "echo \"$PATH\""])
-        .output()
-    {
-        Ok(out) => {
-            let resolved = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !resolved.is_empty() {
-                tracing::debug!(
-                    shell,
-                    path_length = resolved.split(':').count(),
-                    "enrichPath: resolved from login shell"
-                );
-                return;
-            }
-        }
-        Err(err) => {
-            tracing::warn!(%err, "enrichPath: login shell failed, using fallback");
-        }
-    }
-    let current =
-        std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin:/usr/sbin:/sbin".to_string());
-    let home = dirs::home_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let extra = [
-        format!("{home}/.local/bin"),
-        "/usr/local/bin".to_string(),
-        "/opt/homebrew/bin".to_string(),
-    ];
-    let seen: std::collections::HashSet<&str> = current.split(':').collect();
-    let additions: Vec<&String> = extra
-        .iter()
-        .filter(|p| !seen.contains(p.as_str()))
-        .collect();
-    tracing::debug!(?additions, "enrichPath: fallback applied");
-}
-
 #[tokio::main]
 async fn main() {
     // `--version`/`version` is answered before logging init (early-flags.ts): no
@@ -130,7 +82,12 @@ async fn main() {
 async fn run_daemon() {
     let _log_guard = mainframe_runtime::logging::init();
 
-    enrich_path();
+    // Resolve the login-shell PATH once at boot and thread it into every child
+    // spawn (adapters, title generation, LSP, launch, background-task probes).
+    // The TS twin mutated `process.env.PATH`; edition 2024 forbids that under
+    // `#![forbid(unsafe_code)]`, so the value is passed explicitly instead.
+    let resolved_path = mainframe_runtime::ResolvedPath::resolve();
+    mainframe_background_tasks::spawn_env::set_resolved_path(resolved_path.as_str());
 
     let config = match mainframe_runtime::config::get_config() {
         Ok(config) => config,
@@ -170,19 +127,24 @@ async fn run_daemon() {
 
     // Tunnel + launch managers (index.ts: new TunnelManager → new LaunchRegistry).
     // The registry shares the tunnel manager so preview launches can expose URLs.
-    let tunnel_manager = Arc::new(TunnelManager::new(Some(Arc::clone(&on_event))));
-    let launch_registry = Arc::new(LaunchRegistry::new(
-        Arc::clone(&on_event),
-        Some(Arc::clone(&tunnel_manager)),
-    ));
+    let tunnel_manager = Arc::new(
+        TunnelManager::new(Some(Arc::clone(&on_event))).with_resolved_path(resolved_path.as_str()),
+    );
+    let launch_registry = Arc::new(
+        LaunchRegistry::new(Arc::clone(&on_event), Some(Arc::clone(&tunnel_manager)))
+            .with_resolved_path(resolved_path.as_str()),
+    );
 
     // Registries + adapters. ClaudeAdapter needs the tracker (background-task
     // ownership); both adapters register before the static snapshot seed so
     // `GET /api/adapters` serves instantly without a CLI spawn.
     let background_tasks = Arc::new(BackgroundTaskTracker::new());
     let adapters = Arc::new(AdapterRegistry::new());
-    adapters.register(Arc::new(ClaudeAdapter::new(Arc::clone(&background_tasks))));
-    adapters.register(Arc::new(CodexAdapter::new()));
+    adapters.register(Arc::new(ClaudeAdapter::new(
+        Arc::clone(&background_tasks),
+        resolved_path.clone(),
+    )));
+    adapters.register(Arc::new(CodexAdapter::new(resolved_path.clone())));
     adapters.seed_static_snapshots();
 
     // Forward tracker emissions through the broadcast (index.ts wires
@@ -198,6 +160,7 @@ async fn run_daemon() {
     adapters.configure_refresh(Arc::new(DaemonRefreshDeps {
         db: db.clone(),
         broadcast: broadcast.clone(),
+        resolved_path: resolved_path.clone(),
     }));
 
     let services = Services {
@@ -220,6 +183,7 @@ async fn run_daemon() {
         GitFactory,
         broadcast.clone(),
         Arc::new(RegistryLaunchStopper::new(Arc::clone(&launch_registry))),
+        resolved_path.clone(),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
     // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.
@@ -235,7 +199,7 @@ async fn run_daemon() {
     // the old behaviour. TODO(port): confirm these names against the finalized
     // Tauri sidecar layout and verify on a packaged macOS/Windows build.
     let lsp_registry = {
-        let registry = LspRegistry::new();
+        let registry = LspRegistry::new().with_resolved_path(resolved_path.as_str());
         match (
             std::env::var("MAINFRAME_BUNDLED_NODE")
                 .ok()
@@ -286,6 +250,7 @@ async fn run_daemon() {
         version: DAEMON_VERSION.to_string(),
         port,
         auth_secret,
+        resolved_path: resolved_path.clone(),
         tunnel_url: Arc::new(RwLock::new(None)),
         ws_clients: Arc::new(dashmap::DashMap::new()),
         adapter_registry: Arc::clone(&adapters),
@@ -500,11 +465,13 @@ impl ReconcileDb for SnapshotReconcileDb {
 struct DaemonRefreshDeps {
     db: Db,
     broadcast: broadcast::Sender<DaemonEvent>,
+    resolved_path: mainframe_runtime::ResolvedPath,
 }
 
 impl RefreshDeps for DaemonRefreshDeps {
     fn resolve_executable_path(&self, adapter_id: String) -> BoxFuture<'_, Option<String>> {
         let db = self.db.clone();
+        let runner = DefaultRunner::new(self.resolved_path.clone());
         Box::pin(async move {
             // Read the persisted provider path on the DB actor, snapshot it into a
             // one-key SettingsWriter, then run the shared resolver (which falls
@@ -526,7 +493,7 @@ impl RefreshDeps for DaemonRefreshDeps {
                 &adapter_id,
                 &ResolverDeps {
                     settings: &settings,
-                    run: &DefaultRunner,
+                    run: &runner,
                     platform: None,
                 },
             )
@@ -541,8 +508,15 @@ impl RefreshDeps for DaemonRefreshDeps {
         args: Vec<String>,
         timeout_ms: Option<u64>,
     ) -> BoxFuture<'_, RunResult> {
+        let path = self.resolved_path.clone();
         Box::pin(async move {
-            mainframe_adapter_api::resolve_executable::default_run(&cmd, &args, timeout_ms).await
+            mainframe_adapter_api::resolve_executable::default_run(
+                &cmd,
+                &args,
+                timeout_ms,
+                Some(path.as_str()),
+            )
+            .await
         })
     }
 
@@ -613,10 +587,14 @@ async fn shutdown_signal() {
 // liveness + ChatManager + launch/tunnel/plugins/lsp wired; workflows deliberately
 // unported per SCOPE DECISION 2026-07-10)
 // confidence: medium
-// todos: 3
-// notes: enrichPath probes the login shell (execFileSync exception) but cannot
-// apply PATH (set_var is unsafe under edition 2024 + forbid(unsafe_code); no
-// adapter-spawn PATH-threading hook) — logged only. AdapterRegistry registers
+// todos: 2
+// notes: ResolvedPath::resolve() probes the login shell (execFileSync exception)
+// once at boot; the value is threaded EXPLICITLY (set_var is unsafe under edition
+// 2024 + forbid(unsafe_code)) into every child spawn — adapters (claude/codex
+// sessions + probe + version), title generation, LSP external-server detection +
+// spawn, launch children (composed with the MAINFRAME_ORIG_PATH clean-env
+// contract), background-task lsof/kill probes, and resolve-executable `which`
+// detection — plus AppCtx for on-demand route resolution. AdapterRegistry registers
 // claude+codex, seeds static snapshots, configures refresh (resolveExecutablePath
 // reads the provider path off the DB actor + `which` fallback; backfill's setting
 // WRITE bridge is unwired), allows + fires refreshAll. BackgroundTaskTracker

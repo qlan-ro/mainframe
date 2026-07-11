@@ -14,6 +14,11 @@ pub struct LaunchRegistry {
     managers: DashMap<String, Arc<LaunchManager>>,
     on_event: BroadcastFn,
     pub tunnel_manager: Option<Arc<TunnelManager>>,
+    /// Boot-resolved login-shell `PATH` (see `mainframe_runtime::ResolvedPath`),
+    /// forwarded to each `LaunchManager` so launch children resolve the user's
+    /// toolchain (mirrors the TS `enrichPath` env mutation; `MAINFRAME_ORIG_PATH`
+    /// still overrides it in `clean_env`). `None` = inherit the daemon `PATH`.
+    resolved_path: Option<String>,
 }
 
 impl LaunchRegistry {
@@ -22,7 +27,15 @@ impl LaunchRegistry {
             managers: DashMap::new(),
             on_event,
             tunnel_manager,
+            resolved_path: None,
         }
+    }
+
+    /// Inject the boot-resolved login-shell `PATH` forwarded to launch children.
+    #[must_use]
+    pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
+        self.resolved_path = Some(path.into());
+        self
     }
 
     fn key(project_id: &str, project_path: &str) -> String {
@@ -45,6 +58,7 @@ impl LaunchRegistry {
                     project_path.to_string(),
                     self.on_event.clone(),
                     self.tunnel_manager.clone(),
+                    self.resolved_path.clone(),
                 ))
             })
             .clone()

@@ -97,6 +97,7 @@ async fn real_exec(cmd: String, args: Vec<String>) -> Result<ExecOk, LsofExecErr
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    crate::spawn_env::apply(&mut command);
 
     let child = match command.spawn() {
         Ok(child) => child,

@@ -5,4 +5,7 @@
 pub mod auth;
 pub mod config;
 pub mod logging;
+pub mod spawn_env;
 pub mod time;
+
+pub use spawn_env::ResolvedPath;

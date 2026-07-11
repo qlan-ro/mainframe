@@ -263,15 +263,19 @@ impl ManagerState {
 
         tracing::info!(language, project_path, command = %resolved.command, "Spawning LSP server");
 
-        let mut child = Command::new(&resolved.command)
+        let mut command = Command::new(&resolved.command);
+        command
             .args(&resolved.args)
             .current_dir(project_path)
             .env("ELECTRON_RUN_AS_NODE", "1")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()?;
+            .kill_on_drop(true);
+        if let Some(path) = self.registry.resolved_path() {
+            command.env("PATH", path);
+        }
+        let mut child = command.spawn()?;
 
         let pid = child.id().unwrap_or(0);
 

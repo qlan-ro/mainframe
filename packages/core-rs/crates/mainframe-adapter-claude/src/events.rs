@@ -490,6 +490,7 @@ mod tests {
             },
             None,
             tracker,
+            mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
         s
@@ -1058,6 +1059,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
         let sink = RecordingSink::default();
@@ -1088,6 +1090,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
         let sink = RecordingSink::default();

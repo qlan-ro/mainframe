@@ -121,23 +121,23 @@ async fn real_tree_kill(pid: u32, signal: Signal) -> Result<(), String> {
     collect_descendants(pid, &mut all).await;
     for p in all {
         // Best-effort: a pid already gone (ESRCH) is not a failure.
-        let _ = tokio::process::Command::new("kill")
+        let mut command = tokio::process::Command::new("kill");
+        command
             .arg(signal.kill_flag())
             .arg(p.to_string())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .await;
+            .stderr(std::process::Stdio::null());
+        crate::spawn_env::apply(&mut command);
+        let _ = command.status().await;
     }
     Ok(())
 }
 
 async fn collect_descendants(pid: u32, out: &mut Vec<u32>) {
-    let output = tokio::process::Command::new("pgrep")
-        .arg("-P")
-        .arg(pid.to_string())
-        .output()
-        .await;
+    let mut command = tokio::process::Command::new("pgrep");
+    command.arg("-P").arg(pid.to_string());
+    crate::spawn_env::apply(&mut command);
+    let output = command.output().await;
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let children: Vec<u32> = stdout
@@ -176,13 +176,14 @@ async fn command_for_pid(pid: u32) -> String {
 }
 
 async fn real_command_for_pid(pid: u32) -> String {
-    let output = tokio::process::Command::new("ps")
+    let mut command = tokio::process::Command::new("ps");
+    command
         .arg("-p")
         .arg(pid.to_string())
         .arg("-o")
-        .arg("comm=")
-        .output()
-        .await;
+        .arg("comm=");
+    crate::spawn_env::apply(&mut command);
+    let output = command.output().await;
     match output {
         Ok(output) => {
             let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
