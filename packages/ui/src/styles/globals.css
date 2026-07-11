@@ -1079,37 +1079,15 @@ code {
    Replaces the default browser scrollbar without taking over the native
    autoscroll Viewport (radix ScrollArea via asChild doesn't bind to it). */
 .mf-thin-scrollbar {
-  /* Deliberately NO scrollbar-width: thin — modern WebKit/Chromium honor it and
-     thereby DISABLE the ::-webkit-scrollbar rules below, falling back to native
-     (light) chrome. scrollbar-color stays as the Firefox/standards path. */
+  /* Standards path ONLY (scrollbar-width/scrollbar-color) — both shells' engines
+     (WKWebView ≥ 18.2, Chromium ≥ 121) support it, and setting EITHER standard
+     property makes the engine ignore ::-webkit-scrollbar rules entirely. Mixing
+     the two paths let the native (white) classic scrollbar leak through. */
+  scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 .mf-thin-scrollbar:hover {
   scrollbar-color: var(--mf-text-4) transparent;
-}
-.mf-thin-scrollbar::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.mf-thin-scrollbar::-webkit-scrollbar-track {
-  background-color: transparent;
-}
-.mf-thin-scrollbar::-webkit-scrollbar-corner {
-  background-color: transparent;
-}
-.mf-thin-scrollbar::-webkit-scrollbar-thumb {
-  background-color: transparent;
-  border-radius: 9999px;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-}
-.mf-thin-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: var(--mf-text-4);
-  background-clip: padding-box;
-}
-.mf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: var(--mf-text-3);
-  background-clip: padding-box;
 }
 
 /* In-chat Find (FindBar) — CSS Custom Highlight API paint. Only background-color

@@ -41,23 +41,45 @@ const SessionsScroller = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'di
     return (
       <div
         ref={ref}
-        data-testid="sessions-list-scroll"
         className={cn('mf-thin-scrollbar overscroll-contain bg-transparent', className)}
         {...rest}
+        // After {...rest}: Virtuoso injects its own data-testid ("virtuoso-scroller")
+        // which must not override the list's test hook.
+        data-testid="sessions-list-scroll"
       />
     );
   },
 );
 
-const VIRTUOSO_COMPONENTS = { Scroller: SessionsScroller };
+// The pinned group-header host. Its SessionGroupHeader child paints translucent
+// glass, but WKWebView's backdrop-filter does not reliably sample sibling rows
+// scrolled beneath a sticky element — row text ghosted through the pinned
+// header. Composite the glass tint over the opaque window color so the pinned
+// copy (and only it — in-flow headers have nothing beneath them) is opaque.
+const SessionsTopItemList = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'div'>>(function SessionsTopItemList(
+  { style, ...rest },
+  ref,
+) {
+  return (
+    <div
+      ref={ref}
+      {...rest}
+      style={{ ...style, background: 'linear-gradient(var(--mf-glass), var(--mf-glass)), var(--mf-window)' }}
+    />
+  );
+});
+
+const VIRTUOSO_COMPONENTS = { Scroller: SessionsScroller, TopItemList: SessionsTopItemList };
 
 export function SessionListVirtuoso({ groups, showProject, renderItem }: SessionListVirtuosoProps) {
   const groupCounts = useMemo(() => groups.map((g) => g.items.length), [groups]);
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
   return (
+    // pb only: top padding on the scroller opens a see-through band above the
+    // pinned group header (sticky pins to the content edge, below the padding).
     <GroupedVirtuoso
-      className="min-h-0 flex-1 py-0.5"
+      className="min-h-0 flex-1 pb-0.5"
       groupCounts={groupCounts}
       components={VIRTUOSO_COMPONENTS}
       // Skip the visible window as fast as it can; overscan a little so a quick
