@@ -38,7 +38,7 @@ export function TasksDrawerList({ port, projectId, onStartSession }: Props): Rea
 
   return (
     <>
-      <div className="flex flex-col overflow-y-auto min-h-0 mf-thin-scrollbar">
+      <div className="flex flex-col overflow-y-auto min-h-0">
         {active.length === 0 ? (
           <div data-testid="tasks-drawer-empty" className="px-3 py-4 text-caption text-muted-foreground">
             No active tasks.

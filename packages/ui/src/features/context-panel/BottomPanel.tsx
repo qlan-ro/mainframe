@@ -58,7 +58,7 @@ export function BottomPanel() {
           })}
         </div>
       </div>
-      <div className="mf-thin-scrollbar min-h-0 flex-1 overflow-y-auto py-1">
+      <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {tab === 'context' && <ContextInspector />}
         {tab === 'skills' && <SkillsList />}
         {tab === 'agents' && <AgentsList />}

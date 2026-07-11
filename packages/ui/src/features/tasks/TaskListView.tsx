@@ -140,7 +140,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
   return (
     <div
       ref={containerRef}
-      className="flex flex-col min-h-0 flex-1 overflow-y-auto mf-thin-scrollbar focus:outline-none"
+      className="flex flex-col min-h-0 flex-1 overflow-y-auto focus:outline-none"
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >

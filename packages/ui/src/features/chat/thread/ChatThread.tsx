@@ -81,7 +81,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           <ThreadPrimitive.Viewport
             data-testid="chat-thread-viewport"
             data-mf-chat-thread
-            className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
+            className="relative flex flex-1 flex-col overflow-y-auto"
           >
             <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
               <LoadErrorBanner />
