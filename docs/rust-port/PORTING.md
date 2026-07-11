@@ -502,6 +502,44 @@ children; `detached:false` semantics must hold (children die with the daemon).
 The binary's `main` is the **only** place `expect()` is permitted, and only for
 unrecoverable boot errors.
 
+#### Spawn-env `PATH` threading (`enrichPath`)
+
+The TS daemon called `enrichPath()` once at boot and **mutated
+`process.env.PATH`**, so every child it spawned inherited the login-shell
+toolchain `PATH`. In a packaged app the daemon starts from a bare launchd `PATH`
+(`/usr/bin:/bin:…`), so `claude`/`codex` (in `/opt/homebrew/bin` or
+`~/.local/bin`) would `ENOENT`.
+
+Edition 2024 makes `std::env::set_var` `unsafe`, and these crates are
+`#![forbid(unsafe_code)]`, so the value cannot be written back into the process
+env. Instead `mainframe_runtime::ResolvedPath::resolve()` captures it once at
+boot and it is threaded **explicitly** into every child spawn as an
+`env("PATH", …)` override — the same effect the mutation had:
+
+- adapters (`ClaudeAdapter`/`CodexAdapter` carry it) → session spawn, `probe_models`,
+  `is_installed`/`get_version`, and codex's temp app-server;
+- title generation (`generate_title`, via `DaemonChatDeps`/`ExternalSessionDeps`);
+- LSP external-server `command -v` detection **and** spawn (`LspRegistry` carries it);
+- launch children (`LaunchRegistry`→`LaunchManager`): injected into the env
+  snapshot **before** `clean_env`, so `MAINFRAME_ORIG_PATH` still overrides it
+  (the standalone-launcher pristine-PATH contract is preserved);
+- the `cloudflared` tunnel spawn (`TunnelManager` carries it) — the bin defaults
+  to bare `cloudflared` (typically homebrew), so packaged apps would otherwise
+  `ENOENT`;
+- `resolve-executable` `which`/`where` detection + version probes (`default_run`
+  gains a `path` arg; `DefaultRunner` carries it; also on `AppCtx` for the
+  on-demand settings route);
+- background-task `lsof`/`kill`/`pgrep`/`ps` probes (set once at boot via
+  `mainframe_background_tasks::spawn_env::set_resolved_path`, a write-once
+  `OnceLock` — not a mutable env var).
+
+**Out of scope for this pass:** `mainframe-git`'s `exec_git` (`Command::new("git")`)
+also relied on the mutated `PATH`, but it lives in an unowned crate and `git`
+resolves on the bare launchd `PATH` (`/usr/bin/git` on macOS); threading it would
+touch every `exec_git` caller across `mainframe-services`/`mainframe-server`.
+Revisit if git-not-found surfaces on a platform where `git` isn't on the bare
+`PATH`.
+
 ---
 
 ## 3. Type & idiom map
