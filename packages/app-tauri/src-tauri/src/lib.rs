@@ -189,6 +189,19 @@ pub fn run() {
             // Store the handle for the lifetime of the app.
             if let Ok(handle) = daemon_result {
                 let _ = DAEMON.set(handle);
+                // Surface an unexpected daemon death (bind failure, crash) to the
+                // renderer — otherwise the UI keeps polling a port that may be
+                // owned by a stale daemon and everything skews silently.
+                if let Some(h) = DAEMON.get() {
+                    let app_handle = app.handle().clone();
+                    h.watch_exit(move |code| {
+                        let code_label = code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+                        tracing::error!(code = %code_label, "daemon sidecar exited unexpectedly");
+                        if let Some(win) = app_handle.get_webview_window("main") {
+                            let _ = win.emit("daemon:status", &format!("error:daemon exited (code {code_label})"));
+                        }
+                    });
+                }
             }
 
             // Start the OS-idle presence reporter (Plan 3, decision 4).
@@ -243,8 +256,26 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            // Cmd+Q / updater relaunch can end the run loop WITHOUT destroying
+            // windows, skipping the Destroyed handler above — the daemon then
+            // outlives the app (the rc.2→rc.4 stale-daemon incident). RunEvent::Exit
+            // is the last event before process exit; kill() is idempotent, so a
+            // graceful window close having already run it is fine.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(h) = DAEMON.get() {
+                    h.kill();
+                }
+                if let Some(mgr) = app_handle.try_state::<TerminalManager>() {
+                    mgr.kill_all();
+                }
+                if let Some(mgr) = app_handle.try_state::<PreviewManager>() {
+                    mgr.kill_all();
+                }
+            }
+        });
 }
 
 fn boot_daemon(

@@ -288,6 +288,9 @@ if (subcommand === 'pair') {
 } else {
   main().catch((error) => {
     logger.fatal({ err: error }, 'Fatal error');
-    process.exit(1);
+    // Give the async pino transport a beat to flush — exiting immediately can
+    // drop the fatal line, leaving a silent death in the log (how the stale-
+    // daemon EADDRINUSE crash went unnoticed).
+    setTimeout(() => process.exit(1), 200);
   });
 }

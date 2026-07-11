@@ -103,6 +103,9 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     res.json({
       status: 'ok',
       version: DAEMON_VERSION,
+      // Identifies which process owns the port when diagnosing a stale/orphaned
+      // daemon (version + pid answer "who is serving me" with one curl).
+      pid: process.pid,
       timestamp: new Date().toISOString(),
       tunnelUrl: ctx.tunnelUrl ?? getTunnelUrl?.() ?? null,
     });
