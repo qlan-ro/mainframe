@@ -72,7 +72,7 @@ export function TaskColumn({
       </div>
 
       {/* Cards — 9px gap per design (12-todos.jsx:621, finding 9.14) */}
-      <div className="mf-thin-scrollbar flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto px-5 pb-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto px-5 pb-5">
         {todos.map((todo) => (
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}

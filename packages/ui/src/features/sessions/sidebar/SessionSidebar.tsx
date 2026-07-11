@@ -218,7 +218,7 @@ function SessionSidebarImpl() {
 
       {filteredItems.length === 0 ? (
         <div
-          className="mf-thin-scrollbar overscroll-contain min-h-0 flex-1 overflow-y-auto bg-transparent py-0.5"
+          className="overscroll-contain min-h-0 flex-1 overflow-y-auto bg-transparent py-0.5"
           data-testid="sessions-list-scroll"
         >
           <EmptyState hasFilters={hasFilters} />

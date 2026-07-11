@@ -123,7 +123,7 @@ export function SurfacePicker({ surface }: Props) {
       className="flex flex-1 items-center justify-center bg-background p-[16px]"
     >
       <div className="w-[300px] overflow-hidden rounded-[13px] border-[0.5px] border-border bg-background shadow-[var(--mf-shadow-picker)]">
-        <div className="mf-thin-scrollbar max-h-[300px] overflow-y-auto p-[4px]">
+        <div className="max-h-[300px] overflow-y-auto p-[4px]">
           {surface === 'files' ? <FilesPickerContent /> : <RunPickerContent />}
         </div>
         <div className="[border-top:0.5px_solid_var(--border)] px-3.5 py-[7px] font-mono text-micro text-mf-text-4">

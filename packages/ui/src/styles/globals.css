@@ -1075,19 +1075,25 @@ code {
   100% { transform: translateX(420%); }
 }
 
-/* Warm-chrome thin scrollbar for the thread viewport (revealed on hover).
-   Replaces the default browser scrollbar without taking over the native
-   autoscroll Viewport (radix ScrollArea via asChild doesn't bind to it). */
-.mf-thin-scrollbar {
-  /* Standards path ONLY (scrollbar-width/scrollbar-color) — both shells' engines
-     (WKWebView ≥ 18.2, Chromium ≥ 121) support it, and setting EITHER standard
-     property makes the engine ignore ::-webkit-scrollbar rules entirely. Mixing
-     the two paths let the native (white) classic scrollbar leak through. */
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.mf-thin-scrollbar:hover {
-  scrollbar-color: var(--mf-text-4) transparent;
+/* Warm-chrome thin scrollbar, GLOBAL (hover-revealed thumb, transparent track).
+   Universal on purpose: the old opt-in .mf-thin-scrollbar class covered 9 of 66
+   scroll containers — every unstyled one painted the native track, near-white
+   under color-scheme:light and always visible with a mouse attached (classic
+   scrollbars). Standards path ONLY (scrollbar-width/scrollbar-color): setting
+   either standard property makes engines ignore ::-webkit-scrollbar rules, so
+   the two must never be mixed. Opt-outs like [scrollbar-width:none] still win
+   (class specificity beats the universal selector). */
+/* In @layer base so utilities keep winning — unlayered rules would outrank ALL
+   layered ones (cascade layers ignore specificity across layers), silently
+   re-enabling scrollbars on [scrollbar-width:none] opt-outs like the tab strips. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover {
+    scrollbar-color: var(--mf-text-4) transparent;
+  }
 }
 
 /* In-chat Find (FindBar) — CSS Custom Highlight API paint. Only background-color

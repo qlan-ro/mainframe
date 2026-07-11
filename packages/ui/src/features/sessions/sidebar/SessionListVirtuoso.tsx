@@ -31,17 +31,17 @@ export interface SessionListVirtuosoProps {
   renderItem: (item: SessionItem, flags: { inPinnedGroup: boolean; showProject: boolean }) => ReactNode;
 }
 
-// The scroll viewport. Carries the list test hook + the warm auto-hide
-// scrollbar; forwardRef is required — Virtuoso attaches its scroll listener to
-// this node. Defined at module scope so its identity is stable across renders
-// (an inline component would remount the scroller every render).
+// The scroll viewport. Carries the list test hook; forwardRef is required —
+// Virtuoso attaches its scroll listener to this node. Defined at module scope
+// so its identity is stable across renders (an inline component would remount
+// the scroller every render).
 const SessionsScroller = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'div'>>(
   function SessionsScroller(props, ref) {
     const { className, ...rest } = props;
     return (
       <div
         ref={ref}
-        className={cn('mf-thin-scrollbar overscroll-contain bg-transparent', className)}
+        className={cn('overscroll-contain bg-transparent', className)}
         {...rest}
         // After {...rest}: Virtuoso injects its own data-testid ("virtuoso-scroller")
         // which must not override the list's test hook.
