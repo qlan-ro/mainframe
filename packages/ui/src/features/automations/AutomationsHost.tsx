@@ -50,7 +50,7 @@ export function AutomationsHost(): React.ReactElement | null {
   return (
     <div
       data-testid="automations-host"
-      className="fixed inset-0 z-[4600] flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={close}
     >
       <div
