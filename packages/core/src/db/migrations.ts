@@ -259,7 +259,7 @@ export const MIGRATIONS: Migration[] = [
   },
 ];
 
-export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+export const LATEST_VERSION = Math.max(...MIGRATIONS.map((m) => m.version));
 
 /**
  * Applies every migration whose version is greater than the DB's current

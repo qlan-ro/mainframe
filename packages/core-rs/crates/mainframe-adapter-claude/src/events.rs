@@ -211,10 +211,8 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
                 );
             }
         }
-        Some("status") => {
-            if event.get("status").and_then(Value::as_str) == Some("compacting") {
-                sink.on_compact_start();
-            }
+        Some("status") if event.get("status").and_then(Value::as_str) == Some("compacting") => {
+            sink.on_compact_start();
         }
         _ => {}
     }

@@ -61,11 +61,7 @@ impl LspFrameParser {
         self.buffer.extend_from_slice(chunk);
         let mut out = Vec::new();
 
-        loop {
-            let Some(header_end) = find_subsequence(&self.buffer, HEADER_SEPARATOR) else {
-                break;
-            };
-
+        while let Some(header_end) = find_subsequence(&self.buffer, HEADER_SEPARATOR) {
             let header = String::from_utf8_lossy(&self.buffer[..header_end]).into_owned();
             let Some(content_length) = parse_content_length(&header) else {
                 tracing::warn!(header = %header, "Malformed LSP header, discarding");

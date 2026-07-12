@@ -324,7 +324,7 @@ fn collect_explore_run(
 /// splices shift the vec. `sort_by` is stable, so buckets sharing an insert
 /// index keep their first-seen order (matching JS `Map` iteration + stable sort).
 fn splice_progress_entries(result: &mut Vec<PartEntry>, mut buckets: Vec<ProgressBucket>) {
-    buckets.sort_by(|a, b| a.insert_index.cmp(&b.insert_index));
+    buckets.sort_by_key(|b| b.insert_index);
     let mut offset = 0usize;
     for bucket in buckets {
         let Some(first_id) = bucket.items.first().map(|it| it.tool_call_id.clone()) else {
