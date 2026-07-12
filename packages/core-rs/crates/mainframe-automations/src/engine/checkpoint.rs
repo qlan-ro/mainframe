@@ -19,6 +19,19 @@ pub(crate) struct WalkFrame {
     pub current_items: Vec<TokenValue>,
 }
 
+impl WalkFrame {
+    /// One Repeat iteration deeper: `#<i>` chains onto the suffix and the
+    /// item joins the `current` stack.
+    pub fn iteration(&self, index: usize, item: TokenValue) -> WalkFrame {
+        let mut current_items = self.current_items.clone();
+        current_items.push(item);
+        WalkFrame {
+            ref_suffix: format!("{}#{index}", self.ref_suffix),
+            current_items,
+        }
+    }
+}
+
 /// Writes one stepRef entry. `outputs` land only on `succeeded` (a failed
 /// re-run must not clobber earlier outputs); `startedAt` survives
 /// transitions; `chatId`/`interactionId` are preserved — the running→waiting

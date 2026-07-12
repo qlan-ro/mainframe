@@ -78,6 +78,12 @@ pub trait VerbPorts: Send + Sync {
 mod test_support;
 
 #[cfg(test)]
+mod blocks_if_tests;
+
+#[cfg(test)]
+mod blocks_repeat_tests;
+
+#[cfg(test)]
 mod cancel_tests;
 
 #[cfg(test)]
@@ -89,8 +95,8 @@ mod marker_tests;
 #[cfg(test)]
 mod resume_tests;
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1), not a TS port
+// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1-T4.2), not a TS port
 // confidence: high
 // todos: 0
-// notes: semantics mirror Node engine/{walk,interpreter}.ts; block arms
-//        (if/repeat) land in T4.2's blocks.rs.
+// notes: semantics mirror Node engine/{walk,interpreter}.ts + walk.ts blocks;
+//        ask_agent/ask_me verb impls land in T4.3/T5.1.

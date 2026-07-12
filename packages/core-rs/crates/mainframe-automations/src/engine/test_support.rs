@@ -9,7 +9,8 @@ use tempfile::TempDir;
 
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
-    ChipPart, ChipText, NotifyStep, RunActionStep, Step, TokenRef,
+    ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue, IfBlock,
+    NotifyStep, RepeatBlock, RunActionStep, Step, TokenRef,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -175,6 +176,13 @@ pub(crate) fn manual() -> RunTriggerContext {
     RunTriggerContext::manual()
 }
 
+pub(crate) fn manual_with_payload(payload: Value) -> RunTriggerContext {
+    RunTriggerContext {
+        payload: Some(payload),
+        ..RunTriggerContext::manual()
+    }
+}
+
 pub(crate) fn text(s: &str) -> ChipPart {
     ChipPart::Text(s.to_string())
 }
@@ -231,6 +239,47 @@ pub(crate) fn ask_agent_step(id: &str, keep_going: bool) -> Step {
         timeout_minutes: None,
         expects: None,
         attachments: None,
+    })
+}
+
+pub(crate) fn token_ref(step_id: &str, output: &str, field: Option<&str>) -> TokenRef {
+    TokenRef {
+        step_id: step_id.to_string(),
+        output: output.to_string(),
+        field: field.map(str::to_string),
+    }
+}
+
+pub(crate) fn cond_is(step_id: &str, output: &str, value: &str) -> ConditionRow {
+    ConditionRow {
+        token: token_ref(step_id, output, None),
+        comparator: Comparator::Is,
+        value: Some(ConditionValue::Text(value.to_string())),
+    }
+}
+
+pub(crate) fn if_step(
+    id: &str,
+    conditions: Vec<ConditionRow>,
+    then: Vec<Step>,
+    otherwise: Vec<Step>,
+) -> Step {
+    Step::If(IfBlock {
+        id: id.to_string(),
+        keep_going: false,
+        match_mode: ConditionMatch::All,
+        conditions,
+        then,
+        otherwise,
+    })
+}
+
+pub(crate) fn repeat_step(id: &str, items: TokenRef, steps: Vec<Step>) -> Step {
+    Step::Repeat(RepeatBlock {
+        id: id.to_string(),
+        keep_going: false,
+        items,
+        steps,
     })
 }
 
