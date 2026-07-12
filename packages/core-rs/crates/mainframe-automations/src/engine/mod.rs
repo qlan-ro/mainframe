@@ -11,11 +11,13 @@ pub(crate) mod checkpoint;
 mod deadline;
 pub(crate) mod expects;
 pub mod notify_verb;
+pub mod run_action_verb;
 pub(crate) mod walk;
 
 pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
 pub use agent::AgentVerb;
 pub use notify_verb::NotifyVerb;
+pub use run_action_verb::RunActionVerb;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -135,6 +137,9 @@ mod notify_tests;
 
 #[cfg(test)]
 mod resume_tests;
+
+#[cfg(test)]
+mod run_action_verb_tests;
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1-T4.2), not a TS port
 // confidence: high

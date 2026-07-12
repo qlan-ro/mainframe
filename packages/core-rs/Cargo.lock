@@ -1359,6 +1359,7 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
+ "mainframe-automations",
  "mainframe-background-tasks",
  "mainframe-chat",
  "mainframe-db",

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use mainframe_adapter_api::AdapterRegistry;
+use mainframe_automations::AutomationsEngine;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_launch::{LaunchRegistry, TunnelManager};
@@ -128,6 +129,10 @@ pub struct AppCtx {
     /// The `PluginManager` (contract `pluginManager` handle). Its router is nested
     /// under `/api/plugins` by `build_app`. `None` in the route-unit harness.
     pub plugin_manager: Option<Arc<PluginManager>>,
+    /// The Automations v2 engine (T9.2). `Some` in the daemon boot; `None` in
+    /// the route-unit harness — automation routes answer 503 while absent
+    /// (Node parity: "automation service not available").
+    pub automations: Option<Arc<AutomationsEngine>>,
     pub data_dir: PathBuf,
     pub version: String,
     /// The daemon listen port (`config.port`). The tunnel `start` route needs it to
@@ -232,6 +237,7 @@ impl AppCtx {
             tunnel_manager: None,
             lsp_manager: None,
             plugin_manager: None,
+            automations: None,
             data_dir: std::env::temp_dir(),
             version: "0.0.0-test".into(),
             port: 0,

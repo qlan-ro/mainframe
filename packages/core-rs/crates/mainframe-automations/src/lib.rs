@@ -11,9 +11,14 @@ pub mod error;
 pub mod interactions;
 pub mod ports;
 pub mod scheduler;
+pub mod service;
 pub mod store;
 pub mod tokens;
 pub mod triggers;
+
+pub use service::{
+    AutomationSummary, AutomationsConfig, AutomationsEngine, AutomationsPorts, EngineError,
+};
 
 #[cfg(test)]
 mod credentials_tests;
