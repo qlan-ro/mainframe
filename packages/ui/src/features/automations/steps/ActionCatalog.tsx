@@ -4,13 +4,14 @@
  * embedded directly in `ActionConfig` rather than a separate modal —
  * `StepCard`'s own "Set up" disclosure is already the containing chrome).
  *
- * `ActionCatalogEntry` carries no icon/color/blurb/advanced-flag (contract
- * §1 keeps it thin: id/title/group/auth/credentialLabelHint/paramsSchema/
- * outputs) — `ACTION_VISUALS` is this component's UI-local presentation
- * table, the same pattern `domain/tokens.ts`'s `ACTION_LIST_ITEM_FIELDS`
- * already uses. LIST is derived live from `outputs` (no separate flag
- * needed); ADVANCED has no wire signal at all, so it's a small curated set
- * here — flag for design review if a second advanced action ever ships.
+ * `ActionCatalogEntry` carries no icon/blurb/advanced-flag (contract §1
+ * keeps it thin: id/title/group/auth/credentialLabelHint/paramsSchema/
+ * outputs) — `ACTION_ICONS`/`ACTION_BLURBS`/`ADVANCED_ACTION_IDS` below are
+ * this component's UI-local presentation tables, the same pattern
+ * `domain/tokens.ts`'s `ACTION_LIST_ITEM_FIELDS` already uses. LIST is
+ * derived live from `outputs` (no separate flag needed); ADVANCED has no
+ * wire signal at all, so it's a small curated set here — flag for design
+ * review if a second advanced action ever ships.
  */
 import { useState } from 'react';
 import {
