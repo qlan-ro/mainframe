@@ -1,0 +1,37 @@
+# .github/workflows/rust-port.yml
+name: Rust port (core-rs)
+
+on:
+  pull_request:
+    paths:
+      - 'packages/core-rs/**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/core-rs
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/core-rs
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Forbidden-pattern gate
+        run: tools/verify-gate.sh

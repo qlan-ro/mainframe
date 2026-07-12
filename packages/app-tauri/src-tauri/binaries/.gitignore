@@ -1,8 +1,10 @@
-# Node sidecar binaries for Tauri's externalBin, provisioned per target triple by
-# scripts/provision-node.mjs (local: copy the running Node 24; CI: --fetch from
-# nodejs.org). Real binaries are ~tens of MB and platform-specific — never
-# committed. cargo check does not need them; `tauri build` does, so provision
-# first. Only this .gitignore + README.md are tracked.
+# Sidecar binaries for Tauri's externalBin, provisioned per target triple:
+#   node-<triple>            — Node runtime (scripts/provision-node.mjs)
+#   mainframe-daemon-<triple> — Rust daemon (scripts/provision-rust-daemon.mjs)
+# Real binaries are MB-scale and platform-specific — never committed. cargo check
+# does not need them; `tauri build` does, so provision first. Only this
+# .gitignore + README.md are tracked.
 node-*
+mainframe-daemon-*
 !.gitignore
 !README.md

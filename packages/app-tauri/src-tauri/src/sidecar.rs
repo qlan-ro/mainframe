@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
-/// A real Node binary is tens of MB; this floor rejects the zero-byte
-/// `binaries/node-<triple>` scaffold placeholders that may sit next to the exe
-/// in a dev build (spawning a zero-byte file would fail at runtime).
-const MIN_NODE_BIN_BYTES: u64 = 1024;
+/// A real sidecar binary (Node runtime, or the Rust `mainframe-daemon`) is
+/// several MB; this floor rejects the zero-byte `binaries/<name>-<triple>`
+/// scaffold placeholders that may sit next to the exe in a dev build (spawning
+/// a zero-byte file would fail at runtime).
+const MIN_SIDECAR_BIN_BYTES: u64 = 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 enum EnvOverride {
@@ -99,12 +100,39 @@ impl DaemonHandle {
     }
 }
 
+/// Which daemon implementation to spawn (the `MAINFRAME_DAEMON_IMPL` canary).
+///
+/// Both variants funnel through the same [`spawn_daemon`] → [`DaemonHandle`], so
+/// kill/restart semantics are identical regardless of impl.
+pub enum DaemonProgram {
+    /// The Node sidecar: `node <daemon_entry>` (the default, always-working path).
+    Node {
+        /// Absolute path to the `node` binary.
+        node_bin: PathBuf,
+        /// Absolute path to the daemon entry (e.g. `packages/core/dist/index.js`).
+        daemon_entry: PathBuf,
+    },
+    /// The Rust `mainframe-daemon` binary, run directly.
+    Rust {
+        /// Absolute path to the `mainframe-daemon` executable.
+        daemon_bin: PathBuf,
+        /// Bundled Node runtime, exposed to the Rust daemon as
+        /// `MAINFRAME_BUNDLED_NODE` so it can launch the bundled LSP servers.
+        /// `None` in dev / run-from-source (only external LSP servers spawn).
+        bundled_node: Option<PathBuf>,
+        /// Bundled `node_modules` root holding the LSP servers, exposed as
+        /// `MAINFRAME_BUNDLED_LSP_ROOT`. `None` when the bundle is absent.
+        bundled_lsp_root: Option<PathBuf>,
+    },
+}
+
 pub struct SidecarConfig {
-    /// Absolute path to the `node` binary.
-    pub node_bin: PathBuf,
-    /// Absolute path to the daemon entry point (e.g. `packages/core/dist/index.js`).
-    pub daemon_entry: PathBuf,
+    /// The implementation-specific program to spawn.
+    pub program: DaemonProgram,
     /// Login-shell env captured by `shell_env::resolve_shell_env_with_timeout`.
+    /// Becomes the daemon's own env, so the daemon AND its adapter children
+    /// (claude/codex) inherit the resolved PATH — closing the packaged-app
+    /// "bare PATH → CLI ENOENT" gap for both impls.
     pub shell_env: HashMap<String, String>,
     /// Daemon HTTP/WS port.
     pub daemon_port: u16,
@@ -112,13 +140,43 @@ pub struct SidecarConfig {
     pub data_dir: Option<PathBuf>,
 }
 
-/// Spawn the daemon sidecar. Returns a handle used to kill it on app exit.
+/// Spawn the daemon sidecar (Node or Rust). Returns a handle used to kill it on
+/// app exit — identical for both impls.
 ///
 /// Environment precedence (matching Electron's `startDaemon`):
 ///   base process env  ←  shell_env overlay  ←  app-owned daemon overrides
 pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
-    let mut cmd = Command::new(&config.node_bin);
-    cmd.arg(&config.daemon_entry);
+    let mut cmd = match &config.program {
+        DaemonProgram::Node {
+            node_bin,
+            daemon_entry,
+        } => {
+            let mut c = Command::new(node_bin);
+            c.arg(daemon_entry);
+            // NODE_ENV matters only to the Node daemon; harmless but pointless
+            // for the Rust binary, so it is set on the Node arm only.
+            c.env("NODE_ENV", "production");
+            c
+        }
+        DaemonProgram::Rust {
+            daemon_bin,
+            bundled_node,
+            bundled_lsp_root,
+        } => {
+            let mut c = Command::new(daemon_bin);
+            // The Rust daemon has no Node module resolver, so the bundled Node
+            // runtime + node_modules root are injected via env; unset in dev, so
+            // only external LSP servers (jdtls) spawn there.
+            if let Some(node) = bundled_node {
+                c.env("MAINFRAME_BUNDLED_NODE", node);
+            }
+            if let Some(root) = bundled_lsp_root {
+                c.env("MAINFRAME_BUNDLED_LSP_ROOT", root);
+            }
+            c
+        }
+    };
+
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
@@ -140,9 +198,12 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
         }
     }
 
+    let program = match &config.program {
+        DaemonProgram::Node { node_bin, .. } => node_bin.display().to_string(),
+        DaemonProgram::Rust { daemon_bin, .. } => daemon_bin.display().to_string(),
+    };
     tracing::info!(
-        node = %config.node_bin.display(),
-        daemon = %config.daemon_entry.display(),
+        program = %program,
         port = config.daemon_port,
         path = %config.shell_env.get("PATH").map(|s| s.as_str()).unwrap_or("<not set>"),
         "spawning daemon sidecar"
@@ -196,26 +257,48 @@ pub fn find_bundled_node() -> Option<PathBuf> {
     find_bundled_node_in(exe.parent()?)
 }
 
+/// Prefer the bundled Rust `mainframe-daemon` binary in a packaged build.
+///
+/// Tauri's `externalBin` ("binaries/mainframe-daemon") places the matching-triple
+/// binary next to the app executable (`mainframe-daemon` once the bundle strips
+/// the triple, or `mainframe-daemon-<triple>` in some layouts). Returns `None`
+/// when no such binary sits next to the exe, so the caller falls back to the
+/// env override / dev monorepo path.
+pub fn find_bundled_rust_daemon() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    find_bundled_binary_in(exe.parent()?, "mainframe-daemon")
+}
+
 /// Pure directory scan behind [`find_bundled_node`] (unit-testable).
 fn find_bundled_node_in(dir: &Path) -> Option<PathBuf> {
+    find_bundled_binary_in(dir, "node")
+}
+
+/// Locate a bundled sidecar binary named `stem` (or `stem-<triple>`) in `dir`,
+/// rejecting zero-byte placeholders. Shared by the Node and Rust finders.
+///
+/// The exact base name is checked first (Tauri strips the triple in the
+/// assembled bundle), then the triple-suffixed siblings that may sit next to a
+/// dev binary. The `stem-` prefix keeps the two impls' scans disjoint
+/// (`mainframe-daemon-…` never matches the `node` scan and vice-versa).
+fn find_bundled_binary_in(dir: &Path, stem: &str) -> Option<PathBuf> {
     let runnable = |p: &Path| -> bool {
-        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() >= MIN_NODE_BIN_BYTES)
+        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() >= MIN_SIDECAR_BIN_BYTES)
     };
-    // Exact base name first (Tauri strips the triple in the assembled bundle).
-    for name in ["node", "node.exe"] {
-        let candidate = dir.join(name);
+    for name in [stem.to_string(), format!("{stem}.exe")] {
+        let candidate = dir.join(&name);
         if runnable(&candidate) {
-            tracing::info!(node = %candidate.display(), "using bundled node sidecar");
+            tracing::info!(binary = %candidate.display(), stem, "using bundled sidecar binary");
             return Some(candidate);
         }
     }
-    // Triple-suffixed sibling fallback (e.g. node-aarch64-apple-darwin[.exe]).
+    let prefix = format!("{stem}-");
     let entries = std::fs::read_dir(dir).ok()?;
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if name.starts_with("node-") && runnable(&entry.path()) {
-            tracing::info!(node = %entry.path().display(), "using bundled node sidecar (triple)");
+        if name.starts_with(&prefix) && runnable(&entry.path()) {
+            tracing::info!(binary = %entry.path().display(), stem, "using bundled sidecar binary (triple)");
             return Some(entry.path());
         }
     }
@@ -322,8 +405,8 @@ mod tests {
                 .map(|p| p.parse::<u64>().unwrap_or(0))
                 .collect()
         };
-        let mut tags = vec!["v9.11.2", "v10.24.1", "v18.20.0", "v8.17.0"];
-        tags.sort_by(|a, b| parse(a).cmp(&parse(b)));
+        let mut tags = ["v9.11.2", "v10.24.1", "v18.20.0", "v8.17.0"];
+        tags.sort_by_key(|a| parse(a));
         assert_eq!(
             tags.last(),
             Some(&"v18.20.0"),
@@ -351,7 +434,7 @@ mod tests {
 
         // A real-sized triple binary is found via the fallback.
         let mut f = std::fs::File::create(dir.join("node-x86_64-unknown-linux-gnu")).unwrap();
-        f.write_all(&vec![0u8; (MIN_NODE_BIN_BYTES + 1) as usize]).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
         assert_eq!(
             find_bundled_node_in(&dir),
             Some(dir.join("node-x86_64-unknown-linux-gnu"))
@@ -359,8 +442,46 @@ mod tests {
 
         // The exact base name `node` wins over the triple sibling.
         let mut f = std::fs::File::create(dir.join("node")).unwrap();
-        f.write_all(&vec![0u8; (MIN_NODE_BIN_BYTES + 1) as usize]).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
         assert_eq!(find_bundled_node_in(&dir), Some(dir.join("node")));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The Rust daemon scan finds `mainframe-daemon[-triple]`, ignores zero-byte
+    /// placeholders, and stays disjoint from a sibling `node` binary.
+    #[test]
+    fn bundled_rust_daemon_scan() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("mf-bundled-rustd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // A sibling `node` must not satisfy the mainframe-daemon scan.
+        let mut n = std::fs::File::create(dir.join("node")).unwrap();
+        n.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        assert!(find_bundled_binary_in(&dir, "mainframe-daemon").is_none());
+
+        // Zero-byte placeholder ignored.
+        std::fs::File::create(dir.join("mainframe-daemon-aarch64-apple-darwin")).unwrap();
+        assert!(find_bundled_binary_in(&dir, "mainframe-daemon").is_none());
+
+        // Real-sized triple binary found via the fallback.
+        let mut f =
+            std::fs::File::create(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu")).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        assert_eq!(
+            find_bundled_binary_in(&dir, "mainframe-daemon"),
+            Some(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu"))
+        );
+
+        // Exact base name wins over the triple sibling.
+        let mut f = std::fs::File::create(dir.join("mainframe-daemon")).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        assert_eq!(
+            find_bundled_binary_in(&dir, "mainframe-daemon"),
+            Some(dir.join("mainframe-daemon"))
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

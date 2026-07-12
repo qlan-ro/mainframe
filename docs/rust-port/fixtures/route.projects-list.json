@@ -1,0 +1,15 @@
+{
+  "_provenance": "synthetic",
+  "_route": "GET /api/projects",
+  "success": true,
+  "data": [
+    {
+      "id": "proj_a1b2c3",
+      "name": "mainframe",
+      "path": "/Users/doru/Projects/mainframe",
+      "createdAt": "2026-07-08T10:15:30.000Z",
+      "lastOpenedAt": "2026-07-08T10:16:12.500Z",
+      "parentProjectId": null
+    }
+  ]
+}

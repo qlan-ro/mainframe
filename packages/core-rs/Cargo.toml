@@ -1,0 +1,66 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+version = "0.0.0"
+publish = false
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors", "limit"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+thiserror = "2"
+# Binary crate (`mainframe-daemon`) top-level only — library crates use thiserror.
+# The verify gate exempts `anyhow` for the binary crate and forbids it elsewhere.
+anyhow = "1"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+nanoid = "0.4"
+dashmap = "6"
+notify = "6"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# Pairing QR in the daemon's `pair` subcommand (Phase 5).
+qrcode = "0.14"
+# NOTE: the workflow engine (serde_yaml/cron/jsonata) is deliberately NOT ported
+# yet — the TS workflows feature is not stable. mainframe-workflows stays an
+# empty crate; its deps are added when the feature stabilizes.
+# Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
+tempfile = "3"
+
+mainframe-types = { path = "crates/mainframe-types" }
+mainframe-runtime = { path = "crates/mainframe-runtime" }
+mainframe-db = { path = "crates/mainframe-db" }
+mainframe-git = { path = "crates/mainframe-git" }
+mainframe-display = { path = "crates/mainframe-display" }
+mainframe-adapter-api = { path = "crates/mainframe-adapter-api" }
+mainframe-adapter-claude = { path = "crates/mainframe-adapter-claude" }
+mainframe-adapter-codex = { path = "crates/mainframe-adapter-codex" }
+mainframe-plugins = { path = "crates/mainframe-plugins" }
+mainframe-chat = { path = "crates/mainframe-chat" }
+mainframe-background-tasks = { path = "crates/mainframe-background-tasks" }
+mainframe-launch = { path = "crates/mainframe-launch" }
+mainframe-lsp = { path = "crates/mainframe-lsp" }
+mainframe-workflows = { path = "crates/mainframe-workflows" }
+mainframe-services = { path = "crates/mainframe-services" }
+mainframe-server = { path = "crates/mainframe-server" }
+
+# clippy::unwrap_used and clippy::expect_used are enforced as deny at the workspace
+# level. Test code is exempted via `#![cfg_attr(test, allow(clippy::unwrap_used,
+# clippy::expect_used))]` at the top of each crate's lib.rs (idiomatic per-crate
+# override — workspace.lints has no per-cfg granularity), and per PORTING.md the
+# forbidden-pattern grep additionally excludes #[cfg(test)] modules and main.rs boot.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

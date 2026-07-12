@@ -92,6 +92,17 @@ describe('tag routes', () => {
     expect(tags.get('feature')).toBeNull();
   });
 
+  // pins current behavior — see blockers: DELETE deviates from the rest of the
+  // API by ending the response with no body at all, not the {success} envelope.
+  it('DELETE /api/tags/:name returns 204 with an empty body, not the {success} envelope', async () => {
+    const { app, tags } = makeApp();
+    tags.upsert('feature');
+    const res = await request(app).delete('/api/tags/feature');
+    expect(res.status).toBe(204);
+    expect(res.body).toEqual({});
+    expect(res.text).toBe('');
+  });
+
   it('DELETE /api/tags/:name on missing returns 404', async () => {
     const { app } = makeApp();
     const res = await request(app).delete('/api/tags/nope');
@@ -139,5 +150,18 @@ describe('tag routes', () => {
       .put('/api/chats/c1/tags')
       .send({ tags: ['has-pr'] });
     expect(res.status).toBe(400);
+  });
+
+  it('PATCH /api/tags/:name rename cascades to chats already tagged with it', async () => {
+    const { app } = makeApp();
+    await request(app)
+      .put('/api/chats/c1/tags')
+      .send({ tags: ['feat'] });
+
+    const res = await request(app).patch('/api/tags/feat').send({ rename: 'feature' });
+    expect(res.status).toBe(200);
+
+    const chatTags = await request(app).get('/api/chats/c1/tags');
+    expect(chatTags.body.data).toEqual(['feature']);
   });
 });

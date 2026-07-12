@@ -50,6 +50,9 @@ describe('GitService.commitAll', () => {
 
     expect(typeof sha).toBe('string');
     expect(sha.length).toBeGreaterThan(0);
+    // `-c core.abbrev=40` widens the return to the full SHA (intentional vs
+    // simple-git's short hash); pin it so the wire value can't silently narrow.
+    expect(sha).toMatch(/^[0-9a-f]{40}$/);
   });
 
   it('includes previously untracked files in the commit', async () => {

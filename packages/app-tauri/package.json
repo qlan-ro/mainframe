@@ -7,9 +7,12 @@
     "tauri": "tauri",
     "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "cargo tauri build",
+    "tauri:build:canary": "cargo tauri build --config src-tauri/tauri.rust-canary.conf.json",
     "provision:node": "node scripts/provision-node.mjs",
+    "provision:rust-daemon": "node scripts/provision-rust-daemon.mjs",
     "bundle:daemon": "node scripts/bundle-daemon.mjs",
     "bundle": "pnpm run provision:node && pnpm run bundle:daemon",
+    "bundle:canary": "pnpm run provision:node && pnpm run provision:rust-daemon && pnpm run bundle:daemon",
     "codesign:daemon": "node scripts/codesign-daemon.mjs",
     "codesign:daemon:dry-run": "node scripts/codesign-daemon.mjs --dry-run"
   },

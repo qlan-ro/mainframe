@@ -1,0 +1,29 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "message.queued.snapshot",
+    "chatId": "chat_9f2a3b1c",
+    "refs": []
+  },
+  "full": {
+    "type": "message.queued.snapshot",
+    "chatId": "chat_9f2a3b1c",
+    "refs": [
+      {
+        "messageId": "dmsg_0003",
+        "chatId": "chat_9f2a3b1c",
+        "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "content": "Continue with the fix",
+        "timestamp": "2026-07-08T10:15:30.000Z"
+      },
+      {
+        "messageId": "dmsg_0003",
+        "chatId": "chat_9f2a3b1c",
+        "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "content": "Continue with the fix",
+        "timestamp": "2026-07-08T10:15:30.000Z",
+        "attachmentIds": ["att_001", "att_002"]
+      }
+    ]
+  }
+}

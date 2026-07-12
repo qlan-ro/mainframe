@@ -1,0 +1,12 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "context.updated",
+    "chatId": "chat_9f2a3b1c"
+  },
+  "full": {
+    "type": "context.updated",
+    "chatId": "chat_9f2a3b1c",
+    "filePaths": ["packages/core/src/server/ws.ts"]
+  }
+}
