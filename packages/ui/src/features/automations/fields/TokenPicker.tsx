@@ -114,7 +114,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
                     >
                       <Icon size={12} className={style.iconClass} aria-hidden />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-label text-foreground">{token.label}</span>
+                    <span className="min-w-0 flex-1 truncate text-body text-foreground">{token.label}</span>
                     <span className="text-caption text-muted-foreground">{token.type}</span>
                     {isExpandable && (
                       <ChevronRight
@@ -131,7 +131,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
                         type="button"
                         data-testid={`${testId}-option-${key}-${field}`}
                         onClick={() => handleFieldClick(token, field)}
-                        className="flex w-full items-center gap-1 rounded-md py-1 pl-9 pr-2 text-left text-caption text-muted-foreground hover:bg-accent"
+                        className="flex w-full items-center gap-1 rounded-md py-1 pl-9 pr-2 text-left text-body text-muted-foreground hover:bg-accent"
                       >
                         {token.label} <span>›</span> <span className="font-medium text-foreground">{field}</span>
                       </button>
