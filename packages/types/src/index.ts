@@ -19,6 +19,7 @@ export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
 export * from './workflow.js';
 export * from './automation.js';
+export * from './automation-domain/index.js';
 export * from './api.js';
 export * from './host/host-contract.js';
 export * from './host/host-bridge.js';

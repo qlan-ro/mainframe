@@ -7,9 +7,9 @@
  * Contrast with `scopeAt`, which is position-aware (is this ref visible
  * HERE), not existence-aware.
  */
-import type { ActionCatalogEntry, AutomationDefinition, AutomationStep, TokenRef } from '../contract';
-import { TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER } from '../contract';
-import { builtinTokens, stepProduces, triggerTokens, type TokenDescriptor } from './tokens';
+import type { ActionCatalogEntry, AutomationDefinition, AutomationStep, TokenRef } from '../automation.js';
+import { TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER } from '../automation.js';
+import { builtinTokens, stepProduces, triggerTokens, type TokenDescriptor } from './tokens.js';
 
 export function findStep(steps: AutomationStep[], stepId: string): AutomationStep | null {
   for (const step of steps) {
