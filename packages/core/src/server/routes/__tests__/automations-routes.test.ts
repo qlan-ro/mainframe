@@ -147,6 +147,31 @@ describe('automation REST routes', () => {
     expect(res.status).toBe(404);
   });
 
+  // ── enabled toggle ───────────────────────────────────────────────────────
+
+  it('PATCH /api/automations/:id/enabled disables and re-enables', async () => {
+    const created = (await request(app).post('/api/automations').send(NOTIFY_ONLY)).body.data;
+    expect(created.enabled).toBe(true);
+
+    const offRes = await request(app).patch(`/api/automations/${created.id}/enabled`).send({ enabled: false });
+    expect(offRes.status).toBe(200);
+    expect(offRes.body).toMatchObject({ success: true, data: { id: created.id, enabled: false } });
+
+    const onRes = await request(app).patch(`/api/automations/${created.id}/enabled`).send({ enabled: true });
+    expect(onRes.body.data.enabled).toBe(true);
+  });
+
+  it('PATCH /api/automations/:id/enabled rejects a malformed body', async () => {
+    const created = (await request(app).post('/api/automations').send(NOTIFY_ONLY)).body.data;
+    const res = await request(app).patch(`/api/automations/${created.id}/enabled`).send({ enabled: 'nope' });
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH /api/automations/:id/enabled returns 404 for an unknown id', async () => {
+    const res = await request(app).patch('/api/automations/no-such-id/enabled').send({ enabled: false });
+    expect(res.status).toBe(404);
+  });
+
   // ── runs ─────────────────────────────────────────────────────────────────
 
   it('POST /api/automations/:id/runs starts a manual run and returns 202', async () => {

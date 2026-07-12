@@ -122,6 +122,19 @@ export function automationRoutes(ctx: RouteContext): Router {
     }),
   );
 
+  router.patch(
+    '/api/automations/:id/enabled',
+    asyncHandler(async (req, res) => {
+      const service = ctx.automations;
+      if (!service) return void fail(res, 503, 'automation service not available');
+      const id = param(req, 'id');
+      if (!service.get(id)) return void fail(res, 404, 'automation not found');
+      const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);
+      if (!parsed.success) return void fail(res, 400, parsed.error.message);
+      ok(res, service.setEnabled(id, parsed.data.enabled));
+    }),
+  );
+
   router.post(
     '/api/automations/:id/runs',
     asyncHandler(async (req, res) => {
