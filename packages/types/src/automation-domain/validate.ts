@@ -7,7 +7,7 @@
 import type { ActionCatalogEntry, AutomationDefinition, AutomationStep, TokenRef } from '../automation.js';
 import { TOKEN_STEP_BUILTIN } from '../automation.js';
 import { resolveTokenRef } from './resolve.js';
-import { scopeAt } from './tokens.js';
+import { scopeAt } from './token-scope.js';
 
 export interface ValidationIssue {
   stepId: string | null;
@@ -102,6 +102,20 @@ export function validate(
         walk(step.otherwise);
       }
       if (step.kind === 'repeat') {
+        // Only check type once `checkTokenRef` above has confirmed `items` is
+        // in scope — an out-of-scope ref already gets its own existence
+        // error, and piling a second, contradictory message on top of it
+        // would be confusing.
+        const itemsToken = scopeAt(definition, catalog, step.id).find(
+          (t) => t.ref.stepId === step.items.stepId && t.ref.output === step.items.output,
+        );
+        if (itemsToken && itemsToken.type !== 'list') {
+          issues.push({
+            stepId: step.id,
+            level: 'error',
+            msg: `"${itemsToken.label}" isn't a list — pick a value that produces a list to repeat over.`,
+          });
+        }
         walk(step.steps);
       }
     }

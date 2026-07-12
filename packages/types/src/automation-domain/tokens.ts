@@ -17,14 +17,8 @@
  * `ui` and `core`, so the daemon's canonical validation can import the same
  * functions the UI does.
  */
-import type {
-  ActionCatalogEntry,
-  AutomationDefinition,
-  AutomationStep,
-  AutomationTrigger,
-  TokenRef,
-} from '../automation.js';
-import { TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER } from '../automation.js';
+import type { ActionCatalogEntry, AutomationStep, AutomationTrigger, TokenRef } from '../automation.js';
+import { TOKEN_STEP_BUILTIN, TOKEN_STEP_TRIGGER } from '../automation.js';
 
 export type TokenValueType = 'text' | 'number' | 'list' | 'choice' | 'date' | 'object';
 export type TokenSourceKind = 'builtin' | 'trigger' | 'agent' | 'askme' | 'action' | 'item';
@@ -182,9 +176,10 @@ function askMeFieldType(type: 'text' | 'number' | 'choice' | 'multi' | 'textarea
 /**
  * Tokens a single step produces (contract §5's named-output table). `if`
  * aggregates everything produced inside BOTH `then` and `otherwise` — branch
- * results leak to later siblings once the block closes (`scopeAt` below).
- * `repeat` produces nothing here: its `Current item` token is isolated to its
- * own `steps` and is synthesized by `scopeAt`, never by this function.
+ * results leak to later siblings once the block closes (`scopeAt`, in
+ * `token-scope.ts`). `repeat` produces nothing here: its `Current item`
+ * token is isolated to its own `steps` and is synthesized by `scopeAt`,
+ * never by this function.
  */
 export function stepProduces(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenDescriptor[] {
   const source = stepLabel(step, catalog);
@@ -248,67 +243,4 @@ export function stepProduces(step: AutomationStep, catalog: ActionCatalogEntry[]
     case 'repeat':
       return [];
   }
-}
-
-/** Synthesize Repeat's `Current item` token from the list token its `items` ref points to (visible only inside `steps`; never returned by `stepProduces`). */
-function currentItemToken(itemsRef: TokenRef, scope: TokenDescriptor[]): TokenDescriptor | null {
-  const listToken = scope.find((t) => t.ref.stepId === itemsRef.stepId && t.ref.output === itemsRef.output);
-  if (!listToken) return null;
-  const descriptor: TokenDescriptor = {
-    ref: { stepId: TOKEN_STEP_CURRENT, output: 'item' },
-    label: 'Current item',
-    type: 'text',
-    sourceKind: 'item',
-    source: 'Repeat',
-  };
-  if (listToken.fields) descriptor.fields = listToken.fields;
-  return descriptor;
-}
-
-interface WalkResult {
-  found: boolean;
-  scope: TokenDescriptor[];
-}
-
-function walk(
-  steps: AutomationStep[],
-  scope: TokenDescriptor[],
-  targetStepId: string | null,
-  catalog: ActionCatalogEntry[],
-): WalkResult {
-  let running = scope;
-  for (const step of steps) {
-    if (step.id === targetStepId) return { found: true, scope: running };
-    if (step.kind === 'if') {
-      const thenResult = walk(step.then, running, targetStepId, catalog);
-      if (thenResult.found) return thenResult;
-      const otherwiseResult = walk(step.otherwise, running, targetStepId, catalog);
-      if (otherwiseResult.found) return otherwiseResult;
-      running = running.concat(stepProduces(step, catalog));
-    } else if (step.kind === 'repeat') {
-      const itemToken = currentItemToken(step.items, running);
-      const innerScope = itemToken ? running.concat([itemToken]) : running;
-      const repeatResult = walk(step.steps, innerScope, targetStepId, catalog);
-      if (repeatResult.found) return repeatResult;
-      // Isolated: no leak after the block, even though repeatResult.scope may hold Current item.
-    } else {
-      running = running.concat(stepProduces(step, catalog));
-    }
-  }
-  return { found: false, scope: running };
-}
-
-/**
- * Tokens visible immediately before `targetStepId` — trigger tokens + built-ins
- * + every token produced by earlier siblings at this level or an ancestor.
- * Pass `null` to get the scope after the ENTIRE top-level recipe (e.g. for a
- * step about to be appended at the end).
- */
-export function scopeAt(
-  definition: AutomationDefinition,
-  catalog: ActionCatalogEntry[],
-  targetStepId: string | null,
-): TokenDescriptor[] {
-  const base = builtinTokens().concat(triggerTokens(definition.triggers));
-  return walk(definition.steps, base, targetStepId, catalog).scope;
 }

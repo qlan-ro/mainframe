@@ -7,6 +7,7 @@
  * unchanged so existing UI imports keep working.
  */
 export * from './tokens.js';
+export * from './token-scope.js';
 export * from './comparators.js';
 export * from './chip-parts.js';
 export * from './resolve.js';

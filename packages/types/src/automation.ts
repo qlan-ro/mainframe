@@ -52,6 +52,8 @@ export interface AskAgentStep extends AutomationStepBase {
   timeoutMinutes?: number;
   /** A2: declared keys are parsed from the final message's JSON and become named outputs alongside `result`/`chatId`. */
   expects?: AutomationExpectedOutput[];
+  /** Filenames handed to the agent alongside the prompt (wf2-stepconfig.jsx `WfAttachments`). Names only — no upload/storage path exists yet; UI-added per the 2026-07-12 design-conformance pass. */
+  attachments?: string[];
 }
 
 export interface AutomationFormField {
