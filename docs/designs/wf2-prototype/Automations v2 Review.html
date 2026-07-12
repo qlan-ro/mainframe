@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Mainframe — Automations (Workflows v2) Review</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a84ff"/><path d="M55 22 40 55h12l-6 26 26-38H58l6-21z" fill="#fff"/></svg></template>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  * { box-sizing: border-box; }
+  @keyframes twPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+  .tw-pulse { animation: twPulse 1.6s ease-in-out infinite; }
+  @keyframes tw-spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+  @keyframes tw-slidein { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
+  a { color: #0a84ff; } a:hover { color: #0060df; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts153"></script>
+<script type="text/babel" src="mainframe/wf2-base.jsx?v=ts153"></script>
+<script type="text/babel" src="mainframe/wf2-seeds.jsx?v=ts153"></script>
+<script type="text/babel" src="mainframe/wf2-fields.jsx?v=ts153"></script>
+<script type="text/babel" src="mainframe/wf2-stepconfig.jsx?v=ts153"></script>
+<script type="text/babel" src="mainframe/wf2-editor.jsx?v=ts153"></script>
+<script type="text/babel" src="mainframe/wf2-runtime.jsx?v=ts153"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const noop = () => {};
+
+function Frame({ children, bg = T.windowBg }) { return <div style={{ width: '100%', height: '100%', background: bg, overflow: 'hidden' }}>{children}</div>; }
+function EdFrame({ children }) { return <div style={{ position: 'relative', width: '100%', height: '100%', background: T.windowBg, overflow: 'hidden' }}>{children}</div>; }
+function CardFrame({ children, pad = 16, bg = T.content }) { return <div style={{ width: '100%', height: '100%', background: bg, padding: pad, overflow: 'auto' }}>{children}</div>; }
+
+const A = (id) => WF2_AUTOMATIONS.find(a => a.id === id);
+const R = (id) => WF2_RUNS_SEED.find(r => r.id === id);
+
+// Sample in-scope tokens for config demos.
+const demoTokens = [
+  tk('PR', { color: WF2_SRC.trigger, icon: 'branch', type: 'object', fields: ['URL', 'title', 'author'], source: 'Trigger' }),
+  tk('Today', { color: WF2_SRC.builtin, icon: 'calendar', type: 'date', source: 'Built-in' }),
+  tk('Mood', { color: WF2_SRC.askme, icon: 'chat', type: 'choice', source: 'Health check-in' }),
+  tk('Open PRs', { color: WF2_SRC.action, icon: 'branch', type: 'list', fields: ['URL', 'title'], source: 'List my open PRs' }),
+];
+
+// A leaf step card with its Set-up panel forced open (renders the real config).
+function CfgDemo({ kind, step, tokens }) {
+  const [s, setS] = React.useState(step);
+  const patch = (p) => setS(x => ({ ...x, ...p }));
+  const v = WF2_VERB[kind];
+  const Cfg = { agent: WfAgentConfig, askme: WfAskMeConfig, action: WfActionConfig, notify: WfNotifyConfig }[kind];
+  return (
+    <CardFrame>
+      <div style={{ borderRadius: 12, border: `0.5px solid ${T.border}`, background: T.content, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px' }}>
+          <Icon name="grip" size={14} color={T.text4}/>
+          <span style={{ width: 27, height: 27, borderRadius: 7, background: `${v.color}22`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={v.icon} size={14} color={v.color}/></span>
+          <span style={{ flex: 1, fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.text }}>{s.title || v.label}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, border: `0.5px solid ${v.color}66`, background: `${v.color}14`, color: v.color, fontFamily: FONT, fontSize: 11, fontWeight: 600 }}><Icon name="sliders" size={11} color={v.color}/>Done</span>
+        </div>
+        <div style={{ padding: '12px 12px 14px 46px', borderTop: `0.5px solid ${T.hairline}` }}>
+          <Cfg step={s} patch={patch} tokens={tokens || demoTokens}/>
+        </div>
+      </div>
+    </CardFrame>
+  );
+}
+// Recipe host (stateful) — for showing bracket editing in isolation.
+function RecipeDemo({ steps, tokens }) {
+  const [s, setS] = React.useState(steps);
+  return <CardFrame><WfRecipe steps={s} onChange={setS} tokens={tokens || demoTokens}/></CardFrame>;
+}
+// Library host with working New/Describe/Build/run navigation.
+function LibraryDemo() {
+  const [view, setView] = React.useState('lib');
+  const [editing, setEditing] = React.useState(null);
+  const [run, setRun] = React.useState(null);
+  return (
+    <EdFrame>
+      {view === 'lib' && <WfLibrary onNew={() => setView('blank')} onEdit={(a) => setEditing(a)} onOpenRun={(r) => { setRun(r); setView('run'); }}/>}
+      {view === 'blank' && <WfBlankState onDescribe={() => setView('describe')} onBuild={() => setEditing({ name: '', description: '', scope: 'project', triggers: [], steps: [] })}/>}
+      {view === 'describe' && <WfDescribeFlow onOpenEditor={(a) => setEditing(a)}/>}
+      {view === 'run' && run && <WfRunView run={run} onBack={() => setView('lib')}/>}
+      {editing && <WfEditor open embedded automation={editing.steps && editing.steps.length ? editing : (editing.name ? editing : null)} onClose={() => setEditing(null)}/>}
+    </EdFrame>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+
+      <DCSection id="overview" title="Automations (Workflows v2) — a from-scratch model" subtitle="Per the approved spec: the engine grammar is replaced, not restyled. An automation = When (triggers) + Do (a linear list). Four verbs (Ask agent · Ask me · Run an action · Notify me) + two blocks (If · Repeat). No YAML, no expressions, no step ids. Data flows through pickable tokens. The feature keeps the ‘Workflows’ label; the model is v2.">
+        <DCArtboard id="ov-lib" label="Library — live (New → blank state → Describe/Build; click a last-run to open it)" width={980} height={640}>
+          <LibraryDemo/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="library" title="Library & empty state" subtitle="Every automation: trigger summary, last-run status, on/off toggle, Run now. The blank state offers the two creation paths (Describe it / Build it).">
+        <DCArtboard id="lib-pop" label="Library — populated (6 reference automations)" width={940} height={560}>
+          <Frame bg={T.content}><WfLibrary onNew={noop} onEdit={noop} onRun={noop}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="lib-empty" label="Empty state — Describe it / Build it" width={720} height={520}>
+          <Frame bg={T.content}><WfBlankState onDescribe={noop} onBuild={noop}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="describe" title="Create → Describe it (natural language → drafted blocks)" subtitle="Say what you want; the assistant drafts the When/Do blocks. The artifact is always the editable block list — never a buried prompt. Click ‘Draft it’.">
+        <DCArtboard id="desc-flow" label="Describe it — prompt → drafted block list → Open in editor" width={720} height={620}>
+          <Frame bg={T.content}><WfDescribeFlow onOpenEditor={noop}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="editor" title="The editor — When + Do" subtitle="A curated trigger section over a linear Do list; verbs added from the grouped menu, If/Repeat nest a child Do list inline, token picker only ever offers in-scope values, plain-language validation pinned to the offending step. The real WfEditor, embedded.">
+        <DCArtboard id="ed-ship" label="Ship work (HERO) — Ask me → If → action → Ask agent" width={760} height={900}>
+          <EdFrame><WfEditor open embedded automation={A('auto_ship')} onClose={noop}/></EdFrame>
+        </DCArtboard>
+        <DCArtboard id="ed-new" label="New — blank (When empty, Add-step menu)" width={760} height={560}>
+          <EdFrame><WfEditor open embedded automation={null} onClose={noop}/></EdFrame>
+        </DCArtboard>
+        <DCArtboard id="ed-invalid" label="Validation — a step uses a result that comes later" width={760} height={620}>
+          <EdFrame><WfEditor open embedded automation={INVALID} onClose={noop}/></EdFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="blocks" title="Blocks — the only two, editable inline" subtitle="If = structured condition rows (⟨token⟩ · comparator · value; all/any) + Then/Otherwise recipes. Repeat = pick a list token; ⟨Current item⟩ appears inside the bracket. Both nest real steps you add with the same menu.">
+        <DCArtboard id="blk-if" label="If … otherwise — condition rows + branches (edit me)" width={640} height={440}>
+          <RecipeDemo steps={[JSON.parse(JSON.stringify(A('auto_ship').steps[1]))]}/>
+        </DCArtboard>
+        <DCArtboard id="blk-repeat" label="Repeat for each — ⟨Current item⟩ in scope inside (edit me)" width={640} height={360}>
+          <RecipeDemo steps={[JSON.parse(JSON.stringify(A('auto_prsweep').steps[1]))]} tokens={[tk('Open PRs', { color: WF2_SRC.action, icon: 'branch', type: 'list', fields: ['URL','title','author'], source: 'List my open PRs' })]}/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="tokens" title="Tokens — dataflow you can point at" subtitle="Every producing step contributes typed chips (source color + icon; never ids/paths). Insert via the ⟨⟩ picker; object tokens expand to a field (⟨PR › URL⟩). Out-of-scope tokens simply don’t appear. Click ⟨⟩ in any field to try it.">
+        <DCArtboard id="tok-agent" label="Ask agent — prompt with slash + token chips (open picker with ⟨⟩)" width={620} height={380}>
+          <CfgDemo kind="agent" step={JSON.parse(JSON.stringify(A('auto_ship').steps[3]))}/>
+        </DCArtboard>
+        <DCArtboard id="tok-notify" label="Notify me — message mixes text + ⟨Agent result⟩" width={620} height={260}>
+          <CfgDemo kind="notify" step={JSON.parse(JSON.stringify(A('auto_standup').steps[1]))} tokens={[tk('Agent result', { color: WF2_SRC.agent, icon: 'sparkles', source: 'Plan my day' })]}/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="askme" title="Ask me — the form builder" subtitle="Title + fields (text · number · choice · multi · textarea), required, and conditional visibility (‘show when ⟨field⟩ = value’). Answers become tokens for later steps.">
+        <DCArtboard id="ask-cfg" label="Ask me — fields, options, show-when (edit me)" width={640} height={520}>
+          <CfgDemo kind="askme" step={JSON.parse(JSON.stringify(A('auto_ship').steps[0]))}/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="actions" title="Run an action — the catalog & auto-forms" subtitle="One searchable catalog: built-ins (Run a command, Files, HTTP), curated connectors (GitHub, Notion, Azure DevOps), and your MCP tools. Picking an action auto-generates its form; connectors show a one-time ‘Connect…’ per service.">
+        <DCArtboard id="act-catalog" label="Action catalog — built-ins · connectors · MCP (searchable)" width={560} height={620}>
+          <div style={{ width: '100%', height: '100%' }}><WfActionCatalog embed onPick={noop} onClose={null}/></div>
+        </DCArtboard>
+        <DCArtboard id="act-notion" label="Notion — database columns become fields (edit me)" width={620} height={440}>
+          <CfgDemo kind="action" step={JSON.parse(JSON.stringify(A('auto_health').steps[1]))}/>
+        </DCArtboard>
+        <DCArtboard id="act-connect" label="Connect flow — unconnected service shows ‘Connect…’ (click it)" width={620} height={330}>
+          <CfgDemo kind="action" step={{ id: 'x', kind: 'action', actionId: 'ado.create_item', title: 'Create work item', args: {} }}/>
+        </DCArtboard>
+        <DCArtboard id="act-command" label="Run a command — script chips + output-as-list" width={620} height={420}>
+          <CfgDemo kind="action" step={{ id: 'c', kind: 'action', actionId: 'run_command', title: 'Run tests', args: { script: ['pnpm test'], runin: 'Worktree', output: 'Text' } }}/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="runs" title="Run view — timeline, pauses, failures" subtitle="A step timeline with per-step status + output preview + links (agent → chat). A run paused on ‘Ask me’ renders the form inline. A failed step names itself and its error.">
+        <DCArtboard id="run-wait" label="Waiting — paused on a form, answerable inline" width={620} height={560}>
+          <Frame bg={T.content}><WfRunView run={R('r_ship')} onBack={noop}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="run-running" label="Running — Repeat fanned into per-item agent steps" width={620} height={440}>
+          <Frame bg={T.content}><WfRunView run={R('r_sweep')} onBack={noop}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="run-failed" label="Failed — which step + the error" width={620} height={330}>
+          <Frame bg={T.content}><WfRunView run={R('r_review')} onBack={noop}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="run-done" label="Succeeded — expandable output" width={620} height={420}>
+          <Frame bg={T.content}><WfRunView run={R('r_health')} onBack={noop}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="notifs" title="Notifications" subtitle="Run finished · run failed · a form is waiting. Each links to the run and any chat it created.">
+        <DCArtboard id="notif-all" label="The three notification types" width={420} height={420}>
+          <WfNotifications/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="reference" title="The six reference automations — end to end" subtitle="Each authored in the v2 model, opened in the real editor. Health log · Standup · PR auto-review · Morning PR sweep (deterministic loop) · Ship work (branch) · Daily feature spike (agent-heavy, worktree + auto-approve + budget cap).">
+        <DCArtboard id="ref-health" label="① Daily health log" width={720} height={760}><EdFrame><WfEditor open embedded automation={A('auto_health')} onClose={noop}/></EdFrame></DCArtboard>
+        <DCArtboard id="ref-standup" label="② Daily standup" width={720} height={560}><EdFrame><WfEditor open embedded automation={A('auto_standup')} onClose={noop}/></EdFrame></DCArtboard>
+        <DCArtboard id="ref-review" label="③ PR auto-review" width={720} height={520}><EdFrame><WfEditor open embedded automation={A('auto_prreview')} onClose={noop}/></EdFrame></DCArtboard>
+        <DCArtboard id="ref-sweep" label="④ Morning PR sweep" width={720} height={620}><EdFrame><WfEditor open embedded automation={A('auto_prsweep')} onClose={noop}/></EdFrame></DCArtboard>
+        <DCArtboard id="ref-spike" label="⑥ Daily feature spike (agent-heavy)" width={720} height={620}><EdFrame><WfEditor open embedded automation={A('auto_spike')} onClose={noop}/></EdFrame></DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+// Deliberately-invalid automation: an action references a token produced later.
+const INVALID = {
+  name: 'Ship work', scope: 'project', description: 'Commit, then open a PR.',
+  triggers: [{ kind: 'manual' }],
+  steps: [
+    { id: 'pr', kind: 'action', actionId: 'github.create_pr', title: 'Open the PR', args: { title: [tk('Work item ID', { color: WF2_SRC.action, icon: 'checklist.box', type: 'number', source: 'Create work item' })], base: 'main' } },
+    { id: 'ado', kind: 'action', actionId: 'ado.create_item', title: 'Create work item', args: { type: 'Task' } },
+  ],
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
