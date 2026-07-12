@@ -63,9 +63,9 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
     <div className="flex flex-col gap-3">
       <div
         data-testid={`${testId}-header`}
-        className="flex items-center gap-2.5 rounded-md border-[0.5px] border-mf-wf-violet/20 bg-mf-wf-violet/[0.07] px-2.5 py-1.5"
+        className="flex items-center gap-2.5 rounded-md border-[0.5px] border-mf-auto-violet/20 bg-mf-auto-violet/[0.07] px-2.5 py-1.5"
       >
-        <Plug size={14} className="text-mf-wf-violet" aria-hidden />
+        <Plug size={14} className="text-mf-auto-violet" aria-hidden />
         <span className="flex-1 text-body font-semibold text-foreground">{action.title}</span>
         <button
           type="button"

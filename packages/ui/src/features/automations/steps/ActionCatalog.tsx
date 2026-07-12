@@ -129,8 +129,8 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
               onClick={() => onPick(action)}
               className="flex items-start gap-2.5 rounded-md border-[0.5px] border-border bg-card p-2.5 text-left hover:border-mf-border-hover hover:bg-accent"
             >
-              <span className="flex size-[30px] shrink-0 items-center justify-center rounded-md bg-mf-wf-violet/12">
-                <Icon size={15} className="text-mf-wf-violet" aria-hidden />
+              <span className="flex size-[30px] shrink-0 items-center justify-center rounded-md bg-mf-auto-violet/12">
+                <Icon size={15} className="text-mf-auto-violet" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">

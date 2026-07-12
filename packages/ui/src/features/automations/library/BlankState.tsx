@@ -4,10 +4,10 @@
  * behind `DESCRIBE_ENABLED`) and "Build it" (straight to the editor).
  *
  * Deviates from the ts153 prototype's violet accent for "Build it": that hue
- * lived on the v1 `--mf-wf-violet` token slated for deletion in UI Phase 7
- * (plan §"Deletion inventory"), and introducing a new global token is out of
- * this phase's scope. "Build it" uses a neutral/foreground treatment instead
- * of a second brand hue.
+ * is `--mf-auto-violet` (re-homed from the deleted v1 workflows UI's
+ * equivalent token in UI Phase 7), already spoken for by the action step
+ * chrome elsewhere in this feature — "Build it" uses a neutral/foreground
+ * treatment instead of a second brand hue to avoid a color-meaning clash.
  */
 import React from 'react';
 import { ChevronRight, SlidersHorizontal, Wand2, Zap } from 'lucide-react';

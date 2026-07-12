@@ -7,10 +7,10 @@
  * entries. `if` reuses `--mf-accent-violet` (an exact hue match for the
  * prototype's If color); `repeat` deliberately reuses `item`'s green — the
  * block bracket and its ⟨Current item⟩ chip are the same hue in ts153 too.
- * `notify` has no pre-seeded `--mf-wf-*` token (only violet/kind-question/
+ * `notify` has no pre-seeded `--mf-auto-*` token (only violet/kind-question/
  * kind-loop/kind-parallel/kind-call exist, none teal) — reusing
  * `--mf-accent-amber` here rather than hardcoding a new hex; flagged for
- * design review when Phase 7 re-homes these as `--mf-auto-*`.
+ * design review.
  */
 import type { LucideIcon } from 'lucide-react';
 import { Bell, GitBranch, MessageCircle, Plug, RotateCw, Sparkles } from 'lucide-react';

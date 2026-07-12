@@ -65,8 +65,8 @@ export function TriggerRow({ trigger, onChange, testId }: TriggerRowProps) {
       data-testid={testId}
       className="flex items-start gap-2.5 rounded-md border-[0.5px] border-border bg-card p-2.5"
     >
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-mf-wf-kind-call/12">
-        <Icon size={14} className="text-mf-wf-kind-call" aria-hidden />
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-mf-auto-kind-call/12">
+        <Icon size={14} className="text-mf-auto-kind-call" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-label font-semibold text-foreground">{meta.label}</div>
