@@ -106,15 +106,15 @@ relaunch. No data migration is involved.
 ### Data compatibility (both directions)
 
 Both daemons share the **same SQLite migration chain** and target the same
-`PRAGMA user_version` (`LATEST_VERSION = 24`, identical between the TS `migrations.ts` and
+`PRAGMA user_version` (`LATEST_VERSION = 25`, identical between the TS `migrations.ts` and
 the Rust `migrations.rs`). `run_migrations` applies only migrations `> current user_version`
-and stamps `user_version` after each, so switching node↔rust at v24 is a no-op in either
+and stamps `user_version` after each, so switching node↔rust at v25 is a no-op in either
 direction — the DB is left untouched.
 
 **Caveat — no down-migration.** SQLite `user_version` is monotonic and there is **no**
 down-migration path. Forward/back compatibility holds **only while both impls share the same
-`LATEST_VERSION`**. If a future Rust build ships migration 25 and a user then rolls back to a
-Node build still at 24:
+`LATEST_VERSION`**. If a future Rust build ships migration 26 and a user then rolls back to a
+Node build still at 25:
 - The Node daemon opens the v25 DB without downgrading (it only *adds* migrations), but any
   column/table added by migration 25 is invisible to it and writes may violate the older
   schema's assumptions.
@@ -196,7 +196,7 @@ point the release job's Tauri build at the canary variant — either set the tau
 | **macOS arm64** (`aarch64-apple-darwin`) | **Verified** — canary + soak + 84-route diff on this host | — |
 | macOS x64 (`x86_64-apple-darwin`) | **TODO** | Build `mainframe-daemon` for the triple; stage as `binaries/mainframe-daemon-x86_64-apple-darwin` (Tauri `externalBin` requires the triple-suffixed name). Codesign the Mach-O. Re-run the canary matrix on an Intel host. |
 | Windows x64 (`x86_64-pc-windows-msvc`) | **TODO — platform-sensitive** | Signal semantics are **unix-only**: process teardown shells out to `kill` — launch stop uses `kill -<SIG> -<pid>` (process-group SIGTERM→5s→SIGKILL, `launch_manager.rs`) and LSP shutdown uses `kill -TERM <pid>` (`lsp_manager.rs::send_sigterm`). **Windows has no `kill`** — both are flagged platform-sensitive for the Windows packaging pass and need a Windows teardown path (e.g. `taskkill` / job objects) before Windows is viable. |
-| Linux x64 (`x86_64-unknown-linux-gnu`) | **TODO** | Build + stage the triple binary; the unix `kill` teardown paths already apply. Re-run the canary matrix. |
+| Linux x64 (`x86_64-unknown-linux-gnu`) | **TODO** | Build + stage the triple binary; the unix `kill` teardown paths already apply. Re-run the canary matrix. Also: the shebang-child sweep integration test (`records_a_shebang_child…`) is ignored on Linux — `process_matches_launch` compares against macOS-shaped `ps` argv; revisit the matcher against Linux `ps` output. |
 
 Cross-cutting for every non-arm64 target: `tauri.conf.json` `externalBin` entries resolve to
 **target-triple-suffixed** binaries next to the app exe; each CI runner must build/stage its

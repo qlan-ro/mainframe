@@ -39,7 +39,11 @@ function makeDb(initial: Record<string, string> = {}) {
 function makeApp(db = makeDb(), adapterIds: string[] = ['claude']) {
   const app = express();
   app.use(express.json());
-  const adapters = { getAll: () => adapterIds.map((id) => ({ id })) };
+  const adapters = {
+    getAll: () => adapterIds.map((id) => ({ id })),
+    // main's #441 providers route normalizes saved defaultModels against the live catalog.
+    getSnapshots: () => adapterIds.map((id) => ({ id, models: [] })),
+  };
   app.use(settingRoutes({ db, chats: {} as any, adapters } as any));
   return { app, db };
 }
