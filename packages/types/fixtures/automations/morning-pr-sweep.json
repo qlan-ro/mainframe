@@ -1,0 +1,35 @@
+{
+  "name": "Morning PR sweep",
+  "description": "Every weekday morning, list my open PRs and dispatch a codex review agent for each one.",
+  "scope": "global",
+  "definition": {
+    "triggers": [
+      {
+        "id": "trigger-weekdays-9",
+        "kind": "schedule",
+        "schedule": { "type": "weekdays", "at": "09:00" },
+        "onMissed": "run_once"
+      }
+    ],
+    "steps": [
+      {
+        "id": "list-open-prs",
+        "kind": "run_action",
+        "actionId": "github.list_prs",
+        "params": { "author": ["@me"] }
+      },
+      {
+        "id": "repeat-prs",
+        "kind": "repeat",
+        "items": { "stepId": "list-open-prs", "output": "prs" },
+        "steps": [
+          {
+            "id": "ask-review-pr",
+            "kind": "ask_agent",
+            "prompt": ["/codex-review ", { "token": { "stepId": "current", "output": "item", "field": "url" } }]
+          }
+        ]
+      }
+    ]
+  }
+}

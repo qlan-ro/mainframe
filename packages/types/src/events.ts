@@ -2,6 +2,7 @@ import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
+import type { AutomationRunSummary, AutomationInteractionSummary } from './automation.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
@@ -86,15 +87,25 @@ export type DaemonEvent =
   | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask }
-  | { type: 'workflow.run.updated'; run: import('./workflow.js').WorkflowRunSummary }
+  | { type: 'automation.run.updated'; run: AutomationRunSummary }
+  | { type: 'automation.interaction.created'; interaction: AutomationInteractionSummary }
+  | { type: 'automation.interaction.resolved'; interactionId: string; runId: string }
   | {
-      type: 'workflow.step.updated';
+      type: 'automation.completed';
+      automationId: string;
+      automationName: string;
       runId: string;
-      step: Pick<import('./workflow.js').WorkflowStepSummary, 'stepPath' | 'stepId' | 'status' | 'attempt'>;
+      status: 'succeeded' | 'failed';
+      result: string;
     }
-  | { type: 'workflow.interaction.created'; interaction: import('./workflow.js').WorkflowInteractionSummary }
-  | { type: 'workflow.interaction.resolved'; interactionId: string; runId: string }
-  | { type: 'workflow.completed'; workflowId: string; workflowName: string; runId: string; outputs: unknown };
+  | {
+      type: 'automation.notification';
+      runId: string;
+      automationId: string;
+      title: string;
+      body: string;
+      links: { runId: string; chatIds: string[] };
+    };
 
 export type ClientEvent =
   | {

@@ -23,6 +23,9 @@ export function createAuthMiddleware(secret: string | null, devicesRepo?: Device
 
     if (UNAUTHENTICATED_PATHS.has(req.path)) return next();
     if (req.path === '/health') return next();
+    // Webhook ingress authenticates via its own HMAC signature (contract §4),
+    // not a Bearer token — exemption is path-scoped, never a blanket bypass.
+    if (req.path.startsWith('/api/automation-webhooks/')) return next();
 
     if (isLocalhost(req)) {
       tryAttachAuth(req, secret, devicesRepo);

@@ -1,0 +1,86 @@
+{
+  "name": "Ship work",
+  "description": "Manually runnable: optionally file an ADO work item, open the PR, then clean up the worktree.",
+  "scope": "global",
+  "definition": {
+    "triggers": [],
+    "steps": [
+      {
+        "id": "ask-ado-link",
+        "kind": "ask_me",
+        "title": "Link an ADO item?",
+        "fields": [
+          {
+            "key": "action",
+            "type": "choice",
+            "label": "Action",
+            "options": ["link existing", "create new", "skip"],
+            "required": true
+          },
+          {
+            "key": "adoId",
+            "type": "text",
+            "label": "ADO item ID",
+            "showWhen": { "key": "action", "equals": "link existing" }
+          },
+          {
+            "key": "title",
+            "type": "text",
+            "label": "Title",
+            "showWhen": { "key": "action", "equals": "create new" }
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "label": "Description",
+            "showWhen": { "key": "action", "equals": "create new" }
+          }
+        ]
+      },
+      {
+        "id": "if-create-new",
+        "kind": "if",
+        "match": "all",
+        "conditions": [
+          { "token": { "stepId": "ask-ado-link", "output": "action" }, "comparator": "is", "value": "create new" }
+        ],
+        "then": [
+          {
+            "id": "create-ado-item",
+            "kind": "run_action",
+            "actionId": "ado.create_item",
+            "params": {
+              "org": ["my-org"],
+              "project": ["my-project"],
+              "type": ["Task"],
+              "title": [{ "token": { "stepId": "ask-ado-link", "output": "title" } }],
+              "description": [{ "token": { "stepId": "ask-ado-link", "output": "description" } }]
+            }
+          }
+        ],
+        "otherwise": []
+      },
+      {
+        "id": "create-pr",
+        "kind": "run_action",
+        "actionId": "github.create_pr",
+        "params": {
+          "repo": ["my-org/my-repo"],
+          "title": [{ "token": { "stepId": "ask-ado-link", "output": "title" } }],
+          "body": ["Ships the work.", " AB#", { "token": { "stepId": "create-ado-item", "output": "workItemId" } }],
+          "head": ["ship/", { "token": { "stepId": "builtin", "output": "today" } }],
+          "base": ["main"]
+        }
+      },
+      {
+        "id": "cleanup-worktree",
+        "kind": "ask_agent",
+        "prompt": [
+          "Remove the worktree for ship/",
+          { "token": { "stepId": "builtin", "output": "today" } },
+          " and leave everything consistent."
+        ]
+      }
+    ]
+  }
+}

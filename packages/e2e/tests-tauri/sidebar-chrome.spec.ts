@@ -7,11 +7,14 @@
  * Testid reference (verified against source):
  *   sidebar-settings-button    — layout/SidebarHeader.tsx SettingsBtn
  *   sidebar-tasks-button       — layout/SidebarHeader.tsx TasksBtn (dispatches `mf:open-tasks`)
- *   sidebar-workflows-button   — layout/SidebarHeader.tsx WorkflowsBtn (dispatches `mf:open-workflows`)
+ *   sidebar-workflows-button   — layout/SidebarHeader.tsx WorkflowsBtn (opens the Automations v2 host via
+ *                                `useAutomationsNav().openHost()`; testid/copy kept from v1 — Automations v2
+ *                                UI Phase 7 replaced the modal it opens, not the sidebar entry point)
  *   sidebar-hide-button        — layout/SidebarHeader.tsx HideSidebarBtn (toggles ui-prefs.sidebarVisible)
  *   settings-dialog / settings-dialog-close — features/settings/SettingsDialog.tsx
  *   tasks-board-modal / tasks-board-close   — features/tasks/TasksBoard.tsx (mounted by TasksModalHost)
- *   workflows-modal            — features/workflows/WorkflowsModalHost.tsx DialogContent
+ *   automations-host / automations-view / automations-close — features/automations/AutomationsHost.tsx +
+ *                                AutomationsView.tsx (fullview panel; v1's `workflows-modal` was deleted)
  *   sessions-sidebar           — layout/SidebarShell.tsx root (unmounts entirely when hidden — AppShell.tsx
  *                                `{sidebarRendered && <SidebarShell/>}`)
  *   show-sidebar-button        — layout/MainToolbar.tsx (rendered only when `!sidebarRendered`)
@@ -80,35 +83,18 @@ test.describe('§sidebar-chrome', () => {
     await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('workflows button opens the workflows modal', async () => {
+  test('workflows button opens the automations panel', async () => {
     const { page } = app;
     await page.getByTestId('sidebar-workflows-button').click();
-    await expect(page.getByTestId('workflows-modal')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('workflows-close').click();
-    await expect(page.getByTestId('workflows-modal')).toHaveCount(0, { timeout: 5_000 });
-  });
-
-  // Previously: a single Escape press didn't close the workflows modal —
-  // Radix Dialog's default `onOpenAutoFocus` moved keyboard focus to the
-  // Hint-wrapped `workflows-close` button, whose Tooltip opened on focus and
-  // mounted its own dismissable layer *above* the dialog's, so the first
-  // Escape dismissed the tooltip instead. Fixed by the product-bug-fix
-  // campaign — `WorkflowsModalHost`'s `onOpenAutoFocus` now focuses the
-  // dialog content itself instead of letting Radix autofocus the close
-  // button.
-  test('Escape closes the workflows modal on the first press', async () => {
-    const { page } = app;
-    await page.getByTestId('sidebar-workflows-button').click();
-    await expect(page.getByTestId('workflows-modal')).toBeVisible({ timeout: 10_000 });
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('workflows-modal')).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('automations-host')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('automations-close').click();
+    await expect(page.getByTestId('automations-host')).toHaveCount(0, { timeout: 5_000 });
   });
 
   // TODO(recording): the pending-dot (SidebarHeader.tsx WorkflowsBtn, `pending > 0` from
-  // useWorkflowsStore.selectPendingCount / state.interactions.length) is populated by the
-  // workflows WS event stream when a run pauses on a needs-you interaction — there's no REST
-  // seed for that state. Needs a workflow fixture with a paused run; unskip once one exists.
+  // selectPendingInteractionCount(useAutomationsStore)) is populated by the automations WS
+  // event stream when a run pauses on a needs-you interaction — there's no REST seed for that
+  // state. Needs an automation fixture with a paused run; unskip once one exists.
   test.skip('workflows button shows a pending dot when a run needs input', async () => {});
 
   test('footer shows the daemon connected status', async () => {

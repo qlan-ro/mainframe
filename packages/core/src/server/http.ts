@@ -27,10 +27,11 @@ import {
   worktreeRoutes,
   chatRecoveryRoutes,
   tagRoutes,
-  workflowRoutes,
+  automationRoutes,
   suggestionRoutes,
 } from './routes/index.js';
-import { workflowAdminRoutes } from './routes/workflow-admin.js';
+import { automationAdminRoutes } from './routes/automation-admin.js';
+import { automationWebhookRoutes } from './routes/automation-webhook.js';
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
 import { deviceRoutes } from './routes/device.js';
@@ -41,7 +42,7 @@ import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { LspManager } from '../lsp/index.js';
 import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
-import type { WorkflowService } from '../workflows/index.js';
+import type { AutomationService } from '../automations/service.js';
 
 const log = createChildLogger('http');
 
@@ -57,7 +58,7 @@ export interface HttpServerDeps {
   port?: number;
   lspManager?: LspManager;
   backgroundTasks?: BackgroundTaskTracker;
-  workflows?: WorkflowService;
+  automations?: AutomationService;
 }
 
 export function createHttpServer(deps: HttpServerDeps): { app: Express; pushService: PushService } {
@@ -73,7 +74,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     port,
     lspManager,
     backgroundTasks,
-    workflows,
+    automations,
   } = deps;
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -94,6 +95,11 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     next();
   });
 
+  // Webhook signatures are computed over the exact request bytes — this must
+  // stay ahead of the global express.json() below. body-parser's shared
+  // `req._body` flag makes express.json() skip a request already parsed
+  // here, so the raw Buffer survives to automation-webhook.ts untouched.
+  app.use('/api/automation-webhooks', express.raw({ type: '*/*', limit: '5mb' }));
   app.use(express.json({ limit: '30mb' }));
 
   const authSecret = process.env.AUTH_TOKEN_SECRET ?? null;
@@ -126,7 +132,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     setTunnelUrl,
     port,
     backgroundTasks,
-    workflows,
+    automations,
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
@@ -151,8 +157,9 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(worktreeRoutes(ctx));
   app.use(chatRecoveryRoutes(ctx));
   app.use(tagRoutes(ctx));
-  app.use(workflowRoutes(ctx));
-  app.use(workflowAdminRoutes(ctx));
+  app.use(automationRoutes(ctx));
+  app.use(automationAdminRoutes(ctx));
+  app.use(automationWebhookRoutes(ctx));
 
   if (backgroundTasks) {
     app.use(
