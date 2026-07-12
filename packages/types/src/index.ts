@@ -17,7 +17,6 @@ export * from './git.js';
 export * from './suggestion.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
-export * from './workflow.js';
 export * from './automation.js';
 export * from './automation-domain/index.js';
 export * from './api.js';
