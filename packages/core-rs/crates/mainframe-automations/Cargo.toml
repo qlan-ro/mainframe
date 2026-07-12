@@ -1,5 +1,5 @@
 [package]
-name = "mainframe-workflows"
+name = "mainframe-automations"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

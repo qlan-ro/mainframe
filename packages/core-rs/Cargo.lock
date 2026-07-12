@@ -925,6 +925,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-automations"
+version = "0.0.0"
+dependencies = [
+ "mainframe-types",
+ "serde",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "mainframe-background-tasks"
 version = "0.0.0"
 dependencies = [
@@ -1153,16 +1163,6 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "mainframe-workflows"
-version = "0.0.0"
-dependencies = [
- "mainframe-types",
- "serde",
- "thiserror",
- "tokio",
 ]
 
 [[package]]

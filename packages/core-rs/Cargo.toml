@@ -33,11 +33,12 @@ dirs = "6"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 # Pairing QR in the daemon's `pair` subcommand (Phase 5).
 qrcode = "0.14"
-# NOTE: the workflow engine (serde_yaml/cron/jsonata) is deliberately NOT ported
-# yet — the TS workflows feature is not stable. mainframe-workflows stays an
-# empty crate; its deps are added when the feature stabilizes.
+# Cron parsing for the automations scheduler.
+croner = "3"
 # Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
 tempfile = "3"
+# Test-only: HTTP mocking for automations action tests (use as a dev-dependency).
+wiremock = "0.6"
 
 mainframe-types = { path = "crates/mainframe-types" }
 mainframe-runtime = { path = "crates/mainframe-runtime" }
@@ -52,7 +53,7 @@ mainframe-chat = { path = "crates/mainframe-chat" }
 mainframe-background-tasks = { path = "crates/mainframe-background-tasks" }
 mainframe-launch = { path = "crates/mainframe-launch" }
 mainframe-lsp = { path = "crates/mainframe-lsp" }
-mainframe-workflows = { path = "crates/mainframe-workflows" }
+mainframe-automations = { path = "crates/mainframe-automations" }
 mainframe-services = { path = "crates/mainframe-services" }
 mainframe-server = { path = "crates/mainframe-server" }
 
