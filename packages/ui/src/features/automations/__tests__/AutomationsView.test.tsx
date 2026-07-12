@@ -55,3 +55,10 @@ it('shows the (lazy-loaded) run section when a run id is open, taking precedence
   // RunView is React.lazy too — same Suspense-swap reasoning as the editor test above.
   expect(await screen.findByTestId('automations-section-run')).toBeInTheDocument();
 });
+
+it('shows the describe section when describeOpen is set, below run/editor precedence', () => {
+  useAutomationsStore.setState({ definitions: [], runs: [], catalog: [] });
+  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true });
+  render(<AutomationsView />);
+  expect(screen.getByTestId('automations-section-describe')).toBeInTheDocument();
+});

@@ -7,46 +7,17 @@
  * logic, so it stays in the component rather than `domain/`.
  */
 import React, { useState } from 'react';
-import { Calendar, Globe, Pencil, Play, Zap } from 'lucide-react';
+import { Pencil, Play, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { mfToast } from '@/lib/toast';
-import type { AutomationRunSummary, AutomationSummary, AutomationTrigger } from '../contract';
-import { summarizeTrigger } from '../domain/trigger-summary';
+import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { LastRunPill } from './LastRunPill';
-
-const TRIGGER_ICON: Record<
-  AutomationTrigger['kind'],
-  React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
-> = {
-  schedule: Calendar,
-  event: Zap,
-  webhook: Globe,
-};
-
-function TriggerChips({ triggers }: { triggers: AutomationTrigger[] }): React.ReactElement | null {
-  if (triggers.length === 0) return null;
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      {triggers.map((trigger) => {
-        const Icon = TRIGGER_ICON[trigger.kind];
-        return (
-          <span
-            key={trigger.id}
-            className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-2 text-caption font-medium text-muted-foreground"
-          >
-            <Icon size={11} aria-hidden />
-            {summarizeTrigger(trigger)}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
+import { TriggerChips } from './TriggerChips';
 
 function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;

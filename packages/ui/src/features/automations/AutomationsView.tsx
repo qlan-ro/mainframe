@@ -1,15 +1,17 @@
 /**
- * AutomationsView — the shell: header + body switch (library | editor | run).
- * Phase 1 wires in `library/LibraryList`; Phase 3 lazy-loads `editor/
- * AutomationEditor`; Phase 5 lazy-loads `run/RunView`. The describe flow
- * (Phase 5, behind `DESCRIBE_ENABLED`) still replaces its placeholder body
- * below as it lands.
+ * AutomationsView — the shell: header + body switch (run | editor | describe
+ * | library, in that precedence order). Phase 1 wires in `library/
+ * LibraryList`; Phase 3 lazy-loads `editor/AutomationEditor`; Phase 5 lazy-
+ * loads `run/RunView` and wires in `describe/DescribeFlow` (not lazy —
+ * behind `DESCRIBE_ENABLED`, no heavy deps, reachable only from the empty-
+ * library `BlankState`).
  */
 import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
+import { DescribeFlow } from './describe/DescribeFlow';
 import { LibraryList } from './library/LibraryList';
 
 const AutomationEditor = lazy(() => import('./editor/AutomationEditor').then((m) => ({ default: m.AutomationEditor })));
@@ -23,6 +25,7 @@ export function AutomationsView(): React.ReactElement {
   const close = useAutomationsNav((s) => s.close);
   const editorTarget = useAutomationsNav((s) => s.editorTarget);
   const runId = useAutomationsNav((s) => s.runId);
+  const describeOpen = useAutomationsNav((s) => s.describeOpen);
   const definitions = useAutomationsStore((s) => s.definitions);
   const pending = useAutomationsStore(selectPendingInteractionCount);
 
@@ -56,6 +59,10 @@ export function AutomationsView(): React.ReactElement {
           ) : editorTarget ? (
             <div data-testid="automations-section-editor" className="h-full overflow-hidden">
               <AutomationEditor />
+            </div>
+          ) : describeOpen ? (
+            <div data-testid="automations-section-describe" className="h-full overflow-hidden">
+              <DescribeFlow />
             </div>
           ) : (
             <div data-testid="automations-section-library" className="h-full">

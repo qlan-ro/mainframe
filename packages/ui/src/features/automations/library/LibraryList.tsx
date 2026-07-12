@@ -26,13 +26,14 @@ export function LibraryList(): React.ReactElement {
   const definitions = useAutomationsStore((s) => s.definitions);
   const runs = useAutomationsStore((s) => s.runs);
   const openEditor = useAutomationsNav((s) => s.openEditor);
+  const openDescribe = useAutomationsNav((s) => s.openDescribe);
 
   const handleBuild = (): void => openEditor({ mode: 'new' });
 
   if (definitions.length === 0) {
     return (
       <div data-testid="automations-library" className="h-full">
-        <BlankState onDescribe={() => {}} onBuild={handleBuild} describeEnabled={DESCRIBE_ENABLED} />
+        <BlankState onDescribe={openDescribe} onBuild={handleBuild} describeEnabled={DESCRIBE_ENABLED} />
       </div>
     );
   }
