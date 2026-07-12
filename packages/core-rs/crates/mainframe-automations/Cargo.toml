@@ -14,9 +14,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
+dirs = { workspace = true }
+reqwest = { workspace = true }
 nanoid = { workspace = true }
 tracing = { workspace = true }
 mainframe-types = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+wiremock = { workspace = true }

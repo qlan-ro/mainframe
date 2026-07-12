@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod actions;
 pub mod credentials;
 pub mod domain;
 pub mod engine;
