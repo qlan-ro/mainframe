@@ -89,8 +89,8 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
       <>
         Scheduled: <span className="text-primary">{human}</span>
         {' · '}
-        <span className="text-mf-text-4">{recurring ? 'recurring' : 'one-shot'}</span>
-        {durable === false && <span className="text-mf-text-4"> · session-only</span>}
+        <span className="text-mf-text-3">{recurring ? 'recurring' : 'one-shot'}</span>
+        {durable === false && <span className="text-mf-text-3"> · session-only</span>}
       </>
     );
   }
@@ -126,19 +126,19 @@ function buildBody(kind: ScheduleKind, parsed: unknown, text: string): React.Rea
     const jobs = Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
     if (jobs.length === 0) return null;
     return (
-      <div className="flex flex-col gap-1.5 font-mono text-caption text-mf-text-3">
+      <div className="flex flex-col gap-1.5 font-mono text-label text-muted-foreground">
         {jobs.map((j) => (
           <div key={String(j['id'] ?? '')}>
             <div>
               {'• '}
               <span className="text-primary">{String(j['id'] ?? '')}</span>{' '}
               {String(j['humanSchedule'] ?? j['cron'] ?? '')}{' '}
-              <span className="text-mf-text-4">
+              <span className="text-mf-text-3">
                 ({j['recurring'] ? 'recurring' : 'one-shot'}
                 {j['durable'] === false ? ', session-only' : ''})
               </span>
             </div>
-            {Boolean(j['prompt']) && <div className="pl-3 text-mf-text-4">prompt: {String(j['prompt'])}</div>}
+            {Boolean(j['prompt']) && <div className="pl-3 text-mf-text-3">prompt: {String(j['prompt'])}</div>}
           </div>
         ))}
       </div>
@@ -195,7 +195,7 @@ function buildScheduleCard(kind: ScheduleKind): ToolCallMessagePartComponent {
         onClick={toggle}
         testId={`chat-schedule-${kind.toLowerCase()}-pill`}
       >
-        <span className="font-mono text-caption text-mf-text-3">{label}</span>
+        <span className="font-mono text-label text-muted-foreground">{label}</span>
       </MarkerPill>
     );
 

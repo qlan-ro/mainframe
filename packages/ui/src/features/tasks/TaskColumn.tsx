@@ -9,6 +9,7 @@
  */
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { CountBadge } from '@/components/ui/count-badge';
 import { TaskCard } from './TaskCard';
 import type { Todo, TodoStatus } from '@/lib/api/todos';
 
@@ -65,10 +66,8 @@ export function TaskColumn({
       {/* Column header — chip sits adjacent to the label at a 7px gap, not
           right-aligned (design: 12-todos.jsx:617, finding 9.15). */}
       <div className="flex shrink-0 items-center gap-[7px] px-3.5 pb-4 pt-2.5">
-        <span className="text-caption font-bold uppercase tracking-wide text-muted-foreground">
-          {STATUS_LABEL[status]}
-        </span>
-        <span className="rounded-md bg-mf-chip px-1.5 py-px font-mono text-micro text-mf-text-3">{todos.length}</span>
+        <span className="text-caption font-medium text-muted-foreground">{STATUS_LABEL[status]}</span>
+        <CountBadge count={todos.length} variant="info" />
       </div>
 
       {/* Cards — 9px gap per design (12-todos.jsx:621, finding 9.14) */}

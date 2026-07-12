@@ -198,7 +198,7 @@ describe('AskUserQuestionGate', () => {
     const option = screen.getByTestId('chat-question-option-0-MP4');
     const indicator = option.querySelector('[data-radio-indicator]');
     expect(indicator).not.toBeNull();
-    expect(indicator).toHaveClass('size-[17px]', 'border-[1.5px]', 'border-mf-text-4');
+    expect(indicator).toHaveClass('size-[17px]', 'border-[1.5px]', 'border-input');
 
     fireEvent.click(option);
     expect(indicator).toHaveClass('border-[5px]', 'border-primary');

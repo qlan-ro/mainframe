@@ -48,7 +48,7 @@ export function ExternalSessionRow({
           text={session.title ?? (session.firstPrompt ? cleanPromptDisplay(session.firstPrompt) : 'Untitled session')}
           className="block text-body font-medium text-foreground"
         />
-        <div className="mt-0.5 flex items-center gap-1 text-caption text-mf-text-3">
+        <div className="mt-0.5 flex items-center gap-1 text-caption text-muted-foreground">
           {session.gitBranch && (
             <>
               <GitBranch className="size-2.5 shrink-0" />
@@ -89,7 +89,7 @@ export function ExternalSessionRow({
             'Import'
           )}
         </button>
-        <div className="flex items-center gap-1 whitespace-nowrap text-caption text-mf-text-3">
+        <div className="flex items-center gap-1 whitespace-nowrap text-caption text-muted-foreground">
           <Clock className="size-2.5 shrink-0" />
           <span>{formatIsoRelative(session.modifiedAt)}</span>
         </div>

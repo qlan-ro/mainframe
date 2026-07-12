@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { FileText, Wand2, Bot } from 'lucide-react';
 import { useUiPrefs, type BottomPanelTab } from '@/store/ui-prefs';
+import { CountBadge } from '@/components/ui/count-badge';
 import { useSessionContext } from './use-session-context';
 import { useSidebarSkills } from './use-sidebar-skills';
 import { sessionItemCount } from './derive-session-items';
@@ -42,17 +43,15 @@ export function BottomPanel() {
                 type="button"
                 data-testid={`sidebar-bottom-tab-${t.id}`}
                 onClick={() => setTab(t.id)}
-                className={`inline-flex flex-1 items-center justify-center gap-[5px] rounded-[5px] px-[6px] py-[4px] text-caption ${
+                className={`inline-flex flex-1 items-center justify-center gap-[5px] rounded-[5px] px-[6px] py-[4px] text-label ${
                   active
                     ? 'bg-mf-tab-active font-semibold text-foreground shadow-[var(--mf-shadow-rail-active)]'
                     : 'font-medium text-muted-foreground hover:bg-accent'
                 }`}
               >
-                <Icon size={11} className={active ? 'text-primary' : 'text-muted-foreground'} aria-hidden />
+                <Icon size={14} className={active ? 'text-primary' : 'text-muted-foreground'} aria-hidden />
                 <span>{t.label}</span>
-                <span className={`text-micro font-semibold ${active ? 'text-primary' : 'text-mf-text-4'}`}>
-                  {t.count}
-                </span>
+                <CountBadge count={t.count} variant={active ? 'unread' : 'info'} />
               </button>
             );
           })}

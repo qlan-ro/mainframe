@@ -49,7 +49,7 @@ export function AboutPane() {
               i < rows.length - 1 && 'border-b-[0.5px] border-border',
             )}
           >
-            <span className="w-20 shrink-0 text-label text-mf-text-3">{row.label}</span>
+            <span className="w-20 shrink-0 text-label text-muted-foreground">{row.label}</span>
             <TruncatedWithTooltip
               text={row.value}
               data-testid={row.testId}

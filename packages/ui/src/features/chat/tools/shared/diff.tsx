@@ -114,14 +114,14 @@ function DiffLineRow({ kind, content, oldNum = '', newNum = '', rowKey }: DiffLi
 
   const addSign = <span className="shrink-0 w-5 select-none text-mf-diff-add-text text-center">+</span>;
   const delSign = <span className="shrink-0 w-5 select-none text-mf-diff-del-text text-center">-</span>;
-  const ctxSign = <span className="shrink-0 w-5 select-none text-mf-text-4 text-center"> </span>;
+  const ctxSign = <span className="shrink-0 w-5 select-none text-mf-text-3 text-center"> </span>;
 
   return (
     <div key={rowKey} className={rowClass}>
       {/* old line number */}
-      <span className="shrink-0 w-8 select-none text-mf-text-4 text-right pr-1">{kind === 'add' ? '' : oldNum}</span>
+      <span className="shrink-0 w-8 select-none text-mf-text-3 text-right pr-1">{kind === 'add' ? '' : oldNum}</span>
       {/* new line number */}
-      <span className="shrink-0 w-8 select-none text-mf-text-4 text-right pr-2">{kind === 'del' ? '' : newNum}</span>
+      <span className="shrink-0 w-8 select-none text-mf-text-3 text-right pr-2">{kind === 'del' ? '' : newNum}</span>
       {/* sign column */}
       {kind === 'add' ? addSign : kind === 'del' ? delSign : ctxSign}
       {/* content */}
@@ -159,7 +159,7 @@ function HunkSeparator() {
 
 export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
   return (
-    <div className="font-mono text-caption leading-5 overflow-x-auto bg-mf-code-bg">
+    <div className="font-mono text-label leading-5 overflow-x-auto bg-mf-code-bg">
       {hunks.map((hunk, hi) => (
         <React.Fragment key={hi}>
           {hi > 0 && <HunkSeparator />}
@@ -211,7 +211,7 @@ export function DiffFallback({
   const hasLineNums = startLine !== null;
 
   return (
-    <div className="font-mono text-caption leading-5 overflow-x-auto bg-mf-code-bg">
+    <div className="font-mono text-label leading-5 overflow-x-auto bg-mf-code-bg">
       {oldLines.map((line, i) => (
         <DiffLineRow
           key={`old-${i}`}

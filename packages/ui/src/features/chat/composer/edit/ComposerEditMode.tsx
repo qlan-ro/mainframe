@@ -56,11 +56,11 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         </span>
         <span className="text-label font-semibold text-foreground">Editing queued message</span>
         {saveError ? (
-          <span className="text-caption text-destructive">{saveError}</span>
+          <span className="text-label text-destructive">{saveError}</span>
         ) : (
-          <span className="text-caption text-mf-text-3">· stays queued until the run finishes</span>
+          <span className="text-label text-muted-foreground">· stays queued until the run finishes</span>
         )}
-        <span className="ml-auto font-mono text-micro text-mf-text-4">esc to cancel</span>
+        <span className="ml-auto font-mono text-caption text-muted-foreground">esc to cancel</span>
       </div>
 
       <textarea
@@ -95,7 +95,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
             type="button"
             data-testid="chat-composer-edit-cancel"
             onClick={onDone}
-            className="rounded-md px-[12px] py-1.5 text-caption font-medium text-foreground transition-colors hover:bg-accent [border-width:0.5px] border-border"
+            className="rounded-md px-[12px] py-1.5 text-label font-medium text-foreground transition-colors hover:bg-accent [border-width:0.5px] border-border"
           >
             Cancel edit
           </button>
@@ -105,7 +105,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
             onClick={handleSave}
             disabled={saving}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md bg-primary pl-[11px] pr-[13px] py-1.5 text-caption font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50',
+              'inline-flex items-center gap-1.5 rounded-md bg-primary pl-[11px] pr-[13px] py-1.5 text-label font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50',
             )}
           >
             <CheckIcon size={14} />

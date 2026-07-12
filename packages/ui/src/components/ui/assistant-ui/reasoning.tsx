@@ -131,7 +131,7 @@ function ReasoningTrigger({
       data-slot="reasoning-trigger"
       data-testid="chat-reasoning-toggle"
       className={cn(
-        'aui-reasoning-trigger group/trigger text-mf-text-3 hover:text-muted-foreground',
+        'aui-reasoning-trigger group/trigger text-muted-foreground hover:text-foreground',
         'flex max-w-[75%] items-center gap-1.5 py-1 text-caption transition-colors',
         className,
       )}
@@ -174,7 +174,7 @@ function ReasoningContent({ className, children, ...props }: React.ComponentProp
     <CollapsibleContent
       data-slot="reasoning-content"
       className={cn(
-        'aui-reasoning-content text-muted-foreground relative overflow-hidden text-caption outline-none',
+        'aui-reasoning-content text-muted-foreground relative overflow-hidden text-label outline-none',
         'group/collapsible-content ease-out',
         'data-[state=closed]:animate-collapsible-up',
         'data-[state=open]:animate-collapsible-down',

@@ -63,7 +63,7 @@ export const TaskCard = React.memo(function TaskCard({
     >
       {/* Row 1: #number + title + type badge */}
       <div className="flex items-start gap-1.5 min-w-0">
-        <span className="shrink-0 font-mono text-caption font-medium text-primary leading-5">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-label font-medium text-primary leading-5">#{todo.number}</span>
         <span className="flex-1 min-w-0">
           <span
             className={cn(
@@ -86,7 +86,7 @@ export const TaskCard = React.memo(function TaskCard({
 
       {/* Dependencies line */}
       {todo.dependencies.length > 0 && (
-        <div className="text-caption text-muted-foreground">
+        <div className="text-label text-muted-foreground">
           Depends on {todo.dependencies.map((n) => `#${n}`).join(', ')}
         </div>
       )}
@@ -108,7 +108,7 @@ export const TaskCard = React.memo(function TaskCard({
         <span className="flex-1" />
         <Hint label={`Updated ${new Date(todo.updated_at).toLocaleDateString()}`}>
           <span className="inline-flex items-center gap-1 text-caption text-muted-foreground shrink-0 whitespace-nowrap">
-            <Clock size={10} aria-hidden />
+            <Clock size={12} aria-hidden />
             {relativeTime(todo.updated_at)}
           </span>
         </Hint>
@@ -124,7 +124,7 @@ export const TaskCard = React.memo(function TaskCard({
           ))}
           {attachmentCount != null && attachmentCount > 0 && (
             <span className="flex items-center gap-0.5 text-caption text-muted-foreground">
-              <Paperclip size={10} />
+              <Paperclip size={12} />
               {attachmentCount}
             </span>
           )}

@@ -29,9 +29,9 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
           <button
             data-testid="sessions-sort-button"
             type="button"
-            className="inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+            className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
           >
-            <ChevronsUpDownIcon className="size-[11px]" />
+            <ChevronsUpDownIcon className="size-3.5" />
           </button>
         </PopoverTrigger>
       </Hint>

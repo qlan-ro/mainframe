@@ -52,9 +52,9 @@ export function UpdatePill() {
       type="button"
       onClick={handleClick}
       disabled={status.state === 'downloading'}
-      className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] bg-primary/[0.08] px-2.5 text-caption font-semibold tracking-normal text-primary transition-colors hover:bg-primary/[0.14] disabled:cursor-default"
+      className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] bg-primary/[0.08] px-2.5 text-label font-semibold tracking-normal text-primary transition-colors hover:bg-primary/[0.14] disabled:cursor-default"
     >
-      <Download className="size-[11px]" aria-hidden />
+      <Download className="size-[12px]" aria-hidden />
       <span>{label}</span>
     </button>
   );

@@ -61,7 +61,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
     <div data-testid="settings-remote-access-pairing-section" className="space-y-3">
       <div>
         <label className="text-label font-semibold text-muted-foreground">Mobile Pairing</label>
-        <p className="text-micro text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
+        <p className="text-label text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
       </div>
 
       {code ? (
@@ -77,7 +77,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
           data-testid="pairing-generate-code"
           onClick={handleGenerate}
           disabled={generating}
-          className="inline-flex h-[30px] items-center justify-center px-[11px] text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="inline-flex h-[30px] items-center justify-center px-[11px] text-label bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {generating ? (
             <span className="flex items-center gap-1.5">
@@ -115,7 +115,7 @@ function PairingCodeDisplay({
         <CopyButton text={code} testId="pairing-code-copy" />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-micro text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           Expires in {minutes}:{seconds.toString().padStart(2, '0')}
         </span>
         <button

@@ -89,7 +89,7 @@ function TaskStatusIcon({ status }: { status: string }) {
     return <span className="h-3.5 w-3.5 shrink-0 animate-pulse rounded-sm border border-primary bg-primary" />;
   }
   // pending / unknown
-  return <span className="h-3.5 w-3.5 shrink-0 rounded-sm border border-mf-text-4" />;
+  return <span className="h-3.5 w-3.5 shrink-0 rounded-sm border border-mf-text-3" />;
 }
 
 // ── Single task row ───────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ function TaskRow({ task }: { task: TaskState }) {
               'truncate text-body',
               isCompleted && 'text-muted-foreground line-through',
               isInProgress && 'text-foreground',
-              !isCompleted && !isInProgress && 'text-mf-text-3',
+              !isCompleted && !isInProgress && 'text-muted-foreground',
             )}
             tabIndex={0}
           >
@@ -137,7 +137,7 @@ export const TaskProgressCard: ToolCallMessagePartComponent = (part) => {
         className="flex w-full items-center gap-1.5 py-0.5 text-caption text-muted-foreground hover:text-foreground transition-colors"
       >
         <span className="font-medium">Tasks</span>
-        <span className="text-mf-text-4">({tasks.length})</span>
+        <span className="text-mf-text-3">({tasks.length})</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="space-y-0.5 py-0.5">

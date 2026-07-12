@@ -116,16 +116,14 @@ function ToolGroupTrigger({
       <span
         data-testid="tool-group-trigger-label"
         data-slot="tool-group-trigger-label"
-        className={cn(
-          'aui-tool-group-trigger-label-wrapper text-start leading-none font-bold uppercase tracking-[0.5px] text-foreground',
-        )}
+        className={cn('aui-tool-group-trigger-label-wrapper text-start leading-none font-medium text-foreground')}
       >
         {label}
       </span>
       <span
         data-testid="tool-group-trigger-count"
         data-slot="tool-group-trigger-count"
-        className="font-mono text-micro text-mf-text-4"
+        className="font-mono text-caption text-muted-foreground"
       >
         {countLabel}
       </span>

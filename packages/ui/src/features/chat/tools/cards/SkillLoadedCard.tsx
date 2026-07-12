@@ -25,7 +25,7 @@ export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoa
   const expandable = content.length > 0;
 
   const pillLabel = (
-    <span className="font-mono text-caption text-mf-text-3">
+    <span className="font-mono text-label text-muted-foreground">
       Using skill: <span className="text-primary">{skillName}</span>
     </span>
   );
@@ -50,7 +50,7 @@ export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoa
           <TooltipTrigger asChild>
             <span>{pill}</span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="font-mono text-caption max-w-xs break-all">
+          <TooltipContent side="top" className="font-mono text-label max-w-xs break-all">
             {path}
           </TooltipContent>
         </Tooltip>

@@ -449,8 +449,8 @@ describe('ProjectFilterPillBar — project action affordance', () => {
     fireEvent.contextMenu(screen.getByTestId('sessions-filter-pill-p1-wrap'));
     expect(screen.getByTestId('sessions-project-rename-p1').textContent).toContain('Rename Project');
     expect(screen.getByTestId('sessions-project-rename-p1')).toHaveAttribute('data-disabled');
-    expect(screen.getByTestId('sessions-project-rename-p1').className).toContain('text-caption');
-    expect(screen.getByTestId('sessions-project-remove-p1').className).toContain('text-caption');
+    expect(screen.getByTestId('sessions-project-rename-p1').className).toContain('text-label');
+    expect(screen.getByTestId('sessions-project-remove-p1').className).toContain('text-label');
     await userEvent.click(screen.getByTestId('sessions-project-remove-p1'));
 
     expect(handleRemove).toHaveBeenCalledTimes(1);

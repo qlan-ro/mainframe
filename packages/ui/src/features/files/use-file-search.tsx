@@ -43,7 +43,7 @@ export function FileRow({
     >
       <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="text-body font-medium truncate">{result.name}</span>
-      <span className="text-caption text-muted-foreground truncate ml-auto">{dir}</span>
+      <span className="text-label text-muted-foreground truncate ml-auto">{dir}</span>
     </button>
   );
 }

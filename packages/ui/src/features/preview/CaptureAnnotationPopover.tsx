@@ -37,10 +37,10 @@ export function CaptureAnnotationPopover({
               className="w-full rounded-md border border-border object-contain"
               style={{ maxHeight: 80 }}
             />
-            {capture.selector && <span className="text-caption text-muted-foreground">{capture.selector}</span>}
+            {capture.selector && <span className="text-label text-muted-foreground">{capture.selector}</span>}
             <Textarea
               data-testid={`preview-annotation-input-${capture.id}`}
-              className="min-h-[44px] px-2 py-1.5 text-caption"
+              className="min-h-[44px] px-2 py-1.5 text-body"
               rows={2}
               placeholder="Add a note..."
               defaultValue={capture.annotation ?? ''}

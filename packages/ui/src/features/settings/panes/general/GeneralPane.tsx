@@ -36,12 +36,12 @@ export function GeneralPane({ port }: { port: number }) {
       <h2 className="text-title font-bold text-foreground">General</h2>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-label font-semibold text-mf-text-3">Appearance</h3>
+        <h3 className="text-label font-semibold text-muted-foreground">Appearance</h3>
         <AppearanceControls />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-label font-semibold text-mf-text-3">Worktree directory</h3>
+        <h3 className="text-label font-semibold text-muted-foreground">Worktree directory</h3>
         <p className="text-label text-muted-foreground">
           Relative path where worktrees are created inside project roots.
         </p>

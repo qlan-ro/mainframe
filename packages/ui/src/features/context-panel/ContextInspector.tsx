@@ -8,7 +8,7 @@ import { TasksSection } from './TasksSection';
 import { useSessionTodos } from '@/store/session-todos';
 
 function Muted({ text }: { text: string }) {
-  return <div className="py-4 text-center text-caption text-mf-text-3">{text}</div>;
+  return <div className="py-4 text-center text-caption text-muted-foreground">{text}</div>;
 }
 
 /** Context tab body: Global / Project / Session file groups (Tasks live elsewhere). */
@@ -44,7 +44,7 @@ export function ContextInspector() {
         ))}
         {context.attachments.length > 0 && (
           <div className="mt-1 px-[12px]">
-            <div className="mb-1 text-micro uppercase tracking-wide text-mf-text-3">Attachments</div>
+            <div className="mb-1 text-caption font-medium text-muted-foreground">Attachments</div>
             <SessionAttachmentsGrid chatId={chatId} attachments={context.attachments} />
           </div>
         )}

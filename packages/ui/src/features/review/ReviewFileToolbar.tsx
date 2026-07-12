@@ -28,10 +28,10 @@ export function ReviewFileToolbar({
   return (
     <div className="flex h-[40px] shrink-0 items-center gap-[10px] border-b border-border bg-mf-content2 px-[14px]">
       <span className="shrink-0 font-mono text-label font-semibold text-foreground">{name}</span>
-      {dir && <span className="min-w-0 truncate font-mono text-caption text-mf-text-4">{dir}/</span>}
+      {dir && <span className="min-w-0 truncate font-mono text-caption text-muted-foreground">{dir}/</span>}
       <span className="inline-flex gap-[7px] font-mono text-caption">
-        <span className="font-semibold text-mf-success">+{additions}</span>
-        <span className="font-semibold text-destructive">−{deletions}</span>
+        <span className="font-semibold text-mf-diff-add-text">+{additions}</span>
+        <span className="font-semibold text-mf-diff-del-text">−{deletions}</span>
       </span>
 
       <div className="flex-1" />
@@ -57,12 +57,12 @@ export function ReviewFileToolbar({
       >
         <span
           className={`inline-flex h-[15px] w-[15px] items-center justify-center rounded-[4px] border-[1.5px] ${
-            viewed ? 'border-mf-success bg-mf-success' : 'border-mf-text-4 bg-transparent'
+            viewed ? 'border-mf-success bg-mf-success' : 'border-mf-text-3 bg-transparent'
           }`}
         >
           {viewed && <Check size={10} strokeWidth={2.6} className="text-white" aria-hidden />}
         </span>
-        <span className={`text-caption font-semibold ${viewed ? 'text-mf-success' : 'text-muted-foreground'}`}>
+        <span className={`text-caption font-semibold ${viewed ? 'text-foreground' : 'text-muted-foreground'}`}>
           Viewed
         </span>
       </button>

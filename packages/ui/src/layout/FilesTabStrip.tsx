@@ -39,13 +39,13 @@ function tabGlyph(tab: EditorTabModel, isActive: boolean) {
 
   if (tab.kind === 'diff') {
     const color = isActive ? 'text-mf-accent-amber' : 'text-mf-text-3';
-    return <GitCompare size={11} className={`flex-shrink-0 ${color}`} />;
+    return <GitCompare size={12} className={`flex-shrink-0 ${color}`} />;
   }
   if (tab.kind === 'code') {
-    return <Code2 size={11} className={cls} />;
+    return <Code2 size={12} className={cls} />;
   }
   // viewer / unknown
-  return <FileText size={11} className={cls} />;
+  return <FileText size={12} className={cls} />;
 }
 
 // ── Single tab pill ──────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
         'rounded-[7px] tracking-tight transition-colors duration-[120ms]',
         isActive
           ? 'bg-mf-chip font-semibold text-foreground'
-          : 'font-medium text-mf-text-3 hover:bg-accent hover:text-foreground',
+          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground',
       ].join(' ')}
       onClick={() => onActivate(tab.id)}
       onDoubleClick={() => onPromote(tab.id)}
@@ -104,7 +104,7 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
             onClose(tab.id);
           }}
         >
-          <X size={9} />
+          <X size={12} />
         </button>
       </Hint>
     </div>
@@ -142,7 +142,7 @@ export function FilesTabStrip() {
 
       {/* Surface icon */}
       <div className="flex-shrink-0 px-[4px]">
-        <EditorGlyph size={11} className="text-mf-surface-files" />
+        <EditorGlyph size={12} className="text-mf-surface-files" />
       </div>
 
       {/* Tab pills */}
@@ -167,7 +167,7 @@ export function FilesTabStrip() {
           onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
           className={`${ACTION_BTN} ml-0.5`}
         >
-          <Plus size={11} className="text-mf-text-3" />
+          <Plus size={12} className="text-mf-text-3" />
         </button>
       </Hint>
 

@@ -4,18 +4,24 @@ export function SaveStatusChip({ dirty }: { dirty: boolean }) {
     return (
       <span
         data-testid="editor-save-status"
-        className="rounded-[4px] bg-mf-warning-tint px-[5px] py-[1px] font-mono text-micro text-mf-warning"
+        className="rounded-[4px] bg-mf-warning-tint px-[5px] py-[1px] font-mono text-caption text-foreground"
       >
-        ● unsaved
+        <span className="text-mf-warning" aria-hidden>
+          ●
+        </span>{' '}
+        unsaved
       </span>
     );
   }
   return (
     <span
       data-testid="editor-save-status"
-      className="rounded-[4px] bg-mf-success-tint px-[5px] py-[1px] font-mono text-micro text-mf-success"
+      className="rounded-[4px] bg-mf-success-tint px-[5px] py-[1px] font-mono text-caption text-muted-foreground"
     >
-      ● saved
+      <span className="text-mf-success" aria-hidden>
+        ●
+      </span>{' '}
+      saved
     </span>
   );
 }

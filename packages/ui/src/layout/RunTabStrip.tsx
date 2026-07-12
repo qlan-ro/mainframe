@@ -57,7 +57,7 @@ function RunAddMenu({ paneId, configs, onLaunch }: RunAddMenuProps) {
             type="button"
             className={`${ACTION_BTN} ml-0.5 data-[state=open]:bg-mf-chip`}
           >
-            <Plus size={11} className="text-mf-text-3" />
+            <Plus size={12} className="text-mf-text-3" />
           </button>
         </PopoverTrigger>
       </Hint>
@@ -135,7 +135,7 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
       )}
 
       <div className={`flex-shrink-0 ${primary ? 'px-[4px]' : 'pl-[10px] pr-[4px]'}`}>
-        <Play size={11} className="text-mf-surface-run" fill="currentColor" />
+        <Play size={12} className="text-mf-surface-run" fill="currentColor" />
       </div>
 
       <div className="flex h-full min-w-0 flex-initial items-center gap-[2px] overflow-x-auto pr-[2px] [scrollbar-width:none]">

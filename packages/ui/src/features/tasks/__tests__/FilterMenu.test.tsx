@@ -29,7 +29,7 @@ describe('FilterMenu — selected-count pill (finding 9.12)', () => {
     render(<FilterMenu label="Type" options={OPTIONS} selected={['bug']} onChange={() => {}} />);
     const pill = screen.getByTestId('tasks-filter-type-count');
     expect(pill.textContent).toBe('1');
-    expect(pill.className).toContain('font-mono');
+    expect(pill.className).toContain('tabular-nums');
   });
 
   it('does NOT render a parenthetical "(1)" text node', () => {

@@ -159,7 +159,7 @@ export function ProviderModelSelect({
               data-tut="model"
               aria-label={`Provider and model: ${triggerLabel}`}
               className={cn(
-                'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-caption text-muted-foreground',
+                'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-label text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors focus-visible:outline-none',
@@ -169,7 +169,7 @@ export function ProviderModelSelect({
               <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
                 {triggerLabel}
               </span>
-              <ChevronDown size={9} className="flex-shrink-0 opacity-60" />
+              <ChevronDown size={12} className="flex-shrink-0 text-mf-text-3" />
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
@@ -188,7 +188,7 @@ export function ProviderModelSelect({
             trailing={
               locked ? (
                 <span className="flex items-center gap-1 text-caption text-muted-foreground">
-                  <Lock size={11} /> Locked
+                  <Lock size={12} /> Locked
                 </span>
               ) : undefined
             }

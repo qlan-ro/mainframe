@@ -38,9 +38,7 @@ function ProjectPicker({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="px-2 pb-1.5 pt-0.5 text-micro font-bold uppercase tracking-wide text-mf-text-3">
-        Select project
-      </div>
+      <div className="px-2 pb-1.5 pt-0.5 text-caption font-medium text-muted-foreground">Select project</div>
       {sorted.map((project) => (
         <Tooltip key={project.id}>
           <TooltipTrigger asChild>
@@ -164,7 +162,7 @@ export function SessionList({ port, projectId, projectPath, onDone, onBack }: Se
         onClick={onBack}
         className="mb-2 flex items-center gap-0.5 text-caption text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ChevronLeft className="size-3" />
+        <ChevronLeft className="size-3.5" />
         Back
       </button>
     ) : null;
@@ -173,7 +171,7 @@ export function SessionList({ port, projectId, projectPath, onDone, onBack }: Se
     return (
       <>
         {backButton}
-        <div className="flex items-center justify-center gap-2 py-8 text-mf-text-3">
+        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
           <span className="text-body">Loading sessions…</span>
         </div>
@@ -227,7 +225,7 @@ export function SessionList({ port, projectId, projectPath, onDone, onBack }: Se
             <div
               ref={sentinelRef}
               data-testid="sessions-import-load-more"
-              className="flex items-center justify-center gap-2 py-3 text-mf-text-3"
+              className="flex items-center justify-center gap-2 py-3 text-muted-foreground"
             >
               <Loader2 className="size-3.5 animate-spin" />
               <span className="text-caption">Loading more…</span>

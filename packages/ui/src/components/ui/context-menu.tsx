@@ -180,7 +180,7 @@ function ContextMenuLabel({
       data-slot="context-menu-label"
       data-inset={inset}
       className={cn(
-        'px-[8px] pb-[4px] pt-[5px] text-micro font-bold uppercase tracking-wide text-mf-text-3',
+        'px-[8px] pb-[4px] pt-[5px] text-caption font-medium text-muted-foreground',
         'data-[inset]:pl-8',
         className,
       )}

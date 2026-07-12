@@ -160,7 +160,7 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
               action.onClick();
               onDismiss(id);
             }}
-            className="text-caption font-medium text-primary mt-[6px] block"
+            className="text-label font-medium text-primary mt-[6px] block"
           >
             {action.label} →
           </button>
@@ -173,7 +173,7 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
               onOpenSession?.(chatId);
               onDismiss(id);
             }}
-            className="text-caption font-medium text-primary mt-[6px] block"
+            className="text-label font-medium text-primary mt-[6px] block"
           >
             Open session →
           </button>
@@ -192,10 +192,10 @@ export function WsToastCard({ id, type, title, description, action, chatId, onOp
         className={cn(
           'w-[20px] h-[20px] shrink-0 rounded-[6px] inline-flex items-center justify-center',
           'border-none bg-transparent cursor-pointer',
-          'opacity-40 hover:opacity-85 hover:bg-accent transition-opacity',
+          'text-mf-text-3 hover:text-foreground hover:bg-accent transition-colors',
         )}
       >
-        <X size={11} aria-hidden />
+        <X size={14} aria-hidden />
       </button>
 
       {/* countdown rail — hidden for errors and while hovered */}

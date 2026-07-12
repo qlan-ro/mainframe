@@ -18,7 +18,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
       <div className="flex items-center justify-between">
         <div>
           <label className="text-label font-semibold text-muted-foreground">Quick Tunnel</label>
-          <p className="text-micro text-muted-foreground mt-0.5">
+          <p className="text-label text-muted-foreground mt-0.5">
             Ephemeral tunnel via trycloudflare.com (new URL each start).
           </p>
         </div>
@@ -26,7 +26,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
           data-testid="quick-tunnel-toggle"
           onClick={handleToggle}
           disabled={tunnel.togglingAction !== null}
-          className={`inline-flex h-[30px] items-center justify-center px-[11px] text-caption rounded-md transition-colors disabled:opacity-50 ${
+          className={`inline-flex h-[30px] items-center justify-center px-[11px] text-label rounded-md transition-colors disabled:opacity-50 ${
             tunnel.running
               ? 'bg-accent text-foreground border border-border hover:bg-accent/80'
               : 'bg-primary text-primary-foreground hover:opacity-90'
@@ -46,9 +46,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
       </div>
 
       <TunnelStatusRow state={tunnel.state} url={tunnel.url} onRetryVerify={tunnel.retryVerify} />
-      {tunnel.state === 'error' && tunnel.errorMsg && (
-        <p className="text-caption text-destructive">{tunnel.errorMsg}</p>
-      )}
+      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-label text-destructive">{tunnel.errorMsg}</p>}
     </div>
   );
 }

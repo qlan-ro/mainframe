@@ -53,7 +53,7 @@ function UrlRow({ url }: { url: string }) {
         type="button"
         data-testid="web-fetch-card-url"
         onClick={open}
-        className="font-mono text-caption text-primary truncate min-w-0 hover:underline cursor-pointer text-left"
+        className="font-mono text-label text-primary truncate min-w-0 hover:underline cursor-pointer text-left"
       >
         {url}
       </button>
@@ -67,7 +67,10 @@ function UrlRow({ url }: { url: string }) {
 
 function SummaryBody({ text }: { text: string }) {
   return (
-    <p data-testid="web-fetch-card-summary" className="px-3 pb-2 pt-1.5 text-label text-muted-foreground leading-normal">
+    <p
+      data-testid="web-fetch-card-summary"
+      className="px-3 pb-2 pt-1.5 text-label text-muted-foreground leading-normal"
+    >
       {text}
     </p>
   );
@@ -92,9 +95,10 @@ export const WebFetchCard: ToolCallMessagePartComponent = ({ toolName, args, res
     </FamilyTile>
   );
 
-  const target = isSearch && query ? (
-    <span className="font-mono text-caption text-muted-foreground min-w-0 truncate">&quot;{query}&quot;</span>
-  ) : undefined;
+  const target =
+    isSearch && query ? (
+      <span className="font-mono text-label text-muted-foreground min-w-0 truncate">&quot;{query}&quot;</span>
+    ) : undefined;
 
   const trailing = <StatusDot result={result} isError={isError} />;
 

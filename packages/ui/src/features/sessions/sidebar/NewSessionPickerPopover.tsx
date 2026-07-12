@@ -71,9 +71,7 @@ export function NewSessionPickerPopover({
         sideOffset={4}
         className="w-auto min-w-[216px] p-1.5"
       >
-        <div className="px-2 py-1 text-micro font-bold uppercase tracking-wide text-muted-foreground">
-          New session in…
-        </div>
+        <div className="px-2 py-1 text-caption font-medium text-muted-foreground">New session in…</div>
         {projects.map((p) => (
           <button
             key={p.id}
@@ -86,7 +84,9 @@ export function NewSessionPickerPopover({
             className={rowClass}
           >
             <ProjectChip projectId={p.id} name={p.name} size={16} className="min-w-0 flex-1" />
-            <span className="flex-shrink-0 text-micro text-mf-text-3">{countLabel(sessionCounts[p.id] ?? 0)}</span>
+            <span className="flex-shrink-0 text-caption text-muted-foreground">
+              {countLabel(sessionCounts[p.id] ?? 0)}
+            </span>
           </button>
         ))}
         <div className="my-1 h-px bg-border" />
@@ -99,7 +99,7 @@ export function NewSessionPickerPopover({
           }}
           className={rowClass}
         >
-          <FolderPlus className="size-[13px] flex-shrink-0 text-mf-text-3" aria-hidden />
+          <FolderPlus className="size-3.5 flex-shrink-0 text-muted-foreground" aria-hidden />
           <span className="text-muted-foreground">Add project…</span>
         </button>
       </PopoverContent>

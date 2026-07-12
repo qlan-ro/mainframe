@@ -91,13 +91,15 @@ describe('SessionRow — unread store integration', () => {
     render(<SessionRow item={makeItem({ id: 'chat-1', remoteId: 'chat-1' })} />);
 
     const logo = screen.getByTestId('sessions-row-status-dot');
-    expect(logo.className).toContain('opacity-50');
+    expect(logo.className).toContain('text-mf-text-3');
+    expect(logo.className).not.toContain('text-primary');
 
     act(() => {
       useUnreadStore.getState().markUnread('chat-1');
     });
 
-    expect(logo.className).not.toContain('opacity-50');
+    expect(logo.className).toContain('text-primary');
+    expect(logo.className).not.toContain('text-mf-text-3');
     expect(screen.getByTestId('sessions-row-title').className).toContain('font-bold');
   });
 
@@ -108,7 +110,7 @@ describe('SessionRow — unread store integration', () => {
       useUnreadStore.getState().markUnread('chat-1');
     });
 
-    expect(screen.getByTestId('sessions-row-status-dot').className).not.toContain('opacity-50');
+    expect(screen.getByTestId('sessions-row-status-dot').className).toContain('text-primary');
     expect(screen.getByTestId('sessions-row-title').className).toContain('font-bold');
   });
 });

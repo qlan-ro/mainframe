@@ -33,7 +33,7 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
           <ArrowLeft size={14} />
         </button>
         <span className="text-body font-medium text-foreground">Rename Branch</span>
-        {target && <span className="text-caption text-muted-foreground truncate ml-1">'{target}'</span>}
+        {target && <span className="text-label text-muted-foreground truncate ml-1">'{target}'</span>}
       </div>
 
       <input
@@ -66,7 +66,7 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
             (busy || !value.trim()) && 'opacity-40 cursor-not-allowed',
           )}
         >
-          {busy && <Loader2 size={11} className="animate-spin" />}
+          {busy && <Loader2 size={12} className="animate-spin" />}
           Rename
         </button>
       </div>

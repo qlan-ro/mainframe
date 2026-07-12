@@ -82,7 +82,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
         </button>
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-body font-semibold text-foreground">Tasks</span>
-        <span className="font-mono text-caption text-mf-text-3 bg-mf-chip rounded-md px-[8px] py-0.5">
+        <span className="font-mono text-caption text-muted-foreground bg-mf-chip rounded-md px-[8px] py-0.5">
           {activeCount} active · {doneCount} done
         </span>
 
@@ -94,7 +94,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
             onClick={() => setView('list')}
             aria-pressed={view === 'list'}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-caption transition-colors',
+              'flex items-center gap-1 px-2 py-1 rounded text-label transition-colors',
               view === 'list'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -109,7 +109,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
             onClick={() => setView('board')}
             aria-pressed={view === 'board'}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-caption transition-colors',
+              'flex items-center gap-1 px-2 py-1 rounded text-label transition-colors',
               view === 'board'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -125,9 +125,9 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
           data-testid="tasks-board-new"
           type="button"
           onClick={handleNew}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-primary-foreground text-caption hover:opacity-90 transition-opacity"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-primary-foreground text-label hover:opacity-90 transition-opacity"
         >
-          <Plus size={12} />
+          <Plus size={14} />
           New task
         </button>
       </div>

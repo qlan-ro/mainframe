@@ -8,14 +8,14 @@ import { DaemonFooterStatus } from '@/features/daemon/DaemonFooterStatus';
 const COUNT_META: { key: keyof BaseStatusCounts; label: string; dot: string; text: string }[] = [
   { key: 'working', label: 'Working', dot: 'bg-primary animate-pulse', text: 'text-primary' },
   { key: 'waiting', label: 'Waiting for you', dot: 'bg-mf-warning', text: 'text-mf-warning' },
-  { key: 'idle', label: 'Idle', dot: 'bg-mf-text-4', text: 'text-mf-text-3' },
+  { key: 'idle', label: 'Idle', dot: 'bg-mf-text-4', text: 'text-muted-foreground' },
 ];
 
 export function SidebarFooterView({ counts }: { counts: BaseStatusCounts }) {
   return (
     <div
       data-testid="sidebar-footer"
-      className="flex h-[25px] flex-shrink-0 items-center gap-2 px-[12px] text-micro text-mf-text-3"
+      className="flex h-[25px] flex-shrink-0 items-center gap-2 px-[12px] text-caption text-muted-foreground"
     >
       <DaemonFooterStatus />
       <span className="flex-1" />

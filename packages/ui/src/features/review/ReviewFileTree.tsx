@@ -7,6 +7,7 @@
  * brand selection tint; viewed (non-active) rows dim and strike through.
  */
 import { KIND_LABEL } from '@/lib/git-status-kind';
+import { SectionHeader } from '@/components/ui/section-header';
 import type { ReviewFile } from './git-status-to-files';
 
 /**
@@ -15,10 +16,10 @@ import type { ReviewFile } from './git-status-to-files';
  * not the previous /15 approximation.
  */
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
-  added: 'text-mf-success bg-mf-success/[12.16%]',
-  modified: 'text-mf-warning bg-mf-warning/[12.16%]',
-  deleted: 'text-mf-diff-del-text bg-mf-diff-del-text/[12.16%]',
-  renamed: 'text-mf-warning bg-mf-warning/[12.16%]',
+  added: 'text-foreground bg-mf-success/[12.16%]',
+  modified: 'text-foreground bg-mf-warning/[12.16%]',
+  deleted: 'text-foreground bg-mf-diff-del-text/[12.16%]',
+  renamed: 'text-foreground bg-mf-warning/[12.16%]',
 };
 
 interface ReviewFileTreeProps {
@@ -43,7 +44,7 @@ function StatMeter({ path, additions, deletions }: { path: string; additions: nu
             : frac <= delFrac + 0.0001 && addFrac < frac
               ? 'bg-mf-diff-del-text'
               : 'bg-mf-chip';
-        return <span key={i} className={`size-[7px] rounded-[2px] ${color}`} />;
+        return <span key={i} className={`size-[9px] rounded-[2px] ${color}`} />;
       })}
     </span>
   );
@@ -52,9 +53,7 @@ function StatMeter({ path, additions, deletions }: { path: string; additions: nu
 export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles }: ReviewFileTreeProps) {
   return (
     <div className="flex h-full flex-col">
-      <div className="px-3.5 pb-1.5 pt-[12px] text-micro font-bold uppercase tracking-wide text-mf-text-3">
-        Changed files
-      </div>
+      <SectionHeader className="px-3.5 pb-1.5 pt-[12px]">Changed files</SectionHeader>
       {files.length === 0 ? (
         <div data-testid="review-file-tree-empty" className="px-3.5 py-4 text-caption text-muted-foreground">
           No changes to review
@@ -77,7 +76,7 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                 } ${isViewed && !isSelected ? 'opacity-55' : ''}`}
               >
                 <span
-                  className={`inline-flex size-[16px] shrink-0 items-center justify-center rounded font-mono text-micro font-extrabold ${BADGE_CLASS[f.status]}`}
+                  className={`inline-flex size-[16px] shrink-0 items-center justify-center rounded font-mono text-caption font-extrabold ${BADGE_CLASS[f.status]}`}
                 >
                   {KIND_LABEL[f.status]}
                 </span>
@@ -88,7 +87,7 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                   >
                     {fileName}
                   </span>
-                  {dirPath && <span className="truncate text-micro text-mf-text-3">{dirPath}</span>}
+                  {dirPath && <span className="truncate text-caption text-muted-foreground">{dirPath}</span>}
                 </span>
                 <StatMeter path={f.path} additions={f.additions} deletions={f.deletions} />
               </button>

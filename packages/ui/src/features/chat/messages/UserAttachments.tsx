@@ -44,13 +44,13 @@ function FilePill({ name }: { name: string }) {
         className="inline-flex size-[36px] flex-shrink-0 items-center justify-center rounded-lg"
         style={{ background: extTint(m.color) }}
       >
-        <span className="font-mono text-micro font-bold" style={{ color: m.color }}>
+        <span className="font-mono text-caption font-bold" style={{ color: m.color }}>
           .{m.ext}
         </span>
       </span>
       <span className="flex min-w-0 flex-col gap-px">
         <span className="max-w-[150px] truncate text-label font-semibold text-mf-um-ink">{name}</span>
-        <span className="text-micro text-mf-text-3">{subline}</span>
+        <span className="text-caption text-muted-foreground">{subline}</span>
       </span>
     </div>
   );
@@ -95,11 +95,13 @@ function ImageAttachment({ name }: { name: string }) {
           <TruncatedWithTooltip
             data-testid="chat-capture-selector"
             text={capture.selector}
-            className="font-mono text-caption text-mf-code-fn"
+            className="font-mono text-label text-mf-code-fn"
             contentClassName="font-mono break-all"
           />
         )}
-        {capture?.annotation && <span className="truncate text-micro text-mf-text-3">{capture.annotation}</span>}
+        {capture?.annotation && (
+          <span className="truncate text-caption text-muted-foreground">{capture.annotation}</span>
+        )}
       </span>
     </span>
   );

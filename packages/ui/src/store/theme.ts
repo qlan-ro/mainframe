@@ -15,11 +15,13 @@ const SCHEMES: readonly ColorScheme[] = ['classic', 'ocean', 'velvet'];
 const WINDOW_STYLES: readonly WindowStyle[] = ['unified', 'split', 'glass'];
 const UI_SCALES: readonly UiScale[] = ['compact', 'normal', 'large'];
 
-/** Provisional — tuned so Normal dominant text ≈ 13px, Large ≈ 15px. */
+/** Native page-zoom factors. Normal is crisp un-zoomed (dominant text = the raw
+ *  13px body token); Compact/Large nudge the whole surface so dominant text
+ *  reads ≈ 12 / 13 / 15 px across compact / normal / large. */
 export const UI_SCALE_FACTORS: Record<UiScale, number> = {
-  compact: 1,
-  normal: 1.15,
-  large: 1.3,
+  compact: 0.92,
+  normal: 1.0,
+  large: 1.15,
 };
 
 function readMode(): ThemeMode {

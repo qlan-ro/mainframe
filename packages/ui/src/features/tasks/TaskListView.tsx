@@ -9,6 +9,7 @@
  */
 import React, { useState, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight, ListChecks } from 'lucide-react';
+import { CountBadge } from '@/components/ui/count-badge';
 import type { Todo, TodoStatus } from '@/lib/api/todos';
 import type { TodoFilters } from './todos-filters';
 import { useTodosStore } from './use-todos-store';
@@ -160,12 +161,12 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
               <button
                 type="button"
                 data-testid={`tasks-list-group-${status}`}
-                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-mf-content2 px-3 py-1.5 text-caption font-bold uppercase tracking-wide text-muted-foreground"
+                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-mf-content2 px-3 py-1.5 text-caption font-medium text-muted-foreground"
                 onClick={() => toggleGroup(status)}
               >
                 {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                 {GROUP_LABEL[status]}
-                <span className="ml-1 font-normal text-muted-foreground/70">{items.length}</span>
+                <CountBadge count={items.length} variant="info" className="ml-1" />
               </button>
 
               {/* Rows */}
@@ -202,7 +203,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
             <kbd className="rounded-sm border-[0.5px] border-border bg-card px-1.5 py-0.5 font-mono text-caption leading-none text-muted-foreground">
               {key}
             </kbd>
-            <span className="text-caption text-mf-text-3">{label}</span>
+            <span className="text-caption text-muted-foreground">{label}</span>
           </span>
         ))}
       </div>

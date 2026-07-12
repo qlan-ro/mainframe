@@ -6,7 +6,7 @@ import { ToolFallback } from '../tool-fallback';
 const status = (type: string): ToolCallMessagePartStatus => ({ type }) as ToolCallMessagePartStatus;
 
 describe('ToolFallbackTrigger running shimmer', () => {
-  it('overlay geometry matches the base label so it does not ghost (text-caption + font-medium)', () => {
+  it('overlay geometry matches the base label so it does not ghost (text-label + font-medium)', () => {
     render(
       <ToolFallback.Root defaultOpen>
         <ToolFallback.Trigger toolName="DesignSync" status={status('running')} />
@@ -16,9 +16,9 @@ describe('ToolFallbackTrigger running shimmer', () => {
     expect(shimmer).not.toBeNull();
     // The running overlay is a duplicate text copy stacked on the base with a
     // sheen sweep; it must render at the SAME size/weight as the base
-    // (text-caption 11px + font-medium 500), else it renders wider (13px/700)
+    // (text-label 12px + font-medium 500), else it renders wider (13px/700)
     // and misaligns into doubled "Used tool: X" ghosting.
-    expect(shimmer!.className).toContain('text-caption');
+    expect(shimmer!.className).toContain('text-label');
     expect(shimmer!.querySelector('b')?.className).toContain('font-medium');
   });
 

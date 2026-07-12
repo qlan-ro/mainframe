@@ -80,13 +80,13 @@ function StatusDot({ todo, onCycle }: { todo: Todo; onCycle: (id: string) => voi
       className={cn(
         'shrink-0 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-full',
         status === 'done'
-          ? 'w-4 h-4 bg-mf-success'
+          ? 'w-3.5 h-3.5 bg-mf-success'
           : status === 'in_progress'
             ? 'w-[15px] h-[15px] rounded-full border-2 border-primary'
-            : 'w-3.5 h-3.5 rounded-full border-[1.6px] border-mf-text-4 hover:border-primary',
+            : 'w-3.5 h-3.5 rounded-full border-[1.6px] border-mf-text-3 hover:border-primary',
       )}
     >
-      {status === 'done' && <Check size={9} className="text-white" strokeWidth={3} />}
+      {status === 'done' && <Check size={10} className="text-white" strokeWidth={3} />}
       {status === 'in_progress' && (
         <span data-status-pulse className="w-[5px] h-[5px] rounded-full bg-primary animate-pulse" aria-hidden />
       )}
@@ -155,7 +155,7 @@ export function TaskListRow({
         <StatusDot todo={todo} onCycle={onCycle} />
 
         {/* Number */}
-        <span className="shrink-0 font-mono text-caption font-medium text-primary w-10 text-right">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-label font-medium text-primary w-10 text-right">#{todo.number}</span>
 
         {/* Title */}
         <span
@@ -195,7 +195,7 @@ export function TaskListRow({
                   className="p-1.5 rounded text-primary hover:bg-accent transition-colors"
                   aria-label="Start in new session"
                 >
-                  <Play size={13} />
+                  <Play size={14} />
                 </button>
               </TooltipTrigger>
               <TooltipContent>Start session</TooltipContent>
@@ -212,7 +212,7 @@ export function TaskListRow({
                 className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 aria-label="Edit task"
               >
-                <Edit size={13} />
+                <Edit size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent>Edit</TooltipContent>
@@ -228,7 +228,7 @@ export function TaskListRow({
                 className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
                 aria-label="Delete task"
               >
-                <Trash2 size={13} />
+                <Trash2 size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent>Delete</TooltipContent>
@@ -239,9 +239,9 @@ export function TaskListRow({
       {/* Expanded detail panel */}
       {expanded && (
         <div className="px-10 pb-3 space-y-2 text-body text-muted-foreground bg-accent/50">
-          {todo.body && <p className="whitespace-pre-wrap text-foreground text-caption leading-relaxed">{todo.body}</p>}
+          {todo.body && <p className="whitespace-pre-wrap text-foreground text-label leading-relaxed">{todo.body}</p>}
 
-          <div className="flex flex-wrap gap-4 text-caption">
+          <div className="flex flex-wrap gap-4 text-label">
             {todo.milestone && (
               <span>
                 <span className="font-medium text-foreground">Milestone:</span> {todo.milestone}
@@ -260,7 +260,7 @@ export function TaskListRow({
             )}
           </div>
 
-          <div className="flex gap-4 text-caption text-muted-foreground">
+          <div className="flex gap-4 text-label text-muted-foreground">
             <span>Created {formatDate(todo.created_at)}</span>
             <span>Updated {formatDate(todo.updated_at)}</span>
           </div>
@@ -285,9 +285,9 @@ export function TaskListRow({
                   e.stopPropagation();
                   onStartSession(todo);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-caption font-semibold hover:opacity-90 transition-opacity"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-label font-semibold hover:opacity-90 transition-opacity"
               >
-                <Play size={12} />
+                <Play size={14} />
                 {todo.status === 'in_progress' ? 'Resume session' : 'Start session'}
               </button>
             )}
@@ -297,9 +297,9 @@ export function TaskListRow({
                 e.stopPropagation();
                 onEdit(todo);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card text-muted-foreground text-caption font-medium hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card text-muted-foreground text-label font-medium hover:text-foreground transition-colors"
             >
-              <Edit size={12} />
+              <Edit size={14} />
               Edit
             </button>
           </div>

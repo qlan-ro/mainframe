@@ -36,7 +36,7 @@ function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | n
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
-      <span className="min-w-0 flex-initial truncate text-caption font-semibold">New Session</span>
+      <span className="min-w-0 flex-initial truncate text-body font-semibold">New Session</span>
       {projectId != null && projectName != null && (
         <ProjectChip projectId={projectId} name={projectName} size={16} data-testid="chat-header-project" />
       )}
@@ -66,7 +66,7 @@ function ChatCardHeaderReal() {
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
-      <span className="min-w-0 flex-initial truncate text-caption font-semibold">{title}</span>
+      <span className="min-w-0 flex-initial truncate text-body font-semibold">{title}</span>
       <ChatSessionInline part="model" />
       <span className="flex-1" />
       <ChatSessionInline part="status" />
@@ -88,9 +88,9 @@ function ChatCardHeaderReal() {
             data-testid={`chat-header-pr-${pr.number}`}
             type="button"
             onClick={() => void host.shell.openExternal(pr.url)}
-            className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
+            className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-foreground hover:underline"
           >
-            <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}
+            <GitPullRequest size={12} className="flex-shrink-0 text-mf-success" />#{pr.number}
           </button>
         </Hint>
       ))}
@@ -103,7 +103,7 @@ function ChatCardHeaderReal() {
               onClick={() => splitSurface('v')}
               className={HDR_BTN}
             >
-              <LayoutPanelLeft size={13} className="text-mf-text-3" />
+              <LayoutPanelLeft size={13} className="text-muted-foreground" />
             </button>
           </Hint>
           <Hint label="Split down">
@@ -113,7 +113,7 @@ function ChatCardHeaderReal() {
               onClick={() => splitSurface('h')}
               className={HDR_BTN}
             >
-              <LayoutPanelTop size={13} className="text-mf-text-3" />
+              <LayoutPanelTop size={13} className="text-muted-foreground" />
             </button>
           </Hint>
         </>
@@ -127,7 +127,7 @@ function ChatCardHeaderReal() {
           onClick={() => toggleSurface('chat')}
           className={`${HDR_BTN} ${chatIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
         >
-          <EyeOff size={13} className="text-mf-text-3" />
+          <EyeOff size={13} className="text-muted-foreground" />
         </button>
       </Hint>
     </div>

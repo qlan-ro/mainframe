@@ -19,7 +19,7 @@ export function GateButton({
     <Button
       size="sm"
       variant="ghost"
-      className={cn('h-8 px-3.5 text-label font-semibold', KIND_CLASS[kind], className)}
+      className={cn('h-8 px-3.5 text-body font-semibold', KIND_CLASS[kind], className)}
       {...props}
     />
   );

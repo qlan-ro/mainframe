@@ -105,7 +105,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Search tasks…"
-            className="h-[30px] w-[230px] pl-6 pr-6 text-caption"
+            className="h-[30px] w-[230px] pl-6 pr-6 text-label"
           />
           {filters.search && (
             <button
@@ -113,7 +113,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
               className="absolute right-1.5 text-muted-foreground hover:text-foreground"
               aria-label="Clear search"
             >
-              <X size={11} />
+              <X size={12} />
             </button>
           )}
         </div>
@@ -140,12 +140,12 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
             data-testid="tasks-filter-clear"
             onClick={clearAll}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-caption font-medium transition-colors',
+              'flex items-center gap-1 px-2 py-1 rounded text-label font-medium transition-colors',
               'text-primary hover:underline',
             )}
             type="button"
           >
-            <X size={11} />
+            <X size={12} />
             Clear
           </button>
         )}

@@ -31,12 +31,12 @@ function outputLineClass(line: string): string {
   const t = line.trim();
   if (t.includes('✓') || /\bpass(ed|ing)?\b/i.test(t)) return 'text-mf-term-green';
   if (t.includes('✗') || /\b(error|fail(ed|ure)?)\b/i.test(t)) return 'text-destructive';
-  return 'text-mf-term-cmt';
+  return 'text-mf-term-fg';
 }
 
 function ExitLine({ text }: { text: string }) {
   const match = /exit\s+(\d+)/i.exec(text);
-  if (!match) return <span className="text-mf-term-cmt">{text}</span>;
+  if (!match) return <span className="text-mf-term-fg">{text}</span>;
   const code = parseInt(match[1] ?? '0', 10);
   return <span className={code === 0 ? 'text-mf-term-green' : 'text-destructive'}>{text}</span>;
 }
@@ -63,7 +63,7 @@ function TerminalBody({ command, resultText, isError, chatId, toolCallId, trunca
       {truncated && chatId && toolCallId ? (
         <ToolResultExpand chatId={chatId} toolUseId={toolCallId} truncatedContent={resultText} fullBytes={fullBytes} />
       ) : (
-        <pre data-testid="chat-bash-output" className="font-mono text-caption overflow-x-auto whitespace-pre-wrap">
+        <pre data-testid="chat-bash-output" className="font-mono text-label overflow-x-auto whitespace-pre-wrap">
           <span className="text-mf-term-green">$ </span>
           <span className="text-mf-term-fg">{command}</span>
           {'\n'}

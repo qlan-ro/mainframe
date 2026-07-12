@@ -52,11 +52,11 @@ function DirectiveChip({ type, label, id, Icon }: DirectiveChipProps) {
         'inline-flex items-center gap-1',
         'rounded-md px-1.5 py-0.5',
         'bg-mf-chip text-primary',
-        'font-mono text-caption font-medium',
+        'font-mono text-label font-medium',
         'border border-border',
       )}
     >
-      {Icon && <Icon className="size-3 shrink-0" />}
+      {Icon && <Icon className="size-3.5 shrink-0" />}
       {label}
     </span>
   );

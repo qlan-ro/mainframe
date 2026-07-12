@@ -23,13 +23,13 @@ import type { Todo, TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
 // Physical padding avoids Chromium scroll-clip on <input>.
 const inputCls = cn(
   'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5',
-  'text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full',
+  'text-label text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full',
 );
 const textareaWrap = cn(
   'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
 );
 const textareaInner = cn(
-  'w-full bg-transparent border-0 p-0 resize-none text-caption text-foreground outline-none focus:outline-none focus-visible:outline-none',
+  'w-full bg-transparent border-0 p-0 resize-none text-label text-foreground outline-none focus:outline-none focus-visible:outline-none',
 );
 
 interface Props {
@@ -176,7 +176,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
             <div className="flex flex-col gap-1">
-              <label className="text-caption text-muted-foreground">Title *</label>
+              <label className="text-label text-muted-foreground">Title *</label>
               <input
                 data-testid="tasks-edit-title"
                 className={inputCls}
@@ -199,8 +199,8 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
 
             <div className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between">
-                <label className="text-caption text-muted-foreground">Description (markdown)</label>
-                <span className="text-caption text-muted-foreground opacity-60">Paste image to attach</span>
+                <label className="text-label text-muted-foreground">Description (markdown)</label>
+                <span className="text-caption text-muted-foreground">Paste image to attach</span>
               </div>
               <div className={textareaWrap}>
                 <textarea
@@ -215,7 +215,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               </div>
             </div>
 
-            {attachErr && <p className="text-caption text-destructive">{attachErr}</p>}
+            {attachErr && <p className="text-label text-destructive">{attachErr}</p>}
 
             <TaskAttachments
               port={port}
@@ -260,9 +260,9 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
                   onStartSession(todo.id);
                   onClose();
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-caption bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-label bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
               >
-                <Play size={12} aria-hidden />
+                <Play size={14} aria-hidden />
                 Start session
               </button>
             )}
@@ -270,7 +270,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               type="button"
               data-testid="tasks-edit-cancel"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-caption text-muted-foreground hover:bg-muted transition-colors"
+              className="px-3 py-1.5 rounded-md text-label text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancel
             </button>
@@ -278,7 +278,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               type="submit"
               data-testid="tasks-edit-save"
               disabled={!title.trim() || saving}
-              className="px-3 py-1.5 rounded-md text-caption bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
+              className="px-3 py-1.5 rounded-md text-label bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
             >
               {saving ? 'Saving…' : todo ? 'Save changes' : 'Create task'}
             </button>

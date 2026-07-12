@@ -16,8 +16,8 @@ export type { ReplyFn } from './gate-types';
 function ToolNameRow({ toolName }: { toolName: string }) {
   return (
     <div className="flex items-center gap-2 px-3.5 pb-2 pl-[49px]">
-      <TerminalIcon className="size-3.5 text-mf-text-3" />
-      <span className="font-mono text-label font-semibold text-muted-foreground">{toolName}</span>
+      <TerminalIcon className="size-3.5 text-muted-foreground" />
+      <span className="font-mono text-body font-semibold text-foreground">{toolName}</span>
     </div>
   );
 }
@@ -98,7 +98,6 @@ export function PermissionGate({ entry, reply }: PermissionGateProps) {
           icon={<ShieldIcon className="size-[15px]" />}
           tileClassName="bg-mf-warning-tint text-mf-warning"
           eyebrow="Permission required"
-          eyebrowClassName="text-mf-warning"
           title="Permission Required"
         />
         <ToolNameRow toolName={request.toolName} />

@@ -109,7 +109,7 @@ export function RunStepRow({
             <span
               data-testid={`${testId}-kept-going`}
               title="This step failed but the automation kept going"
-              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-mf-warning/15 px-[8px] text-caption font-bold text-mf-warning"
+              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-mf-warning/15 px-[8px] text-caption font-semibold text-muted-foreground"
             >
               Kept going
             </span>

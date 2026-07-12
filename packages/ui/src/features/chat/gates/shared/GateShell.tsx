@@ -6,7 +6,9 @@ type GateAccent = 'primary' | 'warning';
 // Accent-tinted "live card" glow per gate type (blue for Question/Plan, amber for
 // Permission) — replaces the generic popover shadow while a gate is unresolved.
 const ACCENT_SHADOW: Record<GateAccent, CSSProperties> = {
-  primary: { boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 22px -12px color-mix(in srgb, var(--primary) 55%, transparent)' },
+  primary: {
+    boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 22px -12px color-mix(in srgb, var(--primary) 55%, transparent)',
+  },
   warning: {
     boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 22px -12px color-mix(in srgb, var(--mf-warning) 55%, transparent)',
   },
@@ -38,7 +40,7 @@ export function GateCardShell({
 export function GateHead({
   icon,
   eyebrow,
-  eyebrowClassName = 'text-mf-text-3',
+  eyebrowClassName = 'text-muted-foreground',
   title,
   tileClassName,
   right,
@@ -59,7 +61,7 @@ export function GateHead({
         {icon}
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className={cn('text-micro font-bold uppercase tracking-wide', eyebrowClassName)}>{eyebrow}</span>
+        <span className={cn('text-caption font-medium', eyebrowClassName)}>{eyebrow}</span>
         <span className="text-body font-semibold leading-tight text-foreground">{title}</span>
       </div>
       {right}

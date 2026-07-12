@@ -2,6 +2,7 @@ import type { Project } from '@qlan-ro/mainframe-types';
 import { forwardRef, type HTMLAttributes } from 'react';
 import { PencilIcon, Trash2Icon } from 'lucide-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { CountBadge } from '@/components/ui/count-badge';
 import { DismissibleHint } from '@/components/ui/hint';
 import { useUiPrefs } from '@/store/ui-prefs';
 
@@ -27,18 +28,8 @@ const RENAME_LABEL = 'Rename Project';
 const HINT_LABEL = 'Right-click for options';
 
 function ProjectPillBadge({ active, count, testId }: { active: boolean; count: number; testId?: string }) {
-  if (count <= 0 || testId == null) return null;
-  const className = [
-    'inline-flex h-4 min-w-4 items-center justify-center rounded-lg px-1 text-micro font-bold leading-none text-white',
-    active ? 'bg-white/25' : 'bg-primary',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  return (
-    <span data-testid={testId} className={className}>
-      {count}
-    </span>
-  );
+  if (testId == null) return null;
+  return <CountBadge count={count} variant="unread" onAccent={active} data-testid={testId} />;
 }
 
 function ProjectRemoveContextItem({ projectId, onRemoveProject }: { projectId: string; onRemoveProject: () => void }) {
@@ -46,7 +37,6 @@ function ProjectRemoveContextItem({ projectId, onRemoveProject }: { projectId: s
     <ContextMenuItem
       data-testid={`sessions-project-remove-${projectId}`}
       variant="destructive"
-      className="text-caption"
       onSelect={onRemoveProject}
     >
       <Trash2Icon className="mr-2 size-3.5" />
@@ -57,7 +47,7 @@ function ProjectRemoveContextItem({ projectId, onRemoveProject }: { projectId: s
 
 function ProjectRenameContextItem({ projectId }: { projectId: string }) {
   return (
-    <ContextMenuItem data-testid={`sessions-project-rename-${projectId}`} disabled className="text-caption">
+    <ContextMenuItem data-testid={`sessions-project-rename-${projectId}`} disabled>
       <PencilIcon className="mr-2 size-3.5" />
       {RENAME_LABEL}
     </ContextMenuItem>
@@ -69,7 +59,7 @@ const ProjectPillBody = forwardRef<HTMLSpanElement, ProjectPillBodyProps>(functi
   ref,
 ) {
   const containerClass = [
-    'inline-flex h-[24px] shrink-0 items-center overflow-hidden rounded-[12px] text-caption font-medium tracking-normal transition-colors',
+    'inline-flex h-[24px] shrink-0 items-center overflow-hidden rounded-[12px] text-label font-medium tracking-normal transition-colors',
     active ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground hover:text-foreground',
     className,
   ]
@@ -85,7 +75,7 @@ const ProjectPillBody = forwardRef<HTMLSpanElement, ProjectPillBodyProps>(functi
         type="button"
         className="inline-flex h-full min-w-0 items-center gap-1.5 px-3"
       >
-        <span className="max-w-[140px] truncate">{project.name}</span>
+        <span className="max-w-[160px] truncate">{project.name}</span>
         <ProjectPillBadge active={active} count={badgeCount} testId={badgeTestId} />
       </button>
     </span>

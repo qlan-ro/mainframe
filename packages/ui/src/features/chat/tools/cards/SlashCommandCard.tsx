@@ -28,7 +28,7 @@ export const SlashCommandCard: ToolCallMessagePartComponent = ({ args }) => {
             <span
               data-testid="chat-slash-command-args"
               tabIndex={0}
-              className="font-mono text-caption text-mf-text-3 truncate min-w-0 cursor-default"
+              className="font-mono text-caption text-muted-foreground truncate min-w-0 cursor-default"
             >
               {skillArgs}
             </span>

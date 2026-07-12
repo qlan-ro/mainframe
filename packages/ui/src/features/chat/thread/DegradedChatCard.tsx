@@ -12,7 +12,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatWorktree } from '@/lib/api/chats';
 
 const ACTION_BUTTON =
-  'rounded-md border border-border px-3 py-1.5 text-caption text-foreground transition-colors hover:bg-accent disabled:opacity-50';
+  'rounded-md border border-border px-3 py-1.5 text-label text-foreground transition-colors hover:bg-accent disabled:opacity-50';
 
 function CauseSection({ title, body }: { title: string; body: string }) {
   return (
@@ -21,7 +21,7 @@ function CauseSection({ title, body }: { title: string; body: string }) {
         <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />
         {title}
       </p>
-      <p className="text-caption text-muted-foreground">{body}</p>
+      <p className="text-label text-muted-foreground">{body}</p>
     </div>
   );
 }
@@ -75,7 +75,7 @@ export function DegradedChatCard() {
       )}
 
       {recreateError != null && (
-        <p data-testid="chat-degraded-error" className="text-caption text-destructive">
+        <p data-testid="chat-degraded-error" className="text-label text-destructive">
           {recreateError}
         </p>
       )}

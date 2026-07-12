@@ -33,7 +33,7 @@ const ICON_BTN =
   'inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
 
 const CHIP_BASE =
-  'inline-flex h-[22px] min-w-0 max-w-[230px] items-center gap-[5px] rounded-[6px] border-[0.5px] border-solid px-[6px] font-mono text-caption font-normal';
+  'inline-flex h-[22px] min-w-0 max-w-[230px] items-center gap-[5px] rounded-[6px] border-[0.5px] border-solid px-[6px] font-mono text-label font-normal';
 
 /**
  * Worktree vs main-repo chip styling — mirrors the Workspace Surfaces artboard
@@ -53,20 +53,20 @@ function BranchChipContent({ branch, isWorktree }: { branch: string; isWorktree:
   return (
     <>
       {isWorktree ? (
-        <GitFork size={11} className="flex-shrink-0 text-primary" />
+        <GitFork size={12} className="flex-shrink-0 text-primary" />
       ) : (
-        <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
+        <GitBranch size={12} className="flex-shrink-0 text-mf-text-3" />
       )}
       <span className="truncate">{branch}</span>
       {isWorktree && (
         <span
           data-testid="main-toolbar-branch-wt"
-          className="ml-[1px] inline-flex h-[14px] flex-shrink-0 items-center rounded-[4px] bg-primary/12 px-[5px] text-micro font-semibold uppercase tracking-wide text-primary"
+          className="ml-[1px] inline-flex h-[14px] flex-shrink-0 items-center rounded-[4px] bg-primary/12 px-[5px] text-caption font-semibold uppercase tracking-wide text-primary"
         >
           wt
         </span>
       )}
-      <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+      <ChevronDown size={12} className="flex-shrink-0 text-mf-text-3" />
     </>
   );
 }

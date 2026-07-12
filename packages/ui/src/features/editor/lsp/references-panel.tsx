@@ -108,9 +108,7 @@ export function ReferencesPanel({ locations, symbolName, onSelectRange, onClose 
                   onClick={() => handleRowClick(loc)}
                   className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                 >
-                  <span className="min-w-0 flex-1 truncate font-mono text-caption text-foreground">
-                    {basename(path)}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-label text-foreground">{basename(path)}</span>
                   <span className="shrink-0 text-caption text-muted-foreground">:{line}</span>
                 </button>
               </li>

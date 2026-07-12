@@ -46,7 +46,7 @@ interface CodeBlockProps {
 }
 
 const CODE_PRE_CLASS =
-  'my-2 overflow-x-auto rounded-md border border-border bg-mf-code-bg p-3 font-mono text-caption text-mf-code-fg';
+  'my-2 overflow-x-auto rounded-md border border-border bg-mf-code-bg p-3 font-mono text-label text-mf-code-fg';
 
 /** Fenced code block with shiki highlighting. Renders plain until shiki resolves. */
 function CodeBlock({ className, children }: CodeBlockProps) {
@@ -81,7 +81,7 @@ const components = {
     return (
       <code
         {...props}
-        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-caption text-mf-code-cmt"
+        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-label text-mf-code-cmt"
       >
         {children}
       </code>
