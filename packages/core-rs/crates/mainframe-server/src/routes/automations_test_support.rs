@@ -79,6 +79,7 @@ pub(crate) async fn automations_ctx() -> AutomationsHarness {
             projects: Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
             clock: Arc::new(SystemClock),
             event_source: None,
+            registry: None,
         },
     )
     .await

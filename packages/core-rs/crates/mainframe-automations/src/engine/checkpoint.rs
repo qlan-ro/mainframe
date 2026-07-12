@@ -7,7 +7,9 @@ use serde_json::{Map, Value};
 
 use crate::domain::TOKEN_STEP_TRIGGER;
 use crate::ports::Clock;
-use crate::store::{AutomationCheckpoint, CheckpointStep, StepStatus, epoch_ms_now};
+use crate::store::{
+    AutomationCheckpoint, CheckpointStep, RunTriggerKind, StepStatus, epoch_ms_now,
+};
 use crate::tokens::{Scope, TokenValue};
 
 /// Per-scope walk context: `ref_suffix` turns a plain step id into its
@@ -120,13 +122,7 @@ pub(crate) fn build_scope(
     clock: Arc<dyn Clock>,
 ) -> Scope<'static> {
     let mut scope = Scope::root(clock);
-    if let Some(Value::Object(payload)) = &checkpoint.trigger.payload {
-        for (key, value) in payload {
-            if let Some(token_value) = TokenValue::from_json(value) {
-                scope.bind(TOKEN_STEP_TRIGGER, key, token_value);
-            }
-        }
-    }
+    bind_trigger_tokens(&mut scope, checkpoint);
     for (step_ref, entry) in &checkpoint.steps {
         let Some(plain_id) = visible_plain_id(step_ref, &frame.ref_suffix) else {
             continue;
@@ -144,6 +140,32 @@ pub(crate) fn build_scope(
         scope.set_current(item.clone());
     }
     scope
+}
+
+/// Trigger-token exposure (domain `trigger_tokens`): a webhook delivery is one
+/// `payload` object token (fields dig in — `⟨PR URL⟩` = `payload.pull_request
+/// .html_url`); an event trigger spreads its flat `{result, chatId}` bag;
+/// schedule/manual produce none.
+fn bind_trigger_tokens(scope: &mut Scope<'static>, checkpoint: &AutomationCheckpoint) {
+    let Some(payload) = &checkpoint.trigger.payload else {
+        return;
+    };
+    match checkpoint.trigger.kind {
+        RunTriggerKind::Webhook => {
+            if let Some(token_value) = TokenValue::from_json(payload) {
+                scope.bind(TOKEN_STEP_TRIGGER, "payload", token_value);
+            }
+        }
+        _ => {
+            if let Value::Object(fields) = payload {
+                for (key, value) in fields {
+                    if let Some(token_value) = TokenValue::from_json(value) {
+                        scope.bind(TOKEN_STEP_TRIGGER, key, token_value);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// The plain step id a checkpoint ref is visible under in this frame, if any.

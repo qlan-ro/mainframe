@@ -25,10 +25,15 @@ pub(super) async fn build(
     let runs = RunStore::new(db.clone());
     let interactions = InteractionStore::new(db.clone());
 
-    let mut registry = ActionRegistry::new();
-    register_all_actions(&mut registry)
-        .map_err(|err| StoreError::Task(format!("action registry: {}", err.0)))?;
-    let registry = Arc::new(registry);
+    let registry = match ports.registry {
+        Some(registry) => registry,
+        None => {
+            let mut registry = ActionRegistry::new();
+            register_all_actions(&mut registry)
+                .map_err(|err| StoreError::Task(format!("action registry: {}", err.0)))?;
+            Arc::new(registry)
+        }
+    };
     let credentials = Arc::new(FileCredentialStore::load(config.credentials_path).await);
 
     let agent_verb = AgentVerb::new(ports.agent, runs.clone(), ports.events.clone());

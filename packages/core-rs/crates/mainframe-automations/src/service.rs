@@ -60,6 +60,11 @@ pub struct AutomationsPorts {
     pub clock: Arc<dyn Clock>,
     /// Subscribed by `start()` (T10.1); `None` disables event triggers.
     pub event_source: Option<Arc<dyn EventSource>>,
+    /// Test seam (T10.2): a pre-built action registry. `None` → the launch
+    /// catalog (`register_all_actions`). Production always passes `None`; the
+    /// conformance suite injects recording fakes so a run never touches real
+    /// GitHub/Notion HTTP or the user's home directory.
+    pub registry: Option<Arc<ActionRegistry>>,
 }
 
 pub struct AutomationsEngine {

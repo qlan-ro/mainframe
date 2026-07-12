@@ -80,6 +80,7 @@ async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
             projects: Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
             clock: Arc::new(FakeClock),
             event_source: None,
+            registry: None,
         },
     )
     .await
@@ -107,6 +108,7 @@ async fn build_engine(
             projects: Arc::new(FixedProjects(".".to_string())),
             clock: Arc::new(FakeClock),
             event_source: None,
+            registry: None,
         },
     )
     .await

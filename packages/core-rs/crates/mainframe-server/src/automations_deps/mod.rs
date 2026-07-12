@@ -92,6 +92,7 @@ pub async fn build_automations_engine(
         projects: Arc::new(DbProjectRegistry::new(db)),
         clock: Arc::new(SystemClock),
         event_source: Some(DaemonEventSource::spawn(broadcast.subscribe())),
+        registry: None,
     };
     let config = AutomationsConfig {
         db_path: data_dir.join("automations.db"),
