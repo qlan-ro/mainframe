@@ -928,11 +928,16 @@ dependencies = [
 name = "mainframe-automations"
 version = "0.0.0"
 dependencies = [
+ "chrono",
  "mainframe-types",
+ "nanoid",
+ "rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
