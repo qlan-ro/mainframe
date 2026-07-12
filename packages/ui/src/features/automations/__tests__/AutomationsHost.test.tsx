@@ -1,4 +1,4 @@
-import { it, expect } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AutomationsHost } from '../AutomationsHost';
 import { useAutomationsNav } from '../data/use-automations-nav';
@@ -8,6 +8,16 @@ it('renders nothing while closed', () => {
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
   const { container } = render(<AutomationsHost />);
   expect(container).toBeEmptyDOMElement();
+});
+
+it('loads automations even while closed, so the sidebar badge reflects pending interactions on boot', async () => {
+  useAutomationsStore.setState({ definitions: [] });
+  useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
+  render(<AutomationsHost />);
+
+  await vi.waitFor(() => {
+    expect(useAutomationsStore.getState().definitions.length).toBe(6);
+  });
 });
 
 it('renders the view once opened, and loads automations from the gateway', async () => {

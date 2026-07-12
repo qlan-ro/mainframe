@@ -1,18 +1,16 @@
 /**
  * AutomationsHost — single app-root outlet for the Automations v2 fullview
- * host, mirroring `WorkflowsModalHost`'s role but driven by
- * `use-automations-nav` instead of a WorkflowsModalHost-style event.
+ * host, mounted unconditionally in AppShell (Phase 6 entry swap) and driven
+ * by `use-automations-nav`.
  *
- * v1 Workflows stays wired to its own `mf:open-workflows` event untouched;
- * this host has no production entry point yet (that's Phase 6's
- * SidebarHeader swap). Until then, a dev-only affordance
- * (Cmd/Ctrl+Shift+A, `import.meta.env.DEV` only) opens it for manual
- * verification.
+ * A dev-only affordance (Cmd/Ctrl+Shift+A, `import.meta.env.DEV` only) still
+ * opens it directly, alongside the production SidebarHeader entry point.
  */
 import React, { Suspense, useEffect } from 'react';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore } from './data/use-automations-store';
 import { useAutomationToasts } from './data/use-automation-toasts';
+import { useAutomationEvents } from './data/use-automation-events';
 import { AutomationsView } from './AutomationsView';
 
 export function AutomationsHost(): React.ReactElement | null {
@@ -21,12 +19,18 @@ export function AutomationsHost(): React.ReactElement | null {
   const close = useAutomationsNav((s) => s.close);
   const loadAll = useAutomationsStore((s) => s.loadAll);
 
-  // Unconditional (before the `!open` early return) — notifications fire even while the panel is closed.
+  // Both unconditional (before the `!open` early return): toasts fire, and
+  // the WS-driven store patches apply, even while the panel is closed.
   useAutomationToasts();
+  useAutomationEvents();
 
+  // Load once at mount (not gated by `open`) — the sidebar's pending-
+  // interaction badge (`selectPendingInteractionCount`) needs real data from
+  // app boot, not just after the panel has been opened once. WS events keep
+  // it fresh thereafter via useAutomationEvents above.
   useEffect(() => {
-    if (open) void loadAll();
-  }, [open, loadAll]);
+    void loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
