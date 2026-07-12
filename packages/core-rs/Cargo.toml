@@ -37,6 +37,9 @@ qrcode = "0.14"
 croner = "3"
 # Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
 tempfile = "3"
+# Test-only: named timezones for the scheduler DST-edge tests (croner runs
+# in local time in prod; tests need a deterministic tz - use as a dev-dependency).
+chrono-tz = "0.10"
 # Test-only: HTTP mocking for automations action tests (use as a dev-dependency).
 wiremock = "0.6"
 
