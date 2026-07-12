@@ -2,15 +2,15 @@
 //! sink. The payload shapes are the contract §4 WS bodies; mainframe-server
 //! (T9.x) maps `AutomationEvent` onto `DaemonEvent` variants 1:1.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::domain::AutomationFormField;
 use crate::store::{InteractionRecord, InteractionStatus, RunRecord, RunStatus, RunTriggerKind};
 
-/// Engine-side event union (grows with later phases: notification rides the
-/// Notifier port, completed lands with chaining). Serde names are the §4
-/// wire truth so the DaemonEvent mapping cannot drift silently.
+/// Engine-side event union (notification rides the Notifier port). Serde
+/// names are the §4 wire truth so the DaemonEvent mapping cannot drift
+/// silently.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum AutomationEvent {
@@ -25,10 +25,53 @@ pub enum AutomationEvent {
         interaction_id: String,
         run_id: String,
     },
+    /// One WS event serves both chaining selectors (contract §4): the
+    /// `automation.finished`/`automation.failed` triggers filter this by
+    /// `status` — they are NOT separate events.
+    #[serde(rename = "automation.completed", rename_all = "camelCase")]
+    Completed {
+        automation_id: String,
+        automation_name: String,
+        run_id: String,
+        status: CompletedStatus,
+        result: String,
+    },
 }
 
 pub trait EventSink: Send + Sync {
     fn emit(&self, event: AutomationEvent);
+}
+
+/// `automation.completed`'s status field — only real terminal outcomes;
+/// cancelled runs never emit a completion (Node emitCompletionEvent parity).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompletedStatus {
+    Succeeded,
+    Failed,
+}
+
+/// App events the trigger router consumes (T8.3). Carries app events only —
+/// GitHub PR opened/merged are webhook presets, not events (contract §1) —
+/// and `automation.completed` for chaining, which the CompletionEmitter
+/// feeds without a round-trip through the daemon bus.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CuratedEvent {
+    /// The CLI process behind a chat reached a terminal reason (the T9.2
+    /// port impl maps terminal `chat.updated` frames onto this).
+    SessionFinished { chat_id: String, reason: String },
+    AutomationCompleted {
+        automation_id: String,
+        run_id: String,
+        status: CompletedStatus,
+        result: String,
+    },
+}
+
+/// Subscription port (T8.3): the daemon side owns the broadcast sender and
+/// maps its own event stream into `CuratedEvent`s — no polling.
+pub trait EventSource: Send + Sync {
+    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<CuratedEvent>;
 }
 
 /// Wire projection of a run (Node `toRunSummary`, types `AutomationRunSummary`):

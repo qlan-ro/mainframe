@@ -57,6 +57,14 @@ pub struct VerbContext<'a> {
     pub scope: &'a Scope<'a>,
 }
 
+/// Post-finalize hook (T8.3): the CompletionEmitter turns a finalized
+/// `succeeded|failed` run into the `automation.completed` event + chained
+/// trigger fires. Runs after the terminal store write, outside it — a hook
+/// failure can never un-finalize a run.
+pub trait RunFinalizedHook: Send + Sync {
+    fn on_finalized<'a>(&'a self, run: &'a crate::store::RunRecord) -> BoxFuture<'a, ()>;
+}
+
 /// Late-bound advance handle (T4.3): the settle/respond paths re-enter the
 /// interpreter after an external completion, but the interpreter owns the
 /// VerbPorts that contain those verbs — a trait breaks the construction

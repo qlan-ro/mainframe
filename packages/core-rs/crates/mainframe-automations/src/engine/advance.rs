@@ -15,7 +15,7 @@ use crate::store::{RunRecord, RunStore, RunTriggerContext, StepStatus, TerminalS
 
 use super::checkpoint::fail_step_entry;
 use super::walk::{WalkCtx, walk_steps};
-use super::{BoxFuture, RunAdvancer, VerbPorts, WalkResult};
+use super::{BoxFuture, RunAdvancer, RunFinalizedHook, VerbPorts, WalkResult};
 
 const RESTART_MID_ACTION_ERROR: &str = "engine restarted mid-action; effect unknown";
 
@@ -38,6 +38,8 @@ pub struct InterpreterDeps {
     /// regardless of this hook.
     pub is_idempotent: Option<IdempotencyHook>,
     pub agent_waits: Option<Arc<dyn AgentWaitRegistry>>,
+    /// T8.3 chaining (Node onRunFinalized): observes terminal runs.
+    pub on_finalized: Option<Arc<dyn RunFinalizedHook>>,
 }
 
 pub struct Interpreter {
@@ -234,6 +236,9 @@ impl Interpreter {
         match self.deps.store.finalize(run_id, status, error).await {
             Ok((record, _)) => {
                 self.emit(&record);
+                if let Some(hook) = &self.deps.on_finalized {
+                    hook.on_finalized(&record).await;
+                }
                 Ok(())
             }
             // Lost the race to cancel_run — its verdict stands.

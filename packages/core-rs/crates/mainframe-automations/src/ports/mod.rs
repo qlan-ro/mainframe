@@ -12,8 +12,8 @@ pub use agent::{
 };
 pub use clock::{Clock, SystemClock};
 pub use events::{
-    AutomationEvent, EventSink, InteractionSummary, RunSummary, RunTriggerSummary,
-    to_interaction_summary, to_run_summary,
+    AutomationEvent, CompletedStatus, CuratedEvent, EventSink, EventSource, InteractionSummary,
+    RunSummary, RunTriggerSummary, to_interaction_summary, to_run_summary,
 };
 pub use notify::{Notification, NotificationLinks, Notifier, NotifyError};
 

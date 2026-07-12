@@ -41,6 +41,7 @@ async fn harness() -> SweepHarness {
         clock: Arc::new(FakeClock),
         is_idempotent: None,
         agent_waits: None,
+        on_finalized: None,
     }));
     let firer = Arc::new(TriggerFirer::new(automations.clone(), interpreter));
     let sweeper = ScheduleSweeper::new(automations.clone(), firer);

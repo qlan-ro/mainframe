@@ -190,6 +190,7 @@ impl Harness {
             clock: Arc::new(FakeClock),
             is_idempotent: None,
             agent_waits: None,
+            on_finalized: None,
         }
     }
 }
