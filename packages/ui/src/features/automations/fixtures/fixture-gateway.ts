@@ -14,6 +14,7 @@ import type {
   DaemonEvent,
 } from '../contract';
 import type { AutomationsGateway } from '../data/gateway';
+import { ACTION_CATALOG_FIXTURE } from './action-catalog';
 import { AUTOMATION_FIXTURES } from './fixtures';
 
 type EventListener = (event: DaemonEvent) => void;
@@ -153,7 +154,7 @@ export function createFixtureGateway(): AutomationsGateway & { onEvent: (listene
     },
 
     async listActions(): Promise<ActionCatalogEntry[]> {
-      return [];
+      return ACTION_CATALOG_FIXTURE;
     },
 
     async listCredentialLabels() {

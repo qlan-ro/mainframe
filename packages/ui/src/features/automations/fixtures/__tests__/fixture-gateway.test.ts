@@ -69,9 +69,11 @@ describe('createFixtureGateway', () => {
     expect(runsForA.length).toBeGreaterThan(0);
   });
 
-  it('listActions and listCredentialLabels resolve (empty catalog is a valid launch state)', async () => {
+  it('listActions resolves the nine launch actions (Phase 4); listCredentialLabels stays empty (no dev-host auth)', async () => {
     const gateway = createFixtureGateway();
-    expect(await gateway.listActions()).toEqual([]);
+    const actions = await gateway.listActions();
+    expect(actions).toHaveLength(9);
+    expect(actions.some((a) => a.group === 'mcp')).toBe(false);
     expect(await gateway.listCredentialLabels()).toEqual([]);
   });
 });
