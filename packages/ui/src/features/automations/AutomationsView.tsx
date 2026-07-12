@@ -1,16 +1,17 @@
 /**
  * AutomationsView — the shell: header + body switch (library | editor | run).
- * Phase 0 ships only the shell; `library/LibraryList` (Phase 1),
- * `editor/AutomationEditor` (Phase 3, lazy-loaded), `run/RunView` (Phase 5,
- * lazy-loaded), and the describe flow (Phase 5, behind `DESCRIBE_ENABLED`)
- * each replace their placeholder body below as they land — the `<Suspense>`
- * boundary is already in place for the two lazy ones.
+ * Phase 1 wires in `library/LibraryList`; `editor/AutomationEditor` (Phase 3,
+ * lazy-loaded), `run/RunView` (Phase 5, lazy-loaded), and the describe flow
+ * (Phase 5, behind `DESCRIBE_ENABLED`) still replace their placeholder body
+ * below as they land — the `<Suspense>` boundary is already in place for the
+ * two lazy ones.
  */
 import React, { Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
+import { LibraryList } from './library/LibraryList';
 
 function SectionFallback(): React.ReactElement {
   return <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>;
@@ -45,24 +46,24 @@ export function AutomationsView(): React.ReactElement {
       </div>
 
       <Suspense fallback={<SectionFallback />}>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-hidden">
           {runId ? (
-            <div data-testid="automations-section-run" className="text-body text-muted-foreground">
+            <div
+              data-testid="automations-section-run"
+              className="h-full overflow-y-auto p-4 text-body text-muted-foreground"
+            >
               Run view — coming in a later phase.
             </div>
           ) : editorTarget ? (
-            <div data-testid="automations-section-editor" className="text-body text-muted-foreground">
+            <div
+              data-testid="automations-section-editor"
+              className="h-full overflow-y-auto p-4 text-body text-muted-foreground"
+            >
               Editor — coming in a later phase.
             </div>
           ) : (
-            <div data-testid="automations-section-library" className="text-body text-muted-foreground">
-              {definitions.length === 0
-                ? 'No automations yet.'
-                : definitions.map((d) => (
-                    <div key={d.id} data-testid={`automations-library-row-${d.id}`}>
-                      {d.name}
-                    </div>
-                  ))}
+            <div data-testid="automations-section-library" className="h-full">
+              <LibraryList />
             </div>
           )}
         </div>
