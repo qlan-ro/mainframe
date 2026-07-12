@@ -49,7 +49,7 @@ export function DraftSessionRow({
       data-active={selected ? 'true' : 'false'}
       onClick={onSelect}
       onKeyDown={onKeyDown}
-      className="group relative flex w-full items-center gap-[9px] border-l-2 border-l-transparent pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
+      className="group relative flex w-full items-center gap-[9px] rounded-md pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
     >
       <span
         aria-hidden
@@ -63,21 +63,23 @@ export function DraftSessionRow({
           >
             New Session
           </span>
-          <span className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 group-hover:hidden">now</span>
+          <span className="flex-shrink-0 text-caption tabular-nums text-muted-foreground group-hover:hidden">now</span>
           <Hint label="Discard draft">
             <button
               type="button"
               data-testid="sessions-draft-row-discard"
               onClick={discard}
-              className="hidden size-5 flex-shrink-0 items-center justify-center rounded-xs text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
+              className="hidden size-5 flex-shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground group-hover:inline-flex"
             >
-              <XIcon className="size-[11px]" />
+              <XIcon className="size-3.5" />
             </button>
           </Hint>
         </div>
         <div className="mt-[4px] flex min-w-0 items-center gap-[6px] @max-[220px]:hidden">
           {showProject && <ProjectChip projectId={projectId} name={projectName} size={16} />}
-          <span className="truncate text-micro text-mf-text-4">draft — clears if you leave without sending</span>
+          <span className="truncate text-caption text-muted-foreground">
+            draft — clears if you leave without sending
+          </span>
         </div>
       </div>
     </div>

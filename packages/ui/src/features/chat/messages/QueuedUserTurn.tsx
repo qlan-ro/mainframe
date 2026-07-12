@@ -51,7 +51,7 @@ function QueuedAction({ icon: Icon, label, onClick, danger, testid }: QueuedActi
         // Design 7.10: icon/label gap 4 (gap-1 was 2px), radius 7 (rounded-md
         // is 8px) — both arbitrary, no exact compressed-scale token.
         'inline-flex items-center gap-[4px] rounded-[7px] border border-transparent h-[24px] px-[9px]',
-        'text-caption text-mf-text-3 transition-colors',
+        'text-caption text-muted-foreground transition-colors',
         'hover:bg-mf-content2 hover:border-border',
         danger && 'hover:text-destructive hover:border-destructive/35',
       )}
@@ -72,15 +72,9 @@ function QueuedMeta({ position = 1, total = 1 }: { position?: number; total?: nu
 
   // Non-head items use a steady amber dot (no spin); head/single uses the spinner.
   const showSpinner = isHead || !isMulti;
-  const dimmed = isMulti && !isHead;
 
   return (
-    <span
-      className={cn(
-        'mr-1 inline-flex items-center gap-1.5 font-mono text-micro tracking-tight',
-        dimmed ? 'text-mf-text-4' : 'text-mf-text-3',
-      )}
-    >
+    <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-caption tracking-tight text-muted-foreground">
       {showSpinner ? (
         <span
           className="inline-block h-[7px] w-[7px] shrink-0 animate-spin rounded-full border-[1.5px] border-mf-warning"

@@ -85,11 +85,11 @@ export function BackgroundActivityBar() {
                   data-testid={`composer-background-activity-item-${task.id}`}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5"
                 >
-                  <Icon size={13} className="flex-shrink-0 text-mf-text-3" aria-hidden />
+                  <Icon size={14} className="flex-shrink-0 text-muted-foreground" aria-hidden />
                   <span className="min-w-0 flex-1 truncate text-caption text-foreground">
                     {task.description || 'Background task'}
                   </span>
-                  <span className="flex-shrink-0 font-mono text-micro tabular-nums text-mf-text-3">
+                  <span className="flex-shrink-0 font-mono text-caption tabular-nums text-muted-foreground">
                     {formatElapsed(task.startedAt, now)}
                   </span>
                 </li>

@@ -45,7 +45,7 @@ function workingLogoAnimation(adapterId: string): string {
 function statusLogoClass(badge: SessionBadge, adapterId: string): string {
   const base = 'inline-flex size-8 flex-shrink-0 items-center justify-center';
   const active = badge.base === 'working' || badge.base === 'waiting';
-  const visual = badge.unread || active ? 'text-primary' : 'text-mf-text-4 opacity-50';
+  const visual = badge.unread || active ? 'text-primary' : 'text-mf-text-3';
   switch (badge.base) {
     case 'worktree-missing':
     case 'transcript-missing':
@@ -90,7 +90,7 @@ function RelativeTime({ updatedAt }: { updatedAt: number }) {
   return (
     <span
       data-testid="sessions-row-relative-time"
-      className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 group-hover:hidden"
+      className="flex-shrink-0 text-caption tabular-nums text-muted-foreground group-hover:hidden"
     >
       {text}
     </span>
@@ -113,7 +113,7 @@ function RowHoverActions({
   onArchive: () => void;
 }) {
   const btn =
-    'inline-flex size-[22px] items-center justify-center rounded-xs text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
+    'inline-flex size-[22px] items-center justify-center rounded-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
   const stop = (fn: () => void) => (e: MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -132,17 +132,17 @@ function RowHoverActions({
             onTags(e.currentTarget.getBoundingClientRect());
           }}
         >
-          <TagIcon className="size-[11px]" />
+          <TagIcon className="size-3.5" />
         </button>
       </Hint>
       <Hint label="Rename">
         <button data-testid="sessions-row-action-rename" type="button" className={btn} onClick={stop(onRename)}>
-          <PaperclipIcon className="size-[11px]" />
+          <PaperclipIcon className="size-3.5" />
         </button>
       </Hint>
       <Hint label="Archive">
         <button data-testid="sessions-row-action-archive" type="button" className={btn} onClick={stop(onArchive)}>
-          <XIcon className="size-[11px]" />
+          <XIcon className="size-3.5" />
         </button>
       </Hint>
     </div>
@@ -239,7 +239,7 @@ function SessionRowInner({
       <ThreadListItemPrimitive.Root
         data-testid="sessions-row"
         data-chat-id={item.id}
-        className="group relative border-l-2 border-l-transparent transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
+        className="group relative rounded-md transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
       >
         {/* Whole-row select target: the entire row body is the trigger, so a click
             anywhere (title, status dot, meta row, empty space) changes the active

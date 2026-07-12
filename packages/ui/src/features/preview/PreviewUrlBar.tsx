@@ -57,7 +57,7 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
         onClick={handleReload}
         disabled={!isRunning}
       >
-        <RotateCw size={13} />
+        <RotateCw size={14} />
       </PreviewIconButton>
 
       <span
@@ -78,12 +78,12 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
           setInvalid(false);
         }}
         onKeyDown={handleKeyDown}
-        className={`flex-1 min-w-0 bg-transparent outline-none font-mono text-caption px-[4px] ${
+        className={`flex-1 min-w-0 bg-transparent outline-none font-mono text-body px-[4px] ${
           invalid
             ? 'text-destructive ring-1 ring-destructive rounded-sm'
             : isRunning
               ? 'text-foreground'
-              : 'text-mf-text-4'
+              : 'text-muted-foreground'
         }`}
       />
 
@@ -92,9 +92,8 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
         title="Open in browser"
         onClick={handleOpenBrowser}
         disabled={!isRunning}
-        className="text-mf-text-3"
       >
-        <ExternalLink size={12} />
+        <ExternalLink size={14} />
       </PreviewIconButton>
 
       <PreviewIconButton
@@ -102,9 +101,8 @@ export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
         title="Clear cache"
         onClick={handleClearCache}
         disabled={!isRunning}
-        className="text-mf-text-3"
       >
-        <Eraser size={13} />
+        <Eraser size={14} />
       </PreviewIconButton>
     </div>
   );

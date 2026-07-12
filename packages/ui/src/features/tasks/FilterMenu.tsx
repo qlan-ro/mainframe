@@ -9,6 +9,7 @@
 import React from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CountBadge } from '@/components/ui/count-badge';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -56,14 +57,14 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
         >
           {label}
           {hasSelection && (
-            <span
+            <CountBadge
+              count={selected.length}
+              variant="unread"
+              className="ml-0.5"
               data-testid={`tasks-filter-${toKebab(label)}-count`}
-              className="ml-0.5 rounded-[6px] bg-primary/[18%] px-[5px] font-mono text-micro font-bold text-primary"
-            >
-              {selected.length}
-            </span>
+            />
           )}
-          <ChevronDown size={11} className="ml-0.5" />
+          <ChevronDown size={12} className="ml-0.5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[160px] max-h-64 overflow-y-auto p-1">
@@ -86,7 +87,7 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
                   isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border',
                 )}
               >
-                {isSelected && <Check size={9} strokeWidth={3} />}
+                {isSelected && <Check size={12} strokeWidth={3} />}
               </span>
               <span className="flex-1 capitalize">{opt.label.replace('_', ' ')}</span>
               {opt.count > 0 && <span className="text-caption text-muted-foreground tabular-nums">{opt.count}</span>}

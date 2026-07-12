@@ -55,7 +55,7 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
       />
 
       {/* Model (mono, muted) */}
-      {model && <TruncatedWithTooltip text={model} className="font-mono text-caption text-mf-text-4" />}
+      {model && <TruncatedWithTooltip text={model} className="font-mono text-caption text-mf-text-3" />}
 
       {/* Description / prompt */}
       {description && (

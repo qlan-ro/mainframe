@@ -30,7 +30,7 @@ export function WorktreeTabBar({ active, onChange }: TabBarProps) {
           'flex-1 rounded-[5px] px-[8px] py-[2px] text-caption transition-colors',
           active === 'new'
             ? 'bg-popover font-medium text-foreground shadow-sm'
-            : 'text-mf-text-3 hover:text-foreground',
+            : 'text-muted-foreground hover:text-foreground',
         ].join(' ')}
       >
         New
@@ -43,7 +43,7 @@ export function WorktreeTabBar({ active, onChange }: TabBarProps) {
           'flex-1 rounded-[5px] px-[8px] py-[2px] text-caption transition-colors',
           active === 'existing'
             ? 'bg-popover font-medium text-foreground shadow-sm'
-            : 'text-mf-text-3 hover:text-foreground',
+            : 'text-muted-foreground hover:text-foreground',
         ].join(' ')}
       >
         Existing
@@ -86,10 +86,10 @@ export function WorktreeExistingTab({ worktrees, submitting, onAttach, error }: 
           <span className="truncate font-mono text-caption text-foreground">
             {wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached'}
           </span>
-          <span className="truncate text-micro text-mf-text-3">{wt.path}</span>
+          <span className="truncate text-label text-muted-foreground">{wt.path}</span>
         </button>
       ))}
-      {error && <p className="mt-[4px] px-[8px] text-caption text-destructive">{error}</p>}
+      {error && <p className="mt-[4px] px-[8px] text-label text-destructive">{error}</p>}
     </div>
   );
 }

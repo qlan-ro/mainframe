@@ -19,19 +19,19 @@ export interface BranchRowProps {
 
 function BranchDivergence({ ahead, behind }: { ahead?: number; behind?: number }) {
   if (!ahead && !behind) {
-    return <span className="text-caption text-mf-text-4 shrink-0">up to date</span>;
+    return <span className="text-caption text-mf-text-3 shrink-0">up to date</span>;
   }
   return (
-    <span className="inline-flex items-center gap-[7px] font-mono text-caption text-mf-text-3 shrink-0">
+    <span className="inline-flex items-center gap-[7px] font-mono text-caption text-foreground shrink-0">
       {(ahead ?? 0) > 0 && (
-        <span className="inline-flex items-center gap-[1px] text-mf-success">
-          <ArrowUp size={9} className="text-mf-success" />
+        <span className="inline-flex items-center gap-[1px]">
+          <ArrowUp size={12} className="text-mf-success" />
           {ahead}
         </span>
       )}
       {(behind ?? 0) > 0 && (
-        <span className="inline-flex items-center gap-[1px] text-mf-warning">
-          <ArrowDown size={9} className="text-mf-warning" />
+        <span className="inline-flex items-center gap-[1px]">
+          <ArrowDown size={12} className="text-mf-warning" />
           {behind}
         </span>
       )}
@@ -80,7 +80,7 @@ export function BranchRow({
         {displayName}
       </span>
       {!isRemote && <BranchDivergence ahead={ahead} behind={behind} />}
-      <ChevronRight size={11} className="shrink-0 text-mf-text-4" />
+      <ChevronRight size={12} className="shrink-0 text-mf-text-3" />
     </button>
   );
 }

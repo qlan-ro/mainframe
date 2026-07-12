@@ -10,7 +10,7 @@ const buttonVariants = cva(
     'transition-colors',
     'focus-visible:outline-none',
     'disabled:pointer-events-none disabled:opacity-[0.45]',
-    '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+    "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-3.5 [&_svg]:shrink-0",
   ],
   {
     variants: {

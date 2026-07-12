@@ -30,7 +30,7 @@ function TooltipContent({
           // Default width floor so long content wraps instead of stretching the
           // tooltip across the viewport. Callers override via a `max-w-*` class.
           'max-w-xs break-words',
-          'text-caption leading-snug text-popover-foreground',
+          'text-label leading-snug text-popover-foreground',
           'shadow-[var(--mf-shadow-pop)]',
           'animate-in fade-in-0 zoom-in-95',
           'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',

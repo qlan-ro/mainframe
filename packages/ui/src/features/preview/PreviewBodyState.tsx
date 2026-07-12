@@ -42,8 +42,8 @@ export function PreviewBodyState({
             <span className="w-2 h-2 rounded-full bg-destructive" />
             <span className="text-body text-muted-foreground">Preview tunnel unavailable</span>
           </div>
-          {tunnelError && <span className="line-clamp-2 font-mono text-micro text-mf-text-4">{tunnelError}</span>}
-          <span className="text-micro text-mf-text-4">Process logs are in the console below</span>
+          {tunnelError && <span className="line-clamp-2 font-mono text-caption text-mf-text-3">{tunnelError}</span>}
+          <span className="text-caption text-muted-foreground">Process logs are in the console below</span>
         </div>
       </div>
     );
@@ -53,8 +53,8 @@ export function PreviewBodyState({
     return (
       <div data-testid="preview-tunnel-pending" className="absolute inset-0 grid place-items-center bg-card">
         <div className="flex items-center gap-[8px]">
-          <Loader2 size={12} className="animate-spin text-mf-text-3" />
-          <span className="text-label text-mf-text-3">Starting tunnel…</span>
+          <Loader2 size={12} className="animate-spin text-muted-foreground" />
+          <span className="text-label text-muted-foreground">Starting tunnel…</span>
         </div>
       </div>
     );
@@ -70,12 +70,12 @@ export function PreviewBodyState({
           className="group flex flex-col items-center gap-2.5 px-[26px] py-[20px] rounded-xl border-none bg-transparent cursor-pointer hover:bg-accent transition-colors"
         >
           <div className="w-10 h-10 rounded-full border border-border flex items-center justify-center transition-[border-color] duration-[120ms] group-hover:border-mf-success">
-            <Play size={15} className="fill-current text-mf-success" />
+            <Play size={16} className="fill-current text-mf-success" />
           </div>
           <span className="text-label text-muted-foreground font-medium tracking-tight">
             Run {configName || 'server'}
           </span>
-          <span className="font-mono text-micro text-mf-text-4">launches localhost:{port ?? '…'}</span>
+          <span className="font-mono text-caption text-mf-text-3">launches localhost:{port ?? '…'}</span>
         </button>
       </div>
     );
@@ -85,8 +85,8 @@ export function PreviewBodyState({
     return (
       <div data-testid="preview-body-starting" className="absolute inset-0 grid place-items-center bg-card">
         <div className="flex items-center gap-[8px]">
-          <Loader2 size={12} className="animate-spin text-mf-text-3" />
-          <span className="text-label text-mf-text-3">Waiting for localhost:{port ?? '…'}…</span>
+          <Loader2 size={12} className="animate-spin text-muted-foreground" />
+          <span className="text-label text-muted-foreground">Waiting for localhost:{port ?? '…'}…</span>
         </div>
       </div>
     );
@@ -97,9 +97,9 @@ export function PreviewBodyState({
     const inspectBadge = inspectActive ? (
       <div
         data-testid="preview-inspect-active-indicator"
-        className="absolute top-[8px] left-[8px] z-10 rounded-[6px] bg-primary px-[7px] py-[2px] font-mono text-micro font-bold text-white"
+        className="absolute top-[8px] left-[8px] z-10 rounded-[6px] bg-primary px-[7px] py-[2px] font-mono text-caption font-semibold text-primary-foreground"
       >
-        CLICK AN ELEMENT
+        Click an element
       </div>
     ) : null;
     return (

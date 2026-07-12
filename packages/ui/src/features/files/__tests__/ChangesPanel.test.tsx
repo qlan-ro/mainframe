@@ -52,12 +52,12 @@ describe('ChangesPanel status tokens', () => {
     expect(badge.className).toContain('text-mf-diff-add-text');
   });
 
-  it('modified file (status M) uses text-mf-warning', async () => {
+  it('modified file (status M) uses text-muted-foreground', async () => {
     mockGetGitStatus.mockResolvedValue([{ path: 'modified.ts', status: 'M' }]);
     render(<ChangesPanel {...BASE_PROPS} />);
     const badge = await screen.findByTestId('changes-status-modified.ts');
-    expect(badge.className).toContain('text-mf-warning');
-    expect(badge.className).not.toContain('text-mf-surface-files');
+    expect(badge.className).toContain('text-muted-foreground');
+    expect(badge.className).not.toContain('text-mf-warning');
   });
 
   it('deleted file (status D) uses text-mf-diff-del-text', async () => {

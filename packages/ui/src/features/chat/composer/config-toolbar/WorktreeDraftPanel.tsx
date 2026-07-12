@@ -25,22 +25,22 @@ export function WorktreeDraftPanel({ draft, onCancel }: WorktreeDraftPanelProps)
     <div data-testid="composer-worktree-draft-panel" className="space-y-[6px] px-[8px] py-[6px]">
       <div className="flex items-center gap-[6px]">
         <span className="inline-block size-[7px] shrink-0 rounded-full bg-mf-success" aria-hidden />
-        <span className="text-caption font-medium text-mf-success">
+        <span className="text-caption font-medium text-foreground">
           {pending ? 'New worktree on first message' : 'Isolates in worktree on first message'}
         </span>
       </div>
       <MenuDivider />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-[8px] gap-y-[2px]">
-        <span className="text-caption text-mf-text-3">Branch</span>
+        <span className="text-caption text-muted-foreground">Branch</span>
         <span className="truncate font-mono text-caption text-foreground">{branch}</span>
         {pending ? (
           <>
-            <span className="text-caption text-mf-text-3">From</span>
+            <span className="text-caption text-muted-foreground">From</span>
             <span className="truncate font-mono text-caption text-foreground">{pending.baseBranch}</span>
           </>
         ) : (
           <>
-            <span className="text-caption text-mf-text-3">Path</span>
+            <span className="text-caption text-muted-foreground">Path</span>
             <TruncatedWithTooltip
               text={draft.worktreePath ?? ''}
               className="font-mono text-caption text-foreground"
@@ -54,7 +54,7 @@ export function WorktreeDraftPanel({ draft, onCancel }: WorktreeDraftPanelProps)
           type="button"
           data-testid="composer-worktree-draft-cancel"
           onClick={onCancel}
-          className="rounded-[6px] px-[10px] py-[4px] text-caption text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground"
+          className="rounded-[6px] px-[10px] py-[4px] text-label text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           Don&apos;t isolate
         </button>

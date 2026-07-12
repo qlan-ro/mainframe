@@ -108,14 +108,14 @@ function ToolFallbackTrigger({
           isCancelled && 'opacity-50 line-through',
         )}
       >
-        <span className="text-caption">
+        <span className="text-label">
           {label}: <b className="text-foreground font-medium">{toolName}</b>
         </span>
         {isRunning && (
           <span
             aria-hidden
             data-slot="tool-fallback-trigger-shimmer"
-            className="aui-tool-fallback-trigger-shimmer shimmer text-caption pointer-events-none absolute inset-0 motion-reduce:animate-none"
+            className="aui-tool-fallback-trigger-shimmer shimmer text-label pointer-events-none absolute inset-0 motion-reduce:animate-none"
           >
             {label}: <b className="font-medium">{toolName}</b>
           </span>

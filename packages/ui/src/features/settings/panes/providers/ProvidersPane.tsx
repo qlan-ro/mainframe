@@ -25,7 +25,7 @@ function ProviderHeader({ adapter }: { adapter: AdapterInfo }) {
         <h3 className="text-title font-bold text-foreground">{adapter.name}</h3>
         <div className="flex items-center gap-1.5">
           <span className={cn('size-1.5 rounded-full', adapter.installed ? 'bg-mf-success' : 'bg-mf-text-3')} />
-          <span className="text-caption text-muted-foreground">
+          <span className="text-label text-muted-foreground">
             {adapter.installed ? 'Detected on PATH' : 'Not installed'}
           </span>
         </div>

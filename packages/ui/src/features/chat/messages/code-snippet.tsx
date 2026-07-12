@@ -12,8 +12,10 @@ export function SnippetLines({ lines, start }: { lines: readonly string[]; start
       {lines.map((line, i) => (
         // 18px line-height pins the line-number gutter alignment — a fixed
         // layout metric (matches the prototype), not a typography token.
-        <div key={i} className="flex min-h-[18px] font-mono text-caption" style={{ lineHeight: '18px' }}>
-          <span className="w-10 flex-shrink-0 select-none pr-3 text-right text-micro text-mf-text-4">{start + i}</span>
+        <div key={i} className="flex min-h-[18px] font-mono text-label" style={{ lineHeight: '18px' }}>
+          <span className="w-10 flex-shrink-0 select-none pr-3 text-right text-caption text-mf-text-3">
+            {start + i}
+          </span>
           <span className="flex-1 whitespace-pre pr-3 text-foreground">{line}</span>
         </div>
       ))}
@@ -59,7 +61,9 @@ export function SnippetBlock({ id, lines, start }: { id: string; lines: readonly
     <div className="relative">
       <div
         data-testid={`chat-user-snippet-scroll-${id}`}
-        style={collapsed ? { maxHeight: COLLAPSED_HEIGHT_PX } : expanded ? { maxHeight: EXPANDED_MAX_HEIGHT_PX } : undefined}
+        style={
+          collapsed ? { maxHeight: COLLAPSED_HEIGHT_PX } : expanded ? { maxHeight: EXPANDED_MAX_HEIGHT_PX } : undefined
+        }
         className={cn(collapsed && 'overflow-hidden', expanded && 'max-h-[240px] overflow-y-auto')}
       >
         <SnippetLines lines={lines} start={start} />

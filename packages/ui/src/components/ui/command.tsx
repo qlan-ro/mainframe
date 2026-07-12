@@ -29,7 +29,7 @@ function CommandDialog({ children, className, 'data-testid': testId, ...props }:
   return (
     <Dialog {...props}>
       <DialogContent data-testid={testId} className={cn('overflow-hidden p-0', className)}>
-        <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-mf-text-3 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input]]:h-[54px] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2">
+        <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input]]:h-[54px] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2">
           {children}
         </Command>
       </DialogContent>
@@ -86,8 +86,8 @@ const CommandGroup = React.forwardRef<
     className={cn(
       'overflow-hidden p-1 text-foreground',
       '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
-      '[&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide',
-      '[&_[cmdk-group-heading]]:text-mf-text-3',
+      '[&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:font-medium',
+      '[&_[cmdk-group-heading]]:text-muted-foreground',
       className,
     )}
     {...props}

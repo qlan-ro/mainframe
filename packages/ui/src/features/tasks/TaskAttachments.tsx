@@ -175,7 +175,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-caption text-muted-foreground">Attachments</label>
+      <label className="text-label text-muted-foreground">Attachments</label>
       {allItems.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {allItems.map((att) => {
@@ -214,7 +214,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
                   )}
                   aria-label={`Remove ${att.filename}`}
                 >
-                  <X size={10} />
+                  <X size={12} />
                 </button>
               </div>
             );
@@ -229,7 +229,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          'flex items-center gap-1 w-fit px-2 py-1 rounded-md text-caption',
+          'flex items-center gap-1 w-fit px-2 py-1 rounded-md text-label',
           'text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
           'disabled:opacity-40',
         )}

@@ -9,7 +9,7 @@
  * Design per EditorCommentWidget (03-content.jsx):
  *   Header row (6px pad, hairline bottom):
  *     Sparkles icon (text-primary) + "Review comment" (caption semibold
- *     text-muted-foreground) + range label (mono micro text-mf-text-4) + close X
+ *     text-muted-foreground) + range label (mono caption text-mf-text-3) + close X
  *   Snippet block (when lineContent provided):
  *     bg-mf-raised, hairline bottom border, SnippetLines with numbered rows
  *   Card: shadow-pop, accent border when editing (focus-within:border-primary/40)
@@ -93,7 +93,7 @@ export function InlineCommentWidget({
     <div data-testid="editor-comment-widget" className="flex py-[5px] pl-[14px] pr-[14px] font-sans">
       {/* Sparkles gutter indicator */}
       <div className="mr-[10px] flex w-[12px] shrink-0 items-start pt-[9px]">
-        <Sparkles size={11} className="text-primary" aria-hidden />
+        <Sparkles size={12} className="text-primary" aria-hidden />
       </div>
 
       {/* Card */}
@@ -101,7 +101,7 @@ export function InlineCommentWidget({
         {/* Header */}
         <div className="flex items-center gap-[6px] [border-bottom:0.5px_solid_var(--border)] px-[10px] py-[6px]">
           <span className="text-caption font-semibold text-muted-foreground">Review comment</span>
-          {lineLabel !== null && <span className="font-mono text-micro text-mf-text-4">{lineLabel}</span>}
+          {lineLabel !== null && <span className="font-mono text-caption text-mf-text-3">{lineLabel}</span>}
           <div className="flex-1" />
           <Hint label="Close">
             <button
@@ -110,7 +110,7 @@ export function InlineCommentWidget({
               onClick={onClose}
               className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] border-none bg-transparent text-mf-text-3 hover:bg-accent"
             >
-              <X size={10} aria-hidden />
+              <X size={14} aria-hidden />
             </button>
           </Hint>
         </div>
@@ -139,13 +139,13 @@ export function InlineCommentWidget({
 
         {/* Footer */}
         <div className="flex items-center gap-[6px] [border-top:0.5px_solid_var(--border)] px-[9px] py-[6px]">
-          <span className="font-mono text-micro text-mf-text-4">⌘↩ to add</span>
+          <span className="font-mono text-caption text-mf-text-3">⌘↩ to add</span>
           <div className="flex-1" />
           <button
             data-testid="editor-comment-widget-cancel"
             type="button"
             onClick={onClose}
-            className="h-[24px] rounded-[6px] px-[8px] text-caption text-muted-foreground [border:0.5px_solid_var(--border)] bg-transparent hover:bg-accent transition-colors"
+            className="h-[24px] rounded-[6px] px-[8px] text-label text-muted-foreground [border:0.5px_solid_var(--border)] bg-transparent hover:bg-accent transition-colors"
           >
             Cancel
           </button>
@@ -154,7 +154,7 @@ export function InlineCommentWidget({
             type="button"
             onClick={handleSave}
             disabled={!text.trim()}
-            className="h-[24px] rounded-[6px] border-none bg-primary px-[8px] text-caption font-semibold text-white disabled:opacity-40 transition-opacity"
+            className="h-[24px] rounded-[6px] border-none bg-primary px-[8px] text-label font-semibold text-primary-foreground disabled:opacity-40 transition-opacity"
           >
             Add context
           </button>
@@ -164,9 +164,9 @@ export function InlineCommentWidget({
               type="button"
               onClick={handleSend}
               disabled={!text.trim()}
-              className="inline-flex h-[24px] items-center gap-[4px] rounded-[6px] border-none bg-primary px-[8px] text-caption font-semibold text-white disabled:opacity-40 transition-opacity"
+              className="inline-flex h-[24px] items-center gap-[4px] rounded-[6px] border-none bg-primary px-[8px] text-label font-semibold text-primary-foreground disabled:opacity-40 transition-opacity"
             >
-              <Send size={10} aria-hidden />
+              <Send size={14} aria-hidden />
               Send
             </button>
           )}

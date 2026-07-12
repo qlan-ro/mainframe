@@ -24,10 +24,10 @@ const PLAN_MD_COMPONENTS: Components = {
   li: ({ children }) => <li className="mb-1">{children}</li>,
   h1: ({ children }) => <h1 className="mb-1 mt-3 text-heading font-semibold text-foreground">{children}</h1>,
   h2: ({ children }) => <h2 className="mb-1 mt-3 text-body font-semibold text-foreground">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-1 mt-3 text-caption font-semibold text-foreground">{children}</h3>,
-  code: ({ children }) => <code className="rounded bg-mf-raised px-1 py-0.5 font-mono text-caption">{children}</code>,
+  h3: ({ children }) => <h3 className="mb-1 mt-3 text-body font-semibold text-foreground">{children}</h3>,
+  code: ({ children }) => <code className="rounded bg-mf-raised px-1 py-0.5 font-mono text-label">{children}</code>,
   pre: ({ children }) => (
-    <pre className="mb-2 overflow-auto rounded-md bg-mf-raised p-3 font-mono text-caption">{children}</pre>
+    <pre className="mb-2 overflow-auto rounded-md bg-mf-raised p-3 font-mono text-label">{children}</pre>
   ),
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   a: ({ href, children }) => (
@@ -200,7 +200,6 @@ export function PlanGate({ entry, reply, onApprove }: PlanGateProps) {
           icon={<SquareCheckIcon className="size-[15px]" />}
           tileClassName="bg-mf-selection text-primary"
           eyebrow="Plan"
-          eyebrowClassName="text-primary"
           title="Ready to implement"
         />
         {plan && <PlanBody plan={plan} />}
@@ -220,7 +219,7 @@ export function PlanGate({ entry, reply, onApprove }: PlanGateProps) {
             <span
               className={`inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full ${execMode === 'yolo' ? 'bg-destructive' : 'bg-primary'}`}
             />
-            <span className="text-body text-mf-text-3">
+            <span className="text-body text-muted-foreground">
               Executing in{' '}
               <b className={execMode === 'yolo' ? 'font-semibold text-destructive' : 'font-semibold text-foreground'}>
                 {EXEC_MODE_LABELS[execMode]}

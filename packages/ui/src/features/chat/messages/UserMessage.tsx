@@ -140,7 +140,7 @@ function SlashPill({ kind, name }: SlashPillProps) {
     // exact 8px tokens, gap-[5px] has no matching integer step (arbitrary).
     <span className={cn('mr-4 inline-flex items-center gap-[5px] rounded-md py-0.5 pl-1.5 pr-4', bgClass)}>
       <Icon size={12} className={colorClass} />
-      <span className={cn('font-mono text-caption font-semibold', colorClass)}>/{name}</span>
+      <span className={cn('font-mono text-label font-semibold', colorClass)}>/{name}</span>
     </span>
   );
 }
@@ -277,7 +277,7 @@ function UserMessageImpl() {
 
       {sendError != null && (
         <div className="flex items-center gap-2">
-          <span data-testid="chat-user-message-send-failed" className="text-caption text-destructive">
+          <span data-testid="chat-user-message-send-failed" className="text-label text-destructive">
             Failed to send
           </span>
           {retryClientId && chatExtras && (
@@ -285,7 +285,7 @@ function UserMessageImpl() {
               type="button"
               data-testid="chat-user-message-retry"
               onClick={() => void chatExtras.retryMessage(retryClientId)}
-              className="text-caption font-medium text-primary hover:underline"
+              className="text-label font-medium text-primary hover:underline"
             >
               Retry
             </button>

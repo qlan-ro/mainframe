@@ -32,9 +32,9 @@ export function TaskSelectFields({ type, onTypeChange, priority, onPriorityChang
   return (
     <div className="grid grid-cols-3 gap-3">
       <div className="flex flex-col gap-1">
-        <label className="text-caption text-muted-foreground">Type</label>
+        <label className="text-label text-muted-foreground">Type</label>
         <Select value={type} onValueChange={(v) => onTypeChange(v as TodoType)}>
-          <SelectTrigger data-testid="tasks-edit-type" className="text-caption h-8">
+          <SelectTrigger data-testid="tasks-edit-type" className="text-label h-8">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -47,9 +47,9 @@ export function TaskSelectFields({ type, onTypeChange, priority, onPriorityChang
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-caption text-muted-foreground">Priority</label>
+        <label className="text-label text-muted-foreground">Priority</label>
         <Select value={priority} onValueChange={(v) => onPriorityChange(v as TodoPriority)}>
-          <SelectTrigger data-testid="tasks-edit-priority" className="text-caption h-8">
+          <SelectTrigger data-testid="tasks-edit-priority" className="text-label h-8">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -62,9 +62,9 @@ export function TaskSelectFields({ type, onTypeChange, priority, onPriorityChang
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-caption text-muted-foreground">Status</label>
+        <label className="text-label text-muted-foreground">Status</label>
         <Select value={status} onValueChange={(v) => onStatusChange(v as TodoStatus)}>
-          <SelectTrigger data-testid="tasks-edit-status" className="text-caption h-8">
+          <SelectTrigger data-testid="tasks-edit-status" className="text-label h-8">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -56,8 +56,8 @@ export function TasksDrawerList({ port, projectId, onStartSession }: Props): Rea
               )}
             >
               <span className={cn('shrink-0 w-1.5 h-1.5 rounded-full', statusDotColor(todo.status))} />
-              <span className="shrink-0 font-mono text-caption text-primary">#{todo.number}</span>
-              <span className="flex-1 min-w-0 text-caption text-foreground truncate">{todo.title}</span>
+              <span className="shrink-0 font-mono text-label text-primary">#{todo.number}</span>
+              <span className="flex-1 min-w-0 text-body text-foreground truncate">{todo.title}</span>
             </button>
           ))
         )}

@@ -62,7 +62,7 @@ export function ErrorBody({ text, testId }: ErrorBodyProps) {
       <div className="absolute inset-0 bg-destructive opacity-10 pointer-events-none" aria-hidden />
       <pre
         data-testid={testId}
-        className="relative font-mono text-caption whitespace-pre-wrap break-words px-3 py-2 text-destructive"
+        className="relative font-mono text-label whitespace-pre-wrap break-words px-3 py-2 text-destructive"
       >
         {text}
       </pre>

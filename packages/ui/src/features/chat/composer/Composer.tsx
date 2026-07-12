@@ -40,7 +40,7 @@ function SendOrCancelButton({ sendDisabled }: { sendDisabled?: boolean }) {
         aria-label="Stop"
         className={cn(base, 'bg-foreground text-background hover:opacity-90')}
       >
-        <SquareIcon className="size-3 fill-current" />
+        <SquareIcon className="size-3.5 fill-current" />
       </ComposerPrimitive.Cancel>
     );
   }
@@ -122,7 +122,7 @@ export function Composer() {
               placeholder={hasQuote ? 'Add a message…' : 'Reply to Mainframe…'}
               rows={1}
               autoFocus
-              className="relative w-full resize-none overflow-hidden bg-transparent px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-transparent caret-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative w-full resize-none overflow-hidden bg-transparent px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-transparent caret-foreground outline-none placeholder:text-mf-text-3 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 

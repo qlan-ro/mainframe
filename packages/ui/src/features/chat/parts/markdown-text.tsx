@@ -63,7 +63,7 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
         // distinct from the fenced-code-block `mf-code-fg` token.
         'bg-mf-raised text-mf-code-inline-fg',
         'rounded-xs border border-border px-1.5 py-0.5',
-        'font-mono text-caption',
+        'font-mono text-label',
         className,
       )}
       {...props}
@@ -155,7 +155,7 @@ function LinkWithPreview({
           className={cn(
             'shrink-0 px-1.5 py-0.5 rounded-sm',
             'bg-accent hover:bg-muted text-muted-foreground hover:text-foreground',
-            'transition-colors text-micro',
+            'transition-colors text-caption',
           )}
         >
           {copied ? 'Copied' : 'Copy'}

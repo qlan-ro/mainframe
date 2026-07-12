@@ -20,7 +20,7 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
     return (
       <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
         <RotateCw size={12} className="animate-spin text-mf-warning shrink-0" />
-        <span className="text-caption text-muted-foreground flex-1">
+        <span className="text-label text-muted-foreground flex-1">
           {state === 'starting' ? 'Starting tunnel…' : 'Verifying DNS…'}
         </span>
       </div>
@@ -31,7 +31,7 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
     return (
       <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
         <RotateCw size={12} className="animate-spin text-mf-warning shrink-0" />
-        <span className="text-caption text-muted-foreground flex-1">
+        <span className="text-label text-muted-foreground flex-1">
           Verifying DNS for <code className="text-foreground">{url}</code>…
         </span>
       </div>
@@ -42,7 +42,7 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
     return (
       <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
         <span className="w-2 h-2 rounded-full bg-mf-success shrink-0" />
-        <code className="text-caption text-foreground truncate flex-1">{url}</code>
+        <code className="text-label text-foreground truncate flex-1">{url}</code>
         <CopyButton text={url} testId="tunnel-url-copy-ready" />
       </div>
     );
@@ -53,11 +53,11 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
       <div className="space-y-2">
         <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
           <span className="w-2 h-2 rounded-full bg-mf-warning shrink-0" />
-          <code className="text-caption text-muted-foreground truncate flex-1">{url}</code>
+          <code className="text-label text-muted-foreground truncate flex-1">{url}</code>
           <CopyButton text={url} testId="tunnel-url-copy-unreachable" />
         </div>
         <div className="flex items-center justify-between">
-          <p className="text-micro text-mf-warning">
+          <p className="text-label text-muted-foreground">
             DNS not yet propagated — tunnel may not be reachable. Pairing disabled.
           </p>
           <button

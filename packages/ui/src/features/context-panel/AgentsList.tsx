@@ -4,8 +4,8 @@ import { ScopedListRow } from './ScopedListRow';
 
 export function AgentsList() {
   const { agents, loading } = useSidebarSkills();
-  if (loading) return <div className="py-4 text-center text-caption text-mf-text-3">Loading…</div>;
-  if (agents.length === 0) return <div className="py-4 text-center text-caption text-mf-text-3">No agents</div>;
+  if (loading) return <div className="py-4 text-center text-caption text-muted-foreground">Loading…</div>;
+  if (agents.length === 0) return <div className="py-4 text-center text-caption text-muted-foreground">No agents</div>;
   return (
     <div className="py-1">
       {agents.map((a) => (

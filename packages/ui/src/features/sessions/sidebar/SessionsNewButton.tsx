@@ -27,7 +27,7 @@ import { NewSessionPickerPopover } from './NewSessionPickerPopover';
 import { useNewSessionPickerTarget } from './use-new-session-picker-target';
 
 const ICON_BTN =
-  'inline-flex size-[22px] items-center justify-center rounded-[6px] text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
+  'inline-flex size-[22px] items-center justify-center rounded-[6px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 
 interface SessionsNewButtonProps {
   filterProjectId: string | null;
@@ -63,7 +63,7 @@ export function SessionsNewButton({
           }}
         >
           <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={ICON_BTN}>
-            <PlusIcon className="size-[12px]" />
+            <PlusIcon className="size-3.5" />
           </button>
         </ThreadListPrimitive.New>
       </Hint>

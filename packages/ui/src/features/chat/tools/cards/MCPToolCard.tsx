@@ -65,7 +65,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
   const resultText = extractResultText(result);
 
   const pillContent = (
-    <span className="font-mono text-caption text-mf-text-3">
+    <span className="font-mono text-label text-muted-foreground">
       {server} {verb} {state !== 'error' && <span className="text-primary">{tool}</span>}
       {state === 'error' && <span className="text-destructive">{tool}</span>}
     </span>
@@ -88,7 +88,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
             </MarkerPill>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top" className="font-mono text-caption max-w-xs break-all">
+        <TooltipContent side="top" className="font-mono text-label max-w-xs break-all">
           {toolName}
         </TooltipContent>
       </Tooltip>

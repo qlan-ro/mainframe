@@ -54,7 +54,7 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
           Loading...
         </div>
       ) : devices.length === 0 ? (
-        <p className="text-micro text-muted-foreground">No paired devices.</p>
+        <p className="text-label text-muted-foreground">No paired devices.</p>
       ) : (
         <div className="space-y-1.5">
           {devices.map((device) => (
@@ -70,8 +70,10 @@ function DeviceRow({ device, onRemove }: { device: Device; onRemove: (id: string
   return (
     <div className="flex items-center justify-between p-2.5 bg-card border border-border rounded-md">
       <div>
-        <span className="text-caption text-foreground">{device.deviceName}</span>
-        <span className="text-micro text-muted-foreground ml-2">{new Date(device.createdAt).toLocaleDateString()}</span>
+        <span className="text-label text-foreground">{device.deviceName}</span>
+        <span className="text-caption text-muted-foreground ml-2">
+          {new Date(device.createdAt).toLocaleDateString()}
+        </span>
       </div>
       <Tooltip>
         <TooltipTrigger asChild>

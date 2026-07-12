@@ -51,7 +51,7 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               className={[
                 'flex h-[20px] shrink-0 items-center justify-center gap-[5px] px-[6px]',
                 '@[560px]:justify-start @[560px]:pl-[8px] @[560px]:pr-[7px]',
-                'rounded-[11px] border-[0.5px] border-border text-caption',
+                'rounded-[11px] border-[0.5px] border-border text-label',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',
@@ -59,9 +59,9 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
                 isYolo ? 'text-destructive' : 'text-muted-foreground',
               ].join(' ')}
             >
-              <Shield size={11} className="shrink-0" />
-              <span className="hidden @[560px]:inline truncate text-caption font-medium">{currentLabel}</span>
-              <ChevronDown size={9} className="hidden @[560px]:inline shrink-0 opacity-60" />
+              <Shield size={12} className="shrink-0" />
+              <span className="hidden @[560px]:inline truncate text-label font-medium">{currentLabel}</span>
+              <ChevronDown size={12} className="hidden @[560px]:inline shrink-0 text-mf-text-3" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

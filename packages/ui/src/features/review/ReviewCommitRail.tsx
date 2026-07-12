@@ -48,7 +48,7 @@ export function ReviewCommitRail({
             <Check size={22} strokeWidth={2.4} className="text-mf-success" aria-hidden />
           </span>
           <div className="text-body font-semibold text-foreground">Changes committed</div>
-          <div className="font-mono text-caption text-mf-text-3">
+          <div className="font-mono text-caption text-muted-foreground">
             {fileCount} {fileCount === 1 ? 'file' : 'files'} · {totalLines} lines
           </div>
           <button
@@ -78,7 +78,7 @@ export function ReviewCommitRail({
                 type="button"
                 data-testid={`review-commit-suggestion-${s.trim().replace(/[^a-z]/gi, '')}`}
                 onClick={() => onMessageChange(s)}
-                className="rounded-[13px] border border-border bg-background px-[9px] py-[4px] text-micro text-muted-foreground transition-colors hover:border-primary"
+                className="rounded-[13px] border border-border bg-background px-[9px] py-[4px] text-caption text-muted-foreground transition-colors hover:border-primary"
               >
                 {s.trim()}
               </button>
@@ -90,15 +90,15 @@ export function ReviewCommitRail({
               data-testid="review-commit-unviewed-warning"
               className="mb-[12px] flex items-start gap-[8px] rounded-md border border-mf-warning/30 bg-mf-warning/10 px-[10px] py-[9px]"
             >
-              <TriangleAlert size={13} className="mt-px shrink-0 text-mf-warning" aria-hidden />
-              <span className="text-caption leading-snug text-mf-warning">
+              <TriangleAlert size={14} className="mt-px shrink-0 text-mf-warning" aria-hidden />
+              <span className="text-label leading-snug text-foreground">
                 {unviewedCount} {unviewedCount === 1 ? 'file' : 'files'} not yet reviewed.
               </span>
             </div>
           )}
 
           {error && (
-            <div data-testid="review-commit-error" className="mb-[12px] text-caption text-destructive">
+            <div data-testid="review-commit-error" className="mb-[12px] text-label text-destructive">
               {error}
             </div>
           )}
@@ -113,7 +113,7 @@ export function ReviewCommitRail({
             className={`mb-[8px] inline-flex h-[36px] items-center justify-center gap-1.5 rounded-md text-body font-bold tracking-tight transition-opacity ${
               canCommit
                 ? 'bg-primary text-primary-foreground shadow-[0_1px_3px_color-mix(in_oklab,var(--primary)_40%,transparent)] hover:opacity-90'
-                : 'cursor-not-allowed bg-mf-chip text-mf-text-3'
+                : 'cursor-not-allowed bg-mf-chip text-muted-foreground'
             }`}
           >
             <Check size={14} strokeWidth={2.4} aria-hidden />

@@ -31,9 +31,9 @@ export function CommandPreview({ script, testId }: CommandPreviewProps) {
         <span
           key={warning.index}
           data-testid={`${testId}-warning-${warning.index}`}
-          className="flex items-start gap-1.5 text-caption font-medium text-mf-warning"
+          className="flex items-start gap-1.5 text-caption font-medium text-muted-foreground"
         >
-          <TriangleAlert size={11} className="mt-0.5 shrink-0" aria-hidden />
+          <TriangleAlert size={11} className="mt-0.5 shrink-0 text-mf-warning" aria-hidden />
           {warning.message}
         </span>
       ))}

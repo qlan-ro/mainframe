@@ -15,9 +15,7 @@ export const menuItemVariants = cva(
     'flex items-center gap-[9px] rounded-sm px-[8px] py-[7px]',
     'text-label outline-none transition-colors',
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[13px]",
-    // Default icon color is the muted tertiary text token (design T.text3), not the
-    // darker T.text2-mapped --muted-foreground — see design-parity finding 10.2.
-    "[&_svg:not([class*='text-'])]:text-mf-text-3",
+    "[&_svg:not([class*='text-'])]:text-muted-foreground",
   ],
   {
     variants: {

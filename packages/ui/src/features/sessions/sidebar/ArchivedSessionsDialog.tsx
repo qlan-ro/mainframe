@@ -42,7 +42,7 @@ function ArchivedSessionRow({ id, title, projectName, updatedAt, restoring, onRe
       <div className="min-w-0 flex-1">
         <TruncatedWithTooltip text={title} side="left" className="block text-body font-medium text-foreground" />
         {projectName !== null && (
-          <div className="mt-0.5 flex items-center gap-1 text-caption text-mf-text-3">
+          <div className="mt-0.5 flex items-center gap-1 text-caption text-muted-foreground">
             <TruncatedWithTooltip text={projectName} side="left" className="max-w-[140px]" />
           </div>
         )}
@@ -64,7 +64,7 @@ function ArchivedSessionRow({ id, title, projectName, updatedAt, restoring, onRe
             'Restore'
           )}
         </button>
-        <div className="flex items-center gap-1 whitespace-nowrap text-caption text-mf-text-3">
+        <div className="flex items-center gap-1 whitespace-nowrap text-caption text-muted-foreground">
           <Clock className="size-2.5 shrink-0" />
           <span>{when}</span>
         </div>

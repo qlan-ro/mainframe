@@ -43,13 +43,13 @@ export function SuggestionRow({
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-medium text-foreground">{suggestion.title}</span>
-        <span className="truncate text-micro text-mf-text-3">{suggestion.meta}</span>
+        <span className="truncate text-caption text-muted-foreground">{suggestion.meta}</span>
       </span>
       <span
         data-testid={`sessions-welcome-suggestion-insert-${index}`}
-        className="flex flex-shrink-0 items-center gap-1 text-micro text-mf-text-3 opacity-0 transition-opacity group-hover:opacity-100"
+        className="flex flex-shrink-0 items-center gap-1 text-caption text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
       >
-        <CornerDownLeft size={11} /> insert
+        <CornerDownLeft size={12} /> insert
       </span>
     </button>
   );

@@ -30,7 +30,7 @@ import { Hint } from '@/components/ui/hint';
 import { ArchivedSessionsDialog } from './ArchivedSessionsDialog';
 
 const ICON_BTN =
-  'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground';
+  'inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground';
 
 export function SessionsMoreMenu() {
   const port = useDaemonPort();
@@ -48,7 +48,7 @@ export function SessionsMoreMenu() {
         <Hint label="More">
           <DropdownMenuTrigger asChild>
             <button data-testid="sessions-more-button" type="button" className={ICON_BTN}>
-              <MoreHorizontalIcon className="size-[11px]" />
+              <MoreHorizontalIcon className="size-3.5" />
             </button>
           </DropdownMenuTrigger>
         </Hint>

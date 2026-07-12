@@ -37,12 +37,12 @@ function renderWithTooltip(children: React.ReactNode) {
 }
 
 describe('ComposerAddAttachment — paperclip glyph size', () => {
-  it('renders the Paperclip icon at size-3 (matches the design 12px glyph inside the 22px button)', () => {
+  it('renders the Paperclip icon at size-3.5 (14px glyph inside the 22px button)', () => {
     renderWithTooltip(<ComposerAddAttachment />);
     const btn = screen.getByTestId('composer-add-attachment');
     const svg = btn.querySelector('svg');
     expect(svg).not.toBeNull();
-    expect(svg!.getAttribute('class')).toContain('size-3');
+    expect(svg!.getAttribute('class')).toContain('size-3.5');
   });
 });
 

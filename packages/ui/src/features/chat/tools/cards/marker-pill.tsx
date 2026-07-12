@@ -3,8 +3,8 @@
  *
  * Design contract (10-chatcards.jsx MarkerWrap/MarkerPill/MarkerBody):
  *   - Centered column wrapper (MarkerWrap) — `flex flex-col items-center`
- *   - Pill: bg-mf-content2, border-border, rounded-full, font-mono text-caption
- *     text-mf-text-3. Error: red-tinted border + bg. Pending: pulsing dot.
+ *   - Pill: bg-mf-content2, border-border, rounded-full, font-mono text-label
+ *     text-muted-foreground. Error: red-tinted border + bg. Pending: pulsing dot.
  *   - Expandable: chevron right/down; disclosure body below (rounded-lg, bg-mf-content2).
  *   - Accent token via text-primary for the meaningful name.
  *
@@ -61,7 +61,7 @@ export function MarkerPill({
         onClick={clickable ? onClick : undefined}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full pt-[4px] pr-[11px] pb-[4px] pl-[9px]',
-          'font-mono text-caption text-mf-text-3 select-none',
+          'font-mono text-label text-muted-foreground select-none',
           'border border-border bg-mf-content2',
           'transition-colors duration-100',
           clickable && 'hover:bg-accent cursor-pointer',
@@ -70,15 +70,15 @@ export function MarkerPill({
           'max-w-full overflow-hidden',
         )}
       >
-        <span className="shrink-0 text-mf-text-4">{icon}</span>
+        <span className="shrink-0 text-muted-foreground">{icon}</span>
         <span className="truncate min-w-0">{children}</span>
         {isPending && <span className="w-1.5 h-1.5 rounded-full bg-mf-text-4 animate-pulse shrink-0" />}
         {isError && <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />}
         {clickable &&
           (open ? (
-            <ChevronDownIcon size={11} className="text-mf-text-4 shrink-0" />
+            <ChevronDownIcon size={12} className="text-muted-foreground shrink-0" />
           ) : (
-            <ChevronRightIcon size={11} className="text-mf-text-4 shrink-0" />
+            <ChevronRightIcon size={12} className="text-muted-foreground shrink-0" />
           ))}
       </button>
     </Hint>
@@ -110,7 +110,7 @@ export function MarkerBody({
 
 /** ARGUMENTS / RESULT section label inside a MarkerBody. */
 export function MarkerCapsLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-micro font-bold tracking-wide uppercase text-mf-text-3 mb-1">{children}</div>;
+  return <div className="text-caption font-medium text-muted-foreground mb-1">{children}</div>;
 }
 
 // ── MarkerPre ─────────────────────────────────────────────────────────────────
@@ -120,8 +120,8 @@ export function MarkerPre({ children, muted = false }: { children: React.ReactNo
   return (
     <pre
       className={cn(
-        'font-mono text-caption whitespace-pre-wrap break-words leading-snug',
-        muted ? 'text-mf-text-3' : 'text-foreground',
+        'font-mono text-label whitespace-pre-wrap break-words leading-snug',
+        muted ? 'text-muted-foreground' : 'text-foreground',
       )}
     >
       {children}

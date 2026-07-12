@@ -39,7 +39,7 @@ function LoadErrorBanner() {
         data-testid="chat-thread-load-retry"
         type="button"
         onClick={() => void extras.retry()}
-        className="rounded-md border border-border px-3 py-1.5 text-caption text-foreground transition-colors hover:bg-accent"
+        className="rounded-md border border-border px-3 py-1.5 text-label text-foreground transition-colors hover:bg-accent"
       >
         Retry
       </button>
@@ -102,7 +102,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                   aria-label="Scroll to bottom"
                   className="absolute -top-10 left-1/2 z-10 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)] transition-opacity hover:text-foreground disabled:invisible"
                 >
-                  <ArrowDownIcon className="size-4" />
+                  <ArrowDownIcon className="size-3.5" />
                 </button>
               </ThreadPrimitive.ScrollToBottom>
 

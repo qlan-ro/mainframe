@@ -50,10 +50,7 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
     if (modelLabel == null) return null;
     return (
       <Hint label={`${adapter?.name ?? chat.adapterId} · ${modelLabel}`}>
-        <span
-          data-testid="chat-header-model"
-          className="inline-flex min-w-0 shrink items-center gap-[5px] text-caption"
-        >
+        <span data-testid="chat-header-model" className="inline-flex min-w-0 shrink items-center gap-[5px] text-label">
           <span className={cn('size-1.5 flex-shrink-0 rounded-full', providerDot(chat.adapterId))} />
           <span className="truncate font-medium text-muted-foreground">{modelLabel}</span>
         </span>
@@ -84,7 +81,7 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
           ))}
         </span>
       </Hint>
-      <span data-testid="chat-header-context-pct" className="font-mono text-micro tabular-nums text-mf-text-3">
+      <span data-testid="chat-header-context-pct" className="font-mono text-caption tabular-nums text-muted-foreground">
         {pct}%
       </span>
     </span>

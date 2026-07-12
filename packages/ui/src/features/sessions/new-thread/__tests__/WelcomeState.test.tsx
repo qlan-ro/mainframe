@@ -35,16 +35,16 @@ describe('WelcomeState', () => {
     await waitFor(() => expect(screen.getByText('main')).toBeInTheDocument());
   });
 
-  it('does not render the FROM THE REPO section when there are no suggestions', () => {
+  it('does not render the From the repo section when there are no suggestions', () => {
     render(<WelcomeState projectId="proj-a" />);
-    expect(screen.queryByText('FROM THE REPO')).toBeNull();
+    expect(screen.queryByText('From the repo')).toBeNull();
     expect(screen.queryByTestId('sessions-welcome-suggestion-0')).toBeNull();
   });
 
   it('renders suggestion rows and prefills the composer on click (no auto-send)', () => {
     __suggestions = [S(), S({ title: 'Clean up TODOs', tint: 'amber', prefill: 'Fix TODOs.' })];
     render(<WelcomeState projectId="proj-a" />);
-    expect(screen.getByText('FROM THE REPO')).toBeInTheDocument();
+    expect(screen.getByText('From the repo')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('sessions-welcome-suggestion-1'));
     expect(setText).toHaveBeenCalledWith('Fix TODOs.');
   });

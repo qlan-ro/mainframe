@@ -28,10 +28,10 @@ function tabGlyph(tab: RunTab, isActive: boolean) {
         ? 'text-mf-surface-run'
         : 'text-foreground';
   const cls = `flex-shrink-0 ${color}`;
-  if (tab.kind === 'preview') return <Eye size={11} className={cls} />;
-  if (tab.kind === 'console') return <SquareTerminal size={11} className={cls} />;
-  if (tab.kind === 'terminal') return <Terminal size={11} className={cls} />;
-  return <FileText size={11} className={cls} />;
+  if (tab.kind === 'preview') return <Eye size={12} className={cls} />;
+  if (tab.kind === 'console') return <SquareTerminal size={12} className={cls} />;
+  if (tab.kind === 'terminal') return <Terminal size={12} className={cls} />;
+  return <FileText size={12} className={cls} />;
 }
 
 interface RunTabPillProps {
@@ -63,7 +63,7 @@ export function RunTabPill({ pane, tab, configs, scopeStatuses, onStop }: RunTab
         'rounded-[7px] tracking-tight transition-colors duration-[120ms]',
         isActive
           ? 'bg-mf-chip font-semibold text-foreground'
-          : 'font-medium text-mf-text-3 hover:bg-accent hover:text-foreground',
+          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground',
       ].join(' ')}
     >
       {tabGlyph(tab, isActive)}
@@ -81,7 +81,7 @@ export function RunTabPill({ pane, tab, configs, scopeStatuses, onStop }: RunTab
               onStop(config);
             }}
           >
-            <Square size={9} className="text-destructive" fill="currentColor" />
+            <Square size={12} className="text-destructive" fill="currentColor" />
           </button>
         </Hint>
       )}
@@ -95,7 +95,7 @@ export function RunTabPill({ pane, tab, configs, scopeStatuses, onStop }: RunTab
             closeRunTab(pane.id, tab.id);
           }}
         >
-          <X size={9} />
+          <X size={12} />
         </button>
       </Hint>
     </div>

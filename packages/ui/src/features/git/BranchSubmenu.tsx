@@ -201,12 +201,12 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
           re-clicking the already-selected branch row, wired in BranchPopover. */}
       <div className="px-1.5 py-1.5 border-b border-border flex items-center gap-1.5">
         {props.isRemote ? (
-          <Globe size={12} className="text-mf-text-3 shrink-0" />
+          <Globe size={12} className="text-muted-foreground shrink-0" />
         ) : (
-          <GitBranch size={12} className="text-mf-text-3 shrink-0" />
+          <GitBranch size={12} className="text-muted-foreground shrink-0" />
         )}
         <span className="flex-1 truncate font-mono text-label font-semibold text-foreground">{branch}</span>
-        {busy && <Loader2 size={11} className="animate-spin text-muted-foreground shrink-0" />}
+        {busy && <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />}
       </div>
       <div className="py-1">
         {items.map((item, idx) => {
