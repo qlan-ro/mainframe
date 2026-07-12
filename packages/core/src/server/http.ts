@@ -28,6 +28,7 @@ import {
   chatRecoveryRoutes,
   tagRoutes,
   workflowRoutes,
+  automationRoutes,
   suggestionRoutes,
 } from './routes/index.js';
 import { workflowAdminRoutes } from './routes/workflow-admin.js';
@@ -42,6 +43,7 @@ import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { LspManager } from '../lsp/index.js';
 import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import type { WorkflowService } from '../workflows/index.js';
+import type { AutomationService } from '../automations/service.js';
 
 const log = createChildLogger('http');
 
@@ -58,6 +60,7 @@ export interface HttpServerDeps {
   lspManager?: LspManager;
   backgroundTasks?: BackgroundTaskTracker;
   workflows?: WorkflowService;
+  automations?: AutomationService;
 }
 
 export function createHttpServer(deps: HttpServerDeps): { app: Express; pushService: PushService } {
@@ -74,6 +77,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     lspManager,
     backgroundTasks,
     workflows,
+    automations,
   } = deps;
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -127,6 +131,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     port,
     backgroundTasks,
     workflows,
+    automations,
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
@@ -153,6 +158,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(tagRoutes(ctx));
   app.use(workflowRoutes(ctx));
   app.use(workflowAdminRoutes(ctx));
+  app.use(automationRoutes(ctx));
 
   if (backgroundTasks) {
     app.use(

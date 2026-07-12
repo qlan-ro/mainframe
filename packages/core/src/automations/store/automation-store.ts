@@ -75,4 +75,9 @@ export class AutomationStore {
       .run(enabled ? 1 : 0, Date.now(), id);
     return this.get(id)!;
   }
+
+  /** automation_runs/automation_interactions cascade via the DB's ON DELETE CASCADE FKs (db.ts). */
+  delete(id: string): void {
+    this.db.prepare(`DELETE FROM automations WHERE id = ?`).run(id);
+  }
 }

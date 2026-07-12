@@ -230,6 +230,13 @@ export class AutomationService {
     return rowToSummary(row);
   }
 
+  /** Disarms triggers before deleting; runs/interactions cascade via the DB's ON DELETE CASCADE FKs. */
+  delete(id: string): void {
+    if (!this.automations.get(id)) throw new Error(`automation not found: ${id}`);
+    this.triggers.disarm(id);
+    this.automations.delete(id);
+  }
+
   runManually(id: string): AutomationRunRecord {
     const row = this.automations.get(id);
     if (!row) throw new Error(`automation not found: ${id}`);

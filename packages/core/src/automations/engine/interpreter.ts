@@ -230,7 +230,8 @@ function findStepById(steps: AutomationStep[], id: string): AutomationStep | und
   return undefined;
 }
 
-function toRunSummary(run: AutomationRunRecord): AutomationRunSummary {
+/** Exported for the routes layer (Task 24) so GET /api/automation-runs/:id projects the same wire shape as the run.updated WS event. */
+export function toRunSummary(run: AutomationRunRecord): AutomationRunSummary {
   return {
     id: run.id,
     automationId: run.automationId,

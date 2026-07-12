@@ -185,6 +185,7 @@ async function main(): Promise<void> {
     port: config.port,
     backgroundTasks,
     workflows,
+    automations,
   });
 
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
