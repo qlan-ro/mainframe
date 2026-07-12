@@ -33,14 +33,19 @@ export function cleanEnv(extra) {
   return { ...env, ...extra };
 }
 
-/** JSON HTTP request against a loopback daemon. Never throws on non-2xx. */
-export async function req(baseUrl, method, path, { body, query } = {}) {
+/**
+ * JSON HTTP request against a loopback daemon. Never throws on non-2xx.
+ * `headers` layers extra request headers (e.g. `Origin` for CORS probes); the
+ * returned `headers` is a lowercased map of the response headers so the harness
+ * can diff header-level surfaces (e.g. the `Access-Control-Allow-Origin` echo).
+ */
+export async function req(baseUrl, method, path, { body, query, headers } = {}) {
   let url = baseUrl + path;
   if (query) {
     const qs = new URLSearchParams(query).toString();
     if (qs) url += (url.includes('?') ? '&' : '?') + qs;
   }
-  const init = { method, headers: {} };
+  const init = { method, headers: { ...(headers ?? {}) } };
   if (body !== undefined) {
     init.headers['content-type'] = 'application/json';
     init.body = JSON.stringify(body);
@@ -59,7 +64,9 @@ export async function req(baseUrl, method, path, { body, query } = {}) {
     // Non-JSON (raw text, empty 204) — keep the raw body so we can still diff.
     parsed = text === '' ? null : { __raw__: text };
   }
-  return { status: res.status, contentType: ctype.split(';')[0] || '', body: parsed };
+  const respHeaders = {};
+  for (const [k, v] of res.headers) respHeaders[k.toLowerCase()] = v;
+  return { status: res.status, contentType: ctype.split(';')[0] || '', body: parsed, headers: respHeaders };
 }
 
 /** Poll GET /health until it answers 200 or the deadline passes. */

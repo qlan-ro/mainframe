@@ -2,13 +2,13 @@
 //!
 //! Phase-4 boot: enrichPath → config → auth secret → DB (actor handle) →
 //! BackgroundTaskTracker → AdapterRegistry (claude+codex, static seed, refresh) →
-//! services → broadcast → HTTP/WS server, then background-task reconcile +
-//! worktree-relationship backfill + the liveness scheduler + the adapter catalog
-//! refresh, with graceful
-//! SIGINT/SIGTERM shutdown (adapters.killAll + liveness.stop). The ChatManager,
-//! plugins, launch, tunnel, and workflows boot steps stay TODO(port) — the
-//! ChatManager needs a `ChatManagerDeps` impl blocked on a sync-DB bridge (see
-//! the notes trailer); plugins/launch/tunnel/workflows are unported crates.
+//! ChatManager → plugins → LSP → services → broadcast → HTTP/WS server, then the
+//! post-bind stray-child sweep + background-task reconcile + worktree-relationship
+//! backfill + the liveness scheduler + the adapter catalog refresh, with graceful
+//! SIGINT/SIGTERM shutdown. Tunnel + launch share one `FileChildRegistry`
+//! (managed-children.json) so a crashed daemon's next boot reaps every leaked
+//! child (clusters B/F); a panic hook reaps adapter + tunnel children, and a
+//! 200ms flush precedes any fatal exit. Workflows stay unported (SCOPE DECISION).
 #![forbid(unsafe_code)]
 
 mod builtin_plugins;
@@ -32,7 +32,11 @@ use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
 };
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
-use mainframe_launch::{BroadcastFn, LaunchRegistry, TunnelManager, TunnelStartOptions};
+use mainframe_launch::{
+    BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, ResolveCloudflaredDeps,
+    TunnelManager, TunnelManagerOptions, TunnelStartOptions, default_sweep_deps,
+    resolve_cloudflared_path, sweep_stray_children,
+};
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::event_bus::PublicDaemonBus;
 use mainframe_plugins::manager::PluginManagerDeps;
@@ -125,13 +129,41 @@ async fn run_daemon() {
         let _ = event_bcast.send(event);
     });
 
+    // One pidfile registry, shared by the tunnel and launch managers (a `kind`
+    // field distinguishes their records), so a single startup sweep can reap every
+    // child a crashed daemon leaked (index.ts: `new FileChildRegistry(...)`).
+    let child_registry: Arc<dyn ChildRegistryPort> = Arc::new(FileChildRegistry::new(
+        data_dir
+            .join("managed-children.json")
+            .to_string_lossy()
+            .into_owned(),
+    ));
+    // Resolve cloudflared to an absolute path so a spawned tunnel is recorded (and
+    // later reaped) by exact binary path, never a bare name. The TS twin scanned
+    // the enriched `process.env.PATH`; the Rust daemon threads the login-shell PATH
+    // explicitly, so scan that same resolved value.
+    let cloudflared_path = resolve_cloudflared_path(ResolveCloudflaredDeps {
+        path: Some(resolved_path.as_str().to_string()),
+        ..Default::default()
+    })
+    .await;
+
     // Tunnel + launch managers (index.ts: new TunnelManager → new LaunchRegistry).
-    // The registry shares the tunnel manager so preview launches can expose URLs.
+    // The registry shares the tunnel manager so preview launches can expose URLs;
+    // both share the one child registry for crash-recovery reaping.
     let tunnel_manager = Arc::new(
-        TunnelManager::new(Some(Arc::clone(&on_event))).with_resolved_path(resolved_path.as_str()),
+        TunnelManager::with_options(
+            Some(Arc::clone(&on_event)),
+            TunnelManagerOptions {
+                registry: Some(Arc::clone(&child_registry)),
+                cloudflared_path,
+            },
+        )
+        .with_resolved_path(resolved_path.as_str()),
     );
     let launch_registry = Arc::new(
         LaunchRegistry::new(Arc::clone(&on_event), Some(Arc::clone(&tunnel_manager)))
+            .with_child_registry(Arc::clone(&child_registry))
             .with_resolved_path(resolved_path.as_str()),
     );
 
@@ -148,8 +180,26 @@ async fn run_daemon() {
     adapters.seed_static_snapshots();
 
     // Forward tracker emissions through the broadcast (index.ts wires
-    // background_task.started/ended onto broadcastEvent).
+    // background_task.started/updated/ended onto broadcastEvent).
     spawn_task_event_bridge(Arc::clone(&background_tasks), broadcast.clone());
+
+    // uncaughtException cleanup (index.ts `process.on('uncaughtException')`): a
+    // panic is Rust's uncaught exception. Kill adapter children and — crucially —
+    // the tracked cloudflared children, or they orphan and re-parent to PID 1.
+    // Chained ahead of the default hook so the panic still prints and aborts.
+    // (launchRegistry's async stopAll can't be awaited from a sync hook; the
+    // post-bind startup sweep reaps any launch children a panic leaks.)
+    {
+        let panic_adapters = Arc::clone(&adapters);
+        let panic_tunnel = Arc::clone(&tunnel_manager);
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            tracing::error!(panic = %info, "Uncaught exception");
+            panic_adapters.kill_all();
+            panic_tunnel.stop_all();
+            default_hook(info);
+        }));
+    }
 
     // Configure the refresh BEFORE server start so no request triggers an
     // unconfigured probe. resolveExecutablePath reads the persisted provider path
@@ -277,6 +327,22 @@ async fn run_daemon() {
     };
     info!(%addr, version = DAEMON_VERSION, "mainframe-daemon listening");
 
+    // Reap tunnel AND launch children a previous daemon crash/kill orphaned,
+    // pruning their records. This MUST run after the port bind: the bind is the
+    // daemon's only single-instance guard, so a duplicate launch against the same
+    // data dir fails on bind above instead of sweeping the live daemon's children.
+    // It still precedes every tunnel spawn (the daemon tunnel below; preview and
+    // launch children are user-triggered). The sweep logs per-entry internally.
+    let sweep = sweep_stray_children(child_registry.as_ref(), &default_sweep_deps()).await;
+    if sweep.reaped > 0 || sweep.skipped > 0 {
+        info!(
+            total = sweep.total,
+            reaped = sweep.reaped,
+            skipped = sweep.skipped,
+            "stray child process sweep complete"
+        );
+    }
+
     // Post-listen boot (index.ts runs these after server.start()): the liveness
     // sweep scheduler, a non-blocking background-task reconcile, and the adapter
     // catalog refresh. All are fire-and-forget with the same warn-on-failure.
@@ -327,7 +393,7 @@ async fn run_daemon() {
         .await
     {
         tracing::error!(%err, "daemon server exited with error");
-        std::process::exit(1);
+        flush_and_exit(1);
     }
 
     // Ordered shutdown (index.ts `shutdown`): workflows.stop() → chats.dispose →
@@ -348,8 +414,8 @@ async fn run_daemon() {
 }
 
 /// Drain the tracker's `TaskEvent` broadcast and re-emit as daemon
-/// `background_task.started`/`ended` events. Mirrors the two `backgroundTasks.on`
-/// forwarders in index.ts.
+/// `background_task.started`/`updated`/`ended` events. Mirrors the three
+/// `backgroundTasks.on` forwarders in index.ts.
 fn spawn_task_event_bridge(
     tracker: Arc<BackgroundTaskTracker>,
     bus: broadcast::Sender<DaemonEvent>,
@@ -360,6 +426,9 @@ fn spawn_task_event_bridge(
             match rx.recv().await {
                 Ok(TaskEvent::Started { chat_id, task }) => {
                     let _ = bus.send(DaemonEvent::BackgroundTaskStarted { chat_id, task });
+                }
+                Ok(TaskEvent::Updated { chat_id, task }) => {
+                    let _ = bus.send(DaemonEvent::BackgroundTaskUpdated { chat_id, task });
                 }
                 Ok(TaskEvent::Ended { chat_id, task }) => {
                     let _ = bus.send(DaemonEvent::BackgroundTaskEnded { chat_id, task });
@@ -550,7 +619,16 @@ impl SettingsWriter for OneSetting {
 /// `Result` back to — the RUST RULES permit the abort only here, in `main`.
 fn fatal(context: &str, err: &dyn std::fmt::Display) -> ! {
     tracing::error!(error = %err, "{context}");
-    std::process::exit(1);
+    flush_and_exit(1);
+}
+
+/// Give the non-blocking log writer a beat to flush before exiting. `process::exit`
+/// skips the `WorkerGuard` drop, so without this the fatal line can be dropped —
+/// the silent death that hid the stale-daemon EADDRINUSE crash (index.ts
+/// `main().catch` waits 200ms before `process.exit(1)`).
+fn flush_and_exit(code: i32) -> ! {
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    std::process::exit(code);
 }
 
 async fn shutdown_signal() {
@@ -584,7 +662,8 @@ async fn shutdown_signal() {
 }
 
 // PORT STATUS: src/index.ts (full boot: adapters/background-tasks/reconcile/
-// liveness + ChatManager + launch/tunnel/plugins/lsp wired; workflows deliberately
+// liveness + ChatManager + launch/tunnel/plugins/lsp wired; clusters B+F child-
+// registry sweep + background_task.updated wired; workflows deliberately
 // unported per SCOPE DECISION 2026-07-10)
 // confidence: medium
 // todos: 2
@@ -621,3 +700,13 @@ async fn shutdown_signal() {
 // ported. Shutdown order matches index.ts: chats.dispose → plugins.unload_all →
 // adapters.kill_all → launch.stop_all → tunnel.stop_all → liveness.stop →
 // lsp.shutdown_all (server.stop) → db drop; workflows.stop() deliberately skipped.
+// Clusters B/F: tunnel + launch share one FileChildRegistry(managed-children.json);
+// cloudflared is resolved to an absolute path at boot (resolve_cloudflared_path
+// over the login-shell PATH) and passed via TunnelManagerOptions; sweep_stray_
+// children runs AFTER the port bind (the single-instance guard) and before the
+// daemon tunnel spawn; the tracker's Updated event bridges to
+// background_task.updated. A panic hook (uncaughtException twin) kills adapter +
+// tunnel children before the default hook; async launch stop_all is not awaitable
+// from a sync hook, so leaked launch children are reaped by the next boot's sweep.
+// flush_and_exit sleeps 200ms before every fatal std::process::exit so the non-
+// blocking log writer (WorkerGuard, skipped by process::exit) flushes the line.

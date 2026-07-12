@@ -18,6 +18,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use tower_http::limit::RequestBodyLimitLayer;
 
+use crate::cors_origin::is_allowed_origin;
 use crate::ctx::AppCtx;
 use crate::middleware::auth::auth_middleware;
 use crate::routes;
@@ -52,6 +53,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::chat_commands::router())
         .merge(routes::context::router())
         .merge(routes::worktree::router())
+        .merge(routes::chat_recovery::router())
         .merge(routes::external_sessions::router())
         .merge(routes::background_tasks::router())
         .merge(routes::adapters::router())
@@ -121,7 +123,7 @@ async fn cors_middleware(req: Request, next: Next) -> Response {
 
 fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
     if let Some(origin) = origin
-        && is_localhost_origin(origin)
+        && is_allowed_origin(Some(origin))
         && let Ok(value) = HeaderValue::from_str(origin)
     {
         headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, value);
@@ -140,49 +142,13 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
     );
 }
 
-/// `^https?://(localhost|127\.0\.0\.1)(:\d+)?$` — the `LOCALHOST_ORIGIN` regex,
-/// hand-matched (no `regex` crate in the allowlist).
-fn is_localhost_origin(origin: &str) -> bool {
-    let Some(rest) = origin
-        .strip_prefix("http://")
-        .or_else(|| origin.strip_prefix("https://"))
-    else {
-        return false;
-    };
-    let (host, port) = match rest.split_once(':') {
-        Some((host, port)) => (host, Some(port)),
-        None => (rest, None),
-    };
-    if host != "localhost" && host != "127.0.0.1" {
-        return false;
-    }
-    match port {
-        None => true,
-        Some(port) => !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn localhost_origin_regex_parity() {
-        assert!(is_localhost_origin("http://localhost"));
-        assert!(is_localhost_origin("https://localhost:5173"));
-        assert!(is_localhost_origin("http://127.0.0.1:31415"));
-        assert!(!is_localhost_origin("http://evil.com"));
-        assert!(!is_localhost_origin("http://localhost.evil.com"));
-        assert!(!is_localhost_origin("http://localhost:notaport"));
-        assert!(!is_localhost_origin("ftp://localhost"));
-    }
-}
-
 // PORT STATUS: src/server/http.ts (createHttpServer)
 // confidence: medium
 // todos: 1
 // notes: CORS ported as a from_fn middleware (not tower-http CorsLayer) for
-// byte-exact parity: localhost-origin echo, OPTIONS→204, nosniff. Body limit via
+// byte-exact parity: allowed-origin echo (via cors_origin::is_allowed_origin —
+// widened for packaged Tauri per #411), OPTIONS→204, nosniff. Main catch-up
+// (#424) mounts chat_recovery::router() after worktree. Body limit via
 // tower-http RequestBodyLimitLayer(30mb). Auth is a route_layer over the HTTP
 // routes only; the WS `/` route self-authenticates. `trust proxy = loopback` is
 // realized by net::client_ip (peer from ConnectInfo). TODO(port): the global

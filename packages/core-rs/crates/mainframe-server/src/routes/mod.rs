@@ -10,6 +10,7 @@ pub mod attachments;
 pub mod auth;
 pub mod background_tasks;
 pub mod chat_commands;
+pub mod chat_recovery;
 pub mod chats;
 pub mod commands;
 pub mod context;

@@ -177,7 +177,7 @@ mod tests {
     use axum::body::to_bytes;
     use mainframe_background_tasks::tracker::{AdoptOptions, TaskSeed};
     use mainframe_types::background_task::{
-        BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName,
+        BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
     };
 
     async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
@@ -194,6 +194,7 @@ mod tests {
             chat_id,
             TaskSeed {
                 id: "task1".into(),
+                kind: BackgroundWorkKind::Bash,
                 tool_name: BackgroundTaskToolName::Bash,
                 tool_use_id: "tu1".into(),
                 command: "sleep 1".into(),
@@ -208,6 +209,7 @@ mod tests {
     fn seed_task_no_output(ctx: &Arc<AppCtx>, chat_id: &str) -> String {
         let task = BackgroundTask {
             id: "task-no-out".into(),
+            kind: BackgroundWorkKind::Bash,
             tool_name: BackgroundTaskToolName::Bash,
             tool_use_id: "tu2".into(),
             command: "sleep 1".into(),

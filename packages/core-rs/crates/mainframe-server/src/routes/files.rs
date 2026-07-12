@@ -561,6 +561,9 @@ async fn resolve_absolute(base: &str, requested: &str) -> (String, bool) {
 
 const BLOCKED_PREFIXES: &[&str] = &["/etc/shadow", "/etc/master.passwd", "/etc/sudoers"];
 
+/// Minimal sensitive-path blocklist (the user opens these explicitly, so most
+/// paths are allowed): shadow/sudoers prefixes plus the private-secret patterns
+/// (SSH private keys, `.aws/credentials`, `.netrc`, `.gnupg/` keyrings).
 fn is_blocked_external(resolved: &str) -> bool {
     if BLOCKED_PREFIXES
         .iter()
@@ -569,6 +572,9 @@ fn is_blocked_external(resolved: &str) -> bool {
         return true;
     }
     resolved.contains("/.ssh/id_")
+        || resolved.ends_with("/.aws/credentials")
+        || resolved.ends_with("/.netrc")
+        || resolved.contains("/.gnupg/")
 }
 
 async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Response {
@@ -587,6 +593,17 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
             );
         }
     };
+    // encoding: z.enum(['base64']).optional() — absent, or exactly "base64".
+    let encoding = qget(&q, "encoding");
+    if let Some(enc) = encoding
+        && enc != "base64"
+    {
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Invalid option: expected one of \"base64\"",
+        );
+    }
+    let is_base64 = encoding == Some("base64");
     // Blocklist the raw path first so sensitive targets are rejected even when
     // the file does not exist.
     if is_blocked_external(&requested) {
@@ -606,12 +623,25 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
     if !meta.is_file() {
         return fail(StatusCode::BAD_REQUEST, "Path is not a file");
     }
-    if meta.len() > 2 * 1024 * 1024 {
-        return fail(StatusCode::PAYLOAD_TOO_LARGE, "File too large (max 2MB)");
+    // Same limits as the project files route: binary viewers need more headroom.
+    let max_mb: u64 = if is_base64 { 10 } else { 2 };
+    if meta.len() > max_mb * 1024 * 1024 {
+        return fail(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            format!("File too large (max {max_mb}MB)"),
+        );
     }
     match tokio::fs::read(&resolved).await {
         Ok(bytes) => {
-            ok(serde_json::json!({ "path": resolved, "content": String::from_utf8_lossy(&bytes) }))
+            if is_base64 {
+                ok(
+                    serde_json::json!({ "path": resolved, "content": base64_encode(&bytes), "encoding": "base64" }),
+                )
+            } else {
+                ok(
+                    serde_json::json!({ "path": resolved, "content": String::from_utf8_lossy(&bytes) }),
+                )
+            }
         }
         Err(err) => {
             tracing::warn!(error = %err, path = resolved, "Failed to read external file");
@@ -826,6 +856,10 @@ mod tests {
         assert!(is_blocked_external("/etc/shadow"));
         assert!(is_blocked_external("/etc/sudoers/extra"));
         assert!(is_blocked_external("/home/u/.ssh/id_rsa"));
+        assert!(is_blocked_external("/home/u/.aws/credentials"));
+        assert!(is_blocked_external("/home/u/.netrc"));
+        assert!(is_blocked_external("/home/u/.gnupg/secring.gpg"));
+        assert!(!is_blocked_external("/home/u/.aws/config"));
         assert!(!is_blocked_external("/home/u/project/file.txt"));
     }
 }
@@ -844,4 +878,7 @@ mod tests {
 // input". `path.relative`/`path.resolve` via fs_utils shims;
 // realpathSync → tokio canonicalize. Tree/browse sort uses byte Ord (not JS
 // localeCompare) — ordering is unasserted. base64 hand-rolled (no crate in the
-// allowlist), verified against Node Buffer vectors.
+// allowlist), verified against Node Buffer vectors. Main catch-up (#436): the
+// external-file route accepts `encoding=base64` (10MB cap, base64 body +
+// `encoding:'base64'`; else 2MB utf-8) and the blocklist adds `.aws/credentials`,
+// `.netrc`, and `.gnupg/`.

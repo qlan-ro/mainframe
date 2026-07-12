@@ -27,6 +27,8 @@ async fn health_returns_ok_shape() {
         .unwrap();
     assert_eq!(body["status"], "ok");
     assert_eq!(body["version"], "0.0.0-test");
+    // Main catch-up (#442): the health body identifies the port's owner pid.
+    assert!(body["pid"].as_u64().is_some_and(|p| p > 0));
     assert!(body["tunnelUrl"].is_null());
     let ts = body["timestamp"].as_str().unwrap();
     assert!(ts.ends_with('Z'), "millis+Z ISO-8601: {ts}");
@@ -256,6 +258,18 @@ async fn echoes_localhost_origin_but_not_foreign_origin() {
     assert_eq!(
         foreign.headers().get("x-content-type-options").unwrap(),
         "nosniff"
+    );
+
+    // Main catch-up (#411): the packaged-Tauri custom-scheme origin is echoed.
+    let tauri = client
+        .get(server.http_url("/health"))
+        .header("Origin", "tauri://localhost")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        tauri.headers().get("access-control-allow-origin").unwrap(),
+        "tauri://localhost"
     );
 }
 

@@ -129,6 +129,10 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         total_tokens_input: 0,
         total_tokens_output: 0,
         last_context_tokens_input: 0,
+        last_context_total_tokens: None,
+        last_context_max_tokens: None,
+        transcript_missing: None,
+        background_activity: None,
         context_files: None,
         mentions: None,
         modified_files: None,
@@ -165,3 +169,5 @@ fn fallback_id() -> String {
 // notes: The one production PluginHostDb; every accessor bridges through the Db
 // actor's call_blocking (SYNC-DB BRIDGE), one WAL connection. chats_create is
 // infallible per the ported trait — a DB failure logs + returns an unpersisted stub.
+// notes: Main catch-up: the defensive stub gains the new Chat fields (lastContextTotalTokens/
+// lastContextMaxTokens/transcriptMissing/backgroundActivity), all None.

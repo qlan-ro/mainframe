@@ -17,6 +17,9 @@ use crate::ctx::AppCtx;
 pub struct HealthResponse {
     pub status: &'static str,
     pub version: String,
+    /// Identifies which process owns the port when diagnosing a stale/orphaned
+    /// daemon (version + pid answer "who is serving me" with one curl).
+    pub pid: u32,
     pub timestamp: String,
     pub tunnel_url: Option<String>,
 }
@@ -26,6 +29,7 @@ pub async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> 
     Json(HealthResponse {
         status: "ok",
         version: ctx.version.clone(),
+        pid: std::process::id(),
         timestamp: mainframe_runtime::time::now_iso8601(),
         // ctx.tunnelUrl ?? getTunnelUrl?.() ?? null — interior-mutable, so this
         // reflects the daemon-tunnel boot start and the tunnel routes' setTunnelUrl.
@@ -36,8 +40,10 @@ pub async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> 
 // PORT STATUS: src/server/http.ts (GET /health handler)
 // confidence: high
 // todos: 0
-// notes: `tunnelUrl` serializes as `null` (not omitted) to match the fixture, so
-// no `skip_serializing_if`. `timestamp` uses now_iso8601() (millis + `Z`, matching
+// notes: Main catch-up (#442): the body gains `pid: process.pid`
+// (std::process::id()) so a single curl identifies the port's owner. `tunnelUrl`
+// serializes as `null` (not omitted) to match the fixture, so no
+// `skip_serializing_if`. `timestamp` uses now_iso8601() (millis + `Z`, matching
 // Node's Date.toISOString()), NOT chrono's to_rfc3339(). Byte shape verified in
 // docs/rust-port/fixtures/route.health.json (the scaffold's assertions moved to
 // the http integration tests).

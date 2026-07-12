@@ -34,7 +34,6 @@ use mainframe_chat::context_tracker::{
 };
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
-use mainframe_chat::title_generator::generate_title;
 use mainframe_runtime::ResolvedPath;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::attachment::AttachmentStore;
@@ -95,9 +94,6 @@ pub struct DaemonChatDeps {
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
-    /// Boot-resolved login-shell `PATH`, applied to the title-generation CLI spawn
-    /// (mirrors the TS `enrichPath` env mutation).
-    resolved_path: ResolvedPath,
 }
 
 impl ChatManagerDeps for DaemonChatDeps {
@@ -174,6 +170,20 @@ impl ChatManagerDeps for DaemonChatDeps {
             .call_blocking(move |d| d.chats.update(&id, &db_patch))
         {
             tracing::warn!(%err, chat_id, "chats.update failed");
+        }
+    }
+
+    fn chats_clear_session(&self, chat_id: &str) {
+        let id = chat_id.to_string();
+        if let Err(err) = self.db.call_blocking(move |d| d.chats.clear_session(&id)) {
+            tracing::warn!(%err, chat_id, "chats.clearSession failed");
+        }
+    }
+
+    fn chats_clear_worktree(&self, chat_id: &str) {
+        let id = chat_id.to_string();
+        if let Err(err) = self.db.call_blocking(move |d| d.chats.clear_worktree(&id)) {
+            tracing::warn!(%err, chat_id, "chats.clearWorktree failed");
         }
     }
 
@@ -419,12 +429,19 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn generate_title<'a>(
         &'a self,
+        adapter_id: &'a str,
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
-        let path = self.resolved_path.clone();
+        // Adapter-aware (#430): route to the owning adapter's `generateTitle`;
+        // adapters without a cheap one-shot title model return `None` and the
+        // caller keeps the deterministic truncated title.
+        let adapter = self.adapters.get(adapter_id);
+        let content = content.to_string();
+        let binary = binary.to_string();
         Box::pin(async move {
-            match generate_title(content, binary, path.as_str()).await {
+            let adapter = adapter?;
+            match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {
                     tracing::warn!(%err, "title generation failed");
@@ -516,7 +533,10 @@ pub fn build_chat_manager(
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
-    resolved_path: ResolvedPath,
+    // Title generation is now adapter-aware (#430) — the resolved PATH lives with
+    // the adapter's title spawn, so the ChatManager no longer needs it. The param
+    // is retained for the boot call site (mainframe-daemon) until it drops the arg.
+    _resolved_path: ResolvedPath,
 ) -> Arc<ChatManager> {
     let deps = Arc::new(DaemonChatDeps {
         db,
@@ -527,7 +547,6 @@ pub fn build_chat_manager(
         git,
         broadcast,
         launch,
-        resolved_path,
     });
     Arc::new(ChatManager::new(deps))
 }
@@ -684,6 +703,10 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         total_tokens_input: 0,
         total_tokens_output: 0,
         last_context_tokens_input: 0,
+        last_context_total_tokens: None,
+        last_context_max_tokens: None,
+        transcript_missing: None,
+        background_activity: None,
         context_files: None,
         mentions: None,
         modified_files: None,

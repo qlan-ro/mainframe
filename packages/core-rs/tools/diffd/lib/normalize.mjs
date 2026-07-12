@@ -15,6 +15,10 @@ const TS_KEY = /(^|_)(created|updated|last_?opened|last_?seen|modified|timestamp
 const TS_KEY_CAMEL = /(createdAt|updatedAt|lastOpenedAt|lastSeenAt|lastSeen|modifiedAt|timestamp)$/;
 const DUR_KEY = /(duration|elapsed|uptime|took|latency)(ms)?$/i;
 const VER_KEY = /^version$/;
+// The daemon's own OS process id (`/health` gained `pid: process.pid` in #442).
+// The Node and Rust daemons are distinct processes, so their pids legitimately
+// differ — an identity field, not wire logic — and collapse to a placeholder.
+const PID_KEY = /^pid$/;
 // nanoid file-id inside an attachment materialized path: `.../files/<21>-<name>`
 const ATTACH_FILE_ID = /\/files\/[A-Za-z0-9_-]{21}-/g;
 
@@ -48,6 +52,7 @@ export function normalize(value, reps, key) {
       return value;
     }
     if (DUR_KEY.test(key) && typeof value === 'number') return '<DUR>';
+    if (PID_KEY.test(key) && typeof value === 'number') return '<PID>';
     // Daemon build version: npm package version (Node) vs crate version (Rust)
     // legitimately differ — an environmental/cutover concern, not wire logic.
     if (VER_KEY.test(key) && typeof value === 'string') return '<VER>';

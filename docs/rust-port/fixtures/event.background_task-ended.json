@@ -4,6 +4,7 @@
   "chatId": "chat_9f2a3b1c",
   "task": {
     "id": "bgt_002",
+    "kind": "bash",
     "toolName": "Monitor",
     "toolUseId": "toolu_06F",
     "command": "pnpm build:watch",

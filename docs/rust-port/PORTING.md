@@ -341,6 +341,9 @@ lock). See §3's EventEmitter and lock idioms.
 | `packages/core/src/launch/index.ts` | `mainframe-launch::lib` (re-exports) | todo |
 | `packages/core/src/tunnel/tunnel-manager.ts` | `mainframe-launch::tunnel_manager` | todo |
 | `packages/core/src/tunnel/index.ts` | `mainframe-launch::tunnel` (re-exports) | todo |
+| `packages/core/src/process/child-registry.ts` | `mainframe-launch::process::child_registry` | done |
+| `packages/core/src/process/sweep.ts` | `mainframe-launch::process::sweep` | done |
+| `packages/core/src/process/index.ts` | `mainframe-launch::process` (re-exports) | done |
 
 Port detection = TCP connect (tokio). Tunnels + title generation + cloudflared
 stay shell-outs to the same external binaries with the same args.
