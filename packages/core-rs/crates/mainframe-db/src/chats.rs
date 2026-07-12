@@ -20,11 +20,13 @@ const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as pro
   created_at as createdAt, updated_at as updatedAt, \
   total_cost as totalCost, total_tokens_input as totalTokensInput, \
   total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput, \
+  last_context_total_tokens as lastContextTotalTokens, last_context_max_tokens as lastContextMaxTokens, \
   mentions, modified_files as modifiedFiles, \
   worktree_path as worktreePath, branch_name as branchName, \
   process_state as processState, todos, pinned, effort, \
   plan_mode as planMode, detected_prs as detectedPrs, \
   session_file_path as sessionFilePath, \
+  transcript_missing as transcriptMissing, \
   fast, ultracode, adaptive_thinking";
 
 #[derive(Debug, Clone, Default)]
@@ -50,6 +52,8 @@ pub struct ChatUpdate {
     pub total_tokens_input: Option<i64>,
     pub total_tokens_output: Option<i64>,
     pub last_context_tokens_input: Option<i64>,
+    pub last_context_total_tokens: Option<u64>,
+    pub last_context_max_tokens: Option<u64>,
     pub title: Option<String>,
     pub permission_mode: Option<ExecutionMode>,
     pub worktree_path: Option<Option<String>>,
@@ -64,6 +68,7 @@ pub struct ChatUpdate {
     pub ultracode: Option<Option<bool>>,
     pub adaptive_thinking: Option<Option<bool>>,
     pub plan_mode: Option<bool>,
+    pub transcript_missing: Option<bool>,
 }
 
 const VALID_EFFORTS: [&str; 7] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -252,6 +257,8 @@ impl ChatsRepository {
             total_tokens_input: 0,
             total_tokens_output: 0,
             last_context_tokens_input: 0,
+            last_context_total_tokens: None,
+            last_context_max_tokens: None,
             context_files: None,
             mentions: None,
             modified_files: None,
@@ -260,7 +267,9 @@ impl ChatsRepository {
             process_state: None,
             display_status: None,
             is_running: None,
+            background_activity: None,
             worktree_missing: None,
+            transcript_missing: None,
             todos: None,
             pinned: None,
             effort: None,
@@ -312,6 +321,14 @@ impl ChatsRepository {
         if let Some(v) = updates.last_context_tokens_input {
             sets.push("last_context_tokens_input = ?");
             values.push(SqlValue::Integer(v));
+        }
+        if let Some(v) = updates.last_context_total_tokens {
+            sets.push("last_context_total_tokens = ?");
+            values.push(SqlValue::Integer(v as i64));
+        }
+        if let Some(v) = updates.last_context_max_tokens {
+            sets.push("last_context_max_tokens = ?");
+            values.push(SqlValue::Integer(v as i64));
         }
         if let Some(v) = &updates.title {
             sets.push("title = ?");
@@ -373,6 +390,10 @@ impl ChatsRepository {
         }
         if let Some(v) = updates.plan_mode {
             sets.push("plan_mode = ?");
+            values.push(SqlValue::Integer(i64::from(v)));
+        }
+        if let Some(v) = updates.transcript_missing {
+            sets.push("transcript_missing = ?");
             values.push(SqlValue::Integer(i64::from(v)));
         }
 
@@ -531,6 +552,26 @@ impl ChatsRepository {
         Ok(())
     }
 
+    /// Forget the CLI session bound to this chat: the next send spawns a fresh
+    /// session instead of `--resume`ing a dead id. Used by degraded-chat recovery
+    /// ("Continue here") after the CLI's transcript file was deleted.
+    pub fn clear_session(&self, id: &str) -> Result<(), DbError> {
+        self.db.execute(
+            "UPDATE chats SET claude_session_id = NULL, session_file_path = NULL, transcript_missing = 0 WHERE id = ?",
+            rusqlite::params![id],
+        )?;
+        Ok(())
+    }
+
+    /// Detach the chat from its (deleted) worktree so it rebinds to the project root.
+    pub fn clear_worktree(&self, id: &str) -> Result<(), DbError> {
+        self.db.execute(
+            "UPDATE chats SET worktree_path = NULL, branch_name = NULL WHERE id = ?",
+            rusqlite::params![id],
+        )?;
+        Ok(())
+    }
+
     /// Bulk-reset every chat whose process_state is 'working' to 'idle'.
     /// Returns the number of rows affected.
     pub fn reset_working_to_idle(&self) -> Result<i64, DbError> {
@@ -629,6 +670,13 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
         total_tokens_input: row.get("totalTokensInput")?,
         total_tokens_output: row.get("totalTokensOutput")?,
         last_context_tokens_input: row.get("lastContextTokensInput")?,
+        // null → None (TS `?? undefined`); stored INTEGER read as i64 then widened.
+        last_context_total_tokens: row
+            .get::<_, Option<i64>>("lastContextTotalTokens")?
+            .map(|n| n as u64),
+        last_context_max_tokens: row
+            .get::<_, Option<i64>>("lastContextMaxTokens")?
+            .map(|n| n as u64),
         context_files: None,
         mentions: Some(parse_json_array(row.get::<_, Option<String>>("mentions")?)),
         modified_files: Some(parse_json_array(
@@ -645,7 +693,13 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
         )),
         display_status: None,
         is_running: None,
+        background_activity: None,
         worktree_missing: None,
+        // `Boolean(row.transcriptMissing)` — column is DEFAULT 0, always present.
+        transcript_missing: Some(
+            row.get::<_, Option<i64>>("transcriptMissing")?
+                .is_some_and(|n| n != 0),
+        ),
         todos: parse_todos(row.get::<_, Option<String>>("todos")?),
         pinned: Some(row.get::<_, Option<i64>>("pinned")?.is_some_and(|n| n != 0)),
         effort: parse_effort(row.get::<_, Option<String>>("effort")?).map(Some),
@@ -664,9 +718,17 @@ fn parse_todos(value: Option<String>) -> Option<Vec<TodoItem>> {
     serde_json::from_str(&value).ok()
 }
 
-// PORT STATUS: src/db/chats.ts (373 lines)
+// PORT STATUS: src/db/chats.ts (405 lines)
 // confidence: high
-// notes: CHAT_SELECT_FIELDS aliases every column to camelCase, read by that name.
+// notes: Main catch-up (#423/#424): SELECT + mapRow gain lastContextTotalTokens/
+// lastContextMaxTokens (null → None, stored INTEGER read as i64 → u64) and
+// transcriptMissing (Boolean(row) → Some(bool); column is DEFAULT 0 so always
+// present). ChatUpdate + update() field-map add the two token cols (after
+// lastContextTokensInput) and transcriptMissing (last, after planMode, `?1:0`).
+// New clear_session (NULL session id/file + transcript_missing=0) and clear_worktree
+// (NULL worktree_path/branch_name) mirror the degraded-recovery helpers. create()
+// seeds the four new Chat fields to None (backgroundActivity is never persisted).
+// notes(orig): CHAT_SELECT_FIELDS aliases every column to camelCase, read by that name.
 // mapRow's tri-state fields follow the types crate: processState/fast/ultracode/
 // adaptiveThinking are always present (Some(None) for NULL → serializes null);
 // effort uses .map(Some) so an invalid/absent value stays absent (None); todos

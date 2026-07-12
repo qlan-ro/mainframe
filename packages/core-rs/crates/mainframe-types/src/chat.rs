@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::adapter::{ControlRequest, DetectedPr, EffortLevel};
+use crate::background_task::BackgroundActivity;
 use crate::content::LeafContent;
 use crate::context::SessionMention;
 use crate::settings::ExecutionMode;
@@ -135,6 +136,13 @@ pub struct Chat {
     pub total_tokens_input: i64,
     pub total_tokens_output: i64,
     pub last_context_tokens_input: i64,
+    /// Last CLI-reported context usage (`get_context_usage`): tokens in window /
+    /// usable window size. Authoritative pair for the meter when no live report
+    /// is in memory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_context_total_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_context_max_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -155,8 +163,16 @@ pub struct Chat {
     pub display_status: Option<DisplayStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_running: Option<bool>,
+    /// Live background work (agents/bash/workflows) — derived per response, never
+    /// persisted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_activity: Option<BackgroundActivity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worktree_missing: Option<bool>,
+    /// True when the CLI's transcript file for this session was deleted from disk
+    /// (persisted flag).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcript_missing: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos: Option<Vec<TodoItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -432,10 +448,15 @@ mod tests {
     }
 }
 
-// PORT STATUS: packages/types/src/chat.ts (140 lines)
+// PORT STATUS: packages/types/src/chat.ts (153 lines)
 // confidence: high
 // todos: 0
-// notes: `?: X | null` fields (Chat.processState/effort/fast/ultracode/
+// notes: Main catch-up (#423/#424/#425): Chat gains lastContextTotalTokens/
+// lastContextMaxTokens (Option<u64>, persisted), backgroundActivity
+// (Option<BackgroundActivity> from background_task.rs — derived per response,
+// NEVER persisted), transcriptMissing (Option<bool>, persisted). All skip-when-
+// none; serde auto-defaults Option on absent so old payloads still parse.
+// notes(orig): `?: X | null` fields (Chat.processState/effort/fast/ultracode/
 // adaptiveThinking, Project.parentProjectId, SessionTuning.*) use
 // Option<Option<T>> + #[serde(default, skip_serializing_if=Option::is_none)] to
 // preserve the absent/null/value tri-state faithfully (route.projects-list

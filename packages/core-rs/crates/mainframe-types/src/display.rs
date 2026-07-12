@@ -146,6 +146,15 @@ pub struct DisplayMessage {
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
+/// GET /api/chats/:id/messages payload — `transcriptMissing` distinguishes a
+/// genuinely empty thread from one whose CLI transcript was deleted from disk.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatHistoryPayload {
+    pub messages: Vec<DisplayMessage>,
+    pub transcript_missing: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,12 +241,31 @@ mod tests {
             "timestamp": "2026-07-08T10:15:30.000Z"
         }));
     }
+
+    #[test]
+    fn chat_history_payload_round_trips() {
+        roundtrip::<ChatHistoryPayload>(json!({ "messages": [], "transcriptMissing": true }));
+        roundtrip::<ChatHistoryPayload>(json!({
+            "messages": [
+                {
+                    "id": "dmsg_0001",
+                    "chatId": "chat_9f2a3b1c",
+                    "type": "user",
+                    "content": [ { "type": "text", "text": "hi" } ],
+                    "timestamp": "2026-07-08T10:15:30.000Z"
+                }
+            ],
+            "transcriptMissing": false
+        }));
+    }
 }
 
-// PORT STATUS: packages/types/src/display.ts (71 lines)
+// PORT STATUS: packages/types/src/display.ts (80 lines)
 // confidence: high
 // todos: 0
-// notes: DisplayContent is an untagged wrapper over shared LeafContent
+// notes: Main catch-up (#424): ChatHistoryPayload { messages, transcriptMissing }
+// — the GET /api/chats/:id/messages `data` envelope (was a bare DisplayMessage[]).
+// notes(orig): DisplayContent is an untagged wrapper over shared LeafContent
 // (content.rs) + display-only DisplayNode (internally tagged on tool_call/
 // tool_group/task_group/task_progress/permission_request/error/compaction;
 // disjoint from the leaf tags). ToolCategories uses HashSet<String> for the TS

@@ -29,6 +29,7 @@ fn model(id: &str, label: &str) -> AdapterModel {
         id: id.into(),
         label: label.into(),
         description: None,
+        resolved_model: None,
         context_window: None,
         is_default: None,
         supported_efforts: None,

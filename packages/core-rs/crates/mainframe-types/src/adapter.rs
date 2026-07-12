@@ -38,6 +38,19 @@ pub struct SessionResult {
     pub total_cost_usd: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<MessageUsage>,
+    /// Tokens occupying the context window at the turn's last model call
+    /// (input + cache of the final parent assistant message). `null`/absent both
+    /// deserialize to `None`; the producing side (event-handler) distinguishes
+    /// absent (fall back to `usage`) from explicit null (keep stored size).
+    ///
+    /// `contextTokens` is camelCase on the wire even though this struct's other
+    /// keys are snake_case (they mirror the CLI usage payload) — hence the rename.
+    #[serde(
+        rename = "contextTokens",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub context_tokens: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subtype: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -274,6 +287,9 @@ pub struct AdapterModel {
     pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Concrete model id an alias entry currently resolves to (CLI probe, per-entry).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_window: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -469,6 +485,7 @@ mod tests {
             "id": "claude-opus-4-8",
             "label": "Opus 4.8",
             "description": "Most capable Claude model",
+            "resolvedModel": "claude-opus-4-8-20260101",
             "contextWindow": 200000,
             "isDefault": true,
             "supportedEfforts": ["low", "medium", "high", "max"],
@@ -494,6 +511,19 @@ mod tests {
     fn external_session_page_null_next_offset() {
         let v = json!({ "sessions": [], "total": 0, "nextOffset": null });
         roundtrip::<ExternalSessionPage>(v);
+    }
+
+    #[test]
+    fn session_result_context_tokens_optional() {
+        // absent contextTokens → None → omitted on the way back out
+        // (SessionResult keys are snake_case except the camelCase contextTokens)
+        roundtrip::<SessionResult>(json!({ "subtype": "success", "is_error": false }));
+        // explicit number survives
+        roundtrip::<SessionResult>(json!({ "contextTokens": 12345, "is_error": false }));
+        // explicit null collapses to None (absent) on re-serialize
+        let r: SessionResult = serde_json::from_value(json!({ "contextTokens": null })).unwrap();
+        assert_eq!(r.context_tokens, None);
+        assert!(!serde_json::to_string(&r).unwrap().contains("contextTokens"));
     }
 
     #[test]
@@ -535,10 +565,15 @@ mod tests {
     }
 }
 
-// PORT STATUS: packages/types/src/adapter.ts (364 lines)
+// PORT STATUS: packages/types/src/adapter.ts (395 lines)
 // confidence: high
 // todos: 0
-// notes: Data DTOs + effort-clamp logic only; the Adapter/AdapterSession/
+// notes: Main catch-up (#424/#425/#441): SessionResult.contextTokens (Option<i64>,
+// serde default+skip; absent/null both → None, three-way branch lives in the
+// event-handler producer) and AdapterModel.resolvedModel (Option<String>, skip).
+// The new Adapter TRAIT methods generateTitle/isTranscriptPresent land in
+// mainframe-adapter-api (behavioral half). Data DTOs + effort-clamp logic only;
+// the Adapter/AdapterSession/
 // SessionSink TRAIT interfaces are intentionally NOT here — they port to
 // mainframe-adapter-api (crate map §2.6). MessageMetadata.usage / SessionResult
 // fields stay snake_case (they mirror the CLI usage payload; fixture

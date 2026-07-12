@@ -209,9 +209,49 @@ pub trait Adapter: Send + Sync {
         None
     }
 
+    /// `generateTitle?(content, binary)` — a cheap one-shot title from the first
+    /// user message via the resolved `<adapterId>.titleBinary` CLI. Adapters
+    /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
+    /// callers then keep the deterministic truncated title. Owned `String` args to
+    /// match this trait's async-method convention (`send_message`/`set_model`).
+    fn generate_title(
+        &self,
+        content: String,
+        binary: String,
+    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        let _ = (content, binary);
+        Box::pin(async { Ok(None) })
+    }
+
+    /// `isTranscriptPresent?(sessionId, projectPath, sessionFilePath?)` — whether
+    /// the CLI's transcript for `session_id` still exists on disk. `Ok(None)` means
+    /// presence cannot be determined; callers MUST treat it as "don't flag". Owned
+    /// args for the same async-trait-convention reason as `generate_title`.
+    fn is_transcript_present(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
+        let _ = (session_id, project_path, session_file_path);
+        Box::pin(async { Ok(None) })
+    }
+
     // TODO(port): the optional skill/agent/command/external-session CRUD methods
     // and `createPlanModeHandler?` from adapter.ts are deferred to the phase that
     // ports the concrete claude/codex adapters and their routes — their default
     // wire semantics (unsupported vs empty) must be pinned against those callers,
     // not guessed here. The registry + chat-session consumers do not need them.
 }
+
+// PORT STATUS: behavioral half of packages/types/src/adapter.ts (Adapter/
+// AdapterSession/SessionSink traits)
+// confidence: high
+// todos: 1 (skill/agent/command/external-session CRUD + createPlanModeHandler,
+//   deferred to the concrete-adapter phase — see the TODO above)
+// notes: Main catch-up (#424/#430) adds two OPTIONAL Adapter methods with default
+// `Ok(None)` bodies so existing adapters keep compiling and each concrete adapter
+// (Wave 1) overrides: generate_title(content, binary) and is_transcript_present(
+// session_id, project_path, session_file_path). Owned `String` params (not &str)
+// to stay consistent with this trait's async BoxFuture methods; `None` return =
+// "unsupported / cannot determine — don't flag".
