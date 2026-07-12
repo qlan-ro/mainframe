@@ -63,7 +63,12 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // (cloudflared), and the LSP language-status endpoint.
         .merge(routes::launch::router())
         .merge(routes::tunnel::router())
-        .merge(routes::lsp_routes::router());
+        .merge(routes::lsp_routes::router())
+        // Automations v2 (T9.3). All behind auth EXCEPT the webhook ingress,
+        // which middleware/auth.rs exempts by path (HMAC-verified instead).
+        .merge(routes::automations::router())
+        .merge(routes::automation_admin::router())
+        .merge(routes::automation_webhook::router());
 
     // Plugin routes — the PluginManager owns a parent router (listing + per-plugin
     // sub-routers) mounted under `/api/plugins`, behind the auth layer like the TS
