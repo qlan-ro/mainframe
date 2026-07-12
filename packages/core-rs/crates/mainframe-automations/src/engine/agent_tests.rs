@@ -342,3 +342,142 @@ async fn a_late_watch_error_after_success_is_dropped() {
         RunStatus::Succeeded
     );
 }
+
+// --- T4.4 (A2): structured agent outputs -------------------------------
+
+fn agent_expecting_scope(id: &str) -> Step {
+    use crate::domain::{ExpectedOutput, ExpectedOutputType};
+    match ask_agent_step(id, false) {
+        Step::AskAgent(mut step) => {
+            step.expects = Some(vec![ExpectedOutput {
+                key: "scope".to_string(),
+                output_type: ExpectedOutputType::Choice,
+                options: Some(vec!["xs".to_string(), "s".to_string(), "m".to_string()]),
+            }]);
+            Step::AskAgent(step)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[tokio::test]
+async fn expects_appends_the_output_contract_to_the_prompt() {
+    let rig = agent_rig(FakePorts::default()).await;
+    let def = definition(vec![agent_expecting_scope("agent-1")]);
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, def, manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+
+    let prompt = rig.port.started.lock().unwrap()[0].prompt.clone();
+    assert!(prompt.starts_with("go"));
+    assert!(prompt.contains(
+        "End your final message with a JSON object matching this shape (and nothing after it): \
+         {\"scope\": one of [\"xs\",\"s\",\"m\"]}"
+    ));
+}
+
+#[tokio::test]
+async fn expects_parses_the_final_json_into_named_outputs() {
+    let rig = agent_rig(FakePorts::default()).await;
+    let def = definition(vec![agent_expecting_scope("agent-1")]);
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, def, manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+
+    rig.port.complete(
+        "chat-1",
+        Ok(AgentOutcome::Completed {
+            final_text: "sized it\n{\"scope\": \"s\"}".to_string(),
+        }),
+    );
+
+    let finished = wait_for_run(&rig.h.store, &run.id, |r| r.status == RunStatus::Succeeded).await;
+    let outputs = finished.checkpoint.steps["agent-1"]
+        .outputs
+        .as_ref()
+        .unwrap();
+    assert_eq!(outputs["scope"], json!("s"));
+    assert_eq!(outputs["result"], json!("sized it\n{\"scope\": \"s\"}"));
+    assert_eq!(outputs["chatId"], json!("chat-1"));
+    assert!(rig.port.retry_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn expects_mismatch_retries_once_into_the_same_session() {
+    let rig = agent_rig(FakePorts::default()).await;
+    let def = definition(vec![agent_expecting_scope("agent-1")]);
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, def, manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+
+    // First completion: no JSON at all. One corrective retry follows.
+    rig.port.complete(
+        "chat-1",
+        Ok(AgentOutcome::Completed {
+            final_text: "forgot the json".to_string(),
+        }),
+    );
+    // The retry outcome: valid.
+    rig.port.complete(
+        "chat-1",
+        Ok(AgentOutcome::Completed {
+            final_text: "{\"scope\": \"m\"}".to_string(),
+        }),
+    );
+
+    let finished = wait_for_run(&rig.h.store, &run.id, |r| r.status == RunStatus::Succeeded).await;
+    let outputs = finished.checkpoint.steps["agent-1"]
+        .outputs
+        .as_ref()
+        .unwrap();
+    assert_eq!(outputs["scope"], json!("m"));
+    assert_eq!(outputs["result"], json!("{\"scope\": \"m\"}"));
+
+    let retries = rig.port.retry_calls.lock().unwrap().clone();
+    assert_eq!(retries.len(), 1);
+    assert_eq!(retries[0].0, "chat-1");
+    assert!(retries[0].1.starts_with(
+        "That response didn't include the expected JSON (no JSON object found in the response)."
+    ));
+}
+
+#[tokio::test]
+async fn expects_second_mismatch_fails_the_step_loudly() {
+    let rig = agent_rig(FakePorts::default()).await;
+    let def = definition(vec![agent_expecting_scope("agent-1")]);
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, def, manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+
+    rig.port.complete(
+        "chat-1",
+        Ok(AgentOutcome::Completed {
+            final_text: "{\"scope\": \"xl\"}".to_string(),
+        }),
+    );
+    rig.port.complete(
+        "chat-1",
+        Ok(AgentOutcome::Completed {
+            final_text: "still wrong".to_string(),
+        }),
+    );
+
+    let finished = wait_for_run(&rig.h.store, &run.id, |r| r.status == RunStatus::Failed).await;
+    assert_eq!(rig.port.retry_calls.lock().unwrap().len(), 1);
+    assert_eq!(
+        finished.checkpoint.steps["agent-1"].error.as_deref(),
+        Some("agent did not return the expected JSON: no JSON object found in the response")
+    );
+}

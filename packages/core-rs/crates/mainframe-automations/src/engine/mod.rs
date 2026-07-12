@@ -9,6 +9,7 @@ mod agent_settle;
 pub(crate) mod blocks;
 pub(crate) mod checkpoint;
 mod deadline;
+pub(crate) mod expects;
 pub(crate) mod walk;
 
 pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
@@ -109,6 +110,9 @@ mod blocks_repeat_tests;
 
 #[cfg(test)]
 mod cancel_tests;
+
+#[cfg(test)]
+mod expects_tests;
 
 #[cfg(test)]
 mod linear_tests;

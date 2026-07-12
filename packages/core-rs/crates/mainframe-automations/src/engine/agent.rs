@@ -15,6 +15,7 @@ use crate::tokens::render;
 
 use super::advance::AgentWaitRegistry;
 use super::checkpoint::set_step;
+use super::expects::build_output_contract;
 use super::{RunAdvancer, StepOutcome, VerbContext};
 
 #[derive(Clone)]
@@ -214,8 +215,13 @@ impl AgentWaitRegistry for AgentVerb {
 
 fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
     let expects = step.expects.clone().unwrap_or_default();
+    let mut prompt = render(&step.prompt, ctx.scope);
+    if !expects.is_empty() {
+        // A2: the output contract rides the first prompt (Node ask-agent.ts).
+        prompt.push_str(&build_output_contract(&expects));
+    }
     AgentRequest {
-        prompt: render(&step.prompt, ctx.scope),
+        prompt,
         adapter_id: step
             .adapter_id
             .clone()
