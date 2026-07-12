@@ -18,6 +18,16 @@ import type { AutomationsGateway } from './gateway';
 
 let loadSeq = 0;
 
+const TERMINAL_RUN_STATUSES: ReadonlySet<AutomationRunSummary['status']> = new Set([
+  'succeeded',
+  'failed',
+  'cancelled',
+]);
+
+function isTerminalRunStatus(status: AutomationRunSummary['status']): boolean {
+  return TERMINAL_RUN_STATUSES.has(status);
+}
+
 interface AutomationsState {
   gateway: AutomationsGateway;
   definitions: AutomationSummary[];
@@ -84,9 +94,16 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   removeDefinition: (id) => set((s) => ({ definitions: s.definitions.filter((d) => d.id !== id) })),
 
   patchRun: (run) =>
-    set((s) => ({
-      runs: s.runs.some((r) => r.id === run.id) ? s.runs.map((r) => (r.id === run.id ? run : r)) : [run, ...s.runs],
-    })),
+    set((s) => {
+      const existing = s.runs.find((r) => r.id === run.id);
+      // A fast run's WS terminal event can land before the 202 startRun response
+      // resolves; the stale `running` snapshot must not clobber it — nothing
+      // later would ever un-stick the view.
+      if (existing && isTerminalRunStatus(existing.status) && !isTerminalRunStatus(run.status)) return s;
+      return {
+        runs: existing ? s.runs.map((r) => (r.id === run.id ? run : r)) : [run, ...s.runs],
+      };
+    }),
 
   addInteraction: (interaction) =>
     set((s) =>

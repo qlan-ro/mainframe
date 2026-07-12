@@ -124,6 +124,30 @@ describe('useAutomationsStore', () => {
     expect(useAutomationsStore.getState().runs).toEqual([done]);
   });
 
+  it('patchRun never regresses a terminal run to a non-terminal status', () => {
+    // Race seen live: a 2ms run's WS `succeeded` event lands before the 202
+    // response resolves, then patchRun(202-body{running}) clobbered it and the
+    // run view stayed "Running" forever (no later event ever fixes it).
+    const done = {
+      id: 'r1',
+      automationId: 'a1',
+      status: 'succeeded' as const,
+      trigger: { kind: 'manual' as const },
+      startedAt: 1,
+      finishedAt: 3,
+      error: null,
+    };
+    useAutomationsStore.getState().patchRun(done);
+    const stale = { ...done, status: 'running' as const, finishedAt: null };
+    useAutomationsStore.getState().patchRun(stale);
+    expect(useAutomationsStore.getState().runs).toEqual([done]);
+
+    // A terminal→terminal update (e.g. failed details enriched) still applies.
+    const failed = { ...done, status: 'failed' as const, error: 'boom' };
+    useAutomationsStore.getState().patchRun(failed);
+    expect(useAutomationsStore.getState().runs).toEqual([failed]);
+  });
+
   it('addCredential dedupes by label; removeCredential drops it', () => {
     useAutomationsStore.getState().addCredential('GitHub');
     useAutomationsStore.getState().addCredential('GitHub');
