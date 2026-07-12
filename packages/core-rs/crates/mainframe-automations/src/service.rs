@@ -4,6 +4,7 @@
 //! (T10.1).
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use serde_json::{Map, Value};
@@ -28,9 +29,11 @@ use crate::triggers::{
 };
 
 mod build;
+mod start;
 mod summary;
 mod verb_ports;
 
+pub use start::StartError;
 pub use summary::AutomationSummary;
 
 #[derive(Debug, thiserror::Error)]
@@ -68,16 +71,20 @@ pub struct AutomationsEngine {
     registry: Arc<ActionRegistry>,
     credentials: Arc<FileCredentialStore>,
     webhooks: WebhookProcessor,
-    #[allow(dead_code)] // armed by start() (T10.1)
+    /// Armed by `start()` — the 30 s derived-state schedule driver.
     sweeper: Arc<ScheduleSweeper>,
-    #[allow(dead_code)] // subscribed by start() (T10.1)
+    /// Subscribed by `start()` when an `event_source` is present.
     router: Arc<TriggerRouter>,
-    #[allow(dead_code)]
     event_source: Option<Arc<dyn EventSource>>,
-    #[allow(dead_code)] // start() (T10.1) re-attaches watches via resume_run_watches
+    /// `start()` re-attaches watches via `resume_run_watches`.
     agent_verb: Arc<AgentVerb>,
     clock: Arc<dyn Clock>,
+    /// Long-lived background tasks (`start()` arms the sweep + event loop;
+    /// `stop()` aborts them).
     tasks: StdMutex<Vec<JoinHandle<()>>>,
+    /// One-shot latch so a second `start()` is a typed error, not a
+    /// double-armed sweep / duplicate reconcile.
+    started: AtomicBool,
 }
 
 impl AutomationsEngine {
@@ -287,6 +294,6 @@ mod service_tests;
 // re-arming)
 // confidence: high
 // todos: 0
-// notes: start()/reconcile/sweep arming land in T10.1; `tasks` is the
-//        JoinHandle holder stop() drains. `agent_verb` is held for T10.1's
-//        resume_run_watches.
+// notes: start()/reconcile/sweep arming live in service/start.rs; `tasks` is
+//        the JoinHandle holder stop() drains; `agent_verb` re-attaches watches
+//        via resume_run_watches during reconcile.

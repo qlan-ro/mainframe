@@ -101,6 +101,7 @@ pub(super) async fn build(
         agent_verb,
         clock: ports.clock,
         tasks: StdMutex::new(Vec::new()),
+        started: std::sync::atomic::AtomicBool::new(false),
     }))
 }
 

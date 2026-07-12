@@ -18,6 +18,7 @@ pub mod triggers;
 
 pub use service::{
     AutomationSummary, AutomationsConfig, AutomationsEngine, AutomationsPorts, EngineError,
+    StartError,
 };
 
 #[cfg(test)]

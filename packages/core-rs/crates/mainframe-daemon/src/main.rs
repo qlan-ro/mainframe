@@ -252,6 +252,15 @@ async fn run_daemon() {
         &data_dir,
     )
     .await;
+    // Boot reconcile (Node service.start): re-advance in-flight runs, re-attach
+    // durable agent watches, and arm the schedule sweep + event triggers. A
+    // failure logs and leaves the routes serving — same posture as a build
+    // failure. Bounded: each live run advances only to its next park/terminal.
+    if let Some(automations) = &automations
+        && let Err(err) = automations.start().await
+    {
+        tracing::error!(%err, "failed to start the automations engine");
+    }
 
     // LSP: registry (bundled server configs) + the per-(project,language) manager.
     // Constructed in `createServerManager` in the TS; the Rust daemon owns it.
