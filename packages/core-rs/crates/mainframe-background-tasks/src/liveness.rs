@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use tokio::task::JoinHandle;
 
-use mainframe_types::background_task::BackgroundTaskStatus;
+use mainframe_types::background_task::{BackgroundTaskStatus, BackgroundWorkKind};
 
 use crate::lsof::lsof_writers_detailed;
 use crate::tracker::{BackgroundTaskTracker, TerminalUpdate};
@@ -76,6 +76,13 @@ pub async fn run_liveness_sweep(
             .or_default()
             .insert(task.id.clone());
 
+        // lsof-writer liveness only holds for bash tasks (the shell keeps the
+        // spool file open). Agents/workflows run inside the CLI and have no
+        // writer — probing them would false-stop live work. They close via
+        // task_notification bookends or endAllRunning on CLI exit.
+        if task.kind != BackgroundWorkKind::Bash {
+            continue;
+        }
         if now - task.started_at < GRACE_MS {
             continue;
         }
@@ -175,7 +182,7 @@ mod tests {
     use crate::lsof::{ExecFn, ExecOk, set_exec_for_tests};
     use crate::seam_test_guard;
     use crate::tracker::TaskSeed;
-    use mainframe_types::background_task::BackgroundTaskToolName;
+    use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn seed_running(tracker: &BackgroundTaskTracker, chat_id: &str, id: &str, output_path: &str) {
@@ -183,6 +190,7 @@ mod tests {
             chat_id,
             TaskSeed {
                 id: id.to_string(),
+                kind: BackgroundWorkKind::Bash,
                 tool_name: BackgroundTaskToolName::Bash,
                 tool_use_id: "u".to_string(),
                 command: "x".to_string(),
@@ -320,6 +328,42 @@ mod tests {
         assert_eq!(tracker.get_pid("c1", "t1"), Some(555));
     }
 
+    #[tokio::test]
+    async fn non_bash_kinds_are_exempt_from_lsof_probe_and_sweep() {
+        let _guard = seam_test_guard();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls2 = calls.clone();
+        set_exec_for_tests(Arc::new(move |_c, _a| {
+            calls2.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Ok(ExecOk {
+                    stdout: String::new(),
+                })
+            })
+        }));
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start(
+            "c1",
+            TaskSeed {
+                id: "a1".to_string(),
+                kind: BackgroundWorkKind::Agent,
+                tool_name: BackgroundTaskToolName::Bash,
+                tool_use_id: "u".to_string(),
+                command: String::new(),
+                description: "subagent".to_string(),
+            },
+            "/p/a1.out".to_string(),
+        );
+        let task_start = tracker.get("c1", "a1").unwrap().started_at;
+        let mut miss = MissMap::new();
+        run_liveness_sweep(&tracker, &mut miss, task_start + 100_000, true).await;
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            tracker.get("c1", "a1").unwrap().status,
+            BackgroundTaskStatus::Running
+        );
+    }
+
     // --- wake-detection helper + composed scenario (drives the same decision the
     // scheduler loop makes, deterministically — the async interval loop is covered
     // by `stop_prevents_further_ticks`). ---
@@ -401,7 +445,7 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/background-tasks/liveness.ts (131 lines)
+// PORT STATUS: src/background-tasks/liveness.ts (136 lines)
 // confidence: high
 // todos: 0
 // notes: runLivenessSweep/getMissCount/setMiss/deleteMiss/startLivenessScheduler
@@ -410,5 +454,7 @@ mod tests {
 // which would diverge from setInterval); JoinHandle.abort() = clearInterval + the
 // `stopped` guard. `Date.now()` wallclock source is an injected Clock closure so
 // wake-detection is deterministic; the wake decision is extracted to `is_wake`.
-// All 6 sweep cases + wake + stop() translated from liveness.test.ts (the wake
-// case drives run_liveness_sweep via is_wake rather than the flaky async interval).
+// lsof-writer liveness is bash-only (`kind != Bash` → skip); agents/workflows run
+// inside the CLI and have no writer. All 7 sweep cases + wake + stop() translated
+// from liveness.test.ts (the wake case drives run_liveness_sweep via is_wake rather
+// than the flaky async interval).

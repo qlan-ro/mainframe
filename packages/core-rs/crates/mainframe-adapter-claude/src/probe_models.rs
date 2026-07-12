@@ -86,6 +86,7 @@ pub fn map_model_info(info: &Value) -> AdapterModel {
         id: value.to_string(),
         label,
         description: None,
+        resolved_model: None,
         context_window: None,
         is_default: None,
         supported_efforts: None,
@@ -97,6 +98,9 @@ pub fn map_model_info(info: &Value) -> AdapterModel {
     };
     if let Some(d) = description {
         model.description = Some(d.to_string());
+    }
+    if let Some(rm) = info.get("resolvedModel").and_then(Value::as_str) {
+        model.resolved_model = Some(rm.to_string());
     }
     let raw_efforts: Vec<&str> = info
         .get("supportedEffortLevels")
@@ -137,6 +141,25 @@ pub struct ProbeResult {
     pub resolved_model: Option<String>,
 }
 
+/// Drop the concrete entry a `default` alias resolves to, so the catalog does not
+/// list the same model twice (once as "default", once under its concrete id).
+fn remove_concrete_default_duplicate(models: Vec<AdapterModel>) -> Vec<AdapterModel> {
+    let Some(default_resolved) = models
+        .iter()
+        .find(|m| m.is_default == Some(true))
+        .and_then(|m| m.resolved_model.clone())
+    else {
+        return models;
+    };
+    models
+        .into_iter()
+        .filter(|model| {
+            model.is_default == Some(true)
+                || model.resolved_model.as_deref() != Some(default_resolved.as_str())
+        })
+        .collect()
+}
+
 /// Parse the (possibly double-wrapped) `initialize` control_response.
 ///
 /// Live-verified against CLI 2.1.198 (2026-07-04): `resolvedModel` is a per-entry
@@ -151,7 +174,7 @@ pub fn extract_probe_payload(event: &Value) -> Option<ProbeResult> {
     let raw_models = payload
         .and_then(|p| p.get("models"))
         .and_then(Value::as_array)?;
-    let models = raw_models.iter().map(map_model_info).collect();
+    let models = remove_concrete_default_duplicate(raw_models.iter().map(map_model_info).collect());
     let resolved_model = raw_models
         .iter()
         .find(|m| m.get("value").and_then(Value::as_str) == Some("default"))
@@ -263,6 +286,7 @@ mod tests {
             id: id.to_string(),
             label: label.to_string(),
             description: None,
+            resolved_model: None,
             context_window: None,
             is_default: None,
             supported_efforts: None,
@@ -385,11 +409,85 @@ mod tests {
         }));
         assert_eq!(m.supports_ultracode, None);
     }
+
+    // Translated from the new probe-models.test.ts cases (#441).
+
+    #[test]
+    fn carries_each_entry_own_resolved_model_onto_the_mapped_model() {
+        let event = json!({
+            "type": "control_response",
+            "response": { "response": { "models": [
+                { "value": "sonnet", "displayName": "Sonnet", "resolvedModel": "claude-sonnet-5" },
+                { "value": "claude-sonnet-5", "displayName": "Sonnet 5" },
+            ]}}
+        });
+        let out = extract_probe_payload(&event).unwrap();
+        assert_eq!(
+            out.models[0].resolved_model.as_deref(),
+            Some("claude-sonnet-5")
+        );
+        assert_eq!(out.models[1].resolved_model, None);
+    }
+
+    #[test]
+    fn keeps_the_default_alias_and_removes_another_entry_resolving_to_the_same_model() {
+        let event = json!({
+            "type": "control_response",
+            "response": { "response": { "models": [
+                {
+                    "value": "default",
+                    "displayName": "Default (recommended)",
+                    "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks",
+                    "resolvedModel": "claude-opus-4-8[1m]"
+                },
+                {
+                    "value": "opus[1m]",
+                    "displayName": "Opus",
+                    "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks",
+                    "resolvedModel": "claude-opus-4-8[1m]"
+                },
+                { "value": "sonnet", "displayName": "Sonnet", "resolvedModel": "claude-sonnet-5" },
+            ]}}
+        });
+        let out = extract_probe_payload(&event).unwrap();
+        assert_eq!(
+            out.models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            vec!["default", "sonnet"]
+        );
+        assert_eq!(out.models[0].label, "Default - Opus 4.8");
+        assert_eq!(out.models[0].is_default, Some(true));
+    }
+
+    #[test]
+    fn keeps_entries_with_distinct_or_unresolved_concrete_models() {
+        let event = json!({
+            "type": "control_response",
+            "response": { "response": { "models": [
+                { "value": "default", "displayName": "Default" },
+                { "value": "opus[1m]", "displayName": "Opus", "resolvedModel": "claude-opus-4-8[1m]" },
+                { "value": "sonnet", "displayName": "Sonnet", "resolvedModel": "claude-sonnet-5" },
+            ]}}
+        });
+        assert_eq!(
+            extract_probe_payload(&event)
+                .unwrap()
+                .models
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["default", "opus[1m]", "sonnet"]
+        );
+    }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/probe-models.ts (160 lines)
+// PORT STATUS: src/plugins/builtin/claude/probe-models.ts (169 lines)
 // confidence: medium
 // todos: 0
+// notes: Main catch-up (#441): map_model_info copies a string `resolvedModel` onto the
+// notes: AdapterModel; remove_concrete_default_duplicate drops the concrete entry that a
+// notes: `default` alias resolves to (keeps the default entry, matched by is_default
+// notes: rather than the TS reference-identity check — only the "default" value entry
+// notes: carries is_default). New probe-models.test.ts cases translated.
 // notes: pure `map_model_info`/`extract_probe_payload` ported faithfully (JS dynamic
 // notes: property access mirrored via serde_json::Value getters, so an unknown effort
 // notes: string is skipped rather than erroring). `probe_models()` spawns via

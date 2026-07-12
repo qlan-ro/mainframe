@@ -11,7 +11,9 @@
 //! CONCURRENCY.tsv: `tunnels` = `Arc<DashMap<String, ManagedTunnel>>` keyed by
 //! label; `verifiedAt` = `Arc<DashMap<String, VerifyResult>>` (30s TTL cache).
 
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::path::Path;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
@@ -20,6 +22,10 @@ use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 use tokio::process::{ChildStderr, ChildStdout, Command};
 use tokio::time::sleep;
+
+use crate::process::{
+    ChildRegistryPort, ManagedChildEntry, ManagedChildKind, NoopChildRegistry, now_ms,
+};
 
 /// Fire-and-forget DaemonEvent sink (TS `broadcast?: (event) => void`).
 pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
@@ -32,6 +38,38 @@ const CLOUDFLARED_NOT_FOUND: &str = "cloudflared not found. Install it from http
 pub struct TunnelStartOptions {
     pub token: Option<String>,
     pub url: Option<String>,
+}
+
+/// Registry + spawn-binary options (TS `TunnelManagerOptions`).
+#[derive(Default)]
+pub struct TunnelManagerOptions {
+    pub registry: Option<Arc<dyn ChildRegistryPort>>,
+    /// Absolute cloudflared path to spawn; a bare name is spawned but never tracked.
+    pub cloudflared_path: Option<String>,
+}
+
+/// Build the tunnel reap record for a spawned cloudflared pid, or `None` when the
+/// path is a bare name (unsafe to reap) or the pid is missing. Extracted so the
+/// record decision is unit-testable without spawning cloudflared.
+fn tunnel_record_entry(
+    cloudflared_path: &str,
+    pid: Option<u32>,
+    label: &str,
+) -> Option<ManagedChildEntry> {
+    let pid = pid?;
+    if !Path::new(cloudflared_path).is_absolute() {
+        return None;
+    }
+    Some(ManagedChildEntry {
+        pid: i64::from(pid),
+        kind: ManagedChildKind::Tunnel,
+        command: cloudflared_path.to_string(),
+        args: vec![],
+        cwd: None,
+        group: false,
+        label: label.to_string(),
+        spawned_at: now_ms(),
+    })
 }
 
 /// Tunable timings + binary path. Defaults match the TS constants; tests shrink
@@ -94,10 +132,17 @@ fn build_cloudflared_command(bin: &str, args: &[String], resolved_path: Option<&
 
 pub struct TunnelManager {
     tunnels: Arc<DashMap<String, ManagedTunnel>>,
+    // Pids spawned but not yet promoted into `tunnels` (URL parsed + connection
+    // registered). They live here for the up-to-45s start window so stop_all can
+    // reap a mid-start child on shutdown instead of orphaning it to PID 1.
+    pending: Arc<StdMutex<HashSet<u32>>>,
     verified_at: Arc<DashMap<String, VerifyResult>>,
     broadcast: BroadcastFn,
     config: TunnelConfig,
     client: reqwest::Client,
+    /// Pidfile registry so a crashed daemon's next startup sweep can reap tunnels
+    /// it leaked. Defaults to `NoopChildRegistry`.
+    registry: Arc<dyn ChildRegistryPort>,
     /// Boot-resolved login-shell `PATH`, applied to the spawned `cloudflared` so
     /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
     /// `enrichPath` env mutation). `None` = inherit the daemon `PATH`.
@@ -112,12 +157,28 @@ impl TunnelManager {
     pub fn with_config(broadcast: Option<BroadcastFn>, config: TunnelConfig) -> Self {
         Self {
             tunnels: Arc::new(DashMap::new()),
+            pending: Arc::new(StdMutex::new(HashSet::new())),
             verified_at: Arc::new(DashMap::new()),
             broadcast: broadcast.unwrap_or_else(|| Arc::new(|_event| {})),
             config,
             client: reqwest::Client::new(),
+            registry: Arc::new(NoopChildRegistry),
             resolved_path: None,
         }
+    }
+
+    /// Construct with a child registry + spawn-binary path (TS second ctor arg).
+    /// `cloudflaredPath` sets the spawned binary (default bare `cloudflared`).
+    pub fn with_options(broadcast: Option<BroadcastFn>, options: TunnelManagerOptions) -> Self {
+        let mut config = TunnelConfig::default();
+        if let Some(path) = options.cloudflared_path {
+            config.cloudflared_bin = path;
+        }
+        let mut manager = Self::with_config(broadcast, config);
+        if let Some(registry) = options.registry {
+            manager.registry = registry;
+        }
+        manager
     }
 
     /// Inject the boot-resolved login-shell `PATH` (see
@@ -126,6 +187,47 @@ impl TunnelManager {
     pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
         self.resolved_path = Some(path.into());
         self
+    }
+
+    /// Persist a spawned cloudflared pid so a crashed daemon's next startup sweep
+    /// can reap it. Only absolute paths are tracked — reaping a bare-name match
+    /// could kill an unrelated user process after PID reuse. Fire-and-forget.
+    fn record_spawn(&self, label: &str, pid: Option<u32>) {
+        let Some(entry) = tunnel_record_entry(&self.config.cloudflared_bin, pid, label) else {
+            return;
+        };
+        let registry = self.registry.clone();
+        tokio::spawn(async move {
+            registry.add(entry).await;
+        });
+    }
+
+    fn forget_spawn(&self, pid: Option<u32>) {
+        let Some(pid) = pid else {
+            return;
+        };
+        let registry = self.registry.clone();
+        tokio::spawn(async move {
+            registry.remove(i64::from(pid)).await;
+        });
+    }
+
+    fn add_pending(&self, pid: Option<u32>) {
+        if let Some(pid) = pid {
+            self.pending
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(pid);
+        }
+    }
+
+    fn drop_pending(&self, pid: Option<u32>) {
+        if let Some(pid) = pid {
+            self.pending
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&pid);
+        }
     }
 
     /// Extract a `https://<label>.trycloudflare.com` URL from a log line, or
@@ -214,6 +316,10 @@ impl TunnelManager {
         };
 
         let pid = child.id();
+        // Record the reap pid and mark the child pending BEFORE the start window,
+        // so a shutdown or crash during it can reap the child (see stop_all).
+        self.record_spawn(label, pid);
+        self.add_pending(pid);
         let mut out_lines = child.stdout.take().map(|s| BufReader::new(s).lines());
         let mut err_lines = child.stderr.take().map(|s| BufReader::new(s).lines());
 
@@ -241,6 +347,8 @@ impl TunnelManager {
                 }
                 () = &mut start_deadline => {
                     kill_pid(pid, "-TERM");
+                    self.forget_spawn(pid);
+                    self.drop_pending(pid);
                     let msg = format!(
                         "Tunnel \"{label}\" timed out after {}ms",
                         self.config.start_timeout.as_millis()
@@ -255,6 +363,8 @@ impl TunnelManager {
                     return Err(msg);
                 }
                 status = child.wait() => {
+                    self.forget_spawn(pid);
+                    self.drop_pending(pid);
                     return Err(self.on_exit_before_ready(label, status));
                 }
             }
@@ -271,6 +381,8 @@ impl TunnelManager {
                 ready: false,
             },
         );
+        // Promoted into `tunnels`; no longer a pending mid-start child.
+        self.drop_pending(pid);
         tracing::info!(target: "tunnel", label, url, port, "tunnel connected, waiting for DNS propagation…");
         self.broadcast(DaemonEvent::TunnelStatus {
             state: TunnelState::Ready,
@@ -297,10 +409,11 @@ impl TunnelManager {
                     dns_verified: Some(dns_ok),
                     error: None,
                 });
-                self.spawn_exit_watcher(label.to_string(), child);
+                self.spawn_exit_watcher(label.to_string(), pid, child);
                 Ok(url)
             }
             status = child.wait() => {
+                self.forget_spawn(pid);
                 Err(self.on_exit_before_ready(label, status))
             }
         }
@@ -348,13 +461,23 @@ impl TunnelManager {
         msg
     }
 
-    /// Post-ready exit handling (TS `child.once('exit')` `else` branch): remove
-    /// the tunnel and broadcast `stopped` when the established child dies.
-    fn spawn_exit_watcher(&self, label: String, mut child: tokio::process::Child) {
+    /// Post-ready exit handling (TS `child.once('exit')` `else` branch): forget
+    /// the reap pid, remove the tunnel, and broadcast `stopped` when the
+    /// established child dies.
+    fn spawn_exit_watcher(
+        &self,
+        label: String,
+        pid: Option<u32>,
+        mut child: tokio::process::Child,
+    ) {
         let tunnels = self.tunnels.clone();
         let broadcast = self.broadcast.clone();
+        let registry = self.registry.clone();
         tokio::spawn(async move {
             let status = child.wait().await;
+            if let Some(pid) = pid {
+                registry.remove(i64::from(pid)).await;
+            }
             let code = status.ok().and_then(|s| s.code());
             tracing::info!(target: "tunnel", label = %label, code = ?code, "tunnel process exited");
             tunnels.remove(&label);
@@ -373,6 +496,7 @@ impl TunnelManager {
             return;
         };
         kill_pid(tunnel.pid, "-TERM");
+        self.forget_spawn(tunnel.pid);
         tracing::info!(target: "tunnel", label, "tunnel stopped");
         self.broadcast(DaemonEvent::TunnelStatus {
             state: TunnelState::Stopped,
@@ -387,6 +511,19 @@ impl TunnelManager {
         let labels: Vec<String> = self.tunnels.iter().map(|e| e.key().clone()).collect();
         for label in labels {
             self.stop(&label);
+        }
+        // Reap children still mid-start: they aren't in `tunnels` yet, so the loop
+        // above misses them. Their own exit path prunes `pending` afterwards.
+        let pending: Vec<u32> = {
+            let mut set = self
+                .pending
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            set.drain().collect()
+        };
+        for pid in pending {
+            kill_pid(Some(pid), "-TERM");
+            self.forget_spawn(Some(pid));
         }
     }
 
@@ -869,6 +1006,153 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
         assert!(stopped_broadcasts(&events) >= 1);
     }
+
+    // --- registry tracking ---
+
+    use crate::process::{BoxFuture, ManagedChildEntry, ManagedChildKind};
+
+    struct RecordingRegistry {
+        added: Mutex<Vec<ManagedChildEntry>>,
+        removed: Mutex<Vec<i64>>,
+    }
+
+    impl RecordingRegistry {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                added: Mutex::new(vec![]),
+                removed: Mutex::new(vec![]),
+            })
+        }
+        fn added(&self) -> Vec<ManagedChildEntry> {
+            self.added.lock().unwrap().clone()
+        }
+        fn removed(&self) -> Vec<i64> {
+            self.removed.lock().unwrap().clone()
+        }
+    }
+
+    impl ChildRegistryPort for RecordingRegistry {
+        fn add(&self, entry: ManagedChildEntry) -> BoxFuture<'_, ()> {
+            Box::pin(async move {
+                self.added.lock().unwrap().push(entry);
+            })
+        }
+        fn remove(&self, pid: i64) -> BoxFuture<'_, ()> {
+            Box::pin(async move {
+                self.removed.lock().unwrap().push(pid);
+            })
+        }
+        fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
+            Box::pin(async { vec![] })
+        }
+        fn list_by_kind(&self, _kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
+            Box::pin(async { vec![] })
+        }
+        fn clear(&self) -> BoxFuture<'_, ()> {
+            Box::pin(async {})
+        }
+    }
+
+    fn manager_with(config: TunnelConfig, registry: Arc<dyn ChildRegistryPort>) -> TunnelManager {
+        let mut manager = TunnelManager::with_config(None, config);
+        manager.registry = registry;
+        manager
+    }
+
+    /// `cloudflared` stand-in that only sleeps — never prints a URL, so the tunnel
+    /// stays mid-start (in `pending`, not promoted into `tunnels`).
+    fn write_silent_cloudflared(dir: &std::path::Path) -> String {
+        let script = dir.join("silent-cloudflared.sh");
+        std::fs::write(&script, "#!/bin/sh\nsleep 100\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn record_entry_records_with_the_absolute_binary_path() {
+        let entry = tunnel_record_entry("/abs/bin/cloudflared", Some(4242), "preview:Dev").unwrap();
+        assert_eq!(entry.pid, 4242);
+        assert_eq!(entry.kind, ManagedChildKind::Tunnel);
+        assert_eq!(entry.command, "/abs/bin/cloudflared");
+        assert_eq!(entry.label, "preview:Dev");
+        assert!(!entry.group);
+        assert_eq!(entry.cwd, None);
+    }
+
+    #[test]
+    fn record_entry_none_when_the_cloudflared_path_is_a_bare_name() {
+        assert!(tunnel_record_entry("cloudflared", Some(4242), "preview:Dev").is_none());
+    }
+
+    #[test]
+    fn record_entry_none_when_the_child_has_no_pid() {
+        assert!(tunnel_record_entry("/abs/bin/cloudflared", None, "preview:Dev").is_none());
+    }
+
+    #[tokio::test]
+    async fn records_the_spawned_pid_and_forgets_it_on_stop() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_fake_cloudflared(dir.path());
+        let registry = RecordingRegistry::new();
+        let config = TunnelConfig {
+            cloudflared_bin: bin.clone(),
+            dns_poll: Duration::from_millis(20),
+            dns_timeout: Duration::from_millis(100),
+            ..TunnelConfig::default()
+        };
+        let manager = manager_with(config, registry.clone());
+
+        manager.start(4173, "preview:Dev", None).await.unwrap();
+        sleep(Duration::from_millis(50)).await; // let the fire-and-forget add() run
+
+        let added = registry.added();
+        assert_eq!(added.len(), 1);
+        assert_eq!(added[0].kind, ManagedChildKind::Tunnel);
+        assert_eq!(added[0].command, bin);
+        assert_eq!(added[0].label, "preview:Dev");
+        assert!(!added[0].group);
+        let pid = added[0].pid;
+
+        manager.stop("preview:Dev");
+        sleep(Duration::from_millis(50)).await;
+        assert!(registry.removed().contains(&pid));
+    }
+
+    #[tokio::test]
+    async fn stop_all_reaps_a_child_still_mid_start_and_forgets_its_pid() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_silent_cloudflared(dir.path());
+        let registry = RecordingRegistry::new();
+        let config = TunnelConfig {
+            cloudflared_bin: bin,
+            start_timeout: Duration::from_millis(5_000),
+            ..TunnelConfig::default()
+        };
+        let manager = Arc::new(manager_with(config, registry.clone()));
+
+        let start_manager = manager.clone();
+        let task = tokio::spawn(async move {
+            let _ = start_manager.start(4173, "preview:Dev", None).await;
+        });
+
+        // Wait for the child to spawn and record (never promotes — silent bin).
+        let mut pid = None;
+        for _ in 0..40 {
+            let added = registry.added();
+            if let Some(entry) = added.first() {
+                pid = Some(entry.pid);
+                break;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+        let pid = pid.expect("child should have recorded a pid while mid-start");
+
+        manager.stop_all();
+        sleep(Duration::from_millis(100)).await;
+        assert!(registry.removed().contains(&pid));
+        task.abort();
+    }
 }
 
 // PORT STATUS: src/tunnel/tunnel-manager.ts (245 lines)
@@ -889,3 +1173,9 @@ mod tests {
 // node:dns Resolver; the specific-resolver behavior is lost (see blockers).
 // Tunnel/verify tests use real spawned processes / a canned local HTTP server,
 // not code mocks.
+// #431/#442 child-reaping: TunnelManagerOptions{registry,cloudflaredPath} added;
+// recordSpawn/forgetSpawn fire-and-forget against an Arc<dyn ChildRegistryPort>
+// (absolute paths only, via tunnel_record_entry); a `pending` HashSet<pid> tracks
+// mid-start children so stop_all reaps them (the mock-spawn TS tests map to the
+// pure tunnel_record_entry unit tests + real-process record/stop/mid-start-reap
+// tests, matching the crate's real-process test idiom).

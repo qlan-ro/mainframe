@@ -21,7 +21,7 @@ use mainframe_background_tasks::encoding::encode_cwd_segment;
 use mainframe_background_tasks::spool_root::spool_root;
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
 use mainframe_types::background_task::{
-    BackgroundTaskStatus, BackgroundTaskToolName, BackgroundTaskUsage,
+    BackgroundTaskStatus, BackgroundTaskToolName, BackgroundTaskUsage, BackgroundWorkKind,
 };
 
 const METADATA_TTL_MS: u64 = 60_000;
@@ -36,6 +36,13 @@ pub struct TaskStartedPayload {
     pub task_id: String,
     pub tool_use_id: Option<String>,
     pub description: Option<String>,
+    pub task_type: Option<String>,
+}
+
+/// `task_updated` payload subset.
+pub struct TaskUpdatedPayload {
+    pub task_id: String,
+    pub status: String,
 }
 
 /// Context threaded from the session at `task_started` time.
@@ -58,6 +65,28 @@ pub struct TaskNotificationPayload {
     pub output_file: Option<String>,
     pub summary: Option<String>,
     pub usage: Option<TaskNotificationUsage>,
+}
+
+/// CLI `task_type` → client-facing kind. Prefix-tolerant (`local_agent`,
+/// `remote_agent`, teammates → agent) so new CLI variants degrade gracefully;
+/// genuinely unknown types land in `Other`, never dropped.
+pub fn map_task_kind(task_type: Option<&str>, has_bash_metadata: bool) -> BackgroundWorkKind {
+    let Some(task_type) = task_type else {
+        return if has_bash_metadata {
+            BackgroundWorkKind::Bash
+        } else {
+            BackgroundWorkKind::Other
+        };
+    };
+    if task_type.contains("bash") {
+        BackgroundWorkKind::Bash
+    } else if task_type.contains("agent") || task_type.contains("teammate") {
+        BackgroundWorkKind::Agent
+    } else if task_type.contains("workflow") {
+        BackgroundWorkKind::Workflow
+    } else {
+        BackgroundWorkKind::Other
+    }
 }
 
 fn map_status(s: &str) -> BackgroundTaskStatus {
@@ -160,6 +189,7 @@ impl ClaudeTaskEvents {
             chat_id,
             TaskSeed {
                 id: payload.task_id.clone(),
+                kind: map_task_kind(payload.task_type.as_deref(), meta.is_some()),
                 tool_name: meta
                     .as_ref()
                     .map(|m| m.tool_name)
@@ -173,6 +203,25 @@ impl ClaudeTaskEvents {
                 description: payload.description.unwrap_or_default(),
             },
             output_path,
+        );
+    }
+
+    /// `task_updated` fires alongside `task_notification` (post-leak CLI addition).
+    /// Only a terminal status closes the task — the tracker dedups when the
+    /// notification already landed; non-terminal updates carry nothing we track.
+    pub fn handle_task_updated(&self, chat_id: &str, payload: TaskUpdatedPayload) {
+        if !matches!(payload.status.as_str(), "completed" | "failed" | "stopped") {
+            return;
+        }
+        self.tracker.end(
+            chat_id,
+            &payload.task_id,
+            TerminalUpdate {
+                status: map_status(&payload.status),
+                output_path: String::new(),
+                summary: String::new(),
+                usage: None,
+            },
         );
     }
 
@@ -222,6 +271,7 @@ mod tests {
             task_id: task_id.to_string(),
             tool_use_id: Some(tool_use_id.to_string()),
             description: Some(description.to_string()),
+            task_type: None,
         }
     }
 
@@ -378,6 +428,165 @@ mod tests {
         );
     }
 
+    fn started_typed(task_id: &str, task_type: Option<&str>) -> TaskStartedPayload {
+        TaskStartedPayload {
+            task_id: task_id.to_string(),
+            tool_use_id: None,
+            description: Some("x".to_string()),
+            task_type: task_type.map(str::to_string),
+        }
+    }
+
+    // Translated from task-events.test.ts's "background work kind mapping" block.
+
+    #[tokio::test(start_paused = true)]
+    async fn maps_local_bash_to_bash() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("b1", Some("local_bash")), ctx());
+        assert_eq!(
+            tracker.get("chat-a", "b1").unwrap().kind,
+            BackgroundWorkKind::Bash
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn maps_local_agent_to_agent() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("a1", Some("local_agent")), ctx());
+        assert_eq!(
+            tracker.get("chat-a", "a1").unwrap().kind,
+            BackgroundWorkKind::Agent
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn maps_remote_agents_and_teammates_to_agent() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("a2", Some("remote_agent")), ctx());
+        te.handle_task_started("chat-a", started_typed("a3", Some("teammate")), ctx());
+        assert_eq!(
+            tracker.get("chat-a", "a2").unwrap().kind,
+            BackgroundWorkKind::Agent
+        );
+        assert_eq!(
+            tracker.get("chat-a", "a3").unwrap().kind,
+            BackgroundWorkKind::Agent
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn maps_local_workflow_to_workflow() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("w1", Some("local_workflow")), ctx());
+        assert_eq!(
+            tracker.get("chat-a", "w1").unwrap().kind,
+            BackgroundWorkKind::Workflow
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn maps_unknown_task_type_to_other() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("o1", Some("local_quantum")), ctx());
+        assert_eq!(
+            tracker.get("chat-a", "o1").unwrap().kind,
+            BackgroundWorkKind::Other
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn falls_back_to_bash_when_task_type_missing_but_bash_tool_use_captured() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.capture_tool_use(
+            "tu-k",
+            "Bash",
+            Some(&serde_json::json!({ "command": "pnpm dev", "run_in_background": true })),
+        );
+        te.handle_task_started(
+            "chat-a",
+            TaskStartedPayload {
+                task_id: "k1".to_string(),
+                tool_use_id: Some("tu-k".to_string()),
+                description: Some("dev".to_string()),
+                task_type: None,
+            },
+            ctx(),
+        );
+        assert_eq!(
+            tracker.get("chat-a", "k1").unwrap().kind,
+            BackgroundWorkKind::Bash
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn maps_missing_task_type_with_no_captured_tool_use_to_other() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("k2", None), ctx());
+        assert_eq!(
+            tracker.get("chat-a", "k2").unwrap().kind,
+            BackgroundWorkKind::Other
+        );
+    }
+
+    // Translated from task-events.test.ts's "handleTaskUpdated" block.
+
+    #[tokio::test(start_paused = true)]
+    async fn handle_task_updated_ends_the_task_on_a_terminal_status() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("u1", Some("local_agent")), ctx());
+        te.handle_task_updated(
+            "chat-a",
+            TaskUpdatedPayload {
+                task_id: "u1".to_string(),
+                status: "completed".to_string(),
+            },
+        );
+        assert_eq!(
+            tracker.get("chat-a", "u1").unwrap().status,
+            BackgroundTaskStatus::Completed
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn handle_task_updated_ignores_a_non_terminal_status() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_started("chat-a", started_typed("u2", Some("local_agent")), ctx());
+        te.handle_task_updated(
+            "chat-a",
+            TaskUpdatedPayload {
+                task_id: "u2".to_string(),
+                status: "running".to_string(),
+            },
+        );
+        assert_eq!(
+            tracker.get("chat-a", "u2").unwrap().status,
+            BackgroundTaskStatus::Running
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn handle_task_updated_ignores_an_unknown_task_id() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone());
+        te.handle_task_updated(
+            "chat-a",
+            TaskUpdatedPayload {
+                task_id: "ghost".to_string(),
+                status: "completed".to_string(),
+            },
+        );
+        assert!(tracker.get("chat-a", "ghost").is_none());
+    }
+
     #[tokio::test(start_paused = true)]
     async fn threads_deterministic_output_path_into_tracker_start() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
@@ -388,6 +597,7 @@ mod tests {
                 task_id: "tkid01".to_string(),
                 tool_use_id: Some("tu1".to_string()),
                 description: Some("d".to_string()),
+                task_type: None,
             },
             ctx(),
         );
@@ -399,10 +609,19 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/task-events.ts (110 lines)
+// PORT STATUS: src/plugins/builtin/claude/task-events.ts (147 lines)
 // confidence: high
 // todos: 0
-// notes: metadata + evictionTimers held behind one Arc<Mutex<Inner>> so the 60s
+// notes: Main catch-up (#425): map_task_kind(task_type, has_bash_metadata) — prefix-
+// notes: tolerant (contains bash/agent|teammate/workflow → kind, else Other; missing
+// notes: task_type → Bash iff a Bash/Monitor tool_use was captured, else Other). The
+// notes: TaskSeed now carries `kind` (added in mainframe-background-tasks::tracker,
+// notes: cluster F — see blocker if that field is absent). handle_task_updated ends the
+// notes: task ONLY on a terminal status (completed/failed/stopped guard mirrors the
+// notes: KNOWN_STATUSES.has check), with empty output/summary + None usage; the tracker
+// notes: dedups a prior notification. task-events.test.ts kind-mapping + handleTaskUpdated
+// notes: blocks translated assertion-for-assertion.
+// notes(orig): metadata + evictionTimers held behind one Arc<Mutex<Inner>> so the 60s
 // notes: eviction sleep task can delete its own entry (CONCURRENCY.tsv 91-92
 // notes: SINGLE_TASK; the shared inner is a session-local decoupling, not a
 // notes: cross-session lock). spoolRoot() PathBuf is stringified for the same

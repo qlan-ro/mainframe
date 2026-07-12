@@ -8,13 +8,19 @@ use tokio::sync::broadcast;
 
 use mainframe_types::background_task::{
     BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName, BackgroundTaskUsage,
+    BackgroundWorkKind,
 };
 
 /// Broadcast payload — mirrors the TS EventEmitter's
-/// `('background_task.started' | 'background_task.ended', chatId, task)`.
+/// `('background_task.started' | 'background_task.updated' | 'background_task.ended',
+/// chatId, task)`.
 #[derive(Debug, Clone)]
 pub enum TaskEvent {
     Started {
+        chat_id: String,
+        task: BackgroundTask,
+    },
+    Updated {
         chat_id: String,
         task: BackgroundTask,
     },
@@ -24,11 +30,12 @@ pub enum TaskEvent {
     },
 }
 
-/// The `Pick<BackgroundTask, 'id'|'toolName'|'toolUseId'|'command'|'description'>`
+/// The `Pick<BackgroundTask, 'id'|'kind'|'toolName'|'toolUseId'|'command'|'description'>`
 /// seed passed to [`BackgroundTaskTracker::start`].
 #[derive(Debug, Clone)]
 pub struct TaskSeed {
     pub id: String,
+    pub kind: BackgroundWorkKind,
     pub tool_name: BackgroundTaskToolName,
     pub tool_use_id: String,
     pub command: String,
@@ -90,24 +97,37 @@ impl BackgroundTaskTracker {
         }
     }
 
-    /// Subscribe to `background_task.started` / `.ended` events (BROADCAST
-    /// class). Replaces the TS `on(event, listener)` registration.
+    /// Subscribe to `background_task.started` / `.updated` / `.ended` events
+    /// (BROADCAST class). Replaces the TS `on(event, listener)` registration.
     pub fn subscribe(&self) -> broadcast::Receiver<TaskEvent> {
         self.emitter.subscribe()
     }
 
     pub fn start(&self, chat_id: &str, seed: TaskSeed, output_path: String) -> BackgroundTask {
+        let existing = self
+            .by_chat
+            .get(chat_id)
+            .and_then(|chat| chat.get(&seed.id).cloned());
+        // Duplicate start of a live task (CLI re-register on resume) → upsert, no
+        // double count: keep the original startedAt and emit updated, not started.
+        let (is_upsert, started_at, last_output_line) = match &existing {
+            Some(e) if e.status == BackgroundTaskStatus::Running => {
+                (true, e.started_at, e.last_output_line.clone())
+            }
+            _ => (false, now_ms(), None),
+        };
         let task = BackgroundTask {
             id: seed.id,
+            kind: seed.kind,
             tool_name: seed.tool_name,
             tool_use_id: seed.tool_use_id,
             command: seed.command,
             description: seed.description,
             output_path: Some(output_path),
-            started_at: now_ms(),
+            started_at,
             ended_at: None,
             status: BackgroundTaskStatus::Running,
-            last_output_line: None,
+            last_output_line,
             summary: None,
             usage: None,
             recovered: None,
@@ -116,10 +136,18 @@ impl BackgroundTaskTracker {
             let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
             chat.insert(task.id.clone(), task.clone());
         }
-        let _ = self.emitter.send(TaskEvent::Started {
-            chat_id: chat_id.to_string(),
-            task: task.clone(),
-        });
+        let event = if is_upsert {
+            TaskEvent::Updated {
+                chat_id: chat_id.to_string(),
+                task: task.clone(),
+            }
+        } else {
+            TaskEvent::Started {
+                chat_id: chat_id.to_string(),
+                task: task.clone(),
+            }
+        };
+        let _ = self.emitter.send(event);
         task
     }
 
@@ -192,6 +220,35 @@ impl BackgroundTaskTracker {
         }
     }
 
+    /// Running tasks only — the chat's live background-activity set.
+    pub fn list_live(&self, chat_id: &str) -> Vec<BackgroundTask> {
+        self.list(chat_id)
+            .into_iter()
+            .filter(|t| t.status == BackgroundTaskStatus::Running)
+            .collect()
+    }
+
+    /// Terminal-stop every running task for a chat (CLI process ended — agents and
+    /// workflows die with it; orphaned entries must not pin the working indicator).
+    /// Emits `ended` per task; returns the number stopped.
+    pub fn end_all_running(&self, chat_id: &str) -> u32 {
+        let mut count = 0;
+        for task in self.list_live(chat_id) {
+            self.end(
+                chat_id,
+                &task.id,
+                TerminalUpdate {
+                    status: BackgroundTaskStatus::Stopped,
+                    output_path: task.output_path.clone().unwrap_or_default(),
+                    summary: "session ended".to_string(),
+                    usage: None,
+                },
+            );
+            count += 1;
+        }
+        count
+    }
+
     /// Cross-chat iterator over running tasks.
     pub fn list_all_running(&self) -> Vec<(String, BackgroundTask)> {
         let mut out = Vec::new();
@@ -225,12 +282,17 @@ mod tests {
     use super::*;
 
     fn make_seed(id: &str) -> TaskSeed {
+        seed_with(id, BackgroundWorkKind::Bash, "dev server")
+    }
+
+    fn seed_with(id: &str, kind: BackgroundWorkKind, description: &str) -> TaskSeed {
         TaskSeed {
             id: id.to_string(),
+            kind,
             tool_name: BackgroundTaskToolName::Bash,
             tool_use_id: "tu-1".to_string(),
             command: "pnpm dev".to_string(),
-            description: "dev server".to_string(),
+            description: description.to_string(),
         }
     }
 
@@ -240,6 +302,14 @@ mod tests {
             out.push(ev);
         }
         out
+    }
+
+    fn event_kind(ev: &TaskEvent) -> &'static str {
+        match ev {
+            TaskEvent::Started { .. } => "started",
+            TaskEvent::Updated { .. } => "updated",
+            TaskEvent::Ended { .. } => "ended",
+        }
     }
 
     fn usage(total: i64, tools: i64, dur: i64) -> BackgroundTaskUsage {
@@ -443,6 +513,7 @@ mod tests {
     ) -> BackgroundTask {
         BackgroundTask {
             id: id.to_string(),
+            kind: BackgroundWorkKind::Bash,
             tool_name: BackgroundTaskToolName::Bash,
             tool_use_id: String::new(),
             command: "<recovered>".to_string(),
@@ -510,6 +581,7 @@ mod tests {
     fn plain_seed(id: &str) -> TaskSeed {
         TaskSeed {
             id: id.to_string(),
+            kind: BackgroundWorkKind::Bash,
             tool_name: BackgroundTaskToolName::Bash,
             tool_use_id: "u".to_string(),
             command: "x".to_string(),
@@ -564,12 +636,181 @@ mod tests {
     }
 
     #[test]
+    fn stamps_the_kind_from_the_start_seed() {
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start(
+            "chat-a",
+            seed_with("a-1", BackgroundWorkKind::Agent, "dev server"),
+            "/tmp/a-1.output".to_string(),
+        );
+        assert_eq!(
+            tracker.get("chat-a", "a-1").unwrap().kind,
+            BackgroundWorkKind::Agent
+        );
+    }
+
+    #[test]
+    fn list_live_returns_only_running_tasks_for_the_chat() {
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start("chat-a", make_seed("t1"), "/p/t1".to_string());
+        tracker.start(
+            "chat-a",
+            seed_with("t2", BackgroundWorkKind::Agent, "dev server"),
+            "/p/t2".to_string(),
+        );
+        tracker.start("chat-b", make_seed("t3"), "/p/t3".to_string());
+        tracker.end(
+            "chat-a",
+            "t1",
+            TerminalUpdate {
+                status: BackgroundTaskStatus::Completed,
+                output_path: "/p/t1".to_string(),
+                summary: String::new(),
+                usage: None,
+            },
+        );
+        assert_eq!(
+            tracker
+                .list_live("chat-a")
+                .into_iter()
+                .map(|t| t.id)
+                .collect::<Vec<_>>(),
+            vec!["t2"]
+        );
+        assert_eq!(
+            tracker
+                .list_live("chat-b")
+                .into_iter()
+                .map(|t| t.id)
+                .collect::<Vec<_>>(),
+            vec!["t3"]
+        );
+        assert!(tracker.list_live("chat-none").is_empty());
+    }
+
+    #[test]
+    fn upsert_on_duplicate_start_no_double_count_keeps_started_at_emits_updated() {
+        let tracker = BackgroundTaskTracker::new();
+        let mut rx = tracker.subscribe();
+        tracker.start(
+            "chat-a",
+            seed_with("dup", BackgroundWorkKind::Bash, "first"),
+            "/p/dup".to_string(),
+        );
+        let started_at = tracker.get("chat-a", "dup").unwrap().started_at;
+        drain(&mut rx); // clear the started event
+
+        tracker.start(
+            "chat-a",
+            seed_with("dup", BackgroundWorkKind::Bash, "second"),
+            "/p/dup-again".to_string(),
+        );
+
+        assert_eq!(tracker.list_live("chat-a").len(), 1);
+        let task = tracker.get("chat-a", "dup").unwrap();
+        assert_eq!(task.started_at, started_at);
+        assert_eq!(task.description, "second");
+        assert_eq!(
+            drain(&mut rx).iter().map(event_kind).collect::<Vec<_>>(),
+            vec!["updated"]
+        );
+    }
+
+    #[test]
+    fn re_registers_fresh_emits_started_when_previous_entry_is_terminal() {
+        let tracker = BackgroundTaskTracker::new();
+        let mut rx = tracker.subscribe();
+        tracker.start("chat-a", make_seed("reuse"), "/p/reuse".to_string());
+        tracker.end(
+            "chat-a",
+            "reuse",
+            TerminalUpdate {
+                status: BackgroundTaskStatus::Stopped,
+                output_path: String::new(),
+                summary: "CLI exited".to_string(),
+                usage: None,
+            },
+        );
+        drain(&mut rx);
+
+        tracker.start("chat-a", make_seed("reuse"), "/p/reuse".to_string());
+
+        assert_eq!(
+            tracker.get("chat-a", "reuse").unwrap().status,
+            BackgroundTaskStatus::Running
+        );
+        assert_eq!(
+            drain(&mut rx).iter().map(event_kind).collect::<Vec<_>>(),
+            vec!["started"]
+        );
+    }
+
+    #[test]
+    fn end_all_running_stops_every_running_task_emits_ended_and_skips_terminal() {
+        let tracker = BackgroundTaskTracker::new();
+        let mut rx = tracker.subscribe();
+        tracker.start("chat-a", make_seed("r1"), "/p/r1".to_string());
+        tracker.start(
+            "chat-a",
+            seed_with("r2", BackgroundWorkKind::Agent, "dev server"),
+            "/p/r2".to_string(),
+        );
+        tracker.start("chat-a", make_seed("done"), "/p/done".to_string());
+        tracker.end(
+            "chat-a",
+            "done",
+            TerminalUpdate {
+                status: BackgroundTaskStatus::Completed,
+                output_path: String::new(),
+                summary: String::new(),
+                usage: None,
+            },
+        );
+        drain(&mut rx);
+
+        let ended = tracker.end_all_running("chat-a");
+
+        assert_eq!(ended, 2);
+        assert!(tracker.list_live("chat-a").is_empty());
+        assert_eq!(
+            tracker.get("chat-a", "r1").unwrap().status,
+            BackgroundTaskStatus::Stopped
+        );
+        assert_eq!(
+            tracker.get("chat-a", "r2").unwrap().status,
+            BackgroundTaskStatus::Stopped
+        );
+        assert_eq!(
+            tracker.get("chat-a", "done").unwrap().status,
+            BackgroundTaskStatus::Completed
+        );
+        let mut labels: Vec<String> = drain(&mut rx)
+            .iter()
+            .map(|ev| match ev {
+                TaskEvent::Ended { task, .. } => format!("ended:{}", task.id),
+                other => format!("{}:{}", event_kind(other), "?"),
+            })
+            .collect();
+        labels.sort();
+        assert_eq!(labels, vec!["ended:r1", "ended:r2"]);
+    }
+
+    #[test]
+    fn end_all_running_on_unknown_chat_is_a_no_op_returning_zero() {
+        let tracker = BackgroundTaskTracker::new();
+        let mut rx = tracker.subscribe();
+        assert_eq!(tracker.end_all_running("chat-ghost"), 0);
+        assert!(drain(&mut rx).is_empty());
+    }
+
+    #[test]
     fn start_stamps_the_deterministic_output_path() {
         let tracker = BackgroundTaskTracker::new();
         tracker.start(
             "chat-a",
             TaskSeed {
                 id: "t9".to_string(),
+                kind: BackgroundWorkKind::Bash,
                 tool_name: BackgroundTaskToolName::Bash,
                 tool_use_id: "u9".to_string(),
                 command: "pnpm dev".to_string(),
@@ -584,12 +825,15 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/background-tasks/tracker.ts (122 lines)
+// PORT STATUS: src/background-tasks/tracker.ts (162 lines)
 // confidence: high
 // todos: 0
 // notes: CONCURRENCY.tsv — byChat/pidByChat = SHARED_MAP (Arc<DashMap<ChatId,
 // HashMap<TaskId,_>>>); emitter = BROADCAST (tokio broadcast::Sender<TaskEvent>).
 // `on(event, listener)` → `subscribe() -> broadcast::Receiver` (tests drain via
-// try_recv). Locks are never held across the `.send()` (task cloned, guard
-// dropped first). HashMap inner drops Map insertion order; every order-sensitive
-// TS assertion sorts, so parity holds. All 15 tracker.test.ts cases translated.
+// try_recv). Seed carries `kind`; a live-dup start upserts (keeps startedAt +
+// lastOutputLine, emits Updated not Started); list_live/end_all_running added;
+// TaskEvent gains the Updated variant. Locks are never held across the `.send()`
+// (task cloned, guard dropped first). HashMap inner drops Map insertion order;
+// every order-sensitive TS assertion sorts, so parity holds. All 21
+// tracker.test.ts cases translated.

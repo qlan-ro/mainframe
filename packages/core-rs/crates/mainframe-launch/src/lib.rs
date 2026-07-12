@@ -13,6 +13,8 @@ pub mod launch_config;
 pub mod launch_manager;
 pub mod launch_process_state;
 pub mod launch_registry;
+pub mod process;
+pub mod resolve_cloudflared;
 pub mod tunnel_manager;
 
 pub use expand_variables::expand_variables;
@@ -20,4 +22,11 @@ pub use launch_config::parse_launch_config;
 pub use launch_manager::{LaunchError, LaunchManager, LaunchTimings, clean_env};
 pub use launch_process_state::{LaunchOutputEntry, LaunchProcessState};
 pub use launch_registry::LaunchRegistry;
-pub use tunnel_manager::{BroadcastFn, TunnelConfig, TunnelManager, TunnelStartOptions};
+pub use process::{
+    ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind, NoopChildRegistry,
+    SweepDeps, SweepResult, default_sweep_deps, sweep_stray_children,
+};
+pub use resolve_cloudflared::{ResolveCloudflaredDeps, resolve_cloudflared_path};
+pub use tunnel_manager::{
+    BroadcastFn, TunnelConfig, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
+};

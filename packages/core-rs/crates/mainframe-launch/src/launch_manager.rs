@@ -13,7 +13,6 @@
 //! contract is unit-testable without mutating global state.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -26,9 +25,37 @@ use tokio::sync::watch;
 use tokio::time::sleep;
 
 use crate::launch_process_state::{LaunchOutputEntry, LaunchProcessState};
+use crate::process::{
+    BoxFuture, ChildRegistryPort, ManagedChildEntry, ManagedChildKind, default_process_command,
+    now_ms,
+};
 use crate::tunnel_manager::{BroadcastFn, TunnelManager};
 
 const MAX_STDERR_LINES: usize = 20;
+
+/// Reads a pid's live command line (`ps -o command=`); injectable for tests.
+pub type ReadCommandFn = Arc<dyn Fn(i64) -> BoxFuture<'static, Option<String>> + Send + Sync>;
+
+fn default_read_command() -> ReadCommandFn {
+    Arc::new(|pid| Box::pin(default_process_command(pid)))
+}
+
+/// Lexically resolve a relative executable against an absolute project dir,
+/// matching Node's `path.resolve(projectPath, exe)` (normalizes `.`/`..`), so the
+/// recorded reap command matches what the sweep reads back.
+fn lexical_resolve(base: &str, rel: &str) -> String {
+    let mut stack: Vec<&str> = Vec::new();
+    for comp in base.split('/').chain(rel.split('/')) {
+        match comp {
+            "" | "." => {}
+            ".." => {
+                stack.pop();
+            }
+            other => stack.push(other),
+        }
+    }
+    format!("/{}", stack.join("/"))
+}
 
 /// Tunable timings; defaults match the TS constants
 /// (`PORT_POLL_MS`, `PORT_TIMEOUT_MS`, and the 5s SIGTERM→SIGKILL grace).
@@ -167,6 +194,11 @@ struct Inner {
     processes: DashMap<String, ManagedProcess>,
     state: LaunchProcessState,
     timings: LaunchTimings,
+    /// Pidfile registry so a crashed daemon's next startup sweep can reap this
+    /// manager's detached launch groups. `None` = not tracked.
+    child_registry: Option<Arc<dyn ChildRegistryPort>>,
+    /// Reads a pid's live command line for the sweep identity guard; injectable.
+    read_process_command: ReadCommandFn,
     /// Boot-resolved login-shell `PATH` forwarded to launch children (mirrors the
     /// TS `enrichPath` env mutation; `MAINFRAME_ORIG_PATH` still overrides it in
     /// `clean_env`). `None` = inherit the daemon `PATH`.
@@ -174,6 +206,55 @@ struct Inner {
 }
 
 impl Inner {
+    /// Persist a spawned launch pid so a crashed daemon's next startup sweep can
+    /// reap its process group. Identity is the child's LIVE command line, read
+    /// from `ps` at spawn — the kernel rewrites argv for a `#!` script, which is
+    /// what the sweep reads back, so recording our own argv would never match. If
+    /// `ps` can't read the pid we fall back to the spawned argv (a weaker guard).
+    /// The cwd is recorded as a realpath so it matches `lsof`'s resolved path.
+    async fn record_spawn(&self, name: &str, pid: Option<u32>, executable: &str, args: &[String]) {
+        let Some(pid) = pid else {
+            return;
+        };
+        let Some(registry) = &self.child_registry else {
+            return;
+        };
+        let cwd = tokio::fs::canonicalize(&self.project_path)
+            .await
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| self.project_path.clone());
+        let live = (self.read_process_command)(i64::from(pid)).await;
+        let (command, recorded_args) = match live {
+            Some(live) => (live, Vec::new()),
+            None => (executable.to_string(), args.to_vec()),
+        };
+        registry
+            .add(ManagedChildEntry {
+                pid: i64::from(pid),
+                kind: ManagedChildKind::Launch,
+                command,
+                args: recorded_args,
+                cwd: Some(cwd),
+                group: true,
+                label: format!("{}:{}", self.project_id, name),
+                spawned_at: now_ms(),
+            })
+            .await;
+    }
+
+    fn forget_spawn(&self, pid: Option<u32>) {
+        let Some(pid) = pid else {
+            return;
+        };
+        let Some(registry) = &self.child_registry else {
+            return;
+        };
+        let registry = registry.clone();
+        tokio::spawn(async move {
+            registry.remove(i64::from(pid)).await;
+        });
+    }
+
     fn emit_status(&self, name: &str, status: LaunchProcessStatus) {
         (self.on_event)(DaemonEvent::LaunchStatus {
             project_id: self.project_id.clone(),
@@ -205,6 +286,7 @@ impl LaunchManager {
         on_event: BroadcastFn,
         tunnel_manager: Option<Arc<TunnelManager>>,
         resolved_path: Option<String>,
+        child_registry: Option<Arc<dyn ChildRegistryPort>>,
     ) -> Self {
         Self::with_timings(
             project_id,
@@ -212,16 +294,44 @@ impl LaunchManager {
             on_event,
             tunnel_manager,
             resolved_path,
+            child_registry,
+            default_read_command(),
             LaunchTimings::default(),
         )
     }
 
+    /// Like `new`, but with an injectable `read_process_command` (the sweep
+    /// identity reader). Mirrors the TS ctor's last positional param.
+    pub fn with_read_command(
+        project_id: impl Into<String>,
+        project_path: impl Into<String>,
+        on_event: BroadcastFn,
+        tunnel_manager: Option<Arc<TunnelManager>>,
+        resolved_path: Option<String>,
+        child_registry: Option<Arc<dyn ChildRegistryPort>>,
+        read_process_command: ReadCommandFn,
+    ) -> Self {
+        Self::with_timings(
+            project_id,
+            project_path,
+            on_event,
+            tunnel_manager,
+            resolved_path,
+            child_registry,
+            read_process_command,
+            LaunchTimings::default(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn with_timings(
         project_id: impl Into<String>,
         project_path: impl Into<String>,
         on_event: BroadcastFn,
         tunnel_manager: Option<Arc<TunnelManager>>,
         resolved_path: Option<String>,
+        child_registry: Option<Arc<dyn ChildRegistryPort>>,
+        read_process_command: ReadCommandFn,
         timings: LaunchTimings,
     ) -> Self {
         Self {
@@ -233,6 +343,8 @@ impl LaunchManager {
                 processes: DashMap::new(),
                 state: LaunchProcessState::new(),
                 timings,
+                child_registry,
+                read_process_command,
                 resolved_path,
             }),
         }
@@ -255,10 +367,7 @@ impl LaunchManager {
         let executable = if config.runtime_executable.starts_with("./")
             || config.runtime_executable.starts_with("../")
         {
-            Path::new(&inner.project_path)
-                .join(&config.runtime_executable)
-                .to_string_lossy()
-                .into_owned()
+            lexical_resolve(&inner.project_path, &config.runtime_executable)
         } else {
             config.runtime_executable.clone()
         };
@@ -361,6 +470,13 @@ impl LaunchManager {
             stderr_tail,
             exit_tx,
         ));
+
+        // Record only after spawn is confirmed (pid valid) but BEFORE the long
+        // port-readiness wait below — that wait is the window in which a daemon
+        // crash would orphan this child, so its reap record must already be durable.
+        inner
+            .record_spawn(&name, pid, &executable, &config.runtime_args)
+            .await;
 
         // If a port is configured, wait until it accepts a TCP connection before
         // emitting `running`, so clients don't load a URL too early.
@@ -522,6 +638,8 @@ async fn wait_for_exit_task(
 ) {
     let code = child.wait().await.ok().and_then(|s| s.code());
 
+    inner.forget_spawn(pid);
+
     {
         let tail = lock(&stderr_tail);
         if code != Some(0) && !tail.is_empty() {
@@ -680,7 +798,7 @@ mod tests {
     }
 
     fn manager(events: BroadcastFn) -> LaunchManager {
-        LaunchManager::new("proj-1", "/tmp", events, None, None)
+        LaunchManager::new("proj-1", "/tmp", events, None, None, None)
     }
 
     // --- clean_env (MAINFRAME_ORIG_PATH contract) ---
@@ -998,6 +1116,295 @@ mod tests {
         assert_eq!(manager.get_status("web"), LaunchProcessStatus::Running);
         manager.stop("web").await;
     }
+
+    // --- registry tracking (#431 launch child reaping) ---
+
+    use crate::process::{
+        BoxFuture, ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind,
+        default_sweep_deps, sweep_stray_children,
+    };
+    use std::os::unix::fs::PermissionsExt;
+
+    struct RecordingRegistry {
+        added: StdMutex<Vec<ManagedChildEntry>>,
+        removed: StdMutex<Vec<i64>>,
+    }
+
+    impl RecordingRegistry {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                added: StdMutex::new(vec![]),
+                removed: StdMutex::new(vec![]),
+            })
+        }
+        fn added(&self) -> Vec<ManagedChildEntry> {
+            self.added.lock().unwrap().clone()
+        }
+        fn removed(&self) -> Vec<i64> {
+            self.removed.lock().unwrap().clone()
+        }
+    }
+
+    impl ChildRegistryPort for RecordingRegistry {
+        fn add(&self, entry: ManagedChildEntry) -> BoxFuture<'_, ()> {
+            Box::pin(async move {
+                self.added.lock().unwrap().push(entry);
+            })
+        }
+        fn remove(&self, pid: i64) -> BoxFuture<'_, ()> {
+            Box::pin(async move {
+                self.removed.lock().unwrap().push(pid);
+            })
+        }
+        fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
+            Box::pin(async { vec![] })
+        }
+        fn list_by_kind(&self, _kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
+            Box::pin(async { vec![] })
+        }
+        fn clear(&self) -> BoxFuture<'_, ()> {
+            Box::pin(async {})
+        }
+    }
+
+    fn reader(output: Option<&'static str>) -> ReadCommandFn {
+        Arc::new(move |_pid| Box::pin(async move { output.map(str::to_string) }))
+    }
+
+    fn write_executable(path: &std::path::Path, body: &str) {
+        std::fs::write(path, body).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    fn launch_cfg(name: &str, exe: &str, args: &[&str]) -> LaunchConfiguration {
+        LaunchConfiguration {
+            name: name.to_string(),
+            runtime_executable: exe.to_string(),
+            runtime_args: args.iter().map(|s| s.to_string()).collect(),
+            port: None,
+            url: None,
+            preview: Some(false),
+            env: None,
+        }
+    }
+
+    async fn poll_added(registry: &RecordingRegistry) -> ManagedChildEntry {
+        for _ in 0..80 {
+            if let Some(entry) = registry.added().into_iter().next() {
+                return entry;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+        panic!("no launch pid was recorded");
+    }
+
+    #[tokio::test]
+    async fn records_the_live_post_shebang_command_line_not_the_executable() {
+        // The kernel rewrites argv for a #! script (spawning `pnpm` shows
+        // `node …/pnpm run dev` in `ps`), which is what the sweep compares
+        // against — so we record the LIVE command line, not the bare executable.
+        let dir = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(dir.path()).unwrap();
+        let registry = RecordingRegistry::new();
+        let live = "node /opt/homebrew/bin/pnpm run dev";
+        let manager = LaunchManager::with_read_command(
+            "proj-1",
+            dir.path().to_string_lossy().into_owned(),
+            recorder().0,
+            None,
+            None,
+            Some(registry.clone()),
+            reader(Some(live)),
+        );
+
+        manager
+            .start(&launch_cfg("dev", "sh", &["-c", "sleep 5"]))
+            .await
+            .unwrap();
+        let entry = poll_added(&registry).await;
+
+        assert_eq!(entry.kind, ManagedChildKind::Launch);
+        assert_eq!(entry.command, live);
+        assert_eq!(entry.args, Vec::<String>::new());
+        assert!(entry.group);
+        assert_eq!(entry.label, "proj-1:dev");
+        assert_eq!(entry.cwd.as_deref(), Some(real.to_string_lossy().as_ref()));
+        manager.stop_all().await;
+    }
+
+    #[tokio::test]
+    async fn records_the_realpath_resolved_cwd() {
+        // The sweep compares the recorded cwd against `lsof`, which reports the
+        // realpath; a symlinked spawn cwd must be resolved at record time.
+        let dir = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(dir.path()).unwrap();
+        let registry = RecordingRegistry::new();
+        let manager = LaunchManager::with_read_command(
+            "proj-1",
+            dir.path().to_string_lossy().into_owned(),
+            recorder().0,
+            None,
+            None,
+            Some(registry.clone()),
+            reader(Some("node /pnpm run dev")),
+        );
+
+        manager
+            .start(&launch_cfg("dev", "sh", &["-c", "sleep 5"]))
+            .await
+            .unwrap();
+        let entry = poll_added(&registry).await;
+        assert_eq!(entry.cwd.as_deref(), Some(real.to_string_lossy().as_ref()));
+        manager.stop_all().await;
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_the_resolved_executable_and_argv_when_live_is_unavailable() {
+        // If `ps` can't read the pid, keep a best-effort record from what we
+        // spawned — the resolved absolute path for a relative executable.
+        let dir = tempfile::tempdir().unwrap();
+        write_executable(&dir.path().join("gradlew"), "#!/bin/sh\nsleep 5\n");
+        let registry = RecordingRegistry::new();
+        let manager = LaunchManager::with_read_command(
+            "proj-1",
+            dir.path().to_string_lossy().into_owned(),
+            recorder().0,
+            None,
+            None,
+            Some(registry.clone()),
+            reader(None),
+        );
+
+        manager
+            .start(&launch_cfg("dev", "./gradlew", &["bootRun"]))
+            .await
+            .unwrap();
+        let entry = poll_added(&registry).await;
+        let expected = lexical_resolve(&dir.path().to_string_lossy(), "./gradlew");
+        assert_eq!(entry.command, expected);
+        assert_eq!(entry.args, vec!["bootRun".to_string()]);
+        manager.stop_all().await;
+    }
+
+    #[tokio::test]
+    async fn forgets_the_pid_when_the_launch_process_exits() {
+        // In Rust a spawn either yields a pid (recorded, forgotten on exit) or
+        // fails without one — the TS 'error'-event case collapses into this path.
+        let dir = tempfile::tempdir().unwrap();
+        let registry = RecordingRegistry::new();
+        let manager = LaunchManager::with_read_command(
+            "proj-1",
+            dir.path().to_string_lossy().into_owned(),
+            recorder().0,
+            None,
+            None,
+            Some(registry.clone()),
+            reader(Some("node /pnpm run dev")),
+        );
+
+        manager
+            .start(&launch_cfg("dev", "sh", &["-c", "sleep 0.1"]))
+            .await
+            .unwrap();
+        let pid = poll_added(&registry).await.pid;
+        for _ in 0..80 {
+            if registry.removed().contains(&pid) {
+                break;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+        assert!(registry.removed().contains(&pid));
+    }
+
+    #[tokio::test]
+    async fn kills_the_process_group_and_forgets_the_pid_on_stop() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = RecordingRegistry::new();
+        let manager = LaunchManager::with_read_command(
+            "proj-1",
+            dir.path().to_string_lossy().into_owned(),
+            recorder().0,
+            None,
+            None,
+            Some(registry.clone()),
+            reader(Some("node /pnpm run dev")),
+        );
+
+        manager
+            .start(&launch_cfg("dev", "sh", &["-c", "sleep 100"]))
+            .await
+            .unwrap();
+        let pid = poll_added(&registry).await.pid;
+        manager.stop("dev").await;
+        assert_eq!(manager.get_status("dev"), LaunchProcessStatus::Stopped);
+        for _ in 0..80 {
+            if registry.removed().contains(&pid) {
+                break;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+        assert!(registry.removed().contains(&pid));
+    }
+
+    // End-to-end proof (no mocks) that the real sweep reaps a launch orphan. The
+    // child is a #! shell script, so the kernel rewrites its argv — the exact case
+    // a bare-executable identity guard silently fails to match.
+    #[tokio::test]
+    async fn records_a_shebang_child_so_the_real_sweep_reaps_its_group() {
+        let dir = tempfile::tempdir().unwrap();
+        write_executable(&dir.path().join("sleeper.sh"), "#!/bin/sh\nsleep 30\n");
+        let registry = Arc::new(FileChildRegistry::new(
+            dir.path()
+                .join("children.json")
+                .to_string_lossy()
+                .into_owned(),
+        ));
+        let manager = LaunchManager::new(
+            "proj-1",
+            dir.path().to_string_lossy().into_owned(),
+            recorder().0,
+            None,
+            None,
+            Some(registry.clone()),
+        );
+
+        manager
+            .start(&launch_cfg("dev", "./sleeper.sh", &[]))
+            .await
+            .unwrap();
+
+        let recorded = registry.list().await;
+        assert_eq!(recorded.len(), 1);
+        let pid = recorded[0].pid;
+        assert!(
+            crate::process::sweep::default_process_command(pid)
+                .await
+                .is_some()
+        );
+
+        let mut deps = default_sweep_deps();
+        deps.grace = Some(Duration::from_millis(500));
+        let result = sweep_stray_children(&*registry, &deps).await;
+        assert_eq!(result.reaped, 1);
+
+        // SIGTERM delivery is async; the process exits shortly after.
+        let mut gone = false;
+        for _ in 0..40 {
+            if crate::process::sweep::default_process_command(pid)
+                .await
+                .is_none()
+            {
+                gone = true;
+                break;
+            }
+            sleep(Duration::from_millis(50)).await;
+        }
+        assert!(gone);
+        assert!(registry.list().await.is_empty());
+
+        // Cleanup: reap the group if anything survived the assertions.
+        crate::process::sweep::default_kill(pid, "SIGKILL", true);
+    }
 }
 
 // PORT STATUS: src/launch/launch-manager.ts (405 lines)
@@ -1015,3 +1422,11 @@ mod tests {
 // All launch-manager.test.ts cases (both files) translated with real /bin/sh
 // processes and a real ephemeral-port listener; the cleanEnv spawn-arg assertions
 // became direct clean_env unit tests.
+// #431 child-reaping: ctor gains child_registry + injectable read_process_command
+// (ReadCommandFn); recordSpawn records the LIVE `ps` command line (post-`#!` argv)
+// + realpath cwd, awaited after spawn-confirm and BEFORE the port wait;
+// forgetSpawn fires on exit (wait task). Relative-executable resolution now
+// lexically normalizes (`.`/`..`) to match Node `path.resolve` so the reap
+// command matches. launch-manager-tracking.test.ts + launch-reap-integration.test.ts
+// ported with real processes (the TS 'error'-event forget maps onto the exit path,
+// since a Rust spawn either yields a pid or fails without one).

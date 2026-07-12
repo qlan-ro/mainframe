@@ -3,24 +3,25 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use chrono::DateTime;
 use mainframe_adapter_api::{Adapter, AdapterError, AdapterSession, BoxFuture};
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
-    AdapterCapabilities, AdapterModel, ExternalSession, ExternalSessionPage, SessionOptions,
+    AdapterCapabilities, AdapterModel, ExternalSessionPage, SessionOptions,
 };
 use mainframe_types::display::ToolCategories;
 
-use crate::jsonrpc::JsonRpcClient;
+use crate::external_sessions::list_external_sessions;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
-use crate::types::{ModelInfo, ModelListResult, ThreadListResult};
+use crate::transcript::is_codex_transcript_present;
+use crate::types::{ModelInfo, ModelListResult};
 
 pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
     let mut model = AdapterModel {
         id: m.id.clone(),
         label: m.display_name.clone().unwrap_or_else(|| m.id.clone()),
         description: None,
+        resolved_model: None,
         context_window: None,
         is_default: None,
         supported_efforts: None,
@@ -87,6 +88,8 @@ impl CodexAdapter {
         CodexPlanModeHandler::new()
     }
 
+    /// Codex sessions are imported by scanning rollout JSONL on disk (#430), so this
+    /// delegates to the disk scanner instead of the removed `thread/list` RPC.
     pub async fn list_external_sessions(
         &self,
         project_path: &str,
@@ -94,92 +97,56 @@ impl CodexAdapter {
         offset: Option<usize>,
         limit: Option<usize>,
     ) -> ExternalSessionPage {
-        let client = match spawn_temp_app_server(None, false, self.resolved_path.as_str()).await {
+        list_external_sessions(project_path, exclude_session_ids, offset, limit, None).await
+    }
+
+    async fn load_models(&self, executable: &str) -> Vec<AdapterModel> {
+        if let Some(cached) = self
+            .cached_models
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            return cached;
+        }
+        let client = match spawn_temp_app_server(
+            executable,
+            None,
+            false,
+            self.resolved_path.as_str(),
+        )
+        .await
+        {
             Ok(c) => c,
             Err(err) => {
-                tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list external sessions");
-                return ExternalSessionPage {
-                    sessions: Vec::new(),
-                    total: 0,
-                    next_offset: None,
-                };
+                tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
+                return Vec::new();
             }
         };
-        let mut seen: HashSet<String> = HashSet::new();
-        let mut aggregated: Vec<ExternalSession> = Vec::new();
-        match client
-            .request(
-                "thread/list",
-                Some(serde_json::json!({ "cwd": project_path, "archived": false })),
-            )
-            .await
-        {
-            Ok(v) => match serde_json::from_value::<ThreadListResult>(v) {
-                Ok(result) => {
-                    for t in result.data {
-                        if seen.contains(&t.id) {
-                            continue;
-                        }
-                        seen.insert(t.id.clone());
-                        let display = t.name.clone().unwrap_or_else(|| t.preview.clone());
-                        aggregated.push(ExternalSession {
-                            session_id: t.id,
-                            adapter_id: "codex".to_string(),
-                            project_path: project_path.to_string(),
-                            cwd: None,
-                            first_prompt: Some(display.clone()),
-                            title: None,
-                            summary: Some(display),
-                            message_count: None,
-                            created_at: ms_to_iso(t.created_at),
-                            modified_at: ms_to_iso(t.updated_at),
-                            git_branch: None,
-                            model: Some(t.model),
-                        });
-                    }
-                }
+        let models: Vec<AdapterModel> = match client.request("model/list", None).await {
+            Ok(v) => match serde_json::from_value::<ModelListResult>(v) {
+                Ok(result) => result
+                    .data
+                    .iter()
+                    .filter(|m| m.hidden != Some(true))
+                    .map(map_codex_model)
+                    .collect(),
                 Err(err) => {
-                    tracing::warn!(module = "codex:adapter", err = %err, project_path, "codex: failed to list external sessions for path");
+                    tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
+                    Vec::new()
                 }
             },
             Err(err) => {
-                tracing::warn!(module = "codex:adapter", err = %err.0, project_path, "codex: failed to list external sessions for path");
+                tracing::warn!(module = "codex:adapter", err = %err.0, "codex: failed to list models");
+                Vec::new()
             }
-        }
-        client.close();
-
-        let exclude: HashSet<&String> = exclude_session_ids.iter().collect();
-        let filtered: Vec<ExternalSession> = aggregated
-            .into_iter()
-            .filter(|s| !exclude.contains(&s.session_id))
-            .collect();
-        let offset = offset.unwrap_or(0);
-        let limit = limit.unwrap_or(50);
-        let total = filtered.len() as i64;
-        // limit <= 0 handled by usize (0 => empty page)
-        if limit == 0 {
-            return ExternalSessionPage {
-                sessions: Vec::new(),
-                total,
-                next_offset: None,
-            };
-        }
-        let sessions: Vec<ExternalSession> =
-            filtered.into_iter().skip(offset).take(limit).collect();
-        let next_offset = if (offset + limit) < total as usize {
-            Some((offset + limit) as i64)
-        } else {
-            None
         };
-        ExternalSessionPage {
-            sessions,
-            total,
-            next_offset,
+        client.close();
+        // Don't cache transient failures (empty).
+        if !models.is_empty() {
+            *self.cached_models.lock().unwrap_or_else(|e| e.into_inner()) = Some(models.clone());
         }
-    }
-
-    async fn spawn_temp(&self) -> Result<Arc<JsonRpcClient>, AdapterError> {
-        spawn_temp_app_server(None, false, self.resolved_path.as_str()).await
+        models
     }
 }
 
@@ -234,47 +201,34 @@ impl Adapter for CodexAdapter {
     }
 
     fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
+        Box::pin(async move { Ok(self.load_models("codex").await) })
+    }
+
+    fn has_probe_models(&self) -> bool {
+        true
+    }
+
+    /// `probeModels(executablePath?)` — probe with the configured Codex binary
+    /// (#430). Delegates to `load_models`, which caches non-empty catalogs.
+    fn probe_models(
+        &self,
+        executable_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
         Box::pin(async move {
-            if let Some(cached) = self
-                .cached_models
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone()
-            {
-                return Ok(cached);
-            }
-            let client = match self.spawn_temp().await {
-                Ok(c) => c,
-                Err(err) => {
-                    tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
-                    return Ok(Vec::new());
-                }
-            };
-            let models = match client.request("model/list", None).await {
-                Ok(v) => match serde_json::from_value::<ModelListResult>(v) {
-                    Ok(result) => result
-                        .data
-                        .iter()
-                        .filter(|m| m.hidden != Some(true))
-                        .map(map_codex_model)
-                        .collect(),
-                    Err(err) => {
-                        tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
-                        Vec::new()
-                    }
-                },
-                Err(err) => {
-                    tracing::warn!(module = "codex:adapter", err = %err.0, "codex: failed to list models");
-                    Vec::new()
-                }
-            };
-            client.close();
-            if !models.is_empty() {
-                *self.cached_models.lock().unwrap_or_else(|e| e.into_inner()) =
-                    Some(models.clone());
-            }
-            Ok(models)
+            let exe = executable_path.unwrap_or_else(|| "codex".to_string());
+            Ok(Some(self.load_models(&exe).await))
         })
+    }
+
+    /// `isTranscriptPresent(sessionId)` — Codex resolves presence from its state DB
+    /// via the thread registry, so `project_path`/`session_file_path` are unused.
+    fn is_transcript_present(
+        &self,
+        session_id: String,
+        _project_path: String,
+        _session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
+        Box::pin(async move { Ok(is_codex_transcript_present(&session_id, None).await) })
     }
 
     fn get_tool_categories(&self) -> Option<ToolCategories> {
@@ -320,13 +274,6 @@ impl Adapter for CodexAdapter {
             });
         }
     }
-}
-
-/// `new Date(ms).toISOString()`.
-fn ms_to_iso(ms: i64) -> String {
-    DateTime::from_timestamp_millis(ms)
-        .map(mainframe_runtime::time::to_iso8601)
-        .unwrap_or_default()
 }
 
 /// The first `N.N.N` triple in `stdout` (mirrors the TS `stdout.match(/(\d+\.\d+\.\d+)/)`).
@@ -416,15 +363,23 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/codex/adapter.ts (188 lines)
+// PORT STATUS: src/plugins/builtin/codex/adapter.ts (160 lines)
 // confidence: medium
 // todos: 0
-// notes: Adapter trait impl + inherent list_external_sessions / create_plan_mode_handler
-// notes: (the Adapter trait has no seam for those yet — adapter-api's own TODO(port)).
+// notes: #430 — listExternalSessions delegates to the disk scanner (external_sessions.rs;
+// notes: thread/list RPC + ThreadListResult removed). loadModels(executable) extracted;
+// notes: listModels → load_models("codex"), probeModels(exe) → load_models(exe??"codex").
+// notes: spawn_temp_app_server now takes the executable (probe uses the configured path).
+// notes: has_probe_models()=true + probe_models/is_transcript_present are Adapter-trait
+// notes: overrides (so the registry dispatch in adapter-api probes Codex with the
+// notes: configured binary, mirroring `typeof adapter.probeModels === 'function'`).
+// notes: list_external_sessions/create_plan_mode_handler stay inherent (the trait defers
+// notes: external-session CRUD + createPlanModeHandler — adapter-api's own TODO(port)).
 // notes: sessions = Arc<Mutex<Vec<Arc<CodexSession>>>> (CONCURRENCY.tsv 103; Vec + id
 // notes: retain instead of a HashSet since Arc<CodexSession> isn't Hash), cachedModels
 // notes: Arc<Mutex<Option<..>>> (104). killAll spawns a kill task per session (TS
 // notes: fire-and-forget .catch). is_installed/get_version shell out to `codex
 // notes: --version`; parse_version mirrors adapter-api's hand-rolled N.N.N scan.
-// notes: get_fallback_models returns Some(vec![]) (TS returns []). list-models.test.ts
-// notes: ported inline. index.ts `activate` is re-exported from lib.rs.
+// notes: get_fallback_models returns Some(vec![]) (TS returns []). mapCodexModel test
+// notes: ported inline; the probeModels-with-configured-path test lives in
+// notes: tests/list_models.rs (fake app-server). index.ts `activate` re-exported from lib.rs.

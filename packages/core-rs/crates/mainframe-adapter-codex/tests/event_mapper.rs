@@ -330,3 +330,44 @@ fn clears_current_turn_plan_on_turn_completed() {
     );
     assert_eq!(state.current_turn_plan, None);
 }
+
+// Codex omits contextTokens in TS, so the sink falls back to the turn's usage
+// input tokens (event-handler.ts:366). Rust's Option<i64> can't carry the
+// undefined/null distinction, so the mapper resolves that fallback here by
+// sending the turn's raw input usage as context_tokens.
+#[test]
+fn turn_completed_reports_context_tokens_from_prior_token_usage() {
+    let rec = Recorder::new();
+    let mut state = plan_state();
+    handle_notification(
+        "thread/tokenUsage/updated",
+        &json!({ "threadId": "t1", "usage": { "input_tokens": 12_345, "cached_input_tokens": 200, "output_tokens": 42 } }),
+        &rec.sink(),
+        &mut state,
+    );
+    handle_notification(
+        "turn/completed",
+        &json!({ "threadId": "t1", "turn": { "id": "turn1", "status": "completed", "items": [], "error": null } }),
+        &rec.sink(),
+        &mut state,
+    );
+    let results = rec.results();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].context_tokens, Some(12_345));
+}
+
+#[test]
+fn turn_completed_without_usage_reports_no_context_tokens() {
+    let rec = Recorder::new();
+    let mut state = plan_state();
+    handle_notification(
+        "turn/completed",
+        &json!({ "threadId": "t1", "turn": { "id": "turn1", "status": "completed", "items": [], "error": null } }),
+        &rec.sink(),
+        &mut state,
+    );
+    let results = rec.results();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].context_tokens, None);
+    assert_eq!(results[0].usage, None);
+}

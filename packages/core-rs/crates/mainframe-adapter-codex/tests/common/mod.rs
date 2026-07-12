@@ -39,6 +39,9 @@ impl Recorder {
     pub fn permissions(&self) -> Vec<ControlRequest> {
         self.0.lock().unwrap().permissions.clone()
     }
+    pub fn results(&self) -> Vec<SessionResult> {
+        self.0.lock().unwrap().results.clone()
+    }
     pub fn clear_messages(&self) {
         self.0.lock().unwrap().messages.clear();
     }

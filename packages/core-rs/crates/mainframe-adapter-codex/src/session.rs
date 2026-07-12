@@ -215,14 +215,17 @@ fn build_app_server_command(
     cmd
 }
 
-/// Spawn a temporary `codex app-server`, perform the handshake, and return the
-/// ready client. Shared by `load_history` and the adapter's model/session listing.
+/// Spawn a temporary `<executable> app-server`, perform the handshake, and return
+/// the ready client. Shared by `load_history` and the adapter's model listing;
+/// `executable` is the resolved CLI path (`'codex'` by default, or a configured
+/// binary for `probe_models`).
 pub(crate) async fn spawn_temp_app_server(
+    executable: &str,
     cwd: Option<&Path>,
     with_capabilities: bool,
     path: &str,
 ) -> Result<Arc<JsonRpcClient>, AdapterError> {
-    let mut cmd = build_app_server_command("codex", cwd, path);
+    let mut cmd = build_app_server_command(executable, cwd, path);
     let child = cmd
         .spawn()
         .map_err(|e| AdapterError::Message(e.to_string()))?;
@@ -495,7 +498,7 @@ impl AdapterSession for CodexSession {
             let turn_cfg = build_turn_config(
                 tuning.as_ref().unwrap_or(&default_resolved),
                 &codex_tuning,
-                model.as_deref().unwrap_or(""),
+                model.as_deref(),
                 if plan_mode { "plan" } else { "default" },
             );
 
@@ -660,6 +663,7 @@ impl AdapterSession for CodexSession {
             };
 
             let temp = match spawn_temp_app_server(
+                "codex",
                 Some(Path::new(&self.project_path)),
                 true,
                 self.resolved_path.as_str(),

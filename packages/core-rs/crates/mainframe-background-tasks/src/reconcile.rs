@@ -5,7 +5,7 @@ use std::fs::Metadata;
 use std::sync::Arc;
 
 use mainframe_types::background_task::{
-    BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName,
+    BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
 use mainframe_types::chat::{Chat, ChatStatus};
 
@@ -49,6 +49,7 @@ fn build_recovered_snapshot(
     let running = !writers.is_empty();
     BackgroundTask {
         id: task_id.to_string(),
+        kind: BackgroundWorkKind::Bash, // only bash tasks spool to disk, so only they can be recovered
         tool_name: BackgroundTaskToolName::Bash,
         tool_use_id: String::new(),
         command: "<recovered>".to_string(),
@@ -342,6 +343,9 @@ mod tests {
                 TaskEvent::Started { chat_id, task } => {
                     out.push(("started".to_string(), chat_id, task.id))
                 }
+                TaskEvent::Updated { chat_id, task } => {
+                    out.push(("updated".to_string(), chat_id, task.id))
+                }
                 TaskEvent::Ended { chat_id, task } => {
                     out.push(("ended".to_string(), chat_id, task.id))
                 }
@@ -566,10 +570,11 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/background-tasks/reconcile.ts (102 lines)
+// PORT STATUS: src/background-tasks/reconcile.ts (103 lines)
 // confidence: high
 // todos: 1
-// notes: `deps.db` structural type → ReconcileDb trait (chats_list_all /
+// notes: recovered snapshot stamps kind:'bash' (only bash spools to disk).
+// `deps.db` structural type → ReconcileDb trait (chats_list_all /
 // project_path) so this crate stays decoupled from mainframe-db. The TS outer
 // try/catch guarded against unexpected throws; every fallible step here is handled
 // inline (Option/Result → skip), so the 'reconcileBackgroundTasks aborted' warn is

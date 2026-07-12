@@ -39,14 +39,17 @@ pub struct CodexTurnConfig {
 pub fn build_turn_config(
     tuning: &ResolvedTuning,
     codex: &CodexProviderTuning,
-    model_id: &str,
+    model_id: Option<&str>,
     mode: &str,
 ) -> CodexTurnConfig {
+    // `modelId ? { model: modelId } : {}` — omit the model key for both undefined
+    // and empty-string ids (empty is falsy in JS) so Codex uses the account default.
+    let model = model_id.filter(|m| !m.is_empty()).map(str::to_string);
     let mut cfg = CodexTurnConfig {
         collaboration_mode: CollaborationMode {
             mode: mode.to_string(),
             settings: CollaborationModeSettings {
-                model: model_id.to_string(),
+                model,
                 reasoning_effort: tuning.effort,
                 developer_instructions: None,
             },
@@ -91,10 +94,13 @@ mod tests {
                 personality: Some("pragmatic".to_string()),
                 reasoning_summary: Some("concise".to_string()),
             },
-            "gpt-5.5",
+            Some("gpt-5.5"),
             "default",
         );
-        assert_eq!(cfg.collaboration_mode.settings.model, "gpt-5.5");
+        assert_eq!(
+            cfg.collaboration_mode.settings.model.as_deref(),
+            Some("gpt-5.5")
+        );
         assert_eq!(
             cfg.collaboration_mode.settings.reasoning_effort,
             Some(EffortLevel::High)
@@ -110,7 +116,7 @@ mod tests {
             build_turn_config(
                 &tuning(Some(EffortLevel::High), false),
                 &CodexProviderTuning::default(),
-                "m",
+                Some("m"),
                 "default"
             )
             .service_tier,
@@ -120,7 +126,7 @@ mod tests {
             build_turn_config(
                 &tuning(Some(EffortLevel::High), true),
                 &CodexProviderTuning::default(),
-                "m",
+                Some("m"),
                 "default"
             )
             .service_tier
@@ -134,11 +140,25 @@ mod tests {
         let cfg = build_turn_config(
             &tuning(None, false),
             &CodexProviderTuning::default(),
-            "m",
+            Some("m"),
             "default",
         );
         assert_eq!(cfg.personality, None);
         assert_eq!(cfg.summary, None);
+    }
+
+    #[test]
+    fn omits_the_model_setting_when_no_model_is_selected() {
+        // `it.each([undefined, ''])` — both an absent id and an empty string omit `model`.
+        for model in [None, Some("")] {
+            let cfg = build_turn_config(
+                &tuning(Some(EffortLevel::High), false),
+                &CodexProviderTuning::default(),
+                model,
+                "default",
+            );
+            assert_eq!(cfg.collaboration_mode.settings.model, None);
+        }
     }
 
     // --- collaboration-mode.test.ts ---
@@ -148,7 +168,7 @@ mod tests {
         let cfg = build_turn_config(
             &tuning(None, false),
             &CodexProviderTuning::default(),
-            "codex-mini-latest",
+            Some("codex-mini-latest"),
             "plan",
         );
         assert_eq!(cfg.collaboration_mode.mode, "plan");
@@ -159,7 +179,7 @@ mod tests {
         let cfg = build_turn_config(
             &tuning(None, false),
             &CodexProviderTuning::default(),
-            "codex-mini-latest",
+            Some("codex-mini-latest"),
             "default",
         );
         assert_eq!(cfg.collaboration_mode.mode, "default");
@@ -170,7 +190,7 @@ mod tests {
         let cfg = build_turn_config(
             &tuning(Some(EffortLevel::High), false),
             &CodexProviderTuning::default(),
-            "codex-mini-latest",
+            Some("codex-mini-latest"),
             "default",
         );
         assert_eq!(
@@ -184,7 +204,7 @@ mod tests {
         let cfg = build_turn_config(
             &tuning(None, false),
             &CodexProviderTuning::default(),
-            "codex-mini-latest",
+            Some("codex-mini-latest"),
             "default",
         );
         assert_eq!(cfg.collaboration_mode.settings.reasoning_effort, None);
@@ -194,6 +214,9 @@ mod tests {
 // PORT STATUS: src/plugins/builtin/codex/turn-config.ts (50 lines)
 // confidence: high
 // todos: 0
-// notes: reasoning_effort stays Option<EffortLevel> (serializes to the Codex effort
-// notes: string, or explicit null). Ports turn-config.test.ts + collaboration-mode.
-// notes: test.ts assertion-for-assertion. `mode` is a &str ('plan'|'default').
+// notes: #430 — model_id is now Option<&str>; the `model` key is omitted for both a
+// notes: None id and an empty string (JS `modelId ? {model} : {}`), so Codex uses the
+// notes: account default. reasoning_effort stays Option<EffortLevel> (serializes to the
+// notes: Codex effort string, or explicit null). Ports turn-config.test.ts (incl. the
+// notes: it.each([undefined,'']) omit-model case) + collaboration-mode.test.ts
+// notes: assertion-for-assertion. `mode` is a &str ('plan'|'default').

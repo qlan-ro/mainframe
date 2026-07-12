@@ -19,6 +19,8 @@ use mainframe_types::display::ToolCategories;
 
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
+use crate::title_generator::generate_claude_title;
+use crate::transcript::is_claude_transcript_present;
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -32,6 +34,7 @@ fn m(id: &str, label: &str, context_window: i64) -> AdapterModel {
         id: id.to_string(),
         label: label.to_string(),
         description: None,
+        resolved_model: None,
         context_window: Some(context_window),
         is_default: None,
         supported_efforts: None,
@@ -138,6 +141,9 @@ pub fn claude_models() -> Vec<AdapterModel> {
     sonnet37.supported_efforts = efforts(&[Low, Medium, High, Max]);
     models.push(sonnet37);
 
+    // Window live-verified 2026-07-07: the CLI's get_context_usage reports
+    // maxTokens 967,000 for claude-sonnet-5 (1M minus the CLI's reserve).
+    models.push(m("claude-sonnet-5", "Sonnet 5", EXTENDED_CONTEXT_WINDOW));
     models.push(m(
         "claude-haiku-4-5-20251001",
         "Haiku 4.5",
@@ -186,12 +192,15 @@ fn description_hints_extended(description: &str) -> bool {
 }
 
 /// Reconcile probed entries with the static catalog so known IDs retain their
-/// authoritative window, unknown IDs ending in "[1m]" (or resolving to one via
-/// `resolvedModel`) get the extended window, and everything else falls back to a
-/// description sniff before the 200k default.
+/// authoritative window, unknown IDs ending in "[1m]" (on the entry id OR its own
+/// `resolvedModel` — the CLI puts the suffix on either side, e.g.
+/// `claude-fable-5[1m]` resolves to a bare `claude-fable-5`) get the extended
+/// window, and everything else falls back to a description sniff before the 200k
+/// default. `default_resolved_model` is kept for callers probing legacy payloads
+/// where only the "default" entry carried a resolution.
 pub fn enrich_with_context_window(
     probed: Vec<AdapterModel>,
-    resolved_model: Option<&str>,
+    default_resolved_model: Option<&str>,
 ) -> Vec<AdapterModel> {
     let static_windows: std::collections::HashMap<String, i64> = claude_models()
         .into_iter()
@@ -205,16 +214,29 @@ pub fn enrich_with_context_window(
             if model.context_window.filter(|&w| w != 0).is_some() {
                 return model;
             }
-            let effective_id: &str = if model.id == "default" && resolved_model.is_some() {
-                resolved_model.unwrap_or(&model.id)
-            } else {
-                &model.id
-            };
-            if has_extended_window_suffix(effective_id) {
+            // model.resolvedModel ?? (id === 'default' ? defaultResolvedModel : undefined)
+            let resolved: Option<String> = model.resolved_model.clone().or_else(|| {
+                if model.id == "default" {
+                    default_resolved_model.map(str::to_string)
+                } else {
+                    None
+                }
+            });
+            let resolved_ref = resolved.as_deref();
+            if has_extended_window_suffix(&model.id)
+                || resolved_ref
+                    .map(has_extended_window_suffix)
+                    .unwrap_or(false)
+            {
                 model.context_window = Some(EXTENDED_CONTEXT_WINDOW);
                 return model;
             }
-            if let Some(&w) = static_windows.get(&model.id) {
+            // staticById.get(id)?.contextWindow ?? (resolved && staticById.get(resolved)?.contextWindow)
+            let from_static = static_windows
+                .get(&model.id)
+                .copied()
+                .or_else(|| resolved_ref.and_then(|r| static_windows.get(r).copied()));
+            if let Some(w) = from_static {
                 model.context_window = Some(w);
                 return model;
             }
@@ -431,6 +453,33 @@ impl Adapter for ClaudeAdapter {
             .clear();
     }
 
+    fn generate_title(
+        &self,
+        content: String,
+        binary: String,
+    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        let path = self.resolved_path.clone();
+        Box::pin(async move { generate_claude_title(&content, &binary, path.as_str()).await })
+    }
+
+    fn is_transcript_present(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
+        Box::pin(async move {
+            Ok(Some(
+                is_claude_transcript_present(
+                    &session_id,
+                    &project_path,
+                    session_file_path.as_deref(),
+                )
+                .await,
+            ))
+        })
+    }
+
     fn get_tool_categories(&self) -> Option<ToolCategories> {
         Some(ToolCategories {
             explore: tool_category(&["Read", "Glob", "Grep", "LS"]),
@@ -464,6 +513,7 @@ mod tests {
             id: id.to_string(),
             label: id.to_string(),
             description: None,
+            resolved_model: None,
             context_window: None,
             is_default: None,
             supported_efforts: None,
@@ -528,6 +578,65 @@ mod tests {
         assert_eq!(out[0].context_window, Some(1_000_000));
     }
 
+    // Translated assertion-for-assertion from the new adapter-enrich.test.ts cases
+    // (each probed entry carries its own resolvedModel).
+    fn probed_full(id: &str, description: &str, resolved: &str) -> AdapterModel {
+        let mut m = probed(id);
+        m.description = Some(description.to_string());
+        m.resolved_model = Some(resolved.to_string());
+        m
+    }
+
+    #[test]
+    fn infers_1m_from_a_non_default_entry_whose_own_resolved_model_carries_1m() {
+        let probed = vec![
+            probed_full(
+                "opus[1m]",
+                "Opus 4.8 with 1M context",
+                "claude-opus-4-8[1m]",
+            ),
+            probed_full("my-alias", "Some model", "claude-something-9[1m]"),
+        ];
+        let enriched = enrich_with_context_window(probed, None);
+        assert_eq!(enriched[0].context_window, Some(1_000_000));
+        assert_eq!(enriched[1].context_window, Some(1_000_000));
+    }
+
+    #[test]
+    fn keeps_the_1m_id_suffix_authoritative_even_when_resolved_model_drops_it() {
+        let probed = vec![probed_full(
+            "claude-fable-5[1m]",
+            "Fable 5",
+            "claude-fable-5",
+        )];
+        assert_eq!(
+            enrich_with_context_window(probed, None)[0].context_window,
+            Some(1_000_000)
+        );
+    }
+
+    #[test]
+    fn resolves_the_static_catalog_window_via_the_entry_resolved_model_for_alias_ids() {
+        let probed = vec![probed_full("haiku", "Fastest", "claude-haiku-4-5-20251001")];
+        assert_eq!(
+            enrich_with_context_window(probed, None)[0].context_window,
+            Some(200_000)
+        );
+    }
+
+    #[test]
+    fn gives_claude_sonnet_5_the_extended_window_from_the_static_catalog() {
+        let probed = vec![probed_full(
+            "sonnet",
+            "Efficient for routine tasks",
+            "claude-sonnet-5",
+        )];
+        assert_eq!(
+            enrich_with_context_window(probed, None)[0].context_window,
+            Some(1_000_000)
+        );
+    }
+
     // ---- ClaudeAdapter surface ----
     fn opts(chat_id: &str) -> SessionOptions {
         SessionOptions {
@@ -586,9 +695,16 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/adapter.ts (281 lines)
+// PORT STATUS: src/plugins/builtin/claude/adapter.ts (300 lines)
 // confidence: high
 // todos: 0
+// notes: Main catch-up: enrich_with_context_window now reads each entry's own
+// notes: resolved_model for the 1M-suffix check AND the static-catalog fallback
+// notes: (default_resolved_model kept for legacy default-only payloads); added the
+// notes: claude-sonnet-5 catalog entry (extended window, live-verified 967k). Wired
+// notes: two Adapter overrides: generate_title → generate_claude_title(content, binary,
+// notes: resolved PATH); is_transcript_present → is_claude_transcript_present (returns
+// notes: Ok(Some(bool)), never null). adapter-enrich.test.ts new cases translated.
 // notes: FULL port. Pure catalog surface (claude_models, enrich_with_context_window,
 // notes: window constants) + the ClaudeAdapter Adapter-trait impl: is_installed /
 // notes: get_version (execFile `claude --version` → tokio Command; version regex

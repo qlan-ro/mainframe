@@ -339,14 +339,18 @@ fn convert_assistant_entry(entry: &Value, message: &Value, chat_id: &str) -> Opt
                         .to_string(),
                 )),
                 Some("thinking") => {
-                    content_blocks.push(MessageContent::Leaf(LeafContent::Thinking {
-                        thinking: block
-                            .get("thinking")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string(),
-                        parent_tool_use_id: None,
-                    }))
+                    // Hidden-thinking models emit signature-only blocks with empty prose — skip them.
+                    let thinking = block
+                        .get("thinking")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    if !thinking.trim().is_empty() {
+                        content_blocks.push(MessageContent::Leaf(LeafContent::Thinking {
+                            thinking,
+                            parent_tool_use_id: None,
+                        }))
+                    }
                 }
                 Some("tool_use") => {
                     content_blocks.push(MessageContent::Node(MessageContentNode::ToolUse {
@@ -556,6 +560,32 @@ mod tests {
     }
 
     #[test]
+    fn skips_signature_only_empty_thinking_blocks_in_assistant_history() {
+        let entry = json!({
+            "type": "assistant",
+            "uuid": "a1",
+            "timestamp": "2026-07-04T00:00:01Z",
+            "message": { "content": [
+                { "type": "thinking", "thinking": "   ", "signature": "sig" },
+                { "type": "thinking", "thinking": "real plan" },
+                { "type": "text", "text": "hi" },
+            ]}
+        });
+        let msg = convert_history_entry(&entry, "c1").unwrap();
+        let thinkings: Vec<&str> = msg
+            .content
+            .iter()
+            .filter_map(|b| match b {
+                MessageContent::Leaf(LeafContent::Thinking { thinking, .. }) => {
+                    Some(thinking.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(thinkings, vec!["real plan"]);
+    }
+
+    #[test]
     fn handles_a_plain_string_prompt() {
         let msg = convert_history_entry(
             &attachment_entry(json!({}), json!({ "prompt": "string prompt" })),
@@ -617,9 +647,11 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/history-converters.ts (266 lines)
+// PORT STATUS: src/plugins/builtin/claude/history-converters.ts (268 lines)
 // confidence: high
 // todos: 0
+// notes: Main catch-up (#419): assistant-entry conversion skips signature-only empty
+// notes: `thinking` blocks (trim-empty prose) — hidden-thinking models. Unit test added.
 // notes: JSONL entries are serde_json::Value (TS Record<string,unknown>). `||`
 // vs `??` fallbacks are preserved distinctly (id_or_nanoid/uuid_or_nanoid_nullish
 // + timestamp variants). The three `/…/m` regexes are hand-rolled via

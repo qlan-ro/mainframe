@@ -89,24 +89,6 @@ pub struct ThreadReadResult {
     pub thread: ThreadReadThread,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThreadSummary {
-    pub id: String,
-    pub name: Option<String>,
-    pub preview: String,
-    pub cwd: String,
-    pub model_provider: String,
-    pub model: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ThreadListResult {
-    pub data: Vec<ThreadSummary>,
-}
-
 // --- Turn ---
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -217,11 +199,13 @@ pub struct SandboxPolicy {
 
 /// Codex `collaborationMode.settings` — fields are snake_case as Codex emits them
 /// (`reasoning_effort`, `developer_instructions`), so NO camelCase rename here.
-/// `reasoning_effort`/`developer_instructions` serialize as explicit `null` when
-/// absent (the TS shape is `string | null`, always present).
+/// `model` is optional (omitted when no model is selected, so Codex uses the
+/// account default); `reasoning_effort`/`developer_instructions` serialize as
+/// explicit `null` when absent (the TS shape is `string | null`, always present).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollaborationModeSettings {
-    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     pub reasoning_effort: Option<EffortLevel>,
     pub developer_instructions: Option<String>,
 }
@@ -355,9 +339,13 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/codex/types.ts (280 lines)
+// PORT STATUS: src/plugins/builtin/codex/types.ts (261 lines)
 // confidence: high
 // todos: 0
+// notes: #430 — dropped ThreadSummary/ThreadListResult (the thread/list RPC path is
+// notes: gone; external sessions now scan rollout JSONL on disk). CollaborationModeSettings.
+// notes: model is now Option<String> (skip_serializing_if) so turn/start omits `model`
+// notes: when none is selected and Codex uses the account default.
 // notes: JSON-RPC framing modelled with a RequestId enum (Number|String, untagged)
 // notes: + the four is_json_rpc_* predicates over a serde_json::Map. Event params
 // notes: whose `item` may be the non-union `type: 'plan'` shape keep `item: Value`

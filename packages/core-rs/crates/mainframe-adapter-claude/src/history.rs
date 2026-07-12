@@ -8,7 +8,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use dirs::home_dir;
 use mainframe_types::chat::{ChatMessage, MessageContent};
 use mainframe_types::context::SkillFileEntry;
 use serde_json::Value;
@@ -24,37 +23,10 @@ use crate::history_subagents::{
     collect_subagent_assistant_blocks, collect_subagent_tool_results, inject_agent_children,
 };
 use crate::skill_path::resolve_skill_path;
+use crate::transcript::{SessionJsonlPath, get_session_jsonl_path};
 
 fn is_strict_true(v: Option<&Value>) -> bool {
     matches!(v, Some(Value::Bool(true)))
-}
-
-/// CLI parity: replace every char NOT in `[a-zA-Z0-9-]` with '-' (keeps dashes).
-fn encode_project_path(project_path: &str) -> String {
-    project_path
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
-
-fn session_jsonl_path(session_id: &str, project_path: &str) -> (String, String) {
-    let encoded = encode_project_path(project_path);
-    let project_dir = home_dir()
-        .unwrap_or_default()
-        .join(".claude")
-        .join("projects")
-        .join(&encoded);
-    let jsonl_path = project_dir.join(format!("{session_id}.jsonl"));
-    (
-        jsonl_path.to_string_lossy().to_string(),
-        project_dir.to_string_lossy().to_string(),
-    )
 }
 
 async fn open_lines(file_path: &str) -> Option<Lines<BufReader<File>>> {
@@ -71,7 +43,10 @@ pub struct DiscoveredFiles {
 }
 
 pub async fn discover_session_jsonl_files(session_id: &str, project_path: &str) -> DiscoveredFiles {
-    let (jsonl_path, project_dir) = session_jsonl_path(session_id, project_path);
+    let SessionJsonlPath {
+        jsonl_path,
+        project_dir,
+    } = get_session_jsonl_path(session_id, project_path);
 
     if tokio::fs::metadata(&jsonl_path).await.is_err() {
         return DiscoveredFiles {
@@ -262,7 +237,7 @@ pub async fn extract_plan_file_paths(session_id: &str, project_path: &str) -> Ve
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
-    let (_, project_dir) = session_jsonl_path(session_id, project_path);
+    let project_dir = get_session_jsonl_path(session_id, project_path).project_dir;
     let mut plan_files: Vec<String> = Vec::new();
 
     for file in &discovered.all_files {
@@ -390,16 +365,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encode_keeps_dashes_replaces_other_metachars() {
-        assert_eq!(
-            encode_project_path("/Users/x/my_proj.v2"),
-            "-Users-x-my-proj-v2"
-        );
-        // existing dashes are preserved
-        assert_eq!(encode_project_path("a-b/c"), "a-b-c");
-    }
-
-    #[test]
     fn path_resolve_absolute_passthrough() {
         assert_eq!(path_resolve("/proj/dir", "/abs/plan.md"), "/abs/plan.md");
     }
@@ -441,12 +406,12 @@ mod tests {
 // confidence: high
 // todos: 1
 // notes: createReadStream+readline → tokio BufReader::lines() (CRLF-stripped).
-// getSessionJsonlPath's encode uses [^a-zA-Z0-9-] (KEEPS dashes) — distinct from
-// external-session-paths::encode_path ([^a-zA-Z0-9]). path.resolve is a lexical
-// unix-only resolver (collapses ./..). loadHistory threads seen_uuids/agent_tools/
-// subagent maps exactly as the TS; strict `=== true` vs `!== true` checks mapped
-// to is_strict_true. The 1 TODO(port): TS lets a mid-read stream error reject the
-// promise; the port skips an unreadable file (graceful) instead — files are just-
-// discovered so this is an unlikely race. No TS __tests__ file for history.ts
-// (its behavior is covered via history-converters); sanity tests cover encode +
-// path_resolve + the empty-session short-circuit.
+// Main catch-up (#424): getSessionJsonlPath moved to transcript.rs and imported here
+// (the local session_jsonl_path/encode_project_path + the encode test moved with it).
+// path.resolve is a lexical unix-only resolver (collapses ./..). loadHistory threads
+// seen_uuids/agent_tools/subagent maps exactly as the TS; strict `=== true` vs
+// `!== true` checks mapped to is_strict_true. The 1 TODO(port): TS lets a mid-read
+// stream error reject the promise; the port skips an unreadable file (graceful)
+// instead — files are just-discovered so this is an unlikely race. No TS __tests__
+// file for history.ts (its behavior is covered via history-converters); sanity tests
+// cover path_resolve + the empty-session short-circuit.

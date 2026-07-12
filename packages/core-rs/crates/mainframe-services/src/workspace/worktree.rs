@@ -200,6 +200,38 @@ fn has_parent(project: &Project) -> bool {
     matches!(&project.parent_project_id, Some(Some(p)) if !p.is_empty())
 }
 
+pub async fn branch_exists(project_path: &str, branch_name: &str) -> bool {
+    let ref_arg = format!("refs/heads/{branch_name}");
+    exec_git(
+        &["rev-parse", "--verify", "--quiet", &ref_arg],
+        project_path,
+        DEFAULT_GIT_TIMEOUT_MS,
+    )
+    .await
+    // expected: branch missing → non-zero exit → Err
+    .is_ok()
+}
+
+/// Re-add a previously deleted worktree at its original path, checking out an
+/// existing branch.
+pub async fn add_worktree_for_branch(
+    project_path: &str,
+    worktree_path: &str,
+    branch_name: &str,
+) -> Result<(), WorktreeError> {
+    // Drop the stale registration git still holds for the deleted directory.
+    // best-effort
+    let _ = exec_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+    // No timeout: checkout of a large tree can exceed the default cap (see create_worktree).
+    exec_git(
+        &["worktree", "add", worktree_path, branch_name],
+        project_path,
+        0,
+    )
+    .await?;
+    Ok(())
+}
+
 pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_name: &str) {
     if exec_git(
         &["worktree", "remove", worktree_path, "--force"],
@@ -323,9 +355,37 @@ mod tests {
     fn returns_empty_array_for_empty_input() {
         assert_eq!(parse_worktree_list(""), Vec::new());
     }
+
+    async fn run_git(cwd: &str, args: &[&str]) {
+        let status = tokio::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .await
+            .expect("git available");
+        assert!(status.status.success(), "git {args:?} failed");
+    }
+
+    #[tokio::test]
+    async fn branch_exists_true_for_existing_false_for_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().to_str().unwrap();
+        run_git(repo, &["init", "-q"]).await;
+        run_git(repo, &["config", "user.email", "t@t.dev"]).await;
+        run_git(repo, &["config", "user.name", "Tester"]).await;
+        tokio::fs::write(dir.path().join("f.txt"), "x")
+            .await
+            .unwrap();
+        run_git(repo, &["add", "."]).await;
+        run_git(repo, &["commit", "-q", "-m", "init"]).await;
+        run_git(repo, &["branch", "feat-x"]).await;
+
+        assert!(branch_exists(repo, "feat-x").await);
+        assert!(!branch_exists(repo, "does-not-exist").await);
+    }
 }
 
-// PORT STATUS: src/workspace/worktree.ts (125 lines)
+// PORT STATUS: src/workspace/worktree.ts (150 lines, incl. #424 recovery helpers)
 // confidence: medium
 // todos: 1
 // notes: parseWorktreeList / isWorktreePresent are exact ports (isWorktreePresent
@@ -335,4 +395,8 @@ mod tests {
 // Rc<Connection> → !Send): the future is !Send, fine while un-spawned; a later
 // phase wraps the DB in a Send handle. has_parent mirrors the JS truthy check on
 // parentProjectId (non-null, non-empty). remove_worktree returns () (all steps
-// best-effort, swallowed like the TS). Tests ported from worktree.test.ts.
+// best-effort, swallowed like the TS). #424 degraded-recovery helpers added:
+// branch_exists (rev-parse --verify --quiet refs/heads/<b>, Err→false) and
+// add_worktree_for_branch (best-effort `worktree prune` then `worktree add path
+// branch`, no timeout). Tests ported from worktree.test.ts + a real-git
+// branch_exists check.

@@ -7,6 +7,19 @@
 //! inbound change schedules a single trailing `file:changed` broadcast, and the
 //! reference count keeps one watcher per key and tears it down when the last
 //! subscriber leaves.
+//!
+//! Re-arm on atomic save (`file-watcher-rearm.test.ts`): the TS service re-arms
+//! `fs.watch` on every `rename` event because Node follows the file's INODE — an
+//! atomic rename-over (write sibling tmp, rename onto the target) swaps the inode
+//! and the kernel watch goes permanently silent. This port watches the file's
+//! PARENT DIRECTORY, whose inode is stable across a file replace, so the watch
+//! keeps firing after an atomic save with no re-arm. Verified empirically on
+//! macOS (FSEvents) and by construction on Linux (inotify directory watches
+//! survive member rename/replace — the reason directory watching is the standard
+//! way to track editor/agent atomic saves). Reproducing the close-then-reopen
+//! re-arm here would open an event gap mid-replace and regress the parent-dir
+//! watch, so it is intentionally not ported; `keeps_firing_after_atomic_rename_over`
+//! pins the guarantee the re-arm existed to provide.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -327,6 +340,96 @@ mod tests {
         svc.unsubscribe("/tmp/unknown.ts"); // must not panic
     }
 
+    async fn wait_for_event(rx: &mpsc::Receiver<DaemonEvent>) -> Option<DaemonEvent> {
+        for _ in 0..40 {
+            if let Ok(ev) = rx.try_recv() {
+                return Some(ev);
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        None
+    }
+
+    /// Re-arm parity (ports `file-watcher-rearm.test.ts`). Node's `fs.watch`
+    /// follows the file's inode: an atomic rename-over (write sibling tmp, rename
+    /// onto the target) swaps the inode, the kernel watch dies, and the TS service
+    /// re-arms on the `rename` event. The Rust port watches the file's PARENT
+    /// DIRECTORY (see `subscribe`), whose inode is stable across a file replace, so
+    /// the watch is inherently rename-proof and needs no re-arm dance. This test
+    /// pins the guarantee the re-arm existed to provide: `file:changed` keeps
+    /// firing after an atomic save — verified twice to prove the watch never goes
+    /// silent (the failure mode `fs.watch` had).
+    #[tokio::test]
+    async fn keeps_firing_after_atomic_rename_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("watched.txt");
+        std::fs::write(&file, b"initial").unwrap();
+
+        let (tx, rx) = mpsc::channel::<DaemonEvent>();
+        let svc = FileWatcherService::new(move |ev| {
+            let _ = tx.send(ev);
+        });
+        let path = file.to_str().unwrap().to_string();
+        svc.subscribe(&path, &path);
+        // Let the FSEvents/kqueue/inotify backend arm before mutating.
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        let atomic_replace = |body: &[u8], tmp_name: &str| {
+            let tmp = dir.path().join(tmp_name);
+            std::fs::write(&tmp, body).unwrap();
+            std::fs::rename(&tmp, &file).unwrap();
+        };
+
+        atomic_replace(b"replaced", "watched.txt.tmp1");
+        match wait_for_event(&rx).await {
+            Some(DaemonEvent::FileChanged { path: p }) => assert_eq!(p, path),
+            other => panic!("expected file:changed after first atomic rename, got {other:?}"),
+        }
+
+        // Drain, then a SECOND atomic replace to prove the watch did not go silent
+        // (the exact regression the TS re-arm guarded against).
+        while rx.try_recv().is_ok() {}
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        atomic_replace(b"again", "watched.txt.tmp2");
+        match wait_for_event(&rx).await {
+            Some(DaemonEvent::FileChanged { path: p }) => assert_eq!(p, path),
+            other => panic!("expected file:changed after second atomic rename, got {other:?}"),
+        }
+        svc.stop_all();
+    }
+
+    /// Ports the rearm test's "a re-armed watch keeps the existing refcount"
+    /// case: an atomic rename must not disturb ref-counting, so tear-down still
+    /// waits for the last subscriber. The parent-dir watch is never re-created, so
+    /// the entry (and its `ref_count`) survives the rename untouched.
+    #[tokio::test]
+    async fn refcount_survives_atomic_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("watched.txt");
+        std::fs::write(&file, b"initial").unwrap();
+        let svc = FileWatcherService::new(|_| {});
+        let p = file.to_str().unwrap();
+        svc.subscribe(p, p);
+        svc.subscribe(p, p); // ref_count 2
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        let tmp = dir.path().join("watched.txt.tmp");
+        std::fs::write(&tmp, b"replaced").unwrap();
+        std::fs::rename(&tmp, &file).unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        svc.unsubscribe(p);
+        assert!(
+            svc.is_watching(p),
+            "still watching while a subscriber remains"
+        );
+        svc.unsubscribe(p);
+        assert!(
+            !svc.is_watching(p),
+            "torn down after the last subscriber leaves"
+        );
+    }
+
     /// macOS behavior test: create + modify a real file in a tempdir and assert a
     /// debounced `file:changed` event is emitted for it (verifies the notify event
     /// mapping matches Node's `fs.watch`).
@@ -365,7 +468,7 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/files/file-watcher.ts (102 lines)
+// PORT STATUS: src/files/file-watcher.ts (150 lines, incl. #433 re-arm)
 // confidence: medium
 // todos: 0
 // notes: fs.watch → notify RecommendedWatcher per path (SHARED_MAP class:
@@ -378,3 +481,10 @@ mod tests {
 // debug/warn messages as the TS. The macОС behavior test drives a real file
 // modify; the refcount/lifecycle tests use real (existing) temp files since
 // notify.watch (unlike the TS mock) fails on a missing path.
+// #433 re-arm-on-rename: NOT reproduced as close-then-reopen. The TS re-arms
+// because fs.watch follows the file inode and dies on an atomic rename-over; this
+// port watches the parent dir (stable inode), so the watch survives atomic saves
+// natively. Verified on macOS (keeps_firing_after_atomic_rename_over) and by
+// inotify semantics on Linux. Closing+reopening on rename would open an event gap
+// and regress the parent-dir watch, so the outcome (file:changed keeps firing) is
+// pinned by tests instead. See the module doc for the full reconciliation.

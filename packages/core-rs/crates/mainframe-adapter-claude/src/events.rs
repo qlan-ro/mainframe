@@ -16,6 +16,7 @@ use crate::assistant_event::handle_assistant_event;
 use crate::session::ClaudeSession;
 use crate::task_events::{
     TaskNotificationPayload, TaskNotificationUsage, TaskStartedCtx, TaskStartedPayload,
+    TaskUpdatedPayload,
 };
 use crate::user_event::handle_user_event;
 
@@ -140,10 +141,35 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
                             .get("description")
                             .and_then(Value::as_str)
                             .map(str::to_string),
+                        task_type: event
+                            .get("task_type")
+                            .and_then(Value::as_str)
+                            .map(str::to_string),
                     },
                     TaskStartedCtx {
                         claude_session_id,
                         real_cwd,
+                    },
+                );
+            }
+        }
+        Some("task_updated") => {
+            let st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+            if !st.mainframe_chat_id.is_empty() {
+                let chat_id = st.mainframe_chat_id.clone();
+                st.task_events.handle_task_updated(
+                    &chat_id,
+                    TaskUpdatedPayload {
+                        task_id: event
+                            .get("task_id")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string(),
+                        status: event
+                            .get("status")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string(),
                     },
                 );
             }
@@ -297,6 +323,15 @@ fn handle_result_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
             .last_assistant_usage
             .take()
     };
+    // Context size comes ONLY from the last parent assistant usage. The result
+    // event's own `usage` is the QueryEngine total accumulated across every API
+    // call in the turn (cache reads summed N times) — fine for cost accounting,
+    // wrong as a context size (#197). `None` tells the sink "unknown this turn".
+    let context_tokens: Option<i64> = last_usage.as_ref().map(|u| {
+        u.input_tokens.unwrap_or(0)
+            + u.cache_creation_input_tokens.unwrap_or(0)
+            + u.cache_read_input_tokens.unwrap_or(0)
+    });
     let usage: Option<MessageUsage> = last_usage.or_else(|| {
         event
             .get("usage")
@@ -332,6 +367,7 @@ fn handle_result_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
             cache_creation_input_tokens: u.cache_creation_input_tokens,
             cache_read_input_tokens: u.cache_read_input_tokens,
         }),
+        context_tokens,
         subtype: event
             .get("subtype")
             .and_then(Value::as_str)
@@ -1116,6 +1152,73 @@ mod tests {
             mainframe_types::background_task::BackgroundTaskStatus::Completed
         );
         assert!(tracker.list("claude-session-xyz").is_empty());
+    }
+
+    #[test]
+    fn task_started_threads_task_type_through_to_the_tracked_kind() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let s = Arc::new(ClaudeSession::new(
+            SessionOptions {
+                project_path: "/tmp".to_string(),
+                chat_id: None,
+                mainframe_chat_id: "mf-chat-7".to_string(),
+            },
+            None,
+            tracker.clone(),
+            mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
+        ));
+        s.init_weak();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "system", "subtype": "init", "session_id": "claude-session-k" }),
+        );
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "system", "subtype": "task_started", "task_id": "agent-1", "tool_use_id": "tu-a", "description": "reviewer subagent", "task_type": "local_agent" }),
+        );
+        assert_eq!(
+            tracker.get("mf-chat-7", "agent-1").unwrap().kind,
+            mainframe_types::background_task::BackgroundWorkKind::Agent
+        );
+    }
+
+    #[test]
+    fn task_updated_with_a_terminal_status_ends_the_task() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let s = Arc::new(ClaudeSession::new(
+            SessionOptions {
+                project_path: "/tmp".to_string(),
+                chat_id: None,
+                mainframe_chat_id: "mf-chat-8".to_string(),
+            },
+            None,
+            tracker.clone(),
+            mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
+        ));
+        s.init_weak();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "system", "subtype": "init", "session_id": "claude-session-u" }),
+        );
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "system", "subtype": "task_started", "task_id": "task-u", "tool_use_id": "tu-u", "description": "bg agent", "task_type": "local_agent" }),
+        );
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "system", "subtype": "task_updated", "task_id": "task-u", "status": "failed" }),
+        );
+        assert_eq!(
+            tracker.get("mf-chat-8", "task-u").unwrap().status,
+            mainframe_types::background_task::BackgroundTaskStatus::Failed
+        );
     }
 
     // ---- stop-task-routing (control_response forwarding) ----

@@ -407,6 +407,12 @@ fn handle_turn_completed(
     sink.on_result(SessionResult {
         total_cost_usd: Some(0.0),
         usage,
+        // Codex has no distinct per-turn context total (#423 is Claude-only), so it
+        // resolves the sink's `contextTokens === undefined → fall back to usage`
+        // path (event-handler.ts:366) at the adapter boundary: report this turn's
+        // raw input usage as the context size. None (no usage yet) keeps the stored
+        // size. Option<i64> can't carry the TS undefined/null distinction downstream.
+        context_tokens: state.last_usage.as_ref().map(|lu| lu.input_tokens),
         subtype: if is_error {
             Some("error_during_execution".to_string())
         } else {
@@ -604,4 +610,9 @@ fn base64_encode(bytes: &[u8]) -> String {
 // notes: async readFile via tokio::spawn + a hand-rolled base64 encoder (no base64
 // notes: crate in the allowlist; inline path uses Codex's own base64 unchanged).
 // notes: parse_unified_diff is the crate-local shim (see history.rs blocker note).
-// notes: Tests in tests/event_mapper.rs (collab-agent-spawn + plan-item-capture).
+// notes: handle_turn_completed sends SessionResult.context_tokens = this turn's raw
+// notes: input usage (None when no usage yet), resolving the TS sink's
+// notes: `contextTokens === undefined → fall back to usage` path (event-handler.ts:366)
+// notes: here because Option<i64> can't carry the undefined/null distinction downstream.
+// notes: Tests in tests/event_mapper.rs (collab-agent-spawn + plan-item-capture +
+// notes: turn-completed context/usage).

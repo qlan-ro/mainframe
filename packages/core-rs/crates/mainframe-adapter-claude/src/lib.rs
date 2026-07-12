@@ -16,6 +16,7 @@
 pub mod adapter;
 pub mod assistant_event;
 pub mod constants;
+pub mod context_files;
 pub mod events;
 pub mod external_session_cache;
 pub mod external_session_enrich;
@@ -35,6 +36,8 @@ pub mod session_control;
 pub mod skill_path;
 pub mod skills;
 pub mod task_events;
+pub mod title_generator;
+pub mod transcript;
 pub mod trust_store;
 pub mod tuning;
 pub mod user_event;

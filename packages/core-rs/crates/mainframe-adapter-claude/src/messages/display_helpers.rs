@@ -165,6 +165,16 @@ pub fn convert_assistant_content(
     let mut seen_tool_ids: HashSet<String> = HashSet::new();
     let mut content: Vec<DisplayContent> = Vec::new();
 
+    // Subagent child results arrive as tool_result blocks INSIDE the assistant
+    // content (live onSubagentChild and history attachSubagentToolResults), not
+    // as standalone tool_result messages — index them so child cards get results.
+    let mut in_content_results: HashMap<&str, &MessageContent> = HashMap::new();
+    for block in &grouped.base.content {
+        if let MessageContent::Node(MessageContentNode::ToolResult { tool_use_id, .. }) = block {
+            in_content_results.insert(tool_use_id.as_str(), block);
+        }
+    }
+
     for block in &grouped.base.content {
         match block {
             MessageContent::Leaf(LeafContent::Text {
@@ -183,10 +193,14 @@ pub fn convert_assistant_content(
                 thinking,
                 parent_tool_use_id,
             }) => {
-                content.push(DisplayContent::Leaf(LeafContent::Thinking {
-                    thinking: thinking.clone(),
-                    parent_tool_use_id: with_parent_id(parent_tool_use_id),
-                }));
+                // Hidden-thinking models stream signature-only blocks with empty prose;
+                // shipping them yields dead payload and empty reasoning pills.
+                if !thinking.trim().is_empty() {
+                    content.push(DisplayContent::Leaf(LeafContent::Thinking {
+                        thinking: thinking.clone(),
+                        parent_tool_use_id: with_parent_id(parent_tool_use_id),
+                    }));
+                }
             }
             MessageContent::Leaf(LeafContent::Image {
                 media_type,
@@ -210,7 +224,10 @@ pub fn convert_assistant_content(
                 }
                 seen_tool_ids.insert(id.clone());
 
-                let result_block = grouped.tool_results.get(id);
+                let result_block = grouped
+                    .tool_results
+                    .get(id)
+                    .or_else(|| in_content_results.get(id.as_str()).copied());
                 let base_category = categorize_tool_call(name, categories);
                 let category = if name == "AskUserQuestion" && result_block.is_some() {
                     ToolCategory::Default
@@ -649,6 +666,52 @@ mod tests {
         assert_eq!(call["category"], "hidden");
     }
 
+    // ── convertAssistantContent — #419 subagent results + hidden thinking ───────
+    fn grouped_from(blocks: Vec<Value>) -> GroupedMessage {
+        let base = ChatMessage {
+            id: "g".to_string(),
+            chat_id: "c".to_string(),
+            r#type: ChatMessageType::Assistant,
+            content: blocks.into_iter().map(content_from).collect(),
+            timestamp: "t".to_string(),
+            metadata: None,
+        };
+        GroupedMessage {
+            base,
+            tool_results: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn skips_empty_prose_thinking_blocks() {
+        let g = grouped_from(vec![
+            json!({ "type": "thinking", "thinking": "  \n " }),
+            json!({ "type": "thinking", "thinking": "real reasoning" }),
+        ]);
+        let out = convert_assistant_content(&g, None);
+        let thinkings: Vec<Value> = out
+            .iter()
+            .map(|c| serde_json::to_value(c).unwrap())
+            .filter(|v| v["type"] == "thinking")
+            .collect();
+        assert_eq!(thinkings.len(), 1);
+        assert_eq!(thinkings[0]["thinking"], "real reasoning");
+    }
+
+    #[test]
+    fn surfaces_in_content_tool_result_on_child_tool_call() {
+        // Live shape: subagent child results are appended as tool_result blocks
+        // inside the same assistant content (not standalone messages).
+        let g = grouped_from(vec![
+            json!({ "type": "tool_use", "id": "c1", "name": "Bash", "input": { "command": "ls" }, "parentToolUseId": "task1" }),
+            json!({ "type": "tool_result", "toolUseId": "c1", "content": "child-output", "isError": false, "parentToolUseId": "task1" }),
+        ]);
+        let out = convert_assistant_content(&g, None);
+        let call = find_tool_call(&out);
+        assert_eq!(call["id"], "c1");
+        assert_eq!(call["result"]["content"], "child-output");
+    }
+
     // ── toToolCallResult truncation ────────────────────────────────────────────
     #[test]
     fn flags_and_shrinks_oversized_content() {
@@ -761,9 +824,14 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/messages/display-helpers.ts (336 lines)
+// PORT STATUS: src/messages/display-helpers.ts (360 lines)
 // confidence: high
 // todos: 0
+// notes: Main catch-up (#419): index in-content tool_result blocks so subagent child
+// notes: cards get results (grouped._toolResults ?? inContentResults); skip empty-prose
+// notes: `thinking` blocks (hidden-thinking models). Two focused unit tests added; the
+// notes: full subagent-grouping integration (display-pipeline.test.ts) also needs the
+// notes: mainframe-display tool-grouping port (cluster G, another crate).
 // notes: REASSIGNED from mainframe-display → mainframe-adapter-claude (§2.5 amendment):
 // notes: imports Claude-specific message_parsing + parse_ask_user_question + the Claude
 // notes: GroupedMessage, so it lands on the adapter side; the neutral grouping

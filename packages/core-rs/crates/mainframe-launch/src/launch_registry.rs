@@ -8,12 +8,16 @@ use std::sync::Arc;
 use dashmap::DashMap;
 
 use crate::launch_manager::LaunchManager;
+use crate::process::ChildRegistryPort;
 use crate::tunnel_manager::{BroadcastFn, TunnelManager};
 
 pub struct LaunchRegistry {
     managers: DashMap<String, Arc<LaunchManager>>,
     on_event: BroadcastFn,
     pub tunnel_manager: Option<Arc<TunnelManager>>,
+    /// Pidfile registry passed down to each `LaunchManager` so a crashed daemon's
+    /// next startup sweep can reap leaked launch groups. `None` = not tracked.
+    child_registry: Option<Arc<dyn ChildRegistryPort>>,
     /// Boot-resolved login-shell `PATH` (see `mainframe_runtime::ResolvedPath`),
     /// forwarded to each `LaunchManager` so launch children resolve the user's
     /// toolchain (mirrors the TS `enrichPath` env mutation; `MAINFRAME_ORIG_PATH`
@@ -27,8 +31,17 @@ impl LaunchRegistry {
             managers: DashMap::new(),
             on_event,
             tunnel_manager,
+            child_registry: None,
             resolved_path: None,
         }
+    }
+
+    /// Inject the shared pidfile registry (TS ctor's `childRegistry` param, made a
+    /// builder to keep the boot call site additive) passed down to each manager.
+    #[must_use]
+    pub fn with_child_registry(mut self, child_registry: Arc<dyn ChildRegistryPort>) -> Self {
+        self.child_registry = Some(child_registry);
+        self
     }
 
     /// Inject the boot-resolved login-shell `PATH` forwarded to launch children.
@@ -59,6 +72,7 @@ impl LaunchRegistry {
                     self.on_event.clone(),
                     self.tunnel_manager.clone(),
                     self.resolved_path.clone(),
+                    self.child_registry.clone(),
                 ))
             })
             .clone()
@@ -158,7 +172,7 @@ mod tests {
 // confidence: high
 // todos: 0
 // notes: managers = Arc<DashMap<"projectId:projectPath", Arc<LaunchManager>>>.
-// get/get_or_create mirror the TS; the shared on_event + tunnelManager are cloned
-// into each new manager. stopAll → await every manager.stop_all then clear (a
-// local join_all stands in for Promise.allSettled — stop_all is infallible, so
-// sequential await is equivalent; no `futures` crate in the allowlist).
+// get/get_or_create mirror the TS; the shared on_event + tunnelManager + (new
+// #431) child_registry are cloned into each new manager. stopAll → await every
+// manager.stop_all then clear (a local join_all stands in for Promise.allSettled —
+// stop_all is infallible, so sequential await is equivalent; no `futures` crate).

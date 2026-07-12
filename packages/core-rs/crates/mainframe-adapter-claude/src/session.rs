@@ -38,10 +38,11 @@ use mainframe_types::adapter::{
     ControlUpdate, MessageUsage, SessionOptions, SessionSpawnOptions,
 };
 use mainframe_types::chat::{ChatMessage, ResolvedTuning};
-use mainframe_types::context::{ContextFile, ContextFileSource, SkillFileEntry};
+use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 
 use crate::constants::MAINFRAME_SYSTEM_PROMPT_APPEND;
+use crate::context_files::collect_claude_context_files;
 use crate::events::{handle_stderr, handle_stdout};
 use crate::pr_detection::DetectedPrCore;
 use crate::session_control::{ControlRequestChannel, SendAwaitingOpts, StdinTx};
@@ -1107,40 +1108,7 @@ impl ClaudeSession {
     }
 
     pub fn get_context_files(&self) -> ContextFiles {
-        let mut global: Vec<ContextFile> = Vec::new();
-        if let Some(home) = dirs::home_dir() {
-            let global_dir = home.join(".claude");
-            for name in ["CLAUDE.md", "AGENTS.md"] {
-                let p = global_dir.join(name);
-                if p.exists()
-                    && let Ok(content) = std::fs::read_to_string(&p)
-                {
-                    global.push(ContextFile {
-                        path: name.to_string(),
-                        content,
-                        source: ContextFileSource::Global,
-                    });
-                }
-            }
-        }
-        let mut project: Vec<ContextFile> = Vec::new();
-        let base = std::path::Path::new(&self.project_path);
-        for name in ["CLAUDE.md", "AGENTS.md"] {
-            for dir in [base.to_path_buf(), base.join(".claude")] {
-                let p = dir.join(name);
-                if p.exists()
-                    && let Ok(content) = std::fs::read_to_string(&p)
-                    && let Ok(rel) = p.strip_prefix(base)
-                {
-                    project.push(ContextFile {
-                        path: rel.to_string_lossy().to_string(),
-                        content,
-                        source: ContextFileSource::Project,
-                    });
-                }
-            }
-        }
-        ContextFiles { global, project }
+        collect_claude_context_files(&self.project_path, None)
     }
 
     pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
@@ -1712,9 +1680,13 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/session.ts (542 lines)
+// PORT STATUS: src/plugins/builtin/claude/session.ts (512 lines)
 // confidence: medium
 // todos: 0
+// notes: Main catch-up (#432): get_context_files now delegates to
+// notes: collect_claude_context_files (context_files.rs) — global files carry their
+// notes: absolute ~/.claude path; the old inline body + ContextFile/ContextFileSource
+// notes: imports removed.
 // notes: Actor-model translation per CONCURRENCY.tsv 87-90: parse state is one
 // notes: Arc<Mutex<ClaudeSessionState>> (SINGLE_TASK, never held across .await);
 // notes: pid/status/last_activity_ms are the Arc<SharedSurface> atomic read

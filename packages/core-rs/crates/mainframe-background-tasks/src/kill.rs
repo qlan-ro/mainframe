@@ -459,7 +459,7 @@ mod tests {
     use crate::lsof::{ExecCode, ExecFn, ExecOk, LsofExecError, set_exec_for_tests};
     use crate::seam_test_guard;
     use crate::tracker::TaskSeed;
-    use mainframe_types::background_task::BackgroundTaskToolName;
+    use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
     use std::collections::VecDeque;
     use std::fs;
     use tempfile::tempdir;
@@ -542,6 +542,7 @@ mod tests {
             chat,
             TaskSeed {
                 id: id.to_string(),
+                kind: BackgroundWorkKind::Bash,
                 tool_name: BackgroundTaskToolName::Bash,
                 tool_use_id: "u".to_string(),
                 command: "x".to_string(),
