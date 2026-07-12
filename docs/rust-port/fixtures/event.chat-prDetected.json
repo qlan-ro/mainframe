@@ -1,0 +1,12 @@
+{
+  "_provenance": "synthetic",
+  "type": "chat.prDetected",
+  "chatId": "chat_9f2a3b1c",
+  "pr": {
+    "url": "https://github.com/qlan-ro/mainframe/pull/412",
+    "owner": "qlan-ro",
+    "repo": "mainframe",
+    "number": 412,
+    "source": "created"
+  }
+}

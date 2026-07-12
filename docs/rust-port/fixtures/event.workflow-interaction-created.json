@@ -1,0 +1,42 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "workflow.interaction.created",
+    "interaction": {
+      "id": "wint_001",
+      "runId": "run_001",
+      "stepPath": "root.ask",
+      "title": "Confirm deploy target",
+      "formSchema": [
+        {
+          "key": "target",
+          "type": "choice",
+          "options": ["staging", "production"],
+          "required": true
+        }
+      ],
+      "createdAt": 1751970000000,
+      "expiresAt": null
+    }
+  },
+  "full": {
+    "type": "workflow.interaction.created",
+    "interaction": {
+      "id": "wint_002",
+      "runId": "run_001",
+      "stepPath": "root.ask",
+      "title": "Confirm deploy target",
+      "formSchema": [
+        {
+          "key": "target",
+          "type": "choice",
+          "options": ["staging", "production"],
+          "required": true
+        }
+      ],
+      "createdAt": 1751970000000,
+      "expiresAt": 1751973600000,
+      "prompt": "Which environment should this release target?"
+    }
+  }
+}

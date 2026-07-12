@@ -1,0 +1,116 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "display.message.updated",
+    "chatId": "chat_9f2a3b1c",
+    "message": {
+      "id": "dmsg_0001",
+      "chatId": "chat_9f2a3b1c",
+      "type": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Running tests..."
+        }
+      ],
+      "timestamp": "2026-07-08T10:15:30.000Z"
+    }
+  },
+  "full": {
+    "type": "display.message.updated",
+    "chatId": "chat_9f2a3b1c",
+    "message": {
+      "id": "dmsg_0002",
+      "chatId": "chat_9f2a3b1c",
+      "type": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me check the file."
+        },
+        {
+          "type": "tool_call",
+          "id": "toolu_02B",
+          "name": "Read",
+          "input": {
+            "file_path": "packages/core/src/server/ws.ts"
+          },
+          "category": "explore",
+          "result": {
+            "content": "export function createWsServer() {}",
+            "isError": false,
+            "truncated": false,
+            "fullBytes": 512
+          }
+        },
+        {
+          "type": "tool_group",
+          "calls": [
+            {
+              "type": "tool_call",
+              "id": "toolu_03C",
+              "name": "Grep",
+              "input": {
+                "pattern": "reconnect"
+              },
+              "category": "explore"
+            }
+          ]
+        },
+        {
+          "type": "task_group",
+          "agentId": "agent_1",
+          "taskArgs": {
+            "description": "Investigate flake"
+          },
+          "calls": [
+            {
+              "type": "text",
+              "text": "Looking into it."
+            }
+          ],
+          "result": {
+            "content": "done",
+            "isError": false
+          }
+        },
+        {
+          "type": "task_progress",
+          "items": [
+            {
+              "id": "toolu_04D",
+              "name": "Bash",
+              "input": {
+                "command": "pnpm test"
+              },
+              "category": "progress"
+            }
+          ]
+        },
+        {
+          "type": "permission_request",
+          "request": {
+            "requestId": "req_001",
+            "toolName": "Bash",
+            "toolUseId": "toolu_01A",
+            "input": {
+              "command": "rm -rf /tmp/scratch"
+            },
+            "suggestions": []
+          }
+        },
+        {
+          "type": "error",
+          "message": "Tool timed out"
+        },
+        {
+          "type": "compaction"
+        }
+      ],
+      "timestamp": "2026-07-08T10:16:12.500Z",
+      "metadata": {
+        "model": "claude-sonnet-5"
+      }
+    }
+  }
+}

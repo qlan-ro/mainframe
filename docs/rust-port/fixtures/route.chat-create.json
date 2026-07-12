@@ -1,0 +1,17 @@
+{
+  "_provenance": "synthetic",
+  "_route": "POST /api/chats",
+  "success": true,
+  "data": {
+    "id": "chat_9f2a3b1c",
+    "adapterId": "claude",
+    "projectId": "proj_a1b2c3",
+    "status": "active",
+    "createdAt": "2026-07-08T10:15:30.000Z",
+    "updatedAt": "2026-07-08T10:15:30.000Z",
+    "totalCost": 0,
+    "totalTokensInput": 0,
+    "totalTokensOutput": 0,
+    "lastContextTokensInput": 0
+  }
+}

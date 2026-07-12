@@ -1,0 +1,80 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "chat.updated",
+    "chat": {
+      "id": "chat_9f2a3b1c",
+      "adapterId": "claude",
+      "projectId": "proj_a1b2c3",
+      "status": "active",
+      "createdAt": "2026-07-08T10:15:30.000Z",
+      "updatedAt": "2026-07-08T10:15:30.000Z",
+      "totalCost": 0,
+      "totalTokensInput": 0,
+      "totalTokensOutput": 0,
+      "lastContextTokensInput": 0
+    }
+  },
+  "full": {
+    "type": "chat.updated",
+    "chat": {
+      "id": "chat_9f2a3b1c",
+      "adapterId": "claude",
+      "projectId": "proj_a1b2c3",
+      "status": "active",
+      "createdAt": "2026-07-08T10:15:30.000Z",
+      "updatedAt": "2026-07-08T10:16:12.500Z",
+      "totalCost": 0.0842,
+      "totalTokensInput": 15230,
+      "totalTokensOutput": 3021,
+      "lastContextTokensInput": 4211,
+      "title": "Fix flaky websocket reconnect test",
+      "claudeSessionId": "8f14e45f-ceea-467e-9b46-b6f3e6c1d1a2",
+      "sessionFilePath": "/Users/doru/.claude/projects/mainframe/8f14e45f.jsonl",
+      "model": "claude-sonnet-5",
+      "permissionMode": "acceptEdits",
+      "planMode": false,
+      "contextFiles": ["packages/core/src/server/ws.ts"],
+      "mentions": [
+        {
+          "id": "mnt_1",
+          "kind": "file",
+          "source": "user",
+          "name": "ws.ts",
+          "path": "packages/core/src/server/ws.ts",
+          "timestamp": "2026-07-08T10:15:30.000Z"
+        }
+      ],
+      "modifiedFiles": ["packages/core/src/server/ws.ts", "packages/core/src/server/__tests__/ws.test.ts"],
+      "worktreePath": "/Users/doru/Projects/mainframe/.worktrees/fix-ws-reconnect",
+      "branchName": "fix/ws-reconnect",
+      "processState": "working",
+      "displayStatus": "working",
+      "isRunning": true,
+      "worktreeMissing": false,
+      "todos": [
+        {
+          "content": "Reproduce the flake",
+          "status": "completed",
+          "activeForm": "Reproducing the flake"
+        }
+      ],
+      "pinned": false,
+      "effort": "high",
+      "fast": false,
+      "ultracode": false,
+      "adaptiveThinking": true,
+      "detectedPrs": [
+        {
+          "url": "https://github.com/qlan-ro/mainframe/pull/412",
+          "owner": "qlan-ro",
+          "repo": "mainframe",
+          "number": 412,
+          "source": "created"
+        }
+      ],
+      "tags": ["bug", "flaky-test"]
+    },
+    "reason": "completed"
+  }
+}

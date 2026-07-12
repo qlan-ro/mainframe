@@ -1,0 +1,8 @@
+{
+  "_provenance": "synthetic",
+  "_route": "GET /health",
+  "status": "ok",
+  "version": "1.4.0",
+  "timestamp": "2026-07-08T10:15:30.000Z",
+  "tunnelUrl": null
+}

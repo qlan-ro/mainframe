@@ -1,0 +1,37 @@
+[package]
+name = "mainframe-daemon"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mainframe-daemon"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+dashmap = { workspace = true }
+dirs = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+qrcode = { workspace = true }
+mainframe-server = { workspace = true }
+mainframe-runtime = { workspace = true }
+mainframe-db = { workspace = true }
+mainframe-services = { workspace = true }
+mainframe-types = { workspace = true }
+mainframe-adapter-api = { workspace = true }
+mainframe-adapter-claude = { workspace = true }
+mainframe-adapter-codex = { workspace = true }
+mainframe-background-tasks = { workspace = true }
+mainframe-launch = { workspace = true }
+mainframe-plugins = { workspace = true }
+mainframe-lsp = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

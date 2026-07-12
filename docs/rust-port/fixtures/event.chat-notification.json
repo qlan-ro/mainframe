@@ -1,0 +1,8 @@
+{
+  "_provenance": "synthetic",
+  "type": "chat.notification",
+  "chatId": "chat_9f2a3b1c",
+  "title": "Turn complete",
+  "body": "Claude finished responding.",
+  "level": "success"
+}

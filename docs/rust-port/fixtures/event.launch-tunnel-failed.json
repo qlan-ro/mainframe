@@ -1,0 +1,8 @@
+{
+  "_provenance": "synthetic",
+  "type": "launch.tunnel.failed",
+  "projectId": "proj_a1b2c3",
+  "effectivePath": "/Users/doru/Projects/mainframe",
+  "name": "dev-server",
+  "error": "DNS verification timed out"
+}

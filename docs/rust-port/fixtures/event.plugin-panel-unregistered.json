@@ -1,0 +1,12 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "plugin.panel.unregistered",
+    "pluginId": "plugin_todos"
+  },
+  "full": {
+    "type": "plugin.panel.unregistered",
+    "pluginId": "plugin_todos",
+    "panelId": "panel_todos"
+  }
+}

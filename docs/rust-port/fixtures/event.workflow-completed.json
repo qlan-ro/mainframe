@@ -1,0 +1,10 @@
+{
+  "_provenance": "synthetic",
+  "type": "workflow.completed",
+  "workflowId": "wf_release",
+  "workflowName": "Release pipeline",
+  "runId": "run_002",
+  "outputs": {
+    "releaseTag": "v1.4.0"
+  }
+}

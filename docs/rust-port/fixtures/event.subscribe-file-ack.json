@@ -1,0 +1,6 @@
+{
+  "_provenance": "synthetic",
+  "type": "subscribe:file:ack",
+  "requestedPath": "src/server/ws.ts",
+  "resolvedPath": "/Users/doru/Projects/mainframe/packages/core/src/server/ws.ts"
+}
