@@ -63,10 +63,10 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
                 'focus-visible:outline-none',
               ].join(' ')}
             >
-              <Gauge size={11} className="shrink-0" />
+              <Gauge size={12} className="shrink-0" />
               <span className="hidden @[560px]:inline whitespace-nowrap text-label font-medium">{triggerLabel}</span>
-              {locked && <Lock size={10} className="shrink-0 text-mf-text-4" />}
-              <ChevronDown size={9} className="hidden @[560px]:inline shrink-0 opacity-60" />
+              {locked && <Lock size={12} className="shrink-0 text-mf-warning" />}
+              <ChevronDown size={12} className="hidden @[560px]:inline shrink-0 text-mf-text-3" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

@@ -11,6 +11,7 @@ import { onSurfaceIntent } from '@/store/surface-intents';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/store/theme';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { CountBadge } from '@/components/ui/count-badge';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
 import { TasksDrawer } from '../tasks/TasksDrawer';
@@ -20,7 +21,7 @@ import { useChangesCount } from './use-changes-count';
 type Tab = 'files' | 'changes';
 
 const SEG_BASE =
-  'flex h-[22px] flex-1 items-center justify-center gap-[5px] rounded-[6px] text-caption transition-colors';
+  'flex h-[22px] flex-1 items-center justify-center gap-[5px] rounded-[6px] text-label transition-colors';
 
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
@@ -59,7 +60,7 @@ export function InspectorPane({ port }: { port: number }) {
                 : 'font-medium text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Folder size={11} />
+            <Folder size={14} />
             Files
           </button>
           <button
@@ -73,9 +74,9 @@ export function InspectorPane({ port }: { port: number }) {
                 : 'font-medium text-muted-foreground hover:text-foreground'
             }`}
           >
-            <GitCompare size={11} />
+            <GitCompare size={14} />
             Changes
-            {changesCount > 0 && <span className="font-mono text-micro text-mf-text-3">{changesCount}</span>}
+            <CountBadge count={changesCount} variant="info" />
           </button>
         </div>
       </div>

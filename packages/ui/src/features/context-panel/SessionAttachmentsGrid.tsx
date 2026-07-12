@@ -63,12 +63,12 @@ export function SessionAttachmentsGrid({ chatId, attachments }: Props) {
                   className="h-full w-full rounded-sm object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-mf-text-3">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-muted-foreground">
                   <FileText size={16} aria-hidden />
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span
-                        className="h-7 w-full overflow-hidden break-all text-center text-micro leading-tight"
+                        className="h-7 w-full overflow-hidden break-all text-center text-caption leading-tight"
                         tabIndex={0}
                       >
                         {att.name}

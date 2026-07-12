@@ -61,7 +61,7 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
           </div>
 
           <div className="px-3 py-2 border-t border-border">
-            <p className="text-caption text-muted-foreground leading-relaxed">
+            <p className="text-label text-muted-foreground leading-relaxed">
               Ask an agent to resolve the conflicts, or use an external editor. Once resolved, stage and commit to
               complete the operation.
             </p>

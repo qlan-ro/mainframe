@@ -29,7 +29,7 @@ function QuoteBlockIcon({ className, ...props }: ComponentProps<typeof QuoteIcon
   return (
     <QuoteIcon
       data-slot="quote-block-icon"
-      className={cn('mt-0.5 size-3 shrink-0 text-muted-foreground', className)}
+      className={cn('mt-0.5 size-3.5 shrink-0 text-muted-foreground', className)}
       {...props}
     />
   );
@@ -38,7 +38,7 @@ function QuoteBlockText({ className, ...props }: ComponentProps<'p'>) {
   return (
     <p
       data-slot="quote-block-text"
-      className={cn('line-clamp-2 min-w-0 text-caption italic text-muted-foreground', className)}
+      className={cn('line-clamp-2 min-w-0 text-label text-muted-foreground', className)}
       {...props}
     />
   );

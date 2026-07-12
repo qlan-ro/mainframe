@@ -70,7 +70,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-caption text-muted-foreground">Depends on</label>
+      <label className="text-label text-muted-foreground">Depends on</label>
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selected.map((t) => (
@@ -87,7 +87,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
                 className="hover:text-foreground transition-colors"
                 aria-label={`Remove dependency on #${t.number}`}
               >
-                <X size={10} />
+                <X size={12} />
               </button>
             </span>
           ))}
@@ -99,7 +99,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
             type="button"
             data-testid="tasks-dep-input"
             className={cn(
-              'flex items-center gap-1 text-caption text-muted-foreground cursor-pointer',
+              'flex items-center gap-1 text-label text-muted-foreground cursor-pointer',
               'w-full px-2 py-1 rounded-md border border-border bg-background hover:bg-muted transition-colors',
             )}
             onClick={() => setOpen(!open)}
@@ -115,7 +115,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
                   ref={searchRef}
                   data-noring=""
                   type="text"
-                  className="bg-transparent text-caption text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
+                  className="bg-transparent text-label text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
                   placeholder="Search tasks…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -130,7 +130,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
                     <button
                       type="button"
                       data-testid={`tasks-dep-opt-${t.number}`}
-                      className="w-full text-left px-2 py-1.5 text-caption text-foreground hover:bg-muted transition-colors"
+                      className="w-full text-left px-2 py-1.5 text-label text-foreground hover:bg-muted transition-colors"
                       onClick={() => addDep(t.number)}
                     >
                       <span className="text-muted-foreground">#{t.number}</span>{' '}
@@ -144,7 +144,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
         </div>
       )}
       {available.length === 0 && value.length === 0 && (
-        <span className="text-caption text-muted-foreground opacity-60">No other tasks available</span>
+        <span className="text-caption text-muted-foreground">No other tasks available</span>
       )}
     </div>
   );

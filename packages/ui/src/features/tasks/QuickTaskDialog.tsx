@@ -32,14 +32,14 @@ interface PendingFile {
 // Physical padding avoids Chromium scroll-clip bug.
 const inputCls = cn(
   'bg-background border border-border rounded-md pl-3 pr-3 py-1.5',
-  'text-caption text-foreground placeholder:text-muted-foreground',
+  'text-label text-foreground placeholder:text-muted-foreground',
   'focus:outline-none focus:ring-1 focus:ring-ring w-full',
 );
 const textareaWrap = cn(
   'bg-background border border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
 );
 const textareaInner = cn(
-  'w-full bg-transparent border-0 p-0 resize-none text-caption text-foreground outline-none focus:outline-none focus-visible:outline-none',
+  'w-full bg-transparent border-0 p-0 resize-none text-label text-foreground outline-none focus:outline-none focus-visible:outline-none',
 );
 const pillBase = cn('px-3 py-1 text-caption rounded-full border transition-colors cursor-pointer');
 
@@ -229,7 +229,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
                 onKeyDown={handleModEnter}
               />
             </div>
-            <span className="text-caption text-muted-foreground opacity-60">Paste image to attach</span>
+            <span className="text-caption text-muted-foreground">Paste image to attach</span>
           </div>
 
           {/* Pending attachments */}
@@ -251,7 +251,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
                     className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label={`Remove ${f.filename}`}
                   >
-                    <X size={10} />
+                    <X size={12} />
                   </button>
                 </div>
               ))}
@@ -260,7 +260,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
 
           {/* Priority pills */}
           <div className="flex items-center gap-2">
-            <span className="text-caption text-muted-foreground">Priority</span>
+            <span className="text-label text-muted-foreground">Priority</span>
             <div className="flex gap-1">
               {(['low', 'medium', 'high'] as const).map((p) => (
                 <TypePill
@@ -286,7 +286,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
             onClick={() => void handleSubmit()}
             disabled={!title.trim() || submitting}
             className={cn(
-              'px-3 py-1.5 text-caption rounded-md transition-colors',
+              'px-3 py-1.5 text-label rounded-md transition-colors',
               'bg-primary text-primary-foreground hover:opacity-90',
               'disabled:opacity-50 disabled:cursor-not-allowed',
             )}

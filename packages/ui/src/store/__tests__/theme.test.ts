@@ -173,10 +173,10 @@ describe('theme store — uiScale axis', () => {
     expect(setZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
   });
 
-  it('applyStoredScale calls host.setZoom with 1 for compact', async () => {
+  it('applyStoredScale calls host.setZoom with the compact factor', async () => {
     localStorage.setItem('mf-ui-scale', 'compact');
-    const { applyStoredScale } = await import('../theme');
+    const { applyStoredScale, UI_SCALE_FACTORS } = await import('../theme');
     applyStoredScale();
-    expect(setZoomMock).toHaveBeenCalledWith(1);
+    expect(setZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.compact);
   });
 });

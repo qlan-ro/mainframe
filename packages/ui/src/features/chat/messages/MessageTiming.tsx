@@ -53,7 +53,7 @@ export const MessageTiming: FC<MessageTimingProps> = ({ className, side = 'top' 
           data-testid="chat-message-timing"
           aria-label="Message timing"
           className={cn(
-            'cursor-default rounded-sm px-1 py-0.5 font-mono text-micro tabular-nums text-mf-text-4 transition-colors hover:bg-accent hover:text-mf-text-3',
+            'cursor-default rounded-sm px-1 py-0.5 font-mono text-caption tabular-nums text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground',
             className,
           )}
         >

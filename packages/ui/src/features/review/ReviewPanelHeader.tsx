@@ -34,7 +34,7 @@ export function ReviewPanelHeader({
         className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
         aria-label="Close review"
       >
-        <X className="size-[15px]" />
+        <X className="size-[16px]" />
       </button>
 
       <div className="flex items-center gap-2.5">
@@ -47,24 +47,24 @@ export function ReviewPanelHeader({
           data-testid="review-branch-badge"
           className="inline-flex items-center gap-1.5 rounded-md bg-mf-chip px-2.5 py-1"
         >
-          <GitBranch className="size-[11px] text-mf-text-3" aria-hidden />
+          <GitBranch className="size-[12px] text-mf-text-3" aria-hidden />
           <span className="font-mono text-caption text-muted-foreground">{branch}</span>
         </span>
       )}
 
       <div className="flex-1" />
 
-      <span data-testid="review-file-counts" className="text-caption text-mf-text-3">
+      <span data-testid="review-file-counts" className="text-caption text-muted-foreground">
         {fileCount} {fileCount === 1 ? 'file' : 'files'} ·{' '}
-        <span className="font-semibold text-mf-success">+{totalAdditions}</span>{' '}
+        <span className="font-semibold text-mf-diff-add-text">+{totalAdditions}</span>{' '}
         <span className="font-semibold text-mf-diff-del-text">−{totalDeletions}</span>
       </span>
 
       <span
         data-testid="review-viewed-counter"
-        className={`inline-flex items-center gap-1.5 text-caption ${allViewed ? 'text-mf-success' : 'text-mf-text-3'}`}
+        className="inline-flex items-center gap-1.5 text-caption text-muted-foreground"
       >
-        {allViewed && <Check className="size-[12px]" strokeWidth={2.4} aria-hidden />}
+        {allViewed && <Check className="size-[12px] text-mf-success" strokeWidth={2.4} aria-hidden />}
         {viewedCount}/{fileCount} viewed
       </span>
     </div>

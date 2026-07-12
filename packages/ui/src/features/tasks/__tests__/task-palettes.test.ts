@@ -27,17 +27,17 @@ import { typeTint, priorityTint, priorityDotClass } from '../task-palettes';
 describe('typeTint — semantic type tokens (design: 12-todos.jsx:12-20)', () => {
   it('bug: task-type-bug token @ 10%', () => {
     expect(typeTint('bug')).toContain('bg-mf-task-type-bug/10');
-    expect(typeTint('bug')).toContain('text-mf-task-type-bug');
+    expect(typeTint('bug')).toContain('text-foreground');
   });
 
   it('feature: accent (primary) tint', () => {
     expect(typeTint('feature')).toContain('bg-primary/10');
-    expect(typeTint('feature')).toContain('text-primary');
+    expect(typeTint('feature')).toContain('text-foreground');
   });
 
   it('enhancement: task-type-enhancement token @ 10%', () => {
     expect(typeTint('enhancement')).toContain('bg-mf-task-type-enhancement/10');
-    expect(typeTint('enhancement')).toContain('text-mf-task-type-enhancement');
+    expect(typeTint('enhancement')).toContain('text-foreground');
   });
 
   it('documentation: chip tint (design has no bespoke hue)', () => {
@@ -46,29 +46,29 @@ describe('typeTint — semantic type tokens (design: 12-todos.jsx:12-20)', () =>
 
   it('question: task-type-question token @ 12%', () => {
     expect(typeTint('question')).toContain('bg-mf-task-type-question/[0.12]');
-    expect(typeTint('question')).toContain('text-mf-task-type-question');
+    expect(typeTint('question')).toContain('text-foreground');
   });
 
   it('duplicate: task-type-duplicate token @ 10%', () => {
     expect(typeTint('duplicate')).toContain('bg-mf-task-type-duplicate/10');
-    expect(typeTint('duplicate')).toContain('text-mf-task-type-duplicate');
+    expect(typeTint('duplicate')).toContain('text-foreground');
   });
 });
 
 describe('priorityTint — semantic priority tokens (design: 12-todos.jsx:21-26)', () => {
   it('critical: priority-critical token @ 10%', () => {
     expect(priorityTint('critical')).toContain('bg-mf-priority-critical/10');
-    expect(priorityTint('critical')).toContain('text-mf-priority-critical');
+    expect(priorityTint('critical')).toContain('text-foreground');
   });
 
   it('high: priority-high token @ 10%', () => {
     expect(priorityTint('high')).toContain('bg-mf-priority-high/10');
-    expect(priorityTint('high')).toContain('text-mf-priority-high');
+    expect(priorityTint('high')).toContain('text-foreground');
   });
 
   it('medium: priority-medium token @ 12%', () => {
     expect(priorityTint('medium')).toContain('bg-mf-priority-medium/[0.12]');
-    expect(priorityTint('medium')).toContain('text-mf-priority-medium');
+    expect(priorityTint('medium')).toContain('text-foreground');
   });
 
   it('low: chip tint (no bespoke hue)', () => {

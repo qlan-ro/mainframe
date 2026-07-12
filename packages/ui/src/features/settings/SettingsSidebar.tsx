@@ -61,7 +61,7 @@ function ProviderSubItems({ activeProvider }: { activeProvider: string | null })
           >
             <span
               className={cn(
-                'inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-micro font-bold text-white ring-1 ring-inset ring-black/10',
+                'inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-caption font-bold text-white ring-1 ring-inset ring-black/10',
                 providerDot(adapter.id),
               )}
             >

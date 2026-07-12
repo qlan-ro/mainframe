@@ -17,7 +17,7 @@ export function MenuLabel({
   return (
     <div
       className={cn(
-        'flex items-center justify-between px-[8px] pb-[4px] pt-[5px] text-micro font-bold uppercase tracking-wide text-mf-text-3',
+        'flex items-center justify-between px-[8px] pb-[4px] pt-[5px] text-caption font-medium text-muted-foreground',
         className,
       )}
     >
@@ -57,11 +57,11 @@ export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
     >
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {note != null && <span className="shrink-0 text-caption text-mf-text-3">{note}</span>}
+      {note != null && <span className="shrink-0 text-caption text-muted-foreground">{note}</span>}
       {/* font-mono for keyboard-shortcut style hints (e.g. ⌘1, ⤓, ↵) — SKIPPED-macos-typography
           on the 11px→10px size delta itself (finding 10.12); font-mono is a genuine missing
           treatment, not a size/weight token swap. */}
-      {hint != null && <span className="shrink-0 font-mono text-caption text-mf-text-4">{hint}</span>}
+      {hint != null && <span className="shrink-0 font-mono text-caption text-mf-text-3">{hint}</span>}
       {trailing}
     </button>
   ),

@@ -43,9 +43,9 @@ function DegradedMarker({ causes }: { causes: string[] }) {
       <span
         data-testid="sessions-row-meta-degraded"
         aria-label={label}
-        className="inline-flex flex-shrink-0 items-center text-mf-text-3"
+        className="inline-flex flex-shrink-0 items-center text-muted-foreground"
       >
-        <AlertTriangle size={9} aria-hidden />
+        <AlertTriangle size={12} aria-hidden />
       </span>
     </Hint>
   );
@@ -69,11 +69,11 @@ export function SessionRowMeta({
   ];
 
   return (
-    <div className="flex min-w-0 items-center gap-[8px] text-micro tracking-normal text-mf-text-3">
+    <div className="flex min-w-0 items-center gap-[8px] text-caption tracking-normal text-muted-foreground">
       {projectName != null && chipColor != null && (
         <span
           data-testid="sessions-row-meta-project"
-          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] pl-[5px] pr-[6px] text-micro font-semibold"
+          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] pl-[5px] pr-[6px] text-caption font-semibold"
           style={{
             backgroundColor: `color-mix(in oklch, ${chipColor} 10%, transparent)`,
             color: chipColor,
@@ -97,7 +97,7 @@ export function SessionRowMeta({
               worktreeMissing ? 'text-destructive' : 'text-muted-foreground',
             ].join(' ')}
           >
-            <GitFork size={9} className="flex-shrink-0 text-mf-text-3" aria-hidden />
+            <GitFork size={12} className="flex-shrink-0" aria-hidden />
             <span className="max-w-[8rem] truncate">{worktreeBasename(worktreePath)}</span>
           </span>
         </Hint>

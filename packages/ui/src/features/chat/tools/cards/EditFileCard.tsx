@@ -37,9 +37,9 @@ import type { DiffHunk } from '@qlan-ro/mainframe-types';
 function StatPills({ added, removed }: { added: number | null; removed: number | null }) {
   if (added === null && removed === null) return null;
   return (
-    <span className="flex items-center gap-1.5 font-mono tabular-nums text-micro shrink-0">
-      {added !== null && <span className="font-semibold text-mf-diff-add-text">+{added}</span>}
-      {removed !== null && <span className="font-semibold text-mf-diff-del-text">−{removed}</span>}
+    <span className="flex items-center gap-1.5 font-mono tabular-nums text-caption shrink-0 text-muted-foreground">
+      {added !== null && <span className="font-semibold">+{added}</span>}
+      {removed !== null && <span className="font-semibold">−{removed}</span>}
     </span>
   );
 }
@@ -120,7 +120,7 @@ function EditCardBody({
           ) : (
             <pre
               data-testid="chat-edit-error-text"
-              className="text-caption font-mono overflow-x-auto whitespace-pre-wrap text-muted-foreground"
+              className="text-label font-mono overflow-x-auto whitespace-pre-wrap text-muted-foreground"
             >
               {resultText}
             </pre>

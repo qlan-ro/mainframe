@@ -92,7 +92,7 @@ const MoreMenu: FC = () => (
             'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
           )}
         >
-          <DownloadIcon className="size-4 shrink-0" />
+          <DownloadIcon className="size-3.5 shrink-0" />
           Export as Markdown
         </ActionBarMorePrimitive.Item>
       </ActionBarPrimitive.ExportMarkdown>

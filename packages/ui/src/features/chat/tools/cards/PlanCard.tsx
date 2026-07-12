@@ -60,10 +60,10 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
             hasResult ? 'hover:bg-accent transition-colors cursor-pointer' : 'cursor-default',
           )}
         >
-          <FileText size={15} className={cn('shrink-0', hasResult ? 'text-muted-foreground' : 'text-mf-text-4')} />
+          <FileText size={15} className={cn('shrink-0', hasResult ? 'text-muted-foreground' : 'text-mf-text-3')} />
           <span
             data-testid="chat-plan-label"
-            className={cn('text-body flex-1', hasResult ? 'text-muted-foreground' : 'text-mf-text-4')}
+            className={cn('text-body flex-1', hasResult ? 'text-muted-foreground' : 'text-mf-text-3')}
           >
             Updated plan
           </span>
@@ -76,7 +76,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
             <div className="ml-5 border-l border-border py-1">
               <pre
                 data-testid="chat-plan-body"
-                className="text-caption font-mono text-muted-foreground whitespace-pre-wrap px-3"
+                className="text-label font-mono text-muted-foreground whitespace-pre-wrap px-3"
               >
                 {resultText}
               </pre>

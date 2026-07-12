@@ -112,7 +112,7 @@ export function ProjectFilterPillBar({
           data-testid="sessions-add-project"
           type="button"
           onClick={onAddProject}
-          className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] border border-dashed border-mf-border-hover px-2.5 text-caption font-semibold tracking-normal text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground"
+          className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] border border-dashed border-mf-border-hover px-2.5 text-caption font-semibold tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <FolderPlus className="size-[12px]" aria-hidden />
           <span>Add project</span>

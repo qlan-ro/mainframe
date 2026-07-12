@@ -54,7 +54,7 @@
   --mf-raised: #f3efe7;
   --mf-tab-bar: #f3f0ea;
   --mf-tab-active: #ffffff;
-  --mf-text-3: #92918d;
+  --mf-text-3: #6c6b68;
   --mf-text-4: #bcbab5;
   --mf-chip: rgba(0,0,0,0.05);
   --mf-selection: rgba(10,132,255,0.10);
@@ -62,8 +62,8 @@
      editor-search convention), defined once in :root; no scheme overrides them. */
   --mf-find-tint: rgba(251,191,36,0.32);
   --mf-find-active: rgba(251,146,60,0.60);
-  --mf-warning: #d97706;
-  --mf-success: #28a745;
+  --mf-warning: #a15804;
+  --mf-success: #1d7b33;
 
   /* Editor syntax — Xcode-ish on warm paper */
   --mf-code-bg: #fbfaf7;
@@ -244,7 +244,7 @@
   --mf-raised: #313447;
   --mf-tab-bar: #21232e;
   --mf-tab-active: #373a4d;
-  --mf-text-3: #7d8099;
+  --mf-text-3: #8b8ea4;
   --mf-text-4: #555870;
   --mf-chip: rgba(255,255,255,0.07);
   --mf-selection: rgba(138,112,245,0.30);
@@ -301,6 +301,27 @@
   --mf-tool-web: #2bd6c2;
   --mf-tool-web-tint: rgba(43, 214, 194, 0.14);
   --mf-code-inline-fg: #e0a878;
+
+  /* Semantic hue overrides for dark cards. The task-type/priority/auto glyph +
+     tint-foreground colors are declared once in :root at light-tuned L; on dark
+     surfaces they clip, so lighten L (hue/sat preserved) to ~4.5:1 on the
+     darkest card. Design-constant across schemes → identical in all 3 dark
+     blocks. Icon/tint use only, never body text. medium/low priority dots
+     already pass on dark and stay inherited. */
+  --mf-task-type-bug: #e17a76;
+  --mf-task-type-enhancement: #a982f7;
+  --mf-task-type-question: #d38810;
+  --mf-task-type-duplicate: #f3721b;
+  --mf-priority-critical: #e17a76;
+  --mf-priority-high: #f3721b;
+  --mf-priority-medium: #d2890f;
+  --mf-priority-critical-dot: #e17a76;
+  --mf-priority-high-dot: #ef770f;
+  --mf-auto-violet: #ac8bc6;
+  --mf-auto-kind-question: #f3721b;
+  --mf-auto-kind-loop: #27ad72;
+  --mf-auto-kind-parallel: #ec771b;
+  --mf-auto-kind-call: #6798e5;
 
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -361,12 +382,12 @@
   --mf-raised: #eaf1f1;
   --mf-tab-bar: #edf3f4;
   --mf-tab-active: #ffffff;
-  --mf-text-3: #89989d;
+  --mf-text-3: #5f6d72;
   --mf-text-4: #b6c3c7;
   --mf-chip: rgba(10,50,55,0.05);
   --mf-selection: rgba(14,152,136,0.11);
-  --mf-warning: #c07a12;
-  --mf-success: #1e9e58;
+  --mf-warning: #955f0e;
+  --mf-success: #177a44;
 
   --mf-code-bg: #f6fafa;
   --mf-code-fg: #1d262b;
@@ -455,7 +476,7 @@
   --mf-raised: #2a3545;
   --mf-tab-bar: #1b222e;
   --mf-tab-active: #303d4f;
-  --mf-text-3: #76869b;
+  --mf-text-3: #7e8da1;
   --mf-text-4: #4d5a6b;
   --mf-chip: rgba(255,255,255,0.07);
   --mf-selection: rgba(47,198,183,0.26);
@@ -510,6 +531,24 @@
   --mf-tool-web: #2fc6b7;
   --mf-tool-web-tint: rgba(47, 198, 183, 0.14);
   --mf-code-inline-fg: #e0a878;
+
+  /* Semantic hue overrides for dark cards (see classic-dark block for rationale) —
+     design-constant, identical across all 3 dark blocks. */
+  --mf-task-type-bug: #e17a76;
+  --mf-task-type-enhancement: #a982f7;
+  --mf-task-type-question: #d38810;
+  --mf-task-type-duplicate: #f3721b;
+  --mf-priority-critical: #e17a76;
+  --mf-priority-high: #f3721b;
+  --mf-priority-medium: #d2890f;
+  --mf-priority-critical-dot: #e17a76;
+  --mf-priority-high-dot: #ef770f;
+  --mf-auto-violet: #ac8bc6;
+  --mf-auto-kind-question: #f3721b;
+  --mf-auto-kind-loop: #27ad72;
+  --mf-auto-kind-parallel: #ec771b;
+  --mf-auto-kind-call: #6798e5;
+
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
   --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.22);
@@ -561,12 +600,12 @@
   --mf-raised: #f3ecf3;
   --mf-tab-bar: #f2edf2;
   --mf-tab-active: #ffffff;
-  --mf-text-3: #94899c;
+  --mf-text-3: #72677b;
   --mf-text-4: #c0b6c6;
   --mf-chip: rgba(70,20,60,0.05);
   --mf-selection: rgba(214,72,143,0.10);
-  --mf-warning: #c0741f;
-  --mf-success: #1f9e54;
+  --mf-warning: #9a5d19;
+  --mf-success: #187b41;
 
   --mf-code-bg: #fbf8fb;
   --mf-code-fg: #271d2e;
@@ -653,7 +692,7 @@
   --mf-raised: #382c48;
   --mf-tab-bar: #251d30;
   --mf-tab-active: #3d2f4f;
-  --mf-text-3: #877b97;
+  --mf-text-3: #9287a1;
   --mf-text-4: #594f6a;
   --mf-chip: rgba(255,255,255,0.07);
   --mf-selection: rgba(240,107,179,0.24);
@@ -708,6 +747,24 @@
   --mf-tool-web: #2bd6c2;
   --mf-tool-web-tint: rgba(43, 214, 194, 0.14);
   --mf-code-inline-fg: #e0a878;
+
+  /* Semantic hue overrides for dark cards (see classic-dark block for rationale) —
+     design-constant, identical across all 3 dark blocks. */
+  --mf-task-type-bug: #e17a76;
+  --mf-task-type-enhancement: #a982f7;
+  --mf-task-type-question: #d38810;
+  --mf-task-type-duplicate: #f3721b;
+  --mf-priority-critical: #e17a76;
+  --mf-priority-high: #f3721b;
+  --mf-priority-medium: #d2890f;
+  --mf-priority-critical-dot: #e17a76;
+  --mf-priority-high-dot: #ef770f;
+  --mf-auto-violet: #ac8bc6;
+  --mf-auto-kind-question: #f3721b;
+  --mf-auto-kind-loop: #27ad72;
+  --mf-auto-kind-parallel: #ec771b;
+  --mf-auto-kind-call: #6798e5;
+
   --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
   --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
   --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.22);
@@ -854,6 +911,17 @@
   --text-title: 1.0625rem;   /* 17px */
   --text-display: 1.375rem;  /* 22px */
   --text-hero: 1.75rem;      /* 28px */
+
+  /* Paired leading (Tailwind v4 --text-<name>--line-height): looser for body
+     copy, tighter for large display rungs. */
+  --text-micro--line-height: 1.3;
+  --text-caption--line-height: 1.35;
+  --text-label--line-height: 1.4;
+  --text-body--line-height: 1.5;
+  --text-heading--line-height: 1.3;
+  --text-title--line-height: 1.25;
+  --text-display--line-height: 1.2;
+  --text-hero--line-height: 1.15;
 
   /* Letter spacing + line-height */
   --tracking-tight: -0.02em;

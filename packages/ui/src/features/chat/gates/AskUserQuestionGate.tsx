@@ -156,11 +156,10 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
           icon={<MessageCircleQuestionIcon className="size-[15px]" />}
           tileClassName="bg-mf-selection text-primary"
           eyebrow={eyebrow}
-          eyebrowClassName="text-primary"
           title={title}
           right={
             questions.length > 1 ? (
-              <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-micro font-semibold text-mf-text-3 ring-1 ring-border">
+              <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-caption font-semibold text-muted-foreground ring-1 ring-border">
                 {current + 1} of {questions.length}
               </span>
             ) : undefined

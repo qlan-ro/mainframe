@@ -350,8 +350,8 @@ describe('session row badge presentation', () => {
   it('idle + read → muted provider logo, no pill', () => {
     render(<StatusDot badge={{ base: 'idle', unread: false }} adapterId="opencode" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('text-mf-text-4');
-    expect(dot.className).toContain('opacity-50');
+    expect(dot.className).toContain('text-mf-text-3');
+    expect(dot.className).not.toContain('opacity-50');
     expect(dot.className).not.toContain('grayscale');
     expect(dot.className).not.toContain('animate-pulse');
     expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'opencode');
@@ -377,7 +377,7 @@ describe('session row badge presentation', () => {
     render(<StatusDot badge={{ base: 'worktree-missing', unread: false }} adapterId="claude" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
     expect(dot.className).not.toContain('text-destructive');
-    expect(dot.className).toContain('opacity-50');
+    expect(dot.className).not.toContain('opacity-50');
     expect(dot.className).not.toContain('grayscale');
   });
 });

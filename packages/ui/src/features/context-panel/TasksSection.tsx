@@ -24,7 +24,7 @@ export function TasksSection({ todos }: { todos: readonly TodoItem[] }): React.R
                 style={{ width: `${pct}%` }}
               />
             </span>
-            <span className="shrink-0 font-mono text-micro tabular-nums text-mf-text-3">
+            <span className="shrink-0 font-mono text-caption tabular-nums text-muted-foreground">
               {completed}/{total}
             </span>
           </>
@@ -43,12 +43,14 @@ export function TasksSection({ todos }: { todos: readonly TodoItem[] }): React.R
                 <span
                   className={cn(
                     'flex size-[12px] shrink-0 items-center justify-center rounded-[4px] border-[1.5px]',
-                    done ? 'border-mf-success bg-mf-success' : 'border-mf-text-4',
+                    done ? 'border-mf-success bg-mf-success' : 'border-mf-text-3',
                   )}
                 >
                   {done && <Check className="size-[8px] text-white" strokeWidth={3} />}
                 </span>
-                <span className={cn('flex-1 truncate', done ? 'text-mf-text-3 line-through' : 'text-foreground')}>
+                <span
+                  className={cn('flex-1 truncate', done ? 'text-muted-foreground line-through' : 'text-foreground')}
+                >
                   {label}
                 </span>
               </div>

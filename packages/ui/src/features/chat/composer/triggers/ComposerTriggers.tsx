@@ -49,7 +49,7 @@ function ItemRow({ item, testidPrefix }: { item: Unstable_TriggerItem; testidPre
                  data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
     >
       <span className="font-medium text-foreground">{item.label}</span>
-      {item.description != null && <span className="text-caption text-muted-foreground">{item.description}</span>}
+      {item.description != null && <span className="text-label text-muted-foreground">{item.description}</span>}
     </ComposerPrimitive.Unstable_TriggerPopoverItem>
   );
 }

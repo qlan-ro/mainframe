@@ -22,6 +22,7 @@
 import { memo, useCallback, useMemo, type ReactNode } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
+import { CountBadge } from '@/components/ui/count-badge';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -50,7 +51,7 @@ import { resolveProjectSession } from './resolve-project-session';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
-    <div data-testid="sessions-empty-state" className="px-3 py-5 text-center text-caption text-mf-text-3">
+    <div data-testid="sessions-empty-state" className="px-3 py-5 text-center text-body text-muted-foreground">
       {hasFilters ? 'No sessions match these filters.' : 'No sessions yet'}
     </div>
   );
@@ -67,8 +68,8 @@ function SessionsGroupHeader({ count, newButton }: { count: number; newButton: R
   const { sortMode, setSortMode } = useSessionFilters();
   return (
     <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
-      <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">Sessions</span>
-      <span className="text-micro text-mf-text-3">{count}</span>
+      <span className="text-caption font-medium text-muted-foreground">Sessions</span>
+      <CountBadge count={count} variant="info" />
       <div className="flex-1" />
       {newButton}
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />

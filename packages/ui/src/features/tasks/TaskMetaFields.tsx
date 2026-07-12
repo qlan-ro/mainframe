@@ -12,7 +12,7 @@ import type { Todo } from '@/lib/api/todos';
 // Physical padding shorthand avoids the Chromium scroll-clip bug on <input>.
 const inputCls = cn(
   'bg-background border border-border rounded-md pl-3 pr-3 py-1.5',
-  'text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring',
+  'text-label text-foreground focus:outline-none focus:ring-1 focus:ring-ring',
   'w-full',
 );
 
@@ -46,12 +46,12 @@ export function TaskMetaFields({
   return (
     <>
       <div className="flex flex-col gap-1">
-        <label className="text-caption text-muted-foreground">Labels</label>
+        <label className="text-label text-muted-foreground">Labels</label>
         <LabelAutocomplete value={labelList} onChange={onLabelChange} allLabels={allLabels} />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-caption text-muted-foreground">Assignees (comma-separated)</label>
+        <label className="text-label text-muted-foreground">Assignees (comma-separated)</label>
         <input
           data-testid="tasks-edit-assignees"
           className={inputCls}
@@ -62,7 +62,7 @@ export function TaskMetaFields({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-caption text-muted-foreground">Milestone</label>
+        <label className="text-label text-muted-foreground">Milestone</label>
         <input
           data-testid="tasks-edit-milestone"
           className={inputCls}

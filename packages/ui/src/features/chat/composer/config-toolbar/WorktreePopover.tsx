@@ -40,13 +40,13 @@ function ActiveInfo({ chat }: { chat: Chat }) {
     <div data-testid="composer-worktree-active-info" className="space-y-[6px] px-[8px] py-[6px]">
       <div className="flex items-center gap-[6px]">
         <span className="inline-block size-[7px] shrink-0 rounded-full bg-mf-success" aria-hidden />
-        <span className="text-caption font-medium text-mf-success">Isolated in worktree</span>
+        <span className="text-caption font-medium text-foreground">Isolated in worktree</span>
       </div>
       <MenuDivider />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-[8px] gap-y-[2px]">
-        <span className="text-caption text-mf-text-3">Branch</span>
+        <span className="text-caption text-muted-foreground">Branch</span>
         <span className="truncate font-mono text-caption text-foreground">{chat.branchName ?? '—'}</span>
-        <span className="text-caption text-mf-text-3">Path</span>
+        <span className="text-caption text-muted-foreground">Path</span>
         <TruncatedWithTooltip
           text={chat.worktreePath ?? ''}
           className="font-mono text-caption text-foreground"

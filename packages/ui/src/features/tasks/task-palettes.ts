@@ -31,46 +31,48 @@ export function statusTint(status: TodoStatus): string {
 }
 
 /**
- * Background + text tint for a todo type badge.
- * Matches the design's TD_TYPE palette (12-todos.jsx:12-20).
+ * Tint background for a todo type badge; the hue lives on the background only,
+ * the label ink stays neutral (foreground/muted) for contrast in every theme.
+ * Background matches the design's TD_TYPE palette (12-todos.jsx:12-20).
  */
 export function typeTint(type: TodoType): string {
   switch (type) {
     case 'bug':
-      return 'bg-mf-task-type-bug/10 text-mf-task-type-bug';
+      return 'bg-mf-task-type-bug/10 text-foreground';
     case 'feature':
-      return 'bg-primary/10 text-primary';
+      return 'bg-primary/10 text-foreground';
     case 'enhancement':
-      return 'bg-mf-task-type-enhancement/10 text-mf-task-type-enhancement';
+      return 'bg-mf-task-type-enhancement/10 text-foreground';
     case 'documentation':
       return 'bg-mf-chip text-muted-foreground';
     case 'question':
-      return 'bg-mf-task-type-question/[0.12] text-mf-task-type-question';
+      return 'bg-mf-task-type-question/[0.12] text-foreground';
     case 'wont_fix':
-      return 'bg-mf-chip text-mf-text-3';
+      return 'bg-mf-chip text-muted-foreground';
     case 'duplicate':
-      return 'bg-mf-task-type-duplicate/10 text-mf-task-type-duplicate';
+      return 'bg-mf-task-type-duplicate/10 text-foreground';
     case 'invalid':
-      return 'bg-mf-chip text-mf-text-3';
+      return 'bg-mf-chip text-muted-foreground';
     default:
       return 'bg-mf-chip text-muted-foreground';
   }
 }
 
 /**
- * Background + text tint for a priority pill.
- * Matches the design's TD_PRI palette (12-todos.jsx:21-26).
+ * Tint background for a priority pill; the hue is carried by the background and
+ * the leading dot only, the label ink stays neutral for contrast.
+ * Background matches the design's TD_PRI palette (12-todos.jsx:21-26).
  */
 export function priorityTint(priority: TodoPriority): string {
   switch (priority) {
     case 'critical':
-      return 'bg-mf-priority-critical/10 text-mf-priority-critical';
+      return 'bg-mf-priority-critical/10 text-foreground';
     case 'high':
-      return 'bg-mf-priority-high/10 text-mf-priority-high';
+      return 'bg-mf-priority-high/10 text-foreground';
     case 'medium':
-      return 'bg-mf-priority-medium/[0.12] text-mf-priority-medium';
+      return 'bg-mf-priority-medium/[0.12] text-foreground';
     case 'low':
-      return 'bg-mf-chip text-mf-text-3';
+      return 'bg-mf-chip text-muted-foreground';
     default:
       return 'bg-mf-chip text-muted-foreground';
   }

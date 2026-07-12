@@ -46,20 +46,20 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
       className="flex h-[28px] shrink-0 items-center gap-2 border-b border-border bg-mf-content2 px-3"
     >
       {/* Leading git branch icon */}
-      <GitBranch size={11} className="shrink-0 text-mf-text-3" aria-hidden />
+      <GitBranch size={14} className="shrink-0 text-mf-text-3" aria-hidden />
 
       {/* Truncated file path */}
-      <span className="min-w-0 flex-1 truncate font-mono text-micro text-mf-text-4">{fileName}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-label text-muted-foreground">{fileName}</span>
 
       {/* Separate +N / −N counts */}
       {additions !== undefined && (
-        <span className="font-semibold text-mf-success tabular-nums text-caption">+{additions}</span>
+        <span className="font-semibold text-mf-diff-add-text tabular-nums text-caption">+{additions}</span>
       )}
       {deletions !== undefined && (
-        <span className="font-semibold text-destructive tabular-nums text-caption">−{deletions}</span>
+        <span className="font-semibold text-mf-diff-del-text tabular-nums text-caption">−{deletions}</span>
       )}
       {additions === undefined && deletions === undefined && (
-        <span className="text-caption text-mf-text-3 tabular-nums">{changeCount} changes</span>
+        <span className="text-caption text-muted-foreground tabular-nums">{changeCount} changes</span>
       )}
 
       {/* Prev / Next buttons using chevron icons */}
@@ -69,9 +69,9 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
         disabled={disabled}
         onClick={onPrev}
         aria-label="Previous change"
-        className="flex h-5 w-5 items-center justify-center rounded text-mf-text-3 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
       >
-        <ChevronUp size={13} aria-hidden />
+        <ChevronUp size={14} aria-hidden />
       </button>
       <button
         type="button"
@@ -79,9 +79,9 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
         disabled={disabled}
         onClick={onNext}
         aria-label="Next change"
-        className="flex h-5 w-5 items-center justify-center rounded text-mf-text-3 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
       >
-        <ChevronDown size={13} aria-hidden />
+        <ChevronDown size={14} aria-hidden />
       </button>
 
       {/* Reveal button */}
@@ -93,7 +93,7 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
           aria-label="Reveal in file tree"
           className="inline-flex h-[20px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
         >
-          <Crosshair size={12} aria-hidden />
+          <Crosshair size={14} aria-hidden />
         </button>
       )}
     </div>

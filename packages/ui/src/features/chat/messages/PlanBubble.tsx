@@ -36,8 +36,8 @@ export function PlanBubble({ plan }: { plan: string }) {
           <SquareCheck className="size-[12px] text-mf-success" />
         </span>
         <span className="text-body font-bold tracking-tight">Implementing plan</span>
-        <span className="inline-flex items-center gap-[4px] rounded-[20px] bg-mf-success-tint px-[8px] py-[2px] text-micro font-semibold text-mf-success">
-          <Check className="size-[10px]" strokeWidth={2.4} />
+        <span className="inline-flex items-center gap-[4px] rounded-[20px] bg-mf-success-tint px-[8px] py-[2px] text-caption font-semibold text-muted-foreground">
+          <Check className="size-[12px] text-mf-success" strokeWidth={2.4} />
           Approved
         </span>
       </div>

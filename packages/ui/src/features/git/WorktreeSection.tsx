@@ -39,10 +39,10 @@ export function WorktreeSection({
         <button
           data-testid={`git-worktree-toggle-${name}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex-1 h-[26px] flex items-center gap-[5px] px-2 text-micro font-bold text-mf-text-3 uppercase tracking-wide"
+          className="flex-1 h-[26px] flex items-center gap-[5px] px-2 text-caption font-medium text-muted-foreground"
         >
-          {expanded ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-          <GitFork size={11} className="text-mf-warning shrink-0" />
+          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <GitFork size={12} className="text-mf-warning shrink-0" />
           {name}
         </button>
         {onNewSession && (
@@ -58,7 +58,7 @@ export function WorktreeSection({
                 )}
                 aria-label={`New session on worktree ${name}`}
               >
-                <Plus size={11} />
+                <Plus size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="top">New session on this worktree</TooltipContent>
@@ -77,7 +77,7 @@ export function WorktreeSection({
                 )}
                 aria-label={`Delete worktree ${name}`}
               >
-                {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="top">{isDeleting ? 'Deleting…' : 'Delete worktree'}</TooltipContent>

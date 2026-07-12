@@ -23,9 +23,9 @@ export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewR
       <button
         data-testid="preview-run-start"
         onClick={onRun}
-        className="inline-flex h-[24px] flex-shrink-0 items-center gap-1.5 rounded-md bg-mf-success pl-[9px] pr-[11px] text-label font-semibold text-white"
+        className="inline-flex h-[24px] flex-shrink-0 items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[9px] pr-[11px] text-label font-semibold text-foreground"
       >
-        <Play size={11} className="fill-current" />
+        <Play size={12} className="fill-current text-mf-success" />
         Run
       </button>
     );
@@ -39,12 +39,12 @@ export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewR
           onClick={onStop}
           className="inline-flex h-[24px] items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[8px] pr-[10px] text-label font-semibold text-foreground"
         >
-          <Square size={10} className="fill-current text-destructive" />
+          <Square size={12} className="fill-current text-destructive" />
           Stop
         </button>
       </Hint>
       <PreviewIconButton testId="preview-run-restart" title="Restart server" onClick={onRestart} className="w-[24px]">
-        <RefreshCw size={13} />
+        <RefreshCw size={14} />
       </PreviewIconButton>
     </div>
   );

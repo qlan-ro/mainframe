@@ -52,25 +52,20 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
     >
       {isMulti ? (
         // Shared pixel-accurate Checkbox primitive (17x17, rounded-[5px], real checkmark icon).
-        <Checkbox
-          className="mt-0.5 pointer-events-none"
-          checked={isSelected}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
+        <Checkbox className="mt-0.5 pointer-events-none" checked={isSelected} tabIndex={-1} aria-hidden="true" />
       ) : (
         // Radio indicator: thick border when selected (no fill), hairline when not.
         <span
           data-radio-indicator
           className={cn(
             'mt-0.5 size-[17px] shrink-0 rounded-full transition-all',
-            isSelected ? 'border-[5px] border-primary' : 'border-[1.5px] border-mf-text-4',
+            isSelected ? 'border-[5px] border-primary' : 'border-[1.5px] border-input',
           )}
         />
       )}
       <span className="min-w-0">
         <span className="block text-body font-semibold text-foreground">{label}</span>
-        {description && <span className="block text-caption text-mf-text-3">{description}</span>}
+        {description && <span className="block text-label text-muted-foreground">{description}</span>}
       </span>
     </div>
   );

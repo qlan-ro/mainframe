@@ -96,7 +96,7 @@ function LogLines({ entries, scrollRef }: { entries: LogEntry[]; scrollRef: Reac
     <div
       ref={scrollRef}
       data-testid="run-console-log-lines"
-      className="mf-editor-selectable min-h-0 flex-1 overflow-y-auto pl-[12px] pr-[12px] pt-0 pb-[10px] font-mono text-caption leading-relaxed"
+      className="mf-editor-selectable min-h-0 flex-1 overflow-y-auto pl-[12px] pr-[12px] pt-0 pb-[10px] font-mono text-body leading-relaxed"
     >
       {entries.length === 0 ? (
         <span className="text-muted-foreground">No output yet.</span>
@@ -118,7 +118,7 @@ function LogLines({ entries, scrollRef }: { entries: LogEntry[]; scrollRef: Reac
 function LogCountChip({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="flex-shrink-0 rounded-md bg-mf-chip px-[6px] py-[1px] font-mono text-micro text-mf-text-4">
+    <span className="flex-shrink-0 rounded-md bg-mf-chip px-[6px] py-[1px] font-mono text-caption text-muted-foreground">
       {count} logs
     </span>
   );
@@ -134,7 +134,7 @@ function ClearButton({ onClear }: { onClear: () => void }) {
       aria-label="Clear console"
       onClick={onClear}
     >
-      <Trash2 size={10} />
+      <Trash2 size={12} />
     </Button>
   );
 }
@@ -178,9 +178,11 @@ export function ConsolePane({ scopeKey, processName, variant = 'full' }: Console
               size={11}
               className={`flex-shrink-0 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`}
             />
-            <span className="flex-shrink-0 text-caption font-semibold text-muted-foreground">Console</span>
+            <span className="flex-shrink-0 text-label font-semibold text-muted-foreground">Console</span>
             <LogCountChip count={entries.length} />
-            {!expanded && <span className="min-w-0 flex-1 truncate font-mono text-micro text-mf-text-4">{tail}</span>}
+            {!expanded && (
+              <span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground">{tail}</span>
+            )}
           </button>
           <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             <ClearButton onClear={onClear} />
@@ -203,7 +205,7 @@ export function ConsolePane({ scopeKey, processName, variant = 'full' }: Console
     <div data-testid="run-console-pane" className="flex h-full min-h-0 flex-col bg-card">
       <div className="flex h-[28px] flex-shrink-0 items-center justify-between [border-bottom:0.5px_solid_var(--border)] pl-[12px] pr-[6px]">
         <div className="flex min-w-0 items-center gap-[8px]">
-          <span className="flex-shrink-0 text-caption font-semibold text-muted-foreground">Console</span>
+          <span className="flex-shrink-0 text-label font-semibold text-muted-foreground">Console</span>
           <LogCountChip count={entries.length} />
         </div>
         <ClearButton onClear={onClear} />

@@ -46,7 +46,7 @@ export function SurfaceRail() {
                 .filter(Boolean)
                 .join(' ')}
             >
-              <Icon size={12} className={on ? activeColor : 'text-mf-text-4'} />
+              <Icon size={12} className={on ? activeColor : 'text-mf-text-3'} />
             </button>
           </Hint>
         );

@@ -12,6 +12,7 @@
  */
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ExternalLink, Plus, CircleDashed } from 'lucide-react';
+import { CountBadge } from '@/components/ui/count-badge';
 import { useTodosStore } from './use-todos-store';
 import { useTasksModal } from './use-tasks-modal';
 import { TasksDrawerList } from './TasksDrawerList';
@@ -113,21 +114,11 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
 
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 shrink-0 [border-bottom:0.5px_solid_var(--border)]">
-        <CircleDashed size={11} className="text-muted-foreground flex-shrink-0" aria-hidden />
-        <span
-          data-testid="tasks-drawer-label"
-          className="text-caption font-semibold uppercase tracking-wide text-muted-foreground"
-        >
+        <CircleDashed size={12} className="text-muted-foreground flex-shrink-0" aria-hidden />
+        <span data-testid="tasks-drawer-label" className="text-caption font-medium text-muted-foreground">
           Tasks
         </span>
-        {activeCount > 0 && (
-          <span
-            data-testid="tasks-drawer-count"
-            className="font-mono text-micro text-mf-text-3 bg-mf-chip rounded-md px-1.5 py-px tabular-nums"
-          >
-            {activeCount}
-          </span>
-        )}
+        <CountBadge count={activeCount} variant="info" data-testid="tasks-drawer-count" />
         <div className="ml-auto flex items-center gap-0.5">
           <button
             data-testid="tasks-drawer-new"
@@ -136,7 +127,7 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
             className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[4px] border-none bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="New task"
           >
-            <Plus size={11} />
+            <Plus size={14} />
           </button>
           <button
             data-testid="tasks-drawer-expand"
@@ -145,7 +136,7 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
             className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[4px] border-none bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="Open full Tasks view"
           >
-            <ExternalLink size={13} />
+            <ExternalLink size={14} />
           </button>
         </div>
       </div>

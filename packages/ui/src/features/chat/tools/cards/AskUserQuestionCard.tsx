@@ -63,10 +63,10 @@ function AnswerPills({ options, answer }: { options: { label: string }[]; answer
               'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-caption',
               known
                 ? 'bg-mf-content2 text-primary border border-border'
-                : 'bg-card text-muted-foreground border border-border opacity-60',
+                : 'bg-card text-muted-foreground border border-border',
             )}
           >
-            <Check size={11} className="shrink-0" />
+            <Check size={12} className="shrink-0" />
             {label}
           </span>
         );
@@ -80,7 +80,7 @@ function AnswerPills({ options, answer }: { options: { label: string }[]; answer
 function AnswerEntry({ entry, question }: { entry: AskUserQuestionAnswer; question: QuestionArg | undefined }) {
   return (
     <div className="space-y-1.5">
-      <p data-testid="chat-ask-question-text" className="text-caption text-foreground">
+      <p data-testid="chat-ask-question-text" className="text-body text-foreground">
         {entry.question}
       </p>
       <AnswerPills options={question?.options ?? []} answer={entry.answer} />
@@ -103,7 +103,7 @@ function AnswerEntry({ entry, question }: { entry: AskUserQuestionAnswer; questi
 function PendingQuestion({ question }: { question: QuestionArg }) {
   return (
     <div>
-      <p className="text-caption text-muted-foreground">{question.question}</p>
+      <p className="text-body text-muted-foreground">{question.question}</p>
     </div>
   );
 }
@@ -143,7 +143,7 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
           <span data-testid="chat-ask-header" className="text-body text-muted-foreground flex-1 truncate min-w-0">
             {firstHeader}
             {shortAnswerText && (
-              <span className="text-foreground opacity-70">
+              <span className="text-muted-foreground">
                 {' — '}
                 {shortAnswerText}
               </span>

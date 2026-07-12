@@ -29,7 +29,7 @@ function CommentSection({ item, id }: { item: ReviewCommentItem; id: string }) {
   const lines = item.code ? item.code.split('\n') : [];
   return (
     <div data-testid={`chat-user-review-comment-L${item.start}`} className="flex flex-col gap-1.5 px-3 py-2.5">
-      <span className="font-mono text-micro text-mf-text-4">{rangeLabel({ start: item.start, end: item.end })}</span>
+      <span className="font-mono text-caption text-mf-text-3">{rangeLabel({ start: item.start, end: item.end })}</span>
       {lines.length > 0 && (
         <div className="select-text rounded-md border-[0.5px] border-border bg-mf-raised py-1">
           <SnippetBlock id={id} lines={lines} start={item.start} />
@@ -64,9 +64,9 @@ export function ReviewCommentCard({ review }: { review: ReviewComment }) {
         </Hint>
         <span className="flex-1" />
         {review.comments.length > 1 && (
-          <span className="flex-shrink-0 font-mono text-micro text-mf-text-4">{review.comments.length} comments</span>
+          <span className="flex-shrink-0 font-mono text-caption text-mf-text-3">{review.comments.length} comments</span>
         )}
-        <QuoteIcon size={11} className="flex-shrink-0 text-mf-text-4" />
+        <QuoteIcon size={12} className="flex-shrink-0 text-mf-text-3" />
       </div>
       {/* No /opacity modifier on token colors (CLAUDE.md token trap). */}
       <div className="divide-y divide-border">

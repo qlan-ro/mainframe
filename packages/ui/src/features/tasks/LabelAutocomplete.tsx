@@ -83,7 +83,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
               className="ml-0.5 hover:text-foreground transition-colors"
               aria-label={`Remove ${label}`}
             >
-              <X size={10} />
+              <X size={12} />
             </button>
           </span>
         ))}
@@ -99,15 +99,15 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
             }}
             onKeyDown={handleKeyDown}
             placeholder={value.length === 0 ? 'Add labels…' : ''}
-            className="w-full bg-transparent text-caption text-foreground focus:outline-none"
+            className="w-full bg-transparent text-label text-foreground focus:outline-none"
           />
           {ghostSuggestion && (
             <span
-              className="absolute inset-0 pointer-events-none text-caption select-none whitespace-nowrap overflow-hidden flex items-center"
+              className="absolute inset-0 pointer-events-none text-label select-none whitespace-nowrap overflow-hidden flex items-center"
               aria-hidden="true"
             >
               <span className="invisible">{inputValue}</span>
-              <span className="text-muted-foreground opacity-40">{ghostSuggestion.slice(inputValue.length)}</span>
+              <span className="text-mf-text-3">{ghostSuggestion.slice(inputValue.length)}</span>
             </span>
           )}
         </span>

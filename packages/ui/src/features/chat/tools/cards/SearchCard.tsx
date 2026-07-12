@@ -43,7 +43,7 @@ function PlainBody({ resultText }: { resultText: string }) {
   return (
     <pre
       data-testid="search-card-plain-body"
-      className="font-mono text-caption whitespace-pre-wrap break-words px-3 py-2 text-muted-foreground"
+      className="font-mono text-label whitespace-pre-wrap break-words px-3 py-2 text-muted-foreground"
     >
       {resultText}
     </pre>
@@ -84,7 +84,7 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
       <span className="text-mf-text-4 shrink-0">·</span>
       <TruncatedWithTooltip
         text={`"${pattern}"`}
-        className="font-mono text-caption text-muted-foreground min-w-0 max-w-[200px]"
+        className="font-mono text-label text-muted-foreground min-w-0 max-w-[200px]"
         contentClassName="font-mono break-all"
       />
     </>
@@ -92,7 +92,9 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
 
   const trailing = (
     <>
-      {matchCount !== null && <span className="font-mono text-micro text-mf-text-3 shrink-0">· {matchCount}</span>}
+      {matchCount !== null && (
+        <span className="font-mono text-caption text-muted-foreground shrink-0">· {matchCount}</span>
+      )}
       <StatusDot result={result} isError={isError} />
     </>
   );
@@ -103,7 +105,7 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
         <TooltipTrigger asChild>
           <span
             data-testid="search-card-path"
-            className="font-mono text-micro text-mf-text-4 truncate block cursor-default"
+            className="font-mono text-caption text-muted-foreground truncate block cursor-default"
             tabIndex={0}
           >
             in {searchPath}

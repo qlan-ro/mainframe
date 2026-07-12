@@ -58,7 +58,7 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
             'border border-border bg-background text-muted-foreground hover:text-foreground',
           )}
         >
-          <ArrowUpDown size={11} />
+          <ArrowUpDown size={12} />
           <span>
             {current?.label} {dirArrow(sort.dir)}
           </span>
@@ -79,7 +79,7 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
               )}
             >
               <span className="w-3.5 shrink-0">
-                {active && <Check size={11} strokeWidth={2.5} className="text-primary" />}
+                {active && <Check size={12} strokeWidth={2.5} className="text-primary" />}
               </span>
               <span className="flex-1">{label}</span>
               {active && <span className="text-primary">{dirArrow(sort.dir)}</span>}

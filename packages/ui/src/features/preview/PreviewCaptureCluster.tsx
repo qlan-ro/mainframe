@@ -25,8 +25,8 @@ export function PreviewCaptureCluster({
         isRunning ? 'bg-primary/[0.055] border-[0.5px] border-primary/20' : 'opacity-40 pointer-events-none'
       }`}
     >
-      <ArrowUp size={9} strokeWidth={2.4} className="text-primary" />
-      <span className="text-micro font-bold text-primary uppercase [letter-spacing:0.3px] mr-0.5">Chat</span>
+      <ArrowUp size={12} strokeWidth={2.4} className="text-primary" />
+      <span className="text-caption font-semibold text-primary mr-0.5">Chat</span>
       <PreviewIconButton
         testId="preview-toolbar-inspect"
         title="Inspect element"
@@ -34,7 +34,7 @@ export function PreviewCaptureCluster({
         active={inspectActive}
         className="w-[24px]"
       >
-        <Crosshair size={13} />
+        <Crosshair size={14} />
       </PreviewIconButton>
       <PreviewIconButton
         testId="preview-toolbar-capture"
@@ -42,7 +42,7 @@ export function PreviewCaptureCluster({
         onClick={onCaptureClick}
         className="w-[24px]"
       >
-        <Camera size={13} />
+        <Camera size={14} />
       </PreviewIconButton>
       <PreviewIconButton
         testId="preview-toolbar-region"
@@ -51,7 +51,7 @@ export function PreviewCaptureCluster({
         active={regionActive}
         className="w-[24px]"
       >
-        <Frame size={13} />
+        <Frame size={14} />
       </PreviewIconButton>
     </div>
   );

@@ -138,7 +138,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
             .join(' ')}
         >
           <span className="w-[9px] flex-shrink-0" />
-          <File size={11} className="flex-shrink-0 text-mf-text-3" />
+          <File size={12} className="flex-shrink-0 text-mf-text-3" />
           <TruncatedWithTooltip
             text={entry.name}
             tooltip={fullPath}
@@ -162,7 +162,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
           className="flex h-[22px] w-full items-center gap-[5px] border-none bg-transparent pr-[12px] text-left text-label font-medium text-foreground hover:bg-accent"
         >
           <ChevronRight
-            size={9}
+            size={12}
             className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
@@ -259,7 +259,7 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
       {/* Header row: workspace-root label (right-clickable) + refresh button */}
       <div className="flex h-[20px] items-center px-[12px] py-[4px]">
         <FileTreeRowMenu entry={{ name: '.', path: '.', type: 'directory' }} fullPath={base ?? projectId}>
-          <span className="flex-1 truncate font-mono text-micro font-semibold uppercase text-mf-text-3 [letter-spacing:0.6px]">
+          <span className="flex-1 truncate font-mono text-caption font-medium text-muted-foreground">
             {lastSegment(base ?? projectId)}
           </span>
         </FileTreeRowMenu>
@@ -270,7 +270,7 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
             onClick={() => setRefreshKey((k) => k + 1)}
             className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
           >
-            <RotateCw size={11} className="text-mf-text-3" />
+            <RotateCw size={14} className="text-muted-foreground" />
           </button>
         </Hint>
       </div>

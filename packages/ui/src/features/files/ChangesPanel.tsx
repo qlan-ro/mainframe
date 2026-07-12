@@ -36,7 +36,7 @@ const SCOPE_MODES: { id: ScopeMode; label: string }[] = [
   { id: 'branch', label: 'Branch' },
 ];
 
-const SCOPE_BTN = 'flex h-[18px] flex-1 items-center justify-center rounded-[4px] text-micro transition-colors';
+const SCOPE_BTN = 'flex h-[18px] flex-1 items-center justify-center rounded-[4px] text-label transition-colors';
 
 /** Semantic kind → full-word label. */
 const KIND_WORD: Record<string, string> = {
@@ -50,11 +50,11 @@ const KIND_WORD: Record<string, string> = {
 const KIND_CLASS: Record<string, string> = {
   added: 'text-mf-diff-add-text',
   deleted: 'text-mf-diff-del-text',
-  modified: 'text-mf-warning',
-  renamed: 'text-mf-warning',
+  modified: 'text-muted-foreground',
+  renamed: 'text-muted-foreground',
 };
 
-const statusClass = (code: string): string => KIND_CLASS[gitStatusKind(code)] ?? 'text-mf-warning';
+const statusClass = (code: string): string => KIND_CLASS[gitStatusKind(code)] ?? 'text-muted-foreground';
 const statusWord = (code: string): string => KIND_WORD[gitStatusKind(code)] ?? 'Modified';
 const basename = (path: string): string =>
   path.lastIndexOf('/') === -1 ? path : path.slice(path.lastIndexOf('/') + 1);
@@ -167,19 +167,19 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
             onClick={bump}
             className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
           >
-            <RotateCw size={11} className="text-mf-text-3" />
+            <RotateCw size={14} className="text-muted-foreground" />
           </button>
         </Hint>
       </div>
 
       {/* Count + (branch comparison, right-aligned) */}
       <div className="flex flex-shrink-0 items-center gap-[6px] px-[12px] pb-[6px]">
-        <span className="text-micro text-mf-text-3">
+        <span className="text-caption text-muted-foreground">
           {rows !== null && !sessionNoChat ? `${rows.length} changed ${rows.length === 1 ? 'file' : 'files'}` : ''}
         </span>
         <div className="flex-1" />
         {mode === 'branch' && branch?.branch && branch?.baseBranch && (
-          <span className="truncate font-mono text-micro text-primary">
+          <span className="truncate font-mono text-caption text-primary">
             {branch.branch} ↔ {branch.baseBranch}
           </span>
         )}
@@ -206,18 +206,18 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
               onClick={() => emitSurfaceIntent({ type: 'open-diff', path: f.path })}
               className="flex h-[22px] w-full items-center gap-[7px] rounded-[4px] border-none bg-transparent px-[6px] py-[4px] text-left hover:bg-accent hover:text-foreground"
             >
-              <File size={10} className="flex-shrink-0 text-mf-text-3" />
+              <File size={12} className="flex-shrink-0 text-mf-text-3" />
               <TruncatedWithTooltip
                 text={basename(f.path)}
                 tooltip={f.path}
-                className="flex-1 text-caption text-foreground"
+                className="flex-1 text-label text-foreground"
                 contentClassName="font-mono break-all"
               />
-              <span className="truncate font-mono text-micro text-mf-text-3">{dirname(f.path)}</span>
+              <span className="truncate font-mono text-caption text-muted-foreground">{dirname(f.path)}</span>
               {f.status && (
                 <span
                   data-testid={`changes-status-${f.path}`}
-                  className={`flex-shrink-0 font-bold text-micro [letter-spacing:0.3px] ${statusClass(f.status)}`}
+                  className={`flex-shrink-0 font-medium text-caption ${statusClass(f.status)}`}
                 >
                   {statusWord(f.status)}
                 </span>

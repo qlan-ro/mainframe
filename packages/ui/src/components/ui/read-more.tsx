@@ -70,15 +70,15 @@ export function ReadMore({
           data-testid={testId}
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-2 text-caption font-semibold text-primary hover:underline"
+          className="inline-flex items-center gap-2 text-label font-semibold text-primary hover:underline"
           aria-label={expanded ? 'Show less' : 'Read more'}
           aria-expanded={expanded}
         >
           {expanded ? 'Show less' : 'Read more'}
           {expanded ? (
-            <ChevronsUpDown size={10} className="text-primary" />
+            <ChevronsUpDown size={12} className="text-primary" />
           ) : (
-            <ChevronDown size={10} className="text-primary" />
+            <ChevronDown size={12} className="text-primary" />
           )}
         </button>
       )}

@@ -30,8 +30,8 @@ function PickerRow({ testid, icon, label, hint, chevron, onClick, disabled, titl
     >
       {icon}
       <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
-      {hint && <span className="flex-shrink-0 font-mono text-micro text-mf-text-4">{hint}</span>}
-      {chevron && <ChevronRight size={10} className="flex-shrink-0 text-mf-text-4" />}
+      {hint && <span className="flex-shrink-0 font-mono text-caption text-muted-foreground">{hint}</span>}
+      {chevron && <ChevronRight size={12} className="flex-shrink-0 text-mf-text-3" />}
     </button>
   );
 }
@@ -126,7 +126,7 @@ export function SurfacePicker({ surface }: Props) {
         <div className="max-h-[300px] overflow-y-auto p-[4px]">
           {surface === 'files' ? <FilesPickerContent /> : <RunPickerContent />}
         </div>
-        <div className="[border-top:0.5px_solid_var(--border)] px-3.5 py-[7px] font-mono text-micro text-mf-text-4">
+        <div className="[border-top:0.5px_solid_var(--border)] px-3.5 py-[7px] font-mono text-caption text-muted-foreground">
           {surface === 'files' ? 'opens route here automatically' : 'spawns a running surface'}
         </div>
       </div>

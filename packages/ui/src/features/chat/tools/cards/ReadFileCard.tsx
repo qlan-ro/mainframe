@@ -47,7 +47,7 @@ function CodePreview({ text }: CodePreviewProps) {
   return (
     <pre
       data-testid="read-card-code-preview"
-      className="bg-mf-code-bg font-mono text-caption leading-normal text-mf-code-fg overflow-x-auto whitespace-pre px-3 py-2"
+      className="bg-mf-code-bg font-mono text-label leading-normal text-mf-code-fg overflow-x-auto whitespace-pre px-3 py-2"
     >
       {text}
     </pre>
@@ -76,7 +76,7 @@ export const ReadFileCard: ToolCallMessagePartComponent = ({ toolCallId, args, r
 
   const trailing = (
     <>
-      {metaLabel && <span className="shrink-0 font-mono text-micro text-mf-text-4">{metaLabel}</span>}
+      {metaLabel && <span className="shrink-0 font-mono text-caption text-mf-text-3">{metaLabel}</span>}
       <StatusDot result={result} isError={isError} />
     </>
   );

@@ -38,11 +38,12 @@ describe('menu vocabulary', () => {
     expect(screen.getByTestId('x-del').className).toContain('text-destructive');
   });
 
-  it('MenuLabel renders an uppercase eyebrow', () => {
+  it('MenuLabel renders a sentence-case muted eyebrow', () => {
     render(<MenuLabel>Tags</MenuLabel>);
     const el = screen.getByText('Tags');
-    expect(el.closest('div')?.className).toContain('uppercase');
-    expect(el.closest('div')?.className).toContain('text-micro');
+    expect(el.closest('div')?.className).not.toContain('uppercase');
+    expect(el.closest('div')?.className).toContain('text-caption');
+    expect(el.closest('div')?.className).toContain('text-muted-foreground');
   });
 
   it('MenuCheckRow reflects checked state', () => {

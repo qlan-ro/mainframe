@@ -75,7 +75,7 @@ function buildWorktreeCard(kind: 'EnterWorktree' | 'ExitWorktree'): ToolCallMess
         expandable={false}
         testId={`chat-worktree-${isEnter ? 'enter' : 'exit'}-pill`}
       >
-        <span className="font-mono text-caption text-mf-text-3">{label}</span>
+        <span className="font-mono text-label text-muted-foreground">{label}</span>
       </MarkerPill>
     );
 
@@ -86,7 +86,7 @@ function buildWorktreeCard(kind: 'EnterWorktree' | 'ExitWorktree'): ToolCallMess
             <TooltipTrigger asChild>
               <span>{pill}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="font-mono text-caption max-w-xs break-all">
+            <TooltipContent side="top" className="font-mono text-label max-w-xs break-all">
               {tooltip}
             </TooltipContent>
           </Tooltip>

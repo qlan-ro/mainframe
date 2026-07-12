@@ -20,16 +20,14 @@ export function ScopedListRow({ testId, icon: Icon, name, description, scope, fi
       onClick={() => emitSurfaceIntent({ type: 'open-file', path: filePath })}
       className="grid w-full grid-cols-[14px_1fr_auto] items-center gap-[7px] px-[12px] py-[4px] text-left hover:bg-accent"
     >
-      <Icon size={11} className="text-primary" aria-hidden />
+      <Icon size={14} className="text-primary" aria-hidden />
       <div className="min-w-0">
-        <div className="truncate text-caption font-medium text-foreground">{name}</div>
+        <div className="truncate text-label font-medium text-foreground">{name}</div>
         {description && (
-          <TruncatedWithTooltip text={description} tabIndex={0} className="block text-micro text-mf-text-3" />
+          <TruncatedWithTooltip text={description} tabIndex={0} className="block text-caption text-muted-foreground" />
         )}
       </div>
-      <span className="rounded-[8px] bg-mf-chip px-[5px] py-[1px] text-micro uppercase tracking-wide text-mf-text-3">
-        {scope}
-      </span>
+      <span className="rounded-[8px] bg-mf-chip px-[5px] py-[1px] text-caption text-muted-foreground">{scope}</span>
     </button>
   );
 }
