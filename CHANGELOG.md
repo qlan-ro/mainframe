@@ -1,5 +1,52 @@
 # Changelog
 
+## 2.0.0-rc.6
+
+
+### Patch Changes
+
+- Updated dependencies [[`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911), [`d83749e`](https://github.com/qlan-ro/mainframe/commit/d83749e76ac48d5e87fbe1eaf539dea2908b084d)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.6
+  - @qlan-ro/mainframe-core@2.0.0-rc.6
+
+
+### Patch Changes
+
+- [#445](https://github.com/qlan-ro/mainframe/pull/445) [`d83749e`](https://github.com/qlan-ro/mainframe/commit/d83749e76ac48d5e87fbe1eaf539dea2908b084d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Tauri shell gains the `MAINFRAME_DAEMON_IMPL` canary flag: `rust` spawns the ported Rust daemon as an externalBin sidecar (with login-shell PATH, bundled-LSP env, identical supervision); `node` (default) keeps the existing Node sidecar untouched. The Rust binary is opt-in at build time — default `bundle`/`tauri:build` stays Node-only, and `bundle:canary`/`tauri:build:canary` (via the `tauri.rust-canary.conf.json` overlay) produces the dual-daemon build. See `docs/rust-port/CUTOVER.md` for the signing/notarization gate before shipping the canary publicly.
+
+- Updated dependencies [[`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911), [`aa2dce6`](https://github.com/qlan-ro/mainframe/commit/aa2dce69b38621395466777eabb5e9d0088fd17a)]:
+  - @qlan-ro/mainframe-ui@2.0.0-rc.6
+
+
+### Minor Changes
+
+- [#448](https://github.com/qlan-ro/mainframe/pull/448) [`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Replace v1 YAML workflows with Automations v2 (new /api/automations surface; /api/workflows removed).
+
+### Patch Changes
+
+- [#445](https://github.com/qlan-ro/mainframe/pull/445) [`d83749e`](https://github.com/qlan-ro/mainframe/commit/d83749e76ac48d5e87fbe1eaf539dea2908b084d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Pre-port hardening for the daemon Rust migration: GitService now runs raw `git` subprocesses with in-repo porcelain parsers (simple-git removed), SQLite schema evolution moved to numbered `PRAGMA user_version` migrations, black-box HTTP oracle tests added for settings/launch/attachments/tags/todos, and the wire contract frozen as generated snapshots under `docs/rust-port/`.
+
+- Updated dependencies [[`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.6
+
+
+### Minor Changes
+
+- [#448](https://github.com/qlan-ro/mainframe/pull/448) [`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Replace v1 YAML workflows with Automations v2 (new /api/automations surface; /api/workflows removed).
+
+
+### Minor Changes
+
+- [#448](https://github.com/qlan-ro/mainframe/pull/448) [`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Replace v1 YAML workflows with Automations v2 (new /api/automations surface; /api/workflows removed).
+
+### Patch Changes
+
+- [#446](https://github.com/qlan-ro/mainframe/pull/446) [`aa2dce6`](https://github.com/qlan-ro/mainframe/commit/aa2dce69b38621395466777eabb5e9d0088fd17a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Style scrollbars globally instead of per-element. The warm thin scrollbar was an opt-in class covering 9 of 66 scroll containers; every other surface (markdown preview, diff viewers, workflows, tab panels, …) painted the native track — near-white under light themes and permanently visible with a mouse attached. Two @layer base rules now give every scroller the thin, hover-revealed, transparent-track treatment across all themes and schemes; [scrollbar-width:none] opt-outs still win, and the mf-thin-scrollbar class is removed.
+
+- Updated dependencies [[`030e4dc`](https://github.com/qlan-ro/mainframe/commit/030e4dccde96df128fcc92b8b2502318e0cd8911)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.6
+
+
 ## 2.0.0-rc.5
 
 
