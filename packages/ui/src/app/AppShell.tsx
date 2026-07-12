@@ -11,7 +11,6 @@ import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
-import { WorkflowsModalHost } from '../features/workflows/WorkflowsModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
@@ -186,9 +185,9 @@ function RuntimeBody({ port }: { port: number }) {
       <ReviewPanel />
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
-      <WorkflowsModalHost port={port} />
-      {/* Automations v2 — no production entry point yet (Phase 6 swaps SidebarHeader);
-          dev-only affordance (Cmd/Ctrl+Shift+A) opens it for manual verification. */}
+      {/* Automations v2 — production entry point is SidebarHeader's Workflows
+          button (Phase 6); v1's WorkflowsModalHost is unmounted here but its
+          tree stays on disk until Phase 7 deletes it. */}
       <AutomationsHost />
       <GitConfirmDialog />
       <SettingsDialog port={port} />

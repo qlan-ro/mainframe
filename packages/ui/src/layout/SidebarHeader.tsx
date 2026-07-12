@@ -3,7 +3,8 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { useSettingsStore } from '@/store/settings';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 import { Hint } from '@/components/ui/hint';
-import { useWorkflowsStore, selectPendingCount } from '@/features/workflows/use-workflows-store';
+import { useAutomationsNav } from '@/features/automations/data/use-automations-nav';
+import { useAutomationsStore, selectPendingInteractionCount } from '@/features/automations/data/use-automations-store';
 import { UpdatePill } from './UpdatePill';
 
 export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
@@ -33,18 +34,20 @@ function TasksBtn() {
 }
 
 function WorkflowsBtn() {
-  const pending = useWorkflowsStore(selectPendingCount);
+  const pending = useAutomationsStore(selectPendingInteractionCount);
+  const openHost = useAutomationsNav((s) => s.openHost);
   return (
     <Hint label="Workflows">
       <button
         data-testid="sidebar-workflows-button"
         type="button"
         className="relative inline-flex h-[24px] w-[28px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
-        onClick={() => window.dispatchEvent(new CustomEvent('mf:open-workflows'))}
+        onClick={openHost}
       >
         <Zap size={14} className="text-muted-foreground" aria-hidden />
         {pending > 0 && (
           <span
+            data-testid="sidebar-workflows-badge"
             className="absolute right-[3px] top-[2px] h-[7px] w-[7px] rounded-full bg-mf-warning ring-2 ring-mf-content2"
             aria-hidden
           />
