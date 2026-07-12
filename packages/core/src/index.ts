@@ -31,6 +31,8 @@ import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 import { backfillWorktreeRelationships } from './workspace/worktree.js';
 import { WorkflowService } from './workflows/index.js';
 import { makeChatManagerPort } from './workflows/agent-port.js';
+import { AutomationService } from './automations/service.js';
+import { makeAutomationChatPort } from './automations/agent-port.js';
 
 function enrichPath(): void {
   try {
@@ -119,6 +121,14 @@ async function main(): Promise<void> {
     listProjects: () => db.projects.list().map((p) => ({ id: p.id, path: p.path })),
   });
 
+  const automations = new AutomationService({
+    dataDir: getDataDir(),
+    logger,
+    emitEvent: (event) => broadcastEvent(event),
+    agentPort: makeAutomationChatPort(chats, () => db.projects.list()[0]?.id ?? null),
+    listProjects: () => db.projects.list().map((p) => ({ id: p.id, path: p.path })),
+  });
+
   // PluginManager owns its own Express Router; no circular dep on the Express app
   const daemonBus = new EventEmitter();
   const emitEvent = (event: DaemonEvent) => broadcastEvent(event);
@@ -196,10 +206,15 @@ async function main(): Promise<void> {
   broadcastEvent = (event) => {
     server.broadcastEvent(event);
     workflows.onDaemonEvent(event);
+    automations.onDaemonEvent(event);
   };
 
   await workflows.start().catch((err) => {
     logger.error({ err }, 'WorkflowService failed to start — continuing without workflows');
+  });
+
+  await automations.start().catch((err) => {
+    logger.error({ err }, 'AutomationService failed to start — continuing without automations');
   });
 
   reconcileBackgroundTasks({ tracker: backgroundTasks, db }).catch((err) => {
@@ -247,6 +262,7 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     logger.info('Shutting down...');
     workflows.stop();
+    automations.stop();
     chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();

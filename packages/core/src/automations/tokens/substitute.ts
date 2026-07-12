@@ -61,8 +61,12 @@ function digField(value: unknown, field: string): unknown {
   }, value);
 }
 
-/** Literal substitution rules (contract Decision 9): unset -> '', number -> String(), list -> join('\n'), object -> JSON.stringify. */
-function coerceToString(value: unknown): string {
+/**
+ * Literal substitution rules (contract Decision 9): unset -> '', number -> String(), list -> join('\n'), object ->
+ * JSON.stringify. Exported for the run_action port (Task 23), which applies the same per-chip coercion when
+ * building run_command's raw `{chip: string}` parts instead of joining a whole ChipText into one string.
+ */
+export function coerceToString(value: unknown): string {
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);

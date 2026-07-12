@@ -134,6 +134,32 @@ export class AutomationInterpreter {
     return null;
   }
 
+  /**
+   * Fails one step directly, bypassing walk() — for callers outside the
+   * normal advance loop that discover a step's side-channel state is lost
+   * (Task 23's boot reconciler: a waiting ask_agent step whose agent_waits
+   * row didn't survive a restart). Mirrors resolveStaleRunningSteps'/
+   * failDeadlineStep's own pattern: walk() unconditionally skips a
+   * re-entered 'failed' step regardless of keepGoing (walk.ts's re-entry
+   * loop only consults keepGoing on a *fresh* failure), so a step without
+   * keepGoing must finalize the run right here or a later advance() would
+   * silently treat it as done.
+   */
+  async failStep(runId: string, stepRef: string, error: string): Promise<void> {
+    const run = this.deps.store.getRun(runId);
+    if (!run) return;
+    const stepId = run.checkpoint.steps[stepRef]?.stepId;
+    const step = stepId ? findStepById(run.checkpoint.definition.steps, stepId) : undefined;
+
+    this.deps.store.patchCheckpoint(runId, (checkpoint) => failStep(checkpoint, stepRef, error));
+
+    if (!step?.keepGoing) {
+      await this.finalizeAndEmit(runId, 'failed', error);
+      return;
+    }
+    await this.advance(runId);
+  }
+
   private async failDeadlineStep(run: AutomationRunRecord): Promise<void> {
     const waiting = Object.entries(run.checkpoint.steps).find(([, entry]) => entry.status === 'waiting');
     if (!waiting) return;
