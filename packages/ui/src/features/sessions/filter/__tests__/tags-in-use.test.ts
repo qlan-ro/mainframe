@@ -27,6 +27,7 @@ function item(
       hasPending: false,
       detectedPrs,
       worktreeMissing: false,
+      transcriptMissing: false,
       updatedAt: 1748779200000,
       worktreePath,
     },

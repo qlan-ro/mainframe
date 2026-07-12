@@ -1,7 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
 import { realpath as fsRealpath } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { ChildProcess } from 'node:child_process';
@@ -20,6 +18,7 @@ import type {
   ResolvedTuning,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr } from './events.js';
+import { collectClaudeContextFiles } from './context-files.js';
 import { ControlRequestChannel } from './session-control.js';
 import { tuningToFlagSettings } from './tuning.js';
 import type { DetectedPrCore } from './pr-detection.js';
@@ -520,34 +519,7 @@ export class ClaudeSession implements AdapterSession {
   }
 
   getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {
-    const globalDir = path.join(homedir(), '.claude');
-    const global: ContextFile[] = [];
-    for (const name of ['CLAUDE.md', 'AGENTS.md']) {
-      const p = path.join(globalDir, name);
-      if (existsSync(p)) {
-        try {
-          global.push({ path: name, content: readFileSync(p, 'utf-8'), source: 'global' });
-        } catch {
-          /* expected */
-        }
-      }
-    }
-    const project: ContextFile[] = [];
-    for (const name of ['CLAUDE.md', 'AGENTS.md']) {
-      // Check both project root and .claude/ subdirectory
-      for (const dir of [this.projectPath, path.join(this.projectPath, '.claude')]) {
-        const p = path.join(dir, name);
-        if (existsSync(p)) {
-          try {
-            const relPath = path.relative(this.projectPath, p);
-            project.push({ path: relPath, content: readFileSync(p, 'utf-8'), source: 'project' });
-          } catch {
-            /* expected */
-          }
-        }
-      }
-    }
-    return { global, project };
+    return collectClaudeContextFiles(this.projectPath);
   }
 
   async loadHistory(): Promise<ChatMessage[]> {

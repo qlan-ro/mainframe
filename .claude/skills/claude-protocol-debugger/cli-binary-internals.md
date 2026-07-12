@@ -411,6 +411,35 @@ binaries. Examples confirmed via binary string-extraction in v2.1.118:
 sessions, search the installed binary (`~/.local/share/claude/versions/<v>`)
 with Python `re.finditer` before assuming it's harness-injected.
 
+## Background Task Events (live-probed v2.1.202, 2026-07-08)
+
+Two stream-json probes (bg bash via `run_in_background`, bg subagent via Task
+`run_in_background`) against v2.1.202. Contradicts both the 2026-03-31 leak and
+the v2.1.85 findings above:
+
+- **The `result` hold-back for background agents is REMOVED.** The main turn's
+  `result` fires immediately (~1s after "started" text), while the bg agent is
+  still running. In v2.1.85 / the leak, `result` was deferred in the agent wait
+  loop until all bg agents/workflows finished. Bash was never held back.
+- **All kinds emit the same bookends**: `system:task_started` (`task_id`,
+  `task_type: "local_bash" | "local_agent" | ...`, `tool_use_id`, `description`)
+  and `system:task_notification` (`status: completed|failed|stopped`,
+  `output_file`, `summary`). Task ids keep the type prefix (`b…` bash, `a…` agent).
+- **New `system:task_updated` event** (not in the leak): fires alongside
+  `task_notification` with the task's status. Agents also emit
+  `system:task_progress` (usage, last_tool_name) per tool-use.
+- **Completion re-invokes a turn**: task_notification → a fresh `system:init`
+  (subtype init, tools "connected") → drain-turn assistant message → a **second
+  `result`**. Consumers must expect multiple init+result pairs per stdin message.
+- **`session_state_changed` was NOT observed** in either probe despite existing
+  in the leak's sdkEventQueue. Don't build on it without further verification.
+- **Nested tasks surface at top level**: the bg subagent's own bash task emitted
+  its own top-level `task_started`/`task_notification` (`task_type:"local_bash"`)
+  with a distinct task_id, interleaved with the parent's `task_progress`.
+- Consequence: the only reliable "background work still running" accounting is
+  the live set `task_started` ids minus `task_notification` ids. Neither `result`
+  nor `session_state_changed` can be trusted for it.
+
 ## Command / Skill / Agent Enumeration (v2.1.198)
 
 Full method + the post-leak inventory it produced live in the (git-excluded) doc

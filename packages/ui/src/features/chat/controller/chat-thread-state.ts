@@ -15,7 +15,13 @@
  *  - interactions.queued — from message.queued.* events
  *  - pendingUserMessages — optimistic send, reconciled on echo
  */
-import type { DisplayMessage, ControlRequest, QueuedMessageRef, Chat } from '@qlan-ro/mainframe-types';
+import type {
+  BackgroundActivityTask,
+  Chat,
+  ControlRequest,
+  DisplayMessage,
+  QueuedMessageRef,
+} from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -78,6 +84,12 @@ export interface ChatThreadState {
   readonly contextUsage: { percentage: number; totalTokens: number; maxTokens: number } | null;
   /** True between `chat.compacting` and `chat.compactDone` — session-bar status. */
   readonly compacting: boolean;
+  /**
+   * Live background work (agents / bg bash / workflows) keyed by task id — fed
+   * by `background_task.*` events, resynced from `chat.updated`'s
+   * `backgroundActivity` snapshot. Drives the BackgroundActivityBar chip.
+   */
+  readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +98,7 @@ export interface ChatThreadState {
 
 export type ChatStateEvent =
   | { type: 'history.loading' }
-  | { type: 'history.loaded'; messages: DisplayMessage[] }
+  | { type: 'history.loaded'; messages: DisplayMessage[]; transcriptMissing?: boolean }
   | { type: 'history.failed'; error: unknown }
   | { type: 'run.started' }
   | { type: 'run.cancelling' }
@@ -109,7 +121,10 @@ export type ChatStateEvent =
   | { type: 'chat.id.adopted'; chatId: string }
   | { type: 'context.usage'; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'compact.started' }
-  | { type: 'compact.done' };
+  | { type: 'compact.done' }
+  | { type: 'background.upsert'; task: BackgroundActivityTask }
+  | { type: 'background.ended'; taskId: string }
+  | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] };
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -130,6 +145,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     chatConfig: null,
     contextUsage: null,
     compacting: false,
+    backgroundTasks: {} as Readonly<Record<string, BackgroundActivityTask>>,
   };
 }
 
@@ -151,6 +167,18 @@ function removePending(state: ChatThreadState, clientId: string): ChatThreadStat
   return { ...state, pendingUserMessages };
 }
 
+/**
+ * The chat row's persisted CLI-reported context usage (daemon persists it from
+ * `get_context_usage` after each turn), mapped to the contextUsage slice shape.
+ * Null when the chat has never reported (legacy rows, codex).
+ */
+function persistedContextUsage(chat: Chat | null): ChatThreadState['contextUsage'] {
+  if (chat == null) return null;
+  const { lastContextTotalTokens: total, lastContextMaxTokens: max } = chat;
+  if (total == null || max == null || max <= 0) return null;
+  return { percentage: (total / max) * 100, totalTokens: total, maxTokens: max };
+}
+
 /** True when every composer-toolbar field of two chats is equal (ignores cost/token/updatedAt churn). */
 function sameComposerConfig(a: Chat | null, b: Chat): boolean {
   return (
@@ -163,8 +191,23 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.fast === b.fast &&
     a.ultracode === b.ultracode &&
     a.adaptiveThinking === b.adaptiveThinking &&
-    a.worktreeMissing === b.worktreeMissing
+    a.worktreeMissing === b.worktreeMissing &&
+    a.transcriptMissing === b.transcriptMissing &&
+    a.worktreePath === b.worktreePath &&
+    a.branchName === b.branchName
   );
+}
+
+/** True when the snapshot lists exactly the tasks already in state (field-equal). */
+function sameBackgroundTasks(
+  current: Readonly<Record<string, BackgroundActivityTask>>,
+  snapshot: BackgroundActivityTask[],
+): boolean {
+  if (Object.keys(current).length !== snapshot.length) return false;
+  return snapshot.every((t) => {
+    const c = current[t.id];
+    return c !== undefined && c.kind === t.kind && c.description === t.description && c.startedAt === t.startedAt;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -183,11 +226,20 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         messagesById[msg.id] = msg;
         messageOrder.push(msg.id);
       }
+      // Mirror the load-time transcript detection into chatConfig so the
+      // degraded card reacts without waiting for the chat.updated broadcast.
+      const chatConfig =
+        event.transcriptMissing !== undefined &&
+        state.chatConfig !== null &&
+        state.chatConfig.transcriptMissing !== event.transcriptMissing
+          ? { ...state.chatConfig, transcriptMissing: event.transcriptMissing }
+          : state.chatConfig;
       return {
         ...state,
         loadState: { type: 'ready' },
         messagesById,
         messageOrder,
+        chatConfig,
       };
     }
 
@@ -209,11 +261,27 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'chat.id.adopted':
       return state.chatId === event.chatId ? state : { ...state, chatId: event.chatId };
 
-    case 'chat.config.updated':
+    case 'chat.config.updated': {
       // chat.updated also fires for cost/token/updatedAt churn during a run.
       // Only adopt a new identity when a composer-relevant field actually changed,
-      // so the toolbar doesn't re-render on every broadcast.
-      return sameComposerConfig(state.chatConfig, event.chat) ? state : { ...state, chatConfig: event.chat };
+      // so the toolbar doesn't re-render on every broadcast. The persisted
+      // context totals are adopted separately: they keep the meter truthful on
+      // controller seed and after turns completed while this chat was dormant
+      // (chat.contextUsage only reaches subscribers; chat.updated is ungated).
+      const persisted = persistedContextUsage(event.chat);
+      const sameUsage =
+        persisted == null ||
+        (state.contextUsage != null &&
+          state.contextUsage.totalTokens === persisted.totalTokens &&
+          state.contextUsage.maxTokens === persisted.maxTokens);
+      const sameConfig = sameComposerConfig(state.chatConfig, event.chat);
+      if (sameConfig && sameUsage) return state;
+      return {
+        ...state,
+        chatConfig: sameConfig ? state.chatConfig : event.chat,
+        contextUsage: sameUsage ? state.contextUsage : persisted,
+      };
+    }
 
     case 'message.added':
       return upsertMessage(state, event.message);
@@ -310,6 +378,28 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
 
     case 'compact.done':
       return state.compacting ? { ...state, compacting: false } : state;
+
+    case 'background.upsert':
+      return {
+        ...state,
+        backgroundTasks: { ...state.backgroundTasks, [event.task.id]: event.task },
+      };
+
+    case 'background.ended': {
+      if (!(event.taskId in state.backgroundTasks)) return state;
+      const backgroundTasks = { ...state.backgroundTasks };
+      delete backgroundTasks[event.taskId];
+      return { ...state, backgroundTasks };
+    }
+
+    case 'background.snapshot': {
+      // chat.updated fires on every turn boundary — bail identity-stable when
+      // the snapshot matches so the composer doesn't re-render on churn.
+      if (sameBackgroundTasks(state.backgroundTasks, event.tasks)) return state;
+      const backgroundTasks: Record<string, BackgroundActivityTask> = {};
+      for (const task of event.tasks) backgroundTasks[task.id] = task;
+      return { ...state, backgroundTasks };
+    }
 
     case 'local.message.queued':
       return {

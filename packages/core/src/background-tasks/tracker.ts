@@ -22,23 +22,27 @@ export class BackgroundTaskTracker {
 
   start(
     chatId: string,
-    seed: Pick<BackgroundTask, 'id' | 'toolName' | 'toolUseId' | 'command' | 'description'>,
+    seed: Pick<BackgroundTask, 'id' | 'kind' | 'toolName' | 'toolUseId' | 'command' | 'description'>,
     outputPath: string,
   ): BackgroundTask {
+    const chat = this.byChat.get(chatId) ?? new Map<string, BackgroundTask>();
+    const existing = chat.get(seed.id);
+    // Duplicate start of a live task (CLI re-register on resume) → upsert, no
+    // double count: keep the original startedAt and emit updated, not started.
+    const isUpsert = existing !== undefined && existing.status === 'running';
     const task: BackgroundTask = {
       ...seed,
       outputPath,
-      startedAt: Date.now(),
+      startedAt: isUpsert ? existing.startedAt : Date.now(),
       endedAt: null,
       status: 'running',
-      lastOutputLine: null,
+      lastOutputLine: isUpsert ? existing.lastOutputLine : null,
       summary: null,
       usage: null,
     };
-    const chat = this.byChat.get(chatId) ?? new Map<string, BackgroundTask>();
     chat.set(task.id, task);
     this.byChat.set(chatId, chat);
-    this.emitter.emit('background_task.started', chatId, task);
+    this.emitter.emit(isUpsert ? 'background_task.updated' : 'background_task.started', chatId, task);
     return task;
   }
 
@@ -84,6 +88,30 @@ export class BackgroundTaskTracker {
     return chat ? [...chat.values()] : [];
   }
 
+  /** Running tasks only — the chat's live background-activity set. */
+  listLive(chatId: string): BackgroundTask[] {
+    return this.list(chatId).filter((t) => t.status === 'running');
+  }
+
+  /**
+   * Terminal-stop every running task for a chat (CLI process ended — agents and
+   * workflows die with it; orphaned entries must not pin the working indicator).
+   * Emits `ended` per task; returns the number stopped.
+   */
+  endAllRunning(chatId: string): number {
+    let count = 0;
+    for (const task of this.listLive(chatId)) {
+      this.end(chatId, task.id, {
+        status: 'stopped',
+        outputPath: task.outputPath ?? '',
+        summary: 'session ended',
+        usage: null,
+      });
+      count++;
+    }
+    return count;
+  }
+
   /**
    * Cross-chat iterator over running tasks. Returns readonly references so
    * sweep callers (liveness, kill) can't mutate tracker state in place.
@@ -114,7 +142,7 @@ export class BackgroundTaskTracker {
   }
 
   on(
-    event: 'background_task.started' | 'background_task.ended',
+    event: 'background_task.started' | 'background_task.updated' | 'background_task.ended',
     listener: (chatId: string, task: BackgroundTask) => void,
   ): void {
     this.emitter.on(event, listener);

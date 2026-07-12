@@ -81,7 +81,7 @@ export function InspectorPane({ port }: { port: number }) {
       </div>
 
       {/* Body */}
-      <div className="min-h-0 flex-1 overflow-y-auto mf-thin-scrollbar">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {!projectId ? (
           <div className="px-3 py-4 text-caption text-muted-foreground">Open a session to browse its files.</div>
         ) : tab === 'files' ? (

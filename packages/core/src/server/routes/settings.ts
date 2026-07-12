@@ -8,6 +8,7 @@ import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
 import { resolveAdapterExecutableCached, defaultRun } from '../../adapters/resolve-executable.js';
+import { normalizeSavedDefaultModel } from '../../settings/model-default.js';
 
 // Per-group validation so a single bad leaf doesn't discard the user's other
 // valid overrides on read.
@@ -66,6 +67,16 @@ function persistNotifications(ctx: RouteContext, patch: NotificationPatch): void
   ctx.db.settings.set('general', 'notifications', JSON.stringify(merged));
 }
 
+function normalizeProviderDefaultModels(providers: Record<string, Record<string, unknown>>, ctx: RouteContext): void {
+  const catalogs = new Map(ctx.adapters.getSnapshots().map((snapshot) => [snapshot.id, snapshot.models]));
+  for (const [adapterId, provider] of Object.entries(providers)) {
+    const configured = typeof provider.defaultModel === 'string' ? provider.defaultModel : undefined;
+    if (configured && normalizeSavedDefaultModel(configured, catalogs.get(adapterId) ?? []) === undefined) {
+      delete provider.defaultModel;
+    }
+  }
+}
+
 export function settingRoutes(ctx: RouteContext): Router {
   const router = Router();
 
@@ -121,6 +132,7 @@ export function settingRoutes(ctx: RouteContext): Router {
         }
         delete provider.skipPermissions;
       }
+      normalizeProviderDefaultModels(providers, ctx);
       const ids = new Set<string>(Object.keys(providers));
       for (const a of ctx.adapters.getAll()) ids.add(a.id);
       const idList = Array.from(ids);

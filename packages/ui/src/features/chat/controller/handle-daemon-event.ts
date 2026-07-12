@@ -6,7 +6,7 @@
  * The "refetch-on-gap" signal is a special return value so the controller
  * can call refresh() without this module knowing about HTTP.
  */
-import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import { toActivityTask, type DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { ChatStateEvent } from './chat-thread-state';
 
 export type HandleResult = { kind: 'event'; event: ChatStateEvent } | { kind: 'refresh' } | { kind: 'noop' };
@@ -103,6 +103,20 @@ export function handleDaemonEvent(
           maxTokens: event.maxTokens,
         },
       };
+
+    case 'background_task.started':
+    case 'background_task.updated':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      // A non-running payload (e.g. an adopt replay of a finished task) means
+      // the task is no longer live — treat it as ended so it can't stick.
+      if (event.task.status !== 'running') {
+        return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };
+      }
+      return { kind: 'event', event: { type: 'background.upsert', task: toActivityTask(event.task) } };
+
+    case 'background_task.ended':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };
 
     case 'chat.compacting':
       if (event.chatId !== chatId) return { kind: 'noop' };

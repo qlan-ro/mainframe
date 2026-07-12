@@ -7,6 +7,7 @@ import type { LaunchRegistry } from '../launch/index.js';
 import { createChildLogger } from '../logger.js';
 import { DAEMON_VERSION } from '../version.js';
 import { createAuthMiddleware } from './middleware/auth.js';
+import { isAllowedOrigin } from './cors-origin.js';
 import {
   projectRoutes,
   chatRoutes,
@@ -24,6 +25,7 @@ import {
   contentSearchRoutes,
   lspRoutes,
   worktreeRoutes,
+  chatRecoveryRoutes,
   tagRoutes,
   workflowRoutes,
   suggestionRoutes,
@@ -77,11 +79,9 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.set('trust proxy', 'loopback');
   const pushService = new PushService();
 
-  const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-
   app.use((_req, res, next) => {
     const origin = _req.headers.origin;
-    if (origin && LOCALHOST_ORIGIN.test(origin)) {
+    if (isAllowedOrigin(origin)) {
       res.header('Access-Control-Allow-Origin', origin);
     }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -103,6 +103,9 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     res.json({
       status: 'ok',
       version: DAEMON_VERSION,
+      // Identifies which process owns the port when diagnosing a stale/orphaned
+      // daemon (version + pid answer "who is serving me" with one curl).
+      pid: process.pid,
       timestamp: new Date().toISOString(),
       tunnelUrl: ctx.tunnelUrl ?? getTunnelUrl?.() ?? null,
     });
@@ -146,6 +149,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(launchRoutes(ctx));
   app.use(externalSessionRoutes(ctx));
   app.use(worktreeRoutes(ctx));
+  app.use(chatRecoveryRoutes(ctx));
   app.use(tagRoutes(ctx));
   app.use(workflowRoutes(ctx));
   app.use(workflowAdminRoutes(ctx));

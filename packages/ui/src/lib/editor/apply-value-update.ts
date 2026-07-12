@@ -9,41 +9,59 @@ import { Annotation } from '@codemirror/state';
  */
 export const externalValueUpdate = Annotation.define<boolean>();
 
+/** The span that differs between two strings, as a CM6 change spec. */
+interface ChangeSpan {
+  from: number;
+  to: number;
+  insert: string;
+}
+
 /**
- * Apply a new value to a CM6 EditorView while preserving the cursor position
- * and scroll offset on external buffer updates (e.g. file-changed-on-disk
- * reload, or daemon context.updated event).
+ * Trim the common prefix and suffix so only the differing middle is replaced.
+ * The suffix scan stops at the prefix boundary so the two never overlap
+ * (e.g. 'aa' → 'a' must yield {from:1, to:2} and not double-count the 'a').
+ */
+function diffSpan(oldValue: string, newValue: string): ChangeSpan {
+  let from = 0;
+  const maxPrefix = Math.min(oldValue.length, newValue.length);
+  while (from < maxPrefix && oldValue.charCodeAt(from) === newValue.charCodeAt(from)) from++;
+
+  let oldEnd = oldValue.length;
+  let newEnd = newValue.length;
+  while (oldEnd > from && newEnd > from && oldValue.charCodeAt(oldEnd - 1) === newValue.charCodeAt(newEnd - 1)) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  return { from, to: oldEnd, insert: newValue.slice(from, newEnd) };
+}
+
+/**
+ * Apply a new value to a CM6 EditorView while preserving the scroll position
+ * and selection on external buffer updates (e.g. file-changed-on-disk reload,
+ * or daemon context.updated event).
  *
- * CM6 equivalent of the Monaco `applyValueUpdate`: replaces the entire doc
- * with a single transaction that also restores the prior selection (clamped
- * to the new doc length) and the scroll position. No-ops when the value is
- * unchanged so the editor does not flicker on spurious re-renders.
+ * Dispatches a MINIMAL change (common prefix/suffix trimmed) instead of a
+ * whole-doc replace. This is what actually preserves scroll: CM6 keeps an
+ * internal scroll anchor (the line block at the top of the viewport) and maps
+ * it through each transaction's changes. A whole-doc replace maps every
+ * position to 0, so the next measure cycle "corrects" the scroll back to the
+ * top — overriding any manual scrollDOM.scrollTop restore (the previous
+ * implementation; issues #151/#196). With a minimal span the anchor maps
+ * correctly and the viewport stays on the content the user was reading, even
+ * when lines are added or removed above it.
  *
- * Behavior contract (matches the Monaco original, issue #151 fix):
- *   1. Save selection + scroll before touching the doc.
- *   2. Replace the doc content.
- *   3. Restore the selection (clamped) in the same transaction.
- *   4. Re-apply scroll after dispatch (scrollDOM is a DOM side-effect, not a
- *      CM6 state concern, so it must run after the transaction is committed).
+ * The selection is likewise left to CM6's change mapping (positions outside
+ * the changed span are untouched; positions inside collapse to its start),
+ * which supersedes the old manual clamp. No-ops when the value is unchanged
+ * so the editor does not flicker on spurious re-renders.
  */
 export function applyValueUpdate(view: EditorView, nextValue: string): void {
-  if (view.state.doc.toString() === nextValue) return;
-
-  // Snapshot state before modifying so we can restore it.
-  const { anchor, head } = view.state.selection.main;
-  const scrollTop = view.scrollDOM.scrollTop;
-  const docLen = nextValue.length;
-
-  // Clamp selection to the new doc length — the new content may be shorter.
-  const safeAnchor = Math.min(anchor, docLen);
-  const safeHead = Math.min(head, docLen);
+  const currentValue = view.state.doc.toString();
+  if (currentValue === nextValue) return;
 
   view.dispatch({
-    changes: { from: 0, to: view.state.doc.length, insert: nextValue },
-    selection: { anchor: safeAnchor, head: safeHead },
+    changes: diffSpan(currentValue, nextValue),
     annotations: externalValueUpdate.of(true),
   });
-
-  // Restore scroll as a DOM side-effect after the transaction is committed.
-  view.scrollDOM.scrollTop = scrollTop;
 }

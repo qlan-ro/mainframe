@@ -95,6 +95,7 @@ function makeCustom(projectId: string, updatedAt: number, status: 'active' | 'ar
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    transcriptMissing: false,
     updatedAt,
   };
 }

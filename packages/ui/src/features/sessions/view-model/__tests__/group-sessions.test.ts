@@ -30,6 +30,7 @@ function item(id: string, overrides: Partial<SessionCustom> & { title?: string }
       hasPending: false,
       detectedPrs: [],
       worktreeMissing: false,
+      transcriptMissing: false,
       updatedAt: TODAY_1100,
       ...custom,
     },

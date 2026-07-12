@@ -29,6 +29,8 @@ export interface SessionCustom {
   detectedPrs: NonNullable<Chat['detectedPrs']>;
   worktreePath?: string;
   worktreeMissing: boolean;
+  /** True when the CLI's transcript file for this session was deleted from disk. */
+  transcriptMissing: boolean;
   /** Worktree branch — read by the shell MainToolbar identity (additive). */
   branchName?: string;
   updatedAt: number;
@@ -65,6 +67,7 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     detectedPrs: chat.detectedPrs ?? [],
     worktreePath: chat.worktreePath,
     worktreeMissing: chat.worktreeMissing ?? false,
+    transcriptMissing: chat.transcriptMissing ?? false,
     branchName: chat.branchName,
     updatedAt: new Date(chat.updatedAt).getTime(),
   };
@@ -122,12 +125,31 @@ function narrowSessionCustom(custom: Record<string, unknown>): SessionCustom {
 }
 
 /**
- * Narrow the active thread-list item's boundary `custom` to SessionCustom, or
- * undefined for the custom-less new/draft thread. The single safe read of an
- * active item's custom (e.g. the shell identity), keeping the narrowing here.
+ * Narrow a thread-list item's boundary `custom` to SessionCustom, or undefined
+ * for the custom-less new/draft thread. Internal — active-item reads go through
+ * activeSessionCustom below, which also resolves the freshest entry.
  */
-export function sessionCustomOf(custom: Record<string, unknown> | undefined): SessionCustom | undefined {
+function sessionCustomOf(custom: Record<string, unknown> | undefined): SessionCustom | undefined {
   return custom == null ? undefined : narrowSessionCustom(custom);
+}
+
+/**
+ * Freshest custom for the ACTIVE thread-list item.
+ *
+ * A thread created this app-run keeps its `__LOCALID_*` mapping id for life
+ * (no id-flip), but aui's `threads.reload()` re-derives custom only under a
+ * NEW entry keyed by the remoteId — the `__LOCALID_*` entry's custom is never
+ * written again. Reading `s.threadListItem.custom` alone therefore goes
+ * permanently stale on such threads (e.g. a worktree join never reaches the
+ * toolbar). Prefer the remoteId-keyed list entry, which every reload refreshes.
+ */
+export function activeSessionCustom(
+  item: ThreadListEntry | undefined,
+  threadItems: readonly ThreadListEntry[],
+): SessionCustom | undefined {
+  if (!item) return undefined;
+  const fresh = item.remoteId == null ? undefined : threadItems.find((t) => t.id === item.remoteId);
+  return sessionCustomOf(fresh?.custom ?? item.custom);
 }
 
 /** A thread entry that carries a materialized `custom` (i.e. a real session). */

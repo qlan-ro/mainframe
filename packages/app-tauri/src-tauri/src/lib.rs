@@ -37,14 +37,18 @@ static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
 
 /// Daemon HTTP/WS port for this session. Configurable via the `DAEMON_PORT` env
 /// (the dev launch configs set it, alongside `VITE_DAEMON_HTTP_PORT`); falls back
-/// to 31500 — non-default to avoid colliding with a system daemon on 31415.
+/// to the daemon default.
 fn daemon_port() -> u16 {
     parse_daemon_port(std::env::var("DAEMON_PORT").ok())
 }
 
-/// Parse a raw `DAEMON_PORT` value, falling back to 31500 when unset or invalid.
+fn daemon_data_dir_override(raw: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    raw.map(PathBuf::from)
+}
+
+/// Parse a raw `DAEMON_PORT` value, falling back to 31415 when unset or invalid.
 fn parse_daemon_port(raw: Option<String>) -> u16 {
-    raw.and_then(|s| s.parse::<u16>().ok()).unwrap_or(31500)
+    raw.and_then(|s| s.parse::<u16>().ok()).unwrap_or(31415)
 }
 
 /// True when `MAINFRAME_EXTERNAL_DAEMON` opts out of spawning — the renderer then
@@ -189,6 +193,19 @@ pub fn run() {
             // Store the handle for the lifetime of the app.
             if let Ok(handle) = daemon_result {
                 let _ = DAEMON.set(handle);
+                // Surface an unexpected daemon death (bind failure, crash) to the
+                // renderer — otherwise the UI keeps polling a port that may be
+                // owned by a stale daemon and everything skews silently.
+                if let Some(h) = DAEMON.get() {
+                    let app_handle = app.handle().clone();
+                    h.watch_exit(move |code| {
+                        let code_label = code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+                        tracing::error!(code = %code_label, "daemon sidecar exited unexpectedly");
+                        if let Some(win) = app_handle.get_webview_window("main") {
+                            let _ = win.emit("daemon:status", &format!("error:daemon exited (code {code_label})"));
+                        }
+                    });
+                }
             }
 
             // Start the OS-idle presence reporter (Plan 3, decision 4).
@@ -243,8 +260,26 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            // Cmd+Q / updater relaunch can end the run loop WITHOUT destroying
+            // windows, skipping the Destroyed handler above — the daemon then
+            // outlives the app (the rc.2→rc.4 stale-daemon incident). RunEvent::Exit
+            // is the last event before process exit; kill() is idempotent, so a
+            // graceful window close having already run it is fine.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(h) = DAEMON.get() {
+                    h.kill();
+                }
+                if let Some(mgr) = app_handle.try_state::<TerminalManager>() {
+                    mgr.kill_all();
+                }
+                if let Some(mgr) = app_handle.try_state::<PreviewManager>() {
+                    mgr.kill_all();
+                }
+            }
+        });
 }
 
 fn boot_daemon(
@@ -310,7 +345,7 @@ fn boot_node_daemon(
         },
         shell_env: shell_env.clone(),
         daemon_port: daemon_port(),
-        data_dir: None,
+        data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
     })
 }
 
@@ -502,24 +537,36 @@ fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod daemon_port_tests {
-    use super::{daemon_port, parse_daemon_port};
+    use super::{daemon_data_dir_override, daemon_port, parse_daemon_port};
+    use std::path::PathBuf;
 
     #[test]
     fn parse_uses_value_then_falls_back() {
         assert_eq!(parse_daemon_port(Some("31416".into())), 31416);
-        assert_eq!(parse_daemon_port(Some("not-a-port".into())), 31500);
-        assert_eq!(parse_daemon_port(None), 31500);
+        assert_eq!(parse_daemon_port(Some("not-a-port".into())), 31415);
+        assert_eq!(parse_daemon_port(None), 31415);
     }
 
     // Regression: the reader used a malformed env-var name (`"daemon_port()"`)
-    // and always returned the 31500 fallback, ignoring the launch config's
+    // and always returned the fallback, ignoring the launch config's
     // `DAEMON_PORT` — so the dev shell could never reach the configured daemon.
     #[test]
     fn daemon_port_reads_the_daemon_port_env() {
         std::env::set_var("DAEMON_PORT", "31416");
         assert_eq!(daemon_port(), 31416);
         std::env::remove_var("DAEMON_PORT");
-        assert_eq!(daemon_port(), 31500);
+        assert_eq!(daemon_port(), 31415);
+    }
+
+    #[test]
+    fn daemon_data_dir_override_reads_mainframe_data_dir_env() {
+        let dir = std::ffi::OsString::from("/tmp/mainframe-tauri-test-data");
+
+        assert_eq!(
+            daemon_data_dir_override(Some(dir.clone())),
+            Some(PathBuf::from(dir))
+        );
+        assert_eq!(daemon_data_dir_override(None), None);
     }
 }
 

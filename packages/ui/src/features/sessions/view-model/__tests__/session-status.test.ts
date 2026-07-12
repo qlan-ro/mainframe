@@ -38,3 +38,24 @@ describe('deriveSessionBadge', () => {
     expect(deriveSessionBadge(base(), false)).toEqual({ base: 'idle', unread: false });
   });
 });
+
+describe('deriveSessionBadge — transcript-missing', () => {
+  it('transcript-missing outranks working', () => {
+    expect(deriveSessionBadge(base({ transcriptMissing: true, displayStatus: 'working' }), false)).toEqual({
+      base: 'transcript-missing',
+      unread: false,
+    });
+  });
+  it('worktree-missing stays highest precedence when both flags are set', () => {
+    expect(deriveSessionBadge(base({ worktreeMissing: true, transcriptMissing: true }), false)).toEqual({
+      base: 'worktree-missing',
+      unread: false,
+    });
+  });
+  it('transcript-missing outranks waiting; unread rides alongside', () => {
+    expect(deriveSessionBadge(base({ transcriptMissing: true, hasPending: true }), true)).toEqual({
+      base: 'transcript-missing',
+      unread: true,
+    });
+  });
+});

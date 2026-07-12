@@ -8,6 +8,7 @@
  * density pass) — no text pill here, so worktree + PR keep the room.
  */
 
+import { AlertTriangle, GitFork } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import { TAG_DOT_STYLE } from '../tags/tag-colors';
@@ -18,6 +19,8 @@ import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 interface SessionRowMetaProps {
   worktreePath?: string;
   worktreeMissing: boolean;
+  /** True when the CLI's transcript file for this session was deleted from disk. */
+  transcriptMissing?: boolean;
   detectedPrs: DetectedPr[];
   tags?: string[];
   colorOf?: (name: string) => TagColor;
@@ -32,9 +35,26 @@ function worktreeBasename(path: string): string {
   return parts[parts.length - 1] ?? path;
 }
 
+/** Unified degraded marker — one muted icon, tooltip + aria-label name the cause(s). */
+function DegradedMarker({ causes }: { causes: string[] }) {
+  const label = causes.join(' · ');
+  return (
+    <Hint label={label}>
+      <span
+        data-testid="sessions-row-meta-degraded"
+        aria-label={label}
+        className="inline-flex flex-shrink-0 items-center text-mf-text-3"
+      >
+        <AlertTriangle size={9} aria-hidden />
+      </span>
+    </Hint>
+  );
+}
+
 export function SessionRowMeta({
   worktreePath,
   worktreeMissing,
+  transcriptMissing = false,
   detectedPrs,
   tags,
   colorOf,
@@ -43,6 +63,10 @@ export function SessionRowMeta({
 }: SessionRowMetaProps) {
   const visibleTags = tags != null && tags.length > 0 ? tags.slice(0, 4) : [];
   const chipColor = projectId != null ? projectColor(projectId) : undefined;
+  const degradedCauses = [
+    ...(worktreeMissing ? ['Worktree missing'] : []),
+    ...(transcriptMissing ? ['Transcript missing'] : []),
+  ];
 
   return (
     <div className="flex min-w-0 items-center gap-[8px] text-micro tracking-normal text-mf-text-3">
@@ -63,6 +87,7 @@ export function SessionRowMeta({
           <TruncatedWithTooltip text={projectName} className="min-w-0" />
         </span>
       )}
+      {degradedCauses.length > 0 && <DegradedMarker causes={degradedCauses} />}
       {worktreePath != null && (
         <Hint label={worktreePath}>
           <span
@@ -72,21 +97,7 @@ export function SessionRowMeta({
               worktreeMissing ? 'text-destructive' : 'text-muted-foreground',
             ].join(' ')}
           >
-            {worktreeMissing && <span data-testid="sessions-row-meta-worktree-missing" aria-label="worktree missing" />}
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 16 16"
-              fill="none"
-              className="flex-shrink-0 text-mf-text-3"
-              aria-hidden
-            >
-              <path
-                d="M5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
-                fill="currentColor"
-              />
-              <path d="M5 7v1.17A3 3 0 0 1 6.83 10H9a2 2 0 0 0 2-2V7" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
+            <GitFork size={9} className="flex-shrink-0 text-mf-text-3" aria-hidden />
             <span className="max-w-[8rem] truncate">{worktreeBasename(worktreePath)}</span>
           </span>
         </Hint>

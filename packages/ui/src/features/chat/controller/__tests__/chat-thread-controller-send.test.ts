@@ -33,7 +33,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
 }));
 
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue([]),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
   getChat: vi.fn().mockResolvedValue(null),
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),

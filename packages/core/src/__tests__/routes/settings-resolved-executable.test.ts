@@ -16,7 +16,7 @@ function createMockContext(): RouteContext {
       },
     } as any,
     chats: { getChat: vi.fn(), on: vi.fn() } as any,
-    adapters: { get: vi.fn(), list: vi.fn(), getAll: vi.fn() } as any,
+    adapters: { get: vi.fn(), list: vi.fn(), getAll: vi.fn(), getSnapshots: vi.fn().mockReturnValue([]) } as any,
   };
 }
 

@@ -13,6 +13,7 @@ import { buildApplicationMenu } from './menu.js';
 import { setupWebviewSandbox } from './sandbox.js';
 import { registerIpcHandlers } from './ipc-handlers.js';
 import { DaemonStatusTracker } from './daemon-status.js';
+import { buildDaemonEnv } from './daemon-env.js';
 
 // Enable Chrome DevTools Protocol on port 9222 for development tooling (e.g. MCP server).
 // Only active in development mode — never exposed in production builds. Skipped under e2e
@@ -99,9 +100,18 @@ function startDaemon(shellEnv: Record<string, string>): void {
   // bypassing process.resourcesPath which only works in packaged (electron-builder) builds.
   const daemonPath = process.env['MAINFRAME_DAEMON_PATH'] ?? join(process.resourcesPath, 'daemon.cjs');
   log.info({ path: daemonPath }, 'daemon starting');
+  const daemonEnv = buildDaemonEnv(
+    {
+      ...process.env,
+      DAEMON_PORT: String(DAEMON_PORT),
+      VITE_DAEMON_HTTP_PORT: String(DAEMON_PORT),
+      VITE_DAEMON_WS_PORT: String(DAEMON_PORT),
+    },
+    shellEnv,
+  );
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production', ...shellEnv },
+    env: daemonEnv,
   });
 
   daemonStatus?.set('starting');

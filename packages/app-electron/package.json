@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-app-electron",
-  "version": "2.0.0-rc.2",
+  "version": "2.0.0-rc.5",
   "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "test:playwright": "playwright test -c playwright-ct.config.ts",
     "package": "electron-rebuild -o node-pty && electron-rebuild -m ../core -o better-sqlite3 -f -v $(node -p \"require('electron/package.json').version\") && electron-builder",
+    "package:ci": "electron-rebuild -o node-pty && electron-rebuild -m ../core -o better-sqlite3 -f -v $(node -p \"require('electron/package.json').version\") && electron-builder --publish never",
     "postinstall": "node scripts/fix-pty-permissions.mjs"
   },
   "dependencies": {

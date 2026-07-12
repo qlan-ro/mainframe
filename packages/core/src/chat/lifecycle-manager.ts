@@ -11,7 +11,6 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
-import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
 import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/claude/pr-detection.js';
 import type { MessageCache } from './message-cache.js';
@@ -19,6 +18,7 @@ import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
 import { getProviderConfig } from '../settings/provider-config.js';
+import { normalizeSavedDefaultModel } from '../settings/model-default.js';
 
 const log = createChildLogger('chat:lifecycle');
 
@@ -114,7 +114,10 @@ export class ChatLifecycleManager {
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
       const defaultPlanMode = this.deps.db.settings.get('provider', `${adapterId}.defaultPlanMode`);
 
-      if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
+      if (!effectiveModel && defaultModel) {
+        const models = this.deps.adapters.getSnapshots().find((snapshot) => snapshot.id === adapterId)?.models ?? [];
+        effectiveModel = normalizeSavedDefaultModel(defaultModel, models);
+      }
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
       if (defaultPlanMode === 'true') effectivePlanMode = true;
     }
@@ -345,10 +348,13 @@ export class ChatLifecycleManager {
     if (disabled === 'true') return;
 
     const adapterId = active.chat.adapterId;
+    const adapter = this.deps.adapters.get(adapterId);
+    if (!adapter?.generateTitle) return; // deterministic title (set on first message) stands
+
     const binary = this.deps.db.settings.get('provider', `${adapterId}.titleBinary`) || 'claude';
 
     try {
-      const title = await generateTitle(content, binary);
+      const title = await adapter.generateTitle(content, binary);
       if (title) {
         active.chat.title = title;
         this.deps.db.chats.update(chatId, { title });

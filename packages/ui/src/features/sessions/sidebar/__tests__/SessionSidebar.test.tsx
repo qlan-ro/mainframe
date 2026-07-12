@@ -270,6 +270,7 @@ function makeCustom(overrides?: Partial<SessionCustom>): SessionCustom {
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    transcriptMissing: false,
     updatedAt: 1749284160000,
     ...overrides,
   };
@@ -321,6 +322,11 @@ describe('SessionSidebar — list scroll area is present on render', () => {
   it('renders data-testid="sessions-list-scroll"', () => {
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-list-scroll')).toBeTruthy();
+  });
+
+  it('keeps the scrollbar gutter transparent so the parent background shows through', () => {
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-list-scroll').className).toContain('bg-transparent');
   });
 });
 

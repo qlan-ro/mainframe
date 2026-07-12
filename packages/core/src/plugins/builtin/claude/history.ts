@@ -1,9 +1,9 @@
 import { createReadStream } from 'node:fs';
 import { access, constants, readdir } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
-import { homedir } from 'node:os';
 import path from 'node:path';
 import type { ChatMessage, MessageContent, SkillFileEntry } from '@qlan-ro/mainframe-types';
+import { getSessionJsonlPath } from './transcript.js';
 import { resolveSkillPath } from './skill-path.js';
 import { createChildLogger } from '../../../logger.js';
 import {
@@ -21,12 +21,6 @@ import {
 } from './history-subagents.js';
 
 const log = createChildLogger('claude:history');
-
-function getSessionJsonlPath(sessionId: string, projectPath: string): { jsonlPath: string; projectDir: string } {
-  const encodedPath = projectPath.replace(/[^a-zA-Z0-9-]/g, '-');
-  const projectDir = path.join(homedir(), '.claude', 'projects', encodedPath);
-  return { jsonlPath: path.join(projectDir, sessionId + '.jsonl'), projectDir };
-}
 
 export async function discoverSessionJsonlFiles(
   sessionId: string,

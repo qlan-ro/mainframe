@@ -68,6 +68,14 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
   const seenToolIds = new Set<string>();
   const content: DisplayContent[] = [];
 
+  // Subagent child results arrive as tool_result blocks INSIDE the assistant
+  // content (live onSubagentChild and history attachSubagentToolResults), not
+  // as standalone tool_result messages — index them so child cards get results.
+  const inContentResults = new Map<string, MessageContent & { type: 'tool_result' }>();
+  for (const block of grouped.content) {
+    if (block.type === 'tool_result') inContentResults.set(block.toolUseId, block);
+  }
+
   for (const block of grouped.content) {
     if (block.type === 'text') {
       const stripped = stripMainframeCommandTags(block.text);
@@ -78,11 +86,15 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
           ...withParentId(block.parentToolUseId),
         });
     } else if (block.type === 'thinking') {
-      content.push({
-        type: 'thinking',
-        thinking: block.thinking,
-        ...withParentId(block.parentToolUseId),
-      });
+      // Hidden-thinking models stream signature-only blocks with empty prose;
+      // shipping them yields dead payload and empty reasoning pills.
+      if (block.thinking.trim()) {
+        content.push({
+          type: 'thinking',
+          thinking: block.thinking,
+          ...withParentId(block.parentToolUseId),
+        });
+      }
     } else if (block.type === 'image') {
       content.push({
         type: 'image',
@@ -94,7 +106,7 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
       if (seenToolIds.has(block.id)) continue;
       seenToolIds.add(block.id);
 
-      const resultBlock = grouped._toolResults?.get(block.id);
+      const resultBlock = grouped._toolResults?.get(block.id) ?? inContentResults.get(block.id);
       const baseCategory = categorizeToolCall(block.name, categories);
       const call: DisplayContent & { type: 'tool_call' } = {
         type: 'tool_call',

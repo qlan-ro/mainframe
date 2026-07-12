@@ -16,7 +16,7 @@ import { inferLanguage } from '@/lib/editor/file-types';
 import { getWorkingDiff } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
-import { CmDiffEditor } from './CmDiffEditor';
+import { CmDiffEditorWithComments } from './inline-comments/CmDiffEditorWithComments';
 import { DiffHeader } from './DiffHeader';
 import { nextChange, prevChange } from './diff-nav';
 
@@ -121,12 +121,13 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
         onPrev={prevChange}
         onNext={nextChange}
       />
-      <CmDiffEditor
+      <CmDiffEditorWithComments
         key={`${original}\x00${modified}`}
         original={original}
         modified={modified}
         language={language}
         path={path}
+        filePath={path}
         onChunksChange={handleChunksChange}
       />
     </div>

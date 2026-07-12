@@ -21,6 +21,7 @@ import { PaperclipIcon, PinIcon, TagIcon, XIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionBadge, type SessionBadge } from '../view-model/session-status';
+import { isSessionUnread } from '../view-model/session-unread';
 import { formatRelativeTime } from '../view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '../runtime/daemon-port-context';
@@ -31,26 +32,30 @@ import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { Hint } from '@/components/ui/hint';
+import { ProviderLogo } from '@/features/shared/ProviderLogo';
 
 /**
- * The dot is the row's ONLY status indicator (no text pill). Four states:
- *   - working  → a spinning progress circle
- *   - waiting  → a PULSING coloured beacon ("your turn" — rendered in StatusDot)
- *   - idle+unread → a solid (non-pulsing) coloured dot (an unread response)
- *   - idle       → a muted, uncoloured dot
- * (worktree-missing keeps its own destructive dot, outside the four-state set.)
+ * The logo is the row's ONLY status indicator (no text pill): provider shape
+ * identifies the adapter, unread controls vividness, and lifecycle only adds motion.
  */
-function dotClass(badge: SessionBadge): string {
+function workingLogoAnimation(adapterId: string): string {
+  return adapterId === 'claude' ? 'animate-[mf-claude-logo-working_1.52s_linear_infinite]' : 'animate-spin';
+}
+
+function statusLogoClass(badge: SessionBadge, adapterId: string): string {
+  const base = 'inline-flex size-8 flex-shrink-0 items-center justify-center';
+  const active = badge.base === 'working' || badge.base === 'waiting';
+  const visual = badge.unread || active ? 'text-primary' : 'text-mf-text-4 opacity-50';
   switch (badge.base) {
     case 'worktree-missing':
-      return 'size-1.5 bg-destructive';
+    case 'transcript-missing':
+      return `${base} ${visual}`;
     case 'working':
-      return 'size-[8px] border-[1.5px] border-primary border-t-transparent animate-spin';
+      return `${base} ${visual} ${workingLogoAnimation(adapterId)}`;
     case 'waiting':
-      // Unreachable — the pulsing beacon is rendered separately in StatusDot.
-      return 'size-[9px] bg-mf-warning';
+      return `${base} ${visual} animate-pulse`;
     case 'idle':
-      return badge.unread ? 'size-1.5 bg-primary' : 'size-1.5 bg-mf-text-4 opacity-50';
+      return `${base} ${visual}`;
   }
 }
 
@@ -59,6 +64,8 @@ function dotLabel(badge: SessionBadge): string {
   switch (badge.base) {
     case 'worktree-missing':
       return 'Worktree missing';
+    case 'transcript-missing':
+      return 'Transcript missing';
     case 'working':
       return 'Working';
     case 'waiting':
@@ -68,32 +75,12 @@ function dotLabel(badge: SessionBadge): string {
   }
 }
 
-export function StatusDot({ badge }: { badge: SessionBadge }) {
-  if (badge.base === 'waiting') {
-    // "Your turn" → a pulsing coloured beacon: an expanding ping ring behind a
-    // solid inner dot (artboard StatusDot lines 379-390). All waiting sessions
-    // pulse, read or unread — being waiting IS the call to respond.
-    return (
-      <Hint label={dotLabel(badge)}>
-        <span
-          data-testid="sessions-row-status-dot"
-          aria-label={badge.base}
-          className="relative inline-flex size-2.5 flex-shrink-0 items-center justify-center"
-        >
-          <span className="absolute size-full animate-ping rounded-full bg-mf-warning opacity-75" />
-          <span className="relative size-[9px] rounded-full bg-mf-warning shadow-[0_0_0_2px_color-mix(in_srgb,var(--mf-warning)_18%,transparent)]" />
-        </span>
-      </Hint>
-    );
-  }
-
+export function StatusDot({ badge, adapterId = 'claude' }: { badge: SessionBadge; adapterId?: string }) {
   return (
     <Hint label={dotLabel(badge)}>
-      <span
-        data-testid="sessions-row-status-dot"
-        aria-label={badge.base}
-        className={`inline-block flex-shrink-0 rounded-full ${dotClass(badge)}`}
-      />
+      <span data-testid="sessions-row-status-dot" aria-label={badge.base} className={statusLogoClass(badge, adapterId)}>
+        <ProviderLogo adapterId={adapterId} className="size-7" />
+      </span>
     </Hint>
   );
 }
@@ -185,7 +172,8 @@ function SessionRowInner({
   const port = useDaemonPort();
   const itemRuntime = useThreadListItemRuntime();
   const assistantRuntime = useAssistantRuntime();
-  const isUnread = useUnreadStore((s) => s.isUnread(item.id));
+  const unread = useUnreadStore((s) => s.unread);
+  const isUnread = isSessionUnread(item, unread);
   const badge = deriveSessionBadge(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
   // Captured on right-click so the context-menu "Tags" action can anchor the
@@ -268,7 +256,7 @@ function SessionRowInner({
               {custom.pinned && !inPinnedGroup && (
                 <PinIcon data-testid="sessions-row-pin-glyph" className="size-[11px] flex-shrink-0 text-primary" />
               )}
-              <StatusDot badge={badge} />
+              <StatusDot badge={badge} adapterId={custom.adapterId} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex h-[22px] min-w-0 items-center gap-[9px]">
@@ -285,11 +273,7 @@ function SessionRowInner({
                     side="top"
                     className={[
                       'flex-1 text-body tracking-normal',
-                      // Selected (native data-active) reads as semibold/foreground too, matching
-                      // the artboard `sel || unread` rule — applied via CSS so it tracks the
-                      // native selection without a JS hook.
-                      'group-data-[active=true]:font-semibold group-data-[active=true]:text-foreground',
-                      isUnread || custom.pinned ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
+                      isUnread ? 'font-bold text-foreground' : 'font-medium text-foreground',
                     ].join(' ')}
                   />
                 )}
@@ -304,6 +288,7 @@ function SessionRowInner({
                 <SessionRowMeta
                   worktreePath={custom.worktreePath}
                   worktreeMissing={custom.worktreeMissing}
+                  transcriptMissing={custom.transcriptMissing}
                   detectedPrs={custom.detectedPrs}
                   tags={custom.tags}
                   colorOf={colorOf}

@@ -11,9 +11,11 @@ import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
+import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
+import { DegradedChatCard } from './DegradedChatCard';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
@@ -79,12 +81,16 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           <ThreadPrimitive.Viewport
             data-testid="chat-thread-viewport"
             data-mf-chat-thread
-            className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
+            className="relative flex flex-1 flex-col overflow-y-auto"
           >
             <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
               <LoadErrorBanner />
+              <DegradedChatCard />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
+              {/* Inline "thinking/working" indicator — sits after the last message,
+                  not pinned above the composer (#214). */}
+              <GeneratingIndicator />
               <ChatGateMount />
             </div>
 
@@ -101,7 +107,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
               </ThreadPrimitive.ScrollToBottom>
 
               <div className="mx-auto w-full max-w-3xl px-5 pb-4">
-                <GeneratingIndicator />
+                <BackgroundActivityBar />
                 <Composer />
               </div>
             </ThreadPrimitive.ViewportFooter>

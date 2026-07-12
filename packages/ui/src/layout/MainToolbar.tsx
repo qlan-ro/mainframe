@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, GitBranch, Moon, Search, Sun } from 'lucide-react';
+import { ChevronDown, GitBranch, GitFork, Moon, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -21,6 +21,8 @@ interface MainToolbarProps {
   onExpandSidebar: () => void;
   projectName: string;
   branchName?: string;
+  /** Whether the active session runs in a git worktree (vs. the shared main repo). */
+  isWorktree?: boolean;
   windowStyle: WindowStyle;
   port: number;
   projectId?: string;
@@ -29,6 +31,45 @@ interface MainToolbarProps {
 
 const ICON_BTN =
   'inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
+
+const CHIP_BASE =
+  'inline-flex h-[22px] min-w-0 max-w-[230px] items-center gap-[5px] rounded-[6px] border-[0.5px] border-solid px-[6px] font-mono text-caption font-normal';
+
+/**
+ * Worktree vs main-repo chip styling — mirrors the Workspace Surfaces artboard
+ * (02-chrome.jsx MainToolbar). Worktree: accent border + tint, foreground text;
+ * main-repo: transparent border (no layout shift), neutral hover. Both keep the
+ * open popover state subtle — the main-repo chip never turns accent.
+ */
+function chipClass(open: boolean, isWorktree: boolean): string {
+  if (isWorktree) {
+    return cn('border-primary/25 text-foreground', open ? 'bg-primary/15' : 'bg-primary/8 hover:bg-primary/12');
+  }
+  return cn('border-transparent text-muted-foreground', open ? 'bg-accent' : 'hover:bg-accent');
+}
+
+/** Shared chip innards — the interactive trigger and the disabled stub render identically. */
+function BranchChipContent({ branch, isWorktree }: { branch: string; isWorktree: boolean }) {
+  return (
+    <>
+      {isWorktree ? (
+        <GitFork size={11} className="flex-shrink-0 text-primary" />
+      ) : (
+        <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
+      )}
+      <span className="truncate">{branch}</span>
+      {isWorktree && (
+        <span
+          data-testid="main-toolbar-branch-wt"
+          className="ml-[1px] inline-flex h-[14px] flex-shrink-0 items-center rounded-[4px] bg-primary/12 px-[5px] text-micro font-semibold uppercase tracking-wide text-primary"
+        >
+          wt
+        </span>
+      )}
+      <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+    </>
+  );
+}
 
 /**
  * Shell-level surface-area toolbar (above SurfaceHost): project · branch identity
@@ -42,6 +83,7 @@ export function MainToolbar({
   onExpandSidebar,
   projectName,
   branchName,
+  isWorktree = false,
   windowStyle,
   port,
   projectId,
@@ -55,16 +97,28 @@ export function MainToolbar({
   const toggleInspector = useUiPrefs((s) => s.toggleInspector);
   const geo = windowStyleGeometry(windowStyle);
 
-  // BranchPopover writes (checkout/merge/rebase/rename/delete/new-branch) don't
-  // update the persisted `chat.branchName` the label prop derives from — no
-  // git-write route broadcasts `chat.updated`. Re-read the live current branch
-  // straight from git on `onBranchChanged` so the chip never goes stale; reset
-  // whenever the identity itself changes (chat switch) so a stale override from
-  // a previous chat can never leak.
+  // Read the live current branch from git so the chip shows for EVERY session,
+  // not just worktrees: a main-repo session has no persisted `chat.branchName`,
+  // so without this fetch the whole chip disappears. Re-runs on identity change
+  // (fresh, cancellation-guarded so a late response from a previous chat can't
+  // leak) and after a popover write via handleBranchChanged — BranchPopover
+  // writes don't broadcast `chat.updated`, so the prop alone would go stale.
   const [liveBranch, setLiveBranch] = useState<string | undefined>(undefined);
   useEffect(() => {
     setLiveBranch(undefined);
-  }, [chatId, branchName]);
+    if (!projectId) return;
+    let cancelled = false;
+    getGitBranch(port, projectId, chatId)
+      .then(({ branch }) => {
+        if (!cancelled) setLiveBranch(branch ?? undefined);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) console.warn('[MainToolbar] failed to read current branch', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [port, projectId, chatId, branchName]);
   const handleBranchChanged = useCallback(() => {
     if (!projectId) return;
     getGitBranch(port, projectId, chatId)
@@ -73,7 +127,13 @@ export function MainToolbar({
         console.warn('[MainToolbar] failed to refresh branch after popover write', err);
       });
   }, [port, projectId, chatId]);
-  const displayBranch = liveBranch ?? branchName;
+  // A worktree DRAFT (no chatId yet — the chat is created on first send) can't
+  // resolve its branch live: without a chatId the fetch reads the project ROOT.
+  // Trust the draft's own branch name there; every other state prefers live.
+  // The popover stays off too — useBranchActions without a chatId would mutate
+  // the ROOT repo while the chip advertises worktree isolation.
+  const isDraftWorktree = isWorktree && !chatId;
+  const displayBranch = isDraftWorktree ? (branchName ?? liveBranch) : (liveBranch ?? branchName);
 
   return (
     <div
@@ -98,7 +158,7 @@ export function MainToolbar({
           {displayBranch && (
             <>
               <span className="font-normal text-mf-text-4">|</span>
-              {displayBranch && projectId ? (
+              {displayBranch && projectId && !isDraftWorktree ? (
                 <BranchPopover
                   port={port}
                   projectId={projectId}
@@ -106,7 +166,7 @@ export function MainToolbar({
                   open={branchOpen}
                   onOpenChange={setBranchOpen}
                   onBranchChanged={handleBranchChanged}
-                  triggerLabel="Switch branch"
+                  triggerLabel={isWorktree ? 'Switch branch · worktree' : 'Switch branch · main repo'}
                 >
                   {/* Bare trigger — BranchPopover wraps this in Hint itself (via
                       triggerLabel), around PopoverTrigger. Wrapping Hint here would
@@ -115,31 +175,34 @@ export function MainToolbar({
                       content (see BranchPopover.tsx's file header). */}
                   <button
                     data-testid="main-toolbar-branch"
+                    data-worktree={isWorktree ? 'true' : 'false'}
                     type="button"
                     onClick={() => setBranchOpen((o) => !o)}
-                    className={cn(
-                      'inline-flex h-[22px] min-w-0 max-w-[230px] cursor-pointer items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal',
-                      branchOpen
-                        ? 'bg-primary/10 border border-primary/40 text-foreground'
-                        : 'text-muted-foreground hover:bg-accent',
-                    )}
+                    className={cn(CHIP_BASE, 'cursor-pointer', chipClass(branchOpen, isWorktree))}
                   >
-                    <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                    <span className="truncate">{displayBranch}</span>
-                    <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+                    <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
                   </button>
                 </BranchPopover>
               ) : (
-                <Hint label="Switch branch — coming with its surface">
+                <Hint
+                  label={
+                    isDraftWorktree
+                      ? 'Branch actions unlock on first message'
+                      : 'Switch branch — coming with its surface'
+                  }
+                >
                   <button
                     data-testid="main-toolbar-branch"
+                    data-worktree={isWorktree ? 'true' : 'false'}
                     type="button"
                     disabled
-                    className="inline-flex h-[22px] min-w-0 max-w-[230px] cursor-not-allowed items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal text-muted-foreground opacity-80"
+                    className={cn(
+                      CHIP_BASE,
+                      'cursor-not-allowed opacity-80',
+                      isWorktree ? 'border-primary/25 bg-primary/8 text-foreground' : 'text-muted-foreground',
+                    )}
                   >
-                    <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                    <span className="truncate">{displayBranch}</span>
-                    <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+                    <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
                   </button>
                 </Hint>
               )}

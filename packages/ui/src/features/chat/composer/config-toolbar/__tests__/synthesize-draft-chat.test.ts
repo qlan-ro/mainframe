@@ -158,3 +158,32 @@ describe('synthesizeDraftChat — placeholder fields', () => {
     expect(chat.worktreeMissing).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. Pre-send worktree attach (todo #223)
+// ---------------------------------------------------------------------------
+
+describe('synthesizeDraftChat — pre-send worktree attach', () => {
+  it('carries worktreePath and branchName from the draft', () => {
+    const draft: DraftCfg = {
+      projectId: 'p1',
+      adapterId: 'claude',
+      worktreePath: '/wt/feat-a',
+      branchName: 'feat-a',
+    };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.worktreePath).toBe('/wt/feat-a');
+    expect(chat.branchName).toBe('feat-a');
+  });
+
+  it('leaves worktreePath and branchName undefined when the draft has none', () => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude' };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.worktreePath).toBeUndefined();
+    expect(chat.branchName).toBeUndefined();
+  });
+});

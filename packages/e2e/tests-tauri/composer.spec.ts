@@ -391,8 +391,8 @@ test.describe('§composer provider locked after first message', () => {
   });
 });
 
-// ─── Worktree-missing banner (§9c) ─────────────────────────────────────────────
-test.describe('§composer worktree-missing banner', () => {
+// ─── Worktree-missing → degraded card locks composer (§9c) ────────────────────
+test.describe('§composer worktree-missing degraded card', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
   let chatId: string;
@@ -432,12 +432,18 @@ test.describe('§composer worktree-missing banner', () => {
     await closeTauriApp(app);
   });
 
-  test('shows the worktree-missing banner and locks the input + send button', async () => {
+  test('shows the degraded-chat card with recovery actions and locks the input + send button', async () => {
     const { page } = app;
-    const banner = page.getByTestId('chat-composer-worktree-missing');
-    await expect(banner).toBeVisible({ timeout: 10_000 });
-    await expect(banner).toContainText('The worktree for this session was deleted');
-    await expect(banner).toContainText(worktreePath);
+    // The old chat-composer-worktree-missing banner was replaced by the
+    // thread-level DegradedChatCard (unified transcript/worktree recovery).
+    const card = page.getByTestId('chat-degraded-card');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toContainText('Worktree deleted');
+    await expect(card).toContainText(worktreePath);
+    await expect(page.getByTestId('chat-degraded-recreate-worktree')).toBeVisible();
+    await expect(page.getByTestId('chat-degraded-project-root')).toBeVisible();
+    await expect(page.getByTestId('chat-degraded-delete')).toBeVisible();
+    await expect(page.getByTestId('chat-composer-worktree-missing')).toHaveCount(0);
 
     await expect(page.getByTestId('chat-composer-input')).toBeDisabled();
     await expect(page.getByTestId('chat-composer-send')).toBeDisabled();

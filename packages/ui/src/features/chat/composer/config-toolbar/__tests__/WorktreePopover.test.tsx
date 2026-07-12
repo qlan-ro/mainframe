@@ -54,6 +54,7 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
 // Import component AFTER mocks are in place
 import { WorktreePopover } from '../WorktreePopover';
 import type { Chat } from '@qlan-ro/mainframe-types';
+import { useDraftConfigStore, setDraftConfig, getDraftConfig } from '@/features/sessions/runtime/draft-config';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -100,6 +101,7 @@ beforeEach(() => {
   attachWorktreeMock.mockClear();
   getGitBranchesMock.mockClear();
   getProjectWorktreesMock.mockClear();
+  useDraftConfigStore.setState({ drafts: new Map() });
 });
 
 // ---------------------------------------------------------------------------
@@ -357,5 +359,84 @@ describe('WorktreePopover — isolated-state indicator', () => {
     const trigger = screen.getByTestId('composer-worktree-trigger');
     const dot = trigger.querySelector('span[aria-hidden]');
     expect(dot).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Draft mode (todo #223) — a __LOCALID_* chat has no daemon chat yet, so the
+// choice is stashed in the draft config and carried into first-send creation.
+// ---------------------------------------------------------------------------
+
+const DRAFT_ID = '__LOCALID_d1';
+
+function makeDraftChat(overrides?: Partial<Chat>): Chat {
+  return makeChat({ id: DRAFT_ID, ...overrides });
+}
+
+describe('WorktreePopover — draft mode stashes instead of calling the daemon', () => {
+  it('Existing-tab attach patches the draft config and never calls attachWorktree', async () => {
+    setDraftConfig(DRAFT_ID, { projectId: 'p1', adapterId: 'claude' });
+    renderPopover(makeDraftChat());
+
+    openPopover();
+    fireEvent.click(await screen.findByTestId('composer-worktree-tab-existing'));
+    fireEvent.click(await screen.findByTestId('composer-worktree-attach-/wt/feat-a'));
+
+    await waitFor(() => expect(getDraftConfig(DRAFT_ID)?.worktreePath).toBe('/wt/feat-a'));
+    expect(getDraftConfig(DRAFT_ID)?.branchName).toBe('feat-a');
+    expect(attachWorktreeMock).not.toHaveBeenCalled();
+  });
+
+  it('New-tab enable stashes a pendingWorktree and never calls enableWorktree', async () => {
+    setDraftConfig(DRAFT_ID, { projectId: 'p1', adapterId: 'claude' });
+    renderPopover(makeDraftChat());
+
+    openPopover();
+    const input = await screen.findByTestId('composer-worktree-branch-name');
+    fireEvent.change(input, { target: { value: 'feat/new' } });
+    fireEvent.click(screen.getByTestId('composer-worktree-enable'));
+
+    await waitFor(() =>
+      expect(getDraftConfig(DRAFT_ID)?.pendingWorktree).toEqual({ baseBranch: 'main', branchName: 'feat/new' }),
+    );
+    expect(enableWorktreeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorktreePopover — draft panel reflects the stashed choice', () => {
+  it('shows the draft panel for an attached draft worktree and cancel clears it', async () => {
+    setDraftConfig(DRAFT_ID, {
+      projectId: 'p1',
+      adapterId: 'claude',
+      worktreePath: '/wt/feat-a',
+      branchName: 'feat-a',
+    });
+    // ComposerToolbar synthesizes the draft chat from the same draft config.
+    renderPopover(makeDraftChat({ worktreePath: '/wt/feat-a', branchName: 'feat-a' }));
+
+    openPopover();
+
+    expect(await screen.findByTestId('composer-worktree-draft-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('composer-worktree-draft-cancel'));
+
+    expect(getDraftConfig(DRAFT_ID)?.worktreePath).toBeUndefined();
+    expect(getDraftConfig(DRAFT_ID)?.branchName).toBeUndefined();
+  });
+
+  it('shows the draft panel for a pending new worktree and cancel clears the intent', async () => {
+    setDraftConfig(DRAFT_ID, {
+      projectId: 'p1',
+      adapterId: 'claude',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feat/new' },
+    });
+    renderPopover(makeDraftChat());
+
+    openPopover();
+
+    const panel = await screen.findByTestId('composer-worktree-draft-panel');
+    expect(panel.textContent).toContain('feat/new');
+    fireEvent.click(screen.getByTestId('composer-worktree-draft-cancel'));
+
+    expect(getDraftConfig(DRAFT_ID)?.pendingWorktree).toBeUndefined();
   });
 });

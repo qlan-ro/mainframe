@@ -30,6 +30,7 @@ import type { ComponentProps } from 'react';
 
 vi.mock('@/lib/api/files', () => ({
   getProjectFile: vi.fn().mockResolvedValue('content'),
+  getFileForView: vi.fn().mockResolvedValue({ content: 'content', external: false }),
   saveProjectFile: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
@@ -218,7 +219,7 @@ vi.mock('@/features/viewers/ViewerShell', () => ({
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 import { EditorTab } from '../EditorTab';
-import { saveProjectFile, getProjectFile } from '@/lib/api/files';
+import { saveProjectFile, getProjectFile, getFileForView } from '@/lib/api/files';
 import { setHostForTesting, resetHostForTesting } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
@@ -241,6 +242,7 @@ beforeEach(async () => {
   mockOnFileChange.mockClear();
   mockApplyValueUpdate.mockClear();
   vi.mocked(getProjectFile).mockResolvedValue('content');
+  vi.mocked(getFileForView).mockResolvedValue({ content: 'content', external: false });
   // Reset LSP call-order tracker.
   lspCallOrder.length = 0;
   // Reset initLspPort and ensureClient mocks.
@@ -551,6 +553,29 @@ describe('EditorTab — live disk-change reload (D4)', () => {
     expect(screen.queryByTestId('editor-tab-keep-mine')).toBeNull();
   });
 
+  it('DIRTY buffer + file-change on a MARKDOWN file → conflict banner appears (not just code files)', async () => {
+    activeIdentityState.projectId = 'proj-d4-md';
+    activeIdentityState.chatId = 'chat-d4-md';
+    activeIdentityState.projectPath = '/project';
+    mockBufferDirty = true;
+    vi.mocked(getProjectFile).mockResolvedValue('disk content v2');
+
+    render(<EditorTab tabId="tab-d4-md" path="/project/notes.md" />);
+    await screen.findByTestId('markdown-editor-mock');
+
+    await act(async () => {
+      fireFileChange('/project/notes.md');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The banner must render for markdown files too — the markdown branch
+    // previously skipped it, silently swallowing external-change conflicts.
+    expect(screen.getByTestId('editor-tab-disk-conflict')).toBeTruthy();
+    expect(screen.getByTestId('editor-tab-reload')).toBeTruthy();
+    expect(screen.getByTestId('editor-tab-keep-mine')).toBeTruthy();
+  });
+
   it('Keep-mine button dismisses the banner without applying disk content', async () => {
     activeIdentityState.projectId = 'proj-d4-keep';
     activeIdentityState.chatId = 'chat-d4-keep';
@@ -695,5 +720,82 @@ describe('EditorTab — handleSave respects current readOnly (MINOR finding)', (
     });
 
     expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
+  });
+});
+
+describe('EditorTab — external read-only files (#205)', () => {
+  const EXT_PATH = '/tmp/outside/notes.txt';
+
+  function mockExternalIdentity() {
+    activeIdentityState.projectId = 'proj-ext';
+    activeIdentityState.chatId = 'chat-ext';
+    activeIdentityState.projectPath = '/project';
+    vi.mocked(getFileForView).mockResolvedValue({ content: 'external content', external: true });
+  }
+
+  it('forces readOnly on CmEditorWithComments and labels the banner "outside the project"', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-1" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(capturedCmEditorProps[capturedCmEditorProps.length - 1]?.readOnly).toBe(true);
+    const indicator = await screen.findByTestId('editor-tab-readonly');
+    expect(indicator.textContent).toContain('outside the project');
+  });
+
+  it('never calls saveProjectFile for an external file', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-2" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    await act(async () => {
+      lastProps?.onSave?.('attempted save');
+    });
+    expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
+  });
+
+  it('does not register a file watch for an external file', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-3" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(mockSubscribeFile).not.toHaveBeenCalledWith(EXT_PATH);
+  });
+
+  it('keeps an external markdown file read-only in MarkdownEditorTab', async () => {
+    mockExternalIdentity();
+    render(<EditorTab tabId="tab-ext-4" path="/tmp/outside/README.md" />);
+    await screen.findByTestId('markdown-editor-mock');
+    expect(capturedMarkdownProps[capturedMarkdownProps.length - 1]?.readOnly).toBe(true);
+  });
+
+  it('keeps a contained project file fully editable (external:false)', async () => {
+    activeIdentityState.projectId = 'proj-in';
+    activeIdentityState.chatId = 'chat-in';
+    activeIdentityState.projectPath = '/project';
+    render(<EditorTab tabId="tab-ext-5" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(capturedCmEditorProps[capturedCmEditorProps.length - 1]?.readOnly).toBe(false);
+    expect(screen.queryByTestId('editor-tab-readonly')).toBeNull();
+  });
+
+  // Regression: buffers persist globally, and the load effect's cache-hit path
+  // renders them editable. Caching an external file would therefore resurface
+  // it WITHOUT the read-only banner on reopen — external loads must never
+  // enter the buffer cache.
+  it('does NOT cache an external file in the editor store (read-only survives reopen)', async () => {
+    mockExternalIdentity();
+    editorState.setBuffer.mockClear();
+    render(<EditorTab tabId="tab-ext-6" path={EXT_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(editorState.setBuffer).not.toHaveBeenCalled();
+  });
+
+  it('still caches a contained project file on load', async () => {
+    activeIdentityState.projectId = 'proj-in-cache';
+    activeIdentityState.chatId = 'chat-in-cache';
+    activeIdentityState.projectPath = '/project';
+    editorState.setBuffer.mockClear();
+    render(<EditorTab tabId="tab-ext-7" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(editorState.setBuffer).toHaveBeenCalledWith('/project/src/app.js', 'content', false);
   });
 });

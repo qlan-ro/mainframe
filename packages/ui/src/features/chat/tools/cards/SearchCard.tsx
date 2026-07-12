@@ -43,7 +43,7 @@ function PlainBody({ resultText }: { resultText: string }) {
   return (
     <pre
       data-testid="search-card-plain-body"
-      className="font-mono text-caption whitespace-pre-wrap break-words px-3 py-2 max-h-[300px] overflow-y-auto text-muted-foreground"
+      className="font-mono text-caption whitespace-pre-wrap break-words px-3 py-2 text-muted-foreground"
     >
       {resultText}
     </pre>

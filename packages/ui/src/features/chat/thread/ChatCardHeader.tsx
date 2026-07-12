@@ -9,7 +9,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
-import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { Hint } from '@/components/ui/hint';
@@ -54,7 +54,7 @@ function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | n
 function ChatCardHeaderReal() {
   const host = useHost();
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
-  const custom = useAuiState((s) => sessionCustomOf(s.threadListItem?.custom));
+  const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
   const prs = custom?.detectedPrs ?? [];
   const worktreePath = custom?.worktreePath;
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));

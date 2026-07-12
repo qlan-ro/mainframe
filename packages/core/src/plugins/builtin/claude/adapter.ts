@@ -16,6 +16,8 @@ import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
+import { generateClaudeTitle } from './title-generator.js';
+import { isClaudeTranscriptPresent } from './transcript.js';
 import { ClaudePlanModeHandler } from './plan-mode-handler.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import { createChildLogger } from '../../../logger.js';
@@ -111,6 +113,9 @@ const CLAUDE_MODELS: AdapterModel[] = [
     contextWindow: DEFAULT_CONTEXT_WINDOW,
     supportedEfforts: ['low', 'medium', 'high', 'max'],
   },
+  // Window live-verified 2026-07-07: the CLI's get_context_usage reports
+  // maxTokens 967,000 for claude-sonnet-5 (1M minus the CLI's reserve).
+  { id: 'claude-sonnet-5', label: 'Sonnet 5', contextWindow: EXTENDED_CONTEXT_WINDOW },
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
   { id: 'claude-3-5-sonnet-20241022', label: 'Sonnet 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
   { id: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
@@ -123,16 +128,21 @@ function hasExtendedWindowSuffix(id: string): boolean {
 // The CLI's model probe doesn't expose context window size — only a marketing
 // description like "Opus 4.7 with 1M context". Reconcile probed entries with
 // the static catalog so known IDs retain their authoritative window, unknown
-// IDs ending in "[1m]" (or resolving to one via `resolvedModel`) get the
-// extended window, and everything else falls back to a description sniff
-// before the 200k default.
-export function enrichWithContextWindow(probed: AdapterModel[], resolvedModel?: string): AdapterModel[] {
+// IDs ending in "[1m]" (on the entry id OR its own `resolvedModel` — the CLI
+// puts the suffix on either side, e.g. `claude-fable-5[1m]` resolves to a
+// bare `claude-fable-5`) get the extended window, and everything else falls
+// back to a description sniff before the 200k default. `defaultResolvedModel`
+// is kept for callers probing legacy payloads where only the "default" entry
+// carried a resolution.
+export function enrichWithContextWindow(probed: AdapterModel[], defaultResolvedModel?: string): AdapterModel[] {
   const staticById = new Map(CLAUDE_MODELS.map((m) => [m.id, m]));
   return probed.map((model) => {
     if (model.contextWindow) return model;
-    const effectiveId = model.id === 'default' && resolvedModel ? resolvedModel : model.id;
-    if (hasExtendedWindowSuffix(effectiveId)) return { ...model, contextWindow: EXTENDED_CONTEXT_WINDOW };
-    const fromStatic = staticById.get(model.id)?.contextWindow;
+    const resolved = model.resolvedModel ?? (model.id === 'default' ? defaultResolvedModel : undefined);
+    if (hasExtendedWindowSuffix(model.id) || (resolved && hasExtendedWindowSuffix(resolved))) {
+      return { ...model, contextWindow: EXTENDED_CONTEXT_WINDOW };
+    }
+    const fromStatic = staticById.get(model.id)?.contextWindow ?? (resolved && staticById.get(resolved)?.contextWindow);
     if (fromStatic) return { ...model, contextWindow: fromStatic };
     const window = /\b1m\b|1m context/i.test(model.description ?? '')
       ? EXTENDED_CONTEXT_WINDOW
@@ -233,6 +243,10 @@ export class ClaudeAdapter implements Adapter {
     this.sessions.clear();
   }
 
+  generateTitle(content: string, binary: string): Promise<string | null> {
+    return generateClaudeTitle(content, binary);
+  }
+
   async listSkills(projectPath: string): Promise<Skill[]> {
     return skills.listSkills(projectPath);
   }
@@ -277,5 +291,13 @@ export class ClaudeAdapter implements Adapter {
     opts?: { offset?: number; limit?: number },
   ): Promise<ExternalSessionPage> {
     return listExternalSessions(projectPath, excludeSessionIds, opts);
+  }
+
+  async isTranscriptPresent(
+    sessionId: string,
+    projectPath: string,
+    sessionFilePath?: string | null,
+  ): Promise<boolean | null> {
+    return isClaudeTranscriptPresent(sessionId, projectPath, sessionFilePath);
   }
 }

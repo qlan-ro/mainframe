@@ -26,6 +26,7 @@ function item(
       hasPending: false,
       detectedPrs: [],
       worktreeMissing: false,
+      transcriptMissing: false,
       updatedAt: 1000,
       ...customOverrides,
     },

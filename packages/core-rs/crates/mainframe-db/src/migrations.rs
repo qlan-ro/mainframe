@@ -403,11 +403,36 @@ pub fn migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        // Merged from main (34-commit catch-up): context-usage tracking columns +
+        // transcript-missing flag on chats. Mirrors TS migration 25.
+        Migration {
+            version: 25,
+            up: |db| {
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "last_context_total_tokens",
+                    "ALTER TABLE chats ADD COLUMN last_context_total_tokens INTEGER",
+                )?;
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "last_context_max_tokens",
+                    "ALTER TABLE chats ADD COLUMN last_context_max_tokens INTEGER",
+                )?;
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "transcript_missing",
+                    "ALTER TABLE chats ADD COLUMN transcript_missing INTEGER DEFAULT 0",
+                )
+            },
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 24;
+pub const LATEST_VERSION: i64 = 25;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)
@@ -429,10 +454,11 @@ pub fn run_migrations(db: &Connection, target: i64) -> Result<(), DbError> {
 
 // PORT STATUS: src/db/migrations.ts (253 lines)
 // confidence: high
-// notes: same 24 numbered migrations, same in-body table_info guards and data
-// backfills, same LATEST_VERSION=24. MIGRATIONS (const array in TS) becomes
-// migrations() returning a Vec<Migration> with non-capturing closures coerced to
-// fn pointers (a Vec can't be const). LATEST_VERSION is a const literal (24)
+// notes: same 25 numbered migrations, same in-body table_info guards and data
+// backfills, same LATEST_VERSION=25 (25 merged from main's 34-commit catch-up).
+// MIGRATIONS (const array in TS) becomes migrations() returning a Vec<Migration>
+// with non-capturing closures coerced to fn pointers (a Vec can't be const).
+// LATEST_VERSION is a const literal (25)
 // rather than MIGRATIONS[last].version; tests/migrations.rs asserts they agree.
 // The TS default param `target=LATEST_VERSION` becomes an explicit argument
 // (schema::initialize_schema passes LATEST_VERSION). now_iso8601() from

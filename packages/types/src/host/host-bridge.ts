@@ -111,6 +111,14 @@ export interface PreviewHandle {
   onNavigate(cb: (url: string) => void): Unsubscribe;
   /** Tauri: re-read container.getBoundingClientRect() into the native layer. Electron: no-op. */
   refit(): void;
+  /**
+   * Point the handle at a new anchor element for bounds reads. The device
+   * toggle (and any layout swap) can remount the anchor node; without
+   * re-anchoring, refit() keeps reading the mount-time element — detached
+   * nodes report a 0×0 rect and fling the native webview to garbage bounds.
+   * Optional (Tauri implements it; Electron's <webview> tracks the DOM).
+   */
+  reanchor?(el: HTMLElement): void;
   setDevice(device: 'desktop' | 'mobile'): void;
   destroy(): void;
 }

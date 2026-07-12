@@ -15,6 +15,7 @@ export { tunnelRoutes } from './tunnel.js';
 export { contentSearchRoutes } from './search.js';
 export { lspRoutes } from './lsp-routes.js';
 export { worktreeRoutes } from './worktree.js';
+export { chatRecoveryRoutes } from './chat-recovery.js';
 export { deviceRoutes } from './device.js';
 export { tagRoutes } from './tags.js';
 export { workflowRoutes } from './workflows.js';

@@ -4,11 +4,12 @@
  *
  * Resolves projectId from useActiveIdentity(). Registers ⌘⇧T → openQuick().
  * Listens for `mf:open-tasks` custom event (dispatched by SidebarHeader TasksBtn).
- * Triggers a load() on mount so the modal shows correct data even when the
- * inspector drawer is hidden.
+ * Loads on mount (so the inspector drawer has data) and refetches on the
+ * open/quick-add rising edge (so externally-made changes are reflected — the
+ * todos store has no WS event).
  * Mounted once in AppShell's outlet block.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -27,6 +28,8 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
   const { projectId } = useActiveIdentity();
   const startSession = useStartTodoSession(port, projectId);
   const { load, view } = useTodosStore();
+  const prevOpen = useRef(false);
+  const prevQuick = useRef(false);
 
   // Eagerly load todos so modal and quick-add show correct data even when
   // the inspector drawer is hidden.
@@ -34,6 +37,19 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
     if (!projectId || !port) return;
     void load(port, projectId);
   }, [port, projectId, load]);
+
+  // Refetch on the open/quickOpen rising edge. The store has no WS event
+  // (single-window refetch-on-mutation), so a change made outside this window
+  // — agent sessions, another window, direct DB writes — would otherwise leave
+  // the modal showing boot-time statuses. The store's _loadSeq guard keeps
+  // concurrent loads safe; todos are not cleared, so the list stays rendered.
+  useEffect(() => {
+    if (!projectId || !port) return;
+    const justOpened = (open && !prevOpen.current) || (quickOpen && !prevQuick.current);
+    prevOpen.current = open;
+    prevQuick.current = quickOpen;
+    if (justOpened) void load(port, projectId);
+  }, [open, quickOpen, projectId, port, load]);
 
   // ⌘⇧T → open quick-add dialog
   useEffect(() => {

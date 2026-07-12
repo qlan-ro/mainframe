@@ -18,9 +18,8 @@
  *  - All assertions use hardcoded expected values.
  *
  * Behaviors covered:
- *  1. worktreeMissing=true, worktreePath='/tmp/wt'
- *       → banner present (data-testid="chat-composer-worktree-missing")
- *       → banner text contains '/tmp/wt' inside a <code>
+ *  1. worktreeMissing=true
+ *       → NO composer banner (recovery lives in the thread-level DegradedChatCard)
  *       → input has the `disabled` attribute
  *       → send button has the `disabled` attribute
  *  2. worktreeMissing=false
@@ -149,28 +148,18 @@ function renderComposer() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Composer — worktreeMissing=true shows banner and disables input/send', () => {
+describe('Composer — worktreeMissing=true disables input/send (banner replaced by the degraded card)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
     __sendSpy = vi.fn();
   });
 
-  it('renders the worktree-missing banner', () => {
+  it('does NOT render the old worktree-missing banner (the thread-level DegradedChatCard owns recovery)', () => {
     __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
     renderComposer();
 
-    expect(screen.getByTestId('chat-composer-worktree-missing')).toBeInTheDocument();
-  });
-
-  it('banner text contains the worktreePath inside a <code> element', () => {
-    __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
-    renderComposer();
-
-    const banner = screen.getByTestId('chat-composer-worktree-missing');
-    const code = banner.querySelector('code');
-    expect(code).not.toBeNull();
-    expect(code!.textContent).toBe('/tmp/wt');
+    expect(screen.queryByTestId('chat-composer-worktree-missing')).not.toBeInTheDocument();
   });
 
   it('input (chat-composer-input) has the disabled attribute', () => {

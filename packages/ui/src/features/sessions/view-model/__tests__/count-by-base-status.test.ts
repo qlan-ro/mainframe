@@ -34,6 +34,7 @@ it('buckets sessions by base status (unread does not bucket)', () => {
   const unread = new Set<string>(['d']);
   expect(countByBaseStatus(items, unread)).toEqual({
     'worktree-missing': 1,
+    'transcript-missing': 0,
     working: 1,
     waiting: 1,
     idle: 2,

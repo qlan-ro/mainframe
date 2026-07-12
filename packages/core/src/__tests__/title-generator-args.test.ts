@@ -11,9 +11,9 @@ vi.mock('node:child_process', () => ({
 }));
 
 // Import AFTER the mock is registered so the module picks up the stub.
-const { generateTitle } = await import('../chat/title-generator.js');
+const { generateClaudeTitle } = await import('../plugins/builtin/claude/title-generator.js');
 
-describe('generateTitle — CLI args contract', () => {
+describe('generateClaudeTitle — CLI args contract', () => {
   it('passes --no-session-persistence to execFile so throwaway prompts are never persisted', async () => {
     execFileMock.mockImplementation(
       (_bin: string, _args: string[], _opts: unknown, callback: (err: null, stdout: string) => void) => {
@@ -22,7 +22,7 @@ describe('generateTitle — CLI args contract', () => {
       },
     );
 
-    const result = await generateTitle('some message', 'claude');
+    const result = await generateClaudeTitle('some message', 'claude');
 
     // Verify execFile was invoked exactly once.
     expect(execFileMock).toHaveBeenCalledTimes(1);

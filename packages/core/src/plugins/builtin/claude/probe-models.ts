@@ -38,6 +38,7 @@ export function mapModelInfo(info: CliModelInfo): AdapterModel {
   }
   const model: AdapterModel = { id: info.value, label };
   if (info.description) model.description = info.description;
+  if (typeof info.resolvedModel === 'string') model.resolvedModel = info.resolvedModel;
   if (info.supportedEffortLevels?.length) {
     model.supportedEfforts = info.supportedEffortLevels;
     if (info.supportedEffortLevels.includes('xhigh')) model.supportsUltracode = true;
@@ -52,6 +53,12 @@ export function mapModelInfo(info: CliModelInfo): AdapterModel {
 export interface ProbeResult {
   models: AdapterModel[];
   resolvedModel?: string;
+}
+
+function removeConcreteDefaultDuplicate(models: AdapterModel[]): AdapterModel[] {
+  const defaultModel = models.find((model) => model.isDefault);
+  if (!defaultModel?.resolvedModel) return models;
+  return models.filter((model) => model === defaultModel || model.resolvedModel !== defaultModel.resolvedModel);
 }
 
 /**
@@ -69,7 +76,7 @@ export function extractProbePayload(event: Record<string, unknown>): ProbeResult
   const payload = ((response?.response as Record<string, unknown>) ?? response) as Record<string, unknown> | undefined;
   const rawModels = payload?.models;
   if (!Array.isArray(rawModels)) return null;
-  const models = (rawModels as CliModelInfo[]).map(mapModelInfo);
+  const models = removeConcreteDefaultDuplicate((rawModels as CliModelInfo[]).map(mapModelInfo));
   const defaultEntry = (rawModels as CliModelInfo[]).find((m) => m.value === 'default');
   const resolvedModel = typeof defaultEntry?.resolvedModel === 'string' ? defaultEntry.resolvedModel : undefined;
   return { models, resolvedModel };

@@ -18,6 +18,15 @@ export interface SessionResult {
     cache_creation_input_tokens?: number;
     cache_read_input_tokens?: number;
   };
+  /**
+   * Tokens occupying the context window at the turn's last model call
+   * (input + cache tokens of the final parent assistant message).
+   * `null` = the adapter knows the size is unknown this turn (e.g. error
+   * turn with no assistant usage) — do NOT estimate it from `usage`, which
+   * may be a cumulative multi-call total. Absent (undefined) = legacy
+   * adapter; `usage` remains the best available approximation.
+   */
+  contextTokens?: number | null;
   subtype?: string;
   result?: string;
   is_error?: boolean;
@@ -218,6 +227,8 @@ export interface AdapterModel {
   id: string;
   label: string;
   description?: string;
+  /** Concrete model id an alias entry currently resolves to (CLI probe, per-entry). */
+  resolvedModel?: string;
   contextWindow?: number;
   isDefault?: boolean;
   /** Dynamic, per-model. Empty/absent → model has no effort control. */
@@ -329,6 +340,15 @@ export interface Adapter {
   killAll(): void;
   getToolCategories?(): import('./display.js').ToolCategories;
 
+  /**
+   * Generate a friendly chat title from the first user message, via a cheap
+   * one-shot model call. `binary` is the resolved CLI path from the
+   * `<adapterId>.titleBinary` setting. Adapters without a cheap, side-effect-free
+   * title model omit this — callers then keep the deterministic truncated title
+   * (`deriveTitleFromMessage`) rather than cross-spawning another vendor's CLI.
+   */
+  generateTitle?(content: string, binary: string): Promise<string | null>;
+
   getContextFiles?(projectPath: string): {
     global: import('./context.js').ContextFile[];
     project: import('./context.js').ContextFile[];
@@ -351,6 +371,17 @@ export interface Adapter {
     excludeSessionIds: string[],
     opts?: { offset?: number; limit?: number },
   ): Promise<ExternalSessionPage>;
+
+  /**
+   * Whether the CLI's transcript for `sessionId` still exists on disk.
+   * Returns `null` when presence cannot be determined (e.g. the adapter's own
+   * registry is unreadable) — callers must treat `null` as "don't flag".
+   */
+  isTranscriptPresent?(
+    sessionId: string,
+    projectPath: string,
+    sessionFilePath?: string | null,
+  ): Promise<boolean | null>;
 
   /**
    * Factory for an adapter-specific plan-mode action handler.

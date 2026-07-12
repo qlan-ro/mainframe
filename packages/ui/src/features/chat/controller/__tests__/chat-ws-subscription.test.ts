@@ -35,7 +35,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
   // stubs for imports other modules in the same tree pull in
-  getChatMessages: vi.fn().mockResolvedValue([]),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
   interruptChat: vi.fn().mockResolvedValue(undefined),
   cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),

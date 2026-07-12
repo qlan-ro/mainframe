@@ -4,6 +4,20 @@ import type { ClaudeSession } from './session.js';
 import { isPrCreateCommand, isPrMutationCommand, parsePrIdentifierFromArgs } from './pr-detection.js';
 import { normalizeTodos } from '../../../todos/normalize.js';
 
+// `<synthetic>` assistant messages and error turns carry all-zero usage;
+// letting them through would clobber the real captured context size (#197).
+function hasNonZeroUsage(usage: NonNullable<ClaudeSessionUsage>): boolean {
+  return (
+    (usage.input_tokens ?? 0) +
+      (usage.output_tokens ?? 0) +
+      (usage.cache_creation_input_tokens ?? 0) +
+      (usage.cache_read_input_tokens ?? 0) >
+    0
+  );
+}
+
+type ClaudeSessionUsage = ClaudeSession['state']['lastAssistantUsage'];
+
 export function handleAssistantEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const message = event.message as {
     model?: string;
@@ -15,12 +29,10 @@ export function handleAssistantEvent(session: ClaudeSession, event: Record<strin
       cache_read_input_tokens?: number;
     };
   };
-  if (message?.usage) {
-    session.state.lastAssistantUsage = message.usage;
-  }
-  if (!message?.content) return;
-
   if (typeof event.parent_tool_use_id === 'string' && event.parent_tool_use_id) {
+    // Subagent turn: its usage reflects the SUBAGENT's context, not this
+    // chat's — never capture it as lastAssistantUsage (#197).
+    if (!message?.content) return;
     const parentToolUseId = event.parent_tool_use_id;
     const tagged = message.content.map((b) => ({
       ...b,
@@ -29,6 +41,11 @@ export function handleAssistantEvent(session: ClaudeSession, event: Record<strin
     sink.onSubagentChild(parentToolUseId, tagged);
     return;
   }
+
+  if (message?.usage && hasNonZeroUsage(message.usage)) {
+    session.state.lastAssistantUsage = message.usage;
+  }
+  if (!message?.content) return;
 
   for (const block of message.content) {
     if (block.type === 'tool_use') {

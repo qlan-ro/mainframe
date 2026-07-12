@@ -70,7 +70,109 @@ describe('MainToolbar — project name', () => {
 });
 
 describe('MainToolbar — branch chip', () => {
-  it('renders main-toolbar-branch containing the branch name when branchName is given', () => {
+  it('renders a neutral, interactive chip for a main-repo session using the live git branch', async () => {
+    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        projectId="p1"
+        chatId="c1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    const chip = await screen.findByTestId('main-toolbar-branch');
+    expect(chip.textContent).toContain('main');
+    expect(chip).not.toBeDisabled();
+    expect(chip.getAttribute('data-worktree')).toBe('false');
+    expect(chip.className).not.toContain('border-primary');
+    expect(screen.queryByTestId('main-toolbar-branch-wt')).toBeNull();
+    expect(mockGetGitBranch).toHaveBeenCalledWith(31415, 'p1', 'c1');
+  });
+
+  it('renders an accented chip with a WT badge for a worktree session', async () => {
+    mockGetGitBranch.mockResolvedValue({ branch: 'feat/x' });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        branchName="feat/x"
+        isWorktree
+        projectId="p1"
+        chatId="c1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    const chip = await screen.findByTestId('main-toolbar-branch');
+    expect(chip.textContent).toContain('feat/x');
+    expect(chip.getAttribute('data-worktree')).toBe('true');
+    expect(chip.className).toContain('border-primary');
+    expect(screen.getByTestId('main-toolbar-branch-wt').textContent?.trim()).toBe('wt');
+  });
+
+  it('prefers the draft worktree branch over the live project-root branch when there is no chatId yet', async () => {
+    // A draft attached to a worktree has no daemon chat yet, so the live fetch
+    // can only see the project ROOT branch — the chip must show the worktree's.
+    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        branchName="feat/wt-draft"
+        isWorktree
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    await waitFor(() => expect(mockGetGitBranch).toHaveBeenCalled());
+    const chip = await screen.findByTestId('main-toolbar-branch');
+    expect(chip.textContent).toContain('feat/wt-draft');
+    expect(chip.getAttribute('data-worktree')).toBe('true');
+  });
+
+  it('disables the chip (no popover) for a pre-send worktree draft', async () => {
+    // Without a chatId, branch actions would run against the project ROOT while
+    // the chip advertises worktree isolation — the popover must stay off until
+    // the first send stamps the chatId.
+    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        branchName="feat/wt-draft"
+        isWorktree
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    const chip = await screen.findByTestId('main-toolbar-branch');
+    expect(chip).toBeDisabled();
+    expect(screen.queryByTestId('mock-branch-changed')).toBeNull();
+    // The pending worktree choice stays visible on the disabled chip.
+    expect(screen.getByTestId('main-toolbar-branch-wt').textContent?.trim()).toBe('wt');
+  });
+
+  it('renders a disabled stub chip when a branch is persisted but no projectId is available', () => {
     render(
       <MainToolbar
         leadingInset={0}
@@ -86,9 +188,30 @@ describe('MainToolbar — branch chip', () => {
     const chip = screen.getByTestId('main-toolbar-branch');
     expect(chip.textContent).toContain('feat/x');
     expect(chip).toBeDisabled();
+    expect(mockGetGitBranch).not.toHaveBeenCalled();
   });
 
-  it('does not render main-toolbar-branch when branchName is absent', () => {
+  it('does not render the chip when git reports no branch and none is persisted', async () => {
+    mockGetGitBranch.mockResolvedValue({ branch: null });
+
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        projectId="p1"
+        chatId="c1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    await waitFor(() => expect(mockGetGitBranch).toHaveBeenCalled());
+    expect(screen.queryByTestId('main-toolbar-branch')).toBeNull();
+  });
+
+  it('does not render the chip when there is no projectId and no persisted branch', () => {
     render(
       <MainToolbar
         leadingInset={0}
@@ -101,12 +224,15 @@ describe('MainToolbar — branch chip', () => {
     );
 
     expect(screen.queryByTestId('main-toolbar-branch')).toBeNull();
+    expect(mockGetGitBranch).not.toHaveBeenCalled();
   });
 });
 
 describe('MainToolbar — branch chip refresh after popover write', () => {
   it('refetches and displays the live branch after BranchPopover reports onBranchChanged', async () => {
-    mockGetGitBranch.mockResolvedValue({ branch: 'feat/after-checkout' });
+    mockGetGitBranch
+      .mockResolvedValueOnce({ branch: 'feat/before' })
+      .mockResolvedValueOnce({ branch: 'feat/after-checkout' });
 
     render(
       <MainToolbar
@@ -115,6 +241,7 @@ describe('MainToolbar — branch chip refresh after popover write', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         branchName="feat/before"
+        isWorktree
         projectId="p1"
         chatId="c1"
         windowStyle="glass"
@@ -122,7 +249,7 @@ describe('MainToolbar — branch chip refresh after popover write', () => {
       />,
     );
 
-    expect(screen.getByTestId('main-toolbar-branch').textContent).toContain('feat/before');
+    expect((await screen.findByTestId('main-toolbar-branch')).textContent).toContain('feat/before');
 
     fireEvent.click(screen.getByTestId('mock-branch-changed'));
 

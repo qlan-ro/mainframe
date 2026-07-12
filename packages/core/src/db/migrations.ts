@@ -232,6 +232,31 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    // Merged from main (34-commit catch-up): context-usage tracking columns +
+    // transcript-missing flag on chats.
+    version: 25,
+    up: (db) => {
+      addColumnIfMissing(
+        db,
+        'chats',
+        'last_context_total_tokens',
+        'ALTER TABLE chats ADD COLUMN last_context_total_tokens INTEGER',
+      );
+      addColumnIfMissing(
+        db,
+        'chats',
+        'last_context_max_tokens',
+        'ALTER TABLE chats ADD COLUMN last_context_max_tokens INTEGER',
+      );
+      addColumnIfMissing(
+        db,
+        'chats',
+        'transcript_missing',
+        'ALTER TABLE chats ADD COLUMN transcript_missing INTEGER DEFAULT 0',
+      );
+    },
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

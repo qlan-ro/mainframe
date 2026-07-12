@@ -30,7 +30,7 @@ describe('background-tasks routes', () => {
     const tracker = new BackgroundTaskTracker();
     tracker.start(
       'c1',
-      { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'sleep 5', description: '' },
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'sleep 5', description: '' },
       DUMMY_PATH,
     );
     const res = await request(makeApp({ tracker })).get('/api/chats/c1/background-tasks');
@@ -45,6 +45,7 @@ describe('background-tasks routes', () => {
     // adopt() lets us place a task with outputPath: null (e.g. a recovered entry with no spool file).
     tracker.adopt('c1', {
       id: 't1',
+      kind: 'bash',
       toolName: 'Bash',
       toolUseId: 'tu',
       command: 'x',
@@ -70,7 +71,11 @@ describe('background-tasks routes', () => {
 
   it('GET /output → 409 invalid_path when validator rejects', async () => {
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.start(
+      'c1',
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' },
+      DUMMY_PATH,
+    );
     tracker.end('c1', 't1', { status: 'completed', outputPath: '/etc/passwd', summary: '', usage: null });
     const res = await request(makeApp({ tracker, validator: async () => false })).get(
       '/api/chats/c1/background-tasks/t1/output',
@@ -88,7 +93,11 @@ describe('background-tasks routes', () => {
     await writeFile(outPath, 'a\nb\nc\nlast line\n');
 
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, outPath);
+    tracker.start(
+      'c1',
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' },
+      outPath,
+    );
     tracker.end('c1', 't1', { status: 'completed', outputPath: outPath, summary: '', usage: null });
     const res = await request(makeApp({ tracker })).get('/api/chats/c1/background-tasks/t1/output?bytes=64');
     expect(res.status).toBe(200);
@@ -103,7 +112,11 @@ describe('background-tasks routes', () => {
 
   it('POST /kill → 200 on success', async () => {
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.start(
+      'c1',
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' },
+      DUMMY_PATH,
+    );
     const session = { stopBackgroundTask: vi.fn().mockResolvedValue({ ok: true }) };
     const killImpl = vi.fn().mockResolvedValue({ ok: true, via: 'stop_task' });
     const res = await request(makeApp({ tracker, sessionForChat: () => session, killImpl })).post(
@@ -115,7 +128,11 @@ describe('background-tasks routes', () => {
 
   it('POST /kill → 502 + error body when kill fails', async () => {
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.start(
+      'c1',
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' },
+      DUMMY_PATH,
+    );
     const session = { stopBackgroundTask: vi.fn() };
     const killImpl = vi.fn().mockResolvedValue({ ok: false, error: 'timeout', via: 'none' });
     const res = await request(makeApp({ tracker, sessionForChat: () => session, killImpl })).post(
@@ -137,7 +154,11 @@ describe('background-tasks routes', () => {
 
   it('GET /output → 500 (via error middleware) when the validator rejects, not a hung request', async () => {
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.start(
+      'c1',
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' },
+      DUMMY_PATH,
+    );
     tracker.end('c1', 't1', { status: 'completed', outputPath: '/etc/passwd', summary: '', usage: null });
     const res = await request(
       makeAppWithErrorTrap({
@@ -152,7 +173,11 @@ describe('background-tasks routes', () => {
 
   it('POST /kill → 500 (via error middleware) when killImpl rejects, not a hung request', async () => {
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.start(
+      'c1',
+      { id: 't1', kind: 'bash', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' },
+      DUMMY_PATH,
+    );
     const killImpl = vi.fn().mockRejectedValue(new Error('kill boom'));
     const res = await request(
       makeAppWithErrorTrap({ tracker, sessionForChat: () => ({ stopBackgroundTask: vi.fn() }), killImpl }),
@@ -164,6 +189,7 @@ describe('background-tasks routes', () => {
     const tracker = new BackgroundTaskTracker();
     tracker.adopt('chat-a', {
       id: 'rec-1',
+      kind: 'bash',
       toolName: 'Bash',
       toolUseId: '',
       command: '<recovered>',
