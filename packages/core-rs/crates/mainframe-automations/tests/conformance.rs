@@ -31,3 +31,9 @@ mod ship_work;
 
 #[path = "conformance/feature_spike.rs"]
 mod feature_spike;
+
+#[path = "conformance/restart.rs"]
+mod restart;
+
+#[path = "conformance/cancel.rs"]
+mod cancel;

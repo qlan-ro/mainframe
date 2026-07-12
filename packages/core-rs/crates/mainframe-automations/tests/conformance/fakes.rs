@@ -151,6 +151,13 @@ impl FakeAgentPort {
         self.started.lock().unwrap().len()
     }
 
+    /// Offsets a second engine's chat-id counter so its freshly started chats
+    /// never collide with a chat id it resumed from the first engine's
+    /// checkpoint (mid-Repeat restart).
+    pub fn seed_chat_seq(&self, start: usize) {
+        self.chat_seq.store(start, Ordering::SeqCst);
+    }
+
     fn chan(&self, chat_id: &str) -> std::sync::Arc<Chan> {
         self.chats
             .lock()
