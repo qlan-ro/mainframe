@@ -4,8 +4,57 @@
 //! v1's two-level connector.action namespace. Registration order is catalog
 //! order.
 
-use super::manifest::ActionManifest;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
 use super::{Action, ActionError};
+
+/// Wire projection of a manifest (types `ActionCatalogEntry`, the
+/// `GET /api/automation-actions` body). Drops the engine-internal
+/// `idempotent` flag; owns dynamic `mcp:<server>:<tool>` ids the static
+/// manifest's `&'static str` cannot carry — that is the whole MCP seam at
+/// launch (contract §9: no client, no discovery, no `actions/mcp.rs`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionCatalogEntry {
+    pub id: String,
+    pub title: String,
+    pub group: ActionGroup,
+    pub auth: ActionAuth,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_label_hint: Option<String>,
+    pub params_schema: Value,
+    pub outputs: Vec<ActionOutput>,
+}
+
+impl ActionCatalogEntry {
+    fn from_manifest(manifest: &ActionManifest) -> Self {
+        Self {
+            id: manifest.id.to_string(),
+            title: manifest.title.to_string(),
+            group: manifest.group,
+            auth: manifest.auth,
+            credential_label_hint: manifest.credential_label_hint.map(str::to_string),
+            params_schema: manifest.params_schema.clone(),
+            outputs: manifest.outputs.clone(),
+        }
+    }
+
+    /// The reserved shape a live MCP tool would occupy post-launch (R5):
+    /// `mcp:<server>:<tool>`, output `{result: text}` (contract §5).
+    pub fn mcp_seam(server: &str, tool: &str) -> Self {
+        Self {
+            id: format!("mcp:{server}:{tool}"),
+            title: format!("{server}: {tool}"),
+            group: ActionGroup::Mcp,
+            auth: ActionAuth::None,
+            credential_label_hint: None,
+            params_schema: json!({"type": "object", "additionalProperties": true}),
+            outputs: vec![ActionOutput::new("result", ActionOutputType::Text)],
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct ActionRegistry {
@@ -46,6 +95,14 @@ impl ActionRegistry {
 
     pub fn catalog(&self) -> Vec<ActionManifest> {
         self.actions.iter().map(|a| a.manifest()).collect()
+    }
+
+    /// `GET /api/automation-actions` body (T7.3/T9.3).
+    pub fn wire_catalog(&self) -> Vec<ActionCatalogEntry> {
+        self.actions
+            .iter()
+            .map(|a| ActionCatalogEntry::from_manifest(&a.manifest()))
+            .collect()
     }
 }
 

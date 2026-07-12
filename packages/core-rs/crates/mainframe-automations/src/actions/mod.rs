@@ -21,7 +21,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 pub use manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
-pub use registry::ActionRegistry;
+pub use registry::{ActionCatalogEntry, ActionRegistry};
 
 use crate::credentials::Credentials;
 use crate::engine::BoxFuture;
@@ -156,8 +156,8 @@ mod registry_tests;
 #[cfg(test)]
 mod run_command_tests;
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2), not a TS port
+// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2-T7.3), not a TS port
 // confidence: high
 // todos: 0
-// notes: built-ins (run_command/files/http) land in T6.3-T6.5; connectors +
-//        the MCP catalog seam in Phase 7.
+// notes: built-ins (T6.3-T6.5) + curated connectors (T7.1/T7.2) registered;
+//        MCP is a catalog-entry seam only (T7.3, contract §9).

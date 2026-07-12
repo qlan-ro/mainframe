@@ -150,6 +150,76 @@ fn builtin_catalog_matches_the_contract_output_table() {
     }
 }
 
+/// T7.3 — the wire `ActionCatalogEntry` shape (GET /api/automation-actions):
+/// camelCase keys, `credentialLabelHint` omitted when absent, `idempotent`
+/// dropped (engine-internal).
+#[test]
+fn wire_catalog_projects_manifests_to_the_contract_shape() {
+    let mut registry = ActionRegistry::new();
+    super::register_all_actions(&mut registry).unwrap();
+
+    let entries = registry.wire_catalog();
+    let json = serde_json::to_value(&entries).unwrap();
+
+    // Launch catalog carries no mcp entries (contract §9).
+    assert!(
+        entries.iter().all(|e| !e.id.starts_with("mcp:")),
+        "no mcp:* entries at launch"
+    );
+
+    let run_command = &json[0];
+    assert_eq!(run_command["id"], "run_command");
+    assert_eq!(run_command["group"], "builtin");
+    assert!(
+        run_command.get("credentialLabelHint").is_none(),
+        "hint omitted when absent"
+    );
+    assert!(
+        run_command.get("idempotent").is_none(),
+        "idempotent never crosses the wire"
+    );
+
+    let create_pr = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["id"] == "github.create_pr")
+        .unwrap();
+    assert_eq!(create_pr["group"], "connector");
+    assert_eq!(create_pr["auth"], "token");
+    assert_eq!(create_pr["credentialLabelHint"], "github");
+    assert_eq!(
+        create_pr["outputs"],
+        json!([
+            {"name": "prUrl", "type": "text"},
+            {"name": "prNumber", "type": "number"},
+        ])
+    );
+    assert!(create_pr["paramsSchema"].is_object());
+}
+
+/// T7.3 — the MCP catalog-entry seam: an `mcp:<server>:<tool>` id with
+/// output `{result: text}` round-trips through the wire shape. No MCP
+/// client, config source, or `actions/mcp.rs` ships at launch (R5).
+#[test]
+fn mcp_catalog_entry_shape_round_trips() {
+    let entry = super::registry::ActionCatalogEntry::mcp_seam("linear", "create_issue");
+    assert_eq!(entry.id, "mcp:linear:create_issue");
+    assert_eq!(entry.group, ActionGroup::Mcp);
+    assert_eq!(
+        entry.outputs,
+        vec![ActionOutput::new("result", ActionOutputType::Text)]
+    );
+
+    let json = serde_json::to_value(&entry).unwrap();
+    assert_eq!(json["id"], "mcp:linear:create_issue");
+    assert_eq!(json["group"], "mcp");
+    assert_eq!(json["outputs"], json!([{"name": "result", "type": "text"}]));
+
+    let back: super::registry::ActionCatalogEntry = serde_json::from_value(json).unwrap();
+    assert_eq!(back, entry);
+}
+
 #[test]
 fn is_idempotent_reads_the_manifest_and_defaults_false() {
     let mut registry = ActionRegistry::new();
