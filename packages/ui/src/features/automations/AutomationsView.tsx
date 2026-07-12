@@ -1,17 +1,19 @@
 /**
  * AutomationsView — the shell: header + body switch (library | editor | run).
- * Phase 1 wires in `library/LibraryList`; `editor/AutomationEditor` (Phase 3,
- * lazy-loaded), `run/RunView` (Phase 5, lazy-loaded), and the describe flow
- * (Phase 5, behind `DESCRIBE_ENABLED`) still replace their placeholder body
- * below as they land — the `<Suspense>` boundary is already in place for the
- * two lazy ones.
+ * Phase 1 wires in `library/LibraryList`; Phase 3 lazy-loads `editor/
+ * AutomationEditor` (this package's first `React.lazy` usage — verify Vite
+ * chunking via `pnpm build`). `run/RunView` (Phase 5, lazy-loaded) and the
+ * describe flow (Phase 5, behind `DESCRIBE_ENABLED`) still replace their
+ * placeholder body below as they land.
  */
-import React, { Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
 import { LibraryList } from './library/LibraryList';
+
+const AutomationEditor = lazy(() => import('./editor/AutomationEditor').then((m) => ({ default: m.AutomationEditor })));
 
 function SectionFallback(): React.ReactElement {
   return <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>;
@@ -55,11 +57,8 @@ export function AutomationsView(): React.ReactElement {
               Run view — coming in a later phase.
             </div>
           ) : editorTarget ? (
-            <div
-              data-testid="automations-section-editor"
-              className="h-full overflow-y-auto p-4 text-body text-muted-foreground"
-            >
-              Editor — coming in a later phase.
+            <div data-testid="automations-section-editor" className="h-full overflow-hidden">
+              <AutomationEditor />
             </div>
           ) : (
             <div data-testid="automations-section-library" className="h-full">

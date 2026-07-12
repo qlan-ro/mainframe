@@ -38,11 +38,14 @@ it('shows the library section by default, listing loaded definitions', () => {
   expect(screen.getByTestId('automations-library-row-a1')).toHaveTextContent('Daily standup');
 });
 
-it('shows the editor placeholder section when an editor target is open', () => {
+it('shows the (lazy-loaded) editor section when an editor target is open', async () => {
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: null });
   render(<AutomationsView />);
-  expect(screen.getByTestId('automations-section-editor')).toBeInTheDocument();
+  // AutomationEditor is React.lazy — the Suspense boundary swaps its whole
+  // subtree (including this wrapper div) for the fallback until the chunk
+  // resolves, so this assertion must await it rather than getByTestId.
+  expect(await screen.findByTestId('automations-section-editor')).toBeInTheDocument();
 });
 
 it('shows the run placeholder section when a run id is open, taking precedence over the editor', () => {
