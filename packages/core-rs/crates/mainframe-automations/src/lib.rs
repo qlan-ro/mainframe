@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod credentials;
 pub mod domain;
 pub mod engine;
 pub mod error;
@@ -10,6 +11,9 @@ pub mod interactions;
 pub mod ports;
 pub mod store;
 pub mod tokens;
+
+#[cfg(test)]
+mod credentials_tests;
 
 #[cfg(test)]
 mod interactions_tests;
