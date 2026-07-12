@@ -80,6 +80,16 @@ impl RunFinalizedHook for CompletionEmitter {
 /// with the Decision-9 stringification chips use. Node takes the last
 /// checkpoint entry in insertion order; the BTreeMap equivalent is the
 /// entry with the greatest finish/start stamp.
+///
+/// ACCEPTED DIVERGENCE: on a same-millisecond (finished_at, started_at) tie
+/// this picks the lexically-greatest stepRef, whereas Node picks the JS-object
+/// insertion (execution) order. The contract §2 checkpoint carries no
+/// execution-sequence field, and adding one would diverge Rust's checkpoint
+/// from both the contract and the Node engine — so true parity needs an
+/// insertion-ordered `steps` map on BOTH arms, tracked as a cross-engine
+/// follow-up. The tie only reaches the chained-automation ⟨its result⟩ when the
+/// terminal step shares a millisecond with a sibling; sequential runs are
+/// monotonic and unaffected.
 pub fn summarize_run_result(run: &RunRecord) -> String {
     if run.status == RunStatus::Failed {
         return run
