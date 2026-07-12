@@ -11,11 +11,13 @@ import type {
   AutomationInteractionSummary,
   AutomationRunSummary,
   AutomationSummary,
+  AutomationTimelineEntry,
   DaemonEvent,
 } from '../contract';
 import type { AutomationsGateway } from '../data/gateway';
 import { ACTION_CATALOG_FIXTURE } from './action-catalog';
 import { AUTOMATION_FIXTURES } from './fixtures';
+import { buildDemoRuns } from './run-seeds';
 
 type EventListener = (event: DaemonEvent) => void;
 
@@ -29,9 +31,10 @@ function notFound(kind: string, id: string): never {
   throw new Error(`${kind} "${id}" not found`);
 }
 
-export function createFixtureGateway(): AutomationsGateway & { onEvent: (listener: EventListener) => () => void } {
+export function createFixtureGateway(): AutomationsGateway {
   const definitions = new Map<string, AutomationSummary>();
   const runs = new Map<string, AutomationRunSummary>();
+  const timelines = new Map<string, AutomationTimelineEntry[]>();
   const interactions = new Map<string, AutomationInteractionSummary>();
   const listeners = new Set<EventListener>();
 
@@ -52,6 +55,11 @@ export function createFixtureGateway(): AutomationsGateway & { onEvent: (listene
       updatedAt: now(),
     });
   }
+
+  const demo = buildDemoRuns(Array.from(definitions.values()), nextId, now);
+  for (const run of demo.runs) runs.set(run.id, run);
+  for (const [runId, timeline] of demo.timelines) timelines.set(runId, timeline);
+  for (const interaction of demo.interactions) interactions.set(interaction.id, interaction);
 
   return {
     onEvent(listener) {
@@ -123,6 +131,7 @@ export function createFixtureGateway(): AutomationsGateway & { onEvent: (listene
         error: null,
       };
       runs.set(id, run);
+      timelines.set(id, []);
       emit({ type: 'automation.run.updated', run });
       return run;
     },
@@ -133,6 +142,11 @@ export function createFixtureGateway(): AutomationsGateway & { onEvent: (listene
 
     async getRun(runId: string) {
       return runs.get(runId) ?? notFound('run', runId);
+    },
+
+    async getRunTimeline(runId: string) {
+      if (!runs.has(runId)) notFound('run', runId);
+      return timelines.get(runId) ?? [];
     },
 
     async cancelRun(runId: string) {

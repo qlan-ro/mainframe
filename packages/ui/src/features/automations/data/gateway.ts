@@ -12,6 +12,8 @@ import type {
   AutomationInteractionSummary,
   AutomationRunSummary,
   AutomationSummary,
+  AutomationTimelineEntry,
+  DaemonEvent,
 } from '../contract';
 
 export interface AutomationsGateway {
@@ -26,6 +28,14 @@ export interface AutomationsGateway {
   listRuns(id: string): Promise<AutomationRunSummary[]>;
   getRun(runId: string): Promise<AutomationRunSummary>;
   cancelRun(runId: string): Promise<void>;
+  /**
+   * The run's step-by-step timeline (contract §2's checkpoint `steps` map,
+   * flattened to the array shape `AutomationTimelineEntry[]` already models
+   * for exactly this purpose). Not part of `AutomationRunSummary` — the run
+   * view fetches it separately, on demand, rather than every list call
+   * paying for full step detail.
+   */
+  getRunTimeline(runId: string): Promise<AutomationTimelineEntry[]>;
 
   listInteractions(): Promise<AutomationInteractionSummary[]>;
   respondInteraction(id: string, response: Record<string, unknown>): Promise<void>;
@@ -35,4 +45,12 @@ export interface AutomationsGateway {
   listCredentialLabels(): Promise<string[]>;
   putCredential(label: string, token: string): Promise<void>;
   deleteCredential(label: string): Promise<void>;
+
+  /**
+   * Subscribe to the 5 `automation.*` DaemonEvent members. The fixture
+   * gateway implements this as a synchronous local emitter; the Phase 6
+   * `http-gateway.ts` wraps `daemonWs.onEvent` behind the same shape so
+   * callers (`use-automation-toasts`) never care which backend is live.
+   */
+  onEvent(listener: (event: DaemonEvent) => void): () => void;
 }
