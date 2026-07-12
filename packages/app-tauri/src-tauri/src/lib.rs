@@ -136,6 +136,25 @@ pub fn run() {
             daemon_impl::daemon_impl_set,
         ])
         .setup(move |app| {
+            // Build the main window ourselves (config has `"create": false`) so we can
+            // attach `on_web_resource_request`. Tauri's asset protocol sends no
+            // Cache-Control/ETag/Last-Modified headers, and WKWebView's disk cache can
+            // keep serving bytes from a pre-update session across an in-place app
+            // update because the tauri:// origin never changes — a version bump alone
+            // doesn't invalidate it. `no-store` forces every asset request to hit the
+            // current bundle, at effectively zero cost since these are local reads.
+            let window_config = app.config().app.windows[0].clone();
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
+                .expect("invalid main window config")
+                .on_web_resource_request(|_request, response| {
+                    response.headers_mut().insert(
+                        tauri::http::header::CACHE_CONTROL,
+                        tauri::http::HeaderValue::from_static("no-store"),
+                    );
+                })
+                .build()
+                .expect("failed to create main window");
+
             // Build + set the native application menu. Errors are logged and the
             // app continues without a menu rather than panicking (degrade gracefully).
             match menu::build_menu(app.handle()) {
