@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
-use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
+use mainframe_services::settings::normalize_saved_default_model;
+use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
@@ -72,6 +73,11 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
+    /// `adapters.getSnapshots().find((s) => s.id === adapterId)?.models ?? []` —
+    /// the live probed catalog used to normalize a saved default-model id.
+    fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
+        Vec::new()
+    }
 
     // adapters + sink ---------------------------------------------------------
     fn create_session(
@@ -109,9 +115,13 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>>;
     /// `session.setCodexProviderTuning(...)` for the codex adapter (no-op elsewhere).
     fn apply_codex_provider_tuning(&self, session: &Arc<dyn AdapterSession>);
-    /// LLM title generation (`generateTitle`) — shells out; injected so tests skip it.
+    /// Adapter-aware LLM title generation (`adapter.generateTitle`) — shells out;
+    /// injected so tests skip it. The impl resolves `adapters.get(adapterId)` and
+    /// returns `None` when that adapter has no `generateTitle` (deterministic title
+    /// stands). Main catch-up (#430): title gen moved onto the owning adapter.
     fn generate_title<'a>(
         &'a self,
+        adapter_id: &'a str,
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>>;
@@ -265,7 +275,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             if effective_model.is_none()
                 && let Some(m) = default_model
             {
-                effective_model = Some(m);
+                let models = self.deps.adapter_snapshot_models(adapter_id);
+                effective_model = normalize_saved_default_model(Some(&m), &models);
             }
             if effective_mode.is_none()
                 && let Some(m) = default_mode
@@ -730,7 +741,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "claude".to_string());
 
-        if let Some(title) = self.deps.generate_title(content, &binary).await {
+        if let Some(title) = self
+            .deps
+            .generate_title(&adapter_id, content, &binary)
+            .await
+        {
             let chat = {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
                 guard.chat.title = Some(title.clone());
@@ -1072,6 +1087,7 @@ mod tests {
         fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
         fn generate_title<'a>(
             &'a self,
+            _adapter_id: &'a str,
             _content: &'a str,
             _binary: &'a str,
         ) -> BoxFuture<'a, Option<String>> {
@@ -1252,4 +1268,9 @@ mod tests {
 // notes: scan seam; the enableWorktree fork callback is wired by chat_manager (holds
 // notes: config_manager). Ported: isLastActiveChatForScope (5), archive kills-tasks
 // notes: (1), archive releases-scope (3) test cases.
+// notes: Main catch-up (#441/#430): a saved default model is normalized against the
+// notes: live snapshot (`adapter_snapshot_models` deps + `normalize_saved_default_model`)
+// notes: before use; title gen is adapter-aware — `generate_title` gained an `adapter_id`
+// notes: arg so the deps seam resolves `adapters.get(adapterId).generateTitle` (deterministic
+// notes: title stands when the adapter has none).
 // todos: 1

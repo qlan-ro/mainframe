@@ -7,12 +7,12 @@ use std::time::Duration;
 
 use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_types::adapter::{ExternalSession, ExternalSessionPage};
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::{Chat, ChatStatus, Project};
 use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
-use crate::title_generator::{derive_title_from_message, generate_title};
+use crate::title_generator::derive_title_from_message;
 
 /// 5 minutes.
 const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
@@ -38,11 +38,24 @@ pub trait ExternalSessionDeps: Send + Sync {
     fn find_by_external_session_id(&self, session_id: &str, project_id: &str) -> Option<Chat>;
     fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat;
     fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate);
+    /// `db.chats.list(projectId)` — used by the transcript-presence sweep.
+    fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
     fn emit_event(&self, event: DaemonEvent);
-    /// The boot-resolved login-shell `PATH`, applied to the title-generation CLI
-    /// spawn (mirrors the TS `enrichPath` env mutation).
-    fn resolved_path(&self) -> String;
+    /// Adapter-aware title generation (`adapters.get(adapterId)?.generateTitle`).
+    /// `None` when the owning adapter has no `generateTitle` (deterministic import
+    /// title stands). Main catch-up (#430): title gen moved onto the adapter.
+    fn generate_title<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        content: &'a str,
+        binary: &'a str,
+    ) -> BoxFuture<'a, Option<String>>;
+    /// `ChatManager.reconcileTranscript` — flags chats whose transcript vanished
+    /// (degraded-chat sweep). `None` = no callback wired (the sweep is a no-op).
+    fn reconcile_transcript<'a>(&'a self, _chat: &'a Chat) -> Option<BoxFuture<'a, bool>> {
+        None
+    }
     /// Adapter ids that support `listExternalSessions`, in registry order.
     fn external_session_adapter_ids(&self) -> Vec<String>;
     fn list_external_sessions<'a>(
@@ -68,6 +81,13 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             scan_intervals: Arc::new(Mutex::new(HashMap::new())),
             last_counts: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Reconcile transcript presence for every non-archived chat of the project
+    /// that has a CLI session id, so the sidebar degraded marker appears without
+    /// the chat being opened. Runs on the same cadence as the auto-scan.
+    pub async fn sweep_transcript_presence(&self, project_id: &str) {
+        sweep_transcript_presence_impl(self.deps.as_ref(), project_id).await;
     }
 
     /// Page of importable external sessions merged and sorted across all adapters for a project.
@@ -143,16 +163,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             let mut chat_for_title = chat.clone();
             let adapter_id = adapter_id.to_string();
             tokio::spawn(async move {
-                if let Err(err) =
-                    generate_import_title(deps.as_ref(), &mut chat_for_title, &ct, &adapter_id)
-                        .await
-                {
-                    warn!(
-                        ?err,
-                        chat_id = chat_for_title.id,
-                        "Import title generation failed"
-                    );
-                }
+                generate_import_title(deps.as_ref(), &mut chat_for_title, &ct, &adapter_id).await;
             });
         }
 
@@ -172,6 +183,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             let pid = project_id.to_string();
             tokio::spawn(async move {
                 emit_count(deps.as_ref(), &last_counts, &pid).await;
+                sweep_transcript_presence_impl(deps.as_ref(), &pid).await;
             });
         }
 
@@ -185,6 +197,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             loop {
                 ticker.tick().await;
                 emit_count(deps.as_ref(), &last_counts, &pid).await;
+                sweep_transcript_presence_impl(deps.as_ref(), &pid).await;
             }
         });
         self.scan_intervals
@@ -328,21 +341,21 @@ async fn generate_import_title<D: ExternalSessionDeps>(
     chat: &mut Chat,
     content: &str,
     adapter_id: &str,
-) -> std::io::Result<()> {
+) {
     if deps
         .settings_get("general", "titleGeneration.disabled")
         .as_deref()
         == Some("true")
     {
-        return Ok(());
+        return;
     }
 
     let binary = deps
         .settings_get("provider", &format!("{adapter_id}.titleBinary"))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "claude".to_string());
-    let Some(title) = generate_title(content, &binary, &deps.resolved_path()).await? else {
-        return Ok(());
+    let Some(title) = deps.generate_title(adapter_id, content, &binary).await else {
+        return;
     };
 
     chat.title = Some(title.clone());
@@ -357,7 +370,21 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         chat: chat.clone(),
         reason: None,
     });
-    Ok(())
+}
+
+/// The transcript-presence sweep body, shared by the public method and the
+/// auto-scan tasks.
+async fn sweep_transcript_presence_impl<D: ExternalSessionDeps>(deps: &D, project_id: &str) {
+    let candidates: Vec<Chat> = deps
+        .chats_list(project_id)
+        .into_iter()
+        .filter(|c| c.status != ChatStatus::Archived && c.claude_session_id.is_some())
+        .collect();
+    for chat in candidates {
+        if let Some(fut) = deps.reconcile_transcript(&chat) {
+            let _ = fut.await;
+        }
+    }
 }
 
 async fn emit_count<D: ExternalSessionDeps>(
@@ -428,9 +455,138 @@ fn strip_xml_tags(text: &str) -> String {
     out.trim().to_string()
 }
 
-// PORT STATUS: src/chat/external-session-service.ts (172 lines)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::test_chat;
+    use std::sync::Mutex as StdMutex;
+
+    #[derive(Default)]
+    struct SweepDeps {
+        chats: Vec<Chat>,
+        has_reconcile: bool,
+        reconcile_calls: StdMutex<Vec<String>>,
+    }
+    impl ExternalSessionDeps for SweepDeps {
+        fn projects_get(&self, _project_id: &str) -> Option<Project> {
+            None
+        }
+        fn get_imported_session_ids(&self, _project_id: &str) -> Vec<String> {
+            Vec::new()
+        }
+        fn find_by_external_session_id(&self, _sid: &str, _pid: &str) -> Option<Chat> {
+            None
+        }
+        fn chats_create(&self, _project_id: &str, _adapter_id: &str) -> Chat {
+            test_chat("new")
+        }
+        fn chats_update(&self, _chat_id: &str, _updates: &ExternalChatUpdate) {}
+        fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
+            self.chats.clone()
+        }
+        fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
+            None
+        }
+        fn emit_event(&self, _event: DaemonEvent) {}
+        fn generate_title<'a>(
+            &'a self,
+            _adapter_id: &'a str,
+            _content: &'a str,
+            _binary: &'a str,
+        ) -> BoxFuture<'a, Option<String>> {
+            Box::pin(async { None })
+        }
+        fn reconcile_transcript<'a>(&'a self, chat: &'a Chat) -> Option<BoxFuture<'a, bool>> {
+            if !self.has_reconcile {
+                return None;
+            }
+            let id = chat.id.clone();
+            Some(Box::pin(async move {
+                self.reconcile_calls
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(id);
+                false
+            }))
+        }
+        fn external_session_adapter_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+        fn list_external_sessions<'a>(
+            &'a self,
+            _adapter_id: &'a str,
+            _project_path: &'a str,
+            _exclude_ids: &'a [String],
+            _offset: i64,
+            _limit: i64,
+        ) -> BoxFuture<'a, Result<ExternalSessionPage, AdapterError>> {
+            Box::pin(async {
+                Ok(ExternalSessionPage {
+                    sessions: Vec::new(),
+                    total: 0,
+                    next_offset: None,
+                })
+            })
+        }
+    }
+
+    fn chat(id: &str, session: Option<&str>, status: ChatStatus) -> Chat {
+        let mut c = test_chat(id);
+        c.claude_session_id = session.map(str::to_string);
+        c.status = status;
+        c
+    }
+
+    #[tokio::test]
+    async fn reconciles_every_non_archived_chat_with_a_cli_session_id() {
+        let deps = Arc::new(SweepDeps {
+            chats: vec![
+                chat("with-session", Some("sess-a"), ChatStatus::Active),
+                chat("draft", None, ChatStatus::Active),
+                chat("archived", Some("sess-b"), ChatStatus::Archived),
+            ],
+            has_reconcile: true,
+            reconcile_calls: StdMutex::new(Vec::new()),
+        });
+        let service = ExternalSessionService::new(deps.clone());
+
+        service.sweep_transcript_presence("p1").await;
+
+        let calls = deps
+            .reconcile_calls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        assert_eq!(calls.as_slice(), ["with-session"]);
+    }
+
+    #[tokio::test]
+    async fn no_op_when_no_reconcile_callback_provided() {
+        let deps = Arc::new(SweepDeps {
+            chats: vec![chat("with-session", Some("sess-a"), ChatStatus::Active)],
+            has_reconcile: false,
+            reconcile_calls: StdMutex::new(Vec::new()),
+        });
+        let service = ExternalSessionService::new(deps.clone());
+        service.sweep_transcript_presence("p1").await;
+        assert!(
+            deps.reconcile_calls
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_empty()
+        );
+    }
+}
+
+// PORT STATUS: src/chat/external-session-service.ts (198 lines)
 // confidence: medium
 // todos: 0
+// notes: Main catch-up (#424/#430): `sweepTranscriptPresence` (non-archived + has
+// notes: sessionId, reconcile each) runs on the auto-scan cadence (initial + every
+// notes: tick); the optional `reconcileTranscript` callback → a defaulted
+// notes: `reconcile_transcript` deps method (`None` = no-op sweep). Title gen is now
+// notes: adapter-aware via the `generate_title(adapterId,...)` deps method (the free
+// notes: `title_generator::generate_title` moved to the Claude adapter). external-
+// notes: session-sweep.test.ts ported ×2.
 // notes: TS DI (db + AdapterRegistry) → `ExternalSessionDeps` trait. The adapter
 // notes: `listExternalSessions` method is not yet on the ported Adapter trait, so
 // notes: `external_session_adapter_ids` + `list_external_sessions` abstract it.
@@ -440,4 +596,5 @@ fn strip_xml_tags(text: &str) -> String {
 // notes: sessionId desc tie-break) copied exactly; slice bounds clamped like JS
 // notes: `Array.slice`. Fire-and-forget title gen → `tokio::spawn`. The outer
 // notes: scanPage `.catch` guards are unreachable (deps don't throw) and elided.
-// notes: No TS test file.
+// notes: The only ported test is external-session-sweep.test.ts (the scan/import
+// notes: paths have no TS test file).

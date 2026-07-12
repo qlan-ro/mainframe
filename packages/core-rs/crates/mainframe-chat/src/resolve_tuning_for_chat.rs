@@ -45,6 +45,7 @@ pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
             supports_ultracode: None,
             supports_adaptive_thinking: None,
             supports_personality: None,
+            resolved_model: None,
         });
     let cfg = get_provider_config(deps, &chat.adapter_id);
     let provider = ProviderTuningDefaults {
@@ -89,6 +90,8 @@ mod tests {
             total_tokens_input: 0,
             total_tokens_output: 0,
             last_context_tokens_input: 0,
+            last_context_total_tokens: None,
+            last_context_max_tokens: None,
             context_files: None,
             mentions: None,
             modified_files: None,
@@ -97,7 +100,9 @@ mod tests {
             process_state: None,
             display_status: None,
             is_running: None,
+            background_activity: None,
             worktree_missing: None,
+            transcript_missing: None,
             todos: None,
             pinned: None,
             effort: Some(Some(effort)),
@@ -135,6 +140,7 @@ mod tests {
             id: id.to_string(),
             label: id.to_string(),
             description: None,
+            resolved_model: None,
             context_window: None,
             is_default: if is_default { Some(true) } else { None },
             supported_efforts: Some(supported.to_vec()),

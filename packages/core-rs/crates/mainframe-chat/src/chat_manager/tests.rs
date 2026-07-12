@@ -20,6 +20,10 @@ struct StoreDeps {
     order: Arc<Mutex<Vec<String>>>,
     project_removed: Mutex<Vec<String>>,
     mentions: Mutex<Vec<(String, String)>>,
+    /// `adapter.isTranscriptPresent` result (None = cannot determine).
+    transcript_present: Mutex<Option<bool>>,
+    /// When `Some`, `create_session` yields a session whose `load_history` returns it.
+    history: Mutex<Option<Vec<ChatMessage>>>,
 }
 
 impl StoreDeps {
@@ -75,10 +79,13 @@ impl ChatManagerDeps for StoreDeps {
             .lock()
             .unwrap()
             .push((chat_id.to_string(), patch.clone()));
-        if let Some(ps) = patch.process_state
-            && let Some(c) = self.store.lock().unwrap().get_mut(chat_id)
-        {
-            c.process_state = Some(ps);
+        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
+            if let Some(ps) = patch.process_state {
+                c.process_state = Some(ps);
+            }
+            if let Some(tm) = patch.transcript_missing {
+                c.transcript_missing = Some(tm);
+            }
         }
     }
     fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
@@ -144,7 +151,12 @@ impl ChatManagerDeps for StoreDeps {
         _adapter_id: &str,
         _options: mainframe_types::adapter::SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>> {
-        None
+        self.history.lock().unwrap().clone().map(|history| {
+            Arc::new(crate::test_support::FakeSession {
+                history,
+                ..Default::default()
+            }) as Arc<dyn AdapterSession>
+        })
     }
     fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
@@ -213,6 +225,7 @@ impl ChatManagerDeps for StoreDeps {
     fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
     fn generate_title<'a>(
         &'a self,
+        _adapter_id: &'a str,
         _content: &'a str,
         _binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
@@ -237,6 +250,29 @@ impl ChatManagerDeps for StoreDeps {
         false
     }
     fn tracker_remove_chat(&self, _chat_id: &str) {}
+    fn is_transcript_present<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        _session_id: &'a str,
+        _project_path: &'a str,
+        _session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>> {
+        let present = *self.transcript_present.lock().unwrap();
+        Box::pin(async move { present })
+    }
+    fn chats_clear_session(&self, chat_id: &str) {
+        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
+            c.claude_session_id = None;
+            c.session_file_path = None;
+            c.transcript_missing = Some(false);
+        }
+    }
+    fn chats_clear_worktree(&self, chat_id: &str) {
+        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
+            c.worktree_path = None;
+            c.branch_name = None;
+        }
+    }
 }
 
 // ── recording AdapterSession ─────────────────────────────────────────────────
@@ -910,4 +946,207 @@ async fn get_messages_is_empty_without_a_claude_session() {
 #[allow(dead_code)]
 fn _status() -> ChatStatus {
     ChatStatus::Active
+}
+
+// ── chat-manager-background-activity.test.ts (enrichChat derivation) ──────────
+// The TS test drives `manager.getChat` with a fake-timed tracker; the Rust port's
+// backgroundActivity derivation lives in the private `enrich_chat`, tested here
+// directly with fixed `startedAt` (Rust can't trivially freeze the clock).
+mod background_activity {
+    use super::*;
+    use mainframe_types::background_task::{
+        BackgroundActivity, BackgroundActivityTask, BackgroundTask, BackgroundTaskStatus,
+        BackgroundTaskToolName, BackgroundWorkKind,
+    };
+    use mainframe_types::chat::DisplayStatus;
+    use std::collections::HashMap;
+
+    fn bg_task(id: &str, kind: BackgroundWorkKind, description: &str) -> BackgroundTask {
+        BackgroundTask {
+            id: id.to_string(),
+            kind,
+            tool_name: BackgroundTaskToolName::Bash,
+            tool_use_id: format!("tu-{id}"),
+            command: "cmd".to_string(),
+            description: description.to_string(),
+            output_path: None,
+            started_at: 5000,
+            ended_at: None,
+            status: BackgroundTaskStatus::Running,
+            last_output_line: None,
+            summary: None,
+            usage: None,
+            recovered: None,
+        }
+    }
+
+    fn act(id: &str, kind: BackgroundWorkKind, description: &str) -> BackgroundActivityTask {
+        BackgroundActivityTask {
+            id: id.to_string(),
+            kind,
+            description: description.to_string(),
+            started_at: 5000,
+        }
+    }
+
+    #[test]
+    fn main_only_working_no_background() {
+        let mut chat = working_chat("c-working", None, true);
+        super::enrich_chat(&mut chat, false, &[]);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Working));
+        assert_eq!(chat.is_running, Some(true));
+        assert_eq!(chat.background_activity, None);
+    }
+
+    #[test]
+    fn background_only_idle_plus_live_tasks() {
+        let mut chat = working_chat("c-idle", None, false);
+        let tasks = vec![
+            bg_task("a-1", BackgroundWorkKind::Agent, "reviewer"),
+            bg_task("b-1", BackgroundWorkKind::Bash, "dev server"),
+        ];
+        super::enrich_chat(&mut chat, false, &tasks);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Working));
+        assert_eq!(chat.is_running, Some(false));
+        let by_kind = HashMap::from([
+            (BackgroundWorkKind::Agent, 1),
+            (BackgroundWorkKind::Bash, 1),
+        ]);
+        assert_eq!(
+            chat.background_activity,
+            Some(BackgroundActivity {
+                total: 2,
+                by_kind,
+                tasks: vec![
+                    act("a-1", BackgroundWorkKind::Agent, "reviewer"),
+                    act("b-1", BackgroundWorkKind::Bash, "dev server"),
+                ],
+            })
+        );
+    }
+
+    #[test]
+    fn both_main_turn_and_background() {
+        let mut chat = working_chat("c-working", None, true);
+        let tasks = vec![bg_task("w-1", BackgroundWorkKind::Workflow, "deploy")];
+        super::enrich_chat(&mut chat, false, &tasks);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Working));
+        assert_eq!(chat.is_running, Some(true));
+        assert_eq!(
+            chat.background_activity,
+            Some(BackgroundActivity {
+                total: 1,
+                by_kind: HashMap::from([(BackgroundWorkKind::Workflow, 1)]),
+                tasks: vec![act("w-1", BackgroundWorkKind::Workflow, "deploy")],
+            })
+        );
+    }
+
+    #[test]
+    fn terminal_tasks_do_not_count() {
+        // Ended tasks never appear in listLive → an empty slice here.
+        let mut chat = working_chat("c-idle", None, false);
+        super::enrich_chat(&mut chat, false, &[]);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
+        assert_eq!(chat.background_activity, None);
+    }
+
+    #[test]
+    fn pending_permission_wins_over_background_activity() {
+        let mut chat = working_chat("c-idle", None, false);
+        let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
+        super::enrich_chat(&mut chat, true, &tasks);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Waiting));
+        assert_eq!(chat.is_running, Some(false));
+        // The chip still shows the live background work while the gate is up.
+        assert_eq!(chat.background_activity.map(|a| a.total), Some(1));
+    }
+}
+
+// ── chat-manager-degraded.test.ts ────────────────────────────────────────────
+fn history_message() -> ChatMessage {
+    ChatMessage {
+        id: "m1".to_string(),
+        chat_id: "sess-1".to_string(),
+        r#type: ChatMessageType::Assistant,
+        content: vec![MessageContent::Leaf(
+            mainframe_types::content::LeafContent::Text {
+                text: "hello from history".to_string(),
+                parent_tool_use_id: None,
+            },
+        )],
+        timestamp: "2026-07-08T00:00:00.000Z".to_string(),
+        metadata: None,
+    }
+}
+
+#[tokio::test]
+async fn get_display_messages_reports_transcript_missing_persists_and_emits() {
+    let mut chat = test_chat("c1");
+    chat.claude_session_id = Some("sess-1".to_string());
+    let deps = StoreDeps::with_chats(vec![chat]);
+    *deps.transcript_present.lock().unwrap() = Some(false); // transcript gone
+    let mgr = ChatManager::new(deps.clone());
+
+    let result = mgr.get_display_messages("c1").await;
+
+    assert!(result.transcript_missing);
+    assert_eq!(
+        deps.store
+            .lock()
+            .unwrap()
+            .get("c1")
+            .unwrap()
+            .transcript_missing,
+        Some(true)
+    );
+    assert!(deps.events().iter().any(|e| matches!(
+        e,
+        DaemonEvent::ChatUpdated { chat, .. } if chat.transcript_missing == Some(true)
+    )));
+}
+
+#[tokio::test]
+async fn get_display_messages_self_heals_a_stale_flag() {
+    let mut chat = test_chat("c1");
+    chat.claude_session_id = Some("sess-1".to_string());
+    chat.transcript_missing = Some(true);
+    let deps = StoreDeps::with_chats(vec![chat]);
+    *deps.transcript_present.lock().unwrap() = Some(true); // transcript back
+    *deps.history.lock().unwrap() = Some(vec![history_message()]);
+    let mgr = ChatManager::new(deps.clone());
+
+    let result = mgr.get_display_messages("c1").await;
+
+    assert!(!result.transcript_missing);
+    assert_eq!(
+        deps.store
+            .lock()
+            .unwrap()
+            .get("c1")
+            .unwrap()
+            .transcript_missing,
+        Some(false)
+    );
+}
+
+#[tokio::test]
+async fn send_message_with_the_flag_clears_the_dead_session_identity() {
+    let mut chat = test_chat("c1");
+    chat.claude_session_id = Some("sess-1".to_string());
+    chat.transcript_missing = Some(true);
+    chat.session_file_path = Some("/home/u/.claude/projects/x/sess-1.jsonl".to_string());
+    let deps = StoreDeps::with_chats(vec![chat]);
+    let mgr = ChatManager::new(deps.clone());
+
+    // No live session → the send triggers the auto "continue here" reset. The send
+    // itself then can't spawn (no session double), but the reset already ran.
+    let _ = mgr
+        .send_message("c1", "continue after transcript loss", None, None)
+        .await;
+
+    let row = deps.store.lock().unwrap().get("c1").cloned().unwrap();
+    assert_eq!(row.claude_session_id, None);
+    assert_eq!(row.session_file_path, None);
+    assert_eq!(row.transcript_missing, Some(false));
 }

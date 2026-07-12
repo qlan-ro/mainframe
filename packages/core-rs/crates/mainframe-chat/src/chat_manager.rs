@@ -17,18 +17,23 @@ use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
 use mainframe_types::adapter::{ControlResponse, DetectedPr, EffortLevel, SessionOptions};
+use mainframe_types::background_task::{
+    BackgroundTask, derive_background_activity, to_activity_task,
+};
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, DisplayStatus, MessageContent, ProcessState, Project,
     QueuedMessageRef, TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{SessionContext, SessionMention, SkillFileEntry};
+use mainframe_types::display::ChatHistoryPayload;
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
 use tracing::info;
 
 use crate::config_manager::{ChatConfigManager, ChatFieldUpdate, ConfigError, ConfigManagerDeps};
+use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
 use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};
 use crate::lifecycle_manager::{
     ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
@@ -37,6 +42,7 @@ use crate::message_cache::MessageCache;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
 use crate::permission_manager::PermissionManager;
 use crate::title_generator::derive_title_from_message;
+use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
 
 /// Result of `processAttachments` (attachment-processor.ts is a separate port
@@ -67,10 +73,13 @@ pub struct ChatUpdate {
     pub total_tokens_input: Option<i64>,
     pub total_tokens_output: Option<i64>,
     pub last_context_tokens_input: Option<i64>,
+    pub last_context_total_tokens: Option<u64>,
+    pub last_context_max_tokens: Option<u64>,
     pub process_state: Option<Option<ProcessState>>,
     pub updated_at: Option<String>,
     pub title: Option<String>,
     pub status: Option<mainframe_types::chat::ChatStatus>,
+    pub transcript_missing: Option<bool>,
 }
 
 impl From<&EventChatUpdate> for ChatUpdate {
@@ -83,6 +92,8 @@ impl From<&EventChatUpdate> for ChatUpdate {
             total_tokens_input: e.total_tokens_input,
             total_tokens_output: e.total_tokens_output,
             last_context_tokens_input: e.last_context_tokens_input,
+            last_context_total_tokens: e.last_context_total_tokens,
+            last_context_max_tokens: e.last_context_max_tokens,
             process_state: e.process_state,
             updated_at: e.updated_at.clone(),
             ..Default::default()
@@ -197,6 +208,7 @@ pub trait ChatManagerDeps: Send + Sync {
     fn apply_codex_provider_tuning(&self, session: &Arc<dyn AdapterSession>);
     fn generate_title<'a>(
         &'a self,
+        adapter_id: &'a str,
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>>;
@@ -212,6 +224,36 @@ pub trait ChatManagerDeps: Send + Sync {
     /// was newly recorded (Claude-agnostic but db-backed → injected).
     fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool;
     fn tracker_remove_chat(&self, chat_id: &str);
+    /// `tracker.listLive(chatId)` — live (running) background tasks, for enrichChat's
+    /// backgroundActivity + widened working state. Default empty.
+    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
+        Vec::new()
+    }
+    /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
+    /// Required (not a no-op default): `continue-here` relies on it persisting.
+    fn chats_clear_session(&self, chat_id: &str);
+    /// `db.chats.clearWorktree(chatId)` — NULL worktree_path/branch_name.
+    /// Required (not a no-op default): `continue-in-project-root` relies on it persisting.
+    fn chats_clear_worktree(&self, chat_id: &str);
+    /// `adapters.get(adapterId)?.isTranscriptPresent(sessionId, projectPath, sessionFilePath)`.
+    /// `None` = presence cannot be determined (missing predicate / null / error).
+    fn is_transcript_present<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        _session_id: &'a str,
+        _project_path: &'a str,
+        _session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>> {
+        Box::pin(async { None })
+    }
+    /// `adapters.getSnapshots().find(id)?.models ?? []` — for the lifecycle default-
+    /// model normalization. Default empty.
+    fn adapter_snapshot_models(
+        &self,
+        _adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel> {
+        Vec::new()
+    }
 }
 
 type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
@@ -221,17 +263,22 @@ fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
 }
 
-/// `enrichChat` — set displayStatus/isRunning/worktreeMissing (mutates in place).
-fn enrich_chat(chat: &mut Chat, has_pending: bool) {
+/// `enrichChat` — set displayStatus/isRunning/backgroundActivity/worktreeMissing
+/// (mutates in place). `live_tasks` is `tracker.listLive(chat.id)`.
+fn enrich_chat(chat: &mut Chat, has_pending: bool, live_tasks: &[BackgroundTask]) {
     let working = is_working(chat);
+    // Live background work broadens the sidebar 'working' state, but never
+    // isRunning — the composer/thread indicator stays main-turn-only.
     chat.display_status = Some(if has_pending {
         DisplayStatus::Waiting
-    } else if working {
+    } else if working || !live_tasks.is_empty() {
         DisplayStatus::Working
     } else {
         DisplayStatus::Idle
     });
     chat.is_running = Some(working && !has_pending);
+    let activity_tasks: Vec<_> = live_tasks.iter().map(to_activity_task).collect();
+    chat.background_activity = derive_background_activity(&activity_tasks);
     chat.worktree_missing = Some(
         chat.worktree_path
             .as_ref()
@@ -252,7 +299,8 @@ fn enrich_and_emit(
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .has_pending(&chat.id);
-            enrich_chat(chat, has_pending);
+            let live = deps.tracker_list_live(&chat.id);
+            enrich_chat(chat, has_pending, &live);
         }
         _ => {}
     }
@@ -417,10 +465,17 @@ impl LifecycleManagerDeps for LcDeps {
     }
     fn generate_title<'a>(
         &'a self,
+        adapter_id: &'a str,
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
-        self.deps.generate_title(content, binary)
+        self.deps.generate_title(adapter_id, content, binary)
+    }
+    fn adapter_snapshot_models(
+        &self,
+        adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel> {
+        self.deps.adapter_snapshot_models(adapter_id)
     }
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool> {
         self.deps.is_working_tree_dirty(project_path)
@@ -639,6 +694,131 @@ fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
 
 // ── ChatManager facade ───────────────────────────────────────────────────────
 
+/// Shared-internals wrapper implementing the transcript-presence + degraded-
+/// recovery deps traits (the Rust analogue of the TS closures over `this` that
+/// build `reconcileTranscript`/`recoveryDeps`). Constructed on demand.
+struct RecoveryWrapper {
+    deps: Arc<dyn ChatManagerDeps>,
+    active_chats: Registry,
+    permissions: Arc<Mutex<PermissionManager>>,
+    messages: Arc<Mutex<MessageCache>>,
+    event_handler: Arc<EventHandler<EhDeps>>,
+}
+
+impl RecoveryWrapper {
+    fn active_chat_mut(&self, chat_id: &str, f: impl FnOnce(&mut Chat)) {
+        if let Some(cell) = self.active_chats.get(chat_id) {
+            let cell = cell.value().clone();
+            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            f(&mut guard.chat);
+        }
+    }
+    fn current_chat(&self, chat_id: &str) -> Option<Chat> {
+        self.active_chats
+            .get(chat_id)
+            .map(|c| {
+                c.value()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .chat
+                    .clone()
+            })
+            .or_else(|| self.deps.chats_get(chat_id))
+    }
+}
+
+impl TranscriptPresenceDeps for RecoveryWrapper {
+    fn chats_update_transcript_missing(&self, chat_id: &str, missing: bool) {
+        self.deps.chats_update(
+            chat_id,
+            &ChatUpdate {
+                transcript_missing: Some(missing),
+                ..Default::default()
+            },
+        );
+    }
+    fn projects_get_path(&self, project_id: &str) -> Option<String> {
+        self.deps.projects_get_path(project_id)
+    }
+    fn is_transcript_present<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>> {
+        self.deps
+            .is_transcript_present(adapter_id, session_id, project_path, session_file_path)
+    }
+    fn sync_chat_fields_transcript_missing(&self, chat_id: &str, missing: bool) {
+        self.active_chat_mut(chat_id, |chat| chat.transcript_missing = Some(missing));
+    }
+    fn emit_event(&self, event: DaemonEvent) {
+        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+    }
+}
+
+impl DegradedRecoveryDeps for RecoveryWrapper {
+    fn chats_get(&self, chat_id: &str) -> Option<Chat> {
+        self.deps.chats_get(chat_id)
+    }
+    fn projects_get_path(&self, project_id: &str) -> Option<String> {
+        self.deps.projects_get_path(project_id)
+    }
+    fn chats_clear_session(&self, chat_id: &str) {
+        self.deps.chats_clear_session(chat_id);
+    }
+    fn chats_clear_worktree(&self, chat_id: &str) {
+        self.deps.chats_clear_worktree(chat_id);
+    }
+    fn get_active_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
+        self.active_chats.get(chat_id).and_then(|c| {
+            c.value()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .session
+                .clone()
+        })
+    }
+    fn clear_active_session(&self, chat_id: &str) {
+        if let Some(cell) = self.active_chats.get(chat_id) {
+            cell.value()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .session = None;
+        }
+    }
+    fn sync_chat_fields(&self, chat_id: &str, fields: RecoverySync) {
+        self.active_chat_mut(chat_id, |chat| match fields {
+            RecoverySync::ClearSession => {
+                chat.claude_session_id = None;
+                chat.session_file_path = None;
+                chat.transcript_missing = Some(false);
+            }
+            RecoverySync::ClearWorktree => {
+                chat.worktree_path = None;
+                chat.branch_name = None;
+            }
+        });
+    }
+    fn emit_chat_updated(&self, chat_id: &str) {
+        if let Some(chat) = self.current_chat(chat_id) {
+            enrich_and_emit(
+                self.deps.as_ref(),
+                &self.permissions,
+                DaemonEvent::ChatUpdated { chat, reason: None },
+            );
+        }
+    }
+    fn clear_messages(&self, chat_id: &str) {
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .delete(chat_id);
+        self.event_handler.clear_display_cache(chat_id);
+    }
+}
+
 pub struct ChatManager {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
@@ -758,7 +938,8 @@ impl ChatManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .has_pending(chat_id);
-        enrich_chat(&mut chat, has_pending);
+        let live = self.deps.tracker_list_live(chat_id);
+        enrich_chat(&mut chat, has_pending, &live);
         Some(chat)
     }
 
@@ -772,7 +953,8 @@ impl ChatManager {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
-                enrich_chat(&mut c, hp);
+                let live = self.deps.tracker_list_live(&c.id);
+                enrich_chat(&mut c, hp, &live);
                 c
             })
             .collect()
@@ -788,7 +970,8 @@ impl ChatManager {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
-                enrich_chat(&mut c, hp);
+                let live = self.deps.tracker_list_live(&c.id);
+                enrich_chat(&mut c, hp, &live);
                 c
             })
             .collect()
@@ -974,7 +1157,8 @@ impl ChatManager {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
-                enrich_chat(&mut c, hp);
+                let live = self.deps.tracker_list_live(&c.id);
+                enrich_chat(&mut c, hp, &live);
                 c
             })
             .collect()
@@ -1126,11 +1310,61 @@ impl ChatManager {
         }
     }
 
-    pub async fn get_display_messages(&self, chat_id: &str) -> Vec<DisplayMessage> {
+    /// Display history + transcript presence in one typed result, so the REST
+    /// route (and the UI) can tell an empty thread from a deleted transcript.
+    /// Reconciling here persists flag flips and broadcasts `chat.updated`.
+    pub async fn get_display_messages(&self, chat_id: &str) -> ChatHistoryPayload {
         let raw = self.get_messages(chat_id).await;
         let categories = self.deps.get_tool_categories(chat_id);
-        self.deps
-            .prepare_messages_for_client(&raw, categories.as_ref())
+        let messages = self
+            .deps
+            .prepare_messages_for_client(&raw, categories.as_ref());
+        let transcript_missing = match self.get_chat(chat_id) {
+            Some(mut chat) => self.reconcile_transcript(&mut chat).await,
+            None => false,
+        };
+        ChatHistoryPayload {
+            messages,
+            transcript_missing,
+        }
+    }
+
+    /// Reconcile the persisted `transcriptMissing` flag against the transcript file
+    /// on disk.
+    pub async fn reconcile_transcript(&self, chat: &mut Chat) -> bool {
+        let wrapper = self.recovery_wrapper();
+        crate::transcript_presence::reconcile_transcript_presence(&wrapper, chat).await
+    }
+
+    /// Forget the dead CLI session so the next send spawns fresh in the same chat row.
+    pub async fn continue_here(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
+        let wrapper = self.recovery_wrapper();
+        crate::degraded_recovery::continue_here(&wrapper, chat_id).await
+    }
+
+    /// Detach the chat from its deleted worktree and rebind it to the project root.
+    pub async fn continue_in_project_root(
+        &self,
+        chat_id: &str,
+    ) -> Result<(), DegradedRecoveryError> {
+        let wrapper = self.recovery_wrapper();
+        crate::degraded_recovery::continue_in_project_root(&wrapper, chat_id).await
+    }
+
+    /// Re-add the deleted worktree at its stored path from the stored branch (409 when branch gone).
+    pub async fn recreate_worktree(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
+        let wrapper = self.recovery_wrapper();
+        crate::degraded_recovery::recreate_chat_worktree(&wrapper, chat_id).await
+    }
+
+    fn recovery_wrapper(&self) -> RecoveryWrapper {
+        RecoveryWrapper {
+            deps: self.deps.clone(),
+            active_chats: self.active_chats.clone(),
+            permissions: self.permissions.clone(),
+            messages: self.messages.clone(),
+            event_handler: self.event_handler.clone(),
+        }
     }
 
     /// Build a stateless history-load session for `chat_id`, or `None` when the chat
@@ -1280,6 +1514,28 @@ impl ChatManager {
             });
             self.event_handler.emit_display(chat_id);
             return Ok(());
+        }
+
+        // Transcript gone + no live CLI: `--resume` would target a dead session id.
+        // Apply the same reset as the card's "Continue here" so this send spawns fresh.
+        let transcript_missing = chat
+            .as_ref()
+            .and_then(|c| c.transcript_missing)
+            .unwrap_or(false);
+        let spawned_now = self
+            .get_active(chat_id)
+            .map(|c| {
+                c.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .session
+                    .as_ref()
+                    .is_some_and(|s| s.is_spawned())
+            })
+            .unwrap_or(false);
+        if transcript_missing && !spawned_now {
+            self.continue_here(chat_id)
+                .await
+                .map_err(|e| SendError(e.to_string()))?;
         }
 
         self.lifecycle.wait_for_interrupt(chat_id).await;
@@ -1748,4 +2004,16 @@ mod tests;
 // notes: (LaunchStopper + send_push deps), so the TS late-bind setters are unnecessary.
 // notes: Ported tests: cli-queue (5), recover-working (5), turn-timing (1), command-
 // notes: routing (7), remove-project-kills-tasks (1), + 5.4 facade cases (5).
+// notes: Main catch-up (#423/#424/#425): enrichChat widens `working` via
+// notes: `tracker.listLive` + sets `backgroundActivity` (F); getDisplayMessages returns
+// notes: `ChatHistoryPayload` and reconciles transcript presence (E); reconcile_transcript
+// notes: / continue_here / continue_in_project_root / recreate_worktree delegate to the
+// notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
+// notes: implements both deps traits over the shared internals (chat lock is a leaf,
+// notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
+// notes: spawned. New defaulted ChatManagerDeps methods (chat_deps.rs must override):
+// notes: tracker_list_live, is_transcript_present, chats_clear_session/worktree,
+// notes: adapter_snapshot_models; generate_title gained an adapter_id arg (adapter-aware).
+// notes: Ported: chat-manager-background-activity (5, via direct enrich_chat) +
+// notes: chat-manager-degraded (3).
 // todos: 3

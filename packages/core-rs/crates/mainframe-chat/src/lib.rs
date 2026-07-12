@@ -16,6 +16,7 @@ pub mod attachment_processor;
 pub mod chat_manager;
 pub mod config_manager;
 pub mod context_tracker;
+pub mod degraded_recovery;
 pub mod display_emitter;
 pub mod event_handler;
 pub mod external_session_service;
@@ -29,6 +30,7 @@ pub mod plan_mode_handler;
 pub mod resolve_tuning;
 pub mod resolve_tuning_for_chat;
 pub mod title_generator;
+pub mod transcript_presence;
 pub mod types;
 
 #[cfg(test)]

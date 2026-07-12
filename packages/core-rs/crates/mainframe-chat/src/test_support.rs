@@ -32,6 +32,8 @@ pub struct FakeSession {
     pub set_model_ok: bool,
     pub set_permission_mode_ok: bool,
     pub set_plan_mode_ok: bool,
+    /// Configurable history returned by `load_history` (empty by default).
+    pub history: Vec<ChatMessage>,
 }
 
 impl FakeSession {
@@ -156,7 +158,8 @@ impl AdapterSession for FakeSession {
         }
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+        let history = self.history.clone();
+        Box::pin(async move { Ok(history) })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
@@ -202,9 +205,13 @@ pub fn test_chat(id: &str) -> Chat {
         worktree_path: None,
         branch_name: None,
         process_state: None,
+        last_context_total_tokens: None,
+        last_context_max_tokens: None,
         display_status: None,
         is_running: None,
+        background_activity: None,
         worktree_missing: None,
+        transcript_missing: None,
         todos: None,
         pinned: None,
         effort: None,

@@ -49,6 +49,10 @@ pub struct EventChatUpdate {
     pub total_tokens_input: Option<i64>,
     pub total_tokens_output: Option<i64>,
     pub last_context_tokens_input: Option<i64>,
+    /// The CLI's own context totals (`onContextUsage`) — persisted so the meter
+    /// survives reloads (#197).
+    pub last_context_total_tokens: Option<u64>,
+    pub last_context_max_tokens: Option<u64>,
     pub process_state: Option<Option<ProcessState>>,
     pub updated_at: Option<String>,
 }
@@ -86,6 +90,11 @@ pub trait EventHandlerDeps: Send + Sync {
     fn notify_task_complete(&self) -> bool;
     fn notify_session_error(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
+
+    /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
+    /// end (the CLI owns them; none can report completion after it dies). Default
+    /// no-op mirrors the TS optional `tracker?`.
+    fn tracker_end_all_running(&self, _chat_id: &str) {}
 }
 
 /// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
@@ -350,6 +359,37 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             block_count = content.len(),
             "assistant message received"
         );
+
+        // Drain-turn re-entry: a background task's completion re-invokes the turn
+        // (task_notification → fresh init → assistant message → second result)
+        // AFTER the first result already set processState to 'idle'. A top-level
+        // assistant event means the main agent is speaking again — flip back to
+        // 'working' so the thread indicator runs; the drain turn's own result
+        // clears it via the normal onResult path. Version-proof: on hold-back CLIs
+        // the state is still 'working' here, so this never fires.
+        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+            let updated = {
+                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                if guard.chat.process_state != Some(Some(ProcessState::Working)) {
+                    guard.chat.process_state = Some(Some(ProcessState::Working));
+                    Some(guard.chat.clone())
+                } else {
+                    None
+                }
+            };
+            if let Some(chat) = updated {
+                self.deps.chats_update(
+                    &self.chat_id,
+                    &EventChatUpdate {
+                        process_state: Some(Some(ProcessState::Working)),
+                        ..Default::default()
+                    },
+                );
+                self.deps
+                    .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            }
+        }
+
         let categories = self.deps.get_tool_categories(&self.chat_id);
         for block in &content {
             if let MessageContent::Node(MessageContentNode::ToolUse {
@@ -633,13 +673,22 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             ProcessState::Idle
         };
 
+        // Context size: prefer the adapter's explicit per-turn report
+        // (`contextTokens`; None = "unknown this turn — keep the stored value").
+        // Each adapter resolves the value at its source: claude sends the last
+        // parent assistant usage (or None when unknown), and codex resolves the TS
+        // sink's `undefined → fall back to usage` path at its boundary by sending
+        // this turn's raw input usage (event-handler.ts:366). So None always means
+        // "keep stored" here; a zero must never clobber a real stored size.
+        let context_update: Option<i64> = data.context_tokens.filter(|&v| v > 0);
+
         self.deps.chats_update(
             &self.chat_id,
             &EventChatUpdate {
                 total_cost: Some(new_cost),
                 total_tokens_input: Some(new_input),
                 total_tokens_output: Some(new_output),
-                last_context_tokens_input: Some(tokens_input),
+                last_context_tokens_input: context_update,
                 process_state: Some(Some(next_process_state)),
                 updated_at: Some(now.clone()),
                 ..Default::default()
@@ -650,7 +699,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             guard.chat.total_cost = new_cost;
             guard.chat.total_tokens_input = new_input;
             guard.chat.total_tokens_output = new_output;
-            guard.chat.last_context_tokens_input = tokens_input;
+            if let Some(v) = context_update {
+                guard.chat.last_context_tokens_input = v;
+            }
             guard.chat.process_state = Some(Some(next_process_state));
             guard.chat.updated_at = now;
         }
@@ -851,6 +902,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
         self.deps.on_queued_cleared(&self.chat_id);
 
+        // The CLI process owns every live background task (agents, workflows,
+        // bg bash) — none can report completion after it dies. Stop them so
+        // orphaned entries don't pin the sidebar's working indicator; the
+        // tracker emits `ended` per survivor for connected clients.
+        self.deps.tracker_end_all_running(&self.chat_id);
+
         if let Some(cell) = &cell {
             let chat = {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
@@ -908,6 +965,30 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_context_usage(&self, usage: ContextUsage) {
+        // Persist the CLI's own totals so the meter survives reloads and
+        // dormant-chat turns instead of regressing to a catalog-window guess
+        // (#197). `chat.updated` is broadcast ungated (unlike chat.contextUsage,
+        // which only reaches subscribers), so unsubscribed clients converge too.
+        if usage.max_tokens > 0 {
+            self.deps.chats_update(
+                &self.chat_id,
+                &EventChatUpdate {
+                    last_context_total_tokens: Some(usage.total_tokens as u64),
+                    last_context_max_tokens: Some(usage.max_tokens as u64),
+                    ..Default::default()
+                },
+            );
+            if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+                let chat = {
+                    let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                    guard.chat.last_context_total_tokens = Some(usage.total_tokens as u64);
+                    guard.chat.last_context_max_tokens = Some(usage.max_tokens as u64);
+                    guard.chat.clone()
+                };
+                self.deps
+                    .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            }
+        }
         self.deps.emit_event(DaemonEvent::ChatContextUsage {
             chat_id: self.chat_id.clone(),
             percentage: usage.percentage,
@@ -1291,6 +1372,7 @@ mod tests {
         sink.on_result(SessionResult {
             total_cost_usd: Some(0.0),
             usage: None,
+            context_tokens: None,
             subtype: Some("success".to_string()),
             result: None,
             is_error: Some(false),
@@ -1344,6 +1426,7 @@ mod tests {
         sink.on_result(SessionResult {
             total_cost_usd: Some(0.0),
             usage: None,
+            context_tokens: None,
             subtype: Some("success".to_string()),
             result: None,
             is_error: Some(false),
@@ -1398,6 +1481,7 @@ mod tests {
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
             }),
+            context_tokens: None,
             subtype: None,
             result: None,
             is_error: None,
@@ -1444,6 +1528,7 @@ mod tests {
                 cache_creation_input_tokens: None,
                 cache_read_input_tokens: None,
             }),
+            context_tokens: None,
             subtype: None,
             result: None,
             is_error: None,
@@ -1455,6 +1540,205 @@ mod tests {
                 && message.metadata.as_ref().and_then(|md| md.get("turnDurationMs")).is_some())
         });
         assert!(!has_timing);
+    }
+
+    // ── event-handler-background-activity.test.ts ────────────────────────────
+    use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
+    use mainframe_types::background_task::{
+        BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
+    };
+
+    struct BgDeps {
+        cell: Arc<Mutex<ActiveChat>>,
+        tracker: Arc<BackgroundTaskTracker>,
+        events: Mutex<Vec<DaemonEvent>>,
+        updates: Mutex<Vec<EventChatUpdate>>,
+    }
+    impl BgDeps {
+        fn new(cell: Arc<Mutex<ActiveChat>>, tracker: Arc<BackgroundTaskTracker>) -> Arc<Self> {
+            Arc::new(Self {
+                cell,
+                tracker,
+                events: Mutex::new(Vec::new()),
+                updates: Mutex::new(Vec::new()),
+            })
+        }
+    }
+    impl EventHandlerDeps for BgDeps {
+        fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
+            Some(self.cell.clone())
+        }
+        fn emit_event(&self, event: DaemonEvent) {
+            self.events.lock().unwrap().push(event);
+        }
+        fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
+            None
+        }
+        fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
+        fn on_queued_cleared(&self, _chat_id: &str) {}
+        fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
+            Vec::new()
+        }
+        fn prepare_messages_for_client(
+            &self,
+            _raw: &[ChatMessage],
+            _categories: Option<&ToolCategories>,
+        ) -> Vec<DisplayMessage> {
+            Vec::new()
+        }
+        fn strip_command_tags(&self, text: &str) -> String {
+            text.to_string()
+        }
+        fn chats_update(&self, _chat_id: &str, patch: &EventChatUpdate) {
+            self.updates.lock().unwrap().push(patch.clone());
+        }
+        fn projects_get_path(&self, _project_id: &str) -> Option<String> {
+            None
+        }
+        fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
+            false
+        }
+        fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
+            false
+        }
+        fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
+        fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
+            Vec::new()
+        }
+        fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
+            false
+        }
+        fn notify_task_complete(&self) -> bool {
+            false
+        }
+        fn notify_session_error(&self) -> bool {
+            false
+        }
+        fn tracker_end_all_running(&self, chat_id: &str) {
+            self.tracker.end_all_running(chat_id);
+        }
+    }
+
+    fn bg_sink(deps: Arc<BgDeps>) -> Arc<dyn SessionSink> {
+        let handler = EventHandler::new(
+            Arc::new(Mutex::new(MessageCache::new())),
+            Arc::new(Mutex::new(PermissionManager::new())),
+            deps,
+        );
+        handler.build_sink("chat-bg", None)
+    }
+
+    fn seed(id: &str, kind: BackgroundWorkKind, command: &str, description: &str) -> TaskSeed {
+        TaskSeed {
+            id: id.to_string(),
+            kind,
+            tool_name: BackgroundTaskToolName::Bash,
+            tool_use_id: format!("tu-{id}"),
+            command: command.to_string(),
+            description: description.to_string(),
+        }
+    }
+
+    #[test]
+    fn on_exit_stops_every_running_task() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        tracker.start(
+            "chat-bg",
+            seed("a-1", BackgroundWorkKind::Agent, "", "agent"),
+            "/p/a-1".to_string(),
+        );
+        tracker.start(
+            "chat-bg",
+            seed("b-1", BackgroundWorkKind::Bash, "dev", ""),
+            "/p/b-1".to_string(),
+        );
+        let deps = BgDeps::new(cell(ProcessState::Working, None), tracker.clone());
+
+        bg_sink(deps).on_exit(Some(0));
+
+        assert!(tracker.list_live("chat-bg").is_empty());
+        assert_eq!(
+            tracker.get("chat-bg", "a-1").unwrap().status,
+            BackgroundTaskStatus::Stopped
+        );
+        assert_eq!(
+            tracker.get("chat-bg", "b-1").unwrap().status,
+            BackgroundTaskStatus::Stopped
+        );
+    }
+
+    #[test]
+    fn on_exit_does_not_touch_other_chats() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        tracker.start(
+            "other-chat",
+            seed("x-1", BackgroundWorkKind::Bash, "c", ""),
+            "/p/x-1".to_string(),
+        );
+        let deps = BgDeps::new(cell(ProcessState::Working, None), tracker.clone());
+
+        bg_sink(deps).on_exit(Some(0));
+
+        assert_eq!(tracker.list_live("other-chat").len(), 1);
+    }
+
+    #[test]
+    fn on_message_drain_turn_flips_idle_back_to_working() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let cell = cell(ProcessState::Idle, None);
+        let deps = BgDeps::new(cell.clone(), tracker);
+
+        let text = MessageContent::Leaf(LeafContent::Text {
+            text: "drain-turn summary".to_string(),
+            parent_tool_use_id: None,
+        });
+        bg_sink(deps.clone()).on_message(vec![text], None);
+
+        assert_eq!(
+            cell.lock().unwrap().chat.process_state,
+            Some(Some(ProcessState::Working))
+        );
+        assert!(
+            deps.updates
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|u| { u.process_state == Some(Some(ProcessState::Working)) })
+        );
+        assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
+            e,
+            DaemonEvent::ChatUpdated { chat, .. } if chat.process_state == Some(Some(ProcessState::Working))
+        )));
+    }
+
+    #[test]
+    fn on_message_does_not_reflip_when_already_working() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let cell = cell(ProcessState::Working, None);
+        let deps = BgDeps::new(cell, tracker);
+
+        let text = MessageContent::Leaf(LeafContent::Text {
+            text: "mid-turn message".to_string(),
+            parent_tool_use_id: None,
+        });
+        bg_sink(deps.clone()).on_message(vec![text], None);
+
+        assert!(
+            !deps
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
+        );
+        assert!(
+            !deps
+                .updates
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|u| { u.process_state == Some(Some(ProcessState::Working)) })
+        );
     }
 }
 
@@ -1471,5 +1755,17 @@ mod tests {
 // notes: `pushService`/notification config collapse into deps methods. onResult
 // notes: reconcile snapshots message ids before move_to_end (mirrors the TS
 // notes: `[...cached]` copy). buildSink drops the unused `_respondToPermission`.
-// notes: Ported: session-path (3), move-on-process (3), turn-timing (2) test cases.
+// notes: Main catch-up (#423/#424/#425): onResult context-tokens is a two-way
+// notes: branch — `data.context_tokens.filter(|v| v>0)` (None keeps the stored size).
+// notes: Option<i64> can't carry the TS undefined/null distinction, so each adapter
+// notes: resolves its context value at its own boundary: claude sends the last
+// notes: parent assistant usage (or None); codex sends this turn's raw input usage
+// notes: to mirror the TS `undefined→usage` fallback. onContextUsage persists
+// notes: lastContextTotal/MaxTokens +
+// notes: broadcasts chat.updated ungated. onExit calls tracker_end_all_running (new
+// notes: defaulted deps method) BEFORE clearing processState. onMessage drain-turn
+// notes: re-entry flips a non-working processState back to working + emits chat.updated
+// notes: (snapshot-under-lock, emit-after-drop per CONCURRENCY.tsv rule 3).
+// notes: Ported: session-path (3), move-on-process (3), turn-timing (2),
+// notes: background-activity (4) test cases.
 // todos: 0
