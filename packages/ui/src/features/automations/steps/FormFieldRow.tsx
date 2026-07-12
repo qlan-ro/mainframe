@@ -71,7 +71,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
       </div>
 
       {needsOptions && (
-        <div className="pl-5">
+        <div className="pl-[20px]">
           <OptionsEditor
             options={field.options ?? []}
             onChange={(options) => onPatch({ options })}
@@ -81,7 +81,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
       )}
 
       {field.showWhen ? (
-        <div className="flex flex-wrap items-center gap-1.5 pl-5">
+        <div className="flex flex-wrap items-center gap-1.5 pl-[20px]">
           <span className="text-caption font-medium text-muted-foreground">Show when</span>
           <MiniSelect
             value={field.showWhen.key}
@@ -115,7 +115,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
             type="button"
             data-testid={`${testId}-add-showwhen`}
             onClick={() => onPatch({ showWhen: { key: others[0]?.key ?? '', equals: '' } })}
-            className="ml-5 self-start text-caption font-medium text-muted-foreground hover:text-primary"
+            className="ml-[20px] self-start text-caption font-medium text-muted-foreground hover:text-primary"
           >
             + show only when…
           </button>

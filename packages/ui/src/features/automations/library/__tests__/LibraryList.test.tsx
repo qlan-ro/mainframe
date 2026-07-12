@@ -3,12 +3,14 @@
  * both creation paths when the library is empty. TDD: test written first,
  * component implemented after.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { AutomationSummary } from '../../contract';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { LibraryList } from '../LibraryList';
+
+const DEFAULT_LOAD_ALL = useAutomationsStore.getState().loadAll;
 
 const AUTOMATION_A: AutomationSummary = {
   id: 'auto-a',
@@ -35,6 +37,7 @@ const AUTOMATION_B: AutomationSummary = {
 describe('LibraryList', () => {
   beforeEach(() => {
     useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
+    useAutomationsStore.setState({ loading: false, error: null, loadAll: DEFAULT_LOAD_ALL });
   });
 
   it('renders a row per definition, keyed by automation id', () => {
@@ -71,7 +74,7 @@ describe('LibraryList', () => {
     });
     render(<LibraryList />);
 
-    expect(screen.getByTestId('automations-library-last-run-auto-a')).toHaveTextContent('Succeeded');
+    expect(screen.getByTestId('automations-library-last-run-auto-a')).toHaveTextContent('Done');
   });
 
   it('clicking New opens the editor in "new" mode', () => {
@@ -110,5 +113,41 @@ describe('LibraryList', () => {
 
     fireEvent.click(describeButton);
     expect(useAutomationsNav.getState().editorTarget).toBeNull();
+  });
+
+  it('shows a loading state instead of BlankState while the initial fetch is in flight', () => {
+    useAutomationsStore.setState({ definitions: [], runs: [], loading: true });
+    render(<LibraryList />);
+
+    expect(screen.getByTestId('automations-library-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('automations-blank-describe')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('automations-blank-build')).not.toBeInTheDocument();
+  });
+
+  it('shows an inline error with retry instead of BlankState when the fetch fails', () => {
+    const loadAllSpy = vi.fn().mockResolvedValue(undefined);
+    useAutomationsStore.setState({
+      definitions: [],
+      runs: [],
+      loading: false,
+      error: 'Network unreachable',
+      loadAll: loadAllSpy,
+    });
+    render(<LibraryList />);
+
+    expect(screen.getByTestId('automations-library-error')).toHaveTextContent('Network unreachable');
+    expect(screen.queryByTestId('automations-blank-describe')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('automations-library-retry'));
+    expect(loadAllSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the row list, not the loading/error/blank states, once data has loaded', () => {
+    useAutomationsStore.setState({ definitions: [AUTOMATION_A], runs: [], loading: false, error: null });
+    render(<LibraryList />);
+
+    expect(screen.getByTestId('automations-library-row-auto-a')).toBeInTheDocument();
+    expect(screen.queryByTestId('automations-library-loading')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('automations-library-error')).not.toBeInTheDocument();
   });
 });

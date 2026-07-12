@@ -32,6 +32,8 @@ interface AutomationsState {
   gateway: AutomationsGateway;
   definitions: AutomationSummary[];
   runs: AutomationRunSummary[];
+  /** Bumped by `patchRun` on every applied update — lets a run view refetch on every `automation.run.updated` for its run id, not just status changes (a run can emit one per step transition). */
+  runRevisions: Record<string, number>;
   interactions: AutomationInteractionSummary[];
   catalog: ActionCatalogEntry[];
   credentials: string[];
@@ -52,6 +54,7 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   gateway: createFixtureGateway(),
   definitions: [],
   runs: [],
+  runRevisions: {},
   interactions: [],
   catalog: [],
   credentials: [],
@@ -72,12 +75,16 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
         gateway.listCredentialLabels(),
       ]);
       if (seqAtStart !== loadSeq) return;
-      const runLists = await Promise.all(
-        definitions.map((d) => gateway.listRuns(d.id).catch(() => [] as AutomationRunSummary[])),
-      );
+      const runResults = await Promise.allSettled(definitions.map((d) => gateway.listRuns(d.id)));
       if (seqAtStart !== loadSeq) return;
-      const runs = runLists.flat().sort((a, b) => b.startedAt - a.startedAt);
-      set({ definitions, interactions, catalog, credentials, runs, loading: false });
+      const runs: AutomationRunSummary[] = [];
+      let runsError: string | null = null;
+      for (const result of runResults) {
+        if (result.status === 'fulfilled') runs.push(...result.value);
+        else runsError = result.reason instanceof Error ? result.reason.message : 'Failed to load run history';
+      }
+      runs.sort((a, b) => b.startedAt - a.startedAt);
+      set({ definitions, interactions, catalog, credentials, runs, loading: false, error: runsError });
     } catch (err) {
       if (seqAtStart !== loadSeq) return;
       set({ loading: false, error: err instanceof Error ? err.message : 'Failed to load automations' });
@@ -102,6 +109,7 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
       if (existing && isTerminalRunStatus(existing.status) && !isTerminalRunStatus(run.status)) return s;
       return {
         runs: existing ? s.runs.map((r) => (r.id === run.id ? run : r)) : [run, ...s.runs],
+        runRevisions: { ...s.runRevisions, [run.id]: (s.runRevisions[run.id] ?? 0) + 1 },
       };
     }),
 

@@ -79,7 +79,7 @@ describe('RunView — header', () => {
     setup({ run: run({ status: 'succeeded' }), timeline: [] });
     render(<RunView />);
     expect(await screen.findByText('Ship work')).toBeInTheDocument();
-    expect(screen.getByText('Succeeded')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
   it('shows Cancel only while running or waiting', async () => {
@@ -135,13 +135,26 @@ describe('RunView — live updates', () => {
     await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(2));
   });
 
-  it('does not refetch the timeline on a re-render that leaves the run status unchanged', async () => {
+  it('refetches the timeline on every patch of the open run, even one that leaves the status unchanged (a per-step-transition WS event)', async () => {
     const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
     render(<RunView />);
     await screen.findByText('Ship work');
     expect(getRunTimeline).toHaveBeenCalledTimes(1);
 
     useAutomationsStore.getState().patchRun(run({ status: 'running', finishedAt: null }));
+    await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(2));
+
+    useAutomationsStore.getState().patchRun(run({ status: 'running', finishedAt: null }));
+    await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(3));
+  });
+
+  it('does not refetch the timeline when a different run is patched', async () => {
+    const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
+    render(<RunView />);
+    await screen.findByText('Ship work');
+    expect(getRunTimeline).toHaveBeenCalledTimes(1);
+
+    useAutomationsStore.getState().patchRun(run({ id: 'run-2', status: 'running', finishedAt: null }));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(getRunTimeline).toHaveBeenCalledTimes(1);

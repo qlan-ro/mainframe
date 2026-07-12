@@ -67,7 +67,7 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
     return (
       <span
         data-testid={`${testId}-connected`}
-        className="inline-flex h-7 items-center gap-1.5 rounded-full border-[0.5px] border-mf-success/40 bg-mf-success-tint pl-2.5 pr-1"
+        className="inline-flex h-[28px] items-center gap-1.5 rounded-full border-[0.5px] border-mf-success/40 bg-mf-success-tint pl-2.5 pr-1"
       >
         <span className="size-1.5 rounded-full bg-mf-success" aria-hidden />
         <span className="text-caption text-foreground">{service}</span>
@@ -91,7 +91,7 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
       data-testid={`${testId}-connect`}
       onClick={() => void connect()}
       disabled={busy}
-      className="inline-flex h-7 items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card px-2.5 text-caption font-semibold text-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+      className="inline-flex h-[28px] items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card px-2.5 text-caption font-semibold text-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
     >
       <Plug size={12} aria-hidden />
       Connect {service}…

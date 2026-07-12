@@ -71,6 +71,46 @@ describe('validate — out-of-scope token usage, pinned to the offending step', 
   });
 });
 
+describe('validate — Repeat items must be list-typed', () => {
+  it('flags a Repeat whose items token resolves to a non-list value (e.g. a freshly-added block defaulting to the first token in scope)', () => {
+    const source: AutomationStep = askAgent('src');
+    const repeat: AutomationStep = {
+      id: 'r1',
+      kind: 'repeat',
+      items: { stepId: 'src', output: 'result' },
+      steps: [],
+    };
+    const issues = validate('Name', { triggers: [], steps: [source, repeat] }, NO_CATALOG);
+    expect(issues).toContainEqual({
+      stepId: 'r1',
+      level: 'error',
+      msg: '"Result" isn\'t a list — pick a value that produces a list to repeat over.',
+    });
+  });
+
+  it('does not flag a Repeat whose items token is genuinely list-typed', () => {
+    const source: AutomationStep = { id: 'src', kind: 'run_action', actionId: 'list_items', params: {} };
+    const repeat: AutomationStep = {
+      id: 'r1',
+      kind: 'repeat',
+      items: { stepId: 'src', output: 'items' },
+      steps: [],
+    };
+    const catalog: ActionCatalogEntry[] = [
+      {
+        id: 'list_items',
+        title: 'List items',
+        group: 'builtin',
+        auth: 'none',
+        paramsSchema: {},
+        outputs: [{ name: 'items', type: 'list' }],
+      },
+    ];
+    const issues = validate('Name', { triggers: [], steps: [source, repeat] }, catalog);
+    expect(issues.some((i) => i.stepId === 'r1')).toBe(false);
+  });
+});
+
 describe('validate — ask_me field issues', () => {
   it('flags a choice field with no options', () => {
     const step: AutomationStep = {

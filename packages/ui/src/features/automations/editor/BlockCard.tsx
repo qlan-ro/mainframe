@@ -42,10 +42,10 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
       className={cn(
         'overflow-hidden rounded-lg border-[0.5px]',
         bad ? 'border-destructive/55' : meta.borderClass,
-        meta.tintClass,
+        meta.cardTintClass ?? meta.tintClass,
       )}
     >
-      <div className="flex items-center gap-2.5 px-2.5 py-2">
+      <div className="flex items-center gap-[9px] px-2.5 py-[9px]">
         <button
           type="button"
           draggable
@@ -66,23 +66,23 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
           data-testid={`automations-step-delete-${step.id}`}
           onClick={() => onChange(null)}
           aria-label="Remove step"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+          className="flex size-[28px] shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted"
         >
           <Trash2 size={12} aria-hidden />
         </button>
       </div>
       {bad && (
-        <div className="flex flex-col gap-1 border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-3 py-2">
+        <div className="flex flex-col gap-[4px] border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-[12px] pt-[7px] pb-[8px]">
           {myIssues.map((issue, i) => (
             <span key={i} className="flex items-start gap-1.5 text-caption font-semibold text-destructive">
-              <TriangleAlert size={11} className="mt-0.5 shrink-0" aria-hidden />
+              <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />
               {issue.msg}
             </span>
           ))}
         </div>
       )}
-      <div className="px-2.5 pb-3">
-        <div className={cn('flex flex-col gap-3 border-l-2 pl-3', meta.borderClass)}>
+      <div className="pr-[10px] pb-[11px] pl-[12px]">
+        <div className={cn('flex flex-col gap-[11px] border-l-2 pl-[12px]', meta.borderClass)}>
           {step.kind === 'if' ? (
             <IfBody step={step} onChange={patch} tokens={tokens} catalog={catalog} issues={issues} depth={depth} />
           ) : (

@@ -56,7 +56,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
         bad ? 'border-destructive/55' : 'border-border',
       )}
     >
-      <div className="flex items-start gap-2.5 px-2.5 py-2">
+      <div className="flex items-start gap-[9px] px-2.5 py-[9px]">
         <button
           type="button"
           draggable
@@ -93,13 +93,13 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           className={cn(
-            'mt-0.5 inline-flex h-[26px] shrink-0 items-center gap-1 rounded-md border-[0.5px] px-2.5 text-caption font-semibold',
+            'mt-0.5 inline-flex h-[26px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] px-2.5 text-caption font-semibold',
             open
               ? 'border-primary/40 bg-primary/10 text-primary'
               : 'border-border text-muted-foreground hover:bg-accent',
           )}
         >
-          <Sliders size={11} aria-hidden />
+          <Sliders size={12} aria-hidden />
           {open ? 'Done' : 'Set up'}
         </button>
         <button
@@ -107,16 +107,16 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-testid={`automations-step-delete-${step.id}`}
           onClick={() => onChange(null)}
           aria-label="Remove step"
-          className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+          className="mt-0.5 flex size-[28px] shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted"
         >
           <Trash2 size={12} aria-hidden />
         </button>
       </div>
       {bad && (
-        <div className="flex flex-col gap-1 border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-3 py-2">
+        <div className="flex flex-col gap-[4px] border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-[12px] pt-[7px] pb-[8px]">
           {myIssues.map((issue, i) => (
             <span key={i} className="flex items-start gap-1.5 text-caption font-semibold text-destructive">
-              <TriangleAlert size={11} className="mt-0.5 shrink-0" aria-hidden />
+              <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />
               {issue.msg}
             </span>
           ))}
@@ -125,7 +125,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
       {open && (
         <div
           data-testid={`automations-step-config-${step.id}`}
-          className="border-t-[0.5px] border-border p-3 pl-[46px]"
+          className="border-t-[0.5px] border-border pt-[2px] pr-[12px] pb-[14px] pl-[46px]"
         >
           {step.kind === 'ask_agent' && (
             <AgentConfig

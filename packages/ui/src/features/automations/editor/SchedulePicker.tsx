@@ -44,7 +44,7 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-[9px]">
       <MiniSelect
         value={currentLabel}
         options={options}

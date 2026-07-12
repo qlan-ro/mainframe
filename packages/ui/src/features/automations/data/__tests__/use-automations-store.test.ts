@@ -7,6 +7,7 @@ describe('useAutomationsStore', () => {
     useAutomationsStore.setState({
       definitions: [],
       runs: [],
+      runRevisions: {},
       interactions: [],
       catalog: [],
       credentials: [],
@@ -71,6 +72,35 @@ describe('useAutomationsStore', () => {
 
     expect(useAutomationsStore.getState().error).toBe('boom');
     expect(useAutomationsStore.getState().loading).toBe(false);
+  });
+
+  it('loadAll surfaces a run-history fetch failure via the error field instead of silently rendering an empty history', async () => {
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listAutomations: async () => [
+          {
+            id: 'a1',
+            name: 'A',
+            scope: 'global',
+            projectId: null,
+            enabled: true,
+            definition: { triggers: [], steps: [] },
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+        listRuns: async () => {
+          throw new Error('run history unavailable');
+        },
+      }),
+    );
+
+    await useAutomationsStore.getState().loadAll();
+
+    const state = useAutomationsStore.getState();
+    expect(state.definitions).toHaveLength(1);
+    expect(state.loading).toBe(false);
+    expect(state.error).toBe('run history unavailable');
   });
 
   it('patchDefinition upserts by id', () => {
@@ -146,6 +176,39 @@ describe('useAutomationsStore', () => {
     const failed = { ...done, status: 'failed' as const, error: 'boom' };
     useAutomationsStore.getState().patchRun(failed);
     expect(useAutomationsStore.getState().runs).toEqual([failed]);
+  });
+
+  it('patchRun bumps the run’s revision counter on every applied update, even with an unchanged status', () => {
+    const run = {
+      id: 'r1',
+      automationId: 'a1',
+      status: 'running' as const,
+      trigger: { kind: 'manual' as const },
+      startedAt: 1,
+      finishedAt: null,
+      error: null,
+    };
+    useAutomationsStore.getState().patchRun(run);
+    expect(useAutomationsStore.getState().runRevisions.r1).toBe(1);
+    useAutomationsStore.getState().patchRun({ ...run });
+    expect(useAutomationsStore.getState().runRevisions.r1).toBe(2);
+  });
+
+  it('patchRun does not bump the revision counter when the terminal-status guard rejects the update', () => {
+    const done = {
+      id: 'r1',
+      automationId: 'a1',
+      status: 'succeeded' as const,
+      trigger: { kind: 'manual' as const },
+      startedAt: 1,
+      finishedAt: 3,
+      error: null,
+    };
+    useAutomationsStore.getState().patchRun(done);
+    expect(useAutomationsStore.getState().runRevisions.r1).toBe(1);
+    const stale = { ...done, status: 'running' as const, finishedAt: null };
+    useAutomationsStore.getState().patchRun(stale);
+    expect(useAutomationsStore.getState().runRevisions.r1).toBe(1);
   });
 
   it('addCredential dedupes by label; removeCredential drops it', () => {

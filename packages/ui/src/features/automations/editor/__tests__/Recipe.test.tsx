@@ -7,6 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ActionCatalogEntry, AutomationStep } from '../../contract';
 import type { TokenDescriptor } from '../../domain/tokens';
+import { validate } from '../../domain/validate';
 import { Recipe } from '../Recipe';
 
 const TODAY: TokenDescriptor = {
@@ -149,5 +150,24 @@ describe('Recipe — adding a step', () => {
     const added = onChange.mock.calls[0]?.[0] as AutomationStep[];
     expect(added[0]).toMatchObject({ kind: 'repeat', steps: [] });
     expect((added[0] as { items?: unknown })?.items).toEqual(TODAY.ref);
+  });
+
+  it('a fresh "repeat" step whose only in-scope token is non-list-typed gets flagged by validate, not silently accepted', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    // Only TODAY (type "date") is in scope — no list token exists yet, so
+    // Recipe's newStep fallback (first token in scope) picks a non-list
+    // token. That must surface as a plain-language issue on the card, not
+    // pass validation silently.
+    render(<Recipe steps={[]} onChange={onChange} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
+    await user.click(screen.getByTestId('root-add'));
+    await user.click(screen.getByTestId('root-add-verb-repeat'));
+    const added = onChange.mock.calls[0]?.[0] as AutomationStep[];
+    const issues = validate('Automation', { triggers: [], steps: added }, NO_CATALOG);
+    expect(issues).toContainEqual({
+      stepId: added[0]?.id,
+      level: 'error',
+      msg: '"Today" isn\'t a list — pick a value that produces a list to repeat over.',
+    });
   });
 });

@@ -23,7 +23,7 @@ import type {
 } from '../contract';
 import { findStepById } from '../domain/tokens';
 import { VERB_META } from '../editor/verb-meta';
-import { entryLabel, formatDuration, isKeptGoing } from './run-timeline';
+import { entryLabel, formatDuration, isKeptGoing, repeatProgressLabel } from './run-timeline';
 import { RunInlineForm } from './RunInlineForm';
 import { RunRepeatGroup } from './RunRepeatGroup';
 import { STEP_STATUS_META } from './status-meta';
@@ -67,7 +67,6 @@ export function RunStepRow({
   const StatusIcon = statusMeta.Icon;
   const [open, setOpen] = useState(entry.status === 'waiting' || entry.status === 'failed');
 
-  const label = entryLabel(entry, steps, catalog);
   const duration = formatDuration(entry.startedAt, entry.finishedAt);
   const keptGoing = isKeptGoing(entry, steps);
   const hasDisclosure = Boolean(entry.outputPreview || entry.error || entry.chatId);
@@ -78,24 +77,26 @@ export function RunStepRow({
       : undefined;
 
   const repeatStep = entry.kind === 'repeat' ? findStepById(steps, entry.stepId) : null;
+  const progress = repeatStep?.kind === 'repeat' ? repeatProgressLabel(entry, timeline, repeatStep) : null;
+  const label = entryLabel(entry, steps, catalog) + (progress ? ` · ${progress}` : '');
 
   return (
-    <div data-testid={testId} className="flex gap-2.5">
+    <div data-testid={testId} className="flex gap-[11px]">
       {spine && (
         <div className="flex shrink-0 flex-col items-center">
           <span className={cn('mt-0.5 flex size-[22px] items-center justify-center rounded-full', statusMeta.dotClass)}>
             {entry.status === 'running' ? (
-              <Spinner className={statusMeta.iconClass} />
+              <Spinner className="border-primary" />
             ) : (
-              StatusIcon && <StatusIcon size={11} className={statusMeta.iconClass} aria-hidden />
+              StatusIcon && <StatusIcon size={12} className={statusMeta.iconClass} aria-hidden />
             )}
           </span>
-          {!isLast && <span aria-hidden className="mt-1 min-h-[14px] w-[2px] flex-1 bg-border" />}
+          {!isLast && <span aria-hidden className="mt-[3px] min-h-[14px] w-[2px] flex-1 bg-border" />}
         </div>
       )}
       <div className={cn('min-w-0 flex-1', !isLast && 'pb-3.5')}>
-        <div className="flex items-center gap-2">
-          <VerbIcon size={13} className={verbMeta.iconClass} aria-hidden />
+        <div className="flex items-center gap-[8px]">
+          <VerbIcon size={14} className={verbMeta.iconClass} aria-hidden />
           <span
             className={cn(
               'flex-1 text-body font-semibold',
@@ -108,7 +109,7 @@ export function RunStepRow({
             <span
               data-testid={`${testId}-kept-going`}
               title="This step failed but the automation kept going"
-              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-mf-warning/15 px-2 text-caption font-bold text-mf-warning"
+              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-mf-warning/15 px-[8px] text-caption font-bold text-mf-warning"
             >
               Kept going
             </span>
@@ -121,15 +122,15 @@ export function RunStepRow({
               aria-expanded={open}
               aria-label={open ? 'Hide details' : 'Show details'}
               onClick={() => setOpen((o) => !o)}
-              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
+              className="flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground hover:bg-accent"
             >
-              {open ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
+              {open ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
             </button>
           )}
         </div>
 
         {interaction && (
-          <div className="mt-2">
+          <div className="mt-[9px]">
             <RunInlineForm interaction={interaction} onSubmitted={onInteractionSubmitted} testId={`${testId}-form`} />
           </div>
         )}
@@ -137,7 +138,7 @@ export function RunStepRow({
         {open && entry.outputPreview && (
           <div
             data-testid={`${testId}-output`}
-            className="mt-1.5 whitespace-pre-wrap rounded-md border-[0.5px] border-border bg-muted/50 px-2.5 py-2 font-mono text-caption leading-relaxed text-muted-foreground"
+            className="mt-[7px] whitespace-pre-wrap rounded-md border-[0.5px] border-border bg-muted/50 px-[11px] py-[8px] font-mono text-caption leading-relaxed text-muted-foreground"
           >
             {entry.outputPreview}
           </div>
@@ -145,7 +146,7 @@ export function RunStepRow({
         {open && entry.error && (
           <div
             data-testid={`${testId}-error`}
-            className="mt-1.5 rounded-md border-[0.5px] border-destructive/30 bg-destructive/[0.07] px-2.5 py-2 text-caption leading-relaxed text-destructive"
+            className="mt-[7px] rounded-md border-[0.5px] border-destructive/30 bg-destructive/[0.07] px-[11px] py-[9px] text-caption leading-relaxed text-destructive"
           >
             {entry.error}
           </div>
@@ -155,9 +156,9 @@ export function RunStepRow({
             type="button"
             data-testid={`${testId}-chat`}
             onClick={() => onOpenChat(entry.chatId!)}
-            className="mt-1.5 inline-flex h-[26px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-2.5 text-caption font-semibold text-primary hover:bg-accent"
+            className="mt-[7px] inline-flex h-[26px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-[11px] text-caption font-semibold text-primary hover:bg-accent"
           >
-            <MessageSquare size={11} aria-hidden />
+            <MessageSquare size={14} aria-hidden />
             Open agent chat
           </button>
         )}

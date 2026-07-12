@@ -62,6 +62,8 @@ export function RunView() {
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchRun = useAutomationsStore((s) => s.patchRun);
 
+  const runRev = useAutomationsStore((s) => (runId ? (s.runRevisions[runId] ?? 0) : 0));
+
   const run = runs.find((r) => r.id === runId);
   const automation = run ? definitions.find((d) => d.id === run.automationId) : undefined;
 
@@ -80,18 +82,13 @@ export function RunView() {
     [gateway],
   );
 
-  // Phase 6 live wiring: keyed on run?.id AND run?.status (a primitive, not the whole `run`
-  // object) — a fresh id means "navigated to a different run" (refetch from empty); an
-  // unchanged id whose status changed means a live `automation.run.updated` WS event patched
-  // this same run (use-automation-events.ts → patchRun) while the view was open, so the
-  // timeline is stale and needs the same refetch. Status is the right granularity: every
-  // meaningful step transition ends in a run-level status change (running → waiting/succeeded/
-  // failed/cancelled), and keying on it (not `run` itself) avoids re-fetching on unrelated
-  // patches that don't change status.
+  // Keyed on run?.id (switching runs refetches from empty) and runRev, a per-run counter
+  // `patchRun` bumps on every applied update — the daemon emits `automation.run.updated` per
+  // step transition, not just on a run-level status change, so status alone under-refetches.
   useEffect(() => {
     if (!run) return;
     void refetchTimeline(run.id);
-  }, [run?.id, run?.status]);
+  }, [run?.id, runRev]);
 
   async function handleRunAgain() {
     if (!run || starting) return;
@@ -136,15 +133,15 @@ export function RunView() {
 
   return (
     <div data-testid="automations-run-view" className="flex h-full min-h-0 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-3.5">
+      <div className="flex h-[52px] shrink-0 items-center gap-[11px] border-b border-border px-[16px]">
         <Hint label="Back">
           <button
             type="button"
             data-testid="automations-run-back"
             onClick={closeRun}
-            className="flex size-[30px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+            className="flex size-[28px] items-center justify-center rounded-[6px] text-muted-foreground hover:bg-accent"
           >
-            <ChevronLeft size={15} aria-hidden />
+            <ChevronLeft size={16} aria-hidden />
           </button>
         </Hint>
         <div className="min-w-0 flex-1">
@@ -157,7 +154,7 @@ export function RunView() {
         </div>
         <span
           className={cn(
-            'inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-caption font-bold text-foreground',
+            'inline-flex h-[24px] items-center gap-1.5 rounded-full px-[11px] text-caption font-bold text-foreground',
             RUN_STATUS_BG_CLASS[run.status],
           )}
         >
@@ -177,9 +174,9 @@ export function RunView() {
             data-testid="automations-run-cancel"
             disabled={cancelling}
             onClick={() => void handleCancel()}
-            className="inline-flex h-[28px] items-center gap-1.5 rounded-md border-[0.5px] border-destructive/40 px-2.5 text-caption font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-destructive/40 px-[12px] text-caption font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-45"
           >
-            <Square size={10} aria-hidden />
+            <Square size={14} fill="currentColor" aria-hidden />
             Cancel
           </button>
         )}
@@ -188,17 +185,20 @@ export function RunView() {
           data-testid="automations-run-again"
           disabled={starting}
           onClick={() => void handleRunAgain()}
-          className="inline-flex h-[28px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-2.5 text-caption font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-caption font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
         >
-          <Play size={10} className="text-primary" aria-hidden />
+          <Play size={14} className="text-primary" fill="currentColor" aria-hidden />
           Run again
         </button>
       </div>
 
-      <div data-testid="automations-run-timeline" className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">
+      <div
+        data-testid="automations-run-timeline"
+        className="min-h-0 flex-1 overflow-y-auto px-[16px] pt-[14px] pb-[22px]"
+      >
         {topLevel.length === 0 ? (
           <div className="flex items-center gap-2 text-body text-muted-foreground">
-            <Zap size={13} aria-hidden />
+            <Zap size={14} aria-hidden />
             No steps have run yet.
           </div>
         ) : (

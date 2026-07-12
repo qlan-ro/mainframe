@@ -13,7 +13,7 @@
  * design review.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Bell, GitBranch, MessageCircle, Plug, RotateCw, Sparkles } from 'lucide-react';
+import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles } from 'lucide-react';
 import type { AutomationStep } from '../contract';
 import { sourceKindStyle } from '../fields/TokenChip';
 
@@ -23,6 +23,14 @@ export interface VerbMeta {
   icon: LucideIcon;
   iconClass: string;
   tintClass: string;
+  /**
+   * Block cards only (`if`/`repeat`): the card body's faint wash. ts153
+   * (wf2-editor.jsx `WfStepCard`'s block branch) uses a much fainter
+   * `wf2Rgba(v.color, 0.045)` for the body than the `0.13` icon swatch —
+   * `tintClass` alone (~0.12) is too strong for the body, so blocks get
+   * their own weaker token here.
+   */
+  cardTintClass?: string;
   borderClass: string;
   label: string;
   hint: string;
@@ -44,7 +52,8 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     hint: 'Hand a task to an AI agent and wait for the result',
   },
   ask_me: {
-    icon: MessageCircle,
+    // Same glyph as RunStepRow's "Open agent chat" button — one lucide family for the artboard's single "chat" SF symbol.
+    icon: MessageSquare,
     iconClass: askmeStyle.iconClass,
     tintClass: askmeStyle.tintClass,
     borderClass: askmeStyle.borderClass,
@@ -71,6 +80,7 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     icon: GitBranch,
     iconClass: 'text-mf-accent-violet',
     tintClass: 'bg-mf-accent-violet/12',
+    cardTintClass: 'bg-mf-accent-violet/5',
     borderClass: 'border-mf-accent-violet/30',
     label: 'If … otherwise',
     hint: 'Branch on a result',
@@ -80,6 +90,7 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     icon: RotateCw,
     iconClass: itemStyle.iconClass,
     tintClass: itemStyle.tintClass,
+    cardTintClass: 'bg-mf-auto-kind-loop/5',
     borderClass: itemStyle.borderClass,
     label: 'Repeat for each',
     hint: 'Run steps once per item in a list',

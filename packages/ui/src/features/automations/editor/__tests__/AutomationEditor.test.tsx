@@ -106,7 +106,24 @@ describe('AutomationEditor — footer validation summary', () => {
     await user.type(screen.getByTestId('automations-editor-name'), 'My automation');
     await user.click(screen.getByTestId('automations-recipe-root-add'));
     await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
-    expect(screen.getByText('Looks good')).toBeInTheDocument();
+    expect(screen.getByText(/Looks good/)).toBeInTheDocument();
+  });
+
+  it('appends "ready to create" for a new automation once valid', async () => {
+    const user = userEvent.setup();
+    useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
+    render(<AutomationEditor />);
+    await user.type(screen.getByTestId('automations-editor-name'), 'My automation');
+    await user.click(screen.getByTestId('automations-recipe-root-add'));
+    await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
+    expect(screen.getByText('Looks good · ready to create')).toBeInTheDocument();
+  });
+
+  it('appends "ready to save" once valid when editing an existing automation', () => {
+    useAutomationsStore.setState({ definitions: [EXISTING] });
+    useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: EXISTING.id } });
+    render(<AutomationEditor />);
+    expect(screen.getByText('Looks good · ready to save')).toBeInTheDocument();
   });
 });
 

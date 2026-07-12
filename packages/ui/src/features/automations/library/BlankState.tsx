@@ -43,7 +43,7 @@ function CreationCard({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex flex-1 flex-col gap-3 rounded-xl border border-border bg-card p-5 text-left shadow-[var(--mf-shadow-card)]',
+        'flex flex-1 flex-col gap-[11px] rounded-xl border border-border bg-card p-[22px] text-left shadow-[var(--mf-shadow-card)]',
         'transition-colors hover:border-primary/40 hover:shadow-[var(--mf-shadow-card-hover)]',
         'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-border disabled:hover:shadow-[var(--mf-shadow-card)]',
       )}
@@ -69,15 +69,18 @@ interface BlankStateProps {
 
 export function BlankState({ onDescribe, onBuild, describeEnabled }: BlankStateProps): React.ReactElement {
   return (
-    <div data-testid="automations-blank-state" className="flex h-full flex-col items-center justify-center gap-6 p-8">
+    <div
+      data-testid="automations-blank-state"
+      className="flex h-full flex-col items-center justify-center gap-[22px] p-[32px]"
+    >
       <div className="text-center">
-        <div className="mx-auto mb-3 inline-flex size-[52px] items-center justify-center rounded-xl bg-primary/10">
+        <div className="mx-auto mb-[12px] inline-flex size-[52px] items-center justify-center rounded-xl bg-primary/10">
           <Zap size={26} className="text-primary" aria-hidden />
         </div>
         <div className="text-title font-bold tracking-tight text-foreground">Create a workflow</div>
-        <div className="mt-1 text-body text-muted-foreground">Automate the repetitive parts of your day.</div>
+        <div className="mt-[4px] text-body text-muted-foreground">Automate the repetitive parts of your day.</div>
       </div>
-      <div className="flex w-full max-w-[620px] gap-4">
+      <div className="flex w-full max-w-[620px] gap-[16px]">
         <CreationCard
           testId="automations-blank-describe"
           icon={Wand2}

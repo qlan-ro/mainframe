@@ -28,7 +28,7 @@ export function OptionsEditor({ options, onChange, testId }: OptionsEditorProps)
       {options.map((option, i) => (
         <span
           key={i}
-          className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-2 text-caption text-foreground"
+          className="inline-flex h-[20px] items-center gap-1 rounded-full bg-muted px-2 text-caption text-foreground"
         >
           {option}
           <button

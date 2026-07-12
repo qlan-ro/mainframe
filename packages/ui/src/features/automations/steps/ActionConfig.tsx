@@ -6,7 +6,10 @@
  * `step.args`). Composes `AutoForm` (params), `CredentialConnect` (only
  * when `action.auth === 'token'`, using the real `credentialLabelHint` —
  * not a UI-invented field), the `run_command`-only outputAs segment +
- * `CommandPreview` (A1), and `FailureToggle` under `MoreOptions`.
+ * `CommandPreview` (A1), and `FailureToggle` under `MoreOptions`. The header
+ * glyph/tint and the embedded catalog reuse `ActionCatalog`'s
+ * `actionIcon`/`actionAccent` tables so the picked-action chrome and the
+ * catalog list never drift apart.
  *
  * Picking (fresh or via "Change") always replaces the step with a bare
  * `{id, kind, actionId, params: {}}` — a deliberate improvement over ts153,
@@ -14,16 +17,16 @@
  * keys don't match the old one's.
  */
 import { useState } from 'react';
-import { Plug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ActionCatalogEntry, RunActionStep } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
-import { ActionCatalog } from './ActionCatalog';
+import { actionAccent, actionIcon, ActionCatalog } from './ActionCatalog';
 import { asActionParamsSchema } from './action-fields';
 import { AutoForm } from './AutoForm';
 import { CommandPreview } from './CommandPreview';
 import { CredentialConnect } from './CredentialConnect';
 import { FailureToggle } from './FailureToggle';
+import { FieldRow } from './FieldRow';
 import { MoreOptions } from './MoreOptions';
 
 export interface ActionConfigProps {
@@ -50,7 +53,7 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
 
   if (!action || picking) {
     return (
-      <div className="rounded-md border-[0.5px] border-border p-2">
+      <div className="h-[380px] overflow-hidden rounded-md border-[0.5px] border-border">
         <ActionCatalog catalog={catalog} onPick={pick} testId={`${testId}-catalog`} />
       </div>
     );
@@ -58,20 +61,26 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
 
   const schema = asActionParamsSchema(action.paramsSchema);
   const isRunCommand = action.id === 'run_command';
+  const HeaderIcon = actionIcon(action.id);
+  const accent = actionAccent(action.id);
 
   return (
     <div className="flex flex-col gap-3">
       <div
         data-testid={`${testId}-header`}
-        className="flex items-center gap-2.5 rounded-md border-[0.5px] border-mf-auto-violet/20 bg-mf-auto-violet/[0.07] px-2.5 py-1.5"
+        className={cn(
+          'flex items-center gap-[9px] rounded-md border-[0.5px] px-2.5 py-[7px]',
+          accent.headerBorderClass,
+          accent.headerTintClass,
+        )}
       >
-        <Plug size={14} className="text-mf-auto-violet" aria-hidden />
+        <HeaderIcon size={14} className={accent.iconClass} aria-hidden />
         <span className="flex-1 text-body font-semibold text-foreground">{action.title}</span>
         <button
           type="button"
           data-testid={`${testId}-change`}
           onClick={() => setPicking(true)}
-          className="h-6 rounded-md border-[0.5px] border-border bg-card px-2.5 text-caption font-semibold text-muted-foreground hover:bg-accent"
+          className="h-[24px] rounded-sm border-[0.5px] border-border bg-card px-2.5 text-caption font-semibold text-muted-foreground hover:bg-accent"
         >
           Change
         </button>
@@ -94,8 +103,7 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
       )}
 
       {isRunCommand && schema.hasOutputAs && (
-        <div className="flex items-center gap-2.5">
-          <span className="text-caption font-medium text-muted-foreground">Treat output as</span>
+        <FieldRow label="Treat output as">
           <div className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">
             {OUTPUT_AS_OPTIONS.map((option) => (
               <button
@@ -114,7 +122,7 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
               </button>
             ))}
           </div>
-        </div>
+        </FieldRow>
       )}
 
       {isRunCommand && <CommandPreview script={step.params.script ?? []} testId={`${testId}-preview`} />}

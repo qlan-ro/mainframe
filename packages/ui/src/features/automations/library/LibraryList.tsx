@@ -4,9 +4,14 @@
  * the editor (the "Build it" path) — `BlankState`'s own two-path chooser is
  * reserved for the empty, first-run experience (plan `library/LibraryList.tsx`
  * comment: "BlankState when empty").
+ *
+ * Loading and error are distinct from "empty": `AutomationsHost` kicks off
+ * `loadAll()` on mount, so an empty `definitions` array is ambiguous between
+ * "still fetching," "the fetch failed," and "genuinely no automations yet."
+ * BlankState only renders once loading has finished without an error.
  */
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Loader2, Plus, TriangleAlert } from 'lucide-react';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { DESCRIBE_ENABLED } from '../flags';
 import { useAutomationsNav } from '../data/use-automations-nav';
@@ -25,10 +30,50 @@ function mostRecentRun(runs: AutomationRunSummary[], automationId: string): Auto
 export function LibraryList(): React.ReactElement {
   const definitions = useAutomationsStore((s) => s.definitions);
   const runs = useAutomationsStore((s) => s.runs);
+  const loading = useAutomationsStore((s) => s.loading);
+  const error = useAutomationsStore((s) => s.error);
+  const loadAll = useAutomationsStore((s) => s.loadAll);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openDescribe = useAutomationsNav((s) => s.openDescribe);
 
   const handleBuild = (): void => openEditor({ mode: 'new' });
+
+  if (definitions.length === 0 && loading) {
+    return (
+      <div data-testid="automations-library" className="h-full">
+        <div
+          data-testid="automations-library-loading"
+          className="flex h-full flex-col items-center justify-center gap-[8px]"
+        >
+          <Loader2 size={16} className="animate-spin text-muted-foreground" aria-hidden />
+          <span className="text-label text-muted-foreground">Loading automations…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (definitions.length === 0 && error) {
+    return (
+      <div data-testid="automations-library" className="h-full">
+        <div
+          data-testid="automations-library-error"
+          className="flex h-full flex-col items-center justify-center gap-[8px] p-[32px] text-center"
+        >
+          <TriangleAlert size={20} className="text-destructive" aria-hidden />
+          <span className="text-body font-semibold text-foreground">Couldn't load your automations</span>
+          <span className="max-w-[360px] text-label text-muted-foreground">{error}</span>
+          <button
+            type="button"
+            data-testid="automations-library-retry"
+            onClick={() => void loadAll()}
+            className="mt-[4px] inline-flex h-[30px] items-center gap-[6px] rounded-md bg-primary px-[13px] text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (definitions.length === 0) {
     return (
@@ -40,12 +85,12 @@ export function LibraryList(): React.ReactElement {
 
   return (
     <div data-testid="automations-library" className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-end border-b border-border px-4 py-2.5">
+      <div className="flex shrink-0 items-center justify-end gap-[10px] border-b border-border px-[16px] py-[14px]">
         <button
           type="button"
           data-testid="automations-library-new"
           onClick={handleBuild}
-          className="inline-flex h-[30px] items-center gap-1.5 rounded-md bg-primary px-3 text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          className="inline-flex h-[30px] items-center gap-[6px] rounded-md bg-primary px-[13px] text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90"
         >
           <Plus size={12} aria-hidden />
           New

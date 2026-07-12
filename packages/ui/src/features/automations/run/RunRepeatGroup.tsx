@@ -42,14 +42,17 @@ export function RunRepeatGroup({
 
   if (groups.length === 0) {
     return (
-      <div data-testid={testId} className="pl-3 text-caption text-muted-foreground">
+      <div data-testid={testId} className="pl-[12px] text-caption text-muted-foreground">
         No iterations yet.
       </div>
     );
   }
 
   return (
-    <div data-testid={testId} className={cn('flex flex-col gap-2.5 border-l-2 pl-3', VERB_META.repeat.borderClass)}>
+    <div
+      data-testid={testId}
+      className={cn('flex flex-col gap-2.5 border-l-2 pl-[12px]', VERB_META.repeat.borderClass)}
+    >
       {groups.map((group) => (
         <div
           key={group.iteration}

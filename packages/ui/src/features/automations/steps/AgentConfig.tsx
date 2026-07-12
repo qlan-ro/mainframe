@@ -1,19 +1,17 @@
 /**
- * AgentConfig — prompt ChipField (slash), model; More options: worktree,
- * auto-approve, timeout, permission, Expect results (A2), FailureToggle
- * (ts153 wf2-stepconfig.jsx `WfAgentConfig`, ported onto `AskAgentStep`).
+ * AgentConfig — prompt ChipField (slash), model; More options: attachments,
+ * worktree, auto-approve, timeout, permission, Expect results (A2),
+ * FailureToggle (ts153 wf2-stepconfig.jsx `WfAgentConfig`, ported onto
+ * `AskAgentStep`).
  *
- * Two deliberate contract-driven deviations from ts153:
- * - **No attachments.** ts153's "Attachments" (image/file chips handed to
- *   the agent) has no counterpart on the ratified `AskAgentStep` — the
- *   contract carries `prompt`/`adapterId`/`model`/`permissionMode`/
- *   `projectId`/`worktree`/`autoApprove`/`timeoutMinutes`/`expects` and
- *   nothing else (packages/types/src/automation.ts, contract §1). Building
- *   a local-only attachments UI that never persists would be worse than
- *   omitting it — none of the six fixtures use one either. Flagged for the
- *   Node/contract owners if this was meant to ship.
- * - **Timeout, not a free-text budget cap.** ts153's "$4.00 or 20m" text
- *   field is replaced by the real `timeoutMinutes: number` field.
+ * One deliberate contract-driven deviation from ts153: **Timeout, not a
+ * free-text budget cap.** ts153's "$4.00 or 20m" text field is replaced by
+ * the real `timeoutMinutes: number` field.
+ *
+ * Attachments (image/file chips handed to the agent) were dropped in an
+ * earlier pass as a deliberate contract-driven omission; the 2026-07-12
+ * design-conformance pass reverses that call — see `AttachmentsField`'s doc
+ * comment for the contract/schema widening this required.
  *
  * The model list is a curated placeholder (ts153's `WF2_MODELS`) — this
  * phase has no live adapter catalog fetch (that's `lib/model-tuning.ts`'s
@@ -26,6 +24,7 @@ import { EXECUTION_MODES } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import { ChipField } from '../fields/ChipField';
 import { MiniSelect } from '../fields/MiniSelect';
+import { AttachmentsField } from './AttachmentsField';
 import { ExpectResultsBuilder } from './ExpectResultsBuilder';
 import { FailureToggle } from './FailureToggle';
 import { FieldRow } from './FieldRow';
@@ -79,6 +78,14 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
       </FieldRow>
 
       <MoreOptions testId={`${testId}-more`}>
+        <FieldRow label="Attachments" top>
+          <AttachmentsField
+            value={step.attachments ?? []}
+            onChange={(attachments) => onChange({ ...step, attachments })}
+            testId={`${testId}-attachments`}
+          />
+        </FieldRow>
+
         <FieldRow label="Worktree" top>
           {worktree ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -95,14 +102,14 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
                 value={worktree.baseBranch ?? ''}
                 onChange={(e) => onChange({ ...step, worktree: { ...worktree, baseBranch: e.target.value } })}
                 placeholder="main"
-                className="h-7 w-[110px] rounded-md border-[0.5px] border-input bg-card px-2 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+                className="h-[28px] w-[110px] rounded-md border-[0.5px] border-input bg-card px-2 text-caption text-foreground outline-none placeholder:text-muted-foreground"
               />
               <button
                 type="button"
                 data-testid={`${testId}-worktree-remove`}
                 onClick={() => onChange({ ...step, worktree: undefined })}
                 aria-label="Remove worktree"
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                className="flex size-[28px] shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted"
               >
                 <X size={11} aria-hidden />
               </button>
@@ -112,7 +119,7 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
               type="button"
               data-testid={`${testId}-worktree-add`}
               onClick={() => onChange({ ...step, worktree: { baseBranch: 'main', branchName: [] } })}
-              className="h-7 rounded-md border border-dashed border-border px-2.5 text-caption font-semibold text-primary hover:bg-accent"
+              className="h-[28px] rounded-md border border-dashed border-mf-border-hover px-2.5 text-caption font-semibold text-primary hover:bg-accent"
             >
               + Run in a fresh worktree
             </button>
@@ -131,8 +138,8 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
                   onClick={() => toggleApprove(entry)}
                   className={
                     on
-                      ? 'h-6 rounded-full border-[0.5px] border-primary/40 bg-primary/10 px-2.5 text-caption font-medium text-primary'
-                      : 'h-6 rounded-full border-[0.5px] border-border bg-card px-2.5 text-caption font-medium text-muted-foreground hover:bg-accent'
+                      ? 'h-[24px] rounded-full border-[0.5px] border-primary/40 bg-primary/10 px-2.5 text-caption font-medium text-primary'
+                      : 'h-[24px] rounded-full border-[0.5px] border-border bg-card px-2.5 text-caption font-medium text-muted-foreground hover:bg-accent'
                   }
                 >
                   {entry}
@@ -153,7 +160,7 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
               onChange({ ...step, timeoutMinutes: raw === '' ? undefined : Number(raw) });
             }}
             placeholder="minutes"
-            className="h-7 w-[110px] rounded-md border-[0.5px] border-input bg-card px-2.5 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-[28px] w-[110px] rounded-md border-[0.5px] border-input bg-card px-2.5 text-caption text-foreground outline-none placeholder:text-muted-foreground"
           />
         </FieldRow>
 

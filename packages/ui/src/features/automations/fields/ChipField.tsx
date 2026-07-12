@@ -103,7 +103,7 @@ export function ChipField({
     <div
       data-testid={testId}
       onClick={() => inputRef.current?.focus()}
-      className="relative box-border flex w-full cursor-text flex-wrap items-center gap-1.5 rounded-md border-[0.5px] border-input bg-card px-2 py-1.5"
+      className="relative box-border flex w-full cursor-text flex-wrap items-center gap-[5px] rounded-md border-[0.5px] border-input bg-card px-[8px] py-1.5"
       style={{ minHeight: minHeight ?? (multiline ? 60 : 32) }}
     >
       {value.map((part, i) => {
@@ -139,7 +139,7 @@ export function ChipField({
           mono && 'font-mono',
         )}
       />
-      <TokenPicker tokens={tokens} onInsert={insertTokenRef} testId={`${testId}-picker`} />
+      <TokenPicker tokens={tokens} onInsert={insertTokenRef} testId={`${testId}-picker`} small label="" align="end" />
       {slashOpen && <SlashMenu query={draft} onSelect={insertSlashCommand} testId={`${testId}-slash-menu`} />}
     </div>
   );

@@ -159,4 +159,28 @@ describe('RunStepRow — repeat fan-out', () => {
     expect(screen.getByTestId('automations-run-step-ask-review-pr#1')).toBeInTheDocument();
     expect(screen.getByTestId('automations-run-step-ask-review-pr#2')).toBeInTheDocument();
   });
+
+  it("shows the running repeat's current iteration ordinal next to its label", () => {
+    const repeatStep: AutomationStep = {
+      id: 'repeat-prs',
+      kind: 'repeat',
+      items: { stepId: 'list-open-prs', output: 'prs' },
+      steps: [{ id: 'ask-review-pr', kind: 'ask_agent', prompt: [] }],
+    };
+    const timeline: AutomationTimelineEntry[] = [
+      entry({ stepRef: 'repeat-prs', stepId: 'repeat-prs', kind: 'repeat', status: 'running' }),
+      entry({ stepRef: 'ask-review-pr#1', stepId: 'ask-review-pr', status: 'succeeded' }),
+      entry({ stepRef: 'ask-review-pr#2', stepId: 'ask-review-pr', status: 'running' }),
+    ];
+    render(
+      <RunStepRow
+        {...baseProps({
+          entry: timeline[0]!,
+          timeline,
+          steps: [repeatStep],
+        })}
+      />,
+    );
+    expect(screen.getByText('Repeat for each · Iteration 2')).toBeInTheDocument();
+  });
 });

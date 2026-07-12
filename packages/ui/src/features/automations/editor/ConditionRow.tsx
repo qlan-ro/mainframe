@@ -195,7 +195,7 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
             }
             onChange={(e) => onChange({ ...condition, value: e.target.value })}
             placeholder="value"
-            className="h-7 w-[130px] rounded-md border-[0.5px] border-input bg-card px-2.5 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-[28px] w-[130px] rounded-md border-[0.5px] border-input bg-card px-2.5 text-caption text-foreground outline-none placeholder:text-muted-foreground"
           />
         ))}
     </div>

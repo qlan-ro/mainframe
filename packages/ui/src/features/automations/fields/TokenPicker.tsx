@@ -5,6 +5,11 @@
  * inside it). The caller is the scope boundary: it only ever receives
  * `scopeAt(...)`'s result, so an out-of-scope token simply never appears
  * here — this component does no scoping of its own.
+ *
+ * `small`/`label`/`align` mirror ts153's variant API: `ChipField` embeds an
+ * icon-only, right-anchored picker (`small`, `label=""`, `align="end"`);
+ * standalone callers (e.g. a "pick a result" row) get the default 24px
+ * trigger with a visible label, left-anchored.
  */
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -13,12 +18,18 @@ import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { TokenRef } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
-import { sourceKindStyle } from './TokenChip';
+import { sourceKindStyle, tokenIcon } from './TokenChip';
 
 export interface TokenPickerProps {
   tokens: TokenDescriptor[];
   onInsert: (ref: TokenRef) => void;
   testId: string;
+  /** Compact 20px trigger for embedded use (e.g. inside `ChipField`); default is the standalone 24px size. */
+  small?: boolean;
+  /** Trigger label text — pass `''` for an icon-only trigger. */
+  label?: string;
+  /** Popover alignment relative to the trigger. */
+  align?: 'start' | 'end';
 }
 
 interface TokenGroup {
@@ -43,7 +54,7 @@ function tokenKey(ref: TokenRef): string {
   return `${ref.stepId}-${ref.output}`;
 }
 
-export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
+export function TokenPicker({ tokens, onInsert, testId, small, label = 'Insert', align = 'start' }: TokenPickerProps) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const hasTokens = tokens.length > 0;
@@ -83,23 +94,28 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
             type="button"
             data-testid={testId}
             disabled={!hasTokens}
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border bg-card px-2 text-caption font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-caption font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45',
+              small ? 'h-[20px]' : 'h-[24px]',
+            )}
           >
             <span className="font-mono text-[11px]">⟨⟩</span>
-            Insert
+            {label}
           </button>
         </PopoverTrigger>
       </Hint>
-      <PopoverContent data-testid={`${testId}-menu`} align="end" className="max-h-80 w-64 overflow-y-auto p-1.5">
+      <PopoverContent data-testid={`${testId}-menu`} align={align} className="max-h-80 w-64 overflow-y-auto p-1.5">
         {groups.map((group) => (
-          <div key={group.source} className="mb-1">
-            <div className="px-2 py-1 text-caption font-medium text-muted-foreground">{group.source}</div>
+          <div key={group.source} className="mb-[4px]">
+            <div className="px-[8px] pb-[4px] pt-[5px] text-caption font-medium text-muted-foreground">
+              {group.source}
+            </div>
             {group.tokens.map((token) => {
               const key = tokenKey(token.ref);
               const isExpandable = Boolean(token.fields && token.fields.length > 0);
               const isOpen = expanded === key;
               const style = sourceKindStyle(token.sourceKind);
-              const Icon = style.icon;
+              const Icon = tokenIcon(token);
               return (
                 <div key={key}>
                   <button
@@ -107,10 +123,13 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
                     data-testid={`${testId}-option-${key}`}
                     onClick={() => handleRowClick(token)}
                     aria-expanded={isExpandable ? isOpen : undefined}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                    className="flex w-full items-center gap-[9px] rounded-md px-[8px] py-[7px] text-left hover:bg-accent"
                   >
                     <span
-                      className={cn('flex size-5 shrink-0 items-center justify-center rounded-md', style.tintClass)}
+                      className={cn(
+                        'flex size-[20px] shrink-0 items-center justify-center rounded-md',
+                        style.tintClass,
+                      )}
                     >
                       <Icon size={12} className={style.iconClass} aria-hidden />
                     </span>
@@ -131,7 +150,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
                         type="button"
                         data-testid={`${testId}-option-${key}-${field}`}
                         onClick={() => handleFieldClick(token, field)}
-                        className="flex w-full items-center gap-1 rounded-md py-1 pl-9 pr-2 text-left text-body text-muted-foreground hover:bg-accent"
+                        className="flex w-full items-center gap-[8px] rounded-md py-[5px] pl-[37px] pr-[8px] text-left text-body text-muted-foreground hover:bg-accent"
                       >
                         {token.label} <span>›</span> <span className="font-medium text-foreground">{field}</span>
                       </button>

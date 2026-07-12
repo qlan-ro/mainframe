@@ -17,6 +17,11 @@
  *   `RunRepeatGroup` to render as nested children under the repeat's own
  *   entry. `if` branches need no such grouping — their entries use their
  *   own plain stepId and render as ordinary flat, top-level rows.
+ * - `repeatProgressLabel` gives the repeat's own top-level row the
+ *   iteration identity the artboard bakes into its mock title ("Repeat for
+ *   each · PR 3 of 3"): the wire has no total-item count mid-run, so it
+ *   reports the current ordinal while running and a completed count once
+ *   terminal, rather than fabricate an "N of M" the UI can't verify.
  */
 import type { ActionCatalogEntry, AutomationStep, AutomationTimelineEntry, RepeatBlock } from '../contract';
 import { findStepById, stepLabel } from '../domain/tokens';
@@ -75,4 +80,22 @@ export function groupRepeatIterations(
   return Array.from(byIteration.entries())
     .sort(([a], [b]) => a - b)
     .map(([iteration, entries]) => ({ iteration, entries }));
+}
+
+/**
+ * Iteration progress for a Repeat block's own top-level entry — `null`
+ * before its first iteration lands. `null` return means the caller renders
+ * the plain verb label with no suffix.
+ */
+export function repeatProgressLabel(
+  entry: AutomationTimelineEntry,
+  timeline: AutomationTimelineEntry[],
+  repeatStep: RepeatBlock,
+): string | null {
+  const groups = groupRepeatIterations(timeline, repeatStep);
+  if (groups.length === 0) return null;
+  if (entry.status === 'running') {
+    return `Iteration ${groups[groups.length - 1]!.iteration}`;
+  }
+  return `${groups.length} iteration${groups.length === 1 ? '' : 's'}`;
 }

@@ -39,17 +39,6 @@ export const updateAutomation = (id: string, input: AutomationCreateInput): Prom
 export const deleteAutomation = (id: string): Promise<void> =>
   requestEmpty('DELETE', `${b()}/automations/${encodeURIComponent(id)}`);
 
-/**
- * GAP (flag for the Node lane): no daemon route calls
- * `AutomationService.setEnabled`, even though the service method exists and
- * is contract-referenced (Decision 11 — "disabling disarms triggers").
- * `automations.ts`/`automation-admin.ts` only wire CRUD/runs/interactions/
- * actions/credentials. `PATCH .../enabled` mirrors this codebase's existing
- * boolean-toggle convention (`chats.ts`'s `PATCH /api/chats/:id/pinned`), so
- * this starts working the moment a matching route lands; until then it 404s
- * and `LibraryRow`'s toggle surfaces that through its existing
- * `mfToast.error` catch rather than failing silently.
- */
 export const setAutomationEnabled = (id: string, enabled: boolean): Promise<AutomationSummary> =>
   request('PATCH', `${b()}/automations/${encodeURIComponent(id)}/enabled`, { enabled });
 

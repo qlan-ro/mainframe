@@ -78,7 +78,7 @@ export function ExpectResultsBuilder({ expects, onChange, testId }: ExpectResult
             </button>
           </div>
           {row.type === 'choice' && (
-            <div className="pl-5">
+            <div className="pl-[20px]">
               <OptionsEditor
                 options={row.options ?? []}
                 onChange={(options) => setRow(i, { options })}
@@ -92,7 +92,7 @@ export function ExpectResultsBuilder({ expects, onChange, testId }: ExpectResult
         type="button"
         data-testid={`${testId}-add`}
         onClick={addRow}
-        className="inline-flex w-fit items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-dashed border-mf-border-hover px-2.5 py-1 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={10} aria-hidden />
         Add a result

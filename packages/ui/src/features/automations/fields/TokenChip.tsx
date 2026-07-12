@@ -13,8 +13,9 @@
  * `text-foreground` — never colored text on a colored fill.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Clock, MessageCircle, Plug, RotateCw, Sparkles, TriangleAlert, X, Zap } from 'lucide-react';
+import { Calendar, CircleDot, Clock, MessageCircle, Plug, Sparkles, TriangleAlert, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TOKEN_STEP_BUILTIN } from '../contract';
 import type { TokenDescriptor, TokenSourceKind } from '../domain/tokens';
 
 interface SourceStyle {
@@ -46,7 +47,7 @@ const SOURCE_STYLE: Record<TokenSourceKind, SourceStyle> = {
     borderClass: 'border-mf-auto-violet/30',
   },
   item: {
-    icon: RotateCw,
+    icon: CircleDot,
     iconClass: 'text-mf-auto-kind-loop',
     tintClass: 'bg-mf-auto-kind-loop/12',
     borderClass: 'border-mf-auto-kind-loop/30',
@@ -55,6 +56,24 @@ const SOURCE_STYLE: Record<TokenSourceKind, SourceStyle> = {
 
 export function sourceKindStyle(kind: TokenSourceKind): SourceStyle {
   return SOURCE_STYLE[kind];
+}
+
+/**
+ * Icon override for individual builtin tokens where the sourceKind default
+ * (Clock, matching "Now") doesn't fit every member of the kind — "Today"
+ * needs its own calendar glyph. A tiny per-ref exception, not a
+ * reintroduction of per-token icon metadata (`domain/tokens.ts` keeps
+ * icons out of `TokenDescriptor` on purpose).
+ */
+export function tokenIcon(descriptor: Pick<TokenDescriptor, 'sourceKind' | 'ref'>): LucideIcon {
+  if (
+    descriptor.sourceKind === 'builtin' &&
+    descriptor.ref.stepId === TOKEN_STEP_BUILTIN &&
+    descriptor.ref.output === 'today'
+  ) {
+    return Calendar;
+  }
+  return SOURCE_STYLE[descriptor.sourceKind].icon;
 }
 
 export interface TokenChipProps {
@@ -71,7 +90,7 @@ export function TokenChip({ descriptor, field, onRemove, testId }: TokenChipProp
     return (
       <span
         data-testid={testId}
-        className="inline-flex h-5 max-w-[220px] items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 align-middle text-caption font-medium text-foreground"
+        className="inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 align-middle text-caption font-medium text-foreground"
       >
         <TriangleAlert size={12} className="text-destructive" aria-hidden />
         <span className="truncate">Missing value</span>
@@ -90,12 +109,12 @@ export function TokenChip({ descriptor, field, onRemove, testId }: TokenChipProp
   }
 
   const style = SOURCE_STYLE[descriptor.sourceKind];
-  const Icon = style.icon;
+  const Icon = tokenIcon(descriptor);
   return (
     <span
       data-testid={testId}
       className={cn(
-        'inline-flex h-5 max-w-[220px] items-center gap-1 rounded-full border align-middle text-caption font-medium text-foreground',
+        'inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border align-middle text-caption font-medium text-foreground',
         onRemove ? 'pl-[7px] pr-1' : 'px-2',
         style.tintClass,
         style.borderClass,

@@ -58,7 +58,7 @@ function EditorSection({
   children: ReactNode;
 }) {
   return (
-    <div className="mb-6">
+    <div className="mb-[22px]">
       <div className="mb-2.5 flex items-baseline gap-2.5">
         <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-foreground text-caption font-bold text-background">
           {index}
@@ -66,7 +66,7 @@ function EditorSection({
         <span className="text-heading font-bold tracking-tight text-foreground">{label}</span>
         {hint && <span className="text-caption text-muted-foreground">{hint}</span>}
       </div>
-      <div className="pl-8">{children}</div>
+      <div className="pl-[32px]">{children}</div>
     </div>
   );
 }
@@ -138,7 +138,7 @@ export function AutomationEditor() {
 
   return (
     <div data-testid="automations-editor" className="flex h-full min-h-0 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-3.5">
+      <div className="flex h-[52px] shrink-0 items-center gap-[12px] border-b border-border px-3.5">
         <Hint label="Back">
           <button
             type="button"
@@ -176,7 +176,7 @@ export function AutomationEditor() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[620px] px-6 py-6">
-          <div className="mb-6 flex flex-col gap-2">
+          <div className="mb-[24px] flex flex-col gap-[8px]">
             <input
               data-testid="automations-editor-name"
               value={draft.name}
@@ -191,7 +191,7 @@ export function AutomationEditor() {
               placeholder="What does it do? (optional)"
               className="border-none bg-transparent p-0 text-body text-muted-foreground outline-none placeholder:text-muted-foreground"
             />
-            <div className="mt-1 inline-flex w-fit gap-0.5 rounded-md bg-muted p-0.5">
+            <div className="mt-[4px] inline-flex w-fit gap-0.5 rounded-md bg-muted p-0.5">
               {(['project', 'global'] as const).map((value) => (
                 <button
                   key={value}
@@ -236,10 +236,10 @@ export function AutomationEditor() {
       <div className="flex min-h-[40px] shrink-0 items-center gap-2.5 border-t border-border bg-muted/40 px-4 py-2">
         {ok ? (
           <span className="inline-flex items-center gap-1.5 text-label font-semibold text-foreground">
-            <span className="flex size-4 items-center justify-center rounded-full bg-mf-success">
-              <Check size={10} className="text-primary-foreground" aria-hidden />
+            <span className="flex size-[16px] items-center justify-center rounded-full bg-mf-success">
+              <Check size={12} className="text-primary-foreground" aria-hidden />
             </span>
-            Looks good
+            {`Looks good · ready to ${isNew ? 'create' : 'save'}`}
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-label font-semibold text-foreground">

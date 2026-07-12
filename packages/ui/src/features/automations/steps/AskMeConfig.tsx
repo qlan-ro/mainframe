@@ -62,7 +62,7 @@ export function AskMeConfig({ step, onChange, testId }: AskMeConfigProps) {
           type="button"
           data-testid={`${testId}-add`}
           onClick={addField}
-          className="inline-flex w-fit items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-dashed border-mf-border-hover px-2.5 py-1 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <Plus size={10} aria-hidden />
           Add a field

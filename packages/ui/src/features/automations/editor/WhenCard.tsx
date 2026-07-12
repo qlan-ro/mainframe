@@ -3,10 +3,14 @@
  * the "When" band's trigger list). Offers schedule/event/webhook only — the
  * contract's `AutomationTrigger` union has no "manual" variant (manual
  * running is always available regardless of what's in `triggers[]`).
+ *
+ * The add-trigger trigger is wrapped in `Hint` (wraps, never sits inside —
+ * see `TokenPicker`'s identical binding convention).
  */
 import { useState } from 'react';
 import { Calendar, Globe, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AutomationTrigger } from '../contract';
 import { TriggerRow } from './TriggerRow';
@@ -52,7 +56,7 @@ export function WhenCard({ triggers, onChange }: WhenCardProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-[7px]">
       {triggers.map((trigger, i) => (
         <TriggerRow
           key={trigger.id}
@@ -65,15 +69,17 @@ export function WhenCard({ triggers, onChange }: WhenCardProps) {
         <div className="text-label text-muted-foreground">No trigger yet — you’ll run it by hand.</div>
       )}
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid="automations-when-add"
-            className="self-start text-caption font-semibold text-primary"
-          >
-            + Add a trigger
-          </button>
-        </PopoverTrigger>
+        <Hint label="Add a trigger">
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid="automations-when-add"
+              className="self-start text-caption font-semibold text-primary"
+            >
+              + Add a trigger
+            </button>
+          </PopoverTrigger>
+        </Hint>
         <PopoverContent data-testid="automations-when-add-menu" align="start" className="w-64 p-1.5">
           {TRIGGER_ADD_OPTIONS.map((option) => {
             const Icon = option.icon;
@@ -85,7 +91,7 @@ export function WhenCard({ triggers, onChange }: WhenCardProps) {
                 onClick={() => add(option.kind)}
                 className="flex w-full items-start gap-2.5 rounded-md p-2 text-left hover:bg-accent"
               >
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-mf-auto-kind-call/12">
+                <span className="flex size-[24px] shrink-0 items-center justify-center rounded-md bg-mf-auto-kind-call/12">
                   <Icon size={12} className="text-mf-auto-kind-call" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">

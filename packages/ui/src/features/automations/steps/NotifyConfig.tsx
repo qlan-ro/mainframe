@@ -20,7 +20,7 @@ export interface NotifyConfigProps {
 
 export function NotifyConfig({ step, onChange, tokens, testId }: NotifyConfigProps) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-[8px]">
       <span className="text-caption font-medium text-muted-foreground">Message</span>
       <ChipField
         value={step.message}

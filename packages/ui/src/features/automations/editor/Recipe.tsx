@@ -83,7 +83,7 @@ export function Recipe({ steps, onChange, tokens, catalog, issues, depth = 0, te
   }
 
   return (
-    <div data-testid={testId} className="flex flex-col gap-2">
+    <div data-testid={testId} className="flex flex-col gap-[8px]">
       {entries.map(({ step, before }, i) => (
         <div
           key={step.id}

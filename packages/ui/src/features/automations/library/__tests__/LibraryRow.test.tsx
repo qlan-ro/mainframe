@@ -85,7 +85,7 @@ describe('LibraryRow', () => {
     render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
 
     const pill = screen.getByTestId('automations-library-last-run-auto-1');
-    expect(pill).toHaveTextContent('Succeeded');
+    expect(pill).toHaveTextContent('Done');
 
     fireEvent.click(pill);
     expect(useAutomationsNav.getState().runId).toBe('run-1');

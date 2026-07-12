@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ActionCatalogEntry, AutomationStep, AutomationTimelineEntry, RepeatBlock } from '../../contract';
-import { entryLabel, formatDuration, groupRepeatIterations, isKeptGoing } from '../run-timeline';
+import { entryLabel, formatDuration, groupRepeatIterations, isKeptGoing, repeatProgressLabel } from '../run-timeline';
 
 function askAgent(id: string, extra: Partial<AutomationStep> = {}): AutomationStep {
   return { id, kind: 'ask_agent', prompt: [], ...extra } as AutomationStep;
@@ -122,5 +122,49 @@ describe('groupRepeatIterations', () => {
     const groups = groupRepeatIterations(timeline, twoStepRepeat);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.entries.map((e) => e.stepRef)).toEqual(['review#1', 'comment#1']);
+  });
+});
+
+describe('repeatProgressLabel', () => {
+  const repeatStep: RepeatBlock = {
+    id: 'repeat-prs',
+    kind: 'repeat',
+    items: { stepId: 'list-open-prs', output: 'prs' },
+    steps: [askAgent('ask-review-pr')],
+  };
+
+  it('returns null when no iterations have run yet', () => {
+    const repeatEntry = entry({ stepRef: 'repeat-prs', stepId: 'repeat-prs', kind: 'repeat', status: 'running' });
+    expect(repeatProgressLabel(repeatEntry, [], repeatStep)).toBeNull();
+  });
+
+  it('shows the current iteration ordinal while the repeat is still running', () => {
+    const repeatEntry = entry({ stepRef: 'repeat-prs', stepId: 'repeat-prs', kind: 'repeat', status: 'running' });
+    const timeline: AutomationTimelineEntry[] = [
+      repeatEntry,
+      entry({ stepRef: 'ask-review-pr#1', stepId: 'ask-review-pr', status: 'succeeded' }),
+      entry({ stepRef: 'ask-review-pr#2', stepId: 'ask-review-pr', status: 'running' }),
+    ];
+    expect(repeatProgressLabel(repeatEntry, timeline, repeatStep)).toBe('Iteration 2');
+  });
+
+  it('shows the completed iteration count once the repeat has finished', () => {
+    const repeatEntry = entry({ stepRef: 'repeat-prs', stepId: 'repeat-prs', kind: 'repeat', status: 'succeeded' });
+    const timeline: AutomationTimelineEntry[] = [
+      repeatEntry,
+      entry({ stepRef: 'ask-review-pr#1', stepId: 'ask-review-pr', status: 'succeeded' }),
+      entry({ stepRef: 'ask-review-pr#2', stepId: 'ask-review-pr', status: 'succeeded' }),
+      entry({ stepRef: 'ask-review-pr#3', stepId: 'ask-review-pr', status: 'succeeded' }),
+    ];
+    expect(repeatProgressLabel(repeatEntry, timeline, repeatStep)).toBe('3 iterations');
+  });
+
+  it('singularizes a one-iteration completed count', () => {
+    const repeatEntry = entry({ stepRef: 'repeat-prs', stepId: 'repeat-prs', kind: 'repeat', status: 'succeeded' });
+    const timeline: AutomationTimelineEntry[] = [
+      repeatEntry,
+      entry({ stepRef: 'ask-review-pr#1', stepId: 'ask-review-pr', status: 'succeeded' }),
+    ];
+    expect(repeatProgressLabel(repeatEntry, timeline, repeatStep)).toBe('1 iteration');
   });
 });

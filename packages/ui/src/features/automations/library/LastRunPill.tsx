@@ -14,7 +14,7 @@ import { formatRelativeTime } from '@/features/sessions/view-model/relative-time
 export const RUN_STATUS_LABEL: Record<AutomationRunStatus, string> = {
   running: 'Running',
   waiting: 'Waiting',
-  succeeded: 'Succeeded',
+  succeeded: 'Done',
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
@@ -49,15 +49,15 @@ export function LastRunPill({ automationId, run, onOpen }: LastRunPillProps): Re
       type="button"
       data-testid={testId}
       onClick={() => onOpen(run.id)}
-      className="inline-flex items-center gap-1.5 rounded text-caption hover:underline"
+      className="inline-flex items-center gap-[5px] rounded text-caption hover:underline"
     >
       {run.status === 'running' ? (
         <span
           aria-hidden
-          className="size-2 shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent"
+          className="size-[8px] shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent"
         />
       ) : (
-        <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', RUN_STATUS_DOT_CLASS[run.status])} />
+        <span aria-hidden className={cn('size-[7px] shrink-0 rounded-full', RUN_STATUS_DOT_CLASS[run.status])} />
       )}
       <span className="font-medium text-foreground">{RUN_STATUS_LABEL[run.status]}</span>
       <span className="text-muted-foreground">· {formatRelativeTime(run.startedAt, Date.now())}</span>

@@ -26,7 +26,7 @@ export function MiniSelect({ value, onChange, options, testId, mono, width }: Mi
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'h-7 w-full appearance-none rounded-md border-[0.5px] border-input bg-card py-0 pl-2.5 pr-6',
+          'h-[30px] w-full appearance-none rounded-md border-[0.5px] border-input bg-card py-0 pl-[10px] pr-[24px]',
           'text-caption text-foreground outline-none',
           mono && 'font-mono',
         )}
@@ -39,7 +39,7 @@ export function MiniSelect({ value, onChange, options, testId, mono, width }: Mi
       </select>
       <ChevronDown
         size={12}
-        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute right-[9px] top-1/2 -translate-y-1/2 text-muted-foreground"
         aria-hidden
       />
     </span>

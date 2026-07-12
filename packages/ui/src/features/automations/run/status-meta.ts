@@ -5,7 +5,7 @@
  * spinner `LastRunPill` uses instead, for one spinner treatment across the
  * feature.
  */
-import { Check, Clock, SkipForward, TriangleAlert } from 'lucide-react';
+import { Check, ChevronDown, Clock, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AutomationStepStatus } from '../contract';
 
@@ -21,5 +21,5 @@ export const STEP_STATUS_META: Record<AutomationStepStatus, StepStatusMeta> = {
   waiting: { label: 'Waiting', dotClass: 'bg-mf-warning/14', iconClass: 'text-mf-warning', Icon: Clock },
   succeeded: { label: 'Succeeded', dotClass: 'bg-mf-success/14', iconClass: 'text-mf-success', Icon: Check },
   failed: { label: 'Failed', dotClass: 'bg-destructive/14', iconClass: 'text-destructive', Icon: TriangleAlert },
-  skipped: { label: 'Skipped', dotClass: 'bg-muted', iconClass: 'text-muted-foreground', Icon: SkipForward },
+  skipped: { label: 'Skipped', dotClass: 'bg-muted', iconClass: 'text-muted-foreground', Icon: ChevronDown },
 };

@@ -1,13 +1,16 @@
 /**
- * AgentConfig — prompt ChipField (slash), model; More options: worktree,
- * auto-approve, timeout, permission, Expect results (A2), FailureToggle
- * (ts153 wf2-stepconfig.jsx `WfAgentConfig`, ported onto `AskAgentStep`).
+ * AgentConfig — prompt ChipField (slash), attachments, model; More options:
+ * worktree, auto-approve, timeout, permission, Expect results (A2),
+ * FailureToggle (ts153 wf2-stepconfig.jsx `WfAgentConfig`, ported onto
+ * `AskAgentStep`).
  *
- * ts153's "Attachments" and free-text "Budget cap" have no counterpart on
- * the ratified `AskAgentStep` (no `attachments` field at all; `timeoutMinutes:
- * number` replaces the free-text cap) — this component and its test
- * deliberately drop/adapt those, contract wins over the prototype. TDD:
- * test written first, implemented after.
+ * ts153's free-text "Budget cap" has no counterpart on the ratified
+ * `AskAgentStep` — `timeoutMinutes: number` replaces it, contract wins over
+ * the prototype. Attachments (image/file chips) WAS dropped in an earlier
+ * pass as a deliberate contract-driven omission; the 2026-07-12
+ * design-conformance pass reverses that and restores it (`AttachmentsField`,
+ * `AskAgentStep.attachments?: string[]`). TDD: test written first,
+ * implemented after.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -36,6 +39,27 @@ describe('AgentConfig — essentials', () => {
     const options = Array.from((select as HTMLSelectElement).options).map((o) => o.value);
     await user.selectOptions(select, options[1]!);
     expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, model: options[1] });
+  });
+});
+
+describe('AgentConfig — More options: attachments', () => {
+  it('adds a placeholder attachment to step.attachments on click', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-more'));
+    await user.click(screen.getByTestId('automations-agent-a-attachments-add'));
+    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, attachments: ['screenshot-1.png'] });
+  });
+
+  it('removes an attachment on click, leaving the rest', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const step: AskAgentStep = { ...BASE_STEP, attachments: ['a.png', 'b.md'] };
+    render(<AgentConfig step={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-more'));
+    await user.click(screen.getByTestId('automations-agent-a-attachments-remove-0'));
+    expect(onChange).toHaveBeenCalledWith({ ...step, attachments: ['b.md'] });
   });
 });
 

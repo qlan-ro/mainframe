@@ -46,7 +46,7 @@ function PillOption({
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        'h-6 rounded-full border-[0.5px] px-2.5 text-caption font-medium',
+        'h-[28px] rounded-full border-[0.5px] px-[12px] text-caption font-medium',
         active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent',
       )}
     >
@@ -106,7 +106,7 @@ function FieldControl({
         data-testid={`${testId}-input`}
         value={typeof value === 'string' ? value : ''}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-[60px] w-full resize-y rounded-md border-[0.5px] border-input bg-card px-2.5 py-1.5 text-body text-foreground outline-none"
+        className="min-h-[52px] w-full resize-y rounded-md border-[0.5px] border-input bg-card px-2.5 py-1.5 text-body text-foreground outline-none"
       />
     );
   }
@@ -162,11 +162,11 @@ export function RunInlineForm({ interaction, onSubmitted, testId }: RunInlineFor
   return (
     <div
       data-testid={testId}
-      className="flex flex-col gap-2.5 rounded-lg border-[0.5px] border-mf-warning/35 bg-mf-warning/[0.06] p-3"
+      className="flex flex-col gap-[11px] rounded-lg border-[0.5px] border-mf-warning/35 bg-mf-warning/[0.06] p-[13px]"
     >
       <div className="text-label font-bold text-foreground">{interaction.title}</div>
       {visibleFields.map((field) => (
-        <div key={field.key} data-testid={`${testId}-field-${field.key}`} className="flex flex-col gap-1.5">
+        <div key={field.key} data-testid={`${testId}-field-${field.key}`} className="flex flex-col gap-[5px]">
           <span className="text-caption font-semibold text-muted-foreground">
             {field.label || field.key}
             {field.required && <span className="text-destructive"> *</span>}
@@ -184,7 +184,7 @@ export function RunInlineForm({ interaction, onSubmitted, testId }: RunInlineFor
         data-testid={`${testId}-submit`}
         disabled={missingRequired || submitting}
         onClick={() => void handleSubmit()}
-        className="h-[30px] w-fit rounded-md bg-primary px-3.5 text-label font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-45"
+        className="h-[30px] w-fit rounded-md bg-primary px-[15px] text-label font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-45"
       >
         Submit
       </button>

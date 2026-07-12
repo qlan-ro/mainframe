@@ -52,8 +52,8 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-[11px]">
+      <div className="flex flex-col gap-[7px]">
         {conditions.map((condition, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
             {i > 0 && (
