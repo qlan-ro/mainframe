@@ -11,16 +11,23 @@
 // 10): once a step is marked 'failed' outside the walk, walkSteps' re-entry
 // just skips over it, so the keepGoing decision has to be made here, before
 // advance() is called.
+//
+// Task 19b (A2): a completed chat whose step declares `expects` is routed
+// through expects.ts's parseAndValidate. A mismatch sends ONE corrective
+// message into the SAME chat (agent_waits.correction_sent guards the
+// retry) and leaves the step waiting; a second mismatch fails it loudly.
 import type { Logger } from 'pino';
 import type { AutomationRunSummary, AutomationStep, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { AutomationDb } from '../db.js';
 import type { RunStore } from '../store/run-store.js';
 import type { AutomationCheckpoint, AutomationRunRecord } from '../store/types.js';
+import { buildCorrectionMessage, parseAndValidate } from './expects.js';
 
 interface WaitRow {
   run_id: string;
   step_ref: string;
   last_assistant_text: string | null;
+  correction_sent: number;
 }
 
 interface WaitingStepContext {
@@ -35,6 +42,8 @@ export interface AgentWaitDeps {
   advanceRun: (runId: string) => Promise<void>;
   emitEvent: (event: DaemonEvent) => void;
   logger: Logger;
+  /** Sends a corrective retry into an existing chat (A2 mismatch path). Only called when a step declares `expects`. */
+  sendMessage: (chatId: string, content: string) => Promise<void>;
   onRunFinalized?: (runId: string) => void | Promise<void>;
 }
 
@@ -76,11 +85,7 @@ export class AgentWaitService {
     if (!context) return;
 
     if (reason === 'completed') {
-      this.clearWait(chatId);
-      await this.succeedWaitingStep(context.run.id, context.stepRef, {
-        result: row.last_assistant_text ?? '',
-        chatId,
-      });
+      await this.handleCompleted(chatId, row, context);
       return;
     }
 
@@ -88,9 +93,37 @@ export class AgentWaitService {
     await this.failWaitingStep(context, `agent chat ${reason}`);
   }
 
+  /** A2: routes through parseAndValidate when the step declares `expects`; a mismatch retries once before failing loudly. */
+  private async handleCompleted(chatId: string, row: WaitRow, context: WaitingStepContext): Promise<void> {
+    const expects = context.step?.kind === 'ask_agent' ? (context.step.expects ?? []) : [];
+    const text = row.last_assistant_text ?? '';
+
+    if (expects.length === 0) {
+      this.clearWait(chatId);
+      await this.succeedWaitingStep(context.run.id, context.stepRef, { result: text, chatId });
+      return;
+    }
+
+    const parsed = parseAndValidate(text, expects);
+    if (parsed.ok) {
+      this.clearWait(chatId);
+      await this.succeedWaitingStep(context.run.id, context.stepRef, { result: text, chatId, ...parsed.outputs });
+      return;
+    }
+
+    if (row.correction_sent) {
+      this.clearWait(chatId);
+      await this.failWaitingStep(context, `agent did not return the expected JSON: ${parsed.reason}`);
+      return;
+    }
+
+    this.deps.db.prepare(`UPDATE agent_waits SET correction_sent = 1 WHERE chat_id = ?`).run(chatId);
+    await this.deps.sendMessage(chatId, buildCorrectionMessage(parsed.reason, expects));
+  }
+
   private getRow(chatId: string): WaitRow | undefined {
     return this.deps.db
-      .prepare(`SELECT run_id, step_ref, last_assistant_text FROM agent_waits WHERE chat_id = ?`)
+      .prepare(`SELECT run_id, step_ref, last_assistant_text, correction_sent FROM agent_waits WHERE chat_id = ?`)
       .get(chatId) as WaitRow | undefined;
   }
 

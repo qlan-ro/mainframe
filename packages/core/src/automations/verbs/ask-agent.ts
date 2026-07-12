@@ -12,10 +12,15 @@
 // silently dropping the scope. timeoutMinutes IS wired at the engine level
 // via `wakeAt` (the interpreter's deadline sweep); only the "ChatManager
 // itself isn't told to stop generating" gap gets a warning.
+//
+// Task 19b (A2): when the step declares `expects`, the output contract
+// (expects.ts) is appended to the first prompt; parsing/retry of the
+// agent's final JSON lives in AgentWaitService.onChatFinished.
 import type { Logger } from 'pino';
 import type { AskAgentStep } from '@qlan-ro/mainframe-types';
 import { renderChipText } from '../tokens/substitute.js';
 import type { AgentWaitService } from './agent-waits.js';
+import { buildOutputContract } from './expects.js';
 import type { StepOutcome, VerbContext } from '../engine/types.js';
 
 export interface AgentChatPort {
@@ -49,7 +54,8 @@ export function makeAskAgentExecutor(port: AgentChatPort, waits: AgentWaitServic
       );
     }
 
-    const prompt = renderChipText(ctx.tokens, step.prompt);
+    const rendered = renderChipText(ctx.tokens, step.prompt);
+    const prompt = step.expects && step.expects.length > 0 ? rendered + buildOutputContract(step.expects) : rendered;
     const worktree = step.worktree
       ? { baseBranch: step.worktree.baseBranch, branchName: renderChipText(ctx.tokens, step.worktree.branchName) }
       : undefined;

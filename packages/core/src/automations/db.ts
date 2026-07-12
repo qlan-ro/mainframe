@@ -61,7 +61,10 @@ CREATE TABLE IF NOT EXISTS agent_waits (
   chat_id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL REFERENCES automation_runs(id) ON DELETE CASCADE,
   step_ref TEXT NOT NULL,
-  last_assistant_text TEXT
+  last_assistant_text TEXT,
+  -- A2 (Task 19b): one corrective retry into the same chat when expects validation
+  -- fails; a second failure fails the step loudly instead of looping forever.
+  correction_sent INTEGER NOT NULL DEFAULT 0
 );
 `;
 

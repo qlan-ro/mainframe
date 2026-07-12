@@ -30,6 +30,11 @@ function neverCalled(name: string) {
   };
 }
 
+/** No test in this file declares `expects`, so AgentWaitService should never need a corrective retry. */
+async function neverSendMessage(): Promise<void> {
+  throw new Error('unexpected sendMessage call (no expects declared in this test)');
+}
+
 function fakePorts(overrides: Partial<VerbPorts> = {}): VerbPorts {
   return {
     runAction: neverCalled('runAction'),
@@ -112,6 +117,7 @@ describe('ask_agent verb', () => {
       advanceRun: (runId) => getInterpreter().advance(runId),
       emitEvent: (event) => events.push(event),
       logger: silentLogger,
+      sendMessage: neverSendMessage,
       onRunFinalized: onRunFinalized ? (runId) => onRunFinalized(runId) : undefined,
     });
   }
@@ -181,6 +187,7 @@ describe('ask_agent verb', () => {
       advanceRun: async () => {},
       emitEvent: (event) => events.push(event),
       logger: silentLogger,
+      sendMessage: neverSendMessage,
     });
     const askAgent = makeAskAgentExecutor(port, waits, silentLogger);
 
