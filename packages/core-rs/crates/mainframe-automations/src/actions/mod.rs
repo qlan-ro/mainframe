@@ -3,12 +3,14 @@
 //! (Node verbs/run-action.ts) renders ChipText params, resolves the
 //! credential label, and hands this layer a JSON input object.
 
+pub mod files;
 pub mod manifest;
 mod paths;
 pub mod registry;
 pub mod run_command;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -62,6 +64,29 @@ pub(crate) fn parse_input<T: DeserializeOwned>(
     serde_json::from_value(params.clone())
         .map_err(|err| ActionError(format!("invalid input for '{action_id}': {err}")))
 }
+
+/// `~` expansion + absolute resolution (Node verbs/run-action.ts
+/// resolvePath): a leading `~` or `~/` becomes the home dir; a relative
+/// path resolves against the process cwd, mirroring `path.resolve`.
+pub(crate) fn expand_user_path(path: &str) -> PathBuf {
+    if let Some(home) = dirs::home_dir() {
+        if path == "~" {
+            return home;
+        }
+        if let Some(rest) = path.strip_prefix("~/") {
+            return home.join(rest);
+        }
+    }
+    let p = PathBuf::from(path);
+    if p.is_absolute() {
+        p
+    } else {
+        std::env::current_dir().map(|cwd| cwd.join(&p)).unwrap_or(p)
+    }
+}
+
+#[cfg(test)]
+mod files_tests;
 
 #[cfg(test)]
 mod registry_tests;
