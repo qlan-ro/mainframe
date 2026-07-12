@@ -179,6 +179,27 @@ pub struct RepeatBlock {
     pub steps: Vec<Step>,
 }
 
+/// Recursively finds a step by id, descending into `if`'s then/otherwise and
+/// `repeat`'s inner steps — the same tree shape the walk traverses (Node
+/// parity: automation-domain/tokens.ts `findStepById`).
+pub fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step> {
+    for step in steps {
+        if step.id() == step_id {
+            return Some(step);
+        }
+        let nested = match step {
+            Step::If(block) => find_step_by_id(&block.then, step_id)
+                .or_else(|| find_step_by_id(&block.otherwise, step_id)),
+            Step::Repeat(block) => find_step_by_id(&block.steps, step_id),
+            _ => None,
+        };
+        if nested.is_some() {
+            return nested;
+        }
+    }
+    None
+}
+
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
 // confidence: high
 // todos: 0

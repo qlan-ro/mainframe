@@ -146,6 +146,39 @@ impl RunStore {
             .await
     }
 
+    /// One-transaction read-modify-write (Node `patchCheckpoint`): the walk's
+    /// commit funnel. Same A8/cap/A5 guarantees as `save_checkpoint`, but the
+    /// read and the write share a transaction so a concurrent interaction
+    /// resolve can never be clobbered by a stale in-memory copy.
+    pub async fn patch_checkpoint(
+        &self,
+        run_id: &str,
+        mutate: impl FnOnce(&mut AutomationCheckpoint) + Send + 'static,
+    ) -> Result<RunRecord, StoreError> {
+        let run_id = run_id.to_string();
+        self.db
+            .call(move |conn| {
+                let tx = conn.transaction()?;
+                let parts = assert_not_terminal(&tx, &run_id)?;
+                let mut checkpoint: AutomationCheckpoint = serde_json::from_str(&parts.checkpoint)
+                    .map_err(|source| StoreError::Corrupt {
+                        what: "run checkpoint",
+                        id: run_id.clone(),
+                        source,
+                    })?;
+                mutate(&mut checkpoint);
+                assert_step_outputs_within_cap(&checkpoint)?;
+                let status = derive_run_status(&checkpoint);
+                tx.execute(
+                    "UPDATE automation_runs SET checkpoint = ?2, status = ?3 WHERE id = ?1",
+                    params![run_id, serde_json::to_string(&checkpoint)?, status.as_str()],
+                )?;
+                tx.commit()?;
+                require(conn, &run_id)
+            })
+            .await
+    }
+
     /// Folds `error` into the checkpoint, clears `wakeAt`, stamps
     /// `finished_at`, and cancels the run's pending interactions — all in ONE
     /// transaction (A8). Returns the cancelled interaction ids so the engine
