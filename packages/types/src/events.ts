@@ -2,6 +2,7 @@ import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
+import type { AutomationRunSummary, AutomationInteractionSummary } from './automation.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
@@ -94,7 +95,26 @@ export type DaemonEvent =
     }
   | { type: 'workflow.interaction.created'; interaction: import('./workflow.js').WorkflowInteractionSummary }
   | { type: 'workflow.interaction.resolved'; interactionId: string; runId: string }
-  | { type: 'workflow.completed'; workflowId: string; workflowName: string; runId: string; outputs: unknown };
+  | { type: 'workflow.completed'; workflowId: string; workflowName: string; runId: string; outputs: unknown }
+  | { type: 'automation.run.updated'; run: AutomationRunSummary }
+  | { type: 'automation.interaction.created'; interaction: AutomationInteractionSummary }
+  | { type: 'automation.interaction.resolved'; interactionId: string; runId: string }
+  | {
+      type: 'automation.completed';
+      automationId: string;
+      automationName: string;
+      runId: string;
+      status: 'succeeded' | 'failed';
+      result: string;
+    }
+  | {
+      type: 'automation.notification';
+      runId: string;
+      automationId: string;
+      title: string;
+      body: string;
+      links: { runId: string; chatIds: string[] };
+    };
 
 export type ClientEvent =
   | {
