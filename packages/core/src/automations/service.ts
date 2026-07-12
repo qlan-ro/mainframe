@@ -105,6 +105,7 @@ export class AutomationService {
       logger,
       onRunFinalized: (runId) => this.emitCompletionEvent(runId),
       isIdempotent: (step) => step.kind === 'run_action' && this.registry.isIdempotent(step.actionId),
+      agentWaits: this.agentWaits,
     });
 
     this.interactionService = new InteractionService(
@@ -231,10 +232,20 @@ export class AutomationService {
     return rowToSummary(row);
   }
 
-  /** Disarms triggers before deleting; runs/interactions cascade via the DB's ON DELETE CASCADE FKs. */
-  delete(id: string): void {
+  /**
+   * Disarms triggers, cancels every active run, then deletes — cancelRun
+   * finalizes each run before its row is cascade-removed, so an in-flight
+   * advance() can't keep executing side effects against an automation that
+   * no longer exists (its next checkpoint write would otherwise throw
+   * "automation run not found"). Interactions/agent_waits cascade via the
+   * DB's ON DELETE CASCADE FKs once the runs themselves are gone.
+   */
+  async delete(id: string): Promise<void> {
     if (!this.automations.get(id)) throw new Error(`automation not found: ${id}`);
     this.triggers.disarm(id);
+    for (const run of this.store.listActiveRuns(id)) {
+      await this.interpreter.cancelRun(run.id);
+    }
     this.automations.delete(id);
   }
 

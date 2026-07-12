@@ -35,6 +35,8 @@ export interface WalkDeps {
   signal: AbortSignal;
   /** Applies `mutate` to the persisted checkpoint in one transaction and returns the fresh copy. */
   commit: (mutate: (checkpoint: AutomationCheckpoint) => void) => AutomationCheckpoint;
+  /** Fired once a leaf step's checkpoint entry reaches succeeded/failed (not on park — that already reports via the 'parked' WalkResult) so the run timeline updates between consecutive steps, not only at start/park/finalize. */
+  onStepSettled?: () => void;
 }
 
 /** Per-scope walk context: `refSuffix` turns a plain step id into its checkpoint stepRef (Decision 3, chained for nested Repeats); `currentItems` is the Repeat iteration stack `current` resolves against. */
@@ -158,6 +160,7 @@ async function runLeaf(
 
   if (outcome.type === 'completed') {
     current = deps.commit((cp) => setStep(cp, stepRef, step, 'succeeded', outcome.outputs, null));
+    deps.onStepSettled?.();
     return { result: { type: 'done' }, checkpoint: current };
   }
   if (outcome.type === 'wait') {
@@ -168,6 +171,7 @@ async function runLeaf(
     return { result: { type: 'parked' }, checkpoint: current };
   }
   current = deps.commit((cp) => setStep(cp, stepRef, step, 'failed', null, outcome.error));
+  deps.onStepSettled?.();
   return { result: { type: 'failed', error: outcome.error }, checkpoint: current };
 }
 

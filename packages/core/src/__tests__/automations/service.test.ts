@@ -127,6 +127,26 @@ describe('AutomationService', () => {
       expect(service.get(created.id)?.definition).toEqual(NOTIFY_ONLY.definition);
     });
 
+    it('delete cancels every active run for the automation before removing it', async () => {
+      const { service, events } = makeService(dir);
+      const created = service.create({
+        name: 'Parked',
+        scope: 'global',
+        definition: { triggers: [], steps: [{ id: 'ask-1', kind: 'ask_me', title: 'Pick', fields: [] }] },
+      });
+      const run = service.runManually(created.id);
+      await tick();
+      expect(service.store.getRun(run.id)?.status).toBe('waiting');
+
+      await expect(service.delete(created.id)).resolves.toBeUndefined();
+
+      expect(service.list().map((a) => a.id)).not.toContain(created.id);
+      const cancelEvent = events.find(
+        (e) => e.type === 'automation.run.updated' && e.run.id === run.id && e.run.status === 'cancelled',
+      );
+      expect(cancelEvent).toBeDefined();
+    });
+
     it('setEnabled toggles the flag; manual runs stay allowed while disabled', async () => {
       const { service } = makeService(dir);
       const created = service.create(NOTIFY_ONLY);

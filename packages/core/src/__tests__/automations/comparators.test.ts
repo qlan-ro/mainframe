@@ -93,6 +93,33 @@ describe('evalConditions — typed comparators', () => {
     }
   });
 
+  it('scalar comparators reject an array operand outright, instead of stringify-coercing it', () => {
+    const ctx = ctxFor(['a', 'b']);
+    expect(evalOne(ctx, 'is', 'a,b')).toBe(false);
+    expect(evalOne(ctx, 'is_not', 'a,b')).toBe(false);
+    expect(evalOne(ctx, 'starts_with', 'a,')).toBe(false);
+    expect(evalOne(ctx, 'eq', 'a,b')).toBe(false);
+    expect(evalOne(ctx, 'lt', 'a,b')).toBe(false);
+    expect(evalOne(ctx, 'gt', 'a,b')).toBe(false);
+  });
+
+  it('scalar comparators reject an array value outright, instead of Number()-coercing a single-item array', () => {
+    const ctx = ctxFor(5);
+    expect(evalOne(ctx, 'is', ['5'])).toBe(false);
+    expect(evalOne(ctx, 'is_not', ['5'])).toBe(false);
+    expect(evalOne(ctx, 'eq', ['5'])).toBe(false);
+    expect(evalOne(ctx, 'lt', ['10'])).toBe(false);
+    expect(evalOne(ctx, 'gt', ['1'])).toBe(false);
+  });
+
+  it('contains/is_one_of/is_empty/not_empty keep their array-aware semantics unchanged', () => {
+    const listCtx = ctxFor(['a', 'b']);
+    expect(evalOne(listCtx, 'contains', 'a')).toBe(true);
+    expect(evalOne(ctxFor('s'), 'is_one_of', ['xs', 's'])).toBe(true);
+    expect(evalOne(ctxFor([]), 'is_empty')).toBe(true);
+    expect(evalOne(ctxFor(['a']), 'not_empty')).toBe(true);
+  });
+
   it('evalConditions ANDs rows with "all" and ORs with "any"', () => {
     const ctx = ctxFor('hello');
     const rows: ConditionRow[] = [row('is', 'hello'), row('is', 'nope')];

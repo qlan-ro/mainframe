@@ -95,6 +95,29 @@ describe('RunStore', () => {
     expect(resumable).toEqual([running.id, waiting.id].sort());
   });
 
+  it('a step parked waiting with no wakeAt (ask_me) still derives run status "waiting"', () => {
+    const run = store.createRun('auto-1', DEFINITION, MANUAL_TRIGGER, null);
+
+    const parked = store.patchCheckpoint(run.id, (checkpoint) => ({
+      ...checkpoint,
+      wakeAt: null,
+      steps: {
+        'notify-1': {
+          stepId: 'notify-1',
+          kind: 'ask_me',
+          status: 'waiting',
+          outputs: null,
+          error: null,
+          startedAt: 1,
+          finishedAt: null,
+        },
+      },
+    }));
+
+    expect(parked.checkpoint.wakeAt).toBeNull();
+    expect(parked.status).toBe('waiting');
+  });
+
   it('patchCheckpoint read-modify-writes the checkpoint and derives status from wakeAt', () => {
     const run = store.createRun('auto-1', DEFINITION, MANUAL_TRIGGER, null);
 
@@ -130,6 +153,19 @@ describe('RunStore', () => {
     expect(failed.finishedAt).not.toBeNull();
     expect(failed.checkpoint.wakeAt).toBeNull();
     expect(failed.checkpoint.error).toBe('step "notify-1" blew up');
+  });
+
+  it('loadResumable skips a row with corrupt checkpoint JSON, finalizes it failed, and still returns the others', () => {
+    const healthy = store.createRun('auto-1', DEFINITION, MANUAL_TRIGGER, null);
+    const corrupt = store.createRun('auto-1', DEFINITION, MANUAL_TRIGGER, null);
+    db.prepare(`UPDATE automation_runs SET checkpoint = ? WHERE id = ?`).run('{not json', corrupt.id);
+
+    const resumable = store.loadResumable();
+
+    expect(resumable.map((r) => r.id)).toEqual([healthy.id]);
+    const finalized = store.getRun(corrupt.id)!;
+    expect(finalized.status).toBe('failed');
+    expect(finalized.checkpoint.error).toBe('corrupt checkpoint');
   });
 
   it('rejects a per-step output payload over the 4MB cap and leaves the checkpoint unchanged', () => {

@@ -75,6 +75,9 @@ export function automationAdminRoutes(ctx: RouteContext): Router {
     const service = ctx.automations;
     if (!service) return void fail(res, 503, 'automation service not available');
     const label = param(req, 'label');
+    if (!LabelSchema.safeParse(label).success) {
+      return void fail(res, 400, `invalid label '${label}': must match ^[a-zA-Z0-9_-]+$`);
+    }
     const creds = service.credentials.get(label);
     if (!creds) return void fail(res, 404, 'credential not found');
     ok(res, { label, kind: creds.kind });
@@ -93,7 +96,7 @@ export function automationAdminRoutes(ctx: RouteContext): Router {
       if (!parsed.success) return void fail(res, 400, parsed.error.message);
 
       try {
-        service.credentials.set(label, { kind: 'token', token: parsed.data.token });
+        await service.credentials.set(label, { kind: 'token', token: parsed.data.token });
         okEmpty(res);
       } catch (err) {
         logger.error({ err, label }, 'set credential failed');
@@ -112,7 +115,7 @@ export function automationAdminRoutes(ctx: RouteContext): Router {
         return void fail(res, 400, `invalid label '${label}': must match ^[a-zA-Z0-9_-]+$`);
       }
       try {
-        service.credentials.delete(label);
+        await service.credentials.delete(label);
         okEmpty(res);
       } catch (err) {
         logger.error({ err, label }, 'delete credential failed');

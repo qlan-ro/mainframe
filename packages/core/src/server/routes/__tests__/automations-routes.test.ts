@@ -220,11 +220,13 @@ describe('automation REST routes', () => {
     const runId = (await request(app).post(`/api/automations/${created.id}/runs`).send({})).body.data.id;
     await tick();
 
-    service.store.patchCheckpoint(runId, (checkpoint) => {
-      const entry = checkpoint.steps['notify-1'];
-      if (entry) entry.outputs = { blob: 'x'.repeat(40_000) };
-      return checkpoint;
-    });
+    // The run has already finished by the time this fixture is prepared, and
+    // RunStore.patchCheckpoint refuses to touch a terminal run — write the
+    // oversized blob straight to the row instead of through the store.
+    const checkpoint = service.store.getRun(runId)!.checkpoint;
+    const entry = checkpoint.steps['notify-1'];
+    if (entry) entry.outputs = { blob: 'x'.repeat(40_000) };
+    service.db.prepare(`UPDATE automation_runs SET checkpoint = ? WHERE id = ?`).run(JSON.stringify(checkpoint), runId);
 
     const res = await request(app).get(`/api/automation-runs/${runId}`);
     expect(res.body.data.timeline[0].outputPreview).toMatch(/^\[truncated — \d+ bytes\]$/);

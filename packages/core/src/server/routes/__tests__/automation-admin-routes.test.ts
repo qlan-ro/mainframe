@@ -162,6 +162,11 @@ describe('automation admin routes', () => {
     expect(res.status).toBe(404);
   });
 
+  it('GET /api/automation-credentials/:label rejects an invalid label with 400', async () => {
+    const res = await request(app).get('/api/automation-credentials/my bad label');
+    expect(res.status).toBe(400);
+  });
+
   it('PUT /api/automation-credentials/:label rejects an invalid label', async () => {
     const res = await request(app).put('/api/automation-credentials/my bad label').send({ token: 'x' });
     expect(res.status).toBe(400);

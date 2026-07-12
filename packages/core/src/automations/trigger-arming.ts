@@ -82,6 +82,14 @@ export class TriggerArmer {
   private ensureWebhookSecret(hookId: string): void {
     const label = `webhook:${hookId}`;
     if (this.deps.credentials.get(label)) return;
-    this.deps.credentials.set(label, { kind: 'token', token: randomBytes(32).toString('hex') });
+    // arm() is synchronous end-to-end; FileCredentialStore's write path is not
+    // (async I/O — see credentials.ts), so this fires and forgets rather than
+    // making arm/armAll async. Caught here so a write failure logs instead of
+    // becoming an unhandled rejection.
+    void this.deps.credentials
+      .set(label, { kind: 'token', token: randomBytes(32).toString('hex') })
+      .catch((err: unknown) => {
+        this.deps.logger.error({ err, hookId }, 'failed to persist webhook secret');
+      });
   }
 }

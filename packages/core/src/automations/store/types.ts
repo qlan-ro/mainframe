@@ -67,3 +67,17 @@ export interface AutomationInteractionRecord {
   createdAt: number;
   resolvedAt: number | null;
 }
+
+/** Terminal statuses a run never leaves — shared by run-store's write guard and the engine's own re-checks. */
+export const TERMINAL_RUN_STATUSES: ReadonlySet<AutomationRunStatus> = new Set(['succeeded', 'failed', 'cancelled']);
+
+/** Thrown by RunStore.patchCheckpoint/finalizeRun when the target run is already terminal — cancellation is authoritative, so a late-arriving write must never resurrect or overwrite a finished run. */
+export class AutomationRunTerminalError extends Error {
+  constructor(
+    public readonly runId: string,
+    public readonly status: AutomationRunStatus,
+  ) {
+    super(`automation run '${runId}' is already terminal (${status})`);
+    this.name = 'AutomationRunTerminalError';
+  }
+}

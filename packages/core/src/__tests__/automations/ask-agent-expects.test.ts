@@ -198,9 +198,9 @@ describe('ask_agent structured outputs (A2)', () => {
     expect(sendCalls).toHaveLength(1);
     expect(sendCalls[0]?.chatId).toBe(chatId);
     expect(store.getRun(run.id)?.checkpoint.steps['agent-1']?.status).toBe('waiting');
-    // No timeoutMinutes set, so the run's wakeAt-derived status stays 'running'
-    // even while the step itself is 'waiting' (ask-me.test.ts documents this too).
-    expect(store.getRun(run.id)?.status).toBe('running');
+    // No timeoutMinutes set (wakeAt stays null), but the run still reports 'waiting'
+    // because RunStore also checks for a waiting checkpoint step.
+    expect(store.getRun(run.id)?.status).toBe('waiting');
     // The wait row survives the first mismatch — the run is still waiting on the same chat.
     expect(waits.findByRunStep(run.id, 'agent-1')).toEqual({ chatId });
   });

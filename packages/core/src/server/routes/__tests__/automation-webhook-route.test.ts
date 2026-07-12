@@ -82,7 +82,10 @@ describe('automation webhook route', () => {
 
   afterEach(() => {
     service.stop();
-    rmSync(dir, { recursive: true, force: true });
+    // create()'s webhook-secret write (credentials.ts) is fire-and-forget —
+    // retry absorbs the rare race where that write is still landing when
+    // cleanup runs, instead of a spurious ENOTEMPTY.
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 20 });
   });
 
   // supertest/superagent JSON-serializes a Buffer passed to `.send()` (its
@@ -140,7 +143,7 @@ describe('automation webhook route', () => {
     expect(service.store.listRuns(created.id)).toHaveLength(0);
   });
 
-  it('a duplicate delivery id starts exactly one run', async () => {
+  it('a duplicate delivery id starts exactly one run and both requests get 200', async () => {
     const created = service.create(PR_AUTOMATION);
     const secret = service.credentials.get('webhook:gh-hook')?.token as string;
     const rawBody = JSON.stringify({ action: 'opened', pull_request: { html_url: 'https://x/1' } });
@@ -150,12 +153,48 @@ describe('automation webhook route', () => {
       'X-GitHub-Delivery': 'delivery-replay',
     };
 
-    await post('gh-hook', rawBody, headers);
+    const first = await post('gh-hook', rawBody, headers);
     await tick();
-    await post('gh-hook', rawBody, headers);
+    const second = await post('gh-hook', rawBody, headers);
     await tick();
 
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
     expect(service.store.listRuns(created.id)).toHaveLength(1);
+  });
+
+  it('a run-start failure other than a duplicate delivery returns 500 so the sender retries', async () => {
+    service.create(PR_AUTOMATION);
+    const secret = service.credentials.get('webhook:gh-hook')?.token as string;
+    const rawBody = JSON.stringify({ action: 'opened', pull_request: { html_url: 'https://x/1' } });
+    // Breaks only the run insert (trigger_state, used by captureSample, is untouched) so the
+    // route sees a real non-constraint SqliteError distinct from a dedup unique-index conflict.
+    service.db.exec('ALTER TABLE automation_runs RENAME TO automation_runs_disabled_for_test');
+
+    const res = await post('gh-hook', rawBody, {
+      'X-Hub-Signature-256': sign(secret, rawBody),
+      'X-GitHub-Event': 'pull_request',
+      'X-GitHub-Delivery': 'delivery-fail',
+    });
+
+    expect(res.status).toBe(500);
+  });
+
+  it('a stale timestamped delivery returns 204 and starts no run', async () => {
+    const created = service.create(PR_AUTOMATION);
+    const secret = service.credentials.get('webhook:gh-hook')?.token as string;
+    const rawBody = JSON.stringify({ action: 'opened', pull_request: { html_url: 'https://x/1' } });
+    const elevenMinutesAgo = Math.floor((Date.now() - 11 * 60 * 1000) / 1000);
+
+    const res = await post('gh-hook', rawBody, {
+      'X-Hub-Signature-256': sign(secret, rawBody),
+      'X-GitHub-Event': 'pull_request',
+      'X-GitHub-Delivery': 'delivery-stale',
+      'X-Timestamp': String(elevenMinutesAgo),
+    });
+    expect(res.status).toBe(204);
+    await tick();
+    expect(service.store.listRuns(created.id)).toHaveLength(0);
   });
 
   it('an unknown hookId returns 404', async () => {

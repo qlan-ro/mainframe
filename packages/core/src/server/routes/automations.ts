@@ -117,7 +117,7 @@ export function automationRoutes(ctx: RouteContext): Router {
       if (!service) return void fail(res, 503, 'automation service not available');
       const id = param(req, 'id');
       if (!service.get(id)) return void fail(res, 404, 'automation not found');
-      service.delete(id);
+      await service.delete(id);
       okEmpty(res);
     }),
   );

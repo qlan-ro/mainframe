@@ -6,18 +6,31 @@
 // boot reconcile, retry) — concurrent calls for the same runId share one
 // promise so a step never executes twice from a race.
 import type { Logger } from 'pino';
-import type {
-  AutomationDefinition,
-  AutomationRunStatus,
-  AutomationRunSummary,
-  AutomationStep,
-  DaemonEvent,
+import {
+  findStepById,
+  type AutomationDefinition,
+  type AutomationStep,
+  type DaemonEvent,
 } from '@qlan-ro/mainframe-types';
 import type { InteractionStore } from '../store/interaction-store.js';
 import type { RunStore } from '../store/run-store.js';
-import type { AutomationCheckpoint, AutomationRunRecord, AutomationRunTriggerContext } from '../store/types.js';
+import {
+  AutomationRunTerminalError,
+  TERMINAL_RUN_STATUSES,
+  type AutomationCheckpoint,
+  type AutomationRunRecord,
+  type AutomationRunTriggerContext,
+} from '../store/types.js';
+import { toRunSummary } from './run-summary.js';
 import { walkSteps } from './walk.js';
 import type { VerbPorts, WalkResult } from './types.js';
+
+export { toRunSummary } from './run-summary.js';
+
+/** Narrow view of AgentWaitService — cancelRun only needs to purge stale wait rows, not the full waker surface (avoids an engine -> verbs import cycle). */
+export interface AgentWaitCleaner {
+  clearForRun(runId: string): number;
+}
 
 export interface InterpreterDeps {
   store: RunStore;
@@ -28,9 +41,10 @@ export interface InterpreterDeps {
   onRunFinalized?: (runId: string) => void | Promise<void>;
   /** Decision 12 restart policy: true only for run_action steps safe to blindly re-invoke after an unknown-effect restart. Defaults to false (fail loudly); ask_agent is never restart-safe regardless of this hook. */
   isIdempotent?: (step: AutomationStep) => boolean;
+  /** Optional so existing tests that never exercise ask_agent cancellation don't need a fake — cancelRun no-ops the cleanup when absent. */
+  agentWaits?: AgentWaitCleaner;
 }
 
-const TERMINAL_STATUSES: ReadonlySet<AutomationRunStatus> = new Set(['succeeded', 'failed', 'cancelled']);
 const RESTART_MID_ACTION_ERROR = 'engine restarted mid-action; effect unknown';
 const AGENT_DEADLINE_ERROR = 'agent step deadline exceeded';
 
@@ -60,10 +74,27 @@ export class AutomationInterpreter {
     return p;
   }
 
+  /**
+   * Cancellation is authoritative (contract §3): finalize, cancel pending
+   * interactions, and purge agent_waits rows in ONE transaction (parity
+   * with InteractionStore.resolveInOneTx) so no partial state survives a
+   * crash mid-cancel, and no chat that finishes afterward can resurrect the
+   * run via AgentWaitService.onChatFinished. A run that's already terminal
+   * (double-cancel, or lost the race to its own finalize) is a silent
+   * no-op, not an error.
+   */
   async cancelRun(runId: string): Promise<void> {
     this.aborts.get(runId)?.abort();
-    this.deps.store.finalizeRun(runId, 'cancelled', null);
-    this.deps.interactions.cancelPendingForRun(runId);
+    try {
+      this.deps.store.withTransaction(() => {
+        this.deps.store.finalizeRun(runId, 'cancelled', null);
+        this.deps.interactions.cancelPendingForRun(runId);
+        this.deps.agentWaits?.clearForRun(runId);
+      });
+    } catch (err) {
+      if (err instanceof AutomationRunTerminalError) return;
+      throw err;
+    }
     this.emitRun(runId);
     await this.deps.onRunFinalized?.(runId);
   }
@@ -78,7 +109,7 @@ export class AutomationInterpreter {
 
   private async advanceInner(runId: string): Promise<void> {
     let run = this.deps.store.getRun(runId);
-    if (!run || TERMINAL_STATUSES.has(run.status)) return;
+    if (!run || TERMINAL_RUN_STATUSES.has(run.status)) return;
 
     const fatalStale = this.resolveStaleRunningSteps(run);
     if (fatalStale) {
@@ -91,6 +122,11 @@ export class AutomationInterpreter {
     this.aborts.set(runId, abort);
     try {
       const result = await this.walk(run, abort.signal);
+      // cancelRun can finalize this same run while the walk above was mid-flight
+      // (it isn't serialized through advance()'s inFlight map) — re-check before
+      // trusting the walk's own verdict so a late 'done'/'failed' never clobbers
+      // an already-cancelled run.
+      if (this.isNowTerminal(runId)) return;
       if (result.type === 'parked') {
         this.emitRun(runId);
         return;
@@ -101,12 +137,19 @@ export class AutomationInterpreter {
         await this.finalizeAndEmit(runId, 'succeeded', null);
       }
     } catch (err) {
+      if (err instanceof AutomationRunTerminalError) return;
       const message = err instanceof Error ? err.message : String(err);
       this.deps.logger.error({ err, runId }, 'automation advance crashed');
+      if (this.isNowTerminal(runId)) return;
       await this.finalizeAndEmit(runId, 'failed', message);
     } finally {
       this.aborts.delete(runId);
     }
+  }
+
+  private isNowTerminal(runId: string): boolean {
+    const current = this.deps.store.getRun(runId);
+    return !current || TERMINAL_RUN_STATUSES.has(current.status);
   }
 
   private async finalizeAndEmit(runId: string, status: 'succeeded' | 'failed', error: string | null): Promise<void> {
@@ -190,6 +233,7 @@ export class AutomationInterpreter {
           mutate(checkpoint);
           return checkpoint;
         }).checkpoint,
+      onStepSettled: () => this.emitRun(run.id),
     });
   }
 
@@ -212,33 +256,4 @@ function failStep(checkpoint: AutomationCheckpoint, stepRef: string, error: stri
     target.finishedAt = Date.now();
   }
   return checkpoint;
-}
-
-/** The frozen definition snapshot always contains `id` (scope validation rejects duplicates); recurses into If/Repeat bodies since a stale `running` entry can be nested. */
-function findStepById(steps: AutomationStep[], id: string): AutomationStep | undefined {
-  for (const step of steps) {
-    if (step.id === id) return step;
-    if (step.kind === 'if') {
-      const hit = findStepById(step.then, id) ?? findStepById(step.otherwise, id);
-      if (hit) return hit;
-    }
-    if (step.kind === 'repeat') {
-      const hit = findStepById(step.steps, id);
-      if (hit) return hit;
-    }
-  }
-  return undefined;
-}
-
-/** Exported for the routes layer (Task 24) so GET /api/automation-runs/:id projects the same wire shape as the run.updated WS event. */
-export function toRunSummary(run: AutomationRunRecord): AutomationRunSummary {
-  return {
-    id: run.id,
-    automationId: run.automationId,
-    status: run.status,
-    trigger: { kind: run.checkpoint.trigger.kind },
-    startedAt: run.startedAt,
-    finishedAt: run.finishedAt,
-    error: run.checkpoint.error,
-  };
 }

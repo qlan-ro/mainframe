@@ -83,7 +83,22 @@ matches the preset's predicate (event + action, e.g. `pull_request` +
 `opened`) after signature verification and before starting a run — a
 non-matching delivery gets a 204 and starts nothing. Deliveries dedup on
 GitHub's `X-GitHub-Delivery` header (or a required `id` field), so retried
-deliveries never double-fire a run.
+deliveries never double-fire a run — the dedup key is a permanent unique
+index, so it defends against a replay at any distance in time, not just a
+bounded window.
+
+Senders that stamp their own send time — an `X-Timestamp` header, or a
+top-level `timestamp` payload field (unix seconds, unix milliseconds, or ISO
+8601) — get an extra check: a delivery older than 10 minutes is dropped with
+204 before it reaches dedup or run-start. GitHub's own deliveries carry no
+such field, so this window never applies to them; they rely solely on the
+permanent dedup index above, which for an already-seen id is the stronger
+guarantee of the two.
+
+A delivery whose run failed to start for a reason other than a duplicate
+(e.g. the daemon's automations DB is unreachable) gets a 500 so the sender's
+own retry logic re-delivers it; a duplicate delivery is a no-op 200, and a
+non-matching preset is a 204 — none of the three leave a run silently lost.
 
 ## WebSocket events
 

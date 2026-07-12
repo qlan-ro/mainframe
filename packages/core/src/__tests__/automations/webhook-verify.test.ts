@@ -8,6 +8,8 @@ import {
   verifySignature,
   matchPreset,
   deliveryId,
+  deliveryTimestampMs,
+  isStaleDelivery,
   captureSample,
   GITHUB_PR_OPENED_PRESET,
   GITHUB_PR_MERGED_PRESET,
@@ -80,6 +82,42 @@ describe('deliveryId', () => {
 
   it('throws when neither the header nor payload.id is present', () => {
     expect(() => deliveryId({}, {})).toThrow(/delivery id/);
+  });
+});
+
+describe('deliveryTimestampMs', () => {
+  it('reads an X-Timestamp header in unix seconds', () => {
+    expect(deliveryTimestampMs({}, { 'x-timestamp': '1700000000' })).toBe(1700000000 * 1000);
+  });
+
+  it('reads a top-level payload.timestamp field in unix milliseconds', () => {
+    expect(deliveryTimestampMs({ timestamp: 1700000000123 }, {})).toBe(1700000000123);
+  });
+
+  it('reads an ISO 8601 payload.timestamp string', () => {
+    expect(deliveryTimestampMs({ timestamp: '2023-11-14T22:13:20.000Z' }, {})).toBe(
+      Date.parse('2023-11-14T22:13:20.000Z'),
+    );
+  });
+
+  it('prefers the header over the payload field when both are present', () => {
+    expect(deliveryTimestampMs({ timestamp: 1 }, { 'x-timestamp': '1700000000' })).toBe(1700000000 * 1000);
+  });
+
+  it('returns null when neither a header nor a payload field is derivable', () => {
+    expect(deliveryTimestampMs({ action: 'opened' }, {})).toBeNull();
+  });
+});
+
+describe('isStaleDelivery', () => {
+  it('is not stale within the 10-minute window', () => {
+    const now = 1_700_000_000_000;
+    expect(isStaleDelivery(now - 9 * 60 * 1000, now)).toBe(false);
+  });
+
+  it('is stale just past the 10-minute window', () => {
+    const now = 1_700_000_000_000;
+    expect(isStaleDelivery(now - 11 * 60 * 1000, now)).toBe(true);
   });
 });
 

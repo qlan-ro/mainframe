@@ -215,10 +215,10 @@ describe('AutomationInterpreter — If/Repeat blocks', () => {
     expect(askCalls).toBe(2);
     const checkpoint = store.getRun(run.id)!.checkpoint;
     expect(checkpoint.steps['ask#0']?.status).toBe('succeeded');
-    // ask_me never sets a wakeAt (interactions don't expire), so RunStore's wakeAt-derived
-    // run status stays 'running' even though this step itself is 'waiting' on a human.
+    // ask_me never sets a wakeAt (interactions don't expire) — the run still reports
+    // 'waiting' because RunStore also checks for a waiting checkpoint step.
     expect(checkpoint.steps['ask#1']?.status).toBe('waiting');
-    expect(store.getRun(run.id)?.status).toBe('running');
+    expect(store.getRun(run.id)?.status).toBe('waiting');
 
     // Resolve iteration 1's interaction as a real ask_me respond() would, then resume.
     store.patchCheckpoint(run.id, (cp) => {

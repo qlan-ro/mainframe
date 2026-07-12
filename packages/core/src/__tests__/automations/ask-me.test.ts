@@ -95,9 +95,10 @@ describe('ask_me verb', () => {
     const interpreter = makeInterpreter(ports);
     const run = interpreter.startRun('auto-1', definition, MANUAL, null);
     await interpreter.advance(run.id);
-    // ask_me never sets a wakeAt, so the run's wakeAt-derived status stays 'running'
-    // even while the step itself is 'waiting' (engine-blocks.test.ts documents this too).
+    // ask_me never sets a wakeAt, but the run still reports 'waiting' because RunStore
+    // also checks for a waiting checkpoint step (engine-blocks.test.ts documents this too).
     expect(store.getRun(run.id)?.checkpoint.steps['ask-1']?.status).toBe('waiting');
+    expect(store.getRun(run.id)?.status).toBe('waiting');
 
     const interaction = interactions.findPendingForStep(run.id, 'ask-1');
     expect(interaction).not.toBeNull();

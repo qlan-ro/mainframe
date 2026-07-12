@@ -74,6 +74,56 @@ export function deliveryId(payload: unknown, headers: Record<string, string | st
   throw new Error('webhook delivery missing a delivery id (X-GitHub-Delivery header or payload.id)');
 }
 
+const STALE_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * A delivery's client-asserted send time, when the sender provides one
+ * (contract §4's bounded staleness window applies only where a timestamp is
+ * derivable). GitHub's generic webhook delivery carries no such field —
+ * `X-GitHub-Delivery` is a replay-dedup id, not a clock reading — so this
+ * covers senders that do send one: an `X-Timestamp` header, or a top-level
+ * `timestamp` payload field, accepted as unix seconds, unix milliseconds, or
+ * an ISO 8601 string. Returns null when neither is present; the route then
+ * falls back to the permanent delivery-id unique index (webhook.ts's
+ * `deliveryId`), which is a *stronger* defense for ids it has already seen
+ * than any bounded window could be.
+ */
+export function deliveryTimestampMs(
+  payload: unknown,
+  headers: Record<string, string | string[] | undefined>,
+): number | null {
+  const header = headers['x-timestamp'];
+  const fromHeader = parseTimestamp(Array.isArray(header) ? header[0] : header);
+  if (fromHeader !== null) return fromHeader;
+
+  if (typeof payload === 'object' && payload !== null) {
+    const fromPayload = parseTimestamp((payload as Record<string, unknown>).timestamp);
+    if (fromPayload !== null) return fromPayload;
+  }
+  return null;
+}
+
+function parseTimestamp(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return normalizeEpoch(value);
+  if (typeof value === 'string' && value.length > 0) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return normalizeEpoch(numeric);
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
+/** Bare epoch numbers below this are unix *seconds* (Stripe/Slack's convention) — a millisecond timestamp is always well above it for any date this app will see. */
+function normalizeEpoch(value: number): number {
+  return value < 1e12 ? value * 1000 : value;
+}
+
+/** contract §4's 10-minute bounded staleness window. */
+export function isStaleDelivery(timestampMs: number, now: number): boolean {
+  return now - timestampMs > STALE_WINDOW_MS;
+}
+
 /** Stores the last payload for the trigger in `trigger_state.last_payload` (engine-internal, contract §3). */
 export function captureSample(db: AutomationDb, automationId: string, triggerId: string, payload: unknown): void {
   db.prepare(

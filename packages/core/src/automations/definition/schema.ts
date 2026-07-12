@@ -78,6 +78,7 @@ const askAgentStepSchema = z
     autoApprove: z.array(z.string()).optional(),
     timeoutMinutes: z.number().int().positive().optional(),
     expects: z.array(expectedOutputSchema).optional(),
+    attachments: z.array(z.string()).optional(),
   })
   .strict();
 

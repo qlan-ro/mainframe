@@ -17,10 +17,11 @@
 // message into the SAME chat (agent_waits.correction_sent guards the
 // retry) and leaves the step waiting; a second mismatch fails it loudly.
 import type { Logger } from 'pino';
-import type { AutomationRunSummary, AutomationStep, DaemonEvent } from '@qlan-ro/mainframe-types';
+import { findStepById, type AutomationStep, type DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { AutomationDb } from '../db.js';
 import type { RunStore } from '../store/run-store.js';
-import type { AutomationCheckpoint, AutomationRunRecord } from '../store/types.js';
+import { TERMINAL_RUN_STATUSES, type AutomationCheckpoint, type AutomationRunRecord } from '../store/types.js';
+import { toRunSummary } from '../engine/run-summary.js';
 import { buildCorrectionMessage, parseAndValidate } from './expects.js';
 
 interface WaitRow {
@@ -70,6 +71,11 @@ export class AgentWaitService {
       .prepare(`SELECT chat_id FROM agent_waits WHERE run_id = ? AND step_ref = ?`)
       .get(runId, stepRef) as { chat_id: string } | undefined;
     return row ? { chatId: row.chat_id } : null;
+  }
+
+  /** Deletes every wait row for a run — called from cancelRun's one transaction so a chat that finishes after cancellation can't resurrect it via onChatFinished. */
+  clearForRun(runId: string): number {
+    return this.deps.db.prepare(`DELETE FROM agent_waits WHERE run_id = ?`).run(runId).changes;
   }
 
   /** Accumulate the latest assistant text while waiting (from message.added events). */
@@ -134,24 +140,30 @@ export class AgentWaitService {
   private loadWaitingStep(chatId: string, row: WaitRow): WaitingStepContext | null {
     const run = this.deps.store.getRun(row.run_id);
     const entry = run?.checkpoint.steps[row.step_ref];
-    if (!run || !entry || entry.status !== 'waiting') {
+    if (!run || TERMINAL_RUN_STATUSES.has(run.status) || !entry || entry.status !== 'waiting') {
       this.clearWait(chatId);
       this.deps.logger.warn(
         { chatId, runId: row.run_id, stepRef: row.step_ref },
-        'chat finished but step is not waiting',
+        'chat finished but the run is not waiting on this step',
       );
       return null;
     }
-    const step = findStepById(run.checkpoint.definition.steps, entry.stepId);
+    const step = findStepById(run.checkpoint.definition.steps, entry.stepId) ?? undefined;
     return { run, stepRef: row.step_ref, step };
   }
 
+  /** Re-checks terminality even though loadWaitingStep already gates entry — cancelRun races the checkpoint write, not just the wait-row lookup. */
   private async succeedWaitingStep(runId: string, stepRef: string, outputs: Record<string, unknown>): Promise<void> {
+    const run = this.deps.store.getRun(runId);
+    if (!run || TERMINAL_RUN_STATUSES.has(run.status)) return;
     this.deps.store.patchCheckpoint(runId, (checkpoint) => succeedStep(checkpoint, stepRef, outputs));
     await this.deps.advanceRun(runId);
   }
 
   private async failWaitingStep(context: WaitingStepContext, error: string): Promise<void> {
+    const run = this.deps.store.getRun(context.run.id);
+    if (!run || TERMINAL_RUN_STATUSES.has(run.status)) return;
+
     this.deps.store.patchCheckpoint(context.run.id, (checkpoint) => failStep(checkpoint, context.stepRef, error));
 
     if (!context.step?.keepGoing) {
@@ -189,32 +201,4 @@ function failStep(checkpoint: AutomationCheckpoint, stepRef: string, error: stri
   }
   checkpoint.wakeAt = null;
   return checkpoint;
-}
-
-/** The frozen definition snapshot always contains `id`; recurses into If/Repeat since a waiting ask_agent step can be nested. */
-function findStepById(steps: AutomationStep[], id: string): AutomationStep | undefined {
-  for (const step of steps) {
-    if (step.id === id) return step;
-    if (step.kind === 'if') {
-      const hit = findStepById(step.then, id) ?? findStepById(step.otherwise, id);
-      if (hit) return hit;
-    }
-    if (step.kind === 'repeat') {
-      const hit = findStepById(step.steps, id);
-      if (hit) return hit;
-    }
-  }
-  return undefined;
-}
-
-function toRunSummary(run: AutomationRunRecord): AutomationRunSummary {
-  return {
-    id: run.id,
-    automationId: run.automationId,
-    status: run.status,
-    trigger: { kind: run.checkpoint.trigger.kind },
-    startedAt: run.startedAt,
-    finishedAt: run.finishedAt,
-    error: run.checkpoint.error,
-  };
 }

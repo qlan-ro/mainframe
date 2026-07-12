@@ -18,7 +18,11 @@ function evalCondition(ctx: TokenContext, row: ConditionRow): boolean {
   return compare(operand, row.comparator, row.value);
 }
 
+/** These compare via a single scalar stringify/number coercion — an array operand or value would silently compare by its joined string (`['a','b']` -> `'a,b'`), so both sides must be rejected explicitly rather than coerced. */
+const SCALAR_ONLY_COMPARATORS: ReadonlySet<Comparator> = new Set(['is', 'is_not', 'starts_with', 'eq', 'lt', 'gt']);
+
 function compare(operand: unknown, comparator: Comparator, value: ConditionRow['value']): boolean {
+  if (SCALAR_ONLY_COMPARATORS.has(comparator) && (Array.isArray(operand) || Array.isArray(value))) return false;
   switch (comparator) {
     case 'is':
       return String(operand) === String(value);

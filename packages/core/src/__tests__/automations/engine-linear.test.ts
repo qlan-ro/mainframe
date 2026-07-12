@@ -215,6 +215,25 @@ describe('AutomationInterpreter — linear walk', () => {
     expect(finished.checkpoint.steps['notify-1']?.outputs).toEqual({ rendered: 'Result: .' });
   });
 
+  it('emits automation.run.updated after each leaf step settles, not just at start/park/finalize', async () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        { id: 'step-a', kind: 'notify', message: ['a'] },
+        { id: 'step-b', kind: 'notify', message: ['b'] },
+      ],
+    };
+    const ports = fakePorts({ notify: async () => ({ type: 'completed', outputs: {} }) });
+    const interpreter = makeInterpreter(ports);
+    const run = interpreter.startRun('auto-1', definition, MANUAL, null);
+    await interpreter.advance(run.id);
+
+    const runUpdates = events.filter((e) => e.type === 'automation.run.updated');
+    // start, step-a settled, step-b settled, finalize — one event per transition.
+    expect(runUpdates).toHaveLength(4);
+    expect(runUpdates.at(-1)?.run.status).toBe('succeeded');
+  });
+
   it('emits automation.run.updated on start, park, and finalize; onRunFinalized fires only on finalize', async () => {
     const finalized: string[] = [];
     const definition: AutomationDefinition = {
