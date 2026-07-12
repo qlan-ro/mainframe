@@ -158,6 +158,16 @@ describe('useAutomationsStore', () => {
     expect(useAutomationsStore.getState().runs).toEqual([done]);
   });
 
+  it('addCredential dedupes by label; removeCredential drops it', () => {
+    useAutomationsStore.getState().addCredential('GitHub');
+    useAutomationsStore.getState().addCredential('GitHub');
+    expect(useAutomationsStore.getState().credentials).toEqual(['GitHub']);
+    useAutomationsStore.getState().addCredential('Notion');
+    expect(useAutomationsStore.getState().credentials).toEqual(['GitHub', 'Notion']);
+    useAutomationsStore.getState().removeCredential('GitHub');
+    expect(useAutomationsStore.getState().credentials).toEqual(['Notion']);
+  });
+
   it('addInteraction dedupes by id; resolveInteraction removes it', () => {
     const interaction = {
       id: 'i1',

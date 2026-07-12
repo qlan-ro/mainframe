@@ -34,6 +34,8 @@ interface AutomationsState {
   patchRun: (run: AutomationRunSummary) => void;
   addInteraction: (interaction: AutomationInteractionSummary) => void;
   resolveInteraction: (interactionId: string) => void;
+  addCredential: (label: string) => void;
+  removeCredential: (label: string) => void;
 }
 
 export const useAutomationsStore = create<AutomationsState>((set, get) => ({
@@ -93,6 +95,11 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
 
   resolveInteraction: (interactionId) =>
     set((s) => ({ interactions: s.interactions.filter((i) => i.id !== interactionId) })),
+
+  addCredential: (label) =>
+    set((s) => (s.credentials.includes(label) ? s : { credentials: [...s.credentials, label] })),
+
+  removeCredential: (label) => set((s) => ({ credentials: s.credentials.filter((c) => c !== label) })),
 }));
 
 export const selectPendingInteractionCount = (s: AutomationsState): number => s.interactions.length;
