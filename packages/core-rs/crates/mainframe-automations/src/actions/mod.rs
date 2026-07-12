@@ -4,6 +4,7 @@
 //! credential label, and hands this layer a JSON input object.
 
 pub mod files;
+pub mod github;
 pub mod http_action;
 pub mod manifest;
 mod paths;
@@ -29,6 +30,9 @@ use crate::tokens::TokenValue;
 /// no abort signal is threaded through.
 pub struct ActionCtx {
     pub creds: Option<Credentials>,
+    /// The label `creds` was resolved from (the step's `credential` field) —
+    /// connector auth failures name it so the fix is actionable (plan T7.1).
+    pub credential_label: Option<String>,
     /// `runId:stepRef` — passed through to actions that support idempotency
     /// keys (e.g. HTTP).
     pub idempotency_key: String,
@@ -55,6 +59,23 @@ pub trait Action: Send + Sync {
         params: &'a Value,
         ctx: &'a ActionCtx,
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>>;
+}
+
+const ERROR_BODY_SNIPPET_CHARS: usize = 500;
+
+/// Connector HTTP failure (Node's `<op> failed (<status>): <500-char body>`),
+/// plus the plan-T7.1 twist: an auth rejection names the credential label the
+/// step used so the failure is actionable from the run timeline.
+pub(crate) fn http_failure(op: &str, status: u16, ctx: &ActionCtx, body: &str) -> ActionError {
+    let snippet: String = body.chars().take(ERROR_BODY_SNIPPET_CHARS).collect();
+    if status == 401 || status == 403 {
+        let cred = match &ctx.credential_label {
+            Some(label) => format!("credential '{label}'"),
+            None => "no credential configured".to_string(),
+        };
+        return ActionError(format!("{op} failed ({status}, {cred}): {snippet}"));
+    }
+    ActionError(format!("{op} failed ({status}): {snippet}"))
 }
 
 /// Strict input parse — unknown fields rejected (zod `.strict()` parity),
@@ -87,8 +108,8 @@ pub(crate) fn expand_user_path(path: &str) -> PathBuf {
     }
 }
 
-/// Registers every launch built-in (Node actions/register-all.ts). Curated
-/// connectors (github/notion/ado) join in Phase 7; MCP stays a catalog seam.
+/// Registers every launch built-in (Node actions/register-all.ts). MCP stays
+/// a catalog seam (contract §9) — nothing registers an `mcp:*` action here.
 pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
     registry.register(Box::new(run_command::RunCommandAction))?;
     registry.register(Box::new(files::FilesAppendAction))?;
@@ -98,8 +119,26 @@ pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), Act
     Ok(())
 }
 
+/// Curated connectors (plan Phase 7).
+pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+    registry.register(Box::new(github::GithubCreatePrAction::new()))?;
+    registry.register(Box::new(github::GithubListPrsAction::new()))?;
+    Ok(())
+}
+
+/// The launch catalog: built-ins + curated connectors, in Node's
+/// register-all.ts order.
+pub fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+    register_builtin_actions(registry)?;
+    register_curated_actions(registry)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod files_tests;
+
+#[cfg(test)]
+mod github_tests;
 
 #[cfg(test)]
 mod http_tests;

@@ -11,6 +11,7 @@ use super::{Action, ActionCtx};
 fn ctx(project_root: &str) -> ActionCtx {
     ActionCtx {
         creds: None,
+        credential_label: None,
         idempotency_key: "run-1:step-1".to_string(),
         project_root: project_root.to_string(),
         worktree_path: None,

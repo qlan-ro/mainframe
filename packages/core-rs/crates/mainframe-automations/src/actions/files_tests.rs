@@ -12,6 +12,7 @@ use super::{Action, ActionCtx, expand_user_path};
 fn ctx() -> ActionCtx {
     ActionCtx {
         creds: None,
+        credential_label: None,
         idempotency_key: "run-1:step-1".to_string(),
         project_root: "/tmp".to_string(),
         worktree_path: None,
