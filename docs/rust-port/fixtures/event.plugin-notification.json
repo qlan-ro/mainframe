@@ -1,0 +1,16 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "plugin.notification",
+    "pluginId": "plugin_todos",
+    "title": "Todo added",
+    "body": "A new todo was created."
+  },
+  "full": {
+    "type": "plugin.notification",
+    "pluginId": "plugin_todos",
+    "title": "Todo added",
+    "body": "A new todo was created.",
+    "level": "info"
+  }
+}

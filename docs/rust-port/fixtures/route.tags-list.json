@@ -1,0 +1,6 @@
+{
+  "_provenance": "synthetic",
+  "_route": "GET /api/tags",
+  "success": true,
+  "data": ["bug", "flaky-test", "feature"]
+}

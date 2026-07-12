@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "//": "Canary overlay: bundles the ported Rust daemon alongside the Node sidecar. Apply with `cargo tauri build --config src-tauri/tauri.rust-canary.conf.json` (or `pnpm tauri:build:canary`). The base tauri.conf.json ships Node-only so a routine build never depends on the Rust workspace compiling; this overlay opts the Rust binary in (it must be staged first via `bundle:canary` → provision-rust-daemon). externalBin arrays REPLACE (not merge) under --config, so both entries are listed.",
+  "build": {
+    "beforeBuildCommand": "pnpm --filter @qlan-ro/mainframe-ui build && pnpm --filter @qlan-ro/mainframe-app-tauri bundle:canary"
+  },
+  "bundle": {
+    "externalBin": ["binaries/node", "binaries/mainframe-daemon"]
+  }
+}

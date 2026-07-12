@@ -1,0 +1,38 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "adapter.models.updated",
+    "adapterId": "claude",
+    "models": [
+      {
+        "id": "claude-sonnet-5",
+        "label": "Sonnet 5"
+      }
+    ],
+    "modelsRevision": 1
+  },
+  "full": {
+    "type": "adapter.models.updated",
+    "adapterId": "claude",
+    "models": [
+      {
+        "id": "claude-sonnet-5",
+        "label": "Sonnet 5"
+      },
+      {
+        "id": "claude-opus-4-8",
+        "label": "Opus 4.8",
+        "description": "Most capable Claude model",
+        "contextWindow": 200000,
+        "isDefault": true,
+        "supportedEfforts": ["low", "medium", "high", "max"],
+        "defaultEffort": "medium",
+        "supportsFast": true,
+        "supportsUltracode": true,
+        "supportsAdaptiveThinking": true,
+        "supportsPersonality": false
+      }
+    ],
+    "modelsRevision": 2
+  }
+}

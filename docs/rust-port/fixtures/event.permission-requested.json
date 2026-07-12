@@ -1,0 +1,44 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "permission.requested",
+    "chatId": "chat_9f2a3b1c",
+    "request": {
+      "requestId": "req_001",
+      "toolName": "Bash",
+      "toolUseId": "toolu_01A",
+      "input": {
+        "command": "rm -rf /tmp/scratch"
+      },
+      "suggestions": []
+    },
+    "notify": false
+  },
+  "full": {
+    "type": "permission.requested",
+    "chatId": "chat_9f2a3b1c",
+    "request": {
+      "requestId": "req_001",
+      "toolName": "Bash",
+      "toolUseId": "toolu_01A",
+      "input": {
+        "command": "rm -rf /tmp/scratch"
+      },
+      "suggestions": [
+        {
+          "type": "addRules",
+          "rules": [
+            {
+              "toolName": "Bash",
+              "ruleContent": "rm -rf /tmp/*"
+            }
+          ],
+          "behavior": "allow",
+          "destination": "session"
+        }
+      ],
+      "decisionReason": "Destructive command outside project root"
+    },
+    "notify": true
+  }
+}

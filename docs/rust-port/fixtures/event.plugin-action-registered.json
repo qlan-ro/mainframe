@@ -1,0 +1,18 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "plugin.action.registered",
+    "pluginId": "plugin_todos",
+    "actionId": "action_add",
+    "label": "Add todo",
+    "shortcut": "cmd+shift+t"
+  },
+  "full": {
+    "type": "plugin.action.registered",
+    "pluginId": "plugin_todos",
+    "actionId": "action_add",
+    "label": "Add todo",
+    "shortcut": "cmd+shift+t",
+    "icon": "plus"
+  }
+}

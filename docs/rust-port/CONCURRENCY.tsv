@@ -1,0 +1,175 @@
+# CONCURRENCY.tsv — pre-decided Rust ownership/lock class for every long-lived mutable field in the daemon.
+# Master plan §6.4. This is authoritative: port agents MUST use the `class` + `rust_type` here and never invent local locking.
+# The data table starts after the "## Lock ordering" preamble, at the `ts_file<TAB>field` header row. TAB-separated.
+#
+# Classes (plan §6.4):
+#   SINGLE_TASK — touched from exactly one spawned task (a session actor, a timer loop) → plain owned state in that task; no lock.
+#   SHARED_MAP  — concurrent map keyed by id, mutated/read from many tasks → Arc<DashMap<K,V>> (default) or Arc<Mutex<HashMap>>.
+#   PER_ENTITY  — per-chat mutable state (message list, permission FIFO, queued refs, plan-mode, inflight guards) → folded into
+#                 one ChatState behind ONE per-chat lock: Arc<Mutex<ChatState>>. The registry that holds them is SHARED_MAP.
+#   BROADCAST   — event fan-out (EventEmitter, per-connection sinks) → tokio::sync::broadcast::Sender / per-client mpsc.
+#   DB          — persisted behind the Db handle (single rusqlite conn, WAL, spawn_blocking). No in-memory lock; the Db owns it.
+#
+# Verification note: every class below was checked against the cited mutation sites (grepped + read), NOT inferred from names.
+#
+# =====================================================================================================================
+# ## Lock ordering
+# =====================================================================================================================
+#
+# The JS daemon is single-threaded: `activeChats`, `queuedRefs`, `MessageCache`, `PermissionManager`, and `EventHandler.displayCache`
+# are all mutated and read freely across route handlers, WS client-event handlers, session sinks, and timers with zero locking.
+# The Rust port INTRODUCES shared-state concurrency (axum request tasks, WS reader tasks, per-session child-stdout reader tasks,
+# and background timer tasks all touch this state). These rules make that safe. Break one and you get a deadlock or a race the
+# JS version never had.
+#
+# 1. ONE lock per chat, and it is a LEAF. Fold the five chatId-keyed maps (ActiveChat, queuedRefs, message list, pending-permission
+#    FIFO, interrupted flag, displayCache, plan-mode, inflight-load/start/interrupt guards, turnStartedAt) into a single
+#    `ChatState` guarded by `Arc<Mutex<ChatState>>`. Do NOT give each its own lock — the JS code mutates several together per event
+#    (see sendMessage / event-handler onResult), so separate locks would need multi-lock acquisition and could deadlock.
+#
+# 2. REGISTRY MAP BEFORE CHAT LOCK. `activeChats: Arc<DashMap<ChatId, Arc<Mutex<ChatState>>>>`. To touch a chat: look it up in the
+#    DashMap, CLONE the Arc<Mutex<ChatState>>, DROP the DashMap guard (end the `get`/entry borrow), THEN `.lock()` the chat.
+#    Never hold a DashMap shard guard while awaiting a chat lock — that pins a shard and deadlocks any other chat hashing to it.
+#
+# 3. NEVER HOLD THE CHAT LOCK ACROSS AN .await THAT EMITS EVENTS OR DOES SESSION I/O. This is the load-bearing rule. In TS,
+#    `emitEvent(...)` and `session.sendMessage(...)` sit inline between state mutations. In Rust: (a) mutate/snapshot ChatState
+#    under the guard, (b) DROP the guard, (c) then `emitEvent` (fans out to WS clients and can re-enter chat-manager) and `.await`
+#    session stdin/spawn/kill/interrupt (awaits a child process). Holding the lock across either re-enters or blocks the actor and
+#    deadlocks. The streaming hot path (message append + emitDisplay on every assistant block) MUST snapshot-under-lock then
+#    emit-after-drop, or every token serializes the whole chat.
+#
+# 4. SESSION I/O OUTSIDE THE CHAT LOCK. The AdapterSession handle is `Arc`. Clone it out of ChatState under the lock, drop the
+#    lock, then await session methods. Session-internal locks (control-channel `pending`, codex jsonrpc `pending`, approval
+#    `pending`) are LEAVES BELOW the session handle — only reached via the session Arc, never while holding the chat registry.
+#
+# 5. MANAGER SIBLINGS ARE INDEPENDENT LEAVES. BackgroundTaskTracker, LaunchRegistry/LaunchManager, TunnelManager, LspManager,
+#    PushService, FileWatcherService, AdapterRegistry, ExternalSessionService each own their own SHARED_MAP(s) and never nest with
+#    each other. If a code path needs both a chat lock and a sibling map, take the sibling map operation FIRST or (preferred) do it
+#    entirely outside the chat lock. Never acquire the chat lock while holding a sibling map guard.
+#
+# 6. GIT PROJECT-LOCK IS ORTHOGONAL. `project-lock` (per-project FIFO async mutex) is acquired only inside git write paths and is
+#    never nested with the chat lock (disjoint code). Keep it that way: do not call git-write under a chat lock, nor lock a chat
+#    while holding a project lock.
+#
+# 7. SET-BEFORE-EMIT ORDER IS PART OF THE CONTRACT. Where TS mutates a map then emits (AdapterRegistry.applyRefresh, tracker.end,
+#    launch status), mutate the shared state BEFORE emitting so a panicking/blocked subscriber can't leave the cache un-updated.
+#
+# 8. NO MODULE-LEVEL MUTABLE STATE. Every field that is a TS module-level `const map = new Map()` (git project-lock, auth pairing
+#    maps, external-session-cache, resolve-executable memo) becomes an injected `Arc<…>` owned by a struct. `lazy_static`/`static mut`
+#    are forbidden (plan §7.4).
+#
+# 9. INFLIGHT/SINGLE-FLIGHT GUARDS use a shared future, not a bare lock. loadingChats/startingChats/interruptingChats (chat),
+#    spawning (lsp), inFlight (adapter, workflow-run), aborts (workflow-run) dedupe concurrent callers onto ONE in-progress future.
+#    Model as `futures::future::Shared<BoxFuture>` stored in the entity/map, or a per-entity `tokio::sync::Notify`. Do not
+#    reimplement as a held Mutex across the whole operation (that serializes unrelated work and risks holding across await).
+#
+# =====================================================================================================================
+# DATA TABLE
+# =====================================================================================================================
+ts_file	field	mutation_sites	read_sites	class	rust_type
+# --- chat/ : the ChatManager state machine. The five chatId-keyed maps below FOLD INTO ONE ChatState per rule 1. ---
+chat/chat-manager.ts	activeChats	lifecycle-manager.ts:95, lifecycle-manager.ts:365 (set on create/load), lifecycle-manager.ts:266,299 (delete on archive/end), chat-manager.ts:510 (delete on project removal)	Read on nearly every ChatManager method + event-handler getActiveChat callback + idle-scanner + config/permission/plan-mode handlers	SHARED_MAP	Arc<DashMap<ChatId, Arc<Mutex<ChatState>>>>  (ActiveChat{chat,session,turnStartedAt} → ChatState; the map is the registry, values are PER_ENTITY)
+chat/chat-manager.ts	queuedRefs	chat-manager.ts:378 (set on send-while-busy), :399,:422,:432,:446 (delete on edit/cancel/processed/clearAll)	getQueuedForChat, editQueuedMessage, cancelQueuedMessage, event-handler onResult reconcile, websocket sendQueuedSnapshot	PER_ENTITY	fold into ChatState.queued_refs: HashMap<Uuid, QueuedMessageRef> (TS keys globally by uuid but always filters by chatId — make it per-chat)
+chat/message-cache.ts	cache	message-cache.ts:15,29 (set/append), :21 (delete), :47,:57 (removeById/moveToEnd splice)	get (getMessages, event-handler onResult/onExit/onQueuedProcessed, permission restore), display pipeline	PER_ENTITY	fold into ChatState.messages: Vec<ChatMessage> (cap 2000). NOTE: the cross-chat LRU evict (MAX_CHATS=50, message-cache.ts:33) is a registry op — evict the oldest DashMap entry under rule 2 (map-before-chat), never while a chat lock is held
+chat/permission-manager.ts	pendingPermissions	permission-manager.ts:29 (enqueue), :22,:37 (clear/shift delete), :75 (restorePendingPermission set)	getPending, hasPending, matchesPending (enrichChat displayStatus, permission-handler, plan-mode)	PER_ENTITY	fold into ChatState.pending_permissions: VecDeque<ControlRequest> (FIFO, front is active)
+chat/permission-manager.ts	interruptedChats	permission-manager.ts:23 (clear delete), :44 (markInterrupted add), :48 (clearInterrupted delete)	event-handler onResult (clearInterrupted → reason='interrupted')	PER_ENTITY	fold into ChatState.interrupted: bool
+chat/event-handler.ts	displayCache	display-emitter emitDisplayDelta (set per chat), event-handler.ts:109 clearDisplayCache (delete)	emitDisplayDelta diff base for every message.added/updated	PER_ENTITY	fold into ChatState.display_cache: Vec<DisplayMessage> (delta base; never shared cross-chat)
+chat/event-handler.ts	pushService	event-handler.ts:69 setPushService (set-once at boot)	onPermission notify, onResult notify	SINGLE_TASK	Arc<PushService> injected at ChatManager construction (drop the late-bind setter; resolve the boot ordering by constructing PushService first)
+chat/event-handler.ts	pendingFilePaths (sink closure)	event-handler.ts:163 set (onMessage), :206 delete (onToolResult)	onToolResult editedPaths lookup	SINGLE_TASK	local to the session sink → owned by that session's reader task (HashMap<String,String>), no lock
+chat/event-handler.ts	pendingSubagentIds (sink closure)	event-handler.ts:166 add, :209 delete	onToolResult subagentCompleted	SINGLE_TASK	local to the session sink → owned HashSet<String> in the session reader task
+chat/lifecycle-manager.ts	loadingChats	lifecycle-manager.ts:162 set, :166 delete (finally)	loadChat dedup, getMessages inflight await (chat-manager.ts:633)	PER_ENTITY	ChatState inflight guard: Shared<BoxFuture<()>> or per-chat tokio::sync::Mutex serializing load (rule 9)
+chat/lifecycle-manager.ts	startingChats	lifecycle-manager.ts:181 set, :185 delete (finally)	startChat dedup, config-manager startingChats inflight check	PER_ENTITY	ChatState inflight guard: Shared<BoxFuture<()>> (rule 9)
+chat/lifecycle-manager.ts	interruptingChats	lifecycle-manager.ts:200 set, :205,:213 delete (poll/timeout)	waitForInterrupt (sendMessage awaits before respawn, chat-manager.ts:267)	PER_ENTITY	ChatState.interrupting: Option<Shared<BoxFuture<()>>> — completes when child exits; sendMessage awaits it (rule 9). Replace the 50ms poll with the child's exit oneshot/Notify
+chat/idle-scanner.ts	timer	idle-scanner.ts:26 set (start), :36 clear (stop)	scan loop reads activeChats + session.lastActivityAt/isSpawned	SINGLE_TASK	one spawned tokio task on tokio::time::interval; store JoinHandle for shutdown; reads the activeChats SHARED_MAP
+chat/external-session-service.ts	scanIntervals	external-session-service.ts:131 set (startAutoScan), :139 delete (stopAutoScan)	startAutoScan/stopAutoScan/stopAll (routes + chat-manager project open/close)	SHARED_MAP	Arc<Mutex<HashMap<ProjectId, JoinHandle<()>>>> — each value is a spawned interval task; abort on stop
+chat/external-session-service.ts	lastCounts	external-session-service.ts:154 set (emitCount), :140 delete (stopAutoScan)	emitCount dedup (only emit when total changed)	SHARED_MAP	Arc<Mutex<HashMap<ProjectId, u64>>> (or fold alongside scanIntervals under one Mutex)
+# --- claude/codex sessions : per-session actors. Bulk parsing state is SINGLE_TASK; cross-task surfaces are called out. ---
+plugins/builtin/claude/session.ts	ClaudeSessionState.{buffer,lastAssistantUsage,activeTasks,pendingPrCreates,pendingPrMutations,toolUseRegistry,skillPathCache,taskV2Events}	Mutated only in the session's stdout NDJSON reader / event handlers (events.ts)	Read by the same reader task + tests	SINGLE_TASK	owned inside the session's reader task; no lock. NDJSON parse state never leaves the task
+plugins/builtin/claude/session.ts	ClaudeSessionState.{child,status,pid,lastActivityAt}	spawn() sets child/pid/status; stdin writes bump lastActivityAt; exit sets status	CROSS-TASK: idle-scanner reads lastActivityAt/isSpawned; routes read isSpawned; interrupt from routes	SINGLE_TASK	session actor owns them, but expose a shared read surface: Arc<{ status: AtomicU8, pid: AtomicU32, last_activity_ms: AtomicI64, spawned: AtomicBool }> for cross-task reads; child handle stays task-local (kill via a command channel to the actor)
+plugins/builtin/claude/session.ts	ClaudeSessionState.interruptTimer	session.ts:335 set (10s SIGINT fallback), cleared on close	interrupt path	SINGLE_TASK	tokio::time::sleep inside the session actor / a JoinHandle it owns
+plugins/builtin/claude/session-control.ts	ControlRequestChannel.pending	session-control.ts:46 set (sendAwaiting), :39/:65 delete (timeout/resolve), :73 clear (drainAllAsFailed)	events.ts routes control_response → resolve(); session close → drainAllAsFailed	SHARED_MAP	session-scoped Arc<Mutex<HashMap<RequestId, oneshot::Sender<Raw>>>> — leaf below the session handle (rule 4). Awaiters use oneshot + timeout
+plugins/builtin/claude/task-events.ts	ClaudeTaskEvents.metadata	task-events.ts:55 set (captureToolUse), :102 delete (consume)	handleTaskStarted consume	SINGLE_TASK	session-scoped, touched from the session reader task; HashMap owned there (eviction timer is a spawned sleep that deletes via the actor)
+plugins/builtin/claude/task-events.ts	ClaudeTaskEvents.evictionTimers	task-events.ts:61 set, :58/:106 delete	consume / eviction fire	SINGLE_TASK	HashMap<ToolUseId, JoinHandle> owned by the session; abort on consume
+plugins/builtin/claude/adapter.ts	ClaudeAdapter.sessions	adapter registers/removes ClaudeSession on spawn/exit	killAll() iterates to SIGTERM all	SHARED_MAP	Arc<Mutex<HashSet<Arc<ClaudeSession>>>> (or DashSet). Used only for shutdown killAll
+plugins/builtin/claude/adapter.ts	ClaudeAdapter.dynamicModels	adapter.ts:195 set (probeModels)	listModels	SINGLE_TASK	Arc<Mutex<Option<Vec<AdapterModel>>>> or ArcSwapOption; write-rare (probe), read on list. Mutate before any emit
+plugins/builtin/codex/session.ts	CodexSession.{client,approvalHandler,sink,state,pending*,codexProviderTuning,pid,status}	spawn/handshake set client+state.threadId; notifications mutate state.currentTurnId/Plan	CROSS-TASK: status/threadId read by routes + idle paths; rest touched by the session actor	SINGLE_TASK	session actor owns them; expose status/threadId via an Arc shared surface (AtomicU8 + Mutex<Option<String>>) like the claude session
+plugins/builtin/codex/jsonrpc.ts	JsonRpcClient.pending	jsonrpc.ts:108 set (request), :104 delete (timeout), rejectAllPending on close	stdout reader routes id→resolve; close rejects all	SHARED_MAP	session-scoped Arc<Mutex<HashMap<RequestId, PendingRequest>>>; leaf below the session handle
+plugins/builtin/codex/jsonrpc.ts	JsonRpcClient.nextId	jsonrpc.ts:98 increment	request id assignment	SINGLE_TASK	AtomicU64 (or inside the pending Mutex)
+plugins/builtin/codex/jsonrpc.ts	JsonRpcClient.buffer	handleStdout append/split	stdout parse	SINGLE_TASK	owned by the stdout reader task
+plugins/builtin/codex/jsonrpc.ts	JsonRpcClient.closed	jsonrpc.ts:129 set	request/notify/respond guards	SINGLE_TASK	AtomicBool
+plugins/builtin/codex/jsonrpc.ts	JsonRpcClient.closeListeners	set at construction; invoked on close (:87)	close fan-out	SINGLE_TASK	Vec<Box<dyn Fn>> set once; or a oneshot/broadcast for close
+plugins/builtin/codex/approval-handler.ts	ApprovalHandler.pending	approval-handler.ts:43 handleRequest set; resolve deletes	permission response resolve (from routes/WS)	SHARED_MAP	session-scoped Arc<Mutex<HashMap<String, PendingApproval>>>; leaf below the session handle
+plugins/builtin/codex/approval-handler.ts	ApprovalHandler.planContext	approval-handler.ts:49 setPlanContext	handleRequest gating	SINGLE_TASK	Arc<Mutex<PlanContext>> (session-scoped, tiny)
+plugins/builtin/codex/adapter.ts	CodexAdapter.sessions	register/remove on spawn/exit	killAll	SHARED_MAP	Arc<Mutex<HashSet<Arc<CodexSession>>>>
+plugins/builtin/codex/adapter.ts	CodexAdapter.cachedModels	set after first app-server list	resolution / composer toggles	SINGLE_TASK	Arc<Mutex<Option<Vec<AdapterModel>>>> / ArcSwapOption
+# --- background-tasks/ ---
+background-tasks/tracker.ts	byChat	tracker.ts:39,:59,:71 set (start/end/adopt), :103 delete (removeChat)	get, list, listAllRunning (liveness/kill sweeps, routes)	SHARED_MAP	Arc<DashMap<ChatId, DashMap<TaskId, BackgroundTask>>> (or Arc<Mutex<HashMap<ChatId,HashMap<TaskId,_>>>>). Written from session task-events + reconcile + routes
+background-tasks/tracker.ts	pidByChat	tracker.ts:109 setPid, :103 delete (removeChat)	getPid (kill path)	SHARED_MAP	Arc<DashMap<ChatId, HashMap<TaskId, u32>>>
+background-tasks/tracker.ts	emitter	.emit on start/end (:41,:60,:75)	.on subscribers (routes → WS bridge)	BROADCAST	tokio::sync::broadcast::Sender<TaskEvent> (started/ended)
+# --- plugins/ ---
+plugins/manager.ts	loaded	manager.ts:177,:223 set (loadBuiltin/loadPlugin), :237 clear (unloadAll)	getPlugin, getAll, listing routes	SHARED_MAP	Arc<DashMap<PluginId, LoadedPlugin>>; populated at boot, read-mostly. (Rust v1 is builtin-only per §5 — dynamic on-disk load path is dropped)
+plugins/manager.ts	panelEvents	manager.ts:98 set, :104,:106 delete, :239 clear	getRegisteredPanelEvents, listing route	SHARED_MAP	Arc<DashMap<PluginId, HashMap<PanelId, PanelRegisteredEvent>>>
+plugins/manager.ts	actionEvents	manager.ts:111,:118 set, :121 delete, :239 clear	getRegisteredActionEvents, listing route	SHARED_MAP	Arc<DashMap<PluginId, Vec<ActionRegisteredEvent>>>
+plugins/manager.ts	_require	construction only	loadPlugin dynamic require	SINGLE_TASK	N/A — dropped (builtin-only Rust v1, no dynamic JS require)
+plugins/db-context.ts	per-plugin Database	prepare/run per plugin	plugin queries	DB	one Arc<Db> per plugin (separate rusqlite conn, spawn_blocking) — same handle discipline as the main Db
+plugins/event-bus.ts	internalEmitter / daemonBus	on/emit	plugin event subscriptions	BROADCAST	tokio::sync::broadcast::Sender per bus; sanitized re-publish for public events
+# --- launch/ + tunnel/ ---
+launch/launch-registry.ts	managers	launch-registry.ts:22 set (getOrCreate), :29 clear (stopAll)	get/getOrCreate (routes, chat-manager stopLaunchProcesses)	SHARED_MAP	Arc<DashMap<String, Arc<LaunchManager>>> keyed by "projectId:path"
+launch/launch-manager.ts	processes	launch-manager.ts:138 set (start), :192,:227 delete (exit/error)	start guard, stop, stopAll, waitForPort	SHARED_MAP	Arc<DashMap<String, ManagedProcess>> per manager (name → child handle + status)
+launch/launch-process-state.ts	statuses	launch-process-state.ts:38,:42 set (reset/setStatus)	getStatus, getAllStatuses (status routes)	SHARED_MAP	Arc<Mutex<HashMap<String, LaunchProcessStatus>>> (durable, outlives the process entry)
+launch/launch-process-state.ts	outputBuffers	launch-process-state.ts:39,:61 set (reset/bufferOutput, cap 200)	getOutputBuffer (console pane replay)	SHARED_MAP	Arc<Mutex<HashMap<String, VecDeque<LaunchOutputEntry>>>>
+tunnel/tunnel-manager.ts	tunnels	tunnel-manager.ts:95 set (tryFinish), :163,:174 delete (exit/stop)	getUrl, verify, stop, stopAll	SHARED_MAP	Arc<DashMap<String, ManagedTunnel>> keyed by label
+tunnel/tunnel-manager.ts	verifiedAt	tunnel-manager.ts:207,:213 set (verify cache)	verify cache hit (30s TTL)	SHARED_MAP	Arc<DashMap<String, VerifyResult>>
+# --- lsp/ ---
+lsp/lsp-manager.ts	handles	lsp-manager.ts:97 set (doSpawn), :110,:176 delete (removeHandle/shutdown)	getOrSpawn, getActiveLanguages, getHandle, shutdownAll	SHARED_MAP	Arc<DashMap<String, LspServerHandle>> keyed by "projectId:language"
+lsp/lsp-manager.ts	spawning	lsp-manager.ts:55 set, :59 delete (finally)	getOrSpawn single-flight	SHARED_MAP	Arc<DashMap<String, Shared<BoxFuture<LspServerHandle>>>> (single-flight, rule 9)
+lsp/lsp-manager.ts	LspServerHandle.{client,idleTimer,cleanup,initializeResult}	set/cleared per connect/idle	getOrSpawn reconnect, idle shutdown	PER_ENTITY	fields of the per-handle struct (one connection proxy task owns them); idleTimer → JoinHandle
+lsp/lsp-registry.ts	configs	constructor only (lsp-registry.ts:54)	getConfig, resolveCommand, getAllLanguageIds	SINGLE_TASK	immutable after boot → Arc<HashMap<String, LspServerConfig>> (no lock; read-only)
+lsp/lsp-registry.ts	extensionMap	constructor only (:56)	getLanguageForExtension	SINGLE_TASK	immutable after boot → Arc<HashMap<String,String>>
+# --- adapters/ ---
+adapters/index.ts	adapters	index.ts:30 register (boot)	get, getAll, killAll	SHARED_MAP	Arc<DashMap<AdapterId, Arc<dyn Adapter>>>; write-once at boot, read-only after
+adapters/index.ts	snapshots	index.ts:52 seedStaticSnapshots, :152 applyRefresh set	getSnapshots, list (list route + WS connect replay)	SHARED_MAP	Arc<DashMap<AdapterId, AdapterInfo>>; mutate-before-emit (rule 7)
+adapters/index.ts	deps	index.ts:43 configureRefresh (set-once)	runRefresh	SINGLE_TASK	Arc<RefreshDeps> injected once; use OnceCell if truly late
+adapters/index.ts	refreshAllowed	index.ts:46 allowRefresh (set-once latch)	list, refreshAdapter gate	SINGLE_TASK	AtomicBool
+adapters/index.ts	inFlight	index.ts:91 set, :90 delete (finally)	refreshAdapter per-adapter single-flight	SHARED_MAP	Arc<DashMap<AdapterId, Shared<BoxFuture<()>>>> (rule 9)
+adapters/index.ts	succeeded	index.ts:130 add	refreshAdapter skip-if-succeeded latch	SHARED_MAP	Arc<DashSet<AdapterId>> (or Mutex<HashSet>)
+adapters/resolve-executable.ts	resolveMemo (module-level)	resolve-executable.ts:88 set, :93 clear	resolveAdapterExecutableCached (5s TTL memo, settings GET polling)	SHARED_MAP	inject Arc<Mutex<HashMap<AdapterId, (Instant, ResolvedExecutable)>>> — NO module global (rule 8)
+# --- push/ + files/ ---
+push/push-service.ts	devices	push-service.ts:26,:41 set (register/setConnected), :35 delete	sendPush (disconnected tokens), isDeviceConnected, hasRegisteredDevices	SHARED_MAP	Arc<DashMap<DeviceId, RegisteredDevice>>
+push/push-service.ts	desktopActive	push-service.ts:53,:60 set	sendPush suppression gate	SINGLE_TASK	AtomicBool
+push/push-service.ts	stalenessTimer	push-service.ts:59 set, :55,:68 clear	setDesktopActive replace / dispose	SINGLE_TASK	Arc<Mutex<Option<JoinHandle>>> — abort+replace on setDesktopActive (6min → flips desktopActive off)
+files/file-watcher.ts	watchers	file-watcher.ts:55 set (subscribe), :99 delete (cleanup)	subscribe refcount, scheduleEmit, unsubscribe, stopAll	SHARED_MAP	Arc<Mutex<HashMap<PathBuf, WatchEntry>>> (refCount + notify watcher + debounce JoinHandle). Use the `notify` crate; verify macOS event semantics vs fs.watch (plan risk table)
+files/file-watcher.ts	WatchEntry.{refCount,debounceTimer}	subscribe/unsubscribe mutate refCount; scheduleEmit sets debounceTimer	cleanup	PER_ENTITY	fields of WatchEntry inside the watchers map value; debounceTimer → JoinHandle abort+replace
+# --- server/ ---
+server/websocket.ts	clients	websocket.ts:109 set (connection), :141,:244 delete (close/shutdown)	broadcastEvent fan-out, handleClientEvent, sendQueuedSnapshot	SHARED_MAP	Arc<DashMap<ClientId, ClientHandle>> — key by clientId (not the socket); each ClientHandle holds an mpsc::Sender to that connection's write task (the BROADCAST sink)
+server/websocket.ts	ClientConnection.subscriptions	websocket.ts:196 add (subscribe), :208 delete (unsubscribe)	broadcastEvent per-chat gating	PER_ENTITY	per-connection HashSet<ChatId> inside ClientHandle (guard with the connection's own Mutex or an actor)
+server/ws-file-watch.ts	WsFileWatch.fileSubscriptions	ws-file-watch.ts:97 add (subscribe), :114,:124 delete (unsubscribe/all)	unsubscribeAll on close	PER_ENTITY	per-connection HashSet<PathBuf> inside ClientHandle
+server/ws-file-watch.ts	WsFileWatch.requestedToResolved	ws-file-watch.ts:101 set, :113,:123 delete/clear	unsubscribe composite-key → resolved lookup	PER_ENTITY	per-connection HashMap<String,String> inside ClientHandle
+server/routes/auth.ts	pendingPairings (module-level)	auth.ts:115 set, :47,:145,:153,:159 delete	pair-status / confirm handlers	SHARED_MAP	inject Arc<Mutex<HashMap<Code, PendingPairing>>> into the auth router state — NO module global (rule 8)
+server/routes/auth.ts	confirmRateLimit (module-level)	auth.ts:72 set	confirm rate-limit gate	SHARED_MAP	Arc<Mutex<HashMap<Ip, RateLimitEntry>>> (injected)
+server/routes/auth.ts	recentPairings (module-level)	auth.ts:169 set, :39 delete (TTL sweep)	pair-status recently-consumed lookup	SHARED_MAP	Arc<Mutex<HashMap<Code, RecentPairing>>> (injected)
+# --- workflows/ (ported LAST, self-contained) ---
+workflows/index.ts	eventBindings	index.ts:130,:138 rebuilt (armTriggers on rescan)	onDaemonEvent matchEventTriggers (every daemon event)	SHARED_MAP	Arc<RwLock<Vec<EventTriggerBinding>>> (or ArcSwap) — a shared Vec, rewritten on rescan, read on every event
+workflows/index.ts	sweepTimer	index.ts:107 set (start), :114 clear (stop)	30s sweep loop	SINGLE_TASK	one spawned tokio::time::interval task; JoinHandle for stop
+workflows/engine/engine.ts	inFlight	engine.ts:52 set, :51 delete (finally)	advance() per-run serialization (wake/boot/retry dedupe)	SHARED_MAP	Arc<DashMap<RunId, Shared<BoxFuture<()>>>> — one advance per run at a time (rule 9)
+workflows/engine/engine.ts	aborts	engine.ts:62 set, :87 delete, :92 read (cancel)	cancelRun → abort	SHARED_MAP	Arc<DashMap<RunId, tokio_util::sync::CancellationToken>>
+workflows/triggers/scheduler.ts	crons	scheduler.ts:37 set (arm), :44 delete (disarm)	sweep() looks up meta per due DB row	SHARED_MAP	Arc<Mutex<HashMap<String, CronMeta>>> keyed by "workflowId:index" (DB trigger_state is the durable source; this is the in-memory companion)
+workflows/connectors/registry.ts	connectors	registry.ts:9 register (boot)	resolve, catalog	SINGLE_TASK	immutable after boot → Arc<HashMap<String, Connector>> (read-only)
+workflows/agent-waits.ts	AgentWaitService.engine	bindEngine set-once	onChatFinished	SINGLE_TASK	Arc<WorkflowEngine> injected once (OnceCell); waits themselves live in workflows.db (DB)
+workflows/credentials.ts	FileCredentialStore.cache	set/delete (:25,:31) + lazy load (:42,:46,:52)	get (:21), labels (:36); resolved during step exec (workflows/index.ts:77)	SHARED_MAP	Arc<Mutex<HashMap<String, Credentials>>> (or the whole store behind Arc<Mutex>); lazy-load once under lock. Runs advance concurrently (engine.inFlight serializes only per-run), so concurrent get()/set() would race without it
+# --- db/ : all persisted rows are DB; the handle is shared. ---
+db/index.ts	DatabaseManager.db (+ 6 repositories)	all repository writes	all repository reads (every route/manager)	DB	Arc<Db> — single rusqlite Connection, WAL, foreign_keys ON; all queries via tokio::task::spawn_blocking. Repositories borrow the shared handle
+workflows/db.ts	WorkflowDb (run-store, interaction-store, trigger_state)	RunStore/InteractionStore/scheduler writes	engine advance, sweep, projection	DB	separate Arc<Db> for workflows.db (same handle discipline)
+# --- misc module-level caches ---
+plugins/builtin/claude/external-session-cache.ts	cache (module-level)	external-session-cache.ts:19 set, :23 clear	getCached (mtime+size validated), scanner	SHARED_MAP	inject Arc<Mutex<HashMap<SessionId, Entry>>> — process-lifetime cache, NO module global (rule 8)
+git/project-lock.ts	locks (module-level)	project-lock.ts:15 set (chain a new tail per acquire)	acquireProjectLock FIFO wait	SHARED_MAP	Arc<DashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>> — one async mutex per project path; orthogonal to the chat lock (rule 6)
+# PORT STATUS: analysis artifact for docs/plans/2026-07-02-daemon-rust-port.md §6.4 (no .ts ported)
+# confidence: high
+# todos: 0
+# notes: Classes verified against cited mutation sites (grep + read of each manager). The five chatId-keyed maps
+# notes: (activeChats value, queuedRefs, MessageCache.cache, pendingPermissions, interruptedChats, displayCache) are
+# notes: consolidated into ONE ChatState per rule 1 — a port agent must NOT give them separate per-field locks.
+# notes: Session-internal state is SINGLE_TASK (owned by each session's reader-actor task) EXCEPT the control/jsonrpc/approval
+# notes: `pending` maps and the status/threadId read surface, which are called out as leaf session-scoped shared state.
+# notes: Module-level TS singletons (git project-lock, auth pairing maps, external-session-cache, resolve-executable memo)
+# notes: become injected Arc<…> — lazy_static/static mut are forbidden (§7.4).

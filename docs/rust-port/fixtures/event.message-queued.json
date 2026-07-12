@@ -1,0 +1,26 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "message.queued",
+    "chatId": "chat_9f2a3b1c",
+    "ref": {
+      "messageId": "dmsg_0003",
+      "chatId": "chat_9f2a3b1c",
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "content": "Continue with the fix",
+      "timestamp": "2026-07-08T10:15:30.000Z"
+    }
+  },
+  "full": {
+    "type": "message.queued",
+    "chatId": "chat_9f2a3b1c",
+    "ref": {
+      "messageId": "dmsg_0003",
+      "chatId": "chat_9f2a3b1c",
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "content": "Continue with the fix",
+      "timestamp": "2026-07-08T10:15:30.000Z",
+      "attachmentIds": ["att_001", "att_002"]
+    }
+  }
+}

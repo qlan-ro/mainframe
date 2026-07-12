@@ -1,0 +1,12 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "error",
+    "error": "Adapter process exited unexpectedly"
+  },
+  "full": {
+    "type": "error",
+    "chatId": "chat_9f2a3b1c",
+    "error": "Adapter process exited unexpectedly (code 1)"
+  }
+}

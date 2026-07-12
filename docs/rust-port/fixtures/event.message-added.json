@@ -1,0 +1,71 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "message.added",
+    "chatId": "chat_9f2a3b1c",
+    "message": {
+      "id": "msg_0001",
+      "chatId": "chat_9f2a3b1c",
+      "type": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "What is 2 + 2?"
+        }
+      ],
+      "timestamp": "2026-07-08T10:15:30.000Z"
+    }
+  },
+  "full": {
+    "type": "message.added",
+    "chatId": "chat_9f2a3b1c",
+    "message": {
+      "id": "msg_0002",
+      "chatId": "chat_9f2a3b1c",
+      "type": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "The user wants a simple sum."
+        },
+        {
+          "type": "text",
+          "text": "2 + 2 is 4."
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_01A",
+          "name": "Bash",
+          "input": {
+            "command": "echo 4"
+          }
+        },
+        {
+          "type": "tool_result",
+          "toolUseId": "toolu_01A",
+          "content": "4\n",
+          "isError": false,
+          "structuredPatch": [
+            {
+              "oldStart": 1,
+              "oldLines": 1,
+              "newStart": 1,
+              "newLines": 1,
+              "lines": [" 4"]
+            }
+          ],
+          "originalFile": "a.txt",
+          "modifiedFile": "a.txt"
+        }
+      ],
+      "timestamp": "2026-07-08T10:16:12.500Z",
+      "metadata": {
+        "model": "claude-sonnet-5",
+        "usage": {
+          "input_tokens": 120,
+          "output_tokens": 40
+        }
+      }
+    }
+  }
+}

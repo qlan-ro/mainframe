@@ -1,0 +1,11 @@
+{
+  "_provenance": "synthetic",
+  "type": "workflow.step.updated",
+  "runId": "run_001",
+  "step": {
+    "stepPath": "root.build",
+    "stepId": "build",
+    "status": "succeeded",
+    "attempt": 1
+  }
+}

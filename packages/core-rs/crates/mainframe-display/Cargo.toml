@@ -1,0 +1,13 @@
+[package]
+name = "mainframe-display"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+mainframe-types = { workspace = true }
