@@ -8,9 +8,10 @@
  * their static `VERB_META` label as plain text — deliberate, contract-driven
  * deviation, not an oversight.
  *
- * The "Set up" disclosure is a placeholder pending Phase 4's `steps/*`
- * config panels (AgentConfig/AskMeConfig/ActionConfig/NotifyConfig) — this
- * phase only owns the disclosure chrome, not what's inside it.
+ * The "Set up" disclosure switches on `step.kind` to the matching Phase 4
+ * config panel (AgentConfig/AskMeConfig/ActionConfig/NotifyConfig), all
+ * keyed off this card's own `automations-step-config-<id>` testid as their
+ * prefix.
  */
 import { useState } from 'react';
 import { GripVertical, Sliders, Trash2, TriangleAlert } from 'lucide-react';
@@ -18,6 +19,10 @@ import { cn } from '@/lib/utils';
 import type { ActionCatalogEntry, AskMeStep, AutomationStep } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import type { ValidationIssue } from '../domain/validate';
+import { AgentConfig } from '../steps/AgentConfig';
+import { AskMeConfig } from '../steps/AskMeConfig';
+import { ActionConfig } from '../steps/ActionConfig';
+import { NotifyConfig } from '../steps/NotifyConfig';
 import { StepSummary, type LeafStep } from './StepSummary';
 import { VERB_META } from './verb-meta';
 
@@ -120,9 +125,40 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
       {open && (
         <div
           data-testid={`automations-step-config-${step.id}`}
-          className="border-t-[0.5px] border-border py-3 pl-[46px] pr-3 text-label text-muted-foreground"
+          className="border-t-[0.5px] border-border p-3 pl-[46px]"
         >
-          Step setup — coming in a later phase.
+          {step.kind === 'ask_agent' && (
+            <AgentConfig
+              step={step}
+              onChange={(next) => onChange(next)}
+              tokens={tokens}
+              testId={`automations-step-config-${step.id}`}
+            />
+          )}
+          {step.kind === 'ask_me' && (
+            <AskMeConfig
+              step={step}
+              onChange={(next) => onChange(next)}
+              testId={`automations-step-config-${step.id}`}
+            />
+          )}
+          {step.kind === 'run_action' && (
+            <ActionConfig
+              step={step}
+              onChange={(next) => onChange(next)}
+              tokens={tokens}
+              catalog={catalog}
+              testId={`automations-step-config-${step.id}`}
+            />
+          )}
+          {step.kind === 'notify' && (
+            <NotifyConfig
+              step={step}
+              onChange={(next) => onChange(next)}
+              tokens={tokens}
+              testId={`automations-step-config-${step.id}`}
+            />
+          )}
         </div>
       )}
     </div>
