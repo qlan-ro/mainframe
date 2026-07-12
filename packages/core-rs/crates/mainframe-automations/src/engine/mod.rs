@@ -10,10 +10,12 @@ pub(crate) mod blocks;
 pub(crate) mod checkpoint;
 mod deadline;
 pub(crate) mod expects;
+pub mod notify_verb;
 pub(crate) mod walk;
 
 pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
 pub use agent::AgentVerb;
+pub use notify_verb::NotifyVerb;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -119,6 +121,9 @@ mod linear_tests;
 
 #[cfg(test)]
 mod marker_tests;
+
+#[cfg(test)]
+mod notify_tests;
 
 #[cfg(test)]
 mod resume_tests;
