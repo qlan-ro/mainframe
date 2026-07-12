@@ -2,12 +2,15 @@
 //! contract (docs/plans/2026-07-12-automations-v2-contract.md §1).
 
 pub mod automation;
+pub(crate) mod catalog;
 pub mod condition;
 pub mod form;
+pub(crate) mod scope;
 pub mod step;
 pub mod template;
 pub mod token;
 pub mod trigger;
+pub mod validate;
 
 pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScope};
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
@@ -23,6 +26,7 @@ pub use trigger::{
     SchedulePattern, ScheduleTrigger, Trigger, WebhookPreset, WebhookTrigger, WeekdaysSchedule,
     WeeklySchedule,
 };
+pub use validate::{ValidationError, validate};
 
 /// `skip_serializing_if` helper for wire-optional booleans that default false
 /// (`keepGoing`, `required`).
@@ -32,6 +36,12 @@ pub(crate) fn is_false(value: &bool) -> bool {
 
 #[cfg(test)]
 mod serde_tests;
+
+#[cfg(test)]
+mod serde_trigger_tests;
+
+#[cfg(test)]
+mod validate_tests;
 
 /// T1.2 — the six canonical fixtures (contract §8, authored by Node Phase 0)
 /// must deserialize, and re-serialize to the exact same JSON. Rust loads them
