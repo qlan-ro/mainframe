@@ -6,9 +6,9 @@
 // credentials, the interpreter, the cron scheduler, and the interaction +
 // agent-wait services — then wires them into the four verb ports and the
 // daemon-event/sweep entry points packages/core/src/index.ts calls.
-// Trigger arming (schedule/event/webhook) lives in trigger-arming.ts.
+// Trigger arming (schedule/event/webhook) lives in trigger-arming.ts;
+// `automations` table CRUD lives in store/automation-store.ts.
 import { join } from 'node:path';
-import { nanoid } from 'nanoid';
 import type { Logger } from 'pino';
 import type {
   AutomationCreateInput,
@@ -19,6 +19,7 @@ import type {
 import { openAutomationDb, type AutomationDb } from './db.js';
 import { RunStore } from './store/run-store.js';
 import { InteractionStore } from './store/interaction-store.js';
+import { AutomationStore } from './store/automation-store.js';
 import type { AutomationRunRecord } from './store/types.js';
 import { AutomationInterpreter } from './engine/interpreter.js';
 import type { VerbPorts } from './engine/types.js';
@@ -42,7 +43,6 @@ import {
   eventDedupSource,
   extractAssistantText,
   summarizeRunResult,
-  type AutomationRow,
 } from './service-helpers.js';
 
 export class AutomationValidationError extends Error {
@@ -65,6 +65,7 @@ export class AutomationService {
   readonly db: AutomationDb;
   readonly store: RunStore;
   readonly interactions: InteractionStore;
+  readonly automations: AutomationStore;
   readonly interactionService: InteractionService;
   readonly agentWaits: AgentWaitService;
   readonly registry: ActionRegistry;
@@ -80,6 +81,7 @@ export class AutomationService {
     this.db = openAutomationDb(join(deps.dataDir, 'automations.db'));
     this.store = new RunStore(this.db);
     this.interactions = new InteractionStore(this.db, this.store);
+    this.automations = new AutomationStore(this.db);
     this.registry = new ActionRegistry();
     registerAllActions(this.registry);
     this.credentials = new FileCredentialStore(join(deps.dataDir, 'automation-credentials.json'), logger);
@@ -120,7 +122,7 @@ export class AutomationService {
       scheduler: this.scheduler,
       credentials: this.credentials,
       interpreter: this.interpreter,
-      getRow: (id) => this.getRow(id),
+      getRow: (id) => this.automations.get(id),
       logger,
     });
   }
@@ -146,8 +148,7 @@ export class AutomationService {
   }
 
   async start(): Promise<void> {
-    const rows = this.db.prepare(`SELECT * FROM automations WHERE enabled = 1`).all() as AutomationRow[];
-    this.triggers.armAll(rows);
+    this.triggers.armAll(this.automations.listEnabled());
     await reconcileAutomationsOnBoot(this.db, this.store, this.interpreter, this.deps.logger);
     this.sweepTimer = setInterval(() => this.sweep(Date.now()), 30_000);
     this.sweepTimer.unref();
@@ -194,81 +195,43 @@ export class AutomationService {
   }
 
   get(id: string): AutomationSummary | null {
-    const row = this.getRow(id);
-    return row ? rowToSummary(row) : null;
+    return this.automations.getSummary(id);
   }
 
   list(): AutomationSummary[] {
-    const rows = this.db.prepare(`SELECT * FROM automations ORDER BY created_at`).all() as AutomationRow[];
-    return rows.map(rowToSummary);
+    return this.automations.list();
   }
 
   /** Validates (schema + scopes), inserts, and arms the new automation's triggers. Throws AutomationValidationError on either failure. */
   create(input: AutomationCreateInput): AutomationSummary {
     const definition = this.validateDefinition(input.definition);
-    const id = nanoid();
-    const now = Date.now();
-    this.db
-      .prepare(
-        `INSERT INTO automations (id, name, description, scope, project_id, enabled, definition, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        input.name,
-        input.description ?? null,
-        input.scope,
-        input.projectId ?? null,
-        JSON.stringify(definition),
-        now,
-        now,
-      );
-
-    const row = this.getRow(id)!;
+    const row = this.automations.create(input, definition);
     this.triggers.arm(row);
     return rowToSummary(row);
   }
 
   /** Re-validates and re-arms — old triggers are disarmed first so a removed/changed trigger doesn't linger. */
   update(id: string, input: AutomationCreateInput): AutomationSummary {
-    if (!this.getRow(id)) throw new Error(`automation not found: ${id}`);
+    if (!this.automations.get(id)) throw new Error(`automation not found: ${id}`);
     const definition = this.validateDefinition(input.definition);
 
     this.triggers.disarm(id);
-    this.db
-      .prepare(
-        `UPDATE automations SET name = ?, description = ?, scope = ?, project_id = ?, definition = ?, updated_at = ? WHERE id = ?`,
-      )
-      .run(
-        input.name,
-        input.description ?? null,
-        input.scope,
-        input.projectId ?? null,
-        JSON.stringify(definition),
-        Date.now(),
-        id,
-      );
-
-    const row = this.getRow(id)!;
+    const row = this.automations.update(id, input, definition);
     if (row.enabled === 1) this.triggers.arm(row);
     return rowToSummary(row);
   }
 
   /** Contract Decision 11: disabling disarms triggers; manual runs stay allowed regardless of enabled. */
   setEnabled(id: string, enabled: boolean): AutomationSummary {
-    if (!this.getRow(id)) throw new Error(`automation not found: ${id}`);
-    this.db
-      .prepare(`UPDATE automations SET enabled = ?, updated_at = ? WHERE id = ?`)
-      .run(enabled ? 1 : 0, Date.now(), id);
-
-    const row = this.getRow(id)!;
+    if (!this.automations.get(id)) throw new Error(`automation not found: ${id}`);
+    const row = this.automations.setEnabled(id, enabled);
     if (enabled) this.triggers.arm(row);
     else this.triggers.disarm(id);
     return rowToSummary(row);
   }
 
   runManually(id: string): AutomationRunRecord {
-    const row = this.getRow(id);
+    const row = this.automations.get(id);
     if (!row) throw new Error(`automation not found: ${id}`);
     const definition = JSON.parse(row.definition) as AutomationDefinition;
     const run = this.interpreter.startRun(id, definition, { kind: 'manual' }, null);
@@ -290,15 +253,10 @@ export class AutomationService {
     return Object.fromEntries(this.registry.catalog().map((a) => [a.id, a.outputs.map((o) => o.name)]));
   }
 
-  private getRow(id: string): AutomationRow | null {
-    const row = this.db.prepare(`SELECT * FROM automations WHERE id = ?`).get(id) as AutomationRow | undefined;
-    return row ?? null;
-  }
-
   /** run_action's ActionCtx.projectRoot: the automation's own project if it has one, else the workspace's first project, else cwd. */
   private resolveProjectRoot(runId: string): string {
     const run = this.store.getRun(runId);
-    const row = run ? this.getRow(run.automationId) : null;
+    const row = run ? this.automations.get(run.automationId) : null;
     const projects = this.deps.listProjects();
     const project = row?.project_id ? projects.find((p) => p.id === row.project_id) : undefined;
     return project?.path ?? projects[0]?.path ?? process.cwd();
@@ -307,7 +265,7 @@ export class AutomationService {
   private emitCompletionEvent(runId: string): void {
     const run = this.store.getRun(runId);
     if (!run || (run.status !== 'succeeded' && run.status !== 'failed')) return;
-    const row = this.getRow(run.automationId);
+    const row = this.automations.get(run.automationId);
     this.deps.emitEvent({
       type: 'automation.completed',
       automationId: run.automationId,
