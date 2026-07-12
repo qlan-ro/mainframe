@@ -9,6 +9,7 @@ pub mod manifest;
 mod paths;
 pub mod registry;
 pub mod run_command;
+mod shell;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
