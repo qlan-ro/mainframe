@@ -7,6 +7,7 @@ import pino from 'pino';
 import type { AutomationDefinition, DaemonEvent, NotifyStep } from '@qlan-ro/mainframe-types';
 import { openAutomationDb, type AutomationDb } from '../../automations/db.js';
 import { RunStore } from '../../automations/store/run-store.js';
+import { InteractionStore } from '../../automations/store/interaction-store.js';
 import type { AutomationRunTriggerContext } from '../../automations/store/types.js';
 import { AutomationInterpreter } from '../../automations/engine/interpreter.js';
 import type { StepOutcome, VerbPorts } from '../../automations/engine/types.js';
@@ -42,6 +43,7 @@ describe('AutomationInterpreter — linear walk', () => {
   let dir: string;
   let db: AutomationDb;
   let store: RunStore;
+  let interactions: InteractionStore;
   let events: DaemonEvent[];
 
   beforeEach(() => {
@@ -49,6 +51,7 @@ describe('AutomationInterpreter — linear walk', () => {
     db = openAutomationDb(join(dir, 'automations.db'));
     seedAutomation(db, 'auto-1');
     store = new RunStore(db);
+    interactions = new InteractionStore(db, store);
     events = [];
   });
 
@@ -60,6 +63,7 @@ describe('AutomationInterpreter — linear walk', () => {
   function makeInterpreter(ports: VerbPorts, onRunFinalized?: (runId: string) => void) {
     return new AutomationInterpreter({
       store,
+      interactions,
       ports,
       emitEvent: (event) => events.push(event),
       logger: silentLogger,

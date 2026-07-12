@@ -7,6 +7,7 @@ import pino from 'pino';
 import type { AutomationDefinition, DaemonEvent, NotifyStep } from '@qlan-ro/mainframe-types';
 import { openAutomationDb, type AutomationDb } from '../../automations/db.js';
 import { RunStore } from '../../automations/store/run-store.js';
+import { InteractionStore } from '../../automations/store/interaction-store.js';
 import type { AutomationRunTriggerContext } from '../../automations/store/types.js';
 import { AutomationInterpreter } from '../../automations/engine/interpreter.js';
 import { MAX_REPEAT_ITEMS } from '../../automations/engine/walk.js';
@@ -42,6 +43,7 @@ describe('AutomationInterpreter — If/Repeat blocks', () => {
   let dir: string;
   let db: AutomationDb;
   let store: RunStore;
+  let interactions: InteractionStore;
   let events: DaemonEvent[];
 
   beforeEach(() => {
@@ -49,6 +51,7 @@ describe('AutomationInterpreter — If/Repeat blocks', () => {
     db = openAutomationDb(join(dir, 'automations.db'));
     seedAutomation(db, 'auto-1');
     store = new RunStore(db);
+    interactions = new InteractionStore(db, store);
     events = [];
   });
 
@@ -58,7 +61,13 @@ describe('AutomationInterpreter — If/Repeat blocks', () => {
   });
 
   function makeInterpreter(ports: VerbPorts) {
-    return new AutomationInterpreter({ store, ports, emitEvent: (event) => events.push(event), logger: silentLogger });
+    return new AutomationInterpreter({
+      store,
+      interactions,
+      ports,
+      emitEvent: (event) => events.push(event),
+      logger: silentLogger,
+    });
   }
 
   function trigger(payload: unknown): AutomationRunTriggerContext {
