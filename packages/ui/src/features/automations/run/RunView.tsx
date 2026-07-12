@@ -80,12 +80,18 @@ export function RunView() {
     [gateway],
   );
 
-  // Deliberately keyed on run?.id only, not `run`/`refetchTimeline` — refetch on run-identity
-  // change alone; polling/live timeline updates land in Phase 6.
+  // Phase 6 live wiring: keyed on run?.id AND run?.status (a primitive, not the whole `run`
+  // object) — a fresh id means "navigated to a different run" (refetch from empty); an
+  // unchanged id whose status changed means a live `automation.run.updated` WS event patched
+  // this same run (use-automation-events.ts → patchRun) while the view was open, so the
+  // timeline is stale and needs the same refetch. Status is the right granularity: every
+  // meaningful step transition ends in a run-level status change (running → waiting/succeeded/
+  // failed/cancelled), and keying on it (not `run` itself) avoids re-fetching on unrelated
+  // patches that don't change status.
   useEffect(() => {
     if (!run) return;
     void refetchTimeline(run.id);
-  }, [run?.id]);
+  }, [run?.id, run?.status]);
 
   async function handleRunAgain() {
     if (!run || starting) return;

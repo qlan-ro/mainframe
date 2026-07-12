@@ -123,6 +123,31 @@ describe('RunView — header', () => {
   });
 });
 
+describe('RunView — live updates', () => {
+  it('refetches the timeline when the open run is patched with a new status (e.g. a live automation.run.updated WS event)', async () => {
+    const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
+    render(<RunView />);
+    await screen.findByText('Ship work');
+    expect(getRunTimeline).toHaveBeenCalledTimes(1);
+
+    useAutomationsStore.getState().patchRun(run({ status: 'succeeded', finishedAt: Date.now() }));
+
+    await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not refetch the timeline on a re-render that leaves the run status unchanged', async () => {
+    const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
+    render(<RunView />);
+    await screen.findByText('Ship work');
+    expect(getRunTimeline).toHaveBeenCalledTimes(1);
+
+    useAutomationsStore.getState().patchRun(run({ status: 'running', finishedAt: null }));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(getRunTimeline).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('RunView — not found', () => {
   it('renders a not-found state instead of crashing when the run id is unknown', () => {
     useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], interactions: [], catalog: [] });
