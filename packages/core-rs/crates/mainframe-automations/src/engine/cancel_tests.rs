@@ -263,6 +263,72 @@ async fn a_commit_after_cancellation_is_rejected_and_never_clobbers_the_run() {
     assert!(notify_calls.lock().unwrap().is_empty());
 }
 
+/// A8 over the REAL agent flow (T4.3): cancelling a run parked on an
+/// AgentPort wait clears the registration, cancels the chat, and a
+/// completion that arrives afterwards cannot resurrect the run.
+#[tokio::test]
+async fn cancelled_run_plus_agent_port_completion_never_resurrects() {
+    use super::agent_test_support::agent_rig;
+    use crate::ports::AgentOutcome;
+
+    let notify_calls = Arc::new(Mutex::new(Vec::<String>::new()));
+    let notified = notify_calls.clone();
+    let rig = agent_rig(FakePorts {
+        notify: Box::new(move |step, _| {
+            notified.lock().unwrap().push(step.id.clone());
+            completed(empty_outputs())
+        }),
+        ..FakePorts::default()
+    })
+    .await;
+    let def = definition(vec![
+        ask_agent_step("agent-1", false),
+        notify_step("notify-1", vec![text("should never run")]),
+    ]);
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, def, manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+    assert_eq!(
+        rig.h.store.get_run(&run.id).await.unwrap().unwrap().status,
+        RunStatus::Waiting
+    );
+
+    rig.engine.cancel_run(&run.id).await.unwrap();
+
+    // The chat itself is told to stop (spawned, so poll briefly).
+    for _ in 0..200 {
+        if !rig.port.cancel_calls.lock().unwrap().is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    }
+    assert_eq!(
+        *rig.port.cancel_calls.lock().unwrap(),
+        vec!["chat-1".to_string()]
+    );
+
+    // The chat completes anyway: the wait is gone, so nothing settles.
+    rig.port.complete(
+        "chat-1",
+        Ok(AgentOutcome::Completed {
+            final_text: "too late".to_string(),
+        }),
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+    let finished = rig.h.store.get_run(&run.id).await.unwrap().unwrap();
+    assert_eq!(finished.status, RunStatus::Cancelled);
+    assert_eq!(
+        finished.checkpoint.steps["agent-1"].status,
+        StepStatus::Waiting
+    );
+    assert!(finished.checkpoint.steps["agent-1"].outputs.is_none());
+    assert!(notify_calls.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn a_late_agent_completion_cannot_resurrect_a_cancelled_run() {
     let h = harness().await;

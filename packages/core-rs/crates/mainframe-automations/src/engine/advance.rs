@@ -15,7 +15,7 @@ use crate::store::{RunRecord, RunStore, RunTriggerContext, StepStatus, TerminalS
 
 use super::checkpoint::fail_step_entry;
 use super::walk::{WalkCtx, walk_steps};
-use super::{VerbPorts, WalkResult};
+use super::{BoxFuture, RunAdvancer, VerbPorts, WalkResult};
 
 const RESTART_MID_ACTION_ERROR: &str = "engine restarted mid-action; effect unknown";
 
@@ -41,7 +41,7 @@ pub struct InterpreterDeps {
 }
 
 pub struct Interpreter {
-    deps: InterpreterDeps,
+    pub(crate) deps: InterpreterDeps,
     in_flight: StdMutex<HashMap<String, Arc<TokioMutex<()>>>>,
     cancels: StdMutex<HashMap<String, watch::Sender<bool>>>,
 }
@@ -225,7 +225,7 @@ impl Interpreter {
         }
     }
 
-    async fn finalize_and_emit(
+    pub(crate) async fn finalize_and_emit(
         &self,
         run_id: &str,
         status: TerminalStatus,
@@ -287,6 +287,23 @@ impl Interpreter {
         let (tx, rx) = watch::channel(false);
         lock_map(&self.cancels).insert(run_id.to_string(), tx);
         rx
+    }
+}
+
+impl RunAdvancer for Interpreter {
+    fn advance_run<'a>(&'a self, run_id: &'a str) -> BoxFuture<'a, Result<(), StoreError>> {
+        Box::pin(self.advance(run_id))
+    }
+
+    fn fail_run<'a>(
+        &'a self,
+        run_id: &'a str,
+        error: &'a str,
+    ) -> BoxFuture<'a, Result<(), StoreError>> {
+        Box::pin(async move {
+            self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error.to_string()))
+                .await
+        })
     }
 }
 

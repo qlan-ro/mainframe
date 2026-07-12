@@ -4,11 +4,15 @@
 //! testable with fakes; real verb impls land in Phases 5-7.
 
 pub mod advance;
+pub mod agent;
+mod agent_settle;
 pub(crate) mod blocks;
 pub(crate) mod checkpoint;
+mod deadline;
 pub(crate) mod walk;
 
 pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
+pub use agent::AgentVerb;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -16,6 +20,7 @@ use std::pin::Pin;
 use serde_json::{Map, Value};
 
 use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep};
+use crate::error::StoreError;
 use crate::tokens::Scope;
 
 /// Local dyn-future alias (the repo's `mainframe-adapter-api::BoxFuture`
@@ -49,6 +54,19 @@ pub struct VerbContext<'a> {
     pub scope: &'a Scope<'a>,
 }
 
+/// Late-bound advance handle (T4.3): the settle/respond paths re-enter the
+/// interpreter after an external completion, but the interpreter owns the
+/// VerbPorts that contain those verbs — a trait breaks the construction
+/// cycle. `fail_run` finalizes `failed` + emits (the no-keepGoing policy).
+pub trait RunAdvancer: Send + Sync {
+    fn advance_run<'a>(&'a self, run_id: &'a str) -> BoxFuture<'a, Result<(), StoreError>>;
+    fn fail_run<'a>(
+        &'a self,
+        run_id: &'a str,
+        error: &'a str,
+    ) -> BoxFuture<'a, Result<(), StoreError>>;
+}
+
 /// The four Do-verbs, injected (Node engine/types.ts `VerbPorts`). Dyn-safe
 /// via `BoxFuture` (native async-fn-in-trait is not object safe).
 pub trait VerbPorts: Send + Sync {
@@ -76,6 +94,12 @@ pub trait VerbPorts: Send + Sync {
 
 #[cfg(test)]
 mod test_support;
+
+#[cfg(test)]
+mod agent_test_support;
+
+#[cfg(test)]
+mod agent_tests;
 
 #[cfg(test)]
 mod blocks_if_tests;

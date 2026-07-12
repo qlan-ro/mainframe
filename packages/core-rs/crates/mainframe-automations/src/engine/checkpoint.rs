@@ -69,6 +69,37 @@ pub(crate) fn set_step(
     checkpoint.steps.insert(step_ref.to_string(), entry);
 }
 
+/// The walk's wait commit (T4.3): a verb may park AND settle its entry
+/// before the walk's own commit runs (a fast agent completion) — a terminal
+/// entry must not be re-parked, nor its wakeAt re-armed.
+pub(crate) fn park_step(
+    checkpoint: &mut AutomationCheckpoint,
+    step_ref: &str,
+    step_id: &str,
+    kind: &str,
+    wake_at: Option<i64>,
+) {
+    let settled = checkpoint.steps.get(step_ref).is_some_and(|entry| {
+        matches!(
+            entry.status,
+            StepStatus::Succeeded | StepStatus::Failed | StepStatus::Skipped
+        )
+    });
+    if settled {
+        return;
+    }
+    set_step(
+        checkpoint,
+        step_ref,
+        step_id,
+        kind,
+        StepStatus::Waiting,
+        None,
+        None,
+    );
+    checkpoint.wake_at = wake_at;
+}
+
 /// Fails an EXISTING entry in place (the stale-`running` restart policy) —
 /// unlike `set_step`, a missing entry is left missing.
 pub(crate) fn fail_step_entry(checkpoint: &mut AutomationCheckpoint, step_ref: &str, error: &str) {

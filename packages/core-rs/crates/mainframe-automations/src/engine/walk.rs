@@ -12,7 +12,7 @@ use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
 use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus};
 
-use super::checkpoint::{WalkFrame, build_scope, set_step};
+use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
 use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks};
 
 pub(crate) struct WalkCtx<'a> {
@@ -138,16 +138,7 @@ async fn run_leaf(
             let record = ctx
                 .store
                 .patch_checkpoint(ctx.run_id, move |cp| {
-                    set_step(
-                        cp,
-                        &step_ref_owned,
-                        &step_id,
-                        &kind,
-                        StepStatus::Waiting,
-                        None,
-                        None,
-                    );
-                    cp.wake_at = wake_at;
+                    park_step(cp, &step_ref_owned, &step_id, &kind, wake_at);
                 })
                 .await?;
             Ok(StepsResult {

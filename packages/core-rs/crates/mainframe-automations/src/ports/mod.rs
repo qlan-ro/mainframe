@@ -2,9 +2,13 @@
 //! these, so the engine crate never depends back on mainframe-server
 //! (locked decision: ports are traits, production impls live server-side).
 
+pub mod agent;
 pub mod clock;
 pub mod events;
 
+pub use agent::{
+    AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest, WorktreeRequest,
+};
 pub use clock::{Clock, SystemClock};
 pub use events::{AutomationEvent, EventSink, RunSummary, RunTriggerSummary, to_run_summary};
 
