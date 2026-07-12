@@ -95,6 +95,27 @@ describe('LibraryList', () => {
     expect(screen.getByTestId('automations-blank-build')).toBeInTheDocument();
   });
 
+  it('shows an error banner with retry above the rows when a fetch failed but automations exist', () => {
+    let retried = 0;
+    useAutomationsStore.setState({
+      definitions: [AUTOMATION_A],
+      runs: [],
+      error: 'run history unavailable',
+      loadAll: async () => {
+        retried += 1;
+      },
+    });
+    render(<LibraryList />);
+
+    // The library still renders its rows — the failure must not eat the list.
+    expect(screen.getByTestId(`automations-library-row-${AUTOMATION_A.id}`)).toBeInTheDocument();
+    const banner = screen.getByTestId('automations-library-error-banner');
+    expect(banner).toHaveTextContent('run history unavailable');
+
+    fireEvent.click(screen.getByTestId('automations-library-error-retry'));
+    expect(retried).toBe(1);
+  });
+
   it('"Build it" on the blank state opens the editor in "new" mode', () => {
     useAutomationsStore.setState({ definitions: [], runs: [] });
     render(<LibraryList />);

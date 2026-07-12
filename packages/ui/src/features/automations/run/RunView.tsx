@@ -15,7 +15,8 @@
  * themselves.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, Play, Square, Zap } from 'lucide-react';
+import { Ban, Check, ChevronLeft, Clock, Play, Square, TriangleAlert, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
@@ -26,6 +27,14 @@ import { useAutomationsStore } from '../data/use-automations-store';
 import { RUN_STATUS_DOT_CLASS, RUN_STATUS_LABEL } from '../library/LastRunPill';
 import { RunStepRow } from './RunStepRow';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
+
+/** ts153 WfRunView header pill shows the status glyph, not a dot (wf2-base WF2_RUN_STATUS icons); `cancelled` has no prototype entry — Ban is this port's addition. */
+const RUN_STATUS_PILL_ICON: Partial<Record<AutomationRunSummary['status'], LucideIcon>> = {
+  waiting: Clock,
+  succeeded: Check,
+  failed: TriangleAlert,
+  cancelled: Ban,
+};
 
 const TRIGGER_LABEL: Record<AutomationRunTriggerKind, string> = {
   schedule: 'Schedule',
@@ -163,6 +172,11 @@ export function RunView() {
               aria-hidden
               className="size-2 shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent"
             />
+          ) : RUN_STATUS_PILL_ICON[run.status] ? (
+            (() => {
+              const StatusIcon = RUN_STATUS_PILL_ICON[run.status] as LucideIcon;
+              return <StatusIcon size={12} aria-hidden />;
+            })()
           ) : (
             <span aria-hidden className={cn('size-1.5 rounded-full', RUN_STATUS_DOT_CLASS[run.status])} />
           )}

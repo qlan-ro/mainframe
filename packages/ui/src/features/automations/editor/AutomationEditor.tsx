@@ -175,7 +175,7 @@ export function AutomationEditor() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[620px] px-6 py-6">
+        <div className="mx-auto max-w-[620px] px-[24px] pt-[22px] pb-[32px]">
           <div className="mb-[24px] flex flex-col gap-[8px]">
             <input
               data-testid="automations-editor-name"

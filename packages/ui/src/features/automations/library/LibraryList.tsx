@@ -85,6 +85,23 @@ export function LibraryList(): React.ReactElement {
 
   return (
     <div data-testid="automations-library" className="flex h-full min-h-0 flex-col">
+      {error && (
+        <div
+          data-testid="automations-library-error-banner"
+          className="flex shrink-0 items-center gap-[8px] border-b border-destructive/30 bg-destructive/8 px-[16px] py-[8px]"
+        >
+          <TriangleAlert size={12} className="shrink-0 text-destructive" aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-caption text-foreground">{error}</span>
+          <button
+            type="button"
+            data-testid="automations-library-error-retry"
+            onClick={() => void loadAll()}
+            className="shrink-0 text-caption font-semibold text-destructive hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="flex shrink-0 items-center justify-end gap-[10px] border-b border-border px-[16px] py-[14px]">
         <button
           type="button"

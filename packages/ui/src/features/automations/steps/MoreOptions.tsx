@@ -26,7 +26,7 @@ export function MoreOptions({ children, testId, label = 'More options' }: MoreOp
         data-testid={testId}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1 text-caption font-medium text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-[5px] text-caption font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronRight size={10} className={cn('transition-transform', open && 'rotate-90')} aria-hidden />
         {label}

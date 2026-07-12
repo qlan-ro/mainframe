@@ -21,7 +21,7 @@ export function FieldRow({ label, top, children }: FieldRowProps) {
   return (
     <div className={cn('flex gap-2.5', top ? 'items-start' : 'items-center')}>
       <span
-        className={cn('w-[76px] shrink-0 text-right text-caption font-medium text-muted-foreground', top && 'pt-1')}
+        className={cn('w-[76px] shrink-0 text-right text-caption font-medium text-muted-foreground', top && 'pt-[7px]')}
       >
         {label}
       </span>

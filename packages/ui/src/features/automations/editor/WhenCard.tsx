@@ -91,7 +91,7 @@ export function WhenCard({ triggers, onChange }: WhenCardProps) {
                 onClick={() => add(option.kind)}
                 className="flex w-full items-start gap-2.5 rounded-md p-2 text-left hover:bg-accent"
               >
-                <span className="flex size-[24px] shrink-0 items-center justify-center rounded-md bg-mf-auto-kind-call/12">
+                <span className="flex size-[24px] shrink-0 items-center justify-center rounded-sm bg-mf-auto-kind-call/12">
                   <Icon size={12} className="text-mf-auto-kind-call" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
