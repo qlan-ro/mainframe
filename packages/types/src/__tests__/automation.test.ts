@@ -1,9 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   TOKEN_STEP_TRIGGER,
   TOKEN_STEP_BUILTIN,
   TOKEN_STEP_CURRENT,
   type AutomationDefinition,
+  type AutomationCreateInput,
+  type AutomationStep,
+  type AutomationTrigger,
 } from '../automation.js';
 
 describe('reserved TokenRef stepId constants', () => {
@@ -87,5 +93,88 @@ describe('AutomationDefinition compile-time shape', () => {
 
     expect(definition.triggers).toHaveLength(3);
     expect(definition.steps).toHaveLength(6);
+  });
+});
+
+// The zod schema (Task 4) doesn't exist yet, so these fixture checks are a
+// type-annotated cast (`AutomationCreateInput`) plus targeted runtime
+// spot-asserts — not a structural validator. Task 4 supersedes this with
+// real parsing.
+const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'automations');
+
+function loadFixture(name: string): AutomationCreateInput {
+  const raw = readFileSync(join(FIXTURES_DIR, `${name}.json`), 'utf8');
+  return JSON.parse(raw) as AutomationCreateInput;
+}
+
+const KNOWN_STEP_KINDS = new Set(['ask_agent', 'ask_me', 'run_action', 'notify', 'if', 'repeat']);
+const KNOWN_TRIGGER_KINDS = new Set(['schedule', 'event', 'webhook']);
+
+function assertKnownStepKinds(steps: AutomationStep[]): void {
+  for (const step of steps) {
+    expect(KNOWN_STEP_KINDS.has(step.kind)).toBe(true);
+    expect(step.id.length).toBeGreaterThan(0);
+    if (step.kind === 'if') {
+      assertKnownStepKinds(step.then);
+      assertKnownStepKinds(step.otherwise);
+    }
+    if (step.kind === 'repeat') {
+      assertKnownStepKinds(step.steps);
+    }
+  }
+}
+
+const FIXTURE_NAMES = [
+  'daily-health-log',
+  'daily-standup',
+  'pr-auto-review',
+  'morning-pr-sweep',
+  'ship-work',
+  'daily-feature-spike',
+] as const;
+
+describe('canonical automation fixtures (contract §8)', () => {
+  it.each(FIXTURE_NAMES)('%s has a well-formed triggers/steps shape', (name) => {
+    const fixture = loadFixture(name);
+    expect(fixture.name.length).toBeGreaterThan(0);
+    expect(['global', 'project']).toContain(fixture.scope);
+    expect(Array.isArray(fixture.definition.triggers)).toBe(true);
+    expect(fixture.definition.steps.length).toBeGreaterThan(0);
+    for (const trigger of fixture.definition.triggers as AutomationTrigger[]) {
+      expect(KNOWN_TRIGGER_KINDS.has(trigger.kind)).toBe(true);
+    }
+    assertKnownStepKinds(fixture.definition.steps);
+  });
+
+  it('ship-work is manual-only: empty triggers array, since "manual" is not a trigger kind', () => {
+    const fixture = loadFixture('ship-work');
+    expect(fixture.definition.triggers).toEqual([]);
+  });
+
+  it('daily-feature-spike alone carries all three amendments (A1 run_command chip, A2 expects, A3 is_one_of)', () => {
+    const fixture = loadFixture('daily-feature-spike');
+    const steps = fixture.definition.steps;
+
+    const askAgent = steps.find((step) => step.kind === 'ask_agent');
+    expect(askAgent?.kind).toBe('ask_agent');
+    if (askAgent?.kind === 'ask_agent') {
+      expect(askAgent.expects).toEqual([{ key: 'scope', type: 'choice', options: ['xs', 's', 'm'] }]);
+    }
+
+    const ifBlock = steps.find((step) => step.kind === 'if');
+    expect(ifBlock?.kind).toBe('if');
+    if (ifBlock?.kind === 'if') {
+      const hasIsOneOf = ifBlock.conditions.some(
+        (row) => row.comparator === 'is_one_of' && Array.isArray(row.value) && row.value.length > 0,
+      );
+      expect(hasIsOneOf).toBe(true);
+
+      const runCommandStep = ifBlock.then.find((step) => step.kind === 'run_action' && step.actionId === 'run_command');
+      expect(runCommandStep?.kind).toBe('run_action');
+      if (runCommandStep?.kind === 'run_action') {
+        const script = runCommandStep.params.script;
+        expect(script?.some((part) => typeof part === 'object' && 'token' in part)).toBe(true);
+      }
+    }
   });
 });

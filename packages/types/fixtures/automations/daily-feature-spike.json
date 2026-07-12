@@ -1,0 +1,76 @@
+{
+  "name": "Daily feature spike",
+  "description": "Weekday mornings: pick one xs/s feature, verify the scope, run a guarded build check, then plan and implement it.",
+  "scope": "global",
+  "definition": {
+    "triggers": [
+      {
+        "id": "trigger-weekdays-6",
+        "kind": "schedule",
+        "schedule": { "type": "weekdays", "at": "06:00" },
+        "onMissed": "run_once"
+      }
+    ],
+    "steps": [
+      {
+        "id": "pick-feature",
+        "kind": "ask_agent",
+        "prompt": [
+          "Read docs/ideas and recent commits. Pick ONE xs/s feature — if nothing qualifies, stop and say why. Plan, TDD-implement until green, push, then /ship-work."
+        ],
+        "worktree": {
+          "baseBranch": "main",
+          "branchName": ["feature-spike-", { "token": { "stepId": "builtin", "output": "today" } }]
+        },
+        "autoApprove": ["edits", "pnpm", "git"],
+        "timeoutMinutes": 240,
+        "expects": [{ "key": "scope", "type": "choice", "options": ["xs", "s", "m"] }]
+      },
+      {
+        "id": "if-in-scope",
+        "kind": "if",
+        "match": "all",
+        "conditions": [
+          { "token": { "stepId": "pick-feature", "output": "scope" }, "comparator": "is_one_of", "value": ["xs", "s"] }
+        ],
+        "then": [
+          {
+            "id": "verify-build",
+            "kind": "run_action",
+            "actionId": "run_command",
+            "params": {
+              "script": [
+                "echo \"Verifying feature scope: ",
+                { "token": { "stepId": "pick-feature", "output": "scope" } },
+                "\" && pnpm --filter @qlan-ro/mainframe-core build"
+              ],
+              "runIn": ["project root"]
+            },
+            "outputAs": "text"
+          },
+          {
+            "id": "notify-shipped",
+            "kind": "notify",
+            "message": [
+              "Feature spike shipped at scope ",
+              { "token": { "stepId": "pick-feature", "output": "scope" } },
+              "."
+            ]
+          }
+        ],
+        "otherwise": [
+          {
+            "id": "notify-skip",
+            "kind": "notify",
+            "message": [
+              "Skipped: scope ",
+              { "token": { "stepId": "pick-feature", "output": "scope" } },
+              " is not xs or s."
+            ],
+            "keepGoing": true
+          }
+        ]
+      }
+    ]
+  }
+}

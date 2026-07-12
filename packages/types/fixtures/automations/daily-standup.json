@@ -1,0 +1,27 @@
+{
+  "name": "Daily standup",
+  "description": "Every morning, ask the agent for pending work and notify when the day's plan is ready.",
+  "scope": "global",
+  "definition": {
+    "triggers": [
+      {
+        "id": "trigger-morning",
+        "kind": "schedule",
+        "schedule": { "type": "daily", "at": "08:00" },
+        "onMissed": "skip"
+      }
+    ],
+    "steps": [
+      {
+        "id": "ask-pending-work",
+        "kind": "ask_agent",
+        "prompt": ["/pending-work"]
+      },
+      {
+        "id": "notify-plan",
+        "kind": "notify",
+        "message": ["Your day plan is ready."]
+      }
+    ]
+  }
+}

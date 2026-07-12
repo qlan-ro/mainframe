@@ -1,0 +1,78 @@
+{
+  "name": "Daily health log",
+  "description": "Every evening, ask about mood, appetite, sleep, and symptoms, then log the answers to Notion and a local markdown file.",
+  "scope": "global",
+  "definition": {
+    "triggers": [
+      {
+        "id": "trigger-evening",
+        "kind": "schedule",
+        "schedule": { "type": "daily", "at": "21:00" },
+        "onMissed": "run_once"
+      }
+    ],
+    "steps": [
+      {
+        "id": "ask-health",
+        "kind": "ask_me",
+        "title": "Health check-in",
+        "fields": [
+          {
+            "key": "mood",
+            "type": "choice",
+            "label": "Mood",
+            "options": ["great", "good", "okay", "bad"],
+            "required": true
+          },
+          {
+            "key": "appetite",
+            "type": "choice",
+            "label": "Appetite",
+            "options": ["normal", "low", "none"],
+            "required": true
+          },
+          { "key": "sleep", "type": "number", "label": "Sleep (hours)", "required": true },
+          { "key": "symptoms", "type": "multi", "label": "Symptoms", "options": ["fever", "cough", "rash", "other"] },
+          {
+            "key": "symptomsOther",
+            "type": "text",
+            "label": "Other symptoms",
+            "showWhen": { "key": "symptoms", "equals": "other" }
+          }
+        ]
+      },
+      {
+        "id": "log-notion",
+        "kind": "run_action",
+        "actionId": "notion.add_row",
+        "params": {
+          "databaseId": ["Health Log"],
+          "Date": [{ "token": { "stepId": "builtin", "output": "today" } }],
+          "Mood": [{ "token": { "stepId": "ask-health", "output": "mood" } }],
+          "Sleep": [{ "token": { "stepId": "ask-health", "output": "sleep" } }],
+          "Symptoms": [{ "token": { "stepId": "ask-health", "output": "symptoms" } }]
+        }
+      },
+      {
+        "id": "log-file",
+        "kind": "run_action",
+        "actionId": "files.append",
+        "params": {
+          "path": ["~/notes/kid-health-log.md"],
+          "content": [
+            { "token": { "stepId": "builtin", "output": "today" } },
+            " — mood: ",
+            { "token": { "stepId": "ask-health", "output": "mood" } },
+            ", appetite: ",
+            { "token": { "stepId": "ask-health", "output": "appetite" } },
+            ", sleep: ",
+            { "token": { "stepId": "ask-health", "output": "sleep" } },
+            "h, symptoms: ",
+            { "token": { "stepId": "ask-health", "output": "symptoms" } },
+            "\n"
+          ]
+        }
+      }
+    ]
+  }
+}
