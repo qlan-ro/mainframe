@@ -1,10 +1,9 @@
 /**
  * AutomationsView — the shell: header + body switch (library | editor | run).
  * Phase 1 wires in `library/LibraryList`; Phase 3 lazy-loads `editor/
- * AutomationEditor` (this package's first `React.lazy` usage — verify Vite
- * chunking via `pnpm build`). `run/RunView` (Phase 5, lazy-loaded) and the
- * describe flow (Phase 5, behind `DESCRIBE_ENABLED`) still replace their
- * placeholder body below as they land.
+ * AutomationEditor`; Phase 5 lazy-loads `run/RunView`. The describe flow
+ * (Phase 5, behind `DESCRIBE_ENABLED`) still replaces its placeholder body
+ * below as it lands.
  */
 import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
@@ -14,6 +13,7 @@ import { useAutomationsStore, selectPendingInteractionCount } from './data/use-a
 import { LibraryList } from './library/LibraryList';
 
 const AutomationEditor = lazy(() => import('./editor/AutomationEditor').then((m) => ({ default: m.AutomationEditor })));
+const RunView = lazy(() => import('./run/RunView').then((m) => ({ default: m.RunView })));
 
 function SectionFallback(): React.ReactElement {
   return <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>;
@@ -50,11 +50,8 @@ export function AutomationsView(): React.ReactElement {
       <Suspense fallback={<SectionFallback />}>
         <div className="min-h-0 flex-1 overflow-hidden">
           {runId ? (
-            <div
-              data-testid="automations-section-run"
-              className="h-full overflow-y-auto p-4 text-body text-muted-foreground"
-            >
-              Run view — coming in a later phase.
+            <div data-testid="automations-section-run" className="h-full overflow-hidden">
+              <RunView />
             </div>
           ) : editorTarget ? (
             <div data-testid="automations-section-editor" className="h-full overflow-hidden">

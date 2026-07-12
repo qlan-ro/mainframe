@@ -48,9 +48,10 @@ it('shows the (lazy-loaded) editor section when an editor target is open', async
   expect(await screen.findByTestId('automations-section-editor')).toBeInTheDocument();
 });
 
-it('shows the run placeholder section when a run id is open, taking precedence over the editor', () => {
-  useAutomationsStore.setState({ definitions: [] });
+it('shows the (lazy-loaded) run section when a run id is open, taking precedence over the editor', async () => {
+  useAutomationsStore.setState({ definitions: [], runs: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
   render(<AutomationsView />);
-  expect(screen.getByTestId('automations-section-run')).toBeInTheDocument();
+  // RunView is React.lazy too — same Suspense-swap reasoning as the editor test above.
+  expect(await screen.findByTestId('automations-section-run')).toBeInTheDocument();
 });

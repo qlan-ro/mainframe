@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 import type { AutomationRunStatus, AutomationRunSummary } from '../contract';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 
-const STATUS_LABEL: Record<AutomationRunStatus, string> = {
+/** Exported so RunView's header status pill uses the exact same run-status vocabulary — one source of truth. */
+export const RUN_STATUS_LABEL: Record<AutomationRunStatus, string> = {
   running: 'Running',
   waiting: 'Waiting',
   succeeded: 'Succeeded',
@@ -18,7 +19,7 @@ const STATUS_LABEL: Record<AutomationRunStatus, string> = {
   cancelled: 'Cancelled',
 };
 
-const STATUS_DOT_CLASS: Record<AutomationRunStatus, string> = {
+export const RUN_STATUS_DOT_CLASS: Record<AutomationRunStatus, string> = {
   running: 'bg-primary',
   waiting: 'bg-mf-warning',
   succeeded: 'bg-mf-success',
@@ -56,9 +57,9 @@ export function LastRunPill({ automationId, run, onOpen }: LastRunPillProps): Re
           className="size-2 shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent"
         />
       ) : (
-        <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT_CLASS[run.status])} />
+        <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', RUN_STATUS_DOT_CLASS[run.status])} />
       )}
-      <span className="font-medium text-foreground">{STATUS_LABEL[run.status]}</span>
+      <span className="font-medium text-foreground">{RUN_STATUS_LABEL[run.status]}</span>
       <span className="text-muted-foreground">· {formatRelativeTime(run.startedAt, Date.now())}</span>
     </button>
   );
