@@ -46,7 +46,7 @@ function PillOption({
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        'h-7 rounded-full border-[0.5px] px-2.5 text-caption font-semibold',
+        'h-6 rounded-full border-[0.5px] px-2.5 text-caption font-medium',
         active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent',
       )}
     >
@@ -116,7 +116,7 @@ function FieldControl({
       type={field.type === 'number' ? 'number' : 'text'}
       value={typeof value === 'string' ? value : ''}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 w-full rounded-md border-[0.5px] border-input bg-card px-2.5 text-body text-foreground outline-none"
+      className="h-[30px] w-full rounded-md border-[0.5px] border-input bg-card px-2.5 text-body text-foreground outline-none"
     />
   );
 }

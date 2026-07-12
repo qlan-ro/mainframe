@@ -121,7 +121,7 @@ export function RunStepRow({
               aria-expanded={open}
               aria-label={open ? 'Hide details' : 'Show details'}
               onClick={() => setOpen((o) => !o)}
-              className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
+              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
             >
               {open ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
             </button>
