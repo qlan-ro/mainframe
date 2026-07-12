@@ -111,8 +111,11 @@ fn ask_me_step_uses_show_when_and_optional_required() {
     let Step::AskMe(ask) = step else {
         panic!("expected ask_me")
     };
-    assert!(ask.fields[0].required);
-    assert!(!ask.fields[1].required, "required defaults false");
+    assert_eq!(ask.fields[0].required, Some(true));
+    assert!(
+        ask.fields[1].required.is_none(),
+        "absent required stays absent (tri-state: absent still means required)"
+    );
     assert_eq!(ask.fields[1].show_when.as_ref().unwrap().equals, "bad");
     assert!(
         serde_json::from_value::<AutomationFormField>(json!({

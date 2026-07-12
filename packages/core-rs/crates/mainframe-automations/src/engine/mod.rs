@@ -94,7 +94,7 @@ pub trait VerbPorts: Send + Sync {
 }
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 mod agent_test_support;

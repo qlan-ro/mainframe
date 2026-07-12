@@ -189,6 +189,21 @@ impl AutomationCheckpoint {
             error: None,
         }
     }
+
+    /// Deduped chatIds off every ask_agent entry seen so far — notification
+    /// links (contract Decision 4: "chatIds from checkpoint agent steps").
+    pub fn agent_chat_ids(&self) -> Vec<String> {
+        let mut chat_ids = Vec::new();
+        for entry in self.steps.values() {
+            if entry.kind == "ask_agent"
+                && let Some(chat_id) = &entry.chat_id
+                && !chat_ids.contains(chat_id)
+            {
+                chat_ids.push(chat_id.clone());
+            }
+        }
+        chat_ids
+    }
 }
 
 /// A5 — a run whose checkpoint has ANY step `waiting` reports `waiting`

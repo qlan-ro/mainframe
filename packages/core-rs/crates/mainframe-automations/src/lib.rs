@@ -6,9 +6,13 @@
 pub mod domain;
 pub mod engine;
 pub mod error;
+pub mod interactions;
 pub mod ports;
 pub mod store;
 pub mod tokens;
+
+#[cfg(test)]
+mod interactions_tests;
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md), not a TS port
 // confidence: high

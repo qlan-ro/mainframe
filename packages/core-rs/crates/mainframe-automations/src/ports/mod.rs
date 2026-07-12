@@ -5,12 +5,17 @@
 pub mod agent;
 pub mod clock;
 pub mod events;
+pub mod notify;
 
 pub use agent::{
     AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest, WorktreeRequest,
 };
 pub use clock::{Clock, SystemClock};
-pub use events::{AutomationEvent, EventSink, RunSummary, RunTriggerSummary, to_run_summary};
+pub use events::{
+    AutomationEvent, EventSink, InteractionSummary, RunSummary, RunTriggerSummary,
+    to_interaction_summary, to_run_summary,
+};
+pub use notify::{Notification, NotificationLinks, Notifier, NotifyError};
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1-T4.1), not a TS port
 // confidence: high

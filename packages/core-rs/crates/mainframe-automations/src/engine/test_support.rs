@@ -43,8 +43,37 @@ impl CollectingSink {
             .lock()
             .unwrap()
             .iter()
-            .map(|e| match e {
-                AutomationEvent::RunUpdated { run } => run.clone(),
+            .filter_map(|e| match e {
+                AutomationEvent::RunUpdated { run } => Some(run.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn interaction_created(&self) -> Vec<crate::ports::InteractionSummary> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AutomationEvent::InteractionCreated { interaction } => Some(interaction.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// `(interactionId, runId)` pairs from `automation.interaction.resolved`.
+    pub fn interaction_resolved(&self) -> Vec<(String, String)> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AutomationEvent::InteractionResolved {
+                    interaction_id,
+                    run_id,
+                } => Some((interaction_id.clone(), run_id.clone())),
+                _ => None,
             })
             .collect()
     }

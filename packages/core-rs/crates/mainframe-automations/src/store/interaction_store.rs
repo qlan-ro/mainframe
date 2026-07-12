@@ -149,6 +149,23 @@ impl InteractionStore {
             })
             .await
     }
+
+    /// Cancels every pending interaction for a run. Normal run-cancel rides
+    /// `RunStore::finalize`'s single transaction — this standalone variant
+    /// is the ask_me verb's cleanup when its park loses the cancel race
+    /// (the interaction row was created after finalize already swept).
+    pub async fn cancel_pending_for_run(&self, run_id: &str) -> Result<Vec<String>, StoreError> {
+        let run_id = run_id.to_string();
+        self.db
+            .call(move |conn| {
+                let tx = conn.transaction()?;
+                let cancelled =
+                    super::run_rows::cancel_pending_interactions(&tx, &run_id, epoch_ms_now())?;
+                tx.commit()?;
+                Ok(cancelled)
+            })
+            .await
+    }
 }
 
 /// Mirrors Node's `applyAnswers` — the parked ask_me entry becomes

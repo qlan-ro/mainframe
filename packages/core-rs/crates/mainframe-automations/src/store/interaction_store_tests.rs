@@ -16,7 +16,7 @@ fn mood_field() -> AutomationFormField {
         field_type: FormFieldType::Text,
         label: Some("Mood".to_string()),
         options: None,
-        required: true,
+        required: Some(true),
         show_when: None,
     }
 }

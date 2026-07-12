@@ -5,11 +5,12 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::store::{RunRecord, RunStatus, RunTriggerKind};
+use crate::domain::AutomationFormField;
+use crate::store::{InteractionRecord, InteractionStatus, RunRecord, RunStatus, RunTriggerKind};
 
-/// Engine-side event union (grows with later phases: interaction created/
-/// resolved, notification, completed). Serde names are the §4 wire truth so
-/// the DaemonEvent mapping cannot drift silently.
+/// Engine-side event union (grows with later phases: notification rides the
+/// Notifier port, completed lands with chaining). Serde names are the §4
+/// wire truth so the DaemonEvent mapping cannot drift silently.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum AutomationEvent {
@@ -17,6 +18,13 @@ pub enum AutomationEvent {
     /// and finalize, so consecutive deterministic steps stream to the run view.
     #[serde(rename = "automation.run.updated")]
     RunUpdated { run: RunSummary },
+    #[serde(rename = "automation.interaction.created")]
+    InteractionCreated { interaction: InteractionSummary },
+    #[serde(rename = "automation.interaction.resolved", rename_all = "camelCase")]
+    InteractionResolved {
+        interaction_id: String,
+        run_id: String,
+    },
 }
 
 pub trait EventSink: Send + Sync {
@@ -43,6 +51,35 @@ pub struct RunTriggerSummary {
     pub kind: RunTriggerKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tokens: Option<Value>,
+}
+
+/// Wire projection of an interaction (Node `toInteractionSummary`, types
+/// `AutomationInteractionSummary`): `resolvedAt` is `number | null` there,
+/// so no omit-when-absent.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractionSummary {
+    pub id: String,
+    pub run_id: String,
+    pub step_ref: String,
+    pub title: String,
+    pub fields: Vec<AutomationFormField>,
+    pub status: InteractionStatus,
+    pub created_at: i64,
+    pub resolved_at: Option<i64>,
+}
+
+pub fn to_interaction_summary(record: &InteractionRecord) -> InteractionSummary {
+    InteractionSummary {
+        id: record.id.clone(),
+        run_id: record.run_id.clone(),
+        step_ref: record.step_ref.clone(),
+        title: record.title.clone(),
+        fields: record.fields.clone(),
+        status: record.status,
+        created_at: record.created_at,
+        resolved_at: record.resolved_at,
+    }
 }
 
 pub fn to_run_summary(run: &RunRecord) -> RunSummary {

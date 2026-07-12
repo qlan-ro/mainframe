@@ -29,7 +29,7 @@ pub use trigger::{
 pub use validate::{ValidationError, validate};
 
 /// `skip_serializing_if` helper for wire-optional booleans that default false
-/// (`keepGoing`, `required`).
+/// (`keepGoing`).
 pub(crate) fn is_false(value: &bool) -> bool {
     !*value
 }

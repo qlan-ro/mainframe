@@ -102,7 +102,7 @@ fn coerce_field(raw: &Value, field: &ExpectedOutput) -> Result<Value, String> {
 }
 
 /// JS `String(value)` for the scalar shapes a choice can arrive as.
-fn js_string(value: &Value) -> String {
+pub(crate) fn js_string(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
         Value::Number(n) => n

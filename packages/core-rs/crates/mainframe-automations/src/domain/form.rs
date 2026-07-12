@@ -2,8 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::is_false;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FormFieldType {
@@ -31,8 +29,10 @@ pub struct AutomationFormField {
     pub label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub required: bool,
+    /// Tri-state on purpose (Node `required !== false`): an ABSENT
+    /// `required` still means required — only an explicit `false` opts out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_when: Option<ShowWhen>,
 }
