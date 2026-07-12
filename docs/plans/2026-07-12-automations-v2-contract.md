@@ -229,12 +229,15 @@ serialized name must match this list):
 
 ## 9. Known deferrals & open decisions (not silently scoped out)
 
-- **MCP launch scope (DECISION NEEDED).** None of the six reference automations
-  uses an MCP action, yet both daemon plans build full discovery/client/catalog/
-  invocation in two languages. Recommendation: keep the action-registry seam and
-  the catalog entry shape, but **defer live MCP invocation to a post-launch
-  phase on the cutover-default engine only** (Node), behind a flag. Flagged for
-  the user; until decided, plans keep MCP but mark it deferrable.
+- **MCP launch scope (DECIDED 2026-07-12: defer to post-launch).** None of the
+  six reference automations uses an MCP action. Ratified scope: keep the
+  action-registry seam and the `ActionCatalogEntry` shape in all plans, but
+  **live MCP discovery/client/invocation is a post-launch phase, on the
+  cutover-default engine (Node) only, behind `AUTOMATIONS_MCP_ENABLED`
+  (default off)**. The launch action catalog returns no `mcp:*` entries until
+  the flag is enabled. Rust ships only the registry/catalog seam — no live MCP
+  crate at launch. The config-source and trust-boundary gaps below are prereqs
+  for enabling the flag, not launch blockers.
 - **MCP trust boundary.** MCP servers sourced from a project's `.mcp.json` let a
   malicious repo choose a subprocess the daemon spawns — same category as the
   open `docs/security/` criticals. Any live-MCP task requires a negative test

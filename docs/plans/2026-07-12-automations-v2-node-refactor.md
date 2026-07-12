@@ -4,9 +4,9 @@
 
 **Goal:** Replace the v1 YAML/JSONata workflow engine in the Node daemon with the Automations v2 model (spec: `docs/designs/2026-07-11-automations-v2-spec.md`): When-triggers + linear Do-steps, four verbs (ask_agent, ask_me, run_action, notify), two blocks (if, repeat), chip-token dataflow, GUI-owned storage — on the fixed shared contract so the parallel Rust plan implements the same types/REST/WS/SQLite surface.
 
-**Architecture:** Build v2 side-by-side in `packages/core/src/automations/` with new `/api/automations*` routes; v1 stays green through Phases 0–8; Phase 9 deletes v1 wholesale (core, routes, types, UI feature dir, e2e spec, deps). Adapted from v1: checkpointed run engine, sweep scheduler + missed-fire policy, interaction pause/resume, agent-session step, `FileCredentialStore`, WS `emitEvent` plumbing. Pre-release (2.0.0-rc.x): **no v1 back-compat, no run migration; a one-time v1-YAML import is explicitly CUT.**
+**Architecture:** Build v2 side-by-side in `packages/core/src/automations/` with new `/api/automations*` routes; v1 stays green through Phases 0–7; Phase 8 deletes v1 core + shared types. Live MCP is DEFERRED to a post-launch section (behind `AUTOMATIONS_MCP_ENABLED`, default off) — no launch phase depends on it. Adapted from v1: checkpointed run engine, sweep scheduler + missed-fire policy, interaction pause/resume, agent-session step, `FileCredentialStore`, WS `emitEvent` plumbing. Pre-release (2.0.0-rc.x): **no v1 back-compat, no run migration; a one-time v1-YAML import is explicitly CUT.**
 
-**Tech stack:** TypeScript strict/NodeNext, better-sqlite3, express + zod, cron-parser (internal only), `@modelcontextprotocol/sdk` (new dep), vitest.
+**Tech stack:** TypeScript strict/NodeNext, better-sqlite3, express + zod, cron-parser (internal only), vitest. (`@modelcontextprotocol/sdk` is added only in the post-launch MCP section, not at launch.)
 
 ## Global Constraints (CLAUDE.md)
 
@@ -39,7 +39,7 @@
 - [ ] Verify: `pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-types exec vitest run src/__tests__/automation.test.ts`. Commit.
 
 ### Task 2: DaemonEvent additions
-**Files:** Modify `packages/types/src/events.ts` (append after L97, keep `workflow.*` L89-97 untouched until Phase 9).
+**Files:** Modify `packages/types/src/events.ts` (append after L97, keep `workflow.*` L89-97 untouched until Phase 8).
 - [ ] Add: `automation.run.updated {run: AutomationRunSummary}`, `automation.interaction.created {interaction}`, `automation.interaction.resolved {interactionId, runId}`, `automation.completed {automationId, automationName, runId, status:'succeeded'|'failed', result: string}` (one event serves both chaining triggers; `result` = final ⟨its result⟩ token), `automation.notification {runId, automationId, title, body, links:{runId, chatIds: string[]}}`.
 - [ ] Verify: types build + core `tsc --noEmit` (v1 untouched). Commit.
 
@@ -96,6 +96,7 @@
 
 ### Task 11: Registry + catalog
 **Files:** Create `automations/actions/types.ts` (`ActionDef {id, title, group, auth, input: ZodType, outputs, run(ctx, input)}`; `ActionCtx` ports v1 `connectors/types.ts:13` — creds, idempotencyKey, signal, logger, resolvePath), `automations/actions/registry.ts` (flat-id `register/resolve/catalog()` → `ActionCatalogEntry[]` via `z.toJSONSchema`); Test `__tests__/automations/action-registry.test.ts`.
+- [ ] The registry carries the `group:'mcp'` seam but registers NO MCP actions at launch: `GET /api/automation-actions` returns `mcp:*` entries only when `AUTOMATIONS_MCP_ENABLED` is on (default off). At launch the catalog is builtins + curated connectors only. Live MCP is the post-launch section below; nothing in P0–P9 depends on an MCP client.
 - [ ] Verify + commit.
 
 ### Task 12: run_command (A1 — chips never touch shell source)
@@ -116,21 +117,7 @@
 **Files:** Create `automations/actions/github.ts` (`github.create_pr`: repo, title ChipText, body ChipText, head, base → outputs **`prUrl` (text), `prNumber` (number)**; `github.list_prs`: author=@me → output **`prs` (list)** with item fields `url,title,number,author`; fetch api.github.com, Bearer token cred), `automations/actions/notion.ts` (`notion.add_row`: databaseId + properties record → **`pageUrl` (text)**; POST /v1/pages), `automations/actions/ado.ts` (`ado.create_item`: org, project, type, title, description → **`workItemId` (number), `url` (text)**; PAT basic auth, JSON-patch body); Test `__tests__/automations/curated-actions.test.ts` with mocked `fetch` (assert request shape + camelCase output names + HTTP error → failed outcome).
 - [ ] Verify + commit.
 
-## Phase 4 — MCP direct tool calls
-
-> **Deferrable (contract §9):** none of the six reference automations uses an MCP action. Keep the action-registry seam and the `ActionCatalogEntry` shape, but gate live discovery/invocation behind a flag (`AUTOMATIONS_MCP_ENABLED`, default false) — off, the catalog omits MCP entries and no server is spawned. MCP servers from a project `.mcp.json` are an untrusted-subprocess boundary (same category as the open `docs/security/` criticals); a live-MCP launch requires the Task 17 negative test plus an allowlist/confirmation gate before the flag defaults on. This phase may ship after cutover.
-
-### Task 16: Server discovery
-**Files:** Modify `packages/core/package.json` (add `@modelcontextprotocol/sdk`); Create `automations/actions/mcp/config.ts`; Test `__tests__/automations/mcp-config.test.ts` with tmp-dir fixture files.
-- [ ] Tests: merges `<project>/.mcp.json` + `~/.claude.json` `mcpServers` (project wins on name clash); keeps only stdio entries (`command` present); malformed file → logged skip, never throws.
-- [ ] Verify + commit.
-
-### Task 17: Client + catalog + invocation
-**Files:** Create `automations/actions/mcp/client.ts` (stdio `Client` per server: `listTools()` with 10s timeout + 5min cache, `callTool(name, args)` with 60s timeout, idle shutdown), `automations/actions/mcp/catalog.ts` (tools → `ActionCatalogEntry` id `mcp:<server>:<tool>`, `paramsSchema` = tool inputSchema passthrough, single output `result` text); Test `__tests__/automations/mcp-client.test.ts` against a fixture Node script speaking MCP stdio (echo tool).
-- [ ] Tests: catalog lists fixture tool; invocation substitutes ChipText params then calls; unreachable server → catalog skip + runtime failed outcome.
-- [ ] Verify + commit.
-
-## Phase 5 — Interactive verbs
+## Phase 4 — Interactive verbs
 
 ### Task 18: ask_me
 **Files:** Create `automations/verbs/ask-me.ts` (executor: create interaction w/ rendered title, emit `automation.interaction.created`, return wait; `InteractionService.respond`: validate against fields incl. `showWhen` — port `validateForm` from v1 `interactions.ts:9` — then claim + write field outputs into checkpoint via `store.resolveInOneTx` (ONE transaction, Task 3), emit resolved, advance) ; Test `__tests__/automations/ask-me.test.ts`.
@@ -154,7 +141,7 @@
 - [ ] Tests: emits `automation.notification` with rendered message + links (runId, chatIds collected from checkpoint agent steps); calls `PushService.sendPush({title: automation name, body, data:{runId}, priority:'default'})` when port provided; push failure logs, never fails the step.
 - [ ] Verify + commit.
 
-## Phase 6 — Triggers, service, wiring
+## Phase 5 — Triggers, service, wiring
 
 ### Task 21: Schedule compile + scheduler
 **Files:** Create `automations/triggers/schedule.ts` (`compileSchedule(pattern): cron string` — daily→`M H * * *`, weekdays→`M H * * 1-5`, weekly→day list, every_n_hours→`0 */n * * *` where **n must divide 24** — the picker offers only divisors of 24, since `0 */5 * * *` resets at midnight; reject non-divisors at schema/validate), `automations/triggers/scheduler.ts` (adapt v1 `CronScheduler` to `trigger_state(automation_id, trigger_id)`, **local tz** — drop `tz:'UTC'` from `nextAfter`; each fire computes `scheduledFor` and passes `trigger_dedup_key=<triggerId>|<scheduledFor>` to `createRun`, so a duplicate sweep loses the insert race on the §3 unique index rather than double-scheduling); Tests `__tests__/automations/schedule-compile.test.ts`, `scheduler.test.ts` (missed+`skip` drops, missed+`run_once` fires exactly once — port v1 `triggers.test.ts` cases; a double-fire with the same `scheduledFor` inserts ONE run).
@@ -165,21 +152,21 @@
 - [ ] Verify + commit.
 
 ### Task 23: AutomationService + reconciler + daemon wiring
-**Files:** Create `automations/service.ts` (mirror `workflows/index.ts` shape: owns db/stores/registry(+builtins+curated+MCP catalog)/credentials/interpreter/scheduler/interaction+wait services; builds the real `runAction` VerbPort — renders each ChipText param to a string EXCEPT `run_command`, which receives raw chips so Task 12's A1 env-injection applies; CRUD `create/update` runs `AutomationDefinitionSchema` + `validateScopes` and re-arms triggers; arming a webhook trigger generates + stores its `webhook:<hookId>` secret; `setEnabled` arms/disarms; `runManually` (empty `trigger_dedup_key` — every manual run is distinct); `onDaemonEvent` (event/chaining runs pass a dedup key so a re-emitted event does not double-fire); 30s sweep — scheduler + wakeAt deadlines; `emitCompletionEvent` → `automation.completed` for BOTH succeeded and failed), `automations/reconciler.ts` (port v1 `reconciler.ts`: re-advance `running`; waiting agent steps without `agent_waits` row → failed + advance — v2 has no `ambiguous` status, keepGoing decides); Modify `packages/core/src/index.ts` (construct `AutomationService` beside `WorkflowService` L114-120, add to `broadcastEvent` closure L196-199, `start()` after L203, `stop()` at shutdown); Tests `__tests__/automations/service.test.ts`, `reconciler.test.ts`.
+**Files:** Create `automations/service.ts` (mirror `workflows/index.ts` shape: owns db/stores/registry(+builtins+curated; MCP catalog only when `AUTOMATIONS_MCP_ENABLED`)/credentials/interpreter/scheduler/interaction+wait services; builds the real `runAction` VerbPort — renders each ChipText param to a string EXCEPT `run_command`, which receives raw chips so Task 12's A1 env-injection applies; CRUD `create/update` runs `AutomationDefinitionSchema` + `validateScopes` and re-arms triggers; arming a webhook trigger generates + stores its `webhook:<hookId>` secret; `setEnabled` arms/disarms; `runManually` (empty `trigger_dedup_key` — every manual run is distinct); `onDaemonEvent` (event/chaining runs pass a dedup key so a re-emitted event does not double-fire); 30s sweep — scheduler + wakeAt deadlines; `emitCompletionEvent` → `automation.completed` for BOTH succeeded and failed), `automations/reconciler.ts` (port v1 `reconciler.ts`: re-advance `running`; waiting agent steps without `agent_waits` row → failed + advance — v2 has no `ambiguous` status, keepGoing decides); Modify `packages/core/src/index.ts` (construct `AutomationService` beside `WorkflowService` L114-120, add to `broadcastEvent` closure L196-199, `start()` after L203, `stop()` at shutdown); Tests `__tests__/automations/service.test.ts`, `reconciler.test.ts`.
 - [ ] Tests: create→invalid definition rejected with scope errors; schedule fire starts run; chaining automation.completed triggers dependent automation; boot reconcile resumes.
 - [ ] Verify + commit. Daemon boots with both engines: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/automations/ src/__tests__/workflows/` both green.
 
-## Phase 7 — Routes + WS
+## Phase 6 — Routes + WS
 
 ### Task 24: CRUD + runs routes
 **Files:** Create `packages/core/src/server/routes/automations.ts` (`GET/POST /api/automations`, `GET/PUT/DELETE /api/automations/:id`, `POST /:id/runs` (202), `GET /:id/runs`, `GET /api/automation-runs/:id` → `{run, timeline}` (timeline projected from checkpoint + definition, output previews display-truncated at 32KB like v1 `workflows.ts:20`), `POST /api/automation-runs/:id/cancel`; bodies validated with `AutomationDefinitionSchema` + name/scope zod; scope validation errors → 400 `{errors}`); Modify `server/routes/types.ts` (add `automations?: AutomationService`), `server/http.ts` (thread + `app.use(automationRoutes(ctx))`), `server/routes/index.ts` (export); Test `server/routes/__tests__/automations-routes.test.ts` (mirror v1 `routes.test.ts` harness).
 - [ ] Verify + commit.
 
 ### Task 25: Admin + webhook routes
-**Files:** Create `server/routes/automation-admin.ts` (`GET /api/automation-interactions`, `POST /api/automation-interactions/:id/respond` (409 on already-answered), `GET /api/automation-actions` (catalog incl. MCP; MCP discovery failures degrade to builtins+curated), credentials per Decision 6 with `^[a-zA-Z0-9_-]+$` label), `server/routes/automation-webhook.ts` (`POST /api/automation-webhooks/:hookId`, on the RAW body: lookup trigger by hookId → 404 unknown; load secret from credential label `webhook:<hookId>` and `verifySignature` → 401 bad signature; **evaluate the preset's `matchPreset` predicate → 204 + no run on non-match** (a `pull_request` sync/label edit must NOT fire PR-opened); dedup on delivery id via the §3 unique index → 200 no-op on replay; else capture sample + start run with payload tokens); Modify `server/middleware/auth.ts` (near L25: `req.path.startsWith('/api/automation-webhooks/') → next()` BEFORE the Bearer check); Tests `automation-admin-routes.test.ts`, `automation-webhook-route.test.ts` (valid `sha256=` sig w/o Bearer token → run started; invalid sig → 401; preset non-match → 204 no run; duplicate delivery id → single run; **negative auth test: `GET /api/automations` and another non-webhook route WITHOUT a token still return 401** — the exemption is webhook-path-only and must not regress the WS `X-Forwarded-For` finding).
+**Files:** Create `server/routes/automation-admin.ts` (`GET /api/automation-interactions`, `POST /api/automation-interactions/:id/respond` (409 on already-answered), `GET /api/automation-actions` (catalog = builtins + curated connectors; NO `mcp:*` entries unless `AUTOMATIONS_MCP_ENABLED` is on), credentials per Decision 6 with `^[a-zA-Z0-9_-]+$` label), `server/routes/automation-webhook.ts` (`POST /api/automation-webhooks/:hookId`, on the RAW body: lookup trigger by hookId → 404 unknown; load secret from credential label `webhook:<hookId>` and `verifySignature` → 401 bad signature; **evaluate the preset's `matchPreset` predicate → 204 + no run on non-match** (a `pull_request` sync/label edit must NOT fire PR-opened); dedup on delivery id via the §3 unique index → 200 no-op on replay; else capture sample + start run with payload tokens); Modify `server/middleware/auth.ts` (near L25: `req.path.startsWith('/api/automation-webhooks/') → next()` BEFORE the Bearer check); Tests `automation-admin-routes.test.ts`, `automation-webhook-route.test.ts` (valid `sha256=` sig w/o Bearer token → run started; invalid sig → 401; preset non-match → 204 no run; duplicate delivery id → single run; **negative auth test: `GET /api/automations` and another non-webhook route WITHOUT a token still return 401** — the exemption is webhook-path-only and must not regress the WS `X-Forwarded-For` finding).
 - [ ] Verify + commit. WS events need no new plumbing (`emitEvent` → `broadcastEvent` → `WebSocketManager.broadcastEvent`).
 
-## Phase 8 — Conformance (spec §12)
+## Phase 7 — Conformance (spec §12)
 
 ### Task 26: Reference automations 1-3
 **Files:** Test `__tests__/automations/conformance-basic.test.ts` (loads JSON fixtures via `loadFixture` from Task 4). Fake registry (records calls), fake agent port, real interpreter+stores on tmp DB.
@@ -192,7 +179,7 @@
 - [ ] **Non-fake AgentPort for the spike (contract §9):** because `autoApprove`/`timeoutMinutes` have no `ChatManager` param today, assert this fixture against the REAL `makeChatManagerPort` (a stub `ChatManager` recording args) — NOT a fully-fake port — so a green suite cannot hide the missing-param gap; the test asserts the step surfaces "auto-approve scope not yet supported" (Task 19) until the prerequisite lands.
 - [ ] Verify + commit. Phase gate: full `vitest run src/__tests__/automations/` + `tsc --noEmit`.
 
-## Phase 9 — Delete v1 (atomic break point; core + shared types)
+## Phase 8 — Delete v1 (atomic break point; core + shared types)
 
 > **Sequencing (contract §7):** the ordered tail is UI P6 swap → UI P7 v1-UI deletion → Node Task 28 (core) → Node Task 29 (shared types). **Task 29 runs AFTER UI Phase 7**, not Phase 6 — the v1 UI still imports `workflow.ts` types, so deleting them before UI P7 fails `ui typecheck`. UI Phase 7 owns removing the v1 UI (`packages/ui/features/workflows/`, `lib/api/workflows.ts`, AppShell/SidebarHeader edits) and the e2e specs (`workflows.spec.ts`, `sidebar-chrome.spec.ts` assertions); this plan deletes only core and shared types. The app never ships without a workflows screen.
 
@@ -209,12 +196,26 @@
 - [ ] `pnpm changeset` — `@qlan-ro/mainframe-types`, `@qlan-ro/mainframe-core`, `@qlan-ro/mainframe-ui`, minor: "Replace v1 YAML workflows with Automations v2 (new /api/automations surface; /api/workflows removed)."
 - [ ] Final gate: `pnpm build` at repo root; core+ui suites green. Commit.
 
+## Post-launch — Live MCP (behind `AUTOMATIONS_MCP_ENABLED`, default off)
+
+> **Deferred by contract §9.** None of the six reference automations uses MCP; nothing in P0–P8 depends on an MCP client. These tasks run AFTER cutover. Task 11's registry seam + `group:'mcp'` `ActionCatalogEntry` shape already ship; here we add discovery, the client, and gated invocation. `.mcp.json` servers are an untrusted-subprocess boundary (same category as the open `docs/security/` criticals) — the flag stays off until the negative test + an allowlist/confirmation gate land.
+
+### Task 31: Server discovery
+**Files:** Modify `packages/core/package.json` (add `@modelcontextprotocol/sdk` — the dep is added HERE, not at launch); Create `automations/actions/mcp/config.ts`; Test `__tests__/automations/mcp-config.test.ts` with tmp-dir fixture files.
+- [ ] Tests: merges `<project>/.mcp.json` + `~/.claude.json` `mcpServers` (project wins on name clash); keeps only stdio entries (`command` present); malformed file → logged skip, never throws.
+- [ ] Verify + commit.
+
+### Task 32: Client + catalog + gated invocation
+**Files:** Create `automations/actions/mcp/client.ts` (stdio `Client` per server: `listTools()` 10s timeout + 5min cache, `callTool(name, args)` 60s timeout, idle shutdown), `automations/actions/mcp/catalog.ts` (tools → `ActionCatalogEntry` id `mcp:<server>:<tool>`, `paramsSchema` = tool inputSchema passthrough, single output `result` text); wire into the registry ONLY when `AUTOMATIONS_MCP_ENABLED`; Test `__tests__/automations/mcp-client.test.ts` against a fixture Node script speaking MCP stdio (echo tool).
+- [ ] Tests: flag off → `GET /api/automation-actions` has no `mcp:*` entries and no server spawns; flag on → catalog lists the fixture tool, invocation substitutes ChipText params then calls; unreachable server → catalog skip + runtime failed outcome; **negative test:** a `.mcp.json` server not on the allowlist is not spawned.
+- [ ] Verify + commit.
+
 ## Risks / Open Questions (surface to user)
 
 1. **Agent completion detection** reuses v1's `chat.updated` terminal-reason waker — inherits known gaps (CLI death w/ restored permission; see memory `restored-permission-reply-stream-closed`). Acceptable rc risk.
 2. **Webhook exposure:** route is auth-exempt by path; reachable externally only via the Cloudflare tunnel. HMAC + timingSafeEqual required; per-hook secret stored under credential label `webhook:<hookId>` (contract §3). Rate limiting NOT included (open question). Related open security findings on WS auth exist (docs/security/) — webhook route must not regress them.
 3. **Notify mobile push** uses Expo `PushService` (suppressed when desktop active) — true background delivery depends on device registration; hours-later ask_me answering from mobile also needs the (out-of-scope) mobile UI. Daemon side is complete.
-4. **MCP is deferrable (contract §9):** no reference automation uses it; Phase 4 lives behind `AUTOMATIONS_MCP_ENABLED` (default false) and may ship after cutover. `.mcp.json` servers are an untrusted-subprocess boundary — enabling live invocation needs the negative test + an allowlist/confirmation gate. Registry seam + catalog shape ship regardless.
+4. **Live MCP is DEFERRED to post-launch (contract §9):** no reference automation uses it; Tasks 31–32 live behind `AUTOMATIONS_MCP_ENABLED` (default off) and ship after cutover. The `@modelcontextprotocol/sdk` dep is added there, not at launch. `.mcp.json` servers are an untrusted-subprocess boundary — enabling live invocation needs the negative test + an allowlist/confirmation gate. Only the registry seam + catalog shape (Task 11) ship at launch.
 5. **Notion column picking** ("pick database → columns render as fields") needs a database-schema lookup endpoint the fixed REST contract lacks — editor-time concern; `notion.add_row` takes explicit property key/values until then.
 6. **Ratified against the contract:** `automation.notification` event (§4) and the webhook route (§5) ARE contract and the Rust plan mirrors them. `trigger_state`/`agent_waits` are NOT contract — engine-internal rebuildable caches; the Rust plan keeps its own derived-state design and both engines ignore unknown tables in the shared file.
 7. **run_command "run in worktree"**: v2 exposes `cwd` as a ChipText param; ⟨worktree path⟩ token from a prior ask_agent step covers the spec's worktree option without engine-level worktree state.

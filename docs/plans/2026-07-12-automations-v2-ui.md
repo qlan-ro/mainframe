@@ -28,18 +28,17 @@ tree and MUST precede Node Task 29 (removes `packages/types/src/workflow.ts` +
   `{url,title,number,author}`), `notion.add_row` → `pageUrl`, `ado.create_item` →
   `workItemId`/`url`, `files.read` → `content` (no `path`), `http.request` →
   `status`/`body`, `mcp:*` → `result`. Output-type enum = `text|number|list|record`.
-  `domain/tokens.ts` stepProduces + fixtures emit exactly these names/types; the token
-  picker binds `{stepId, output}` and displays friendly labels only.
+  `domain/tokens.ts` stepProduces + fixtures emit exactly these; the picker binds
+  `{stepId, output}` and shows friendly labels only.
 - Comparators (A3): `is | is_not | contains | starts_with | eq | lt | gt | is_empty |
   not_empty | is_one_of`. `contains` is polymorphic (substring/membership);
   `is_one_of` takes an array value → the condition row needs a multi-select value
   editor (choice tokens: multi-select of their own options; text: value-chip list).
-- Triggers: schedule `{schedule, onMissed: 'run_once'|'skip'}`; curated events are
-  `session.finished | automation.finished | automation.failed` ONLY — GitHub *PR
-  opened/merged* appear in the "When something happens" list but are **webhook
-  presets** configuring `POST /api/automation-webhooks/:hookId` under the hood;
-  manual always available. Sample-payload capture is persisted daemon-side but not yet
-  routed to the editor (integration point — show a "waiting for a sample" placeholder).
+- Triggers: schedule `{schedule, onMissed: 'run_once'|'skip'}` (picker offers only
+  divisors of 24 for every-N-hours); curated events `session.finished |
+  automation.finished | automation.failed` ONLY — GitHub *PR opened/merged* show in the
+  list but are **webhook presets** (`POST /api/automation-webhooks/:hookId`, daemon-side
+  match predicate); manual always available.
 - Run statuses `running|waiting|succeeded|failed|cancelled`; interactions
   `pending|answered|cancelled`.
 - REST (contract §4, WS4 envelope): `GET/POST /api/automations`, `GET/PUT/DELETE
@@ -47,28 +46,25 @@ tree and MUST precede Node Task 29 (removes `packages/types/src/workflow.ts` +
   interactions (`automation-interactions`, `:id/respond`), `automation-actions`
   (catalog + field metadata → auto-forms), `automation-credentials[/:label]`. Webhook
   ingress `POST /api/automation-webhooks/:hookId` is daemon-only, not a UI caller.
-- Action ids (contract §5): `run_command`, `files.append|files.write|files.read`
-  (three catalog entries — the prototype's single op-segment "Files" is superseded),
-  `http.request`, `github.create_pr|list_prs`, `notion.add_row`, `ado.create_item`,
-  `mcp:<server>:<tool>`. Catalog UI is data-driven from the route — a fixture/mapping
-  concern, not a redesign.
-- WS events (exactly 5): `automation.run.updated {run}`,
-  `automation.interaction.created {interaction}`, `automation.interaction.resolved
-  {interactionId, runId}`, `automation.completed {automationId, automationName, runId,
-  status:'succeeded'|'failed', result}`, `automation.notification {runId, automationId,
-  title, body, links:{runId, chatIds}}` — additive `DaemonEvent` members, never gate on
-  the mobile submodule. NOTE: `automation.failed` is a trigger *selector*, NOT a WS
-  event — a failed run arrives as `automation.completed` with `status:'failed'`; the
-  events handler must switch on those five names only and never subscribe `automation.failed`.
+- Action ids (contract §5): `run_command`, `files.append|files.write|files.read` (three
+  entries — the prototype's single op-segment "Files" is superseded), `http.request`,
+  `github.create_pr|list_prs`, `notion.add_row`, `ado.create_item`, `mcp:<server>:<tool>`.
+- WS events (exactly 5): `automation.run.updated {run}`, `automation.interaction.created
+  {interaction}`, `automation.interaction.resolved {interactionId, runId}`,
+  `automation.completed {automationId, automationName, runId, status:'succeeded'|'failed',
+  result}`, `automation.notification {runId, automationId, title, body, links:{runId,
+  chatIds}}` — additive `DaemonEvent` members. NOTE: `automation.failed` is a trigger
+  *selector*, NOT a WS event — a failed run arrives as `automation.completed{status:
+  'failed'}`; the events handler switches on those five names only.
 - Amendments the UI must carry: **A1** — `run_command` set-up panel gets a read-only
   "what will run" preview: chips become quoted `"$MF_<n>"` where they sat, only
   author-typed literals are shell source. The preview MUST detect a chip inside single
   quotes or a quoted heredoc (where `$MF_<n>` won't expand) and show a plain-language
   warning instead of a misleading resolved preview. Run-in is an enum
-  (`project root|worktree|custom`); `cwd` is validated (containment), NOT env-substituted,
-  so it is out of the preview. **A2** — `ask_agent` gains an "Expect results" builder
-  (rows: key + type `text|number|list|choice` + options); declared keys become typed
-  tokens alongside ⟨Agent result⟩. No ts153 artboard — styled from the form-builder idiom.
+  (`project root|worktree|custom`); `cwd` is validated (containment), NOT env-substituted
+  — out of the preview. **A2** — `ask_agent` gains an "Expect results" builder (rows: key
+  + type `text|number|list|choice` + options); declared keys become typed tokens
+  alongside ⟨Agent result⟩. No ts153 artboard — styled from the form-builder idiom.
 
 ## Binding conventions
 
@@ -89,14 +85,13 @@ tree and MUST precede Node Task 29 (removes `packages/types/src/workflow.ts` +
 
 ## Decision: where pure logic lives
 
-Token scoping, comparators, chip-part helpers, command preview (A1), and
-plain-language validation go in `features/automations/domain/` — pure functions, zero
-React, zero I/O. The "pure logic lives in core" rule can't mean importing
-`@qlan-ro/mainframe-core` from the renderer (Node-only: better-sqlite3, pino). The
-correct shared home is `packages/types` next to `AutomationDefinition` — browser-safe,
-already a dependency of both ui and core, so the daemon's canonical validation imports
-the same functions. The UI starts with the local `domain/` module and moves it into
-`packages/types` as a mechanical Phase 6 task, coordinated with the Node plan.
+Token scoping, comparators, chip-part helpers, command preview (A1), and plain-language
+validation go in `features/automations/domain/` — pure functions, zero React, zero I/O.
+The "pure logic lives in core" rule can't mean importing `@qlan-ro/mainframe-core` from
+the renderer (Node-only: better-sqlite3, pino); the correct shared home is
+`packages/types` next to `AutomationDefinition` — browser-safe, already a dep of both ui
+and core, so the daemon's canonical validation imports the same functions. UI starts
+with the local `domain/` module, moves it to `packages/types` as a Phase 6 task.
 
 ## UI-critical semantics to preserve (verified in ts153)
 
@@ -129,12 +124,11 @@ domain/comparators.ts       comparatorsFor(type), comparatorNeedsValue, isMultiV
 domain/validate.ts          plain-language issues [{stepId, level, msg}]
 domain/chip-parts.ts        isTokenPart, mergeDraftTail, partsToPlainText
 domain/resolve.ts           resolveTokenRef(def, catalog, ref) → display descriptor (+ "missing producer")
-domain/command-preview.ts   A1: chip script → {envMap, previewText "$MF_<n>", warnings[]};
-                            flags chips in single quotes / quoted heredocs (won't expand)
+domain/command-preview.ts   A1: chip script → {envMap, "$MF_<n>" text, warnings[] for chips in single quotes/heredocs}
 domain/trigger-summary.ts   trigger → human summary descriptor
-fixtures/fixtures.ts        LOADS the six exact Node-owned files (packages/types/fixtures/
-                            automations/*.json); mirrors 1:1 until they land, never diverges.
-                            Fixture 6 daily-feature-spike.json = sole A1+A2+A3 carrier
+fixtures/fixtures.ts        LOADS the six Node-owned packages/types/fixtures/automations/*.json
+                            (mirror 1:1 until they land, never diverge); fixture 6
+                            daily-feature-spike.json = sole A1+A2+A3 carrier
 fixtures/fixture-gateway.ts in-memory gateway + scripted event emitter
 data/gateway.ts             AutomationsGateway interface (all REST verbs)
 data/http-gateway.ts        real impl over lib/api/automations.ts
@@ -160,8 +154,7 @@ editor/RepeatBody.tsx       "For each item in" list-token pick + inner recipe
 editor/ConditionRow.tsx     token chip · comparator · value (text / choice dropdown / is_one_of multi)
 editor/AddStepMenu.tsx      verbs pinned on top, searchable action catalog below
 editor/StepSummary.tsx      per-verb collapsed summary line (ChipText etc.)
-steps/AgentConfig.tsx       prompt ChipField (slash), model; More: attachments, worktree,
-                            auto-approve, budget, permission, ExpectResultsBuilder, FailureToggle
+steps/AgentConfig.tsx       prompt ChipField (slash), model; More: attachments, worktree, auto-approve, budget, permission, ExpectResults, FailureToggle
 steps/ExpectResultsBuilder.tsx  A2 rows: key + type + options-for-choice
 steps/AttachmentsField.tsx  add/remove image-file chips
 steps/AskMeConfig.tsx       title + field list + add-field
@@ -169,8 +162,7 @@ steps/FormFieldRow.tsx      label/type/required, options chip editor, "show only
 steps/ActionConfig.tsx      picked-action header + Change; embeds catalog when unpicked
 steps/CommandPreview.tsx    A1 read-only "what will run" block + won't-expand warning
 steps/ActionCatalog.tsx     search, All/Built-in/Connectors/MCP segments, LIST/ADVANCED badges
-steps/AutoForm.tsx          catalog metadata → controls: select/segment/text/credential/columns-map/
-                            code (mono chip area)/chiparea/chip
+steps/AutoForm.tsx          catalog metadata → controls: select/segment/text/credential/columns-map/code/chiparea/chip
 steps/CredentialConnect.tsx "Connect <service>…" ↔ connected pill; credentials routes
 steps/NotifyConfig.tsx      message ChipField + auto-links note
 steps/FailureToggle.tsx     "Keep going if this step fails" (writes step.keepGoing)
@@ -224,13 +216,12 @@ choice dropdown, is_one_of multi-select, no-value hides input), `Recipe.test.tsx
 
 **Phase 4 — step configs + catalog + credentials.** `steps/*` (port
 `wf2-stepconfig.jsx` onto contract action ids): four verb panels, MoreOptions,
-FailureToggle everywhere, attachments, ExpectResultsBuilder (A2), CommandPreview
-inside the run_command form (A1), AutoForm from catalog metadata (showIf, credential,
-columns-map), ActionCatalog embed-or-modal, CredentialConnect. Tests:
-`AskMeConfig.test.tsx` (field CRUD, options chips, show-when), `AutoForm.test.tsx`
-(metadata → control mapping, showIf), `ExpectResultsBuilder.test.tsx` (keys become
-tokens via domain/tokens), `ActionCatalog.test.tsx` (search + source filter, split
-files.* entries present).
+FailureToggle everywhere, attachments, ExpectResultsBuilder (A2), CommandPreview in the
+run_command form (A1), AutoForm from catalog metadata (showIf, credential, columns-map),
+ActionCatalog embed-or-modal, CredentialConnect. Tests: `AskMeConfig.test.tsx` (field
+CRUD, options chips, show-when), `AutoForm.test.tsx` (metadata → control, showIf),
+`ExpectResultsBuilder.test.tsx` (keys become tokens), `ActionCatalog.test.tsx` (search +
+source filter, split files.* entries present).
 
 **Phase 5 — run view, notifications, describe.** `run/*`: timeline states
 running/waiting/succeeded/failed/cancelled/skipped, inline paused form (submits via
@@ -252,12 +243,12 @@ points: `SidebarHeader.tsx` opens Automations (badge = pending interaction count
 `AppShell.tsx` mounts only `AutomationsHost`. Tests: `api-automations.test.ts` (paths +
 envelope), `use-automation-events.test.ts`. Manual pass against the dev daemon.
 
-**Phase 7 — delete v1 + cleanup + changeset.** Deletion list below; remove
-`--mf-wf-*` tokens from `globals.css` (re-home verb colors as `--mf-auto-*`); sweep
-dead imports; `pnpm changeset` (minor, `@qlan-ro/mainframe-ui`). Final gate: dispatch
-the **design-conformance** agent against `docs/designs/wf2-prototype/` + the theme
-contract for library, editor, token picker, catalog, run view (A2's Expect-results
-and A1's preview are excluded — no artboards; review them against this plan instead).
+**Phase 7 — delete v1 + cleanup + changeset.** Deletion list below; remove the five
+`--mf-wf-*` tokens + their `@theme` mappings from `globals.css` (re-home verb colors as
+`--mf-auto-*`); sweep dead imports; `pnpm changeset` (minor, `@qlan-ro/mainframe-ui`).
+Final gate: **design-conformance** agent against `docs/designs/wf2-prototype/` + theme
+contract for library, editor, token picker, catalog, run view (A1 preview + A2
+Expect-results have no artboards — review against this plan instead).
 
 ## Deletion inventory (Phase 7 — v1 workflows UI dies entirely)
 
@@ -267,10 +258,8 @@ and A1's preview are excluded — no artboards; review them against this plan in
   `WfStepLibrary.tsx`, `WfYamlPane.tsx`, `yaml-serialize.ts`, `wf-draft-types.ts`,
   `wf-slug.ts`), and all `__tests__/`. Re-confirm the exact file set at execution.
 - `packages/ui/src/lib/api/workflows.ts`.
-- Moved here from the Node plan (contract §7 — they break at the Phase 6 entry
-  swap, so removal rides this plan's timing): delete
-  `packages/e2e/tests-tauri/workflows.spec.ts`; edit
-  `packages/e2e/tests-tauri/sidebar-chrome.spec.ts` (drop workflows nav assertions).
+- UI Phase 7 owns (contract §7): delete `packages/e2e/tests-tauri/workflows.spec.ts`;
+  edit `packages/e2e/tests-tauri/sidebar-chrome.spec.ts` (drop workflows nav assertions).
 - Edits, not deletions: `app/AppShell.tsx` (import + mount), `layout/SidebarHeader.tsx`
   (`WorkflowsBtn` → automations open + badge source), `styles/globals.css` (`--mf-wf-*`).
 - Keep: `BackgroundActivityBar` 'workflow' task kind, `lib/model-tuning.ts` copy,
@@ -280,31 +269,32 @@ and A1's preview are excluded — no artboards; review them against this plan in
 
 ## Testing strategy
 
-Test authoring is delegated to the **test-writer** agent at implementation time, phase
-by phase, with the assertions enumerated above (hardcoded expectations, behavior-based,
-structural chip-part assertions — no rendered-string round-trips). Every interactive
-element carries a testid per the naming rule. Coverage thresholds are not lowered.
-Acceptance = design-conformance pass + the six §12 reference automations fully
-authorable and inspectable against fixtures (which also exercise A1–A3 per contract §7).
+Test authoring is delegated to the **test-writer** agent at implementation time, phase by
+phase, with the assertions above (hardcoded expectations, behavior-based, structural
+chip-part assertions — no rendered-string round-trips). Every interactive element carries
+a testid per the naming rule; coverage thresholds not lowered. Acceptance =
+design-conformance pass + the six §12 automations fully authorable/inspectable against
+fixtures (which exercise A1–A3 per contract §8).
 
 ## Risks
 
 - **assistant-ui interop.** The host lives outside the aui thread tree (as v1 did);
   contact points are session navigation and toasts only. Reuse the existing
   session-selection store action; never touch aui internals from automations code.
-- **Editor perf on deep recipes.** Scope accumulation is O(steps×tokens) per render.
-  Spec bounds nesting (≤2) and recipe length; still `useMemo` the validate pass, keep
-  `ChipField` draft state local (commit on blur/Enter), memoize `StepCard` on
-  `(step, tokensBefore, issues)`. Virtualize only run lists (virtuoso), never the recipe.
-- **Describe-it dependency.** No drafting endpoint in the contract → behind
-  `DESCRIBE_ENABLED=false` with a fixture draft. Blocking follow-up on the Node plan;
-  Build-it ships fully regardless.
+- **Editor perf on deep recipes.** Scope accumulation is O(steps×tokens) per render;
+  spec bounds nesting (≤2). `useMemo` the validate pass, keep `ChipField` draft state
+  local (commit on blur/Enter), memoize `StepCard` on `(step, tokensBefore, issues)`.
+  Virtualize only run lists (virtuoso), never the recipe.
+- **Describe-it dependency.** No drafting endpoint → behind `DESCRIBE_ENABLED=false`
+  with a fixture draft; Node-plan follow-up. Build-it ships fully regardless.
 - **Contract drift.** Types owned by the Node plan; every UI import goes through
   `contract.ts` (one-file swap). Canonical JSON fixtures are the tie-breaker; the
-  prototype's action shapes (single Files action, `github_pr_*` events) are known
-  divergences already resolved by the contract.
+  prototype's action shapes (single Files action, `github_pr_*` events) are already
+  resolved divergences.
 - **No artboards for A1/A2.** Style CommandPreview and ExpectResultsBuilder from the
   existing form idioms; flag for user review at the Phase 4 checkpoint (design-conformance
   can't cover them). Webhook sample capture is likewise unrouted → placeholder state.
 - **First React.lazy in the package.** Verify Vite chunking in the app-tauri shell at
   Phase 3 (`pnpm build`); fallback is a plain spinner, no layout shift.
+- **Repeat fan-out cap.** Engine fails a Repeat over `MAX_REPEAT_ITEMS` (500, §2); the
+  run view renders it as a normal failed step, not a crash.
