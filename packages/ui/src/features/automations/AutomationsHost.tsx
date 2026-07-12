@@ -12,6 +12,7 @@
 import React, { Suspense, useEffect } from 'react';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore } from './data/use-automations-store';
+import { useAutomationToasts } from './data/use-automation-toasts';
 import { AutomationsView } from './AutomationsView';
 
 export function AutomationsHost(): React.ReactElement | null {
@@ -19,6 +20,9 @@ export function AutomationsHost(): React.ReactElement | null {
   const openHost = useAutomationsNav((s) => s.openHost);
   const close = useAutomationsNav((s) => s.close);
   const loadAll = useAutomationsStore((s) => s.loadAll);
+
+  // Unconditional (before the `!open` early return) — notifications fire even while the panel is closed.
+  useAutomationToasts();
 
   useEffect(() => {
     if (open) void loadAll();
