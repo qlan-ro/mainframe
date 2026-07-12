@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionCatalogEntry, AutomationDefinition, AutomationStep } from '../../contract';
-import { builtinTokens, scopeAt, stepProduces, triggerTokens } from '../tokens';
+import { builtinTokens, findStepById, scopeAt, stepProduces, triggerTokens } from '../tokens';
 
 const RUN_COMMAND_CATALOG: ActionCatalogEntry[] = [
   {
@@ -303,5 +303,42 @@ describe('scopeAt — the invisible rule made concrete', () => {
     const scope = scopeAt(definition, sourceCatalog, 'inner');
     const current = scope.find((t) => t.ref.stepId === 'current');
     expect(current?.fields).toEqual(['url', 'title', 'number', 'author']);
+  });
+});
+
+describe('findStepById', () => {
+  it('finds a top-level step by id', () => {
+    const step = askAgent('a');
+    expect(findStepById([step, askAgent('b')], 'a')).toBe(step);
+  });
+
+  it('returns null when no step matches', () => {
+    expect(findStepById([askAgent('a')], 'missing')).toBeNull();
+  });
+
+  it('recurses into an if block’s then and otherwise branches', () => {
+    const thenStep = askAgent('then-step');
+    const otherwiseStep = askAgent('otherwise-step');
+    const ifStep: AutomationStep = {
+      id: 'if1',
+      kind: 'if',
+      match: 'all',
+      conditions: [],
+      then: [thenStep],
+      otherwise: [otherwiseStep],
+    };
+    expect(findStepById([ifStep], 'then-step')).toBe(thenStep);
+    expect(findStepById([ifStep], 'otherwise-step')).toBe(otherwiseStep);
+  });
+
+  it('recurses into a repeat block’s inner steps', () => {
+    const inner = askAgent('inner');
+    const repeatStep: AutomationStep = {
+      id: 'r1',
+      kind: 'repeat',
+      items: { stepId: 'trigger', output: 'x' },
+      steps: [inner],
+    };
+    expect(findStepById([repeatStep], 'inner')).toBe(inner);
   });
 });

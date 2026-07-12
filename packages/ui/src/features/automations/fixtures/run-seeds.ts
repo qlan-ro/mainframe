@@ -14,30 +14,13 @@ import type {
   AutomationFormField,
   AutomationInteractionSummary,
   AutomationRunSummary,
-  AutomationStep,
   AutomationSummary,
   AutomationTimelineEntry,
 } from '../contract';
-
-function findStep(steps: AutomationStep[], stepId: string): AutomationStep | null {
-  for (const step of steps) {
-    if (step.id === stepId) return step;
-    if (step.kind === 'if') {
-      const inThen = findStep(step.then, stepId);
-      if (inThen) return inThen;
-      const inOtherwise = findStep(step.otherwise, stepId);
-      if (inOtherwise) return inOtherwise;
-    }
-    if (step.kind === 'repeat') {
-      const inner = findStep(step.steps, stepId);
-      if (inner) return inner;
-    }
-  }
-  return null;
-}
+import { findStepById } from '../domain/tokens';
 
 function askMeFields(automation: AutomationSummary, stepId: string): AutomationFormField[] {
-  const step = findStep(automation.definition.steps, stepId);
+  const step = findStepById(automation.definition.steps, stepId);
   return step?.kind === 'ask_me' ? step.fields : [];
 }
 

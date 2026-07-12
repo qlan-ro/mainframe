@@ -128,6 +128,23 @@ function outputLabel(name: string): string {
   return OUTPUT_LABELS[name] ?? capitalize(name);
 }
 
+/** Recursively finds a step by id, descending into `if`'s then/otherwise and `repeat`'s inner steps — the same tree shape `walk` traverses below. */
+export function findStepById(steps: AutomationStep[], stepId: string): AutomationStep | null {
+  for (const step of steps) {
+    if (step.id === stepId) return step;
+    if (step.kind === 'if') {
+      const inThen = findStepById(step.then, stepId);
+      if (inThen) return inThen;
+      const inOtherwise = findStepById(step.otherwise, stepId);
+      if (inOtherwise) return inOtherwise;
+    } else if (step.kind === 'repeat') {
+      const inner = findStepById(step.steps, stepId);
+      if (inner) return inner;
+    }
+  }
+  return null;
+}
+
 /** A step's display label — steps carry no free-text name in the wire contract, so this is the verb/action label (Ask-me's `title` is the one contract exception). */
 export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): string {
   switch (step.kind) {

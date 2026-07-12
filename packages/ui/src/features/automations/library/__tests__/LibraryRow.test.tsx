@@ -5,44 +5,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { AutomationRunSummary, AutomationSummary } from '../../contract';
-import type { AutomationsGateway } from '../../data/gateway';
+import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { LibraryRow } from '../LibraryRow';
-
-function fakeGateway(overrides: Partial<AutomationsGateway> = {}): AutomationsGateway {
-  return {
-    listAutomations: async () => [],
-    createAutomation: async () => {
-      throw new Error('not implemented');
-    },
-    getAutomation: async () => {
-      throw new Error('not implemented');
-    },
-    updateAutomation: async () => {
-      throw new Error('not implemented');
-    },
-    deleteAutomation: async () => {},
-    setEnabled: async () => {
-      throw new Error('not implemented');
-    },
-    startRun: async () => {
-      throw new Error('not implemented');
-    },
-    listRuns: async () => [],
-    getRun: async () => {
-      throw new Error('not implemented');
-    },
-    cancelRun: async () => {},
-    listInteractions: async () => [],
-    respondInteraction: async () => {},
-    listActions: async () => [],
-    listCredentialLabels: async () => [],
-    putCredential: async () => {},
-    deleteCredential: async () => {},
-    ...overrides,
-  };
-}
 
 const AUTOMATION: AutomationSummary = {
   id: 'auto-1',

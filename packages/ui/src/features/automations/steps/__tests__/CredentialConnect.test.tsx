@@ -9,42 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useAutomationsStore } from '../../data/use-automations-store';
-import type { AutomationsGateway } from '../../data/gateway';
+import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { CredentialConnect } from '../CredentialConnect';
-
-function fakeGateway(overrides: Partial<AutomationsGateway> = {}): AutomationsGateway {
-  return {
-    listAutomations: async () => [],
-    createAutomation: async () => {
-      throw new Error('not implemented');
-    },
-    getAutomation: async () => {
-      throw new Error('not implemented');
-    },
-    updateAutomation: async () => {
-      throw new Error('not implemented');
-    },
-    deleteAutomation: async () => {},
-    setEnabled: async () => {
-      throw new Error('not implemented');
-    },
-    startRun: async () => {
-      throw new Error('not implemented');
-    },
-    listRuns: async () => [],
-    getRun: async () => {
-      throw new Error('not implemented');
-    },
-    cancelRun: async () => {},
-    listInteractions: async () => [],
-    respondInteraction: async () => {},
-    listActions: async () => [],
-    listCredentialLabels: async () => [],
-    putCredential: async () => {},
-    deleteCredential: async () => {},
-    ...overrides,
-  };
-}
 
 describe('CredentialConnect', () => {
   beforeEach(() => {
