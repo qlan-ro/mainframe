@@ -28,6 +28,15 @@ const UNAUTHENTICATED_PATHS: [&str; 3] = [
     "/api/auth/pair-status",
 ];
 
+/// `POST /api/automation-webhooks/:hookId` is auth-exempt BY PATH (contract
+/// §4 — external senders can't hold a device token; HMAC verifies them).
+/// Exactly one non-empty segment after the prefix, so nothing else under
+/// `/api/automation*` rides the exemption.
+fn is_webhook_ingress(path: &str) -> bool {
+    path.strip_prefix("/api/automation-webhooks/")
+        .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
+}
+
 /// Adapts a `&DevicesRepository` (fallible `find_by_device_id`) to the
 /// `DeviceLookup` trait `validate_authed_token` consumes. A DB error fails
 /// closed (`None`) — the TS `findByDeviceId` returns `DeviceRow | null` and the
@@ -82,7 +91,7 @@ pub async fn auth_middleware(
     };
 
     let path = req.uri().path();
-    if path == "/health" || UNAUTHENTICATED_PATHS.contains(&path) {
+    if path == "/health" || UNAUTHENTICATED_PATHS.contains(&path) || is_webhook_ingress(path) {
         return next.run(req).await;
     }
 

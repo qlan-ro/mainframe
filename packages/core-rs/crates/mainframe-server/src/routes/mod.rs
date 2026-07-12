@@ -8,6 +8,11 @@ pub mod adapters;
 pub mod agents;
 pub mod attachments;
 pub mod auth;
+pub mod automation_admin;
+pub mod automation_webhook;
+pub mod automations;
+#[cfg(test)]
+pub(crate) mod automations_test_support;
 pub mod background_tasks;
 pub mod chat_commands;
 pub mod chat_recovery;

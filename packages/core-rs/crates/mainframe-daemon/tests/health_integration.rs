@@ -53,6 +53,7 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
         tunnel_manager: None,
         lsp_manager: None,
         plugin_manager: None,
+        automations: None,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));
 

@@ -136,6 +136,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
+        automations: None,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));
 

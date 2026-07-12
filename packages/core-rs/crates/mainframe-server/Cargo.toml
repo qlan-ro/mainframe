@@ -19,6 +19,7 @@ chrono = { workspace = true }
 dashmap = { workspace = true }
 nanoid = { workspace = true }
 dirs = { workspace = true }
+mainframe-automations = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
@@ -35,3 +36,6 @@ mainframe-lsp = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 reqwest = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }

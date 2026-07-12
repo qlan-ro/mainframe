@@ -57,6 +57,7 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
         tunnel_manager: None,
         lsp_manager: None,
         plugin_manager: None,
+        automations: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
         port: 0,

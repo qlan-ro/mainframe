@@ -189,7 +189,7 @@ def is_test_dir_file(path: Path) -> bool:
 # declaration of `mod foo;`. Idiomatic test-support files (e.g. a shared
 # `test_support.rs` behind `#[cfg(test)] mod test_support;`) are thus exempt
 # without weakening the ban for normal modules.
-_CFG_TEST_MOD = re.compile(r"#\[cfg\(test\)\]\s*(?:pub\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
+_CFG_TEST_MOD = re.compile(r"#\[cfg\(test\)\]\s*(?:pub(?:\([a-z: ]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
 
 
 def is_cfg_test_module_file(path: Path) -> bool:

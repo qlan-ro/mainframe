@@ -1,0 +1,31 @@
+[package]
+name = "mainframe-automations"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+chrono = { workspace = true }
+croner = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+dirs = { workspace = true }
+reqwest = { workspace = true }
+nanoid = { workspace = true }
+tracing = { workspace = true }
+mainframe-types = { workspace = true }
+
+[dev-dependencies]
+chrono-tz = { workspace = true }
+tempfile = { workspace = true }
+wiremock = { workspace = true }

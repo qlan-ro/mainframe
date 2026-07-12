@@ -46,8 +46,13 @@ use crate::ws_schemas::parse_client_event;
 
 /// Event types delivered to every connected client regardless of per-chat
 /// subscription (unread-dot / attention-badge for backgrounded chats). Verbatim
-/// from `CONNECTION_GLOBAL_EVENT_TYPES`.
-const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 2] = ["chat.notification", "permission.requested"];
+/// from `CONNECTION_GLOBAL_EVENT_TYPES` + `automation.notification` (T9.1 —
+/// chatId-less, fans out to all clients).
+const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 3] = [
+    "chat.notification",
+    "permission.requested",
+    "automation.notification",
+];
 
 /// Per-connection registry entry. Holds the outbound sink and the shared chat
 /// subscription set (read by the fan-out, written by the connection task).

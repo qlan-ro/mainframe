@@ -44,7 +44,8 @@ use mainframe_plugins::{EmitSink, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
-    RegistryLaunchStopper, build_app, build_chat_manager, spawn_broadcast_pump,
+    RegistryLaunchStopper, build_app, build_automations_engine, build_chat_manager,
+    spawn_broadcast_pump,
 };
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
@@ -239,6 +240,28 @@ async fn run_daemon() {
     // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.
     chats.recover_stale_working_state();
 
+    // Automations v2 engine (T9.2): built over its own automations.db after the
+    // ChatManager exists (the agent port drives chats). A build failure logs and
+    // leaves `None` — routes answer 503, everything else serves.
+    let automations = build_automations_engine(
+        db.clone(),
+        Arc::clone(&chats),
+        broadcast.clone(),
+        Arc::clone(&services.push),
+        GitFactory,
+        &data_dir,
+    )
+    .await;
+    // Boot reconcile (Node service.start): re-advance in-flight runs, re-attach
+    // durable agent watches, and arm the schedule sweep + event triggers. A
+    // failure logs and leaves the routes serving — same posture as a build
+    // failure. Bounded: each live run advances only to its next park/terminal.
+    if let Some(automations) = &automations
+        && let Err(err) = automations.start().await
+    {
+        tracing::error!(%err, "failed to start the automations engine");
+    }
+
     // LSP: registry (bundled server configs) + the per-(project,language) manager.
     // Constructed in `createServerManager` in the TS; the Rust daemon owns it.
     // The TS twin resolved bundled servers (typescript-language-server, pyright)
@@ -310,6 +333,7 @@ async fn run_daemon() {
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
+        automations: automations.clone(),
     });
 
     spawn_broadcast_pump(Arc::clone(&ctx));
@@ -396,13 +420,15 @@ async fn run_daemon() {
         flush_and_exit(1);
     }
 
-    // Ordered shutdown (index.ts `shutdown`): workflows.stop() → chats.dispose →
+    // Ordered shutdown (index.ts `shutdown`): automations.stop() → chats.dispose →
     // plugins.unloadAll → adapters.killAll → launch.stopAll → tunnel.stopAll →
-    // liveness.stop → server.stop → db.close. workflows.stop() is deliberately
-    // skipped (SCOPE DECISION 2026-07-10 — workflows unported); the HTTP server is
-    // already stopped (axum::serve returned above), and lspManager.shutdownAll is
-    // part of that server-stop step in the TS.
+    // liveness.stop → server.stop → db.close. The HTTP server is already stopped
+    // (axum::serve returned above), and lspManager.shutdownAll is part of that
+    // server-stop step in the TS.
     info!("Shutting down...");
+    if let Some(automations) = &automations {
+        automations.stop();
+    }
     chats.dispose();
     plugin_manager.unload_all();
     adapters.kill_all();
