@@ -33,6 +33,13 @@ pub(crate) async fn spawn_script(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        // Cancellation is structural: a run cancel drops the pinned walk future,
+        // which drops this frame and the owned Child. Without kill_on_drop the
+        // shell (and its build/test descendants) would be reparented to the init
+        // process and keep running — a real leak the fakes-only conformance suite
+        // can't see. Node cancels cooperatively and kills the child; this is the
+        // Rust equivalent.
+        .kill_on_drop(true)
         .spawn()
         .map_err(|err| ActionError(format!("run_command failed to spawn {shell}: {err}")))?;
 

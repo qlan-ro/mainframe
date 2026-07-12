@@ -6,6 +6,7 @@ use serde_json::json;
 use crate::tokens::TokenValue;
 
 use super::run_command::{RunCommandAction, compile_script, resolve_cwd_for_test};
+use super::shell::{resolve_shell, spawn_script};
 use super::{Action, ActionCtx};
 
 fn ctx(project_root: &str) -> ActionCtx {
@@ -254,4 +255,34 @@ fn manifest_matches_contract() {
         ]
     );
     assert!(!manifest.idempotent);
+}
+
+#[tokio::test]
+async fn dropping_the_spawn_future_kills_the_shell_subprocess() {
+    // Cancellation drops the walk future mid-`run_command`; kill_on_drop(true)
+    // must take the shell (and its descendants) down with it. A fakes-only
+    // conformance suite can't spawn a real process, so this guards it directly:
+    // a killed child never reaches its sentinel-touch, an orphaned one does.
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = dir.path().to_str().unwrap().to_string();
+    let sentinel = dir.path().join("touched-after-kill");
+    let shell = resolve_shell().await;
+    let script = format!("sleep 1; : > {}", sentinel.display());
+
+    let handle = tokio::spawn(async move {
+        let _ = spawn_script(&shell, &script, &cwd, &[]).await;
+    });
+
+    // Let the child spawn and enter its sleep, then abort — which drops the
+    // spawn_script future and the owned Child.
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    handle.abort();
+
+    // Wait well past the sentinel-touch deadline. With kill_on_drop the child is
+    // dead; without it the orphan touches the sentinel at ~1s.
+    tokio::time::sleep(std::time::Duration::from_millis(1600)).await;
+    assert!(
+        !sentinel.exists(),
+        "orphaned shell survived cancellation and touched the sentinel"
+    );
 }
