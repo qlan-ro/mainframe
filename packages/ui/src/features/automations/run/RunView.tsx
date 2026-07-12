@@ -145,7 +145,7 @@ export function RunView() {
           <div className="truncate text-heading font-bold tracking-tight text-foreground">
             {automation?.name ?? 'Automation'}
           </div>
-          <div className="text-micro text-muted-foreground">
+          <div className="text-caption text-muted-foreground">
             {TRIGGER_LABEL[run.trigger.kind]} · {formatRelativeTime(run.startedAt, Date.now())}
           </div>
         </div>
