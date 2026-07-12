@@ -33,7 +33,8 @@ export function makeAskMeExecutor(interactions: InteractionStore, emitEvent: (ev
   };
 }
 
-function toInteractionSummary(record: AutomationInteractionRecord): AutomationInteractionSummary {
+/** Exported for the admin routes layer (Task 25) — GET /api/automation-interactions projects the same wire shape. */
+export function toInteractionSummary(record: AutomationInteractionRecord): AutomationInteractionSummary {
   return {
     id: record.id,
     runId: record.runId,

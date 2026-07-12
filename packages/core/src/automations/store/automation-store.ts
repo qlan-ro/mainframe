@@ -5,7 +5,12 @@
 // scopes) is AutomationService's job; this store only persists and reads
 // the already-validated definition it's handed.
 import { nanoid } from 'nanoid';
-import type { AutomationCreateInput, AutomationDefinition, AutomationSummary } from '@qlan-ro/mainframe-types';
+import type {
+  AutomationCreateInput,
+  AutomationDefinition,
+  AutomationSummary,
+  WebhookTrigger,
+} from '@qlan-ro/mainframe-types';
 import type { AutomationDb } from '../db.js';
 import { rowToSummary, type AutomationRow } from '../service-helpers.js';
 
@@ -29,6 +34,17 @@ export class AutomationStore {
 
   listEnabled(): AutomationRow[] {
     return this.db.prepare(`SELECT * FROM automations WHERE enabled = 1`).all() as AutomationRow[];
+  }
+
+  /** Scans every stored definition for a webhook trigger with this hookId — the webhook route's (Task 25) hookId lookup. Deliberately includes disabled automations: the route still verifies the signature and defers the enabled check to TriggerArmer.fireRun, so a disabled automation's webhook doesn't leak its existence via a differing HTTP status. */
+  findWebhookTrigger(hookId: string): { row: AutomationRow; trigger: WebhookTrigger } | null {
+    const rows = this.db.prepare(`SELECT * FROM automations`).all() as AutomationRow[];
+    for (const row of rows) {
+      const definition = JSON.parse(row.definition) as AutomationDefinition;
+      const trigger = definition.triggers.find((t): t is WebhookTrigger => t.kind === 'webhook' && t.hookId === hookId);
+      if (trigger) return { row, trigger };
+    }
+    return null;
   }
 
   create(input: AutomationCreateInput, definition: AutomationDefinition): AutomationRow {

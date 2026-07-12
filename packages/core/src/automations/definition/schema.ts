@@ -172,7 +172,14 @@ const eventTriggerSchema = z
   })
   .strict();
 
-const webhookTriggerSchema = z.object({ id: idSchema, kind: z.literal('webhook'), hookId: idSchema }).strict();
+const webhookTriggerSchema = z
+  .object({
+    id: idSchema,
+    kind: z.literal('webhook'),
+    hookId: idSchema,
+    preset: z.enum(['github_pr_opened', 'github_pr_merged']).optional(),
+  })
+  .strict();
 
 export const TriggerSchema: z.ZodType<AutomationTrigger> = z.discriminatedUnion('kind', [
   scheduleTriggerSchema,

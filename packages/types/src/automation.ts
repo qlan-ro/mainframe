@@ -139,10 +139,21 @@ export interface EventTrigger {
   automationId?: string;
 }
 
+/**
+ * Server-side match predicate a webhook trigger opts into (contract §4 —
+ * "webhook presets carry a server-side match predicate"). Absent = every
+ * verified delivery starts a run (no filter). NOT in the original contract
+ * doc: `WebhookTrigger` had no field naming which predicate to evaluate,
+ * yet §4/Task 25 both require "the preset's matchPreset predicate" to be
+ * evaluated per-trigger. Added here minimally — flag to the Rust/UI plans.
+ */
+export type WebhookPreset = 'github_pr_opened' | 'github_pr_merged';
+
 export interface WebhookTrigger {
   id: string;
   kind: 'webhook';
   hookId: string;
+  preset?: WebhookPreset;
 }
 
 export type AutomationTrigger = ScheduleTrigger | EventTrigger | WebhookTrigger;

@@ -113,6 +113,23 @@ describe('auth middleware', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(401);
   });
+
+  // ── automation webhook exemption (Task 25, contract §4) ────────────────────
+
+  it('allows a non-localhost automation-webhooks request without a token', async () => {
+    const app = express();
+    app.set('trust proxy', 'loopback');
+    app.use(createAuthMiddleware(secret, devices));
+    app.post('/api/automation-webhooks/:hookId', (_req, res) => res.json({ success: true }));
+    const res = await request(app).post('/api/automation-webhooks/gh-hook').set('X-Forwarded-For', '192.168.1.100');
+    expect(res.status).toBe(200);
+  });
+
+  it('does not exempt other non-localhost routes — the exemption is webhook-path-only', async () => {
+    const app = createApp(secret, devices);
+    const res = await request(app).get('/api/automations').set('X-Forwarded-For', '192.168.1.100');
+    expect(res.status).toBe(401);
+  });
 });
 
 describe('createAuthMiddleware with devicesRepo', () => {

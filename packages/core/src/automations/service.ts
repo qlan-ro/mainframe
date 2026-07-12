@@ -72,7 +72,8 @@ export class AutomationService {
   readonly credentials: FileCredentialStore;
   readonly scheduler: CronScheduler;
   readonly interpreter: AutomationInterpreter;
-  private readonly triggers: TriggerArmer;
+  /** Public so the webhook route (Task 25) can call fireRun directly with its own dedup key — arm/disarm stay service-internal (called only from create/update/setEnabled/start). */
+  readonly triggers: TriggerArmer;
 
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
