@@ -107,6 +107,49 @@ fn unknown_id_is_an_error() {
     assert_eq!(err.to_string(), "unknown action 'nope.nothing'");
 }
 
+/// Cross-check: every built-in's manifest outputs match the frozen contract
+/// §5 table already encoded in `domain::catalog` (names AND order).
+#[test]
+fn builtin_catalog_matches_the_contract_output_table() {
+    let mut registry = ActionRegistry::new();
+    super::register_builtin_actions(&mut registry).unwrap();
+
+    let catalog = registry.catalog();
+    assert_eq!(
+        catalog.iter().map(|m| m.id).collect::<Vec<_>>(),
+        vec![
+            "run_command",
+            "files.append",
+            "files.write",
+            "files.read",
+            "http.request",
+        ]
+    );
+    for manifest in &catalog {
+        let expected = crate::domain::catalog::action_outputs(manifest.id);
+        let actual: Vec<(&str, &str)> = manifest
+            .outputs
+            .iter()
+            .map(|o| {
+                (
+                    o.name.as_str(),
+                    match o.output_type {
+                        ActionOutputType::Text => "text",
+                        ActionOutputType::Number => "number",
+                        ActionOutputType::List => "list",
+                        ActionOutputType::Record => "record",
+                    },
+                )
+            })
+            .collect();
+        let expected: Vec<(&str, &str)> = expected
+            .iter()
+            .map(|(name, ty)| (*name, ty.describe()))
+            .collect();
+        assert_eq!(actual, expected, "outputs drifted for '{}'", manifest.id);
+    }
+}
+
 #[test]
 fn is_idempotent_reads_the_manifest_and_defaults_false() {
     let mut registry = ActionRegistry::new();

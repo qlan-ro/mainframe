@@ -4,6 +4,7 @@
 //! credential label, and hands this layer a JSON input object.
 
 pub mod files;
+pub mod http_action;
 pub mod manifest;
 mod paths;
 pub mod registry;
@@ -85,8 +86,22 @@ pub(crate) fn expand_user_path(path: &str) -> PathBuf {
     }
 }
 
+/// Registers every launch built-in (Node actions/register-all.ts). Curated
+/// connectors (github/notion/ado) join in Phase 7; MCP stays a catalog seam.
+pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+    registry.register(Box::new(run_command::RunCommandAction))?;
+    registry.register(Box::new(files::FilesAppendAction))?;
+    registry.register(Box::new(files::FilesWriteAction))?;
+    registry.register(Box::new(files::FilesReadAction))?;
+    registry.register(Box::new(http_action::HttpRequestAction::new()))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod files_tests;
+
+#[cfg(test)]
+mod http_tests;
 
 #[cfg(test)]
 mod registry_tests;
