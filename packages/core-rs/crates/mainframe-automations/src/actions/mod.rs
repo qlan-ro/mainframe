@@ -4,10 +4,13 @@
 //! credential label, and hands this layer a JSON input object.
 
 pub mod manifest;
+mod paths;
 pub mod registry;
+pub mod run_command;
 
 use std::collections::BTreeMap;
 
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 pub use manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
@@ -50,8 +53,21 @@ pub trait Action: Send + Sync {
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>>;
 }
 
+/// Strict input parse — unknown fields rejected (zod `.strict()` parity),
+/// with the Node verb's error text (`invalid input for '<id>': …`).
+pub(crate) fn parse_input<T: DeserializeOwned>(
+    action_id: &str,
+    params: &Value,
+) -> Result<T, ActionError> {
+    serde_json::from_value(params.clone())
+        .map_err(|err| ActionError(format!("invalid input for '{action_id}': {err}")))
+}
+
 #[cfg(test)]
 mod registry_tests;
+
+#[cfg(test)]
+mod run_command_tests;
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2), not a TS port
 // confidence: high
