@@ -29,8 +29,6 @@ import { logger } from './logger.js';
 import { wrapClaudeForRecording } from './testing/record-wrapper.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 import { backfillWorktreeRelationships } from './workspace/worktree.js';
-import { WorkflowService } from './workflows/index.js';
-import { makeChatManagerPort } from './workflows/agent-port.js';
 import { AutomationService } from './automations/service.js';
 import { makeAutomationChatPort } from './automations/agent-port.js';
 
@@ -113,14 +111,6 @@ async function main(): Promise<void> {
     if (manager) await manager.stopAll();
   });
 
-  const workflows = new WorkflowService({
-    dataDir: getDataDir(),
-    logger,
-    emitEvent: (event) => broadcastEvent(event),
-    agentPort: makeChatManagerPort(chats, () => db.projects.list()[0]?.id ?? null),
-    listProjects: () => db.projects.list().map((p) => ({ id: p.id, path: p.path })),
-  });
-
   const automations = new AutomationService({
     dataDir: getDataDir(),
     logger,
@@ -184,7 +174,6 @@ async function main(): Promise<void> {
     tunnelManager,
     port: config.port,
     backgroundTasks,
-    workflows,
     automations,
   });
 
@@ -200,19 +189,14 @@ async function main(): Promise<void> {
   // and launch children are user-triggered).
   await sweepStrayChildren(childRegistry).catch((err) => logger.warn({ err }, 'Stray child process sweep failed'));
 
-  // Bind the real WS broadcast AND feed daemon events to the workflow engine.
+  // Bind the real WS broadcast AND feed daemon events to the automation engine.
   // All event sources (chats, launchRegistry, tunnelManager, backgroundTasks,
   // pluginManager) use the broadcastEvent closure by reference, so every event
   // is forwarded here after server.start().
   broadcastEvent = (event) => {
     server.broadcastEvent(event);
-    workflows.onDaemonEvent(event);
     automations.onDaemonEvent(event);
   };
-
-  await workflows.start().catch((err) => {
-    logger.error({ err }, 'WorkflowService failed to start — continuing without workflows');
-  });
 
   await automations.start().catch((err) => {
     logger.error({ err }, 'AutomationService failed to start — continuing without automations');
@@ -262,7 +246,6 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
-    workflows.stop();
     automations.stop();
     chats.dispose();
     await pluginManager.unloadAll();

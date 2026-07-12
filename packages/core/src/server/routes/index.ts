@@ -18,7 +18,6 @@ export { worktreeRoutes } from './worktree.js';
 export { chatRecoveryRoutes } from './chat-recovery.js';
 export { deviceRoutes } from './device.js';
 export { tagRoutes } from './tags.js';
-export { workflowRoutes } from './workflows.js';
 export { automationRoutes } from './automations.js';
 export { suggestionRoutes } from './suggestions.js';
 export { asyncHandler } from './async-handler.js';

@@ -227,9 +227,6 @@ importers:
       express:
         specifier: ^5.0.0
         version: 5.2.1
-      jsonata:
-        specifier: ^2.2.1
-        version: 2.2.1
       nanoid:
         specifier: ^5.1.11
         version: 5.1.11
@@ -257,9 +254,6 @@ importers:
       ws:
         specifier: ^8.20.1
         version: 8.20.1
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -4561,10 +4555,6 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
-
-  jsonata@2.2.1:
-    resolution: {integrity: sha512-xd1uwUrKeIcJbsWhaoS3qAX4Ea8m0Mw0G5nlnAQvPT7TbZ5qaPdzBVTQia9KfyuyQm+nenfyjvzUDTRYHsC2sw==}
-    engines: {node: '>= 8'}
 
   jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
@@ -10930,8 +10920,6 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsonata@2.2.1: {}
-
   jsonfile@4.0.0:
     optionalDependencies:
       graceful-fs: 4.2.11
@@ -13077,7 +13065,8 @@ snapshots:
 
   yallist@5.0.0: {}
 
-  yaml@2.9.0: {}
+  yaml@2.9.0:
+    optional: true
 
   yargs-parser@21.1.1: {}
 
