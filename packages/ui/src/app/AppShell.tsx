@@ -12,6 +12,7 @@ import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { WorkflowsModalHost } from '../features/workflows/WorkflowsModalHost';
+import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SpotlightPalette } from '../features/palette/SpotlightPalette';
@@ -186,6 +187,9 @@ function RuntimeBody({ port }: { port: number }) {
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
       <WorkflowsModalHost port={port} />
+      {/* Automations v2 — no production entry point yet (Phase 6 swaps SidebarHeader);
+          dev-only affordance (Cmd/Ctrl+Shift+A) opens it for manual verification. */}
+      <AutomationsHost />
       <GitConfirmDialog />
       <SettingsDialog port={port} />
       {showTour && <TutorialOverlay />}
