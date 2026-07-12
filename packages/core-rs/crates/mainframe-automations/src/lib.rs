@@ -13,6 +13,7 @@ pub mod ports;
 pub mod scheduler;
 pub mod store;
 pub mod tokens;
+pub mod triggers;
 
 #[cfg(test)]
 mod credentials_tests;
