@@ -54,6 +54,25 @@ describe('AutomationEditor — new automation', () => {
     await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
     expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
   });
+
+  it("pre-fills from editorTarget.draft when present (Describe-it's Open in editor)", () => {
+    useAutomationsNav.setState({
+      editorTarget: {
+        mode: 'new',
+        draft: {
+          name: 'Daily health log',
+          description: 'Evening check-in',
+          scope: 'global',
+          definition: { triggers: [], steps: [{ id: 'q', kind: 'ask_me', title: 'Check-in', fields: [] }] },
+        },
+      },
+    });
+    render(<AutomationEditor />);
+    expect(screen.getByTestId('automations-editor-name')).toHaveValue('Daily health log');
+    expect(screen.getByTestId('automations-editor-description')).toHaveValue('Evening check-in');
+    expect(screen.getByTestId('automations-editor-scope-global')).toHaveClass('bg-card');
+    expect(screen.getByTestId('automations-step-q')).toBeInTheDocument();
+  });
 });
 
 describe('AutomationEditor — edit existing', () => {

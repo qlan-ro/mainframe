@@ -33,6 +33,15 @@ const EMPTY_DRAFT: DraftState = {
   definition: { triggers: [], steps: [] },
 };
 
+function draftFrom(input: {
+  name: string;
+  description?: string;
+  scope: AutomationScope;
+  definition: AutomationDefinition;
+}): DraftState {
+  return { name: input.name, description: input.description ?? '', scope: input.scope, definition: input.definition };
+}
+
 function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
@@ -74,32 +83,20 @@ export function AutomationEditor() {
     editorTarget?.mode === 'edit' ? definitions.find((d) => d.id === editorTarget.automationId) : undefined;
   const isNew = editorTarget?.mode !== 'edit';
   const editKey = editorTarget?.mode === 'edit' ? editorTarget.automationId : null;
+  const newDraft = editorTarget?.mode === 'new' ? editorTarget.draft : undefined;
 
   const [draft, setDraft] = useState<DraftState>(() =>
-    existing
-      ? {
-          name: existing.name,
-          description: existing.description ?? '',
-          scope: existing.scope,
-          definition: existing.definition,
-        }
-      : EMPTY_DRAFT,
+    existing ? draftFrom(existing) : newDraft ? draftFrom(newDraft) : EMPTY_DRAFT,
   );
   const [saving, setSaving] = useState(false);
 
-  // Re-seed only when the target automation changes, not on every store tick —
-  // deliberately narrower than `[existing]` (a fresh object every render).
+  // Re-seed only when the target identity changes (`editKey`), not on every store
+  // tick — mirrors the initializer above so the mount-time run is a harmless no-op
+  // re-render with the same values; real re-seeds happen when `editorTarget`
+  // switches between two `edit` targets (or `edit` ↔ `new`) without this component
+  // unmounting in between.
   useEffect(() => {
-    setDraft(
-      existing
-        ? {
-            name: existing.name,
-            description: existing.description ?? '',
-            scope: existing.scope,
-            definition: existing.definition,
-          }
-        : EMPTY_DRAFT,
-    );
+    setDraft(existing ? draftFrom(existing) : newDraft ? draftFrom(newDraft) : EMPTY_DRAFT);
   }, [editKey]);
 
   const issues = useMemo(
