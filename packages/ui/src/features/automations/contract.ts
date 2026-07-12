@@ -9,8 +9,9 @@
  * never from `@qlan-ro/mainframe-types` directly, so a future reshuffle of
  * the upstream package only touches this one file.
  */
-export { TOKEN_STEP_TRIGGER, TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT } from '@qlan-ro/mainframe-types';
+export { TOKEN_STEP_TRIGGER, TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, EXECUTION_MODES } from '@qlan-ro/mainframe-types';
 export type {
+  ExecutionMode,
   TokenRef,
   ChipPart,
   ChipText,
