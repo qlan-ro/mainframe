@@ -7,12 +7,7 @@ use serde::Serialize;
 
 use crate::engine::BoxFuture;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationLinks {
-    pub run_id: String,
-    pub chat_ids: Vec<String>,
-}
+pub use mainframe_types::automation::AutomationNotificationLinks as NotificationLinks;
 
 /// The §4 `automation.notification` body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

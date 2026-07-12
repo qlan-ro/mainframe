@@ -10,6 +10,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::adapter::{AdapterModel, AdapterProcess, ControlRequest, ControlResponse, DetectedPr};
+use crate::automation::{
+    AutomationCompletedStatus, AutomationInteractionSummary, AutomationNotificationLinks,
+    AutomationRunSummary,
+};
 use crate::background_task::BackgroundTask;
 use crate::chat::{Chat, ChatMessage, QueuedMessageRef, TodoItem};
 use crate::display::DisplayMessage;
@@ -355,6 +359,39 @@ pub enum DaemonEvent {
         run_id: String,
         outputs: serde_json::Value,
     },
+    // ── Automations v2 (contract §4 — all five are chatId-less) ─────────────
+    /// A6 — emitted on run start, EVERY leaf-step terminal transition, park,
+    /// and finalize.
+    #[serde(rename = "automation.run.updated")]
+    AutomationRunUpdated { run: AutomationRunSummary },
+    #[serde(rename = "automation.interaction.created")]
+    AutomationInteractionCreated {
+        interaction: AutomationInteractionSummary,
+    },
+    #[serde(rename = "automation.interaction.resolved")]
+    AutomationInteractionResolved {
+        interaction_id: String,
+        run_id: String,
+    },
+    /// One WS event serves both chaining selectors: the
+    /// `automation.finished`/`automation.failed` triggers filter this by
+    /// `status` — they are NOT separate events.
+    #[serde(rename = "automation.completed")]
+    AutomationCompleted {
+        automation_id: String,
+        automation_name: String,
+        run_id: String,
+        status: AutomationCompletedStatus,
+        result: String,
+    },
+    #[serde(rename = "automation.notification")]
+    AutomationNotification {
+        run_id: String,
+        automation_id: String,
+        title: String,
+        body: String,
+        links: AutomationNotificationLinks,
+    },
 }
 
 // ─── ClientEvent (client→server) ─────────────────────────────────────────────
@@ -590,6 +627,157 @@ mod tests {
             "attachmentIds": ["att_1"],
             "metadata": { "command": { "name": "review", "source": "user", "args": "--fast" } }
         }));
+    }
+
+    // ── Automations v2 events (contract §4 — no captured fixtures yet; the
+    // expected JSON below IS the ratified wire shape) ────────────────────────
+    fn assert_daemon_wire(event: DaemonEvent, expected: Value) {
+        let serialized = serde_json::to_value(&event).unwrap();
+        assert_eq!(serialized, expected, "wire shape mismatch");
+        let parsed: DaemonEvent = serde_json::from_value(expected).unwrap();
+        assert_eq!(parsed, event, "round-trip mismatch");
+    }
+
+    #[test]
+    fn automation_run_updated_wire_shape() {
+        use crate::automation::*;
+        assert_daemon_wire(
+            DaemonEvent::AutomationRunUpdated {
+                run: AutomationRunSummary {
+                    id: "run_1".into(),
+                    automation_id: "auto_1".into(),
+                    status: AutomationRunStatus::Waiting,
+                    trigger: AutomationRunTrigger {
+                        kind: AutomationTriggerKind::Schedule,
+                        tokens: None,
+                    },
+                    started_at: 1,
+                    finished_at: None,
+                    error: None,
+                },
+            },
+            json!({
+                "type": "automation.run.updated",
+                "run": {
+                    "id": "run_1",
+                    "automationId": "auto_1",
+                    "status": "waiting",
+                    "trigger": { "kind": "schedule" },
+                    "startedAt": 1,
+                    "finishedAt": null,
+                    "error": null
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn automation_interaction_created_wire_shape() {
+        use crate::automation::*;
+        assert_daemon_wire(
+            DaemonEvent::AutomationInteractionCreated {
+                interaction: AutomationInteractionSummary {
+                    id: "int_1".into(),
+                    run_id: "run_1".into(),
+                    step_ref: "ask#0".into(),
+                    title: "Daily check-in".into(),
+                    fields: vec![AutomationFormField {
+                        key: "mood".into(),
+                        field_type: AutomationFormFieldType::Choice,
+                        label: None,
+                        options: Some(vec!["good".into(), "bad".into()]),
+                        required: None,
+                        show_when: Some(AutomationShowWhen {
+                            key: "action".into(),
+                            equals: "log".into(),
+                        }),
+                    }],
+                    status: AutomationInteractionStatus::Pending,
+                    created_at: 2,
+                    resolved_at: None,
+                },
+            },
+            json!({
+                "type": "automation.interaction.created",
+                "interaction": {
+                    "id": "int_1",
+                    "runId": "run_1",
+                    "stepRef": "ask#0",
+                    "title": "Daily check-in",
+                    "fields": [{
+                        "key": "mood",
+                        "type": "choice",
+                        "options": ["good", "bad"],
+                        "showWhen": { "key": "action", "equals": "log" }
+                    }],
+                    "status": "pending",
+                    "createdAt": 2,
+                    "resolvedAt": null
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn automation_interaction_resolved_wire_shape() {
+        assert_daemon_wire(
+            DaemonEvent::AutomationInteractionResolved {
+                interaction_id: "int_1".into(),
+                run_id: "run_1".into(),
+            },
+            json!({
+                "type": "automation.interaction.resolved",
+                "interactionId": "int_1",
+                "runId": "run_1"
+            }),
+        );
+    }
+
+    #[test]
+    fn automation_completed_wire_shape() {
+        use crate::automation::AutomationCompletedStatus;
+        assert_daemon_wire(
+            DaemonEvent::AutomationCompleted {
+                automation_id: "auto_1".into(),
+                automation_name: "Daily standup".into(),
+                run_id: "run_1".into(),
+                status: AutomationCompletedStatus::Succeeded,
+                result: "done".into(),
+            },
+            json!({
+                "type": "automation.completed",
+                "automationId": "auto_1",
+                "automationName": "Daily standup",
+                "runId": "run_1",
+                "status": "succeeded",
+                "result": "done"
+            }),
+        );
+    }
+
+    #[test]
+    fn automation_notification_wire_shape() {
+        use crate::automation::AutomationNotificationLinks;
+        assert_daemon_wire(
+            DaemonEvent::AutomationNotification {
+                run_id: "run_1".into(),
+                automation_id: "auto_1".into(),
+                title: "Daily standup".into(),
+                body: "Standup posted".into(),
+                links: AutomationNotificationLinks {
+                    run_id: "run_1".into(),
+                    chat_ids: vec!["chat_1".into()],
+                },
+            },
+            json!({
+                "type": "automation.notification",
+                "runId": "run_1",
+                "automationId": "auto_1",
+                "title": "Daily standup",
+                "body": "Standup posted",
+                "links": { "runId": "run_1", "chatIds": ["chat_1"] }
+            }),
+        );
     }
 
     #[test]

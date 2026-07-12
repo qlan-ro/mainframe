@@ -9,6 +9,7 @@
 
 pub mod adapter;
 pub mod api;
+pub mod automation;
 pub mod background_task;
 pub mod chat;
 pub mod command;

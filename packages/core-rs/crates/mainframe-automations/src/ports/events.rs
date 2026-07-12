@@ -2,11 +2,17 @@
 //! sink. The payload shapes are the contract §4 WS bodies; mainframe-server
 //! (T9.x) maps `AutomationEvent` onto `DaemonEvent` variants 1:1.
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::Serialize;
 
-use crate::domain::AutomationFormField;
-use crate::store::{InteractionRecord, InteractionStatus, RunRecord, RunStatus, RunTriggerKind};
+use crate::store::{InteractionRecord, RunRecord};
+
+// Canonical wire payloads live in `mainframe-types` (the DaemonEvent
+// variants carry them, T9.1); the engine keeps its original local names.
+pub use mainframe_types::automation::{
+    AutomationCompletedStatus as CompletedStatus,
+    AutomationInteractionSummary as InteractionSummary, AutomationRunSummary as RunSummary,
+    AutomationRunTrigger as RunTriggerSummary,
+};
 
 /// Engine-side event union (notification rides the Notifier port). Serde
 /// names are the §4 wire truth so the DaemonEvent mapping cannot drift
@@ -42,15 +48,6 @@ pub trait EventSink: Send + Sync {
     fn emit(&self, event: AutomationEvent);
 }
 
-/// `automation.completed`'s status field — only real terminal outcomes;
-/// cancelled runs never emit a completion (Node emitCompletionEvent parity).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CompletedStatus {
-    Succeeded,
-    Failed,
-}
-
 /// App events the trigger router consumes (T8.3). Carries app events only —
 /// GitHub PR opened/merged are webhook presets, not events (contract §1) —
 /// and `automation.completed` for chaining, which the CompletionEmitter
@@ -72,44 +69,6 @@ pub enum CuratedEvent {
 /// maps its own event stream into `CuratedEvent`s — no polling.
 pub trait EventSource: Send + Sync {
     fn subscribe(&self) -> tokio::sync::broadcast::Receiver<CuratedEvent>;
-}
-
-/// Wire projection of a run (Node `toRunSummary`, types `AutomationRunSummary`):
-/// `finishedAt`/`error` are `T | null` there, so no omit-when-absent.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunSummary {
-    pub id: String,
-    pub automation_id: String,
-    pub status: RunStatus,
-    pub trigger: RunTriggerSummary,
-    pub started_at: i64,
-    pub finished_at: Option<i64>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunTriggerSummary {
-    pub kind: RunTriggerKind,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tokens: Option<Value>,
-}
-
-/// Wire projection of an interaction (Node `toInteractionSummary`, types
-/// `AutomationInteractionSummary`): `resolvedAt` is `number | null` there,
-/// so no omit-when-absent.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InteractionSummary {
-    pub id: String,
-    pub run_id: String,
-    pub step_ref: String,
-    pub title: String,
-    pub fields: Vec<AutomationFormField>,
-    pub status: InteractionStatus,
-    pub created_at: i64,
-    pub resolved_at: Option<i64>,
 }
 
 pub fn to_interaction_summary(record: &InteractionRecord) -> InteractionSummary {

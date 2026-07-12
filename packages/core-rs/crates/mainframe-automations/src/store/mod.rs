@@ -21,72 +21,12 @@ use serde_json::Value;
 use crate::domain::{AutomationDefinition, AutomationFormField, AutomationScope};
 use crate::error::StoreError;
 
-/// Run statuses (contract §1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunStatus {
-    Running,
-    Waiting,
-    Succeeded,
-    Failed,
-    Cancelled,
-}
-
-impl RunStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            RunStatus::Running => "running",
-            RunStatus::Waiting => "waiting",
-            RunStatus::Succeeded => "succeeded",
-            RunStatus::Failed => "failed",
-            RunStatus::Cancelled => "cancelled",
-        }
-    }
-
-    /// A8 — terminal runs are immutable.
-    pub fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            RunStatus::Succeeded | RunStatus::Failed | RunStatus::Cancelled
-        )
-    }
-}
-
-impl std::fmt::Display for RunStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-/// Checkpoint step statuses (contract §2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StepStatus {
-    Running,
-    Succeeded,
-    Failed,
-    Waiting,
-    Skipped,
-}
-
-/// Interaction statuses (contract §1) — no expiry in v2.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum InteractionStatus {
-    Pending,
-    Answered,
-    Cancelled,
-}
-
-impl InteractionStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            InteractionStatus::Pending => "pending",
-            InteractionStatus::Answered => "answered",
-            InteractionStatus::Cancelled => "cancelled",
-        }
-    }
-}
+// Statuses/kinds are the canonical wire enums in `mainframe-types` (T9.1);
+// the engine keeps its original local names via aliases.
+pub use mainframe_types::automation::{
+    AutomationInteractionStatus as InteractionStatus, AutomationRunStatus as RunStatus,
+    AutomationStepStatus as StepStatus, AutomationTriggerKind as RunTriggerKind,
+};
 
 /// The statuses `RunStore::finalize` may set (a run never re-enters
 /// `running|waiting` once finalized — A8).
@@ -105,15 +45,6 @@ impl TerminalStatus {
             TerminalStatus::Cancelled => RunStatus::Cancelled,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunTriggerKind {
-    Schedule,
-    Event,
-    Webhook,
-    Manual,
 }
 
 /// The firing context frozen into the checkpoint at run start (contract §2).
