@@ -3,10 +3,12 @@
 //! (Node verbs/run-action.ts) renders ChipText params, resolves the
 //! credential label, and hands this layer a JSON input object.
 
+pub mod ado;
 pub mod files;
 pub mod github;
 pub mod http_action;
 pub mod manifest;
+pub mod notion;
 mod paths;
 pub mod registry;
 pub mod run_command;
@@ -123,6 +125,8 @@ pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), Act
 pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
     registry.register(Box::new(github::GithubCreatePrAction::new()))?;
     registry.register(Box::new(github::GithubListPrsAction::new()))?;
+    registry.register(Box::new(notion::NotionAddRowAction::new()))?;
+    registry.register(Box::new(ado::AdoCreateItemAction::new()))?;
     Ok(())
 }
 
@@ -142,6 +146,9 @@ mod github_tests;
 
 #[cfg(test)]
 mod http_tests;
+
+#[cfg(test)]
+mod notion_ado_tests;
 
 #[cfg(test)]
 mod registry_tests;
