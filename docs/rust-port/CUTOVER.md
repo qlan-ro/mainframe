@@ -167,6 +167,28 @@ User-facing behavior changes when a build ships the Rust daemon as default:
 
 ---
 
+## 4b. Build modes — how the Rust binary is (not) shipped
+
+The Rust daemon is **opt-in at build time** so a routine Tauri build never depends on
+the `core-rs` workspace compiling, and the public installer does not carry an
+unverified binary until the signing gate below passes.
+
+| Mode | Command | `externalBin` | Ships the Rust daemon? |
+|---|---|---|---|
+| **Default** (release CI today, local `pnpm tauri:build`) | `pnpm bundle` → `cargo tauri build` | `["binaries/node"]` (base `tauri.conf.json`) | **No** — Node-only; byte-identical to pre-port packaging. `core-rs` is never built. |
+| **Canary** | `pnpm bundle:canary` → `pnpm tauri:build:canary` | `["binaries/node","binaries/mainframe-daemon"]` (overlay `tauri.rust-canary.conf.json`) | **Yes** — both daemons bundled; flip at runtime with `MAINFRAME_DAEMON_IMPL`. |
+| **Dev, no bundle** | run the Node/Tauri dev stack with `MAINFRAME_DAEMON_IMPL=rust` + `MAINFRAME_RUST_DAEMON_PATH=<cargo-built binary>` | — | Runs a cargo-built binary directly; no bundling/signing involved. |
+
+**To ship the canary in a public release** (one lever, once the signing gate passes):
+point the release job's Tauri build at the canary variant — either set the tauri-action
+`args: --config src-tauri/tauri.rust-canary.conf.json`, or change the beforeBuildCommand to
+`bundle:canary`. The Tauri job already caches `packages/core-rs` (release.yml rust-cache) for that build.
+
+### Signing / notarization gate (MUST pass before shipping the canary)
+
+- **Signing is already wired:** `bundle:daemon`'s final step (`signMachOTree([resources/daemon, binaries/])`, `scripts/codesign-daemon.mjs`) signs every Mach-O under `binaries/`, so the staged `mainframe-daemon-<triple>` is Developer-ID-signed alongside `binaries/node`. The release job imports the cert before tauri-action runs, and Tauri notarizes the `.app` (binary included).
+- **Unverified at runtime:** the canary proof used an *unsigned dev* binary. Before any public build ships the Rust arm, do a **signed + notarized smoke test**: build via `tauri:build:canary` on the release cert, install the `.dmg` on a clean machine (no dev tools), flip `MAINFRAME_DAEMON_IMPL=rust`, and confirm the sidecar launches under Gatekeeper + hardened runtime (watch for a nested-binary entitlements/notarization rejection — `entitlements.plist` currently targets the main app; the sidecar may need `com.apple.security.cs.allow-jit`/inherit or its own entitlements).
+
 ## 5. Platform matrix
 
 | Platform | Status | What's needed |

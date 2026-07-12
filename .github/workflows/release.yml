@@ -159,7 +159,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: packages/app-tauri/src-tauri
+          # Two Cargo workspaces: the Tauri shell and (for the opt-in
+          # `bundle:canary` / `tauri:build:canary` path) the ported Rust daemon.
+          # core-rs only compiles when the canary build runs — caching it keeps
+          # that build fast without affecting the default Node-only bundle.
+          workspaces: |
+            packages/app-tauri/src-tauri
+            packages/core-rs
 
       # Tauri's Linux build needs the system WebKitGTK / GTK stack.
       - name: Install Linux system dependencies
