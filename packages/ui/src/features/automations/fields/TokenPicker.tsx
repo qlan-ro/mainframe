@@ -99,7 +99,7 @@ export function TokenPicker({ tokens, onInsert, testId, small, label = 'Insert',
               small ? 'h-[20px]' : 'h-[24px]',
             )}
           >
-            <span className="font-mono text-[11px]">⟨⟩</span>
+            <span className="font-mono text-caption">⟨⟩</span>
             {label}
           </button>
         </PopoverTrigger>

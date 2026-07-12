@@ -205,12 +205,12 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
                 <span className="flex items-center gap-1.5">
                   <span className="text-body font-semibold text-foreground">{action.title}</span>
                   {isList && (
-                    <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-bold leading-4">
+                    <Badge variant="outline" className="px-1.5 py-0 text-caption font-semibold leading-4">
                       LIST
                     </Badge>
                   )}
                   {isAdvanced && (
-                    <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-bold leading-4">
+                    <Badge variant="outline" className="px-1.5 py-0 text-caption font-semibold leading-4">
                       ADVANCED
                     </Badge>
                   )}
