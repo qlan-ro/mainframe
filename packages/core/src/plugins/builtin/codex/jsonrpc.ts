@@ -8,6 +8,15 @@ const log = createChildLogger('codex:jsonrpc');
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
+const STDERR_TAIL_LINES = 20;
+
+// `<rfc3339> <LEVEL> <target>: <message>` — the codex binary's tracing format.
+const TRACING_LINE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s/;
+
+// The app-server discards panicked task handles and can still exit 0, so a panic is
+// only detectable on stderr. Latched here and reported at exit, never mid-run.
+const PANIC_LINE = /^thread '.*' panicked/;
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -71,6 +80,9 @@ export interface JsonRpcHandlers {
 export class JsonRpcClient {
   private nextId = 1;
   private buffer = '';
+  private stderrBuffer = '';
+  private sawPanic = false;
+  private readonly recentStderr: string[] = [];
   private pending = new Map<RequestId, PendingRequest>();
   private closed = false;
   private closeListeners = new Set<() => void>();
@@ -82,8 +94,9 @@ export class JsonRpcClient {
   ) {
     process.stdout?.on('data', (chunk: Buffer) => this.handleStdout(chunk));
     process.stderr?.on('data', (chunk: Buffer) => this.handleStderr(chunk));
-    process.on('close', (code: number | null) => {
+    process.on('close', (code: number | null, signal?: NodeJS.Signals | null) => {
       this.rejectAllPending(new Error(`Process exited with code ${code}`));
+      this.reportUnexpectedExit(code, signal ?? null);
       for (const listener of this.closeListeners) listener();
       this.handlers.onExit(code);
     });
@@ -166,21 +179,44 @@ export class JsonRpcClient {
     }
   }
 
-  private static readonly STDERR_NOISE = [
-    /^Debugger/i,
-    /^Warning:/i,
-    /^DeprecationWarning/i,
-    /^ExperimentalWarning/i,
-    /^\(node:\d+\)/,
-    /^thread '.*' panicked/,
-  ];
-
+  // codex is a Rust binary that writes tracing logs to stderr as normal operation —
+  // an unauthenticated remote MCP server alone emits ERROR lines on every startup while
+  // the run proceeds fine. stderr is a log stream, never an error channel: a real failure
+  // arrives as a JSON-RPC error, a process 'error', or a non-zero exit (reported below).
   private handleStderr(chunk: Buffer): void {
-    const message = chunk.toString().trim();
+    this.stderrBuffer += chunk.toString();
+    const lines = this.stderrBuffer.split('\n');
+    this.stderrBuffer = lines.pop() ?? '';
+    for (const line of lines) this.recordStderr(line);
+  }
+
+  private recordStderr(line: string): void {
+    const message = line.trim();
     if (!message) return;
-    if (JsonRpcClient.STDERR_NOISE.some((p) => p.test(message))) return;
-    log.warn({ stderr: message }, 'codex stderr');
-    this.handlers.onError(message);
+
+    if (PANIC_LINE.test(message)) this.sawPanic = true;
+
+    this.recentStderr.push(message);
+    if (this.recentStderr.length > STDERR_TAIL_LINES) this.recentStderr.shift();
+
+    if (TRACING_LINE.test(message)) log.debug({ stderr: message }, 'codex stderr');
+    else log.warn({ stderr: message }, 'codex stderr');
+  }
+
+  private reportUnexpectedExit(code: number | null, signal: NodeJS.Signals | null): void {
+    if (this.closed) return;
+
+    // A dying process often omits the trailing newline on its last line — the very line
+    // that says why. Flush the partial before reading the tail.
+    this.recordStderr(this.stderrBuffer);
+    this.stderrBuffer = '';
+
+    if (code === 0 && signal === null && !this.sawPanic) return;
+
+    const reason =
+      signal !== null ? `was killed by ${signal}` : this.sawPanic ? 'panicked' : `exited with code ${code}`;
+    const tail = this.recentStderr.join('\n');
+    this.handlers.onError(tail ? `codex ${reason}:\n${tail}` : `codex ${reason}`);
   }
 
   private dispatch(msg: Record<string, unknown>): void {
