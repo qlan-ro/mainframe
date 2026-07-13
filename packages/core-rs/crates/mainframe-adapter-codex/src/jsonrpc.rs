@@ -23,6 +23,7 @@ use crate::types::{
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
 const STDERR_TAIL_LINES: usize = 20;
+const STDERR_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -144,6 +145,7 @@ impl JsonRpcClient {
         let close_notify = Arc::new(Notify::new());
         let kill_notify = Arc::new(Notify::new());
         let recent_stderr: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
+        let saw_panic = Arc::new(AtomicBool::new(false));
         let handlers = Arc::new(handlers);
 
         let stdin = child.stdin.take();
@@ -198,14 +200,19 @@ impl JsonRpcClient {
         // every startup while the run proceeds fine. stderr is a log stream, never an error
         // channel: a real failure arrives as a JSON-RPC error or a non-zero exit (reported by
         // the exit watcher, which replays this tail as the reason).
-        if let Some(stderr) = stderr {
+        let stderr_reader = stderr.map(|stderr| {
             let recent_stderr = recent_stderr.clone();
+            let saw_panic = saw_panic.clone();
             tokio::spawn(async move {
                 let mut lines = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
                     let message = line.trim();
                     if message.is_empty() {
                         continue;
+                    }
+
+                    if is_panic_line(message) {
+                        saw_panic.store(true, Ordering::SeqCst);
                     }
 
                     let mut tail = recent_stderr.lock().unwrap_or_else(|e| e.into_inner());
@@ -221,8 +228,8 @@ impl JsonRpcClient {
                         tracing::warn!(module = "codex:jsonrpc", stderr = message, "codex stderr");
                     }
                 }
-            });
-        }
+            })
+        });
 
         // Exit watcher — resolve on process exit (or an explicit kill request);
         // reject pending + fire close.
@@ -234,6 +241,7 @@ impl JsonRpcClient {
             let exited = exited.clone();
             let closed = closed.clone();
             let recent_stderr = recent_stderr.clone();
+            let saw_panic = saw_panic.clone();
             let handlers = handlers.clone();
             tokio::spawn(async move {
                 let code = tokio::select! {
@@ -248,8 +256,23 @@ impl JsonRpcClient {
                     &pending,
                     JsonRpcError(format!("Process exited with code {code:?}")),
                 );
-                if !closed.load(Ordering::SeqCst) && code.is_some_and(|c| c != 0) {
-                    let code = code.unwrap_or_default();
+
+                // `child.wait()` only means the PID is gone — the stderr pipe can still hold
+                // the very lines that say why (a panic backtrace). Let the reader drain to EOF
+                // before snapshotting the tail, bounded so a wedged pipe can't hang the exit.
+                if let Some(reader) = stderr_reader {
+                    let _ = tokio::time::timeout(STDERR_DRAIN_TIMEOUT, reader).await;
+                }
+
+                let panicked = saw_panic.load(Ordering::SeqCst);
+                let clean = code == Some(0) && !panicked;
+                if !closed.load(Ordering::SeqCst) && !clean {
+                    // A signal death (including an aborting panic) reports no code at all.
+                    let reason = match (code, panicked) {
+                        (Some(c), _) => format!("exited with code {c}"),
+                        (None, true) => "panicked".to_string(),
+                        (None, false) => "was killed by a signal".to_string(),
+                    };
                     let tail: Vec<String> = recent_stderr
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
@@ -257,9 +280,9 @@ impl JsonRpcClient {
                         .cloned()
                         .collect();
                     (handlers.on_error)(if tail.is_empty() {
-                        format!("codex exited with code {code}")
+                        format!("codex {reason}")
                     } else {
-                        format!("codex exited with code {code}:\n{}", tail.join("\n"))
+                        format!("codex {reason}:\n{}", tail.join("\n"))
                     });
                 }
                 for listener in close_listeners
@@ -453,25 +476,71 @@ fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: 
     }
 }
 
+/// `2026-07-13T13:10:39.248771Z` — mirrors the TS `^\d{4}-\d{2}-\d{2}T[\d:.]+Z` prefix.
+fn is_rfc3339_prefix(ts: &str) -> bool {
+    let b = ts.as_bytes();
+    // yyyy-mm-ddT + at least one time char + Z
+    b.len() > 12
+        && b.ends_with(b"Z")
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && b[4] == b'-'
+        && b[5..7].iter().all(u8::is_ascii_digit)
+        && b[7] == b'-'
+        && b[8..10].iter().all(u8::is_ascii_digit)
+        && b[10] == b'T'
+        && b[11..b.len() - 1]
+            .iter()
+            .all(|c| c.is_ascii_digit() || *c == b':' || *c == b'.')
+}
+
 /// `<rfc3339> <LEVEL> <target>: <message>` — the codex binary's tracing format.
-/// Hand-rolled (no regex crate): a timestamp-shaped first token, then a level.
+/// Hand-rolled (no regex crate); kept in parity with `TRACING_LINE` in the TS adapter,
+/// which also requires something to follow the level.
 fn is_tracing_line(message: &str) -> bool {
     let mut parts = message.split_whitespace();
     let Some(ts) = parts.next() else {
         return false;
     };
-    if !ts.ends_with('Z') || !ts.starts_with(|c: char| c.is_ascii_digit()) || !ts.contains('T') {
+    if !is_rfc3339_prefix(ts) {
         return false;
     }
-    matches!(
+    if !matches!(
         parts.next(),
         Some("TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR")
-    )
+    ) {
+        return false;
+    }
+    parts.next().is_some()
+}
+
+/// The app-server discards panicked task handles and can still exit 0, so a panic is only
+/// detectable on stderr. Latched during the run and reported at exit, never mid-run.
+fn is_panic_line(message: &str) -> bool {
+    message.starts_with("thread '") && message.contains("panicked")
 }
 
 #[cfg(test)]
 mod stderr_tests {
-    use super::is_tracing_line;
+    use super::{is_panic_line, is_tracing_line};
+
+    #[test]
+    fn latches_a_rust_panic_line() {
+        assert!(is_panic_line(
+            "thread 'tokio-runtime-worker' panicked at src/foo.rs:1:1"
+        ));
+        // The #237 line is an ordinary tracing ERROR, not a panic — it must NOT latch.
+        assert!(!is_panic_line(
+            "2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: \
+             Transport channel closed, when AuthRequired(AuthRequiredError { .. })"
+        ));
+        assert!(!is_panic_line("all good here"));
+    }
+
+    #[test]
+    fn rejects_timestamp_shaped_garbage() {
+        assert!(!is_tracing_line("2TgarbageZ ERROR foo: bar"));
+        assert!(!is_tracing_line("2026-07-13T13:10:39.248771Z ERROR"));
+    }
 
     // The #237 repro: an unauthenticated remote MCP server makes codex log this on every
     // startup while the run itself proceeds fine.

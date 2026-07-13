@@ -291,5 +291,80 @@ describe('JsonRpcClient', () => {
 
       expect(onError).not.toHaveBeenCalled();
     });
+
+    it('calls onError once naming the signal when the process dies by signal without a client-initiated close', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from('2026-07-13T13:10:00.000000Z ERROR codex_core: fatal condition\n'));
+      proc.emit('close', null, 'SIGKILL');
+
+      expect(onError).toHaveBeenCalledOnce();
+      const [message] = onError.mock.calls[0]!;
+      expect(message).toContain('SIGKILL');
+      expect(message).toContain('fatal condition');
+    });
+
+    it('does not call onError for a signal death after the client itself initiated the close', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      const client = createClient(proc, { onError });
+
+      client.close(); // mock proc.kill() emits close(0) synchronously
+      proc.emit('close', null, 'SIGKILL');
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('calls onError when a Rust panic line was seen even though the process exits 0', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from("thread 'tokio-runtime-worker' panicked at src/foo.rs:1:1\n"));
+      proc.emit('close', 0);
+
+      expect(onError).toHaveBeenCalledOnce();
+      const [message] = onError.mock.calls[0]!;
+      expect(message).toContain("thread 'tokio-runtime-worker' panicked at src/foo.rs:1:1");
+    });
+
+    it('does not call onError on a clean exit with code 0 and no panic line', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from('2026-07-13T13:10:00.000000Z INFO codex_core: starting\n'));
+      proc.emit('close', 0);
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('does not call onError when only the rmcp AuthRequired line was seen and the process exits 0', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      const line =
+        '2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer resource_metadata=\\"https://mcp.slack.com/.well-known/oauth-protected-resource\\"" })';
+      proc.stderr!.emit('data', Buffer.from(line + '\n'));
+      proc.emit('close', 0);
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('includes the final unterminated stderr line in the exit report', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from("thread 'main' panicked at src/lib.rs:9:1"));
+      proc.emit('close', 1);
+
+      expect(onError).toHaveBeenCalledOnce();
+      const [message] = onError.mock.calls[0]!;
+      expect(message).toContain("thread 'main' panicked at src/lib.rs:9:1");
+    });
   });
 });
