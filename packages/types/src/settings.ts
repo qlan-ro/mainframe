@@ -50,9 +50,13 @@ export interface NotificationConfig {
   other: { plugin: boolean };
 }
 
+export const UPDATE_CHANNELS = ['stable', 'prerelease'] as const;
+export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
+
 export interface GeneralConfig {
   worktreeDir: string;
   notifications: NotificationConfig;
+  updateChannel: UpdateChannel;
 }
 
 export const NOTIFICATION_DEFAULTS: NotificationConfig = {
@@ -64,4 +68,5 @@ export const NOTIFICATION_DEFAULTS: NotificationConfig = {
 export const GENERAL_DEFAULTS: GeneralConfig = {
   worktreeDir: '.worktrees',
   notifications: NOTIFICATION_DEFAULTS,
+  updateChannel: 'stable',
 };

@@ -1,10 +1,33 @@
 import { autoUpdater } from 'electron-updater';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
 import { BrowserWindow, ipcMain, dialog, app } from 'electron';
+import type { UpdateChannel } from '@qlan-ro/mainframe-types';
 import { createMainLogger } from './logger.js';
 import { classifyUpdateError } from './auto-updater-error-classifier.js';
 
 const log = createMainLogger('electron:auto-updater');
+
+const DAEMON_HOST = process.env['DAEMON_HOST'] ?? '127.0.0.1';
+
+// Set once at startup by initAutoUpdater; every check re-reads the channel
+// setting from the daemon before calling checkForUpdates().
+let daemonPort: number | null = null;
+
+async function fetchUpdateChannel(): Promise<UpdateChannel> {
+  if (daemonPort === null) return 'stable';
+  try {
+    const res = await fetch(`http://${DAEMON_HOST}:${daemonPort}/api/settings/general`);
+    const body = (await res.json()) as { data?: { updateChannel?: unknown } };
+    return body.data?.updateChannel === 'prerelease' ? 'prerelease' : 'stable';
+  } catch (err) {
+    log.warn({ err }, 'failed to fetch update channel from daemon; defaulting to stable');
+    return 'stable';
+  }
+}
+
+async function applyUpdateChannel(): Promise<void> {
+  autoUpdater.allowPrerelease = (await fetchUpdateChannel()) === 'prerelease';
+}
 
 export type UpdateStatus =
   | { state: 'checking' }
@@ -112,24 +135,32 @@ function registerListeners(mainWindow: BrowserWindow): void {
 }
 
 function registerIPC(): void {
-  ipcMain.handle('update:check', () => autoUpdater.checkForUpdates());
+  ipcMain.handle('update:check', async () => {
+    await applyUpdateChannel();
+    return autoUpdater.checkForUpdates();
+  });
   ipcMain.handle('update:download', () => autoUpdater.downloadUpdate());
   ipcMain.handle('update:install', () => autoUpdater.quitAndInstall());
+}
+
+async function checkForUpdatesWithChannel(warnMessage: string): Promise<void> {
+  await applyUpdateChannel();
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err: unknown) {
+    log.warn({ err }, warnMessage);
+  }
 }
 
 function scheduleChecks(): void {
   // First check after 10 seconds on startup, then every 4 hours.
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((err: unknown) => {
-      log.warn({ err }, 'scheduled update check failed');
-    });
+    void checkForUpdatesWithChannel('scheduled update check failed');
   }, 10_000);
 
   setInterval(
     () => {
-      autoUpdater.checkForUpdates().catch((err: unknown) => {
-        log.warn({ err }, 'periodic update check failed');
-      });
+      void checkForUpdatesWithChannel('periodic update check failed');
     },
     4 * 60 * 60 * 1_000,
   );
@@ -153,6 +184,7 @@ export async function checkForUpdatesManual(window: BrowserWindow): Promise<void
     log.warn('manual update check timed out without a terminal event; clearing flag');
     clearManualFlag();
   }, MANUAL_CHECK_TIMEOUT_MS);
+  await applyUpdateChannel();
   try {
     await autoUpdater.checkForUpdates();
   } catch (err: unknown) {
@@ -161,13 +193,14 @@ export async function checkForUpdatesManual(window: BrowserWindow): Promise<void
   }
 }
 
-export function initAutoUpdater(mainWindow: BrowserWindow): void {
+export function initAutoUpdater(mainWindow: BrowserWindow, port: number): void {
   // electron-updater only works in packaged builds; skip in development.
   if (process.env.NODE_ENV === 'development') {
     log.info('development mode: auto-updater disabled');
     return;
   }
 
+  daemonPort = port;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 

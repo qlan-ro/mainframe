@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EXECUTION_MODES } from '@qlan-ro/mainframe-types';
+import { EXECUTION_MODES, UPDATE_CHANNELS } from '@qlan-ro/mainframe-types';
 
 // --- HTTP Route Schemas ---
 
@@ -84,6 +84,7 @@ export const UpdateGeneralSettingsBody = z.object({
     .regex(/^[a-zA-Z0-9._-]+$/, 'Must be a simple directory name')
     .optional(),
   notifications: NotificationConfigSchema,
+  updateChannel: z.enum(UPDATE_CHANNELS).optional(),
 });
 
 // Filesystem browsing

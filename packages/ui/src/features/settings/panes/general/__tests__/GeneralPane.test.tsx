@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GeneralPane } from '../GeneralPane';
 import { useSettingsStore } from '../../../../../store/settings';
 import { useTheme } from '../../../../../store/theme';
@@ -11,7 +11,11 @@ vi.mock('../../../../../lib/api/settings', () => ({
 
 beforeEach(() => {
   useSettingsStore.setState({
-    general: { worktreeDir: '.worktrees', notifications: useSettingsStore.getState().general.notifications },
+    general: {
+      worktreeDir: '.worktrees',
+      notifications: useSettingsStore.getState().general.notifications,
+      updateChannel: 'stable',
+    },
   });
   updateGeneralSettings.mockClear();
 });
@@ -60,5 +64,29 @@ describe('GeneralPane', () => {
     fireEvent.click(screen.getByTestId('settings-appearance-ui-scale-large'));
     expect(useTheme.getState().uiScale).toBe('large');
     expect(updateGeneralSettings).not.toHaveBeenCalled();
+  });
+
+  describe('update channel', () => {
+    it('renders the current channel as selected', () => {
+      render(<GeneralPane port={31415} />);
+      expect(screen.getByTestId('settings-updates-channel-stable').className).toContain('bg-accent text-foreground');
+      expect(screen.getByTestId('settings-updates-channel-prerelease').className).not.toContain(
+        'bg-accent text-foreground',
+      );
+    });
+
+    it('selecting Pre-release PUTs the patch and updates the displayed selection optimistically', async () => {
+      render(<GeneralPane port={31415} />);
+      fireEvent.click(screen.getByTestId('settings-updates-channel-prerelease'));
+      expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { updateChannel: 'prerelease' });
+      await waitFor(() => {
+        expect(screen.getByTestId('settings-updates-channel-prerelease').className).toContain(
+          'bg-accent text-foreground',
+        );
+      });
+      expect(screen.getByTestId('settings-updates-channel-stable').className).not.toContain(
+        'bg-accent text-foreground',
+      );
+    });
   });
 });

@@ -270,7 +270,7 @@ app.whenReady().then(() => {
   startIdleReporter();
   startRendererMemoryLogger(() => mainWindow);
 
-  if (mainWindow) initAutoUpdater(mainWindow);
+  if (mainWindow) initAutoUpdater(mainWindow, DAEMON_PORT);
 
   setupWebviewSandbox(denyUnneededPermissions, openExternalSafe);
 

@@ -1,7 +1,13 @@
 import { useState } from 'react';
+import type { UpdateChannel } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../../../store/settings';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
-import { AppearanceControls } from './AppearanceControls';
+import { AppearanceControls, PickerRow } from './AppearanceControls';
+
+const UPDATE_CHANNEL_OPTIONS: { id: UpdateChannel; label: string }[] = [
+  { id: 'stable', label: 'Stable' },
+  { id: 'prerelease', label: 'Pre-release (RC)' },
+];
 
 export function GeneralPane({ port }: { port: number }) {
   const general = useSettingsStore((s) => s.general);
@@ -29,6 +35,12 @@ export function GeneralPane({ port }: { port: number }) {
         console.warn('[settings/GeneralPane]', err);
         setSaveError(err instanceof Error ? err.message : 'Save failed');
       });
+  }
+
+  function handleUpdateChannelSelect(updateChannel: UpdateChannel) {
+    updateGeneralSettings(port, { updateChannel })
+      .then(() => loadGeneral({ ...general, updateChannel }))
+      .catch((err: unknown) => console.warn('[settings/GeneralPane]', err));
   }
 
   return (
@@ -65,6 +77,17 @@ export function GeneralPane({ port }: { port: number }) {
           )}
         </div>
         {saveError !== null && <p className="text-label text-destructive">{saveError}</p>}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h3 className="text-label font-semibold text-muted-foreground">Updates</h3>
+        <PickerRow
+          label="Channel"
+          options={UPDATE_CHANNEL_OPTIONS}
+          current={general.updateChannel}
+          prefix="settings-updates-channel"
+          onSelect={handleUpdateChannelSelect}
+        />
       </section>
     </div>
   );

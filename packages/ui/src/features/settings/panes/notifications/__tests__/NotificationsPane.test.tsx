@@ -16,7 +16,9 @@ const NOTIF = {
   other: { plugin: true },
 };
 beforeEach(() => {
-  useSettingsStore.setState({ general: { worktreeDir: '.worktrees', notifications: structuredClone(NOTIF) } });
+  useSettingsStore.setState({
+    general: { worktreeDir: '.worktrees', notifications: structuredClone(NOTIF), updateChannel: 'stable' },
+  });
   updateGeneralSettings.mockClear();
 });
 afterEach(() => vi.clearAllMocks());

@@ -24,7 +24,7 @@ const UI_SIZES: { id: UiScale; label: string }[] = [
   { id: 'large', label: 'Large' },
 ];
 
-function PickerRow<T extends string>({
+export function PickerRow<T extends string>({
   label,
   options,
   current,
