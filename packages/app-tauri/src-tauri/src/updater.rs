@@ -5,13 +5,43 @@
 //! `packages/app-electron/src/main/auto-updater.ts`. Signing keypair + CI release
 //! workflow are deferred (see `docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md`).
 
+pub mod channel;
 pub mod error_classifier;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_updater::{Updater, UpdaterExt};
 
+use channel::UpdateChannel;
 use error_classifier::{classify, UpdateErrorKind};
+
+/// Resolve the updater for the current channel setting. Stable keeps using
+/// the static endpoint from `tauri.conf.json`; prerelease looks up the
+/// newest published GitHub release's `latest.json` asset and falls back to
+/// the stable endpoint if that lookup fails for any reason (never hard-fails
+/// the check). Used by `updater_check`/`updater_download`/`updater_install`,
+/// so `schedule_update_checks` (which calls `updater_check`) picks it up too.
+async fn resolve_updater(app: &AppHandle) -> Result<Updater, String> {
+    let daemon_port = crate::daemon_port();
+    let update_channel = tokio::task::spawn_blocking(move || channel::resolve_channel(daemon_port))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if update_channel == UpdateChannel::Prerelease {
+        let endpoint = tokio::task::spawn_blocking(channel::resolve_prerelease_endpoint)
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Some(url) = endpoint {
+            return app
+                .updater_builder()
+                .endpoints(vec![url])
+                .map_err(|e| e.to_string())?
+                .build()
+                .map_err(|e| e.to_string());
+        }
+    }
+    app.updater().map_err(|e| e.to_string())
+}
 
 /// Contract-shaped status (serde tagged on `state`) — mirrors
 /// `UpdateStatusSchema` in `@qlan-ro/mainframe-types`. Plan 3, decision 1.
@@ -42,7 +72,7 @@ fn emit_status(app: &AppHandle, status: UpdateStatus) {
 #[tauri::command]
 pub async fn updater_check(app: AppHandle) -> Result<UpdateStatus, String> {
     emit_status(&app, UpdateStatus::Checking);
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let updater = resolve_updater(&app).await?;
     match updater.check().await {
         Ok(Some(update)) => {
             let status = UpdateStatus::Available {
@@ -85,7 +115,7 @@ pub async fn updater_check(app: AppHandle) -> Result<UpdateStatus, String> {
 /// Bridge: `invoke('updater_download')` in `lib/tauri/bridge.ts`.
 #[tauri::command]
 pub async fn updater_download(app: AppHandle) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let updater = resolve_updater(&app).await?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         return Err("no update available to download".to_string());
     };
@@ -116,7 +146,7 @@ pub async fn updater_download(app: AppHandle) -> Result<(), String> {
 /// Bridge: `invoke('updater_install')` in `lib/tauri/bridge.ts`.
 #[tauri::command]
 pub async fn updater_install(app: AppHandle) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let updater = resolve_updater(&app).await?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         return Err("no update available to install".to_string());
     };

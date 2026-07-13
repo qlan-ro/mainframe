@@ -5,6 +5,7 @@ const listeners = new Map<string, ((arg?: unknown) => void)[]>();
 const mockAutoUpdater = {
   autoDownload: false,
   autoInstallOnAppQuit: false,
+  allowPrerelease: false,
   on: vi.fn((event: string, fn: (arg?: unknown) => void) => {
     const arr = listeners.get(event) ?? [];
     arr.push(fn);
@@ -54,7 +55,7 @@ afterEach(() => {
 describe('auto-updater manual check', () => {
   it('shows "up to date" dialog on update-not-available when manual', async () => {
     const mod = await import('./auto-updater.js');
-    mod.initAutoUpdater(mockWindow);
+    mod.initAutoUpdater(mockWindow, 31415);
     await mod.checkForUpdatesManual(mockWindow);
     emit('update-not-available');
     expect(showMessageBox).toHaveBeenCalledTimes(1);
@@ -63,14 +64,14 @@ describe('auto-updater manual check', () => {
 
   it('does NOT show dialog on update-not-available when scheduled', async () => {
     const mod = await import('./auto-updater.js');
-    mod.initAutoUpdater(mockWindow);
+    mod.initAutoUpdater(mockWindow, 31415);
     emit('update-not-available');
     expect(showMessageBox).not.toHaveBeenCalled();
   });
 
   it('shows error dialog on persistent error when manual', async () => {
     const mod = await import('./auto-updater.js');
-    mod.initAutoUpdater(mockWindow);
+    mod.initAutoUpdater(mockWindow, 31415);
     await mod.checkForUpdatesManual(mockWindow);
     emit('error', Object.assign(new Error('signature mismatch'), { code: 'EPERM' }));
     expect(showMessageBox).toHaveBeenCalledTimes(1);
@@ -79,7 +80,7 @@ describe('auto-updater manual check', () => {
 
   it('does NOT show dialog on transient error when manual, but clears in-flight flag', async () => {
     const mod = await import('./auto-updater.js');
-    mod.initAutoUpdater(mockWindow);
+    mod.initAutoUpdater(mockWindow, 31415);
     await mod.checkForUpdatesManual(mockWindow);
     emit('error', Object.assign(new Error('connect ETIMEDOUT'), { code: 'ETIMEDOUT' }));
     expect(showMessageBox).not.toHaveBeenCalled();
@@ -88,7 +89,7 @@ describe('auto-updater manual check', () => {
 
   it('does NOT show dialog on update-available when manual (StatusBar handles it)', async () => {
     const mod = await import('./auto-updater.js');
-    mod.initAutoUpdater(mockWindow);
+    mod.initAutoUpdater(mockWindow, 31415);
     await mod.checkForUpdatesManual(mockWindow);
     emit('update-available', { version: '0.18.0' });
     expect(showMessageBox).not.toHaveBeenCalled();
@@ -97,7 +98,7 @@ describe('auto-updater manual check', () => {
 
   it('checkForUpdatesManual is a no-op when already in-flight', async () => {
     const mod = await import('./auto-updater.js');
-    mod.initAutoUpdater(mockWindow);
+    mod.initAutoUpdater(mockWindow, 31415);
     await mod.checkForUpdatesManual(mockWindow);
     await mod.checkForUpdatesManual(mockWindow);
     expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
@@ -107,7 +108,7 @@ describe('auto-updater manual check', () => {
     vi.useFakeTimers();
     try {
       const mod = await import('./auto-updater.js');
-      mod.initAutoUpdater(mockWindow);
+      mod.initAutoUpdater(mockWindow, 31415);
       await mod.checkForUpdatesManual(mockWindow);
       expect(mod.isManualCheckInFlight()).toBe(true);
       vi.advanceTimersByTime(60_000);
@@ -122,5 +123,54 @@ describe('auto-updater manual check', () => {
     const mod = await import('./auto-updater.js');
     await mod.checkForUpdatesManual(mockWindow);
     expect(mockAutoUpdater.checkForUpdates).not.toHaveBeenCalled();
+  });
+});
+
+describe('auto-updater update channel', () => {
+  let allowPrereleaseAtCheckTime: boolean | undefined;
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    allowPrereleaseAtCheckTime = undefined;
+    mockAutoUpdater.checkForUpdates.mockImplementation(() => {
+      allowPrereleaseAtCheckTime = mockAutoUpdater.allowPrerelease;
+      return Promise.resolve(null);
+    });
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sets allowPrerelease=true when the daemon reports the prerelease channel', async () => {
+    fetchMock.mockResolvedValue({
+      json: () => Promise.resolve({ success: true, data: { updateChannel: 'prerelease' } }),
+    });
+    const mod = await import('./auto-updater.js');
+    mod.initAutoUpdater(mockWindow, 31415);
+    await mod.checkForUpdatesManual(mockWindow);
+
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:31415/api/settings/general');
+    expect(allowPrereleaseAtCheckTime).toBe(true);
+  });
+
+  it('sets allowPrerelease=false when the daemon reports the stable channel', async () => {
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ success: true, data: { updateChannel: 'stable' } }) });
+    const mod = await import('./auto-updater.js');
+    mod.initAutoUpdater(mockWindow, 31415);
+    await mod.checkForUpdatesManual(mockWindow);
+
+    expect(allowPrereleaseAtCheckTime).toBe(false);
+  });
+
+  it('defaults to allowPrerelease=false without throwing when the daemon fetch fails', async () => {
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
+    const mod = await import('./auto-updater.js');
+    mod.initAutoUpdater(mockWindow, 31415);
+    await expect(mod.checkForUpdatesManual(mockWindow)).resolves.toBeUndefined();
+
+    expect(allowPrereleaseAtCheckTime).toBe(false);
   });
 });

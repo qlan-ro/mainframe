@@ -33,6 +33,8 @@ dirs = "5"
 which = "6"
 portable-pty = "0.9"
 ureq = { version = "2", default-features = false, features = ["json"] }
+# Matches the `url::Url` type tauri-plugin-updater's `endpoints()` builder expects.
+url = "2"
 # The platform credential-store backends are opt-in in keyring 3.x. Without an
 # explicit backend feature the crate silently falls back to an in-memory mock
 # store, so remote-daemon tokens never persist and every reconnect authenticates
