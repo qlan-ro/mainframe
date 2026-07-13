@@ -25,6 +25,7 @@
     "draft-session-context",
     "editor-scroll-refresh",
     "fix-archive-active-fallback",
+    "fix-automations-host-zindex",
     "fix-context-meter-overreport",
     "fix-dormant-chat-reseed",
     "fix-prepare-release-title",
@@ -53,7 +54,9 @@
     "subagent-grouping-fixes",
     "tauri-webview-cors-origin",
     "todos-modal-refresh",
+    "typography-legibility-remediation",
     "ui-small-fixes",
+    "webview-stale-asset-cache",
     "worktree-join-icon-state",
     "ws-boot-race"
   ]
