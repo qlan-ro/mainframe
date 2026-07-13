@@ -1,5 +1,23 @@
 # @qlan-ro/mainframe-ui
 
+## 2.0.0-rc.8
+
+### Minor Changes
+
+- [#458](https://github.com/qlan-ro/mainframe/pull/458) [`41c87af`](https://github.com/qlan-ro/mainframe/commit/41c87af258415f88863a72df4a49b5ebfb045866) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add an update channel setting (Stable / Pre-release) in Settings → General. Electron respects it via `electron-updater`'s `allowPrerelease`; Tauri resolves the newest published GitHub release directly for the pre-release channel, since its updater has no built-in concept of channels.
+
+### Patch Changes
+
+- [#457](https://github.com/qlan-ro/mainframe/pull/457) [`a679cb9`](https://github.com/qlan-ro/mainframe/commit/a679cb95b850796dec3498b5996a896ac5f73c39) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix toasts flickering when hovered.
+
+  Sonner's default collapsed stack clamps every toast to the front toast's height and re-lays the
+  stack out on hover. Our toast cards vary in height, so hovering moved a stacked toast ~314px out
+  from under the pointer, which un-hovered it, which moved it back — a visible flicker loop. The
+  toast stack is now always expanded, so hover changes no geometry.
+
+- Updated dependencies [[`41c87af`](https://github.com/qlan-ro/mainframe/commit/41c87af258415f88863a72df4a49b5ebfb045866)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.7
+
 ## 2.0.0-rc.7
 
 ### Minor Changes
