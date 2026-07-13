@@ -37,6 +37,8 @@
     "global-thin-scrollbars",
     "mainframe-2-0",
     "mainframe-cli-and-update",
+    "olive-buttons-repeat",
+    "olive-pans-shake",
     "preview-child-ipc-and-csp",
     "preview-cluster",
     "preview-empty-new-session",
@@ -56,6 +58,7 @@
     "todos-modal-refresh",
     "typography-legibility-remediation",
     "ui-small-fixes",
+    "update-channel-setting",
     "webview-stale-asset-cache",
     "worktree-join-icon-state",
     "ws-boot-race"
