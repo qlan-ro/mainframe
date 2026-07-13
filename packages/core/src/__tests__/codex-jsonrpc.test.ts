@@ -200,4 +200,96 @@ describe('JsonRpcClient', () => {
     proc.emit('close', 1);
     expect(onExit).toHaveBeenCalledWith(1);
   });
+
+  describe('stderr handling (#237)', () => {
+    it('does not call onError for the rmcp AuthRequired stderr line', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      const line =
+        '2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer resource_metadata=\\"https://mcp.slack.com/.well-known/oauth-protected-resource\\"" })';
+      proc.stderr!.emit('data', Buffer.from(line + '\n'));
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('does not call onError for a plain informational stderr line', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from('2026-07-13T13:10:00.000000Z INFO codex_core: starting session\n'));
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('does not call onError for any line in a chunk carrying multiple stderr lines', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      const chunk =
+        [
+          '2026-07-13T13:10:38.000000Z INFO codex_core: loaded config',
+          '2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer resource_metadata=\\"https://mcp.slack.com/.well-known/oauth-protected-resource\\"" })',
+          '2026-07-13T13:10:40.000000Z INFO codex_core: session ready',
+        ].join('\n') + '\n';
+      proc.stderr!.emit('data', Buffer.from(chunk));
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('does not call onError when a stderr line arrives split across two chunks', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from('2026-01-01T00:00:00.0Z INFO foo: hel'));
+      proc.stderr!.emit('data', Buffer.from('lo\n'));
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('calls onError once with the exit code and stderr tail when the process exits non-zero unexpectedly', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from('2026-07-13T13:10:00.000000Z INFO codex_core: starting\n'));
+      proc.stderr!.emit('data', Buffer.from('2026-07-13T13:10:01.000000Z ERROR codex_core: panic: bad config file\n'));
+
+      proc.emit('close', 1);
+
+      expect(onError).toHaveBeenCalledOnce();
+      const [message] = onError.mock.calls[0]!;
+      expect(message).toContain('1');
+      expect(message).toContain('panic: bad config file');
+    });
+
+    it('includes the fully reassembled split-chunk line in exit diagnostics', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      createClient(proc, { onError });
+
+      proc.stderr!.emit('data', Buffer.from('2026-01-01T00:00:00.0Z INFO foo: hel'));
+      proc.stderr!.emit('data', Buffer.from('lo\n'));
+
+      proc.emit('close', 1);
+
+      expect(onError).toHaveBeenCalledOnce();
+      const [message] = onError.mock.calls[0]!;
+      expect(message).toContain('foo: hello');
+    });
+
+    it('does not call onError when the client itself initiated the close', () => {
+      const onError = vi.fn();
+      const proc = createMockProcess();
+      const client = createClient(proc, { onError });
+
+      client.close();
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -5,7 +5,7 @@
 //! copied exactly from the TS). 30s request timeout; notification + server-request
 //! handlers; close listeners.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -22,6 +22,7 @@ use crate::types::{
 };
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+const STDERR_TAIL_LINES: usize = 20;
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -142,6 +143,7 @@ impl JsonRpcClient {
         let close_listeners: Arc<Mutex<Vec<CloseListener>>> = Arc::new(Mutex::new(Vec::new()));
         let close_notify = Arc::new(Notify::new());
         let kill_notify = Arc::new(Notify::new());
+        let recent_stderr: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
         let handlers = Arc::new(handlers);
 
         let stdin = child.stdin.take();
@@ -191,18 +193,33 @@ impl JsonRpcClient {
             });
         }
 
-        // Stderr reader task — filter noise, surface the rest.
+        // Stderr reader task. codex is a Rust binary that writes tracing logs to stderr as
+        // normal operation — an unauthenticated remote MCP server alone emits ERROR lines on
+        // every startup while the run proceeds fine. stderr is a log stream, never an error
+        // channel: a real failure arrives as a JSON-RPC error or a non-zero exit (reported by
+        // the exit watcher, which replays this tail as the reason).
         if let Some(stderr) = stderr {
-            let handlers = handlers.clone();
+            let recent_stderr = recent_stderr.clone();
             tokio::spawn(async move {
                 let mut lines = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
                     let message = line.trim();
-                    if message.is_empty() || is_stderr_noise(message) {
+                    if message.is_empty() {
                         continue;
                     }
-                    tracing::warn!(module = "codex:jsonrpc", stderr = message, "codex stderr");
-                    (handlers.on_error)(message.to_string());
+
+                    let mut tail = recent_stderr.lock().unwrap_or_else(|e| e.into_inner());
+                    tail.push_back(message.to_string());
+                    while tail.len() > STDERR_TAIL_LINES {
+                        tail.pop_front();
+                    }
+                    drop(tail);
+
+                    if is_tracing_line(message) {
+                        tracing::debug!(module = "codex:jsonrpc", stderr = message, "codex stderr");
+                    } else {
+                        tracing::warn!(module = "codex:jsonrpc", stderr = message, "codex stderr");
+                    }
                 }
             });
         }
@@ -215,6 +232,8 @@ impl JsonRpcClient {
             let close_notify = close_notify.clone();
             let kill_notify = kill_notify.clone();
             let exited = exited.clone();
+            let closed = closed.clone();
+            let recent_stderr = recent_stderr.clone();
             let handlers = handlers.clone();
             tokio::spawn(async move {
                 let code = tokio::select! {
@@ -229,6 +248,20 @@ impl JsonRpcClient {
                     &pending,
                     JsonRpcError(format!("Process exited with code {code:?}")),
                 );
+                if !closed.load(Ordering::SeqCst) && code.is_some_and(|c| c != 0) {
+                    let code = code.unwrap_or_default();
+                    let tail: Vec<String> = recent_stderr
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .iter()
+                        .cloned()
+                        .collect();
+                    (handlers.on_error)(if tail.is_empty() {
+                        format!("codex exited with code {code}")
+                    } else {
+                        format!("codex exited with code {code}:\n{}", tail.join("\n"))
+                    });
+                }
                 for listener in close_listeners
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
@@ -420,15 +453,55 @@ fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: 
     }
 }
 
-/// The stderr noise filter (`STDERR_NOISE`) — hand-rolled (no regex crate).
-fn is_stderr_noise(message: &str) -> bool {
-    let lower = message.to_lowercase();
-    lower.starts_with("debugger")
-        || lower.starts_with("warning:")
-        || message.starts_with("DeprecationWarning")
-        || message.starts_with("ExperimentalWarning")
-        || (message.starts_with("(node:") && message.contains(')'))
-        || (message.starts_with("thread '") && message.contains("panicked"))
+/// `<rfc3339> <LEVEL> <target>: <message>` — the codex binary's tracing format.
+/// Hand-rolled (no regex crate): a timestamp-shaped first token, then a level.
+fn is_tracing_line(message: &str) -> bool {
+    let mut parts = message.split_whitespace();
+    let Some(ts) = parts.next() else {
+        return false;
+    };
+    if !ts.ends_with('Z') || !ts.starts_with(|c: char| c.is_ascii_digit()) || !ts.contains('T') {
+        return false;
+    }
+    matches!(
+        parts.next(),
+        Some("TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR")
+    )
+}
+
+#[cfg(test)]
+mod stderr_tests {
+    use super::is_tracing_line;
+
+    // The #237 repro: an unauthenticated remote MCP server makes codex log this on every
+    // startup while the run itself proceeds fine.
+    #[test]
+    fn classifies_the_rmcp_auth_required_error_as_a_tracing_line() {
+        assert!(is_tracing_line(
+            "2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: \
+             Transport channel closed, when AuthRequired(AuthRequiredError { .. })"
+        ));
+    }
+
+    #[test]
+    fn classifies_every_tracing_level() {
+        for level in ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"] {
+            assert!(is_tracing_line(&format!(
+                "2026-07-13T13:10:39.248771Z {level} codex_core::config: loaded"
+            )));
+        }
+    }
+
+    #[test]
+    fn rejects_lines_that_are_not_tracing_output() {
+        assert!(!is_tracing_line(
+            "thread 'main' panicked at src/main.rs:1:1"
+        ));
+        assert!(!is_tracing_line("error: unexpected argument '--nope'"));
+        assert!(!is_tracing_line(""));
+        assert!(!is_tracing_line("2026-07-13T13:10:39.248771Z"));
+        assert!(!is_tracing_line("ERROR rmcp: no leading timestamp"));
+    }
 }
 
 #[cfg(test)]
