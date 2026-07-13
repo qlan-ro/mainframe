@@ -12,5 +12,10 @@
 import { Toaster as SonnerToaster } from 'sonner';
 
 export function Toaster() {
-  return <SonnerToaster position="bottom-right" offset={18} gap={9} visibleToasts={5} />;
+  // `expand` is load-bearing, not cosmetic: sonner's default collapsed stack clamps every
+  // toast to the front toast's height and re-lays the stack out on hover. Our cards vary in
+  // height (a "Read more"-expanded error is ~300px), so hovering moved a stacked toast by
+  // ~314px — out from under the pointer, which un-hovered it, which moved it back: a flicker
+  // loop. Always-expanded means hover changes no geometry.
+  return <SonnerToaster position="bottom-right" offset={18} gap={9} visibleToasts={5} expand />;
 }
