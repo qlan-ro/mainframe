@@ -159,11 +159,19 @@ pub struct NotificationConfig {
     pub other: NotificationOtherConfig,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateChannel {
+    Stable,
+    Prerelease,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneralConfig {
     pub worktree_dir: String,
     pub notifications: NotificationConfig,
+    pub update_channel: UpdateChannel,
 }
 
 /// Mirrors the exported `NOTIFICATION_DEFAULTS` constant (all channels on).
@@ -190,6 +198,7 @@ impl Default for GeneralConfig {
         Self {
             worktree_dir: ".worktrees".to_string(),
             notifications: NotificationConfig::default(),
+            update_channel: UpdateChannel::Stable,
         }
     }
 }
@@ -262,6 +271,18 @@ mod tests {
     #[test]
     fn general_defaults_match_ts_constant() {
         assert_eq!(GeneralConfig::default().worktree_dir, ".worktrees");
+        assert_eq!(
+            GeneralConfig::default().update_channel,
+            UpdateChannel::Stable
+        );
+    }
+
+    #[test]
+    fn update_channel_serializes_lowercase() {
+        assert_eq!(
+            serde_json::to_string(&UpdateChannel::Prerelease).unwrap(),
+            "\"prerelease\""
+        );
     }
 }
 

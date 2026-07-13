@@ -173,6 +173,10 @@ async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
         "worktreeDir".to_string(),
         Value::String(GeneralConfig::default().worktree_dir),
     );
+    data.insert(
+        "updateChannel".to_string(),
+        Value::String("stable".to_string()),
+    );
     for (k, v) in &raw {
         if k != "notifications" {
             data.insert(k.clone(), Value::String(v.clone()));
@@ -187,6 +191,8 @@ struct GeneralPatch {
     #[serde(rename = "worktreeDir")]
     worktree_dir: Option<String>,
     notifications: Option<NotificationPatch>,
+    #[serde(rename = "updateChannel")]
+    update_channel: Option<String>,
 }
 
 fn is_valid_worktree_dir(s: &str) -> bool {
@@ -215,10 +221,14 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
             return fail(StatusCode::BAD_REQUEST, "Must be a simple directory name");
         }
     }
+    if !in_enum(&patch.update_channel, &["stable", "prerelease"]) {
+        return fail(StatusCode::BAD_REQUEST, "Invalid update channel");
+    }
 
     let GeneralPatch {
         worktree_dir,
         notifications,
+        update_channel,
     } = patch;
     let result = ctx
         .db
@@ -228,6 +238,13 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
                     db.settings.delete("general", "worktreeDir")?;
                 } else {
                     db.settings.set("general", "worktreeDir", &wd)?;
+                }
+            }
+            if let Some(uc) = update_channel {
+                if uc == "stable" {
+                    db.settings.delete("general", "updateChannel")?;
+                } else {
+                    db.settings.set("general", "updateChannel", &uc)?;
                 }
             }
             if let Some(patch) = notifications {

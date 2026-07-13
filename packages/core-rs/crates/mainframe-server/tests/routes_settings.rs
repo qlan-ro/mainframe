@@ -134,6 +134,55 @@ async fn general_put_rejects_empty_worktree_dir_with_joined_zod_message() {
     );
 }
 
+#[tokio::test]
+async fn general_put_persists_prerelease_channel() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "updateChannel": "prerelease" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        get_setting(&server, "general", "updateChannel")
+            .await
+            .as_deref(),
+        Some("prerelease")
+    );
+    let body = get_json(&server, "/api/settings/general").await;
+    assert_eq!(body["data"]["updateChannel"], "prerelease");
+}
+
+#[tokio::test]
+async fn general_put_deletes_channel_key_when_set_to_default() {
+    let server = spawn_test_server(None).await;
+    set_setting(&server, "general", "updateChannel", "prerelease").await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "updateChannel": "stable" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(get_setting(&server, "general", "updateChannel").await, None);
+}
+
+#[tokio::test]
+async fn general_put_rejects_invalid_update_channel() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "updateChannel": "bogus" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], false);
+    assert_eq!(body["error"], "Invalid update channel");
+}
+
 // ── providers PUT ────────────────────────────────────────────────────────────
 
 #[tokio::test]
