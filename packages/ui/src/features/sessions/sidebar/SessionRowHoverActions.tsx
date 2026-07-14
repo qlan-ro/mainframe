@@ -1,24 +1,18 @@
 /**
- * SessionRowHoverActions — tag / rename / archive icon buttons revealed on
- * row hover (artboard SessionRowDense `.tw-row-actions` shown on `:hover`,
- * swapping out the time). Extracted out of SessionRow.tsx to keep it under
- * the file-size limit. Each click stops propagation so it doesn't also
- * select the row, and wires to the same handlers the right-click context
- * menu uses.
+ * SessionRowHoverActions — tag / archive icon buttons revealed on row hover
+ * (artboard SessionRowDense `.tw-row-actions` shown on `:hover`, swapping out
+ * the time). Extracted out of SessionRow.tsx to keep it under the file-size
+ * limit. Each click stops propagation so it doesn't also select the row, and
+ * wires to the same handlers the right-click context menu uses.
+ *
+ * No inline Rename button here — the right-click context menu (SessionContextMenu)
+ * already offers Rename, so a duplicate inline shortcut is redundant.
  */
 import type { MouseEvent } from 'react';
-import { PaperclipIcon, TagIcon, XIcon } from 'lucide-react';
+import { TagIcon, XIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 
-export function RowHoverActions({
-  onTags,
-  onRename,
-  onArchive,
-}: {
-  onTags: (rect: DOMRect) => void;
-  onRename: () => void;
-  onArchive: () => void;
-}) {
+export function RowHoverActions({ onTags, onArchive }: { onTags: (rect: DOMRect) => void; onArchive: () => void }) {
   const btn =
     'inline-flex size-[22px] items-center justify-center rounded-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
   const stop = (fn: () => void) => (e: MouseEvent) => {
@@ -40,11 +34,6 @@ export function RowHoverActions({
           }}
         >
           <TagIcon className="size-3.5" />
-        </button>
-      </Hint>
-      <Hint label="Rename">
-        <button data-testid="sessions-row-action-rename" type="button" className={btn} onClick={stop(onRename)}>
-          <PaperclipIcon className="size-3.5" />
         </button>
       </Hint>
       <Hint label="Archive">

@@ -35,10 +35,15 @@ describe('SessionMetaCard — title and time', () => {
 });
 
 describe('SessionMetaCard — project', () => {
-  it('renders project name with a colored dot when projectName is given', () => {
+  it('renders a "Project" field label and a plain-colored (not tinted) name, with an avatar', () => {
     render(<SessionMetaCard {...baseProps()} projectId="p1" projectName="mainframe" />);
     const project = screen.getByTestId('sessions-meta-card-project');
+    expect(project.textContent).toContain('Project');
     expect(project.textContent).toContain('mainframe');
+    expect(project.querySelector('[data-testid="project-avatar"]')).not.toBeNull();
+    const name = screen.getByText('mainframe');
+    expect(name.style.color).toBe('');
+    expect(name.className).toContain('text-foreground');
   });
 
   it('omits the project row when projectName is absent', () => {
@@ -52,7 +57,9 @@ describe('SessionMetaCard — worktree / branch', () => {
     render(<SessionMetaCard {...baseProps()} worktreePath="/repos/mf/.git/worktrees/feat-x" />);
     const el = screen.getByTestId('sessions-meta-card-worktree');
     expect(el.textContent).toContain('feat-x');
-    expect(el.className).toContain('font-mono');
+    // The value (not the field label) carries the monospace treatment — the
+    // label stays in the regular UI font.
+    expect(screen.getByText('feat-x').className).toContain('font-mono');
   });
 
   it('falls back to branchName when there is no worktreePath', () => {
@@ -84,8 +91,14 @@ describe('SessionMetaCard — tags', () => {
   it('renders a full pill per tag, not just dots', () => {
     render(<SessionMetaCard {...baseProps()} tags={['alpha', 'beta']} colorOf={() => 'blue'} />);
     const wrap = screen.getByTestId('sessions-meta-card-tags');
+    expect(wrap.textContent).toContain('Tags');
     expect(wrap.textContent).toContain('alpha');
     expect(wrap.textContent).toContain('beta');
+    // Each tag is a solid-colored chip (tinted background + matching text
+    // color), not a neutral chip with a separate color dot.
+    const chip = screen.getByText('alpha');
+    expect(chip.style.backgroundColor).not.toBe('');
+    expect(chip.style.color).not.toBe('');
   });
 
   it('omits the tags row when tags is empty', () => {

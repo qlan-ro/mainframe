@@ -33,3 +33,9 @@ export function tagColorValue(color: TagColor): string {
 export function TAG_DOT_STYLE(color: TagColor): CSSProperties {
   return { backgroundColor: tagColorValue(color) };
 }
+
+/** A soft-tinted chip/pill in the tag's own color (background tint + matching text). */
+export function TAG_CHIP_STYLE(color: TagColor): CSSProperties {
+  const value = tagColorValue(color);
+  return { backgroundColor: `color-mix(in oklch, ${value} 18%, transparent)`, color: value };
+}

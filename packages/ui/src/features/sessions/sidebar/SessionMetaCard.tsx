@@ -17,10 +17,26 @@ import { FolderGit2, GitBranch, AlertTriangle } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { formatRelativeTime } from '../view-model/relative-time';
 import { projectColor } from './project-color';
-import { TAG_DOT_STYLE } from '../tags/tag-colors';
+import { TAG_CHIP_STYLE } from '../tags/tag-colors';
 import { worktreeBasename } from './worktree-basename';
+import { ProjectAvatar } from './ProjectAvatar';
 
 const CARD_GAP_PX = 8;
+const LABEL_WIDTH_PX = 46;
+
+/** A short, fixed-width caption naming what the row's value is, so the card
+ * doesn't rely on icon semantics alone. */
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <span
+      data-testid={`sessions-meta-card-label-${children.toLowerCase()}`}
+      style={{ width: LABEL_WIDTH_PX }}
+      className="flex-shrink-0 text-muted-foreground"
+    >
+      {children}
+    </span>
+  );
+}
 
 interface SessionMetaCardProps {
   anchorRect: DOMRect;
@@ -40,12 +56,14 @@ interface SessionMetaCardProps {
 
 function WorktreeOrBranchRow({ worktreePath, branchName }: { worktreePath?: string; branchName?: string }) {
   if (worktreePath == null && branchName == null) return null;
-  const text = worktreePath != null ? worktreeBasename(worktreePath) : (branchName as string);
-  const Icon = worktreePath != null ? FolderGit2 : GitBranch;
+  const isWorktree = worktreePath != null;
+  const text = isWorktree ? worktreeBasename(worktreePath) : (branchName as string);
+  const Icon = isWorktree ? FolderGit2 : GitBranch;
   return (
-    <div data-testid="sessions-meta-card-worktree" className="flex items-center gap-[6px] font-mono text-caption">
+    <div data-testid="sessions-meta-card-worktree" className="flex items-center gap-[6px] text-caption">
+      <FieldLabel>{isWorktree ? 'Worktree' : 'Branch'}</FieldLabel>
       <Icon size={12} className="flex-shrink-0 text-muted-foreground" aria-hidden />
-      <span className="truncate">{text}</span>
+      <span className="truncate font-mono">{text}</span>
     </div>
   );
 }
@@ -67,16 +85,19 @@ function WarningRow({ worktreeMissing, transcriptMissing }: { worktreeMissing: b
 function TagsRow({ tags, colorOf }: { tags: string[]; colorOf?: (name: string) => TagColor }) {
   if (tags.length === 0 || colorOf == null) return null;
   return (
-    <div data-testid="sessions-meta-card-tags" className="flex flex-wrap items-center gap-[5px]">
-      {tags.map((name) => (
-        <span
-          key={name}
-          className="inline-flex items-center gap-[4px] rounded-[9px] bg-accent px-[7px] py-[1px] text-caption font-medium text-foreground"
-        >
-          <span className="size-[6px] rounded-full" style={TAG_DOT_STYLE(colorOf(name))} aria-hidden="true" />
-          {name}
-        </span>
-      ))}
+    <div data-testid="sessions-meta-card-tags" className="flex items-start gap-[6px]">
+      <FieldLabel>Tags</FieldLabel>
+      <div className="flex flex-1 flex-wrap items-center gap-[5px]">
+        {tags.map((name) => (
+          <span
+            key={name}
+            className="inline-flex items-center rounded-[9px] px-[8px] py-[1px] text-caption font-medium"
+            style={TAG_CHIP_STYLE(colorOf(name))}
+          >
+            {name}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -96,7 +117,7 @@ export function SessionMetaCard({
   tags,
   colorOf,
 }: SessionMetaCardProps) {
-  const chipColor = projectId != null ? projectColor(projectId) : undefined;
+  const avatarColor = projectId != null ? projectColor(projectId) : undefined;
 
   return createPortal(
     <div
@@ -114,36 +135,31 @@ export function SessionMetaCard({
             {formatRelativeTime(updatedAt, now)}
           </span>
         </div>
-        {projectName != null && chipColor != null && (
+        {projectName != null && avatarColor != null && (
           <div data-testid="sessions-meta-card-project" className="flex items-center gap-[6px] text-caption">
-            <span
-              className="size-[6px] flex-shrink-0 rounded-full"
-              style={{ backgroundColor: chipColor }}
-              aria-hidden="true"
-            />
-            <span className="truncate" style={{ color: chipColor }}>
-              {projectName}
-            </span>
+            <FieldLabel>Project</FieldLabel>
+            <ProjectAvatar name={projectName} color={avatarColor} size={14} />
+            <span className="truncate text-foreground">{projectName}</span>
           </div>
         )}
         <WorktreeOrBranchRow worktreePath={worktreePath} branchName={branchName} />
         {detectedPrs.length > 0 && (
-          <div
-            data-testid="sessions-meta-card-pr"
-            className="flex flex-wrap items-center gap-[8px] font-mono text-caption font-semibold"
-          >
-            {detectedPrs.map((pr) => (
-              <a
-                key={pr.number}
-                href={pr.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-mf-success hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                #{pr.number}
-              </a>
-            ))}
+          <div data-testid="sessions-meta-card-pr" className="flex items-center gap-[6px] text-caption">
+            <FieldLabel>PR</FieldLabel>
+            <div className="flex flex-1 flex-wrap items-center gap-[8px] font-mono font-semibold">
+              {detectedPrs.map((pr) => (
+                <a
+                  key={pr.number}
+                  href={pr.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-mf-success hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  #{pr.number}
+                </a>
+              ))}
+            </div>
           </div>
         )}
         <TagsRow tags={tags} colorOf={colorOf} />

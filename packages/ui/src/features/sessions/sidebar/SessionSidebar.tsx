@@ -2,9 +2,11 @@
  * SessionSidebar — the full left panel shell (warm-chrome glass panel).
  *
  * Composition (matches the 02-chrome artboard Sidebar):
- *   header → "Sessions" group header (chevron + count + new/sort/more) →
- *   ProjectFilterPillBar → scrollable TIME-grouped list (flex-1) →
- *   TagFilterBar pinned at the BOTTOM (border-t, flex-shrink-0)
+ *   header → ProjectFilterPillBar (the project switcher — "All projects" is
+ *   its own top row, so no separate "Projects" section title is needed) →
+ *   "Sessions" group header (chevron + count + new/sort/more) → scrollable
+ *   TIME-grouped list (flex-1) → TagFilterBar pinned at the BOTTOM (border-t,
+ *   flex-shrink-0)
  *
  * Grouping is by TIME, not project (Pinned / Today / Yesterday / Earlier), with a
  * Sort By menu (Recent / Name / Status) — per the artboard `arrangeSessions`.
@@ -189,6 +191,15 @@ function SessionSidebarImpl() {
 
   return (
     <>
+      <ProjectFilterPillBar
+        projects={sortedProjects}
+        filterProjectId={filterProjectId}
+        attentionCounts={attentionCounts}
+        onSelect={onSelectProject}
+        onRemoveProject={(project) => void handleRemoveProject(project)}
+        onAddProject={() => void handleAddProject()}
+      />
+
       <SessionsGroupHeader
         count={allItems.length}
         newButton={
@@ -200,15 +211,6 @@ function SessionSidebarImpl() {
             onAddProject={() => void handleAddProject()}
           />
         }
-      />
-
-      <ProjectFilterPillBar
-        projects={sortedProjects}
-        filterProjectId={filterProjectId}
-        attentionCounts={attentionCounts}
-        onSelect={onSelectProject}
-        onRemoveProject={(project) => void handleRemoveProject(project)}
-        onAddProject={() => void handleAddProject()}
       />
 
       {draftRow.visible && draftRow.model != null && (

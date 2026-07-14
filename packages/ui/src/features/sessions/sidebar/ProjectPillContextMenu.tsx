@@ -13,6 +13,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { CountBadge } from '@/components/ui/count-badge';
 import { DismissibleHint } from '@/components/ui/hint';
 import { useUiPrefs } from '@/store/ui-prefs';
+import { ProjectAvatar } from './ProjectAvatar';
 
 interface ProjectPillContextMenuProps {
   project: Project;
@@ -37,18 +38,6 @@ interface ProjectRowBodyProps extends HTMLAttributes<HTMLDivElement> {
 const REMOVE_LABEL = 'Remove Project';
 const RENAME_LABEL = 'Rename Project';
 const HINT_LABEL = 'Right-click for options';
-
-function ProjectAvatar({ name, color }: { name: string; color: string }) {
-  const initial = name.trim().charAt(0).toUpperCase() || '?';
-  return (
-    <span
-      className="inline-flex size-[18px] flex-shrink-0 items-center justify-center rounded-full text-caption font-semibold"
-      style={{ backgroundColor: `color-mix(in oklch, ${color} 18%, transparent)`, color }}
-    >
-      {initial}
-    </span>
-  );
-}
 
 const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function ProjectRowBody(
   { project, active, badgeCount, badgeTestId, avatarColor, onSelect, className, ...props },

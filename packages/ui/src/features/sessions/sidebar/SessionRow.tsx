@@ -199,11 +199,7 @@ function SessionRowInner({
                 />
               </div>
               <RelativeTime updatedAt={custom.updatedAt} />
-              <RowHoverActions
-                onTags={(rect) => handleTags(rect)}
-                onRename={() => queueMicrotask(() => setIsRenaming(true))}
-                onArchive={() => void itemRuntime.archive()}
-              />
+              <RowHoverActions onTags={(rect) => handleTags(rect)} onArchive={() => void itemRuntime.archive()} />
             </div>
           </ThreadListItemPrimitive.Trigger>
         </ThreadListItemPrimitive.Root>

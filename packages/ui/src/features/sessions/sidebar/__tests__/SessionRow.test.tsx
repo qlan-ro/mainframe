@@ -572,16 +572,15 @@ describe('StatusDot working provider logo size', () => {
 
 // ---------------------------------------------------------------------------
 // 17. Row hover-action glyphs match the artboard's literal (mismatched) icon
-// choice — paperclip for Rename, xmark for Archive (finding 1.16, debatable
-// but scope is full parity with 02-chrome.jsx).
+// choice — xmark for Archive (finding 1.16, debatable but scope is full
+// parity with 02-chrome.jsx). The inline Rename shortcut was removed — the
+// right-click context menu (SessionContextMenu) already offers Rename.
 // ---------------------------------------------------------------------------
 
 describe('SessionRow hover-action glyphs match the artboard (finding 1.16)', () => {
-  it('Rename action uses the paperclip glyph, not PencilIcon', () => {
+  it('has no inline Rename hover-action button (right-click context menu covers it)', () => {
     render(<SessionRow item={makeItem()} />);
-    const btn = screen.getByTestId('sessions-row-action-rename');
-    expect(btn.querySelector('svg.lucide-paperclip')).toBeTruthy();
-    expect(btn.querySelector('svg.lucide-pencil')).toBeNull();
+    expect(screen.queryByTestId('sessions-row-action-rename')).toBeNull();
   });
 
   it('Archive action uses the xmark glyph, not ArchiveIcon', () => {
