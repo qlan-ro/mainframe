@@ -38,22 +38,23 @@ const RUN: AutomationRunSummary = {
 describe('LibraryRow', () => {
   beforeEach(() => {
     useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], gateway: fakeGateway() });
-    useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
+    useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, detailsAutomationId: null });
   });
 
-  it('renders name, description, scope badge, and trigger chip', () => {
+  it('renders name, description, and trigger chip', () => {
     render(<LibraryRow automation={AUTOMATION} />);
 
     const row = screen.getByTestId('automations-library-row-auto-1');
     expect(row).toHaveTextContent('Daily standup');
     expect(row).toHaveTextContent('Summarizes yesterday and pings me');
-    expect(row).toHaveTextContent('Project');
     expect(row).toHaveTextContent('Every day at 08:00');
   });
 
-  it('shows the "Global" scope badge for a global automation', () => {
-    render(<LibraryRow automation={{ ...AUTOMATION, scope: 'global', projectId: null }} />);
-    expect(screen.getByTestId('automations-library-row-auto-1')).toHaveTextContent('Global');
+  it('renders no scope badge — every automation is project-scoped, so it carries no information', () => {
+    render(<LibraryRow automation={AUTOMATION} />);
+    const row = screen.getByTestId('automations-library-row-auto-1');
+    expect(row).not.toHaveTextContent('Project');
+    expect(row).not.toHaveTextContent('Global');
   });
 
   it('renders a chip per trigger when there are several', () => {
@@ -137,6 +138,62 @@ describe('LibraryRow', () => {
     fireEvent.click(screen.getByTestId('automations-library-edit-auto-1'));
 
     expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'edit', automationId: 'auto-1' });
+  });
+
+  describe('clicking the row (todo #233 — navigate to details)', () => {
+    it('opens the run view directly when the automation has exactly one run', () => {
+      useAutomationsStore.setState({ runs: [RUN] });
+      render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
+
+      fireEvent.click(screen.getByTestId('automations-library-row-auto-1'));
+
+      expect(useAutomationsNav.getState().runId).toBe('run-1');
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    });
+
+    it('opens details when the automation has more than one run', () => {
+      const secondRun: AutomationRunSummary = { ...RUN, id: 'run-2', startedAt: RUN.startedAt - 1000 };
+      useAutomationsStore.setState({ runs: [RUN, secondRun] });
+      render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
+
+      fireEvent.click(screen.getByTestId('automations-library-row-auto-1'));
+
+      expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
+      expect(useAutomationsNav.getState().runId).toBeNull();
+    });
+
+    it('opens details when the automation has never run', () => {
+      render(<LibraryRow automation={AUTOMATION} />);
+
+      fireEvent.click(screen.getByTestId('automations-library-row-auto-1'));
+
+      expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
+    });
+
+    it('does not fire row navigation when clicking Run, Edit, or the toggle', () => {
+      render(<LibraryRow automation={AUTOMATION} />);
+
+      fireEvent.click(screen.getByTestId('automations-library-edit-auto-1'));
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+      expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'edit', automationId: 'auto-1' });
+
+      useAutomationsNav.setState({ editorTarget: null });
+      fireEvent.click(screen.getByTestId('automations-library-toggle-auto-1'));
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    });
+
+    it('does not fire row navigation when clicking the last-run pill', () => {
+      const secondRun: AutomationRunSummary = { ...RUN, id: 'run-2', startedAt: RUN.startedAt - 1000 };
+      useAutomationsStore.setState({ runs: [RUN, secondRun] });
+      render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
+
+      fireEvent.click(screen.getByTestId('automations-library-last-run-auto-1'));
+
+      // The pill's own handler opens the specific run it shows, not the
+      // row's "several runs → details" routing.
+      expect(useAutomationsNav.getState().runId).toBe('run-1');
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    });
   });
 
   it('keys every interactive testid off the automation id, not an array index', () => {

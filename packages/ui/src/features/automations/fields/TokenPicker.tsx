@@ -6,6 +6,12 @@
  * `scopeAt(...)`'s result, so an out-of-scope token simply never appears
  * here — this component does no scoping of its own.
  *
+ * A token carrying `TokenDescriptor.description` (todo #234 bullet 5 — e.g.
+ * an agent step's "Result", to distinguish it from the parsed `expects`
+ * fields) surfaces it as the row's native `title`, matching this feature's
+ * existing native-tooltip spot (`LibraryRow`'s Run button) rather than
+ * adding a second tooltip mechanism for one row.
+ *
  * `small`/`label`/`align` mirror ts153's variant API: `ChipField` embeds an
  * icon-only, right-anchored picker (`small`, `label=""`, `align="end"`);
  * standalone callers (e.g. a "pick a result" row) get the default 24px
@@ -123,6 +129,7 @@ export function TokenPicker({ tokens, onInsert, testId, small, label = 'Insert',
                     data-testid={`${testId}-option-${key}`}
                     onClick={() => handleRowClick(token)}
                     aria-expanded={isExpandable ? isOpen : undefined}
+                    title={token.description}
                     className="flex w-full items-center gap-[9px] rounded-md px-[8px] py-[7px] text-left hover:bg-accent"
                   >
                     <span

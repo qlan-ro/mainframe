@@ -1,7 +1,11 @@
 /**
  * Automations v2 navigation store — open/close + which body AutomationsView
- * renders (library | editor | run | describe), mirroring
+ * renders (library | editor | run | describe | details), mirroring
  * `use-workflows-modal.ts`'s shape.
+ *
+ * `details` (todo #233) is the automation's read-only details view — reached
+ * by clicking a library row (`LibraryRow`'s click handler decides whether to
+ * route straight to `openRun` instead, when there's exactly one run to show).
  */
 import { create } from 'zustand';
 import type { AutomationCreateInput } from '../contract';
@@ -20,6 +24,7 @@ interface AutomationsNavState {
   editorTarget: AutomationsEditorTarget | null;
   runId: string | null;
   describeOpen: boolean;
+  detailsAutomationId: string | null;
   openHost: () => void;
   close: () => void;
   openEditor: (target: AutomationsEditorTarget) => void;
@@ -28,6 +33,8 @@ interface AutomationsNavState {
   closeRun: () => void;
   openDescribe: () => void;
   closeDescribe: () => void;
+  openDetails: (automationId: string) => void;
+  closeDetails: () => void;
 }
 
 export const useAutomationsNav = create<AutomationsNavState>((set) => ({
@@ -35,12 +42,16 @@ export const useAutomationsNav = create<AutomationsNavState>((set) => ({
   editorTarget: null,
   runId: null,
   describeOpen: false,
+  detailsAutomationId: null,
   openHost: () => set({ open: true }),
-  close: () => set({ open: false, editorTarget: null, runId: null, describeOpen: false }),
-  openEditor: (editorTarget) => set({ editorTarget, runId: null, describeOpen: false }),
+  close: () => set({ open: false, editorTarget: null, runId: null, describeOpen: false, detailsAutomationId: null }),
+  openEditor: (editorTarget) => set({ editorTarget, runId: null, describeOpen: false, detailsAutomationId: null }),
   closeEditor: () => set({ editorTarget: null }),
-  openRun: (runId) => set({ runId, editorTarget: null, describeOpen: false }),
+  openRun: (runId) => set({ runId, editorTarget: null, describeOpen: false, detailsAutomationId: null }),
   closeRun: () => set({ runId: null }),
-  openDescribe: () => set({ describeOpen: true, editorTarget: null, runId: null }),
+  openDescribe: () => set({ describeOpen: true, editorTarget: null, runId: null, detailsAutomationId: null }),
   closeDescribe: () => set({ describeOpen: false }),
+  openDetails: (detailsAutomationId) =>
+    set({ detailsAutomationId, editorTarget: null, runId: null, describeOpen: false }),
+  closeDetails: () => set({ detailsAutomationId: null }),
 }));

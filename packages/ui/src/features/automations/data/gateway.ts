@@ -17,7 +17,8 @@ import type {
 } from '../contract';
 
 export interface AutomationsGateway {
-  listAutomations(): Promise<AutomationSummary[]>;
+  /** Omitted/null returns every automation the caller can see; a projectId scopes the list to that project (contract: automations are project-scoped, todo #234 bullet 1). */
+  listAutomations(projectId?: string | null): Promise<AutomationSummary[]>;
   createAutomation(input: AutomationCreateInput): Promise<AutomationSummary>;
   getAutomation(id: string): Promise<AutomationSummary>;
   updateAutomation(id: string, input: AutomationCreateInput): Promise<AutomationSummary>;

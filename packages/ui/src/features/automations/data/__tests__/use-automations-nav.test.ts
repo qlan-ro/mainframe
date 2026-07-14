@@ -96,4 +96,48 @@ describe('useAutomationsNav', () => {
       expect(useAutomationsNav.getState().describeOpen).toBe(false);
     });
   });
+
+  describe('details flow (todo #233)', () => {
+    beforeEach(() => {
+      useAutomationsNav.setState({ open: false, editorTarget: null, runId: null, detailsAutomationId: null });
+    });
+
+    it('openDetails sets the automation id and clears any open editor/run/describe', () => {
+      useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1', describeOpen: true });
+      useAutomationsNav.getState().openDetails('auto-1');
+      const s = useAutomationsNav.getState();
+      expect(s.detailsAutomationId).toBe('auto-1');
+      expect(s.editorTarget).toBeNull();
+      expect(s.runId).toBeNull();
+      expect(s.describeOpen).toBe(false);
+    });
+
+    it('closeDetails clears only the details target', () => {
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1', runId: 'r1' });
+      useAutomationsNav.getState().closeDetails();
+      const s = useAutomationsNav.getState();
+      expect(s.detailsAutomationId).toBeNull();
+      expect(s.runId).toBe('r1');
+    });
+
+    it('openEditor, openRun, and openDescribe all clear an open details target', () => {
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+      useAutomationsNav.getState().openEditor({ mode: 'new' });
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+      useAutomationsNav.getState().openRun('r1');
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+      useAutomationsNav.getState().openDescribe();
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    });
+
+    it('close resets detailsAutomationId too', () => {
+      useAutomationsNav.setState({ open: true, detailsAutomationId: 'auto-1' });
+      useAutomationsNav.getState().close();
+      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    });
+  });
 });

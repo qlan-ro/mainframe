@@ -67,8 +67,9 @@ export function createFixtureGateway(): AutomationsGateway {
       return () => listeners.delete(listener);
     },
 
-    async listAutomations() {
-      return Array.from(definitions.values());
+    async listAutomations(projectId) {
+      const all = Array.from(definitions.values());
+      return projectId ? all.filter((d) => d.projectId === projectId) : all;
     },
 
     async createAutomation(input: AutomationCreateInput) {

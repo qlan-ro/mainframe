@@ -60,10 +60,12 @@ function failValidation(res: Response, err: AutomationValidationError): void {
 export function automationRoutes(ctx: RouteContext): Router {
   const router = Router();
 
-  router.get('/api/automations', (_req, res) => {
+  router.get('/api/automations', (req, res) => {
     const service = ctx.automations;
     if (!service) return void fail(res, 503, 'automation service not available');
-    ok(res, service.list());
+    const { projectId } = req.query;
+    const list = service.list();
+    ok(res, typeof projectId === 'string' ? list.filter((a) => a.projectId === projectId) : list);
   });
 
   router.post(
