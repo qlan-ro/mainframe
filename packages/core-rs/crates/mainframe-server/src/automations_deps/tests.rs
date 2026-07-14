@@ -47,9 +47,10 @@ impl AgentChatPort for FakeChatPort {
         model: Option<&'a str>,
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
+        automation_run_id: &'a str,
     ) -> BoxFuture<'a, String> {
         self.record(format!(
-            "create:{project_id}:{adapter_id}:{}:{}:{}",
+            "create:{project_id}:{adapter_id}:{}:{}:{}:{automation_run_id}",
             model.unwrap_or("-"),
             permission_mode.unwrap_or("-"),
             branch_name.unwrap_or("-"),
@@ -111,6 +112,7 @@ fn request(project_id: Option<&str>) -> AgentRequest {
         model: Some("sonnet".to_string()),
         permission_mode: None,
         project_id: project_id.map(str::to_string),
+        run_id: "run-1".to_string(),
         worktree: None,
         auto_approve: None,
         timeout_minutes: None,
@@ -143,7 +145,7 @@ async fn start_creates_a_chat_and_sends_the_prompt() {
     assert_eq!(
         fake.calls(),
         vec![
-            "create:p1:claude:sonnet:-:-".to_string(),
+            "create:p1:claude:sonnet:-:-:run-1".to_string(),
             "send:chat_1:do the thing".to_string(),
         ]
     );
@@ -164,7 +166,7 @@ async fn start_enables_a_worktree_with_the_step_base_branch() {
     assert_eq!(
         fake.calls(),
         vec![
-            "create:p1:claude:sonnet:-:auto/spike".to_string(),
+            "create:p1:claude:sonnet:-:auto/spike:run-1".to_string(),
             "worktree:chat_1:main:auto/spike".to_string(),
             "send:chat_1:do the thing".to_string(),
         ]

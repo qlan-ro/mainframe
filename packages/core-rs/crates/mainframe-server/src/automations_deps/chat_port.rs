@@ -12,6 +12,9 @@ use mainframe_types::content::LeafContent;
 pub trait AgentChatPort: Send + Sync {
     /// `createChatWithDefaults` → the new chat id. `branch_name` rides the
     /// create so the chat row carries it from birth (v1 agent-port parity).
+    /// `automation_run_id` stamps the chat as automation-created so the
+    /// sessions sidebar hides it from the default list.
+    #[allow(clippy::too_many_arguments)]
     fn create_chat<'a>(
         &'a self,
         project_id: &'a str,
@@ -19,6 +22,7 @@ pub trait AgentChatPort: Send + Sync {
         model: Option<&'a str>,
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
+        automation_run_id: &'a str,
     ) -> BoxFuture<'a, String>;
     fn enable_worktree<'a>(
         &'a self,
@@ -56,6 +60,7 @@ impl AgentChatPort for ChatManagerPort {
         model: Option<&'a str>,
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
+        automation_run_id: &'a str,
     ) -> BoxFuture<'a, String> {
         Box::pin(async move {
             self.chats
@@ -66,6 +71,7 @@ impl AgentChatPort for ChatManagerPort {
                     permission_mode,
                     None,
                     branch_name,
+                    Some(automation_run_id),
                 )
                 .await
                 .id

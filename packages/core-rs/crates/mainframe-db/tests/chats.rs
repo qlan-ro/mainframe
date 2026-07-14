@@ -6,7 +6,7 @@ use std::rc::Rc;
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{ChatUpdate, ChatsRepository, ProjectsRepository};
+use mainframe_db::{ChatListFilters, ChatUpdate, ChatsRepository, ProjectsRepository};
 use mainframe_types::chat::{ChatStatus, TodoItem, TodoStatus};
 
 fn setup() -> (ChatsRepository, ProjectsRepository) {
@@ -30,7 +30,7 @@ fn todo(content: &str, status: TodoStatus, active_form: &str) -> TodoItem {
 fn returns_null_when_no_todos_have_been_set() {
     let (chats, projects) = setup();
     let p = projects.create("/project/todos", None).unwrap();
-    let chat = chats.create(&p.id, "claude", None, None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
     assert!(chats.get_todos(&chat.id).unwrap().is_none());
 }
 
@@ -38,7 +38,7 @@ fn returns_null_when_no_todos_have_been_set() {
 fn stores_and_retrieves_todos() {
     let (chats, projects) = setup();
     let p = projects.create("/project/todos", None).unwrap();
-    let chat = chats.create(&p.id, "claude", None, None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
     let todos = vec![
         todo("Write tests", TodoStatus::Completed, "Writing tests"),
         todo(
@@ -56,7 +56,7 @@ fn stores_and_retrieves_todos() {
 fn replaces_todos_on_subsequent_calls() {
     let (chats, projects) = setup();
     let p = projects.create("/project/todos", None).unwrap();
-    let chat = chats.create(&p.id, "claude", None, None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
     chats
         .update_todos(
             &chat.id,
@@ -72,7 +72,7 @@ fn replaces_todos_on_subsequent_calls() {
 fn includes_todos_in_get_result() {
     let (chats, projects) = setup();
     let p = projects.create("/project/todos", None).unwrap();
-    let chat = chats.create(&p.id, "claude", None, None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
     let todos = vec![todo("Task 1", TodoStatus::Pending, "Task 1")];
     chats.update_todos(&chat.id, &todos).unwrap();
     let loaded = chats.get(&chat.id).unwrap();
@@ -83,7 +83,7 @@ fn includes_todos_in_get_result() {
 fn includes_todos_in_list_results() {
     let (chats, projects) = setup();
     let p = projects.create("/project/todos", None).unwrap();
-    let chat = chats.create(&p.id, "claude", None, None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
     let todos = vec![todo("Task 1", TodoStatus::Completed, "Task 1")];
     chats.update_todos(&chat.id, &todos).unwrap();
     let all = chats.list(&p.id).unwrap();
@@ -96,9 +96,9 @@ fn list_all_returns_chats_across_all_projects_sorted_by_updated_at_desc() {
     let p1 = projects.create("/project/one", None).unwrap();
     let p2 = projects.create("/project/two", None).unwrap();
 
-    let chat1 = chats.create(&p1.id, "claude", None, None).unwrap();
-    let chat2 = chats.create(&p2.id, "claude", None, None).unwrap();
-    let chat3 = chats.create(&p1.id, "claude", None, None).unwrap();
+    let chat1 = chats.create(&p1.id, "claude", None, None, None).unwrap();
+    let chat2 = chats.create(&p2.id, "claude", None, None, None).unwrap();
+    let chat3 = chats.create(&p1.id, "claude", None, None, None).unwrap();
 
     let all = chats.list_all().unwrap();
     assert_eq!(all.len(), 3);
@@ -112,7 +112,7 @@ fn list_all_returns_chats_across_all_projects_sorted_by_updated_at_desc() {
 fn list_all_includes_archived_chats() {
     let (chats, projects) = setup();
     let p1 = projects.create("/project/one", None).unwrap();
-    let chat1 = chats.create(&p1.id, "claude", None, None).unwrap();
+    let chat1 = chats.create(&p1.id, "claude", None, None, None).unwrap();
     chats
         .update(
             &chat1.id,
@@ -123,9 +123,53 @@ fn list_all_includes_archived_chats() {
         )
         .unwrap();
 
-    chats.create(&p1.id, "claude", None, None).unwrap();
+    chats.create(&p1.id, "claude", None, None, None).unwrap();
 
     let all = chats.list_all().unwrap();
     assert_eq!(all.len(), 2);
     assert!(all.iter().any(|c| c.status == ChatStatus::Archived));
+}
+
+#[test]
+fn persists_automation_run_id_and_round_trips_through_get() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/automations", None).unwrap();
+    let created = chats
+        .create(&p.id, "claude", None, None, Some("run-42"))
+        .unwrap();
+    assert_eq!(created.automation_run_id.as_deref(), Some("run-42"));
+
+    let fetched = chats.get(&created.id).unwrap().unwrap();
+    assert_eq!(fetched.automation_run_id.as_deref(), Some("run-42"));
+}
+
+#[test]
+fn leaves_automation_run_id_none_for_a_normal_chat() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/manual", None).unwrap();
+    let created = chats.create(&p.id, "claude", None, None, None).unwrap();
+    assert_eq!(created.automation_run_id, None);
+
+    let fetched = chats.get(&created.id).unwrap().unwrap();
+    assert_eq!(fetched.automation_run_id, None);
+}
+
+#[test]
+fn list_filtered_excludes_chats_with_an_automation_run_id() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/filtered", None).unwrap();
+    let manual = chats.create(&p.id, "claude", None, None, None).unwrap();
+    let automated = chats
+        .create(&p.id, "claude", None, None, Some("run-1"))
+        .unwrap();
+
+    let ids: Vec<String> = chats
+        .list_filtered(&ChatListFilters::default())
+        .unwrap()
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+
+    assert!(ids.contains(&manual.id));
+    assert!(!ids.contains(&automated.id));
 }

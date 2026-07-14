@@ -94,6 +94,7 @@ describe('ChatLifecycleManager.forkToWorktree', () => {
       sourceChat.adapterId,
       sourceChat.model,
       sourceChat.permissionMode,
+      undefined,
     );
     expect(enableWorktreeFn).toHaveBeenCalledWith('chat-new', 'main', 'feat/fork');
     expect(deps.emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.created', chat: newChat }));

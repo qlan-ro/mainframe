@@ -20,7 +20,7 @@ async fn seed_chat(server: &TestServer) -> String {
         .db
         .call(|db| {
             let project = db.projects.create("/tmp/tags-proj", Some("p"))?;
-            let chat = db.chats.create(&project.id, "claude", None, None)?;
+            let chat = db.chats.create(&project.id, "claude", None, None, None)?;
             Ok(chat.id)
         })
         .await

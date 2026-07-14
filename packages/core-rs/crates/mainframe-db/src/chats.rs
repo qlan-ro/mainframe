@@ -27,7 +27,8 @@ const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as pro
   plan_mode as planMode, detected_prs as detectedPrs, \
   session_file_path as sessionFilePath, \
   transcript_missing as transcriptMissing, \
-  fast, ultracode, adaptive_thinking";
+  fast, ultracode, adaptive_thinking, \
+  automation_run_id as automationRunId";
 
 #[derive(Debug, Clone, Default)]
 pub struct ChatListFilters {
@@ -170,6 +171,8 @@ impl ChatsRepository {
         if !filters.include_archived {
             where_clauses.push("status != 'archived'".to_string());
         }
+        // Automation-created chats (ask_agent steps) are hidden from the default sidebar list.
+        where_clauses.push("automation_run_id IS NULL".to_string());
         if let Some(project_id) = &filters.project_id {
             where_clauses.push("project_id = ?".to_string());
             params.push(SqlValue::Text(project_id.clone()));
@@ -227,17 +230,28 @@ impl ChatsRepository {
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Result<Chat, DbError> {
         let id = nanoid::nanoid!();
         let now = now_iso8601();
         // `model || null` / `permissionMode || null` — empty string binds NULL.
         let model_bind = model.filter(|s| !s.is_empty());
         let permission_bind = permission_mode.filter(|s| !s.is_empty());
+        let automation_run_id_bind = automation_run_id.filter(|s| !s.is_empty());
 
         self.db.execute(
-            "INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, 'active', ?, ?)",
-            rusqlite::params![id, adapter_id, project_id, model_bind, permission_bind, now, now],
+            "INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at, automation_run_id) \
+             VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)",
+            rusqlite::params![
+                id,
+                adapter_id,
+                project_id,
+                model_bind,
+                permission_bind,
+                now,
+                now,
+                automation_run_id_bind
+            ],
         )?;
 
         Ok(Chat {
@@ -278,6 +292,7 @@ impl ChatsRepository {
             adaptive_thinking: None,
             detected_prs: None,
             tags: None,
+            automation_run_id: automation_run_id.map(str::to_string),
         })
     }
 
@@ -710,6 +725,7 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
             row.get::<_, Option<String>>("detectedPrs")?,
         )),
         tags: None,
+        automation_run_id: row.get("automationRunId")?,
     })
 }
 

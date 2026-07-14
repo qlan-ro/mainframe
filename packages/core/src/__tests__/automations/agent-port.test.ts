@@ -29,6 +29,7 @@ describe('makeAutomationChatPort', () => {
       permissionMode: 'default',
       worktree: undefined,
       prompt: 'Write a test',
+      automationRunId: 'run-1',
     });
 
     expect(result).toEqual({ chatId: 'chat-9' });
@@ -39,6 +40,7 @@ describe('makeAutomationChatPort', () => {
       'default',
       undefined,
       undefined,
+      'run-1',
     );
     expect(chats.sendMessage).toHaveBeenCalledWith('chat-9', 'Write a test');
   });
@@ -54,6 +56,7 @@ describe('makeAutomationChatPort', () => {
       permissionMode: undefined,
       worktree: { branchName: 'feat/my-branch' },
       prompt: 'Hello',
+      automationRunId: 'run-2',
     });
 
     expect(chats.createChatWithDefaults).toHaveBeenCalledWith(
@@ -63,6 +66,7 @@ describe('makeAutomationChatPort', () => {
       undefined,
       undefined,
       'feat/my-branch',
+      'run-2',
     );
   });
 
@@ -78,6 +82,7 @@ describe('makeAutomationChatPort', () => {
         permissionMode: undefined,
         worktree: undefined,
         prompt: 'Hello',
+        automationRunId: 'run-3',
       }),
     ).rejects.toThrow('requires a projectId');
   });

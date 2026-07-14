@@ -46,7 +46,7 @@ async fn create_chat(server: &TestServer, project_id: &str) -> String {
     server
         .ctx
         .db
-        .call(move |db| db.chats.create(&pid, "claude", None, None))
+        .call(move |db| db.chats.create(&pid, "claude", None, None, None))
         .await
         .unwrap()
         .id

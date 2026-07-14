@@ -257,6 +257,13 @@ export const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    // Marks a chat as automation-created (ask_agent step) so the sessions
+    // sidebar can hide it from the default list.
+    version: 26,
+    up: (db) =>
+      addColumnIfMissing(db, 'chats', 'automation_run_id', 'ALTER TABLE chats ADD COLUMN automation_run_id TEXT'),
+  },
 ];
 
 export const LATEST_VERSION = Math.max(...MIGRATIONS.map((m) => m.version));

@@ -81,6 +81,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
             b.permission_mode.as_deref(),
             b.worktree_path.as_deref(),
             b.branch_name.as_deref(),
+            None,
         )
         .await;
     ok(chat)

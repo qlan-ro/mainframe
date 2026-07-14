@@ -154,6 +154,7 @@ impl AgentPort for DaemonAgentPort {
                     request.model.as_deref(),
                     request.permission_mode.as_deref(),
                     branch_name,
+                    &request.run_id,
                 )
                 .await;
 

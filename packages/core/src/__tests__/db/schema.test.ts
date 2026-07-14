@@ -58,6 +58,7 @@ describe('initializeSchema', () => {
     expect(colNames).toContain('branch_name');
     expect(colNames).toContain('process_state');
     expect(colNames).toContain('last_context_tokens_input');
+    expect(colNames).toContain('automation_run_id');
   });
 
   it('creates the settings table', () => {

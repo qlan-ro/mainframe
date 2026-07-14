@@ -54,6 +54,22 @@ describe('ChatsRepository', () => {
       expect(chat.model).toBeUndefined();
       expect(chat.permissionMode).toBeUndefined();
     });
+
+    it('persists automationRunId when provided, and round-trips it through get()', () => {
+      const created = chats.create(projectId, 'claude', undefined, undefined, 'run-42');
+      expect(created.automationRunId).toBe('run-42');
+
+      const fetched = chats.get(created.id);
+      expect(fetched!.automationRunId).toBe('run-42');
+    });
+
+    it('leaves automationRunId undefined for a normal chat', () => {
+      const created = chats.create(projectId, 'claude');
+      expect(created.automationRunId).toBeUndefined();
+
+      const fetched = chats.get(created.id);
+      expect(fetched!.automationRunId).toBeUndefined();
+    });
   });
 
   describe('get', () => {
@@ -703,6 +719,18 @@ describe('ChatsRepository', () => {
 
       const reloaded = chats.get(chat.id);
       expect(reloaded?.detectedPrs).toEqual([expect.objectContaining({ number: 7, source: 'mentioned' })]);
+    });
+  });
+
+  describe('listFiltered — automation chats', () => {
+    it('excludes chats with an automationRunId from the default list', () => {
+      const manual = chats.create(projectId, 'claude');
+      const automated = chats.create(projectId, 'claude', undefined, undefined, 'run-1');
+
+      const ids = chats.listFiltered({}).map((c) => c.id);
+
+      expect(ids).toContain(manual.id);
+      expect(ids).not.toContain(automated.id);
     });
   });
 });

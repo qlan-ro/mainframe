@@ -68,6 +68,7 @@ pub trait LifecycleManagerDeps: Send + Sync {
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat;
     fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
@@ -204,6 +205,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .or_else(|| self.deps.chats_get(chat_id))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_chat(
         &self,
         project_id: &str,
@@ -212,10 +214,15 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         permission_mode: Option<&str>,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat {
-        let mut chat = self
-            .deps
-            .chats_create(project_id, adapter_id, model, permission_mode);
+        let mut chat = self.deps.chats_create(
+            project_id,
+            adapter_id,
+            model,
+            permission_mode,
+            automation_run_id,
+        );
         if let (Some(wt), Some(branch)) = (worktree_path, branch_name) {
             self.deps.chats_update(
                 &chat.id,
@@ -256,6 +263,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         permission_mode: Option<&str>,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat {
         let mut effective_model = model.map(str::to_string);
         let mut effective_mode = permission_mode.map(str::to_string);
@@ -296,6 +304,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 effective_mode.as_deref(),
                 worktree_path,
                 branch_name,
+                automation_run_id,
             )
             .await;
         if effective_plan_mode {
@@ -709,6 +718,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     .as_deref(),
                 None,
                 None,
+                None,
             )
             .await;
         // The `enableWorktree(newChatId, base, branch)` step is owned by
@@ -1017,7 +1027,14 @@ mod tests {
         fn chats_get(&self, _id: &str) -> Option<Chat> {
             Some(self.chat.clone())
         }
-        fn chats_create(&self, _p: &str, _a: &str, _m: Option<&str>, _pm: Option<&str>) -> Chat {
+        fn chats_create(
+            &self,
+            _p: &str,
+            _a: &str,
+            _m: Option<&str>,
+            _pm: Option<&str>,
+            _run_id: Option<&str>,
+        ) -> Chat {
             self.chat.clone()
         }
         fn chats_update(&self, _chat_id: &str, _patch: &LifecycleChatUpdate) {}

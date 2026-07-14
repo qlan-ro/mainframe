@@ -15,6 +15,7 @@ interface ChatPortDeps {
     permissionMode?: string,
     worktreePath?: string,
     branchName?: string,
+    automationRunId?: string,
   ): Promise<{ id: string }>;
   sendMessage(chatId: string, content: string): Promise<void>;
 }
@@ -40,6 +41,7 @@ export function makeAutomationChatPort(chats: ChatPortDeps, getDefaultProjectId:
         args.permissionMode,
         undefined, // worktreePath — attach worktree by branchName only, matching v1
         args.worktree?.branchName,
+        args.automationRunId,
       );
 
       await chats.sendMessage(chat.id, args.prompt);
