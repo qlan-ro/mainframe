@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, GitBranch, GitFork, Moon, Search, Sun } from 'lucide-react';
+import { ChevronDown, FolderGit2, GitBranch, Moon, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -53,7 +53,7 @@ function BranchChipContent({ branch, isWorktree }: { branch: string; isWorktree:
   return (
     <>
       {isWorktree ? (
-        <GitFork size={12} className="flex-shrink-0 text-primary" />
+        <FolderGit2 size={12} className="flex-shrink-0 text-primary" />
       ) : (
         <GitBranch size={12} className="flex-shrink-0 text-mf-text-3" />
       )}
