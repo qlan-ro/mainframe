@@ -21,10 +21,9 @@
  *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
  *   - arrangeSessions / applySessionFilters / attentionCount (pure VMs)
  */
-import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
-import { CountBadge } from '@/components/ui/count-badge';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -60,20 +59,18 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 }
 
 /**
- * SessionsGroupHeader — the sticky "SESSIONS" group header with the count and
- * the new/sort/more icon-button cluster. `newButton` is SessionsNewButton
- * (pill-active → native New; "All" view → the project-picker popover); the sort
- * button opens SessionSortMenu; the more (⋯) button opens SessionsMoreMenu
- * (Archived sessions · Import external sessions).
+ * SessionsGroupHeader — the sticky "SESSIONS" group header with the sort/more
+ * icon-button cluster. New-session entry is its own full-width row underneath
+ * (SessionsNewButton), not a header icon; the sort button opens
+ * SessionSortMenu; the more (⋯) button opens SessionsMoreMenu (Archived
+ * sessions · Import external sessions).
  */
-function SessionsGroupHeader({ count, newButton }: { count: number; newButton: ReactNode }) {
+function SessionsGroupHeader() {
   const { sortMode, setSortMode } = useSessionFilters();
   return (
     <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
       <span className="text-caption font-medium text-muted-foreground">Sessions</span>
-      <CountBadge count={count} variant="info" />
       <div className="flex-1" />
-      {newButton}
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />
     </div>
@@ -200,18 +197,17 @@ function SessionSidebarImpl() {
         onAddProject={() => void handleAddProject()}
       />
 
-      <SessionsGroupHeader
-        count={allItems.length}
-        newButton={
-          <SessionsNewButton
-            filterProjectId={filterProjectId}
-            filterProjectName={filterProjectName}
-            projects={sortedProjects}
-            sessionCounts={sessionCounts}
-            onAddProject={() => void handleAddProject()}
-          />
-        }
-      />
+      <SessionsGroupHeader />
+
+      <div className="px-2">
+        <SessionsNewButton
+          filterProjectId={filterProjectId}
+          filterProjectName={filterProjectName}
+          projects={sortedProjects}
+          sessionCounts={sessionCounts}
+          onAddProject={() => void handleAddProject()}
+        />
+      </div>
 
       {draftRow.visible && draftRow.model != null && (
         <DraftSessionRow
