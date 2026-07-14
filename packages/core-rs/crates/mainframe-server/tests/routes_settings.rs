@@ -183,6 +183,76 @@ async fn general_put_rejects_invalid_update_channel() {
     assert_eq!(body["error"], "Invalid update channel");
 }
 
+#[tokio::test]
+async fn general_put_persists_default_adapter_id() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "defaultAdapterId": "gemini" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        get_setting(&server, "general", "defaultAdapterId")
+            .await
+            .as_deref(),
+        Some("gemini")
+    );
+    let body = get_json(&server, "/api/settings/general").await;
+    assert_eq!(body["data"]["defaultAdapterId"], "gemini");
+}
+
+#[tokio::test]
+async fn general_put_clears_default_adapter_id_on_explicit_null() {
+    let server = spawn_test_server(None).await;
+    set_setting(&server, "general", "defaultAdapterId", "gemini").await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "defaultAdapterId": null }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        get_setting(&server, "general", "defaultAdapterId").await,
+        None
+    );
+}
+
+#[tokio::test]
+async fn general_put_leaves_default_adapter_id_untouched_when_omitted() {
+    let server = spawn_test_server(None).await;
+    set_setting(&server, "general", "defaultAdapterId", "gemini").await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "worktreeDir": "custom-dir" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        get_setting(&server, "general", "defaultAdapterId")
+            .await
+            .as_deref(),
+        Some("gemini")
+    );
+}
+
+#[tokio::test]
+async fn general_put_rejects_invalid_default_adapter_id() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "defaultAdapterId": "../escape" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], false);
+}
+
 // ── providers PUT ────────────────────────────────────────────────────────────
 
 #[tokio::test]

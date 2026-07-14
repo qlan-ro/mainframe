@@ -67,6 +67,14 @@ describe('GET /api/settings/general', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.worktreeDir).toBe('my-worktrees');
   });
+
+  it('returns the stored defaultAdapterId override', async () => {
+    const db = makeDb({ 'general:defaultAdapterId': 'codex' });
+    const { app } = makeApp(db);
+    const res = await request(app).get('/api/settings/general');
+    expect(res.status).toBe(200);
+    expect(res.body.data.defaultAdapterId).toBe('codex');
+  });
 });
 
 describe('PUT /api/settings/general', () => {
@@ -89,6 +97,29 @@ describe('PUT /api/settings/general', () => {
   it('rejects a worktreeDir containing path separators', async () => {
     const { app } = makeApp();
     const res = await request(app).put('/api/settings/general').send({ worktreeDir: '../escape' });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('persists a defaultAdapterId', async () => {
+    const { app, db } = makeApp();
+    const res = await request(app).put('/api/settings/general').send({ defaultAdapterId: 'gemini' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(db.settings.get('general', 'defaultAdapterId')).toBe('gemini');
+  });
+
+  it('deletes the stored defaultAdapterId when set back to null', async () => {
+    const db = makeDb({ 'general:defaultAdapterId': 'gemini' });
+    const { app } = makeApp(db);
+    const res = await request(app).put('/api/settings/general').send({ defaultAdapterId: null });
+    expect(res.status).toBe(200);
+    expect(db.settings.get('general', 'defaultAdapterId')).toBeNull();
+  });
+
+  it('rejects a defaultAdapterId with invalid characters', async () => {
+    const { app } = makeApp();
+    const res = await request(app).put('/api/settings/general').send({ defaultAdapterId: '../escape' });
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });

@@ -177,6 +177,10 @@ async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
         "updateChannel".to_string(),
         Value::String("stable".to_string()),
     );
+    // Explicit `null` (not an omitted key) — mirrors the TS route's
+    // `{ ...GENERAL_DEFAULTS, ...scalars }` spread, where GENERAL_DEFAULTS carries
+    // `defaultAdapterId: null`.
+    data.insert("defaultAdapterId".to_string(), Value::Null);
     for (k, v) in &raw {
         if k != "notifications" {
             data.insert(k.clone(), Value::String(v.clone()));
@@ -186,6 +190,21 @@ async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
     ok(Value::Object(data))
 }
 
+/// Distinguishes an absent JSON key (`None` — leave unchanged) from an explicit
+/// `null` (`Some(None)` — clear to the default) for a `defaultAdapterId: string |
+/// null` field. Plain `Option<Option<T>>` can't make this distinction on its own:
+/// serde's `Option<T>` deserializer treats a missing key and an explicit `null`
+/// identically. Pairing `#[serde(default)]` (absent key → outer `None`, skips this
+/// fn) with this deserializer (present key, even if `null` → `Some(inner)`) is the
+/// standard hand-rolled equivalent of `serde_with::rust::double_option`.
+fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
 #[derive(Deserialize)]
 struct GeneralPatch {
     #[serde(rename = "worktreeDir")]
@@ -193,6 +212,8 @@ struct GeneralPatch {
     notifications: Option<NotificationPatch>,
     #[serde(rename = "updateChannel")]
     update_channel: Option<String>,
+    #[serde(rename = "defaultAdapterId", default, deserialize_with = "deserialize_present")]
+    default_adapter_id: Option<Option<String>>,
 }
 
 fn is_valid_worktree_dir(s: &str) -> bool {
@@ -200,6 +221,13 @@ fn is_valid_worktree_dir(s: &str) -> bool {
     !s.is_empty()
         && s.bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+fn is_valid_adapter_id(s: &str) -> bool {
+    // ^[a-zA-Z0-9_-]+$
+    !s.is_empty()
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
 
 async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
@@ -224,11 +252,17 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     if !in_enum(&patch.update_channel, &["stable", "prerelease"]) {
         return fail(StatusCode::BAD_REQUEST, "Invalid update channel");
     }
+    if let Some(Some(ref id)) = patch.default_adapter_id
+        && !is_valid_adapter_id(id)
+    {
+        return fail(StatusCode::BAD_REQUEST, "Invalid adapter id");
+    }
 
     let GeneralPatch {
         worktree_dir,
         notifications,
         update_channel,
+        default_adapter_id,
     } = patch;
     let result = ctx
         .db
@@ -245,6 +279,14 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
                     db.settings.delete("general", "updateChannel")?;
                 } else {
                     db.settings.set("general", "updateChannel", &uc)?;
+                }
+            }
+            // Present-but-null clears back to the default (no configured provider);
+            // an absent key leaves the stored value untouched.
+            if let Some(id_opt) = default_adapter_id {
+                match id_opt {
+                    None => db.settings.delete("general", "defaultAdapterId")?,
+                    Some(id) => db.settings.set("general", "defaultAdapterId", &id)?,
                 }
             }
             if let Some(patch) = notifications {
@@ -639,3 +681,10 @@ mod tests {
 // catch-up (#441): GET providers now runs normalize_provider_default_models —
 // a saved defaultModel absent from a non-empty probed catalog is dropped
 // (normalize_saved_default_model); an empty catalog / empty id is left untouched.
+// catch-up (#236): general GET/PUT carries `defaultAdapterId: string | null`
+// (which adapter seeds a new chat). GET always emits the key (explicit `null`
+// default, not omitted). PUT distinguishes an absent key (no change) from an
+// explicit `null` (clear to default) via a hand-rolled double-Option
+// deserializer (`deserialize_present`), since serde's `Option<Option<T>>`
+// collapses both cases to `None` otherwise; a present string is validated
+// against the same `^[a-zA-Z0-9_-]+$` id charset as the TS zod schema.
