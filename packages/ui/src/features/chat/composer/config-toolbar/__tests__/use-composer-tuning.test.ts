@@ -679,3 +679,66 @@ describe('composer provider-default inheritance', () => {
     expect(result.current).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 15. Todo #235 — model resolution must consult providerDefaults.defaultModel
+//     BEFORE falling back to the catalog isDefault/first entry, so a user's
+//     configured default model shows pre-send instead of the catalog default.
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — model resolution honors providerDefaults.defaultModel', () => {
+  it('resolves the provider-configured default model when chat.model is unset', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: undefined, adapterId: 'claude' })) as unknown as ReturnType<
+        typeof useChatExtras
+      >,
+    );
+    vi.mocked(getProviderSettings).mockResolvedValue({ claude: { defaultModel: 'claude-3-opus' } });
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+
+    await waitFor(() => expect(result.current.model?.id).toBe('claude-3-opus'));
+  });
+
+  it('falls back to the catalog isDefault model when providerDefaults has no defaultModel', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: undefined, adapterId: 'claude' })) as unknown as ReturnType<
+        typeof useChatExtras
+      >,
+    );
+    vi.mocked(getProviderSettings).mockResolvedValue({ claude: {} });
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+
+    await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
+    expect(result.current.model?.id).toBe('claude-3-sonnet');
+  });
+
+  it('prefers the explicit chat.model over providerDefaults.defaultModel', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: 'claude-3-haiku', adapterId: 'claude' })) as unknown as ReturnType<
+        typeof useChatExtras
+      >,
+    );
+    vi.mocked(getProviderSettings).mockResolvedValue({ claude: { defaultModel: 'claude-3-opus' } });
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+
+    await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
+    expect(result.current.model?.id).toBe('claude-3-haiku');
+  });
+
+  it('ignores a providerDefaults.defaultModel id that does not exist in the catalog', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: undefined, adapterId: 'claude' })) as unknown as ReturnType<
+        typeof useChatExtras
+      >,
+    );
+    vi.mocked(getProviderSettings).mockResolvedValue({ claude: { defaultModel: 'claude-does-not-exist' } });
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+
+    await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
+    expect(result.current.model?.id).toBe('claude-3-sonnet');
+  });
+});

@@ -46,19 +46,67 @@ export const TaskCard = React.memo(function TaskCard({
   onDelete,
   onStartSession,
 }: Props): React.ReactElement {
+  const [isDragging, setIsDragging] = React.useState(false);
+
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData('todo-number', String(todo.number));
+
+    // The browser's default drag ghost is a static snapshot taken at dragstart,
+    // before React repaints — so `isDragging`'s opacity-50 below never reaches
+    // the thing actually following the cursor, only the card's resting spot.
+    // A styled clone passed to setDragImage is the only way to make the moving
+    // ghost itself look lifted. Guarded: not every environment implements it.
+    if (typeof e.dataTransfer.setDragImage === 'function') {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const inner = e.currentTarget.cloneNode(true) as HTMLElement;
+      inner.style.boxSizing = 'border-box';
+      inner.style.width = `${rect.width}px`;
+      inner.style.height = `${rect.height}px`;
+      inner.style.margin = '0';
+      inner.style.transform = 'rotate(-2deg)';
+
+      // setDragImage snapshots exactly the passed element's own (un-rotated)
+      // layout box — a rotated card's corners visually overflow that box and
+      // get clipped by the capture itself, reading as a non-rectangular shape.
+      // Wrapping with slack padding gives the tilted corners room so nothing's
+      // cut off; the wrapper (not the card) is what's passed to setDragImage.
+      const PAD = 16;
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'fixed';
+      wrapper.style.top = '-9999px';
+      wrapper.style.left = '-9999px';
+      wrapper.style.width = `${rect.width + PAD * 2}px`;
+      wrapper.style.height = `${rect.height + PAD * 2}px`;
+      wrapper.style.padding = `${PAD}px`;
+      wrapper.style.boxSizing = 'border-box';
+      wrapper.style.opacity = '0.85';
+      wrapper.style.pointerEvents = 'none';
+      wrapper.appendChild(inner);
+      document.body.appendChild(wrapper);
+      // Force a synchronous layout before the browser snapshots the wrapper
+      // for the drag image — without this it can be captured mid-collapse
+      // (wrong size, rounded corners not yet clipped).
+      void wrapper.offsetWidth;
+      e.dataTransfer.setDragImage(wrapper, PAD + 16, PAD + 16);
+      setTimeout(() => wrapper.remove(), 0);
+    }
+
+    setIsDragging(true);
   };
+
+  const handleDragEnd = () => setIsDragging(false);
 
   return (
     <div
       data-testid={`tasks-card-${todo.number}`}
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onClick={() => onEdit(todo)}
       className={cn(
         'group cursor-pointer space-y-1.5 rounded-md border-[0.5px] border-border bg-background px-[11px] py-[10px]',
         'transition-colors hover:border-border/80',
+        isDragging && 'opacity-50',
       )}
     >
       {/* Row 1: #number + title + type badge */}
