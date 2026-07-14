@@ -2,11 +2,45 @@ import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../../../lib/utils';
 import { useSettingsStore } from '../../../../store/settings';
 import { useAdapters } from '../../../../store/adapters';
+import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { providerDot } from '../../../chat/composer/config-toolbar/ProviderModelSelect';
 import { ProviderConfigForm } from './ProviderConfigForm';
 
 interface ProvidersPaneProps {
   port: number;
+}
+
+/** Which adapter seeds a new chat. `null` (the "Auto" option) auto-picks the first installed adapter. */
+function DefaultProviderPicker({ port }: { port: number }) {
+  const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
+  const loadGeneral = useSettingsStore((s) => s.loadGeneral);
+  const installed = useAdapters().filter((a) => a.installed);
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value || null;
+    updateGeneralSettings(port, { defaultAdapterId: value })
+      .then(() => loadGeneral({ ...useSettingsStore.getState().general, defaultAdapterId: value }))
+      .catch((err: unknown) => console.warn('[settings/ProvidersPane]', err));
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-body text-muted-foreground">Default provider</span>
+      <select
+        data-testid="settings-default-provider-select"
+        value={defaultAdapterId ?? ''}
+        onChange={handleChange}
+        className="h-[30px] rounded border border-input bg-card px-2 text-body text-foreground outline-none focus:border-primary"
+      >
+        <option value="">Auto (first installed)</option>
+        {installed.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 /** Avatar tile + name + installed/not-installed status row that anchors each provider pane. */
@@ -44,6 +78,7 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
 
   return (
     <div data-testid="settings-pane-providers" className="flex flex-col gap-4 p-4">
+      <DefaultProviderPicker port={port} />
       {!selectedProvider && (
         <p className="text-body text-muted-foreground">Select a provider from the sidebar to configure it.</p>
       )}
