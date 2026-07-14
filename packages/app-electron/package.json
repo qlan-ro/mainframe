@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-app-electron",
-  "version": "2.0.0-rc.7",
+  "version": "2.0.0-rc.8",
   "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
   "license": "MIT",
   "repository": {
