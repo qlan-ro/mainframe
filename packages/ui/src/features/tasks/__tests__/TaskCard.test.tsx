@@ -96,6 +96,11 @@ describe('TaskCard — custom drag ghost image', () => {
     expect(ghost).toBeInstanceOf(HTMLElement);
     expect(ghost).not.toBe(card);
     expect(ghost.style.opacity).toBe('0.85');
+    // Both dimensions must be pinned (not just width) and box-sizing set to
+    // border-box, or the ghost can be captured as the wrong shape.
+    expect(ghost.style.boxSizing).toBe('border-box');
+    expect(ghost.style.width).toMatch(/px$/);
+    expect(ghost.style.height).toMatch(/px$/);
   });
 
   it('does not throw when dataTransfer has no setDragImage (defensive — not all environments support it)', () => {

@@ -57,16 +57,23 @@ export const TaskCard = React.memo(function TaskCard({
     // A styled clone passed to setDragImage is the only way to make the moving
     // ghost itself look lifted. Guarded: not every environment implements it.
     if (typeof e.dataTransfer.setDragImage === 'function') {
-      const source = e.currentTarget;
-      const ghost = source.cloneNode(true) as HTMLElement;
-      ghost.style.width = `${source.offsetWidth}px`;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const ghost = e.currentTarget.cloneNode(true) as HTMLElement;
+      ghost.style.boxSizing = 'border-box';
+      ghost.style.width = `${rect.width}px`;
+      ghost.style.height = `${rect.height}px`;
+      ghost.style.margin = '0';
       ghost.style.opacity = '0.85';
       ghost.style.transform = 'rotate(-2deg)';
-      ghost.style.position = 'absolute';
+      ghost.style.position = 'fixed';
       ghost.style.top = '-9999px';
       ghost.style.left = '-9999px';
       ghost.style.pointerEvents = 'none';
       document.body.appendChild(ghost);
+      // Force a synchronous layout before the browser snapshots the ghost for
+      // the drag image — without this it can be captured mid-collapse (wrong
+      // height, rounded corners not yet clipped), reading as a non-rectangle.
+      void ghost.offsetWidth;
       e.dataTransfer.setDragImage(ghost, 16, 16);
       setTimeout(() => ghost.remove(), 0);
     }
