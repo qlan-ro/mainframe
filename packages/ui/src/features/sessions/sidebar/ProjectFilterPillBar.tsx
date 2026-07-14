@@ -65,7 +65,12 @@ function AddProjectRow({ onAddProject }: { onAddProject: () => void }) {
       onClick={onAddProject}
       className="flex h-[28px] w-full items-center gap-[8px] rounded-md px-2 text-label font-medium tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
     >
-      <FolderPlus className="size-[13px] flex-shrink-0" aria-hidden />
+      {/* 18px box (matches ProjectAvatar/the "All projects" spacer) so the
+          icon is centered in the same footprint an avatar occupies, and
+          "Add project" lines up with the project name text below it. */}
+      <span className="inline-flex size-[18px] flex-shrink-0 items-center justify-center" aria-hidden="true">
+        <FolderPlus className="size-[13px]" />
+      </span>
       <span>Add project</span>
     </button>
   );
