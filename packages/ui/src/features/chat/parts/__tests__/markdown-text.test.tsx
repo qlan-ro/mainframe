@@ -14,8 +14,8 @@
  * Mock strategy: render under HostProvider with a FakeHostBridge; spy on
  * fake.shell.openExternal to verify behavioral calls without invoking Tauri APIs.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
@@ -335,9 +335,7 @@ describe('fenced code block container', () => {
 // Task-list checkbox (remark-gfm) — bespoke checkbox visual, not raw <input>.
 // ---------------------------------------------------------------------------
 
-const Li = markdownComponents.li as React.ComponentType<
-  React.LiHTMLAttributes<HTMLLIElement> & { className?: string }
->;
+const Li = markdownComponents.li as React.ComponentType<React.LiHTMLAttributes<HTMLLIElement> & { className?: string }>;
 const MdInput = (markdownComponents as Record<string, unknown>).input as
   | React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>
   | undefined;
@@ -383,13 +381,21 @@ describe('markdownComponents list markers', () => {
   const Ol = markdownComponents.ol as React.ComponentType<React.OlHTMLAttributes<HTMLOListElement>>;
 
   it('ul does not use browser list-disc markers (replaced by a custom dot)', () => {
-    const { container } = render(<Ul><Li>item</Li></Ul>);
+    const { container } = render(
+      <Ul>
+        <Li>item</Li>
+      </Ul>,
+    );
     const ul = container.querySelector('ul');
     expect(ul!.className).not.toContain('list-disc');
   });
 
   it('ol does not use browser list-decimal markers (replaced by a custom mono index)', () => {
-    const { container } = render(<Ol><Li>item</Li></Ol>);
+    const { container } = render(
+      <Ol>
+        <Li>item</Li>
+      </Ol>,
+    );
     const ol = container.querySelector('ol');
     expect(ol!.className).not.toContain('list-decimal');
   });
@@ -520,5 +526,68 @@ describe('MarkdownText container tracking', () => {
   it('exports MARKDOWN_ROOT_CLASS with tracking-tight applied', () => {
     expect(MARKDOWN_ROOT_CLASS).toContain('tracking-tight');
     expect(MARKDOWN_ROOT_CLASS).toContain('aui-md');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Copy-link context-menu item — visible "Copied" feedback (todo #230).
+// Radix closes a ContextMenuItem's menu immediately on select by default, so
+// the item must preventDefault, show feedback, then close itself on a delay.
+// ---------------------------------------------------------------------------
+
+describe('LinkWithPreview context-menu copy feedback', () => {
+  // NOTE: deliberately uses fireEvent, not userEvent — userEvent.setup()
+  // installs its own real clipboard stub on `navigator.clipboard`, silently
+  // shadowing the mock this suite defines below (confirmed by direct
+  // reproduction: userEvent.click left our `writeText` mock with 0 calls
+  // while fireEvent.click hit it correctly).
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    writeText.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function openContextMenu() {
+    wrap(<A href="https://example.com">link text</A>);
+    fireEvent.contextMenu(screen.getByRole('link', { name: 'link text' }));
+  }
+
+  it('renders "Copy link" before the item is selected', () => {
+    openContextMenu();
+    expect(screen.getByTestId('chat-link-copy').textContent).toContain('Copy link');
+  });
+
+  it('writes the href to the clipboard and swaps the label to "Copied" when selected', () => {
+    openContextMenu();
+
+    fireEvent.click(screen.getByTestId('chat-link-copy'));
+
+    expect(writeText).toHaveBeenCalledWith('https://example.com');
+    expect(screen.getByTestId('chat-link-copy').textContent).toContain('Copied');
+  });
+
+  it('keeps the menu open right after selecting Copy link (no immediate close)', () => {
+    openContextMenu();
+
+    fireEvent.click(screen.getByTestId('chat-link-copy'));
+
+    expect(screen.queryByTestId('chat-link-copy')).not.toBeNull();
+  });
+
+  it('closes the menu itself shortly after showing the "Copied" feedback', () => {
+    openContextMenu();
+
+    fireEvent.click(screen.getByTestId('chat-link-copy'));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(screen.queryByTestId('chat-link-copy')).toBeNull();
   });
 });

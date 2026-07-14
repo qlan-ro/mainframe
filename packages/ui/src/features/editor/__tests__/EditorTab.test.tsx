@@ -23,7 +23,7 @@
  *  - Assert Reload button applies disk content; Keep mine dismisses the banner (D4).
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 
 // ── Mock external deps ────────────────────────────────────────────────────────
@@ -334,11 +334,18 @@ describe('EditorTab — LSP document open (A2b)', () => {
     render(<EditorTab tabId="tab-a2b" path="/project/src/index.ts" />);
     await screen.findByTestId('cm-editor-mock');
 
-    expect(lspClientManager.ensureDocumentOpen).toHaveBeenCalledWith('proj-1', 'typescript', {
-      filePath: '/project/src/index.ts',
-      languageId: 'typescript',
-      version: 1,
-      text: 'content',
+    // ensureDocumentOpen fires from a *separate* effect than the one gating
+    // cm-editor-mock's render (it also depends on lspReady flipping true), so
+    // waiting only for the DOM node does not guarantee it has already run —
+    // under contention (full-suite CI runs) that effect can flush a tick later.
+    // Poll explicitly instead of asserting immediately after the DOM appears.
+    await waitFor(() => {
+      expect(lspClientManager.ensureDocumentOpen).toHaveBeenCalledWith('proj-1', 'typescript', {
+        filePath: '/project/src/index.ts',
+        languageId: 'typescript',
+        version: 1,
+        text: 'content',
+      });
     });
   });
 
