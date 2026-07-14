@@ -270,8 +270,106 @@ jobs:
               gh api -X PATCH "repos/$REPO/releases/assets/$id" -f name="$new" >/dev/null
             done
 
+  # Rust-daemon canary variant (docs/rust-port/CUTOVER.md): bundles the ported
+  # Rust daemon (packages/core-rs) alongside the Node sidecar so testers can
+  # flip MAINFRAME_DAEMON_IMPL=rust at runtime. Same identifier/productName as
+  # the default build — it's the same app with an extra opt-in binary, not a
+  # fork — so it is DELIBERATELY NOT part of the auto-update channel: only the
+  # .dmg installer is uploaded, never the .app.tar.gz/.sig, so it can never be
+  # picked up by latest.json. Non-blocking (own job, not in build-app-tauri's
+  # matrix): a canary failure must never stop the Node release from publishing.
+  build-app-tauri-canary:
+    runs-on: macos-14 # Apple Silicon (arm64) — matches build-app-tauri
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/app-tauri/src-tauri
+            packages/core-rs
+
+      # node-pty has no prebuild on this runner and compiles via `node-gyp rebuild`.
+      - name: Install node-gyp
+        run: npm install -g node-gyp
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Re-gate the Rust workspace at release time (rust-port.yml already gates
+      # every PR touching packages/core-rs, but this is cheap insurance right
+      # before we spend signing/notarization time on it — CUTOVER.md §6 step 2).
+      - name: Rust workspace fmt/clippy/test gate
+        working-directory: packages/core-rs
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test --workspace
+          tools/verify-gate.sh
+
+      - name: Build workspace dependencies
+        run: pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Import Apple Developer ID certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CSC_LINK }}
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      # Plain `tauri build` (the @tauri-apps/cli devDependency, not tauri-action)
+      # so this leg only builds+signs — it does NOT also create/upload to the
+      # tag's GitHub release. A second tauri-action run against the same tag
+      # would collide with build-app-tauri's asset names (identical productName
+      # + version). The `--config` overlay's `beforeBuildCommand` runs
+      # `bundle:canary`, which stages the Rust daemon binary via
+      # provision-rust-daemon.mjs before Tauri packages it.
+      - name: Build canary bundle (Node + Rust daemon)
+        working-directory: packages/app-tauri
+        run: pnpm exec tauri build --config src-tauri/tauri.rust-canary.conf.json
+        env:
+          # createUpdaterArtifacts is on globally, so the build needs a signing
+          # key even though we never publish the updater artifacts it produces.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Rename in place so it can never collide with build-app-tauri's
+      # `Mainframe_<ver>_aarch64.dmg` once both land in the `release` job's
+      # merged `artifacts/` dir.
+      - name: Rename canary dmg
+        working-directory: packages/app-tauri/src-tauri/target/release/bundle/dmg
+        run: |
+          set -euo pipefail
+          src=$(ls Mainframe_*_aarch64.dmg)
+          mv "$src" "Mainframe-tauri-canary-${GITHUB_REF_NAME#v}-macos-arm64.dmg"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-tauri-canary-macos-arm64
+          path: packages/app-tauri/src-tauri/target/release/bundle/dmg/Mainframe-tauri-canary-*.dmg
+
   release:
-    needs: [build-desktop, build-daemon, build-app-tauri]
+    needs: [build-desktop, build-daemon, build-app-tauri, build-app-tauri-canary]
     # Publish as long as the daemon built — the daemon tarballs back `mainframe update`
     # and must never be blocked by a desktop/Tauri build failure. `always()` overrides
     # the default "skip if any need failed"; download-artifact then attaches whatever
