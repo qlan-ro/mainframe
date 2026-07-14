@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tagColorValue, TAG_DOT_STYLE } from '../tag-colors';
+import { tagColorValue, TAG_DOT_STYLE, TAG_CHIP_STYLE } from '../tag-colors';
 import { TAG_PALETTE } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,19 @@ describe("TAG_DOT_STYLE — returns { backgroundColor: 'oklch(0.72 0.19 150)' } 
   it('returns the exact inline style object for green', () => {
     expect(TAG_DOT_STYLE('green')).toEqual({
       backgroundColor: 'oklch(0.72 0.19 150)',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TAG_CHIP_STYLE — tinted background + matching text color for a solid pill
+// ---------------------------------------------------------------------------
+
+describe('TAG_CHIP_STYLE — returns a color-mix background tint and matching text color for blue', () => {
+  it('returns the exact inline style object for blue', () => {
+    expect(TAG_CHIP_STYLE('blue')).toEqual({
+      backgroundColor: 'color-mix(in oklch, oklch(0.65 0.18 250) 18%, transparent)',
+      color: 'oklch(0.65 0.18 250)',
     });
   });
 });

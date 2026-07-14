@@ -15,6 +15,7 @@
       {
         "label": "main",
         "create": false,
+        "dragDropEnabled": false,
         "title": "Mainframe",
         "width": 1400,
         "height": 900,

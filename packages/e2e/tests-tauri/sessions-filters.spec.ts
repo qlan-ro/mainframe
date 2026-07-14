@@ -121,14 +121,23 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     await expect(rows.first()).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
   });
 
-  test('clicking the active project pill again clears the filter but keeps the active session', async () => {
+  test('clicking the already-active project row is a no-op (single-select switcher, not a toggle)', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     await expandProjectPills(page);
 
     await sidebar.projectFilterPill(projectA.projectId).click();
+    await sidebar.projectFilterPill(projectA.projectId).click();
 
-    await expect(sidebar.projectFilterPill(projectA.projectId)).toHaveAttribute('aria-pressed', 'false');
+    // 2026-07 rebuild: the project switcher is a single-select list — only the
+    // "All projects" row clears the filter, a second click on the active row
+    // no longer deselects it (that toggle-off behavior belonged to the old
+    // pill-cloud bar).
+    await expect(sidebar.projectFilterPill(projectA.projectId)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('sessions-filter-pill-all')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('sessions-row')).toHaveCount(1, { timeout: 10_000 });
+
+    await page.getByTestId('sessions-filter-pill-all').click();
     await expect(page.getByTestId('sessions-filter-pill-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
 
