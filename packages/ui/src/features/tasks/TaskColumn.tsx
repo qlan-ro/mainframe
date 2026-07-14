@@ -58,7 +58,10 @@ export function TaskColumn({
   return (
     <div
       data-testid={`tasks-column-${status}`}
-      className={cn('flex flex-col min-h-0 transition-colors', dragOver ? 'bg-primary/5' : 'bg-mf-content2')}
+      className={cn(
+        'flex flex-col min-h-0 rounded-md transition-colors',
+        dragOver ? 'bg-mf-selection ring-1 ring-inset ring-primary' : 'bg-mf-content2',
+      )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

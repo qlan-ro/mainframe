@@ -46,19 +46,26 @@ export const TaskCard = React.memo(function TaskCard({
   onDelete,
   onStartSession,
 }: Props): React.ReactElement {
+  const [isDragging, setIsDragging] = React.useState(false);
+
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData('todo-number', String(todo.number));
+    setIsDragging(true);
   };
+
+  const handleDragEnd = () => setIsDragging(false);
 
   return (
     <div
       data-testid={`tasks-card-${todo.number}`}
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onClick={() => onEdit(todo)}
       className={cn(
         'group cursor-pointer space-y-1.5 rounded-md border-[0.5px] border-border bg-background px-[11px] py-[10px]',
         'transition-colors hover:border-border/80',
+        isDragging && 'opacity-50',
       )}
     >
       {/* Row 1: #number + title + type badge */}
