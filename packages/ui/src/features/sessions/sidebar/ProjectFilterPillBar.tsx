@@ -2,10 +2,10 @@
  * ProjectFilterPillBar — the one-click project switcher list (2026-07 rebuild).
  *
  * Was a horizontal pill-cloud (width-measured overflow via useRowOverflow);
- * is now a vertical list: an "All projects" row (clears the filter) atop one
+ * is now a vertical list: an "All" row (clears the filter) atop one
  * row per project (colored initial avatar + name + attention badge), a plain
  * single-select switch — clicking a row always narrows to that project;
- * only "All projects" clears it (no toggle-to-deselect, unlike the old pill
+ * only "All" clears it (no toggle-to-deselect, unlike the old pill
  * bar). Collapsible past DEFAULT_VISIBLE_PROJECTS via a count-based "Show N
  * more"/"Show less" toggle — no width measurement needed for a vertical list.
  * The dashed "Add project" affordance is now a trailing row action, name
@@ -15,7 +15,7 @@
  * ProjectPillContextMenu, restyled from a pill to a full-width row.
  */
 import { useState } from 'react';
-import { FolderPlus } from 'lucide-react';
+import { FolderPlus, LayoutGrid } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { CountBadge } from '@/components/ui/count-badge';
 import { ProjectPillContextMenu } from './ProjectPillContextMenu';
@@ -44,11 +44,16 @@ function AllProjectsRow({ active, totalAttn, onSelect }: { active: boolean; tota
         active ? 'bg-mf-selection text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       ].join(' ')}
     >
-      {/* Avatar-sized spacer (matches ProjectAvatar's default 18px) so "All
-          projects" lines up with the project name text below it, which is
-          preceded by a real avatar. */}
-      <span className="inline-block size-[18px] flex-shrink-0" aria-hidden="true" />
-      <span>All projects</span>
+      {/* Neutral grid-icon avatar (same 18px footprint as ProjectAvatar,
+          untinted since "All" isn't tied to one project's color) so the
+          row lines up with the project name text below it. */}
+      <span
+        className="inline-flex size-[18px] flex-shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+        aria-hidden="true"
+      >
+        <LayoutGrid className="size-[11px]" />
+      </span>
+      <span>All</span>
       <div className="flex-1" />
       {active && totalAttn > 0 && (
         <CountBadge count={totalAttn} variant="unread" data-testid="sessions-filter-pill-attn-all" />
@@ -65,7 +70,7 @@ function AddProjectRow({ onAddProject }: { onAddProject: () => void }) {
       onClick={onAddProject}
       className="flex h-[28px] w-full items-center gap-[8px] rounded-md px-2 text-label font-medium tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
     >
-      {/* 18px box (matches ProjectAvatar/the "All projects" spacer) so the
+      {/* 18px box (matches ProjectAvatar/the "All" spacer) so the
           icon is centered in the same footprint an avatar occupies, and
           "Add project" lines up with the project name text below it. */}
       <span className="inline-flex size-[18px] flex-shrink-0 items-center justify-center" aria-hidden="true">
