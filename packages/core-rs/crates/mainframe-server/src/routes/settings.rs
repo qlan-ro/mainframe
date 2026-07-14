@@ -212,7 +212,11 @@ struct GeneralPatch {
     notifications: Option<NotificationPatch>,
     #[serde(rename = "updateChannel")]
     update_channel: Option<String>,
-    #[serde(rename = "defaultAdapterId", default, deserialize_with = "deserialize_present")]
+    #[serde(
+        rename = "defaultAdapterId",
+        default,
+        deserialize_with = "deserialize_present"
+    )]
     default_adapter_id: Option<Option<String>>,
 }
 
