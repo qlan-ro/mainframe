@@ -37,15 +37,15 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.30.0",
-    "concurrently": "^9.1.0",
-    "esbuild": "^0.28.0",
-    "eslint": "^10.4.0",
+    "concurrently": "^10.0.3",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.5",
-    "prettier": "^3.8.3",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3"
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.9.5",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.64.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
