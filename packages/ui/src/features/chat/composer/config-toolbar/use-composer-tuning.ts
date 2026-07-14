@@ -141,13 +141,17 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
 
   const providerDefaults = useProviderDefaults(adapter?.id ?? null);
 
-  // Resolve the AdapterModel: the chat's explicit model, else the adapter's
-  // default (chat.model is null when the session inherits the adapter default).
+  // Resolve the AdapterModel: the chat's explicit model, else the user's
+  // configured provider default, else the catalog default (chat.model is null
+  // when the session inherits the adapter default).
   const model: AdapterModel | null = (() => {
     if (adapter == null) return null;
     const adapterModels = adapter.models;
     return (
       (chat?.model != null ? adapterModels.find((m) => m.id === chat.model) : undefined) ??
+      (providerDefaults?.defaultModel != null
+        ? adapterModels.find((m) => m.id === providerDefaults.defaultModel)
+        : undefined) ??
       adapterModels.find((m) => m.isDefault) ??
       adapterModels[0] ??
       null
