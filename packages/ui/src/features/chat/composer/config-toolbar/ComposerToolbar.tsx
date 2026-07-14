@@ -55,7 +55,7 @@ export function ComposerToolbar() {
         setAdapter={setAdapter}
         setModel={setModel}
       />
-      <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} />
+      <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} providerDefaults={providerDefaults} />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
       {model && (
         <EffortPicker

@@ -14,7 +14,7 @@
  */
 
 import { ChevronDown, Shield } from 'lucide-react';
-import type { Chat, ExecutionMode } from '@qlan-ro/mainframe-types';
+import type { Chat, ExecutionMode, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 export interface PermissionSelectProps {
   chat: Chat;
   setPermissionMode: (mode: ExecutionMode) => void;
+  providerDefaults?: ProviderConfig;
 }
 
 const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string }[] = [
@@ -34,8 +35,8 @@ const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string 
   { id: 'yolo', label: 'Unattended', description: 'Runs without prompts' },
 ];
 
-export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectProps) {
-  const currentMode: ExecutionMode = chat.permissionMode ?? 'default';
+export function PermissionSelect({ chat, setPermissionMode, providerDefaults }: PermissionSelectProps) {
+  const currentMode: ExecutionMode = chat.permissionMode ?? providerDefaults?.defaultMode ?? 'default';
   const isYolo = currentMode === 'yolo';
   const currentLabel = PERMISSION_MODES.find((m) => m.id === currentMode)?.label ?? currentMode;
 
