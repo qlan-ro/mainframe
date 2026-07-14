@@ -115,8 +115,6 @@ function SessionSidebarImpl() {
     [allItems, filterProjectId, selectedTags, selectedSynthetic],
   );
 
-  const groups = useMemo(() => arrangeSessions(filteredItems, sortMode), [filteredItems, sortMode]);
-
   const projectNameOf = useMemo(() => {
     const map = new Map(projects.map((p) => [p.id, p.name]));
     return (projectId: string): string => map.get(projectId) ?? projectId;
@@ -128,6 +126,13 @@ function SessionSidebarImpl() {
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
+
+  // 'project' mode groups by the sidebar's own project order (sortedProjects),
+  // not raw daemon order — matches the switcher list above it.
+  const groups = useMemo(
+    () => arrangeSessions(filteredItems, sortMode, Date.now(), sortedProjects),
+    [filteredItems, sortMode, sortedProjects],
+  );
 
   const sessionCounts = useSessionCounts(allItems);
   const draftRow = useDraftRow(allItems, filterProjectId);

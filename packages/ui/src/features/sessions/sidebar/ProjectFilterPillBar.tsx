@@ -1,25 +1,27 @@
 /**
- * ProjectFilterPillBar — "All" + per-project filter pills with attention badges.
+ * ProjectFilterPillBar — the one-click project switcher list (2026-07 rebuild).
  *
- * Collapsible by available width (not a hardcoded count): the row fills with as
- * many project pills as fit on a single line, then a compact accent "+N more"
- * control — placed AFTER the "Add project" affordance — expands/collapses the
- * rest. Expanding wraps the bar to multiple lines. View-only (D12): selecting a
- * pill filters but does NOT auto-activate the project's most-recent chat.
- * Attention badge = unread-or-pending count per project. Pills are the shared
- * FilterPill primitive.
+ * Was a horizontal pill-cloud (width-measured overflow via useRowOverflow);
+ * is now a vertical list: an "All projects" row (clears the filter) atop one
+ * row per project (colored initial avatar + name + attention badge), a plain
+ * single-select switch — clicking a row always narrows to that project;
+ * only "All projects" clears it (no toggle-to-deselect, unlike the old pill
+ * bar). Collapsible past DEFAULT_VISIBLE_PROJECTS via a count-based "Show N
+ * more"/"Show less" toggle — no width measurement needed for a vertical list.
+ * The dashed "Add project" affordance is now a trailing row action, name
+ * kept the same (`sessions-add-project`) for e2e/page-object compatibility.
  *
- * Includes the dashed "Add project" affordance (artboard 02-chrome.jsx) when an
- * onAddProject handler is provided; the bar stays presentational (no daemon calls).
+ * Right-click management (rename disabled / remove) is unchanged — still
+ * ProjectPillContextMenu, restyled from a pill to a full-width row.
  */
 import { useState } from 'react';
-import { ChevronDown, FolderPlus } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
-import { FilterPill } from './FilterPill';
+import { CountBadge } from '@/components/ui/count-badge';
 import { ProjectPillContextMenu } from './ProjectPillContextMenu';
-import { useRowOverflow } from '../use-row-overflow';
+import { projectColor } from './project-color';
 
-const ROW_GAP_PX = 4;
+const DEFAULT_VISIBLE_PROJECTS = 5;
 
 interface ProjectFilterPillBarProps {
   projects: Project[];
@@ -28,6 +30,63 @@ interface ProjectFilterPillBarProps {
   onSelect: (projectId: string | null) => void;
   onRemoveProject?: (project: Project) => void;
   onAddProject?: () => void;
+}
+
+function AllProjectsRow({ active, totalAttn, onSelect }: { active: boolean; totalAttn: number; onSelect: () => void }) {
+  return (
+    <button
+      data-testid="sessions-filter-pill-all"
+      aria-pressed={active}
+      type="button"
+      onClick={onSelect}
+      className={[
+        'flex h-[28px] w-full items-center gap-[8px] rounded-md px-2 text-label font-medium tracking-normal transition-colors',
+        active ? 'bg-mf-selection text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      ].join(' ')}
+    >
+      <span>All projects</span>
+      <div className="flex-1" />
+      {active && totalAttn > 0 && (
+        <CountBadge count={totalAttn} variant="unread" data-testid="sessions-filter-pill-attn-all" />
+      )}
+    </button>
+  );
+}
+
+function AddProjectRow({ onAddProject }: { onAddProject: () => void }) {
+  return (
+    <button
+      data-testid="sessions-add-project"
+      type="button"
+      onClick={onAddProject}
+      className="flex h-[28px] w-full items-center gap-[8px] rounded-md px-2 text-label font-medium tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+    >
+      <FolderPlus className="size-[13px] flex-shrink-0" aria-hidden />
+      <span>Add project</span>
+    </button>
+  );
+}
+
+function ShowMoreToggle({
+  expanded,
+  hiddenCount,
+  onToggle,
+}: {
+  expanded: boolean;
+  hiddenCount: number;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      data-testid="sessions-projects-more"
+      type="button"
+      aria-expanded={expanded}
+      onClick={onToggle}
+      className="flex h-[24px] w-full items-center px-2 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
+    >
+      {expanded ? 'Show less' : `Show ${hiddenCount} more`}
+    </button>
+  );
 }
 
 export function ProjectFilterPillBar({
@@ -41,94 +100,28 @@ export function ProjectFilterPillBar({
   const [expanded, setExpanded] = useState(false);
   const totalAttn = Object.values(attentionCounts).reduce((a, b) => a + b, 0);
 
-  // Re-measure only on width-affecting changes: the project set, whether each
-  // pill shows a badge at all (0↔non-0), whether the "All" pill shows its total
-  // badge, and the add-project affordance. The EXACT count and the active
-  // styling don't change a pill's width, so excluding them keeps a plain pill
-  // click (which only flips active state / re-tallies counts) off the measuring
-  // path — previously every click and every unread tick forced a full re-measure.
-  const allBadge = filterProjectId != null && totalAttn > 0;
-  const signature = `${allBadge ? 'A' : ''}|${projects
-    .map((p) => `${p.id}:${(attentionCounts[p.id] ?? 0) > 0 ? '1' : '0'}`)
-    .join(',')}|${onAddProject != null ? 'add' : ''}`;
-  const { containerRef, visibleCount, measuring } = useRowOverflow({
-    itemCount: projects.length,
-    leadingCount: 1, // the "All" pill
-    trailingCount: onAddProject != null ? 1 : 0, // the "Add project" affordance
-    gapPx: ROW_GAP_PX,
-    signature,
-  });
-
-  const showAll = measuring || expanded;
-  const shownProjects = showAll ? projects : projects.slice(0, visibleCount);
-  const overflow = visibleCount < projects.length;
-  const hiddenCount = projects.length - visibleCount;
-  const collapsible = measuring || overflow;
-  const moreLabel = measuring ? `+${projects.length} more` : expanded ? 'Less' : `+${hiddenCount} more`;
+  const collapsible = projects.length > DEFAULT_VISIBLE_PROJECTS;
+  const shownProjects = expanded || !collapsible ? projects : projects.slice(0, DEFAULT_VISIBLE_PROJECTS);
+  const hiddenCount = projects.length - shownProjects.length;
 
   return (
-    <div
-      ref={containerRef}
-      className={`flex w-full min-w-0 items-center gap-[4px] px-2.5 pb-1.5 pt-[4px] ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
-    >
-      <FilterPill
-        label="All"
-        active={filterProjectId == null}
-        testId="sessions-filter-pill-all"
-        badgeCount={filterProjectId == null ? 0 : totalAttn}
-        badgeTestId="sessions-filter-pill-attn-all"
-        onClick={() => onSelect(null)}
-      />
-      {shownProjects.map((p) => {
-        const active = filterProjectId === p.id;
-        const selectProject = () => onSelect(active ? null : p.id);
-        if (onRemoveProject != null) {
-          return (
-            <ProjectPillContextMenu
-              key={p.id}
-              project={p}
-              active={active}
-              badgeCount={attentionCounts[p.id] ?? 0}
-              badgeTestId={`sessions-filter-pill-attn-${p.id}`}
-              onSelect={selectProject}
-              onRemoveProject={onRemoveProject}
-            />
-          );
-        }
-        return (
-          <FilterPill
-            key={p.id}
-            label={p.name}
-            active={active}
-            testId={`sessions-filter-pill-${p.id}`}
-            badgeCount={attentionCounts[p.id] ?? 0}
-            badgeTestId={`sessions-filter-pill-attn-${p.id}`}
-            onClick={selectProject}
-          />
-        );
-      })}
-      {onAddProject != null && (
-        <button
-          data-testid="sessions-add-project"
-          type="button"
-          onClick={onAddProject}
-          className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] border border-dashed border-mf-border-hover px-2.5 text-caption font-semibold tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <FolderPlus className="size-[12px]" aria-hidden />
-          <span>Add project</span>
-        </button>
-      )}
+    <div className="flex w-full flex-col gap-[2px] px-2 pb-1.5 pt-[4px]">
+      <AllProjectsRow active={filterProjectId == null} totalAttn={totalAttn} onSelect={() => onSelect(null)} />
+      {shownProjects.map((p) => (
+        <ProjectPillContextMenu
+          key={p.id}
+          project={p}
+          active={filterProjectId === p.id}
+          badgeCount={attentionCounts[p.id] ?? 0}
+          badgeTestId={`sessions-filter-pill-attn-${p.id}`}
+          avatarColor={projectColor(p.id)}
+          onSelect={() => onSelect(p.id)}
+          onRemoveProject={onRemoveProject}
+        />
+      ))}
+      {onAddProject != null && <AddProjectRow onAddProject={onAddProject} />}
       {collapsible && (
-        <button
-          data-testid="sessions-projects-more"
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((v) => !v)}
-          className="inline-flex shrink-0 items-center gap-[3px] px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
-        >
-          {moreLabel}
-          {expanded && <ChevronDown className="size-[10px] rotate-180" aria-hidden />}
-        </button>
+        <ShowMoreToggle expanded={expanded} hiddenCount={hiddenCount} onToggle={() => setExpanded((v) => !v)} />
       )}
     </div>
   );

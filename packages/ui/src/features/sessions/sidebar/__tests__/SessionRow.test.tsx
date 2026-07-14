@@ -460,18 +460,21 @@ describe('SessionRow — answer pill is absent; status dot is the sole indicator
 });
 
 // ---------------------------------------------------------------------------
-// 10. Tag dots cluster renders when custom.tags is non-empty
+// 10. Compact tag-dot glyph cluster renders when custom.tags is non-empty
+// (2026-07 single-row rebuild: the old inline SessionRowMeta tag-dots testid
+// moved to the hover card; the row itself shows SessionRowMetaIcons' compact
+// glyph cluster instead.)
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — tag dots cluster when tags are present', () => {
-  it('renders sessions-row-meta-tag-dots when custom.tags has entries', () => {
+describe('SessionRow — compact tag-dot glyphs when tags are present', () => {
+  it('renders sessions-row-meta-icon-tag-dots when custom.tags has entries', () => {
     render(<SessionRow item={makeItem({ tags: ['alpha', 'beta'] })} />);
-    expect(screen.getByTestId('sessions-row-meta-tag-dots')).toBeTruthy();
+    expect(screen.getByTestId('sessions-row-meta-icon-tag-dots')).toBeTruthy();
   });
 
-  it('does not render sessions-row-meta-tag-dots when custom.tags is empty', () => {
+  it('does not render sessions-row-meta-icon-tag-dots when custom.tags is empty', () => {
     render(<SessionRow item={makeItem({ tags: [] })} />);
-    expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
+    expect(screen.queryByTestId('sessions-row-meta-icon-tag-dots')).toBeNull();
   });
 });
 
@@ -540,12 +543,12 @@ describe('StatusDot provider logos', () => {
     expect(dot.className).not.toContain('grayscale');
   });
 
-  it('status logo wrapper uses a 32px slot and a 28px logo', () => {
+  it('status logo wrapper uses a 24px slot and a 20px logo (2026-07 single-row compaction)', () => {
     render(<StatusDot badge={{ base: 'waiting', unread: false }} adapterId="claude" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
     const logo = screen.getByTestId('sessions-row-provider-logo');
-    expect(dot.className).toContain('size-8');
-    expect(logo.getAttribute('class')).toContain('size-7');
+    expect(dot.className).toContain('size-6');
+    expect(logo.getAttribute('class')).toContain('size-5');
   });
 
   it('unknown adapter falls back to the generic provider logo identity', () => {
@@ -559,10 +562,10 @@ describe('StatusDot provider logos', () => {
 // ---------------------------------------------------------------------------
 
 describe('StatusDot working provider logo size', () => {
-  it('working status logo uses the larger 16px slot', () => {
+  it('working status logo uses the same 24px slot as every other status', () => {
     render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="codex" />);
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('size-8');
+    expect(dot.className).toContain('size-6');
     expect(dot.className).not.toContain('size-[8px]');
   });
 });
@@ -703,8 +706,82 @@ describe('SessionRow — Tags context-menu action defers past a macrotask (not j
 
     fireEvent.contextMenu(screen.getByTestId('sessions-row'));
     fireEvent.click(screen.getByTestId('sessions-ctx-tags'));
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(useTagPopoverTarget.getState().target).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. Hovering the row raises the SessionMetaCard (2026-07 single-row rebuild)
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — hovering raises the SessionMetaCard', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows sessions-meta-card with the row title after the hover delay', async () => {
+    render(<SessionRow item={makeItem()} />);
+
+    fireEvent.mouseEnter(screen.getByTestId('sessions-row').firstChild as Element);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByTestId('sessions-meta-card')).toBeTruthy();
+    expect(screen.getByTestId('sessions-meta-card-title').textContent).toBe('Build the sidebar');
+  });
+
+  it('hides the card again on mouse-leave', async () => {
+    render(<SessionRow item={makeItem()} />);
+
+    const trigger = screen.getByTestId('sessions-row').firstChild as Element;
+    fireEvent.mouseEnter(trigger);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    fireEvent.mouseLeave(trigger);
+
+    expect(screen.queryByTestId('sessions-meta-card')).toBeNull();
+  });
+
+  it('does not show the card before the hover delay elapses', () => {
+    render(<SessionRow item={makeItem()} />);
+
+    fireEvent.mouseEnter(screen.getByTestId('sessions-row').firstChild as Element);
+
+    expect(screen.queryByTestId('sessions-meta-card')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 20. Compact meta glyphs render inline on the row (worktree/PR), matching
+// the metaIcons algorithm — icon-only, no basename/PR text overflow risk.
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — compact worktree/PR glyphs render inline', () => {
+  it('renders sessions-row-meta-icon-worktree when custom.worktreePath is set', () => {
+    render(<SessionRow item={makeItem({ worktreePath: '/repos/mf/.git/worktrees/feat-x' })} />);
+    expect(screen.getByTestId('sessions-row-meta-icon-worktree')).toBeTruthy();
+  });
+
+  it('renders sessions-row-meta-icon-pr with "#42" when a PR is detected', () => {
+    render(
+      <SessionRow
+        item={makeItem({
+          detectedPrs: [
+            { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('sessions-row-meta-icon-pr').textContent).toBe('#42');
   });
 });

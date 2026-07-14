@@ -7,9 +7,14 @@
  * aria-current when mainThreadId === threadListItem.id; we only style data-[active=true].
  * Actions (rename/archive) come from the item RUNTIME (useThreadListItemRuntime),
  * not the item STATE (useThreadListItem). Status dot via deriveSessionBadge + unread.
- * Responsive: @max-[300px] hides time; @max-[220px] hides meta row.
+ *
+ * Single-line row (2026-07 compaction): the old second meta line
+ * (worktree/PR/tags, via the now-removed SessionRowMeta) collapsed into small
+ * trailing glyphs (SessionRowMetaIcons) on this same row. The full text
+ * (worktree/branch, PR, tag pills, project, branch-safety warning) now lives
+ * in a SessionMetaCard shown on hover, positioned from this row's rect
+ * (useRowHoverCard).
  */
-import type { MouseEvent } from 'react';
 import { memo, useRef, useState } from 'react';
 import {
   ThreadListItemPrimitive,
@@ -17,73 +22,26 @@ import {
   useAssistantRuntime,
   useThreadListItemRuntime,
 } from '@assistant-ui/react';
-import { PaperclipIcon, PinIcon, TagIcon, XIcon } from 'lucide-react';
+import { PinIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
-import { deriveSessionBadge, type SessionBadge } from '../view-model/session-status';
+import { deriveSessionBadge } from '../view-model/session-status';
 import { isSessionUnread } from '../view-model/session-unread';
 import { formatRelativeTime } from '../view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { pinChat } from '@/lib/api/chats';
-import { SessionRowMeta } from './SessionRowMeta';
+import { StatusDot } from './SessionRowStatus';
+import { RowHoverActions } from './SessionRowHoverActions';
+import { SessionRowMetaIcons } from './SessionRowMetaIcons';
+import { SessionMetaCard } from './SessionMetaCard';
+import { useRowHoverCard } from './use-row-hover-card';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
-import { Hint } from '@/components/ui/hint';
-import { ProviderLogo } from '@/features/shared/ProviderLogo';
 
-/**
- * The logo is the row's ONLY status indicator (no text pill): provider shape
- * identifies the adapter, unread controls vividness, and lifecycle only adds motion.
- */
-function workingLogoAnimation(adapterId: string): string {
-  return adapterId === 'claude' ? 'animate-[mf-claude-logo-working_1.52s_linear_infinite]' : 'animate-spin';
-}
-
-function statusLogoClass(badge: SessionBadge, adapterId: string): string {
-  const base = 'inline-flex size-8 flex-shrink-0 items-center justify-center';
-  const active = badge.base === 'working' || badge.base === 'waiting';
-  const visual = badge.unread || active ? 'text-primary' : 'text-mf-text-3';
-  switch (badge.base) {
-    case 'worktree-missing':
-    case 'transcript-missing':
-      return `${base} ${visual}`;
-    case 'working':
-      return `${base} ${visual} ${workingLogoAnimation(adapterId)}`;
-    case 'waiting':
-      return `${base} ${visual} animate-pulse`;
-    case 'idle':
-      return `${base} ${visual}`;
-  }
-}
-
-/** The dot is the row's ONLY status indicator (no text pill) — the tooltip carries the label. */
-function dotLabel(badge: SessionBadge): string {
-  switch (badge.base) {
-    case 'worktree-missing':
-      return 'Worktree missing';
-    case 'transcript-missing':
-      return 'Transcript missing';
-    case 'working':
-      return 'Working';
-    case 'waiting':
-      return 'Your turn';
-    case 'idle':
-      return badge.unread ? 'Unread response' : 'Idle';
-  }
-}
-
-export function StatusDot({ badge, adapterId = 'claude' }: { badge: SessionBadge; adapterId?: string }) {
-  return (
-    <Hint label={dotLabel(badge)}>
-      <span data-testid="sessions-row-status-dot" aria-label={badge.base} className={statusLogoClass(badge, adapterId)}>
-        <ProviderLogo adapterId={adapterId} className="size-7" />
-      </span>
-    </Hint>
-  );
-}
+export { StatusDot } from './SessionRowStatus';
 
 function RelativeTime({ updatedAt }: { updatedAt: number }) {
   const text = formatRelativeTime(updatedAt, Date.now());
@@ -94,58 +52,6 @@ function RelativeTime({ updatedAt }: { updatedAt: number }) {
     >
       {text}
     </span>
-  );
-}
-
-/**
- * RowHoverActions — tag / rename / archive icon buttons revealed on row hover
- * (artboard SessionRowDense `.tw-row-actions` shown on `:hover`, swapping out
- * the time). Each click stops propagation so it doesn't also select the row,
- * and wires to the same handlers the right-click context menu uses.
- */
-function RowHoverActions({
-  onTags,
-  onRename,
-  onArchive,
-}: {
-  onTags: (rect: DOMRect) => void;
-  onRename: () => void;
-  onArchive: () => void;
-}) {
-  const btn =
-    'inline-flex size-[22px] items-center justify-center rounded-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
-  const stop = (fn: () => void) => (e: MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    fn();
-  };
-  return (
-    <div className="hidden flex-shrink-0 items-center group-hover:flex">
-      <Hint label="Tags">
-        <button
-          data-testid="sessions-row-action-tags"
-          type="button"
-          className={btn}
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onTags(e.currentTarget.getBoundingClientRect());
-          }}
-        >
-          <TagIcon className="size-3.5" />
-        </button>
-      </Hint>
-      <Hint label="Rename">
-        <button data-testid="sessions-row-action-rename" type="button" className={btn} onClick={stop(onRename)}>
-          <PaperclipIcon className="size-3.5" />
-        </button>
-      </Hint>
-      <Hint label="Archive">
-        <button data-testid="sessions-row-action-archive" type="button" className={btn} onClick={stop(onArchive)}>
-          <XIcon className="size-3.5" />
-        </button>
-      </Hint>
-    </div>
   );
 }
 
@@ -176,6 +82,7 @@ function SessionRowInner({
   const isUnread = isSessionUnread(item, unread);
   const badge = deriveSessionBadge(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
+  const hoverCard = useRowHoverCard();
   // Captured on right-click so the context-menu "Tags" action can anchor the
   // popover at the cursor (same coordinates the context menu opened at) rather
   // than the host's default (0,0).
@@ -211,96 +118,113 @@ function SessionRowInner({
   }
 
   return (
-    <SessionContextMenu
-      pinned={custom.pinned}
-      onPin={handlePin}
-      onUnpin={handleUnpin}
-      onRename={() => {
-        queueMicrotask(() => setIsRenaming(true));
-      }}
-      onTags={() => {
-        // Radix's ContextMenu is a MODAL layer: closing it on select restores
-        // focus to the trigger via a requestAnimationFrame-scheduled callback
-        // (its FocusScope handing focus back), which always runs AFTER the
-        // microtask queue drains. A queueMicrotask-deferred open lets our
-        // popover grab focus first, then loses it to that rAF right
-        // afterwards — its own FocusScope reads that as "focus moved
-        // outside" and dismisses the popover immediately (flash-open then
-        // close). setTimeout (a macrotask) reliably runs after that
-        // rAF-scheduled restore, so the popover keeps focus.
-        setTimeout(() => {
-          const p = contextMenuPoint.current;
-          handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
-        }, 0);
-      }}
-      onArchive={() => void itemRuntime.archive()}
-      claudeSessionId={custom.claudeSessionId}
-    >
-      <ThreadListItemPrimitive.Root
-        data-testid="sessions-row"
-        data-chat-id={item.id}
-        className="group relative rounded-md transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
+    // Fragment, not a single child of SessionContextMenu: its ContextMenuTrigger
+    // is `asChild` (a real Radix Slot, unmocked in tests) which requires exactly
+    // one element child. SessionMetaCard portals to document.body regardless of
+    // where it sits in this tree, so it must be a SIBLING, not nested inside.
+    <>
+      <SessionContextMenu
+        pinned={custom.pinned}
+        onPin={handlePin}
+        onUnpin={handleUnpin}
+        onRename={() => {
+          queueMicrotask(() => setIsRenaming(true));
+        }}
+        onTags={() => {
+          // Radix's ContextMenu is a MODAL layer: closing it on select restores
+          // focus to the trigger via a requestAnimationFrame-scheduled callback
+          // (its FocusScope handing focus back), which always runs AFTER the
+          // microtask queue drains. A queueMicrotask-deferred open lets our
+          // popover grab focus first, then loses it to that rAF right
+          // afterwards — its own FocusScope reads that as "focus moved
+          // outside" and dismisses the popover immediately (flash-open then
+          // close). setTimeout (a macrotask) reliably runs after that
+          // rAF-scheduled restore, so the popover keeps focus.
+          setTimeout(() => {
+            const p = contextMenuPoint.current;
+            handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
+          }, 0);
+        }}
+        onArchive={() => void itemRuntime.archive()}
+        claudeSessionId={custom.claudeSessionId}
       >
-        {/* Whole-row select target: the entire row body is the trigger, so a click
-            anywhere (title, status dot, meta row, empty space) changes the active
-            session. Interactive children (PR links, hover actions, the rename
-            input) stopPropagation, so they keep their own behavior. */}
-        <ThreadListItemPrimitive.Trigger asChild>
-          <div
-            onContextMenu={(e) => {
-              contextMenuPoint.current = { x: e.clientX, y: e.clientY };
-            }}
-            className="flex w-full cursor-pointer items-center gap-[9px] pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left"
-          >
-            <div className="flex flex-shrink-0 items-center gap-[5px]">
-              {custom.pinned && !inPinnedGroup && (
-                <PinIcon data-testid="sessions-row-pin-glyph" className="size-[11px] flex-shrink-0 text-primary" />
-              )}
-              <StatusDot badge={badge} adapterId={custom.adapterId} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex h-[22px] min-w-0 items-center gap-[9px]">
-                {isRenaming ? (
-                  <SessionRowRename
-                    initialTitle={title}
-                    onCommit={handleCommitRename}
-                    onCancel={() => setIsRenaming(false)}
-                  />
-                ) : (
-                  <TruncatedWithTooltip
-                    data-testid="sessions-row-title"
-                    text={title}
-                    side="top"
-                    className={[
-                      'flex-1 text-body tracking-normal',
-                      isUnread ? 'font-bold text-foreground' : 'font-medium text-foreground',
-                    ].join(' ')}
-                  />
+        <ThreadListItemPrimitive.Root
+          data-testid="sessions-row"
+          data-chat-id={item.id}
+          className="group relative rounded-md transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
+        >
+          {/* Whole-row select target: the entire row body is the trigger, so a click
+              anywhere (title, status dot, meta icons, empty space) changes the active
+              session. Interactive children (PR links, hover actions, the rename
+              input) stopPropagation, so they keep their own behavior. */}
+          <ThreadListItemPrimitive.Trigger asChild>
+            <div
+              onContextMenu={(e) => {
+                contextMenuPoint.current = { x: e.clientX, y: e.clientY };
+              }}
+              onMouseEnter={hoverCard.onMouseEnter}
+              onMouseLeave={hoverCard.onMouseLeave}
+              className="flex h-[30px] w-full cursor-pointer items-center gap-[9px] px-2.5 text-left"
+            >
+              <div className="flex flex-shrink-0 items-center gap-[5px]">
+                {custom.pinned && !inPinnedGroup && (
+                  <PinIcon data-testid="sessions-row-pin-glyph" className="size-[11px] flex-shrink-0 text-primary" />
                 )}
-                <RelativeTime updatedAt={custom.updatedAt} />
-                <RowHoverActions
-                  onTags={(rect) => handleTags(rect)}
-                  onRename={() => queueMicrotask(() => setIsRenaming(true))}
-                  onArchive={() => void itemRuntime.archive()}
-                />
+                <StatusDot badge={badge} adapterId={custom.adapterId} />
               </div>
-              <div className="mt-[4px] @max-[220px]:hidden">
-                <SessionRowMeta
+              {isRenaming ? (
+                <SessionRowRename
+                  initialTitle={title}
+                  onCommit={handleCommitRename}
+                  onCancel={() => setIsRenaming(false)}
+                />
+              ) : (
+                <TruncatedWithTooltip
+                  data-testid="sessions-row-title"
+                  text={title}
+                  side="top"
+                  className={[
+                    'min-w-0 flex-1 text-body tracking-normal',
+                    isUnread ? 'font-bold text-foreground' : 'font-medium text-foreground',
+                  ].join(' ')}
+                />
+              )}
+              <div className="@max-[260px]:hidden">
+                <SessionRowMetaIcons
                   worktreePath={custom.worktreePath}
                   worktreeMissing={custom.worktreeMissing}
-                  transcriptMissing={custom.transcriptMissing}
                   detectedPrs={custom.detectedPrs}
                   tags={custom.tags}
                   colorOf={colorOf}
-                  projectId={projectName != null ? custom.projectId : undefined}
-                  projectName={projectName}
                 />
               </div>
+              <RelativeTime updatedAt={custom.updatedAt} />
+              <RowHoverActions
+                onTags={(rect) => handleTags(rect)}
+                onRename={() => queueMicrotask(() => setIsRenaming(true))}
+                onArchive={() => void itemRuntime.archive()}
+              />
             </div>
-          </div>
-        </ThreadListItemPrimitive.Trigger>
-      </ThreadListItemPrimitive.Root>
-    </SessionContextMenu>
+          </ThreadListItemPrimitive.Trigger>
+        </ThreadListItemPrimitive.Root>
+      </SessionContextMenu>
+      {hoverCard.rect != null && (
+        <SessionMetaCard
+          anchorRect={hoverCard.rect}
+          title={title}
+          updatedAt={custom.updatedAt}
+          projectId={custom.projectId}
+          projectName={projectName}
+          worktreePath={custom.worktreePath}
+          branchName={custom.branchName}
+          worktreeMissing={custom.worktreeMissing}
+          transcriptMissing={custom.transcriptMissing}
+          detectedPrs={custom.detectedPrs}
+          tags={custom.tags}
+          colorOf={colorOf}
+        />
+      )}
+    </>
   );
 }
 
