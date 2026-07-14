@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { DAEMON_VERSION } from '../version.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -25,6 +26,8 @@ export interface UpdateOptions {
   version?: string;
   /** Consider pre-releases when picking the newest release. */
   includePrerelease?: boolean;
+  /** Install even if the target release is not newer than the running version. */
+  force?: boolean;
 }
 
 /** Map the running platform to the release artifact filename it should install. */
@@ -43,9 +46,7 @@ export function pickRelease(releases: GhRelease[], opts: UpdateOptions): GhRelea
 
   if (opts.version) {
     const norm = (t: string) => t.replace(/^v/, '');
-    const found = published.find(
-      (r) => r.tag_name === opts.version || norm(r.tag_name) === norm(opts.version!),
-    );
+    const found = published.find((r) => r.tag_name === opts.version || norm(r.tag_name) === norm(opts.version!));
     if (!found) throw new Error(`No release found for version ${opts.version}`);
     return found;
   }
@@ -59,6 +60,61 @@ export function pickRelease(releases: GhRelease[], opts: UpdateOptions): GhRelea
     throw new Error(`No matching release found.${hint}`);
   }
   return newest;
+}
+
+interface SemVer {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: string[];
+}
+
+function parseSemver(version: string): SemVer {
+  const [core, ...preParts] = version.replace(/^v/, '').split('-');
+  const [major = 0, minor = 0, patch = 0] = core.split('.').map((n) => Number(n) || 0);
+  const prerelease = preParts.join('-');
+  return { major, minor, patch, prerelease: prerelease ? prerelease.split('.') : [] };
+}
+
+/** Compare two (optionally `v`-prefixed) semver strings: negative if `a` < `b`, 0 if equal, positive if `a` > `b`. */
+export function compareSemver(a: string, b: string): number {
+  const va = parseSemver(a);
+  const vb = parseSemver(b);
+  if (va.major !== vb.major) return va.major - vb.major;
+  if (va.minor !== vb.minor) return va.minor - vb.minor;
+  if (va.patch !== vb.patch) return va.patch - vb.patch;
+  // A release with no prerelease suffix outranks one with the same major.minor.patch that has one.
+  if (va.prerelease.length === 0 && vb.prerelease.length > 0) return 1;
+  if (va.prerelease.length > 0 && vb.prerelease.length === 0) return -1;
+  const len = Math.max(va.prerelease.length, vb.prerelease.length);
+  for (let i = 0; i < len; i++) {
+    const pa = va.prerelease[i];
+    const pb = vb.prerelease[i];
+    if (pa === undefined) return -1;
+    if (pb === undefined) return 1;
+    const na = Number(pa);
+    const nb = Number(pb);
+    const aIsNum = pa !== '' && !Number.isNaN(na);
+    const bIsNum = pb !== '' && !Number.isNaN(nb);
+    if (aIsNum && bIsNum) {
+      if (na !== nb) return na - nb;
+    } else if (aIsNum !== bIsNum) {
+      return aIsNum ? -1 : 1; // numeric identifiers rank below alphanumeric ones (semver 11.4.4)
+    } else if (pa !== pb) {
+      return pa < pb ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+/** Refuse to install a release that isn't newer than `currentVersion`, unless `force` is set. */
+export function assertNotDowngrade(release: GhRelease, currentVersion: string, force: boolean): void {
+  if (force) return;
+  if (compareSemver(release.tag_name, currentVersion) > 0) return;
+  throw new Error(
+    `${release.tag_name} is not newer than the running version (v${currentVersion}). ` +
+      'Refusing to downgrade — pass --force to override.',
+  );
 }
 
 /** Resolve the download URL of `artifact` within a release, or throw. */
@@ -76,6 +132,7 @@ export function parseUpdateArgs(argv: string[]): UpdateOptions & { help?: boolea
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--pre' || arg === '--prerelease') opts.includePrerelease = true;
+    else if (arg === '--force') opts.force = true;
     else if (arg === '-h' || arg === '--help') opts.help = true;
     else if (arg === '--version') opts.version = argv[++i];
     else if (arg === '--dir') opts.dir = argv[++i];
@@ -137,6 +194,7 @@ export async function runUpdate(argv: string[] = process.argv.slice(3)): Promise
     : `https://api.github.com/repos/${REPO}/releases?per_page=30`;
   const payload = await fetchJson<GhRelease | GhRelease[]>(listUrl);
   const release = pickRelease(Array.isArray(payload) ? payload : [payload], opts);
+  assertNotDowngrade(release, DAEMON_VERSION, opts.force ?? false);
   const url = assetUrl(release, artifact);
 
   console.log(`  Installing ${release.tag_name} (${artifact}) → ${root}`);
@@ -160,11 +218,12 @@ function printUsage(): void {
       '',
       '  mainframe update — upgrade the standalone daemon in place',
       '',
-      '  Usage: mainframe update [--pre] [--version <tag>] [--dir <path>]',
+      '  Usage: mainframe update [--pre] [--version <tag>] [--dir <path>] [--force]',
       '',
       '    --pre              include pre-releases when picking the newest',
       '    --version <tag>    install a specific release tag (e.g. v2.0.0-rc.1)',
       '    --dir <path>       install root to unpack over (default: auto-detected)',
+      '    --force            allow installing a release that is not newer than the current one',
       '',
     ].join('\n'),
   );
