@@ -259,17 +259,20 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
     // DraftSessionRow's own project chip only renders in "All" view
     // (`showProject`, per its own doc comment) — with a project pill active,
-    // the sidebar row deliberately omits it (same pattern as
-    // `sessions-row-meta-project`). Assert the project on the chat header's
-    // own chip instead, which always renders for a draft regardless of pill
-    // state (ChatCardHeaderDraft's `chat-header-project`).
+    // the sidebar row deliberately omits it (same "only in All view" rule the
+    // SessionMetaCard hover card's project row follows). Assert the project on
+    // the chat header's own chip instead, which always renders for a draft
+    // regardless of pill state (ChatCardHeaderDraft's `chat-header-project`).
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(projectA.projectPath));
 
-    // Clean up: discard, then clear the pill for the next test.
+    // Clean up: discard, then clear the pill for the next test. The 2026-07
+    // project switcher list is single-select (not a toggle) — only the "All
+    // projects" row clears the filter, a second click on the active row
+    // no longer does.
     await draftRow.hover();
     await draftRow.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
-    await sidebar.projectFilterPill(projectA.projectId).click();
+    await page.getByTestId('sessions-filter-pill-all').click();
   });
 
   test('abandoning a draft in project A does not leak into a second New picking project B', async () => {
@@ -403,11 +406,12 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
 
-    // Clean up: discard, then clear the pill.
+    // Clean up: discard, then clear the pill. The 2026-07 project switcher
+    // list is single-select (not a toggle) — only "All projects" clears it.
     await draftRow.hover();
     await draftRow.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
-    await sidebar.projectFilterPill(project.projectId).click();
+    await page.getByTestId('sessions-filter-pill-all').click();
   });
 });
 

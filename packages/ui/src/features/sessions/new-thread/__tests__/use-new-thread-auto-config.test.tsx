@@ -4,6 +4,8 @@
  * Strategy:
  *  - Mock @assistant-ui/react → useAuiState driven via fakeAuiState.
  *  - Mock @/store/session-filters → useSessionFilters driven via fakeFilters.
+ *  - Mock @/store/settings → useSettingsStore driven via fakeDefaultAdapterId.
+ *  - Mock @/store/adapters → useAdapters driven via fakeAdapters.
  *  - Mock ../runtime/draft-config → spy on setDraftConfig, stub getDraftConfig.
  *  - Use the REAL new-thread-ready-store (zustand) and reset it between tests.
  *    markReady is checked via store state (readyIds.has), not a spy.
@@ -21,6 +23,10 @@
  *  8. Regression (bug: draft discard is a no-op with a pill active): a local id
  *     just marked "discarded" (useDiscardedDraftStore) must NOT be re-armed even
  *     though it still looks like a fresh, unconfigured __LOCALID_* thread.
+ *  9. general.defaultAdapterId is set → setDraftConfig uses it instead of 'claude'.
+ * 10. defaultAdapterId is unset but an installed adapter exists → uses the first
+ *     installed adapter's id.
+ * 11. defaultAdapterId is unset and nothing is installed → falls back to 'claude'.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -40,6 +46,8 @@ let fakeAuiState: FakeAuiState = {
 };
 
 let fakeFilterProjectId: string | null = null;
+let fakeDefaultAdapterId: string | null = null;
+let fakeAdapters: { id: string; installed: boolean }[] = [];
 
 const setDraftConfigSpy = vi.fn();
 let getDraftConfigResult: unknown = undefined;
@@ -55,6 +63,15 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('@/store/session-filters', () => ({
   useSessionFilters: (selector: (s: { filterProjectId: string | null }) => unknown) =>
     selector({ filterProjectId: fakeFilterProjectId }),
+}));
+
+vi.mock('@/store/settings', () => ({
+  useSettingsStore: (selector: (s: { general: { defaultAdapterId: string | null } }) => unknown) =>
+    selector({ general: { defaultAdapterId: fakeDefaultAdapterId } }),
+}));
+
+vi.mock('@/store/adapters', () => ({
+  useAdapters: () => fakeAdapters,
 }));
 
 vi.mock('../../runtime/draft-config', () => ({
@@ -78,6 +95,8 @@ beforeEach(() => {
   setDraftConfigSpy.mockReset();
   getDraftConfigResult = undefined;
   fakeFilterProjectId = null;
+  fakeDefaultAdapterId = null;
+  fakeAdapters = [];
   fakeAuiState = {
     threadListItem: null,
     thread: { messages: [] },
@@ -250,5 +269,53 @@ describe('useNewThreadAutoConfig — a just-discarded local id is not re-armed',
     renderHook(() => useNewThreadAutoConfig());
 
     expect(setDraftConfigSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9-11. defaultAdapterId resolution: setting → first installed adapter → 'claude'.
+// ---------------------------------------------------------------------------
+
+describe('useNewThreadAutoConfig — adapterId resolution', () => {
+  it('uses general.defaultAdapterId when it is set', () => {
+    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+    fakeDefaultAdapterId = 'gemini';
+    fakeAdapters = [{ id: 'claude', installed: true }];
+
+    renderHook(() => useNewThreadAutoConfig());
+
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
+      projectId: 'proj-42',
+      adapterId: 'gemini',
+    });
+  });
+
+  it('falls back to the first installed adapter when defaultAdapterId is unset', () => {
+    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+    fakeDefaultAdapterId = null;
+    fakeAdapters = [
+      { id: 'codex', installed: false },
+      { id: 'gemini', installed: true },
+    ];
+
+    renderHook(() => useNewThreadAutoConfig());
+
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
+      projectId: 'proj-42',
+      adapterId: 'gemini',
+    });
+  });
+
+  it('falls back to "claude" when defaultAdapterId is unset and nothing is installed', () => {
+    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+    fakeDefaultAdapterId = null;
+    fakeAdapters = [{ id: 'codex', installed: false }];
+
+    renderHook(() => useNewThreadAutoConfig());
+
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
+      projectId: 'proj-42',
+      adapterId: 'claude',
+    });
   });
 });

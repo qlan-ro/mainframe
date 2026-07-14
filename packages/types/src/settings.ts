@@ -57,6 +57,8 @@ export interface GeneralConfig {
   worktreeDir: string;
   notifications: NotificationConfig;
   updateChannel: UpdateChannel;
+  /** Adapter id used to seed new chats. `null` = auto-pick the first installed adapter. */
+  defaultAdapterId: string | null;
 }
 
 export const NOTIFICATION_DEFAULTS: NotificationConfig = {
@@ -69,4 +71,5 @@ export const GENERAL_DEFAULTS: GeneralConfig = {
   worktreeDir: '.worktrees',
   notifications: NOTIFICATION_DEFAULTS,
   updateChannel: 'stable',
+  defaultAdapterId: null,
 };

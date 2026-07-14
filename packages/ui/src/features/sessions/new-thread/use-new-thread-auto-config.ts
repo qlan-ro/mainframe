@@ -11,12 +11,14 @@
 import { useEffect } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
+import { useSettingsStore } from '@/store/settings';
+import { useAdapters } from '@/store/adapters';
 import { getDraftConfig, setDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { isDraftDiscarded } from './discarded-drafts';
 
-/** Default adapter for a project-scoped new thread (matches desktop startChat). */
-const DEFAULT_ADAPTER_ID = 'claude';
+/** Last-resort adapter when no default is configured and nothing is installed yet. */
+const FALLBACK_ADAPTER_ID = 'claude';
 
 export function useNewThreadAutoConfig(): void {
   const localId = useAuiState((s) => s.threadListItem?.id ?? null);
@@ -24,6 +26,8 @@ export function useNewThreadAutoConfig(): void {
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const isReady = useNewThreadReady((s) => (localId ? s.readyIds.has(localId) : false));
+  const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
+  const adapters = useAdapters();
 
   useEffect(() => {
     if (localId == null || filterProjectId == null) return;
@@ -33,9 +37,10 @@ export function useNewThreadAutoConfig(): void {
     // hasn't landed yet. Without this guard we'd instantly re-seed the exact
     // draft the user just closed (see discarded-drafts.ts).
     if (!isNewLocal || isReady || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
+    const adapterId = defaultAdapterId ?? adapters.find((a) => a.installed)?.id ?? FALLBACK_ADAPTER_ID;
     // No permissionMode: chat creation omits it so the daemon applies the user's
     // provider defaultMode (matching desktop). A deliberate pick sets it later.
-    setDraftConfig(localId, { projectId: filterProjectId, adapterId: DEFAULT_ADAPTER_ID });
+    setDraftConfig(localId, { projectId: filterProjectId, adapterId });
     useNewThreadReady.getState().markReady(localId);
-  }, [localId, itemStatus, messageCount, filterProjectId, isReady]);
+  }, [localId, itemStatus, messageCount, filterProjectId, isReady, defaultAdapterId, adapters]);
 }

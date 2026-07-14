@@ -2,9 +2,11 @@
  * SessionSidebar — the full left panel shell (warm-chrome glass panel).
  *
  * Composition (matches the 02-chrome artboard Sidebar):
- *   header → "Sessions" group header (chevron + count + new/sort/more) →
- *   ProjectFilterPillBar → scrollable TIME-grouped list (flex-1) →
- *   TagFilterBar pinned at the BOTTOM (border-t, flex-shrink-0)
+ *   header → ProjectFilterPillBar (the project switcher — "All projects" is
+ *   its own top row, so no separate "Projects" section title is needed) →
+ *   "Sessions" group header (chevron + count + new/sort/more) → scrollable
+ *   TIME-grouped list (flex-1) → TagFilterBar pinned at the BOTTOM (border-t,
+ *   flex-shrink-0)
  *
  * Grouping is by TIME, not project (Pinned / Today / Yesterday / Earlier), with a
  * Sort By menu (Recent / Name / Status) — per the artboard `arrangeSessions`.
@@ -19,10 +21,9 @@
  *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
  *   - arrangeSessions / applySessionFilters / attentionCount (pure VMs)
  */
-import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
-import { CountBadge } from '@/components/ui/count-badge';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -58,20 +59,18 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 }
 
 /**
- * SessionsGroupHeader — the sticky "SESSIONS" group header with the count and
- * the new/sort/more icon-button cluster. `newButton` is SessionsNewButton
- * (pill-active → native New; "All" view → the project-picker popover); the sort
- * button opens SessionSortMenu; the more (⋯) button opens SessionsMoreMenu
- * (Archived sessions · Import external sessions).
+ * SessionsGroupHeader — the sticky "SESSIONS" group header with the sort/more
+ * icon-button cluster. New-session entry is its own full-width row underneath
+ * (SessionsNewButton), not a header icon; the sort button opens
+ * SessionSortMenu; the more (⋯) button opens SessionsMoreMenu (Archived
+ * sessions · Import external sessions).
  */
-function SessionsGroupHeader({ count, newButton }: { count: number; newButton: ReactNode }) {
+function SessionsGroupHeader() {
   const { sortMode, setSortMode } = useSessionFilters();
   return (
     <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
       <span className="text-caption font-medium text-muted-foreground">Sessions</span>
-      <CountBadge count={count} variant="info" />
       <div className="flex-1" />
-      {newButton}
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />
     </div>
@@ -115,8 +114,6 @@ function SessionSidebarImpl() {
     [allItems, filterProjectId, selectedTags, selectedSynthetic],
   );
 
-  const groups = useMemo(() => arrangeSessions(filteredItems, sortMode), [filteredItems, sortMode]);
-
   const projectNameOf = useMemo(() => {
     const map = new Map(projects.map((p) => [p.id, p.name]));
     return (projectId: string): string => map.get(projectId) ?? projectId;
@@ -128,6 +125,13 @@ function SessionSidebarImpl() {
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
+
+  // 'project' mode groups by the sidebar's own project order (sortedProjects),
+  // not raw daemon order — matches the switcher list above it.
+  const groups = useMemo(
+    () => arrangeSessions(filteredItems, sortMode, Date.now(), sortedProjects),
+    [filteredItems, sortMode, sortedProjects],
+  );
 
   const sessionCounts = useSessionCounts(allItems);
   const draftRow = useDraftRow(allItems, filterProjectId);
@@ -184,19 +188,6 @@ function SessionSidebarImpl() {
 
   return (
     <>
-      <SessionsGroupHeader
-        count={allItems.length}
-        newButton={
-          <SessionsNewButton
-            filterProjectId={filterProjectId}
-            filterProjectName={filterProjectName}
-            projects={sortedProjects}
-            sessionCounts={sessionCounts}
-            onAddProject={() => void handleAddProject()}
-          />
-        }
-      />
-
       <ProjectFilterPillBar
         projects={sortedProjects}
         filterProjectId={filterProjectId}
@@ -205,6 +196,18 @@ function SessionSidebarImpl() {
         onRemoveProject={(project) => void handleRemoveProject(project)}
         onAddProject={() => void handleAddProject()}
       />
+
+      <SessionsGroupHeader />
+
+      <div className="px-2">
+        <SessionsNewButton
+          filterProjectId={filterProjectId}
+          filterProjectName={filterProjectName}
+          projects={sortedProjects}
+          sessionCounts={sessionCounts}
+          onAddProject={() => void handleAddProject()}
+        />
+      </div>
 
       {draftRow.visible && draftRow.model != null && (
         <DraftSessionRow

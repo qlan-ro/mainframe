@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, GitFork, Loader2 } from 'lucide-react';
+import { AlertTriangle, FolderGit2, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -186,7 +186,7 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
                 'transition-colors focus-visible:outline-none',
               ].join(' ')}
             >
-              <GitFork size={13} />
+              <FolderGit2 size={13} />
               {showIsolated && (
                 <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
               )}

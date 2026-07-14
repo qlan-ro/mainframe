@@ -50,12 +50,12 @@ function idsOf(groups: { label: string; items: SessionItem[] }[], label: string)
 // ---------------------------------------------------------------------------
 
 describe('SESSION_SORTS', () => {
-  it('exposes recent / name / status options in order', () => {
-    expect(SESSION_SORTS.map((s) => s.id)).toEqual(['recent', 'name', 'status']);
+  it('exposes recent / name / status / project options in order', () => {
+    expect(SESSION_SORTS.map((s) => s.id)).toEqual(['recent', 'name', 'status', 'project']);
   });
 
   it('labels each option', () => {
-    expect(SESSION_SORTS.map((s) => s.label)).toEqual(['Recent activity', 'Name (A–Z)', 'Status']);
+    expect(SESSION_SORTS.map((s) => s.label)).toEqual(['Recent activity', 'Name (A–Z)', 'Status', 'Project']);
   });
 });
 
@@ -133,6 +133,53 @@ describe("arrangeSessions mode 'name'", () => {
 // ---------------------------------------------------------------------------
 // mode 'status' — a single By status group ranked working→waiting→idle
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// mode 'project' — Pinned + one section per project (project-list order)
+// ---------------------------------------------------------------------------
+
+describe("arrangeSessions mode 'project'", () => {
+  const PROJECTS = [
+    { id: 'proj-b', name: 'Beta' },
+    { id: 'proj-a', name: 'Alpha' },
+  ];
+
+  it('emits one section per project, labeled by project name, in project-list order', () => {
+    const items = [
+      item('a1', { projectId: 'proj-a' }),
+      item('b1', { projectId: 'proj-b' }),
+      item('b2', { projectId: 'proj-b' }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Beta', 'Alpha']);
+    expect(idsOf(groups, 'Beta')).toEqual(['b1', 'b2']);
+    expect(idsOf(groups, 'Alpha')).toEqual(['a1']);
+  });
+
+  it('omits sections with zero matching sessions', () => {
+    const items = [item('a1', { projectId: 'proj-a' })];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Alpha']);
+  });
+
+  it('surfaces pinned items in a leading Pinned section ahead of the project sections', () => {
+    const items = [item('a1', { projectId: 'proj-a' }), item('b-pin', { projectId: 'proj-b', pinned: true })];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Pinned', 'Alpha']);
+    expect(idsOf(groups, 'Pinned')).toEqual(['b-pin']);
+  });
+
+  it('groups sessions whose projectId is absent from the given project list into a trailing section keyed by that id', () => {
+    const items = [item('a1', { projectId: 'proj-a' }), item('orphan1', { projectId: 'proj-ghost' })];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Alpha', 'proj-ghost']);
+    expect(idsOf(groups, 'proj-ghost')).toEqual(['orphan1']);
+  });
+
+  it('returns an empty array for no items', () => {
+    expect(arrangeSessions([], 'project', NOW, PROJECTS)).toEqual([]);
+  });
+});
 
 describe("arrangeSessions mode 'status'", () => {
   it('orders By status working then waiting then idle', () => {

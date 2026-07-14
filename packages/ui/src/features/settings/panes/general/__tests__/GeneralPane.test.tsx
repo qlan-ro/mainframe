@@ -15,6 +15,7 @@ beforeEach(() => {
       worktreeDir: '.worktrees',
       notifications: useSettingsStore.getState().general.notifications,
       updateChannel: 'stable',
+      defaultAdapterId: null,
     },
   });
   updateGeneralSettings.mockClear();

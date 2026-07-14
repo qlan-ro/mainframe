@@ -309,7 +309,7 @@ describe('WorktreePopover — trigger shape', () => {
     expect(trigger.className).not.toContain('rounded-[11px]');
   });
 
-  it('GitFork glyph renders at 13px (design size), not 11px', () => {
+  it('FolderGit2 glyph renders at 13px (design size), not 11px', () => {
     renderPopover(makeChat());
 
     const trigger = screen.getByTestId('composer-worktree-trigger');
@@ -339,7 +339,7 @@ describe('WorktreePopover — isolated-state indicator', () => {
 
     // No Check glyph (lucide Check renders a <svg> with a polyline path) inside the trigger
     const svgs = trigger.querySelectorAll('svg');
-    expect(svgs.length).toBe(1); // only GitFork
+    expect(svgs.length).toBe(1); // only FolderGit2
   });
 
   it('corner dot uses the primary accent color, not success', () => {
