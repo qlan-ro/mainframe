@@ -69,10 +69,7 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 function SessionsGroupHeader({ count, newButton }: { count: number; newButton: ReactNode }) {
   const { sortMode, setSortMode } = useSessionFilters();
   return (
-    // px-[16px]: matches the project switcher rows' effective left inset
-    // (ProjectFilterPillBar's px-2 container + each row's own px-2), so
-    // "Sessions" lines up with the project names above it.
-    <div className="flex items-center gap-[4px] px-[16px] pb-1 pt-[8px]">
+    <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
       <span className="text-caption font-medium text-muted-foreground">Sessions</span>
       <CountBadge count={count} variant="info" />
       <div className="flex-1" />

@@ -44,6 +44,10 @@ function AllProjectsRow({ active, totalAttn, onSelect }: { active: boolean; tota
         active ? 'bg-mf-selection text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       ].join(' ')}
     >
+      {/* Avatar-sized spacer (matches ProjectAvatar's default 18px) so "All
+          projects" lines up with the project name text below it, which is
+          preceded by a real avatar. */}
+      <span className="inline-block size-[18px] flex-shrink-0" aria-hidden="true" />
       <span>All projects</span>
       <div className="flex-1" />
       {active && totalAttn > 0 && (
