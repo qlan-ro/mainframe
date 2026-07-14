@@ -1,7 +1,7 @@
 /**
  * §sessions-rows — The session row as a human uses it: click-to-select, hover
  * actions, the right-click context menu, pin/unpin, the four StatusDot states,
- * and the row's meta line (project chip / worktree pill / tag dots).
+ * and the row's compact meta glyphs + hover-card detail.
  *
  * Ported from plan spec #2 (docs/plans/2026-07-03-tauri-e2e-test-plan.md,
  * Cluster A). Does NOT duplicate: sessions.spec.ts (rename/archive/restore/
@@ -9,10 +9,11 @@
  * (tag popover internals — this file only asserts the resulting row dot).
  *
  * Source (verified against packages/ui/src/features/sessions/sidebar/):
- *   SessionRow.tsx        — row root, StatusDot, RowHoverActions, pin glyph
- *   SessionRowMeta.tsx    — project chip / worktree pill / PR link / tag dots
- *   SessionContextMenu.tsx — right-click menu (Pin/Unpin, Rename, Tags, Archive, Copy Session ID)
- *   SessionGroupHeader.tsx — group header, incl. the 'Pinned' group's pin glyph
+ *   SessionRow.tsx          — row root, StatusDot, RowHoverActions, pin glyph
+ *   SessionRowMetaIcons.tsx — compact worktree/PR/tag-dot glyph cluster (2026-07 rebuild)
+ *   SessionMetaCard.tsx     — hover-card detail (project/worktree/branch/PR/tags/warning)
+ *   SessionContextMenu.tsx  — right-click menu (Pin/Unpin, Rename, Tags, Archive, Copy Session ID)
+ *   SessionGroupHeader.tsx  — group header, incl. the 'Pinned' group's pin glyph
  *   view-model/session-status.ts — deriveSessionBadge (worktree-missing > transcript-missing > working > waiting > idle)
  *
  * Testid reference (all verified against source above):
@@ -24,10 +25,10 @@
  *   sessions-ctx-pin/-rename/-tags/-archive/-copy-id — context-menu items
  *   sessions-group-header-Pinned     — the Pinned group header
  *   sessions-group-pin-glyph         — pin glyph on the Pinned group header (see NOTE below)
- *   sessions-row-meta-project        — project chip (All view only)
- *   sessions-row-meta-worktree       — worktree pill (text-destructive when missing)
- *   sessions-row-meta-degraded       — unified degraded marker (muted icon); aria-label names the cause(s)
- *   sessions-row-meta-tag-dot-<name> — applied-tag dot cluster
+ *   sessions-row-meta-icon-worktree  — compact worktree glyph on the row (text-destructive when missing)
+ *   sessions-row-meta-icon-tag-dot-<name> — compact tag-dot glyph on the row (capped at 3)
+ *   sessions-meta-card-project       — project row inside the hover card (All view only)
+ *   sessions-meta-card-warning       — branch-safety warning inside the hover card
  *
  * NOTE on the pin glyph: SessionRow.tsx also renders a PER-ROW
  * `sessions-row-pin-glyph` guarded by `custom.pinned && !inPinnedGroup`. Per
@@ -184,21 +185,26 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await expect(rowX).toBeVisible();
   });
 
-  test('project chip renders in the meta line only in the All view', async () => {
+  test('hover card shows the project only in the All view', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     const rowX = sidebar.row(chatIdX);
 
-    const chip = rowX.getByTestId('sessions-row-meta-project');
-    await expect(chip).toBeVisible({ timeout: 5_000 });
-    await expect(chip).toContainText(path.basename(project.projectPath));
+    // 2026-07 single-row rebuild: the per-row project chip moved off the row
+    // entirely (dropped from SessionRowMetaIcons per the compact-row spec) —
+    // project identity is now surfaced only in the SessionMetaCard hover card,
+    // and only in "All" view (same visibility rule the old inline chip had).
+    await rowX.hover();
+    const projectRow = page.getByTestId('sessions-meta-card-project');
+    await expect(projectRow).toBeVisible({ timeout: 5_000 });
+    await expect(projectRow).toContainText(path.basename(project.projectPath));
 
     await sidebar.projectFilterPill(project.projectId).click();
-    await expect(rowX.getByTestId('sessions-row-meta-project')).toHaveCount(0, { timeout: 5_000 });
+    await rowX.hover();
+    await expect(page.getByTestId('sessions-meta-card-project')).toHaveCount(0, { timeout: 5_000 });
 
     // Reset the filter to All for subsequent tests.
     await page.getByTestId('sessions-filter-pill-all').click();
-    await expect(chip).toBeVisible({ timeout: 5_000 });
   });
 
   test('applying a tag surfaces a colored dot in the row meta line', async () => {
@@ -218,7 +224,7 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await page.keyboard.press('Escape');
     await expect(popover).toHaveCount(0, { timeout: 5_000 });
 
-    await expect(rowX.getByTestId(`sessions-row-meta-tag-dot-${tagName}`)).toBeVisible({ timeout: 5_000 });
+    await expect(rowX.getByTestId(`sessions-row-meta-icon-tag-dot-${tagName}`)).toBeVisible({ timeout: 5_000 });
   });
 });
 
@@ -240,7 +246,7 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     await closeTauriApp(app);
   });
 
-  test('worktree pill shows the branch basename; going missing on disk flips the pill + dot to destructive', async () => {
+  test('worktree glyph is present; going missing on disk flips the glyph + dot to destructive and the hover card warns', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
     const dot = row.getByTestId('sessions-row-status-dot');
@@ -250,10 +256,12 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     });
     expect(enableRes.ok()).toBe(true);
 
-    const pill = row.getByTestId('sessions-row-meta-worktree');
-    await expect(pill).toBeVisible({ timeout: 15_000 });
-    await expect(pill).not.toHaveClass(/text-destructive/);
-    await expect(row.getByTestId('sessions-row-meta-degraded')).toHaveCount(0);
+    // 2026-07 single-row rebuild: the row shows an icon-only worktree glyph
+    // (SessionRowMetaIcons); the full "Worktree missing" cause text moved to
+    // the SessionMetaCard hover card (no more inline text pill/degraded marker).
+    const glyph = row.getByTestId('sessions-row-meta-icon-worktree');
+    await expect(glyph).toBeVisible({ timeout: 15_000 });
+    await expect(glyph).not.toHaveClass(/text-destructive/);
     await expect(dot).toHaveAttribute('aria-label', 'idle');
 
     const chatRes = await page.request.get(`${DAEMON_BASE}/api/chats/${chatId}`);
@@ -268,11 +276,12 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     await waitConnected(page);
 
     await expect(dot).toHaveAttribute('aria-label', 'worktree-missing', { timeout: 15_000 });
-    await expect(pill).toHaveClass(/text-destructive/);
-    // Unified degraded marker — aria-label names the cause.
-    const marker = row.getByTestId('sessions-row-meta-degraded');
-    await expect(marker).toHaveCount(1);
-    await expect(marker).toHaveAttribute('aria-label', 'Worktree missing');
+    await expect(glyph).toHaveClass(/text-destructive/);
+
+    await row.hover();
+    const warning = page.getByTestId('sessions-meta-card-warning');
+    await expect(warning).toBeVisible({ timeout: 5_000 });
+    await expect(warning).toContainText('Worktree missing');
   });
 });
 

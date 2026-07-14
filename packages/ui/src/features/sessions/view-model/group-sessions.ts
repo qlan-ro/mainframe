@@ -2,22 +2,23 @@
  * Sessions sidebar view-model: arrange the filtered session list into the
  * warm-chrome artboard's groups.
  *
- * The artboard does NOT group by project — it groups by TIME, surfaces a
- * Pinned section first, and offers a Sort By menu (Recent / Name / Status).
- * Project narrowing is handled by the filter pills + the per-row project chip,
- * not by grouping. See 02-chrome.jsx `arrangeSessions`/`groupSessionsByTime`/
- * `SESSION_SORTS`/`SESSION_STATUS_RANK`.
+ * The default grouping is TIME (Pinned / Today / Yesterday / Earlier), not
+ * project — project narrowing is primarily the project switcher list + the
+ * per-row project chip. A "Project" Sort By mode is additionally offered
+ * (`mode: 'project'`) for anyone who wants project-grouped sections instead;
+ * it does not change the default. See `arrangeByProject` below.
  *
  * Pure: `now` is a parameter so calendar-day bucketing is deterministic in tests.
  */
 import type { SessionItem } from './chat-to-thread-custom';
 
-export type SortMode = 'recent' | 'name' | 'status';
+export type SortMode = 'recent' | 'name' | 'status' | 'project';
 
 export const SESSION_SORTS = [
   { id: 'recent', label: 'Recent activity' },
   { id: 'name', label: 'Name (A–Z)' },
   { id: 'status', label: 'Status' },
+  { id: 'project', label: 'Project' },
 ] as const;
 
 const SESSION_STATUS_RANK: Record<string, number> = {
@@ -70,11 +71,52 @@ function arrangeFlat(pinned: SessionItem[], rest: SessionItem[], label: string):
   return out;
 }
 
+export interface ProjectRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * One section per project, ordered by the given project list. Sessions whose
+ * `projectId` isn't in `projects` (a removed/unknown project) still get a
+ * trailing section keyed by that id, in order of first appearance — grouping
+ * never silently drops a session.
+ */
+function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: ProjectRef[]): SessionGroupResult[] {
+  const byProject = new Map<string, SessionItem[]>();
+  for (const it of rest) {
+    const bucket = byProject.get(it.custom.projectId);
+    if (bucket) bucket.push(it);
+    else byProject.set(it.custom.projectId, [it]);
+  }
+
+  const out: SessionGroupResult[] = [];
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byUpdatedDesc) });
+
+  for (const project of projects) {
+    const bucket = byProject.get(project.id);
+    if (bucket) {
+      out.push({ label: project.name, items: bucket });
+      byProject.delete(project.id);
+    }
+  }
+  // Remaining buckets: projectIds absent from the given list, kept in first-seen order.
+  for (const [projectId, bucket] of byProject) {
+    out.push({ label: projectId, items: bucket });
+  }
+  return out;
+}
+
 /**
  * Group + sort the (already-filtered) session list per the active sort mode.
  * Pinned items are always lifted into a leading 'Pinned' group (omitted when empty).
  */
-export function arrangeSessions(items: SessionItem[], mode: SortMode, now: number = Date.now()): SessionGroupResult[] {
+export function arrangeSessions(
+  items: SessionItem[],
+  mode: SortMode,
+  now: number = Date.now(),
+  projects: ProjectRef[] = [],
+): SessionGroupResult[] {
   const pinned = items.filter((i) => i.custom.pinned);
   const rest = items.filter((i) => !i.custom.pinned);
 
@@ -88,6 +130,10 @@ export function arrangeSessions(items: SessionItem[], mode: SortMode, now: numbe
       (a, b) => (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3),
     );
     return arrangeFlat(pinned, sorted, 'By status');
+  }
+
+  if (mode === 'project') {
+    return arrangeByProject(pinned, rest, projects);
   }
 
   return arrangeRecent(pinned, rest, now);

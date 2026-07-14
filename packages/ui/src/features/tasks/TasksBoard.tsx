@@ -68,7 +68,11 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
   }
 
   return (
-    <div data-testid="tasks-board-modal" className="flex flex-col h-full min-h-0 overflow-hidden">
+    // flex-1, not h-full: DialogContent only sets min/max-height (no explicit
+    // height), so percentage sizing here doesn't resolve reliably — flex-grow
+    // makes this fill available space regardless, threading through to
+    // TaskBoardView/TaskListView (already flex-1) and the board's columns.
+    <div data-testid="tasks-board-modal" className="flex flex-1 flex-col min-h-0 overflow-hidden">
       {/* Header — fixed 52px height per design (12-todos.jsx:714) */}
       <div className="flex items-center gap-5 h-[52px] px-[16px] border-b border-border shrink-0">
         <button

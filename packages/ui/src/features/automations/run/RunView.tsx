@@ -21,11 +21,12 @@ import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { openSessionById } from '@/lib/session-nav';
-import type { AutomationRunSummary, AutomationRunTriggerKind, AutomationTimelineEntry } from '../contract';
+import type { AutomationRunSummary, AutomationTimelineEntry } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { RUN_STATUS_DOT_CLASS, RUN_STATUS_LABEL } from '../library/LastRunPill';
 import { RunStepRow } from './RunStepRow';
+import { TRIGGER_LABEL } from './run-trigger-label';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 
 /** ts153 WfRunView header pill shows the status glyph, not a dot (wf2-base WF2_RUN_STATUS icons); `cancelled` has no prototype entry — Ban is this port's addition. */
@@ -34,13 +35,6 @@ const RUN_STATUS_PILL_ICON: Partial<Record<AutomationRunSummary['status'], Lucid
   succeeded: Check,
   failed: TriangleAlert,
   cancelled: Ban,
-};
-
-const TRIGGER_LABEL: Record<AutomationRunTriggerKind, string> = {
-  schedule: 'Schedule',
-  event: 'Event',
-  webhook: 'Webhook',
-  manual: 'Manual',
 };
 
 /** Background tint per run status — the hue lives on this tint + the dot, never on the label text (typography audit §1). */

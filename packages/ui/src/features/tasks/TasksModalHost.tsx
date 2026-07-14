@@ -86,7 +86,7 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
         <DialogContent
           hideClose
           className={cn(
-            'w-full max-h-[85vh] flex flex-col p-0 gap-0 transition-[width] duration-[180ms] ease-out',
+            'w-full min-h-[480px] max-h-[85vh] flex flex-col p-0 gap-0 transition-[width] duration-[180ms] ease-out',
             view === 'list' ? 'max-w-[880px]' : 'max-w-[1200px] w-[90vw]',
           )}
         >

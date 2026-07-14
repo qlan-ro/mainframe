@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { useAdapters } from '@/store/adapters';
-import { useSettingsStore } from '../../store/settings';
+import { useSettingsStore, type SettingsTab } from '../../store/settings';
 import { providerDot } from '../chat/composer/config-toolbar/ProviderModelSelect';
 import { SETTINGS_TABS } from './settings-tabs';
 
@@ -79,6 +79,18 @@ export function SettingsSidebar() {
   const activeTab = useSettingsStore((s) => s.activeTab);
   const selectedProvider = useSettingsStore((s) => s.selectedProvider);
   const setActiveTab = useSettingsStore((s) => s.setActiveTab);
+  const setSelectedProvider = useSettingsStore((s) => s.setSelectedProvider);
+  const adapters = useAdapters();
+
+  function handleTabClick(tabId: SettingsTab) {
+    setActiveTab(tabId);
+    // Opening "Providers" with nothing selected used to leave ProvidersPane on
+    // its blank state until the user picked a provider from the sub-nav below.
+    if (tabId === 'providers' && selectedProvider == null) {
+      const first = adapters.find((a) => a.installed) ?? adapters[0];
+      if (first) setSelectedProvider(first.id);
+    }
+  }
 
   return (
     <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r-[0.5px] border-border bg-mf-content2 p-4">
@@ -89,7 +101,7 @@ export function SettingsSidebar() {
             label={tab.label}
             icon={tab.icon}
             active={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabClick(tab.id)}
             testId={`settings-nav-${tab.id}`}
           />
           {tab.id === 'providers' && activeTab === 'providers' && (

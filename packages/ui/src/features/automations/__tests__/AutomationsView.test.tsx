@@ -58,7 +58,34 @@ it('shows the (lazy-loaded) run section when a run id is open, taking precedence
 
 it('shows the describe section when describeOpen is set, below run/editor precedence', () => {
   useAutomationsStore.setState({ definitions: [], runs: [], catalog: [] });
-  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true });
+  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true, detailsAutomationId: null });
   render(<AutomationsView />);
   expect(screen.getByTestId('automations-section-describe')).toBeInTheDocument();
+});
+
+it('shows the (lazy-loaded) details section when a details target is open, below run/editor/describe precedence', async () => {
+  useAutomationsStore.setState({
+    definitions: [
+      {
+        id: 'a1',
+        name: 'Daily standup',
+        scope: 'project',
+        projectId: 'proj-1',
+        enabled: true,
+        definition: { triggers: [], steps: [] },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    runs: [],
+    catalog: [],
+  });
+  useAutomationsNav.setState({
+    editorTarget: null,
+    runId: null,
+    describeOpen: false,
+    detailsAutomationId: 'a1',
+  });
+  render(<AutomationsView />);
+  expect(await screen.findByTestId('automations-section-details')).toBeInTheDocument();
 });

@@ -13,12 +13,35 @@ describe('useAutomationsStore', () => {
       credentials: [],
       loading: false,
       error: null,
+      activeProjectId: null,
     });
   });
 
   it('defaults to a seeded fixture gateway (no network needed before Phase 6)', async () => {
     const definitions = await useAutomationsStore.getState().gateway.listAutomations();
     expect(definitions.length).toBe(6);
+  });
+
+  it('setActiveProjectId updates the field', () => {
+    useAutomationsStore.getState().setActiveProjectId('proj-9');
+    expect(useAutomationsStore.getState().activeProjectId).toBe('proj-9');
+  });
+
+  it('loadAll passes the active projectId through to gateway.listAutomations', async () => {
+    let received: string | null | undefined = 'unset';
+    useAutomationsStore.getState().setActiveProjectId('proj-9');
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listAutomations: async (projectId) => {
+          received = projectId;
+          return [];
+        },
+      }),
+    );
+
+    await useAutomationsStore.getState().loadAll();
+
+    expect(received).toBe('proj-9');
   });
 
   it('loadAll populates definitions/interactions/catalog/credentials/runs from the gateway', async () => {

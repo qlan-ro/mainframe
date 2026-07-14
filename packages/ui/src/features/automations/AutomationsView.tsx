@@ -1,10 +1,11 @@
 /**
  * AutomationsView — the shell: header + body switch (run | editor | describe
- * | library, in that precedence order). Phase 1 wires in `library/
+ * | details | library, in that precedence order). Phase 1 wires in `library/
  * LibraryList`; Phase 3 lazy-loads `editor/AutomationEditor`; Phase 5 lazy-
  * loads `run/RunView` and wires in `describe/DescribeFlow` (not lazy —
  * behind `DESCRIBE_ENABLED`, no heavy deps, reachable only from the empty-
- * library `BlankState`).
+ * library `BlankState`); todo #233 lazy-loads `details/AutomationDetails`,
+ * reached by clicking a library row.
  */
 import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
@@ -16,6 +17,9 @@ import { LibraryList } from './library/LibraryList';
 
 const AutomationEditor = lazy(() => import('./editor/AutomationEditor').then((m) => ({ default: m.AutomationEditor })));
 const RunView = lazy(() => import('./run/RunView').then((m) => ({ default: m.RunView })));
+const AutomationDetails = lazy(() =>
+  import('./details/AutomationDetails').then((m) => ({ default: m.AutomationDetails })),
+);
 
 function SectionFallback(): React.ReactElement {
   return <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>;
@@ -26,6 +30,7 @@ export function AutomationsView(): React.ReactElement {
   const editorTarget = useAutomationsNav((s) => s.editorTarget);
   const runId = useAutomationsNav((s) => s.runId);
   const describeOpen = useAutomationsNav((s) => s.describeOpen);
+  const detailsAutomationId = useAutomationsNav((s) => s.detailsAutomationId);
   const definitions = useAutomationsStore((s) => s.definitions);
   const pending = useAutomationsStore(selectPendingInteractionCount);
 
@@ -63,6 +68,10 @@ export function AutomationsView(): React.ReactElement {
           ) : describeOpen ? (
             <div data-testid="automations-section-describe" className="h-full overflow-hidden">
               <DescribeFlow />
+            </div>
+          ) : detailsAutomationId ? (
+            <div data-testid="automations-section-details" className="h-full overflow-hidden">
+              <AutomationDetails />
             </div>
           ) : (
             <div data-testid="automations-section-library" className="h-full">

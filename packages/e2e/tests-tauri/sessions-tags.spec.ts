@@ -14,7 +14,7 @@
  *   tags/validate-tag-name.ts    — client-side name validation (mirrors core/src/lib/validate-tag-name.ts)
  *   sidebar/SessionRow.tsx       — row hover action `sessions-row-action-tags`
  *   sidebar/SessionContextMenu.tsx — row context-menu item `sessions-ctx-tags`
- *   sidebar/SessionRowMeta.tsx   — applied-tag dot cluster on the row
+ *   sidebar/SessionRowMetaIcons.tsx — compact applied-tag dot cluster on the row (2026-07 rebuild)
  *   filter/TagFilterBar.tsx      — tag pills in the sidebar filter bar
  *
  * Testid reference (all verified against source above):
@@ -36,7 +36,7 @@
  *   sessions-tag-color-<c>           — a palette swatch button (TAG_PALETTE from mainframe-types)
  *   sessions-tag-delete-confirm      — delete confirm dialog root
  *   sessions-tag-delete-confirm-cancel / -ok — dialog buttons
- *   sessions-row-meta-tag-dot-<name> — applied-tag dot on the row meta line
+ *   sessions-row-meta-icon-tag-dot-<name> — applied-tag dot on the row meta line
  *   sessions-tag-filter-<name>       — tag pill in the sidebar filter bar
  *
  * NOTE on the validation-error scenario: TagPopover's client-side
@@ -158,7 +158,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 5_000 });
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId(`sessions-tag-filter-${TAG_A}`)).toBeVisible({ timeout: 10_000 });
   });
 
@@ -169,7 +169,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await waitConnected(page);
 
     const row = sessionsSidebar(page).row(chatId);
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 10_000 });
 
     await openViaHoverAction(page, row);
     await expect(page.getByTestId(`sessions-tag-toggle-${TAG_A}`)).toHaveAttribute('aria-checked', 'true');
@@ -195,8 +195,8 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible();
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_B}`)).toBeVisible();
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A}`)).toBeVisible();
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_B}`)).toBeVisible();
   });
 
   test('search field filters the registry list', async () => {
@@ -228,8 +228,8 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_B}`)).toHaveCount(0, { timeout: 5_000 });
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible();
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_B}`)).toHaveCount(0, { timeout: 5_000 });
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A}`)).toBeVisible();
   });
 
   test('renames a tag via the registry item context menu, cascading to the row', async () => {
@@ -251,8 +251,8 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await closePopover(page);
 
     // Rename cascades to every thread carrying the old name (spec §5.5).
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toBeVisible({ timeout: 10_000 });
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toHaveCount(0);
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A_RENAMED}`)).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A}`)).toHaveCount(0);
     await expect(page.getByTestId(`sessions-tag-filter-${TAG_A_RENAMED}`)).toBeVisible({ timeout: 10_000 });
   });
 
@@ -263,7 +263,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
   test('recolors a tag via the recolor panel (registry-only — no cascade needed for the name)', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
-    const dot = row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`);
+    const dot = row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A_RENAMED}`);
     const readBackgroundColor = () => dot.evaluate((el) => (el as HTMLElement).style.backgroundColor);
     const styleBefore = await readBackgroundColor();
 
@@ -330,7 +330,9 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toHaveCount(0, { timeout: 10_000 });
+    await expect(row.getByTestId(`sessions-row-meta-icon-tag-dot-${TAG_A_RENAMED}`)).toHaveCount(0, {
+      timeout: 10_000,
+    });
     await expect(page.getByTestId(`sessions-tag-filter-${TAG_A_RENAMED}`)).toHaveCount(0, { timeout: 10_000 });
   });
 

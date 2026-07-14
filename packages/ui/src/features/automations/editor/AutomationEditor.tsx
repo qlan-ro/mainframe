@@ -5,41 +5,46 @@
  * directly (mirrors `LibraryRow`'s self-sufficient pattern) rather than
  * taking props — `AutomationsView` only decides WHETHER to mount this, not
  * what to pass it.
+ *
+ * Project scoping (todo #234 bullet 1): there is no scope picker. Every
+ * automation saves non-configurably to `store.activeProjectId` — the
+ * session's current project, resolved once at `AutomationsHost`'s mount
+ * boundary via `useActiveIdentity()` and mirrored into the store — exactly
+ * like Todos (`TasksModalHost`'s `useActiveIdentity()`). Saving is blocked
+ * until a project has resolved. `handleSave` also runs every `ask_agent`
+ * step through `stampAgentProjectId` (bullet 4) so the step's own
+ * `projectId` — which the daemon engine actually reads at run time — always
+ * matches, rather than falling back to an arbitrary "first project in the
+ * DB".
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, TriangleAlert, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
-import type { AutomationCreateInput, AutomationDefinition, AutomationScope } from '../contract';
+import type { AutomationCreateInput, AutomationDefinition } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { builtinTokens, triggerTokens } from '../domain/tokens';
 import { validate } from '../domain/validate';
 import { Recipe } from './Recipe';
+import { stampAgentProjectId } from './stamp-agent-project-id';
 import { WhenCard } from './WhenCard';
 
 interface DraftState {
   name: string;
   description: string;
-  scope: AutomationScope;
   definition: AutomationDefinition;
 }
 
 const EMPTY_DRAFT: DraftState = {
   name: '',
   description: '',
-  scope: 'project',
   definition: { triggers: [], steps: [] },
 };
 
-function draftFrom(input: {
-  name: string;
-  description?: string;
-  scope: AutomationScope;
-  definition: AutomationDefinition;
-}): DraftState {
-  return { name: input.name, description: input.description ?? '', scope: input.scope, definition: input.definition };
+function draftFrom(input: { name: string; description?: string; definition: AutomationDefinition }): DraftState {
+  return { name: input.name, description: input.description ?? '', definition: input.definition };
 }
 
 function errorMessage(err: unknown): string | undefined {
@@ -78,6 +83,7 @@ export function AutomationEditor() {
   const catalog = useAutomationsStore((s) => s.catalog);
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchDefinition = useAutomationsStore((s) => s.patchDefinition);
+  const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
 
   const existing =
     editorTarget?.mode === 'edit' ? definitions.find((d) => d.id === editorTarget.automationId) : undefined;
@@ -99,10 +105,12 @@ export function AutomationEditor() {
     setDraft(existing ? draftFrom(existing) : newDraft ? draftFrom(newDraft) : EMPTY_DRAFT);
   }, [editKey]);
 
-  const issues = useMemo(
-    () => validate(draft.name, draft.definition, catalog),
-    [draft.name, draft.definition, catalog],
-  );
+  const issues = useMemo(() => {
+    const base = validate(draft.name, draft.definition, catalog);
+    return activeProjectId
+      ? base
+      : [{ stepId: null, level: 'error' as const, msg: 'Pick an active project first.' }, ...base];
+  }, [draft.name, draft.definition, catalog, activeProjectId]);
   const errors = issues.filter((i) => i.level === 'error');
   const ok = errors.length === 0;
 
@@ -112,14 +120,18 @@ export function AutomationEditor() {
   );
 
   async function handleSave() {
-    if (!ok || saving) return;
+    if (!ok || saving || !activeProjectId) return;
     setSaving(true);
     try {
       const input: AutomationCreateInput = {
         name: draft.name,
         description: draft.description || undefined,
-        scope: draft.scope,
-        definition: draft.definition,
+        scope: 'project',
+        projectId: activeProjectId,
+        definition: {
+          ...draft.definition,
+          steps: stampAgentProjectId(draft.definition.steps, activeProjectId),
+        },
       };
       const result =
         editorTarget?.mode === 'edit'
@@ -191,22 +203,6 @@ export function AutomationEditor() {
               placeholder="What does it do? (optional)"
               className="border-none bg-transparent p-0 text-body text-muted-foreground outline-none placeholder:text-muted-foreground"
             />
-            <div className="mt-[4px] inline-flex w-fit gap-0.5 rounded-md bg-muted p-0.5">
-              {(['project', 'global'] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  data-testid={`automations-editor-scope-${value}`}
-                  onClick={() => setDraft((d) => ({ ...d, scope: value }))}
-                  className={cn(
-                    'rounded-sm px-2.5 py-1 text-label font-medium',
-                    draft.scope === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
-                  )}
-                >
-                  {value === 'project' ? 'Just this project' : 'Everywhere'}
-                </button>
-              ))}
-            </div>
           </div>
 
           <EditorSection

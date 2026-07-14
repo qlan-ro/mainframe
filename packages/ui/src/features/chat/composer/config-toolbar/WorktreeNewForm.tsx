@@ -14,9 +14,8 @@
  */
 
 import { useState } from 'react';
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
-import { MenuSelectRow } from '@/components/ui/menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Check, Loader2 } from 'lucide-react';
+import { BranchSelect } from '@/features/git/BranchSelect';
 
 // ---------------------------------------------------------------------------
 // Branch name validation (ported from desktop)
@@ -29,62 +28,6 @@ export function validateBranchName(name: string): string | null {
   if (!BRANCH_RE.test(name)) return 'Invalid characters — use letters, digits, . _ / -';
   if (name.includes('..')) return 'Branch name must not contain ".."';
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Base-branch selector (Popover + MenuSelectRow)
-// ---------------------------------------------------------------------------
-
-interface BranchSelectProps {
-  value: string;
-  options: string[];
-  currentBranch: string;
-  onChange: (v: string) => void;
-}
-
-function BranchSelect({ value, options, currentBranch, onChange }: BranchSelectProps) {
-  const [open, setOpen] = useState(false);
-  const label = value ? (value === currentBranch ? `${value} (current)` : value) : 'Select…';
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-testid="composer-worktree-base-branch"
-          className={[
-            'flex w-full items-center justify-between gap-[6px]',
-            'rounded-[6px] border-[0.5px] border-border bg-muted',
-            'px-[8px] py-[4px] text-caption text-foreground',
-            'hover:bg-accent transition-colors focus-visible:outline-none',
-          ].join(' ')}
-        >
-          <span className="truncate">{label}</span>
-          <ChevronDown size={12} className="shrink-0 text-mf-text-3" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        data-testid="composer-worktree-base-branch-list"
-        align="start"
-        side="top"
-        sideOffset={4}
-        className="max-h-[200px] w-[240px] overflow-y-auto p-[4px]"
-      >
-        {options.map((b) => (
-          <MenuSelectRow
-            key={b}
-            data-testid={`composer-worktree-base-branch-option-${b}`}
-            selected={b === value}
-            label={b === currentBranch ? `${b} (current)` : b}
-            onClick={() => {
-              onChange(b);
-              setOpen(false);
-            }}
-          />
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +78,7 @@ export function WorktreeNewForm({
           options={branches}
           currentBranch={currentBranch}
           onChange={(v) => setBaseBranch(v)}
+          testId="composer-worktree-base-branch"
         />
       </div>
 

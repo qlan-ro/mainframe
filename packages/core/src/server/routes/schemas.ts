@@ -85,6 +85,9 @@ export const UpdateGeneralSettingsBody = z.object({
     .optional(),
   notifications: NotificationConfigSchema,
   updateChannel: z.enum(UPDATE_CHANNELS).optional(),
+  // `null` clears the setting back to its default (auto-pick an installed adapter);
+  // omitted leaves the stored value untouched.
+  defaultAdapterId: z.union([z.string().regex(/^[a-zA-Z0-9_-]+$/, 'Invalid adapter id'), z.null()]).optional(),
 });
 
 // Filesystem browsing

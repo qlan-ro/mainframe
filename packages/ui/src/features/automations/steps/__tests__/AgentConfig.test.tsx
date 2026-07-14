@@ -1,24 +1,57 @@
 /**
- * AgentConfig — prompt ChipField (slash), attachments, model; More options:
- * worktree, auto-approve, timeout, permission, Expect results (A2),
- * FailureToggle (ts153 wf2-stepconfig.jsx `WfAgentConfig`, ported onto
- * `AskAgentStep`).
+ * AgentConfig — prompt ChipField (slash), attachments, provider+model
+ * picker; More options: worktree (branch picker), timeout, permission,
+ * Expect results (A2), FailureToggle (ts153 wf2-stepconfig.jsx
+ * `WfAgentConfig`, ported onto `AskAgentStep`).
  *
  * ts153's free-text "Budget cap" has no counterpart on the ratified
  * `AskAgentStep` — `timeoutMinutes: number` replaces it, contract wins over
  * the prototype. Attachments (image/file chips) WAS dropped in an earlier
  * pass as a deliberate contract-driven omission; the 2026-07-12
  * design-conformance pass reverses that and restores it (`AttachmentsField`,
- * `AskAgentStep.attachments?: string[]`). TDD: test written first,
- * implemented after.
+ * `AskAgentStep.attachments?: string[]`).
+ *
+ * todo #234: the model list is now the live `useAdapters()` catalog (bullet
+ * 7, replacing the hardcoded `AGENT_MODELS`/`AUTO_APPROVE_OPTIONS` arrays —
+ * auto-approve is gone entirely, bullet 3), and the worktree base-branch
+ * field is the shared `BranchSelect` picker fed by `getGitBranches`, scoped
+ * to the automation's own resolved project (`store.activeProjectId`, bullet
+ * 4) rather than a per-step project picker.
  */
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import type { AskAgentStep } from '../../contract';
+import { useAutomationsStore } from '../../data/use-automations-store';
+import { resetAdapters, seedAdapters } from '@/store/adapters';
 import { AgentConfig } from '../AgentConfig';
 
+vi.mock('@/lib/api/git', () => ({
+  getGitBranches: vi.fn(async () => ({ local: [{ name: 'main' }, { name: 'dev' }], current: 'main' })),
+}));
+
 const BASE_STEP: AskAgentStep = { id: 'a', kind: 'ask_agent', prompt: [] };
+
+function adapter(id: string, name: string, installed: boolean, models: AdapterInfo['models']): AdapterInfo {
+  return { id, name, description: '', installed, models, capabilities: { planMode: false } };
+}
+
+const CLAUDE = adapter('claude', 'Claude', true, [
+  { id: 'sonnet-5', label: 'Sonnet 5', isDefault: true },
+  { id: 'opus-4', label: 'Opus 4' },
+]);
+const CODEX = adapter('codex', 'Codex', true, [{ id: 'gpt-5', label: 'GPT-5', isDefault: true }]);
+
+beforeEach(() => {
+  useAutomationsStore.setState({ activeProjectId: 'proj-1' });
+  resetAdapters();
+  seedAdapters([CLAUDE, CODEX]);
+});
+
+afterEach(() => {
+  resetAdapters();
+});
 
 describe('AgentConfig — essentials', () => {
   it('renders the prompt ChipField bound to step.prompt', async () => {
@@ -31,14 +64,27 @@ describe('AgentConfig — essentials', () => {
     expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, prompt: ['Plan my day'] });
   });
 
-  it('renders a model select that patches step.model', async () => {
+  it('renders a provider+model picker fed by the live adapter catalog, defaulting to the first installed provider and its default model', () => {
+    const onChange = vi.fn();
+    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    expect(screen.getByTestId('automations-agent-a-provider')).toHaveValue('claude');
+    expect(screen.getByTestId('automations-agent-a-model')).toHaveValue('sonnet-5');
+  });
+
+  it('picking a model patches step.model without touching adapterId', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    const select = screen.getByTestId('automations-agent-a-model');
-    const options = Array.from((select as HTMLSelectElement).options).map((o) => o.value);
-    await user.selectOptions(select, options[1]!);
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, model: options[1] });
+    await user.selectOptions(screen.getByTestId('automations-agent-a-model'), 'opus-4');
+    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, model: 'opus-4' });
+  });
+
+  it("picking a different provider patches step.adapterId and resets model to that provider's default", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.selectOptions(screen.getByTestId('automations-agent-a-provider'), 'codex');
+    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, adapterId: 'codex', model: undefined });
   });
 });
 
@@ -73,17 +119,20 @@ describe('AgentConfig — More options: worktree', () => {
     expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, worktree: { baseBranch: 'main', branchName: [] } });
   });
 
-  it('renders base + branch inputs when a worktree is set, and editing base patches baseBranch', async () => {
+  it("renders a branch picker for base + a chip field for branch name, scoped to the automation's project; picking a branch patches baseBranch", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const step: AskAgentStep = { ...BASE_STEP, worktree: { baseBranch: 'main', branchName: [] } };
     render(<AgentConfig step={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
     await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.type(screen.getByTestId('automations-agent-a-worktree-base'), '!');
-    expect(onChange).toHaveBeenLastCalledWith({
-      ...step,
-      worktree: { baseBranch: 'main!', branchName: [] },
-    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('automations-agent-a-worktree-base')).toHaveTextContent('main (current)'),
+    );
+    await user.click(screen.getByTestId('automations-agent-a-worktree-base'));
+    await user.click(screen.getByTestId('automations-agent-a-worktree-base-option-dev'));
+
+    expect(onChange).toHaveBeenLastCalledWith({ ...step, worktree: { baseBranch: 'dev', branchName: [] } });
   });
 
   it('removing the worktree clears it back to undefined', async () => {
@@ -97,25 +146,12 @@ describe('AgentConfig — More options: worktree', () => {
   });
 });
 
-describe('AgentConfig — More options: auto-approve', () => {
-  it('toggles an entry into step.autoApprove on click, and out again on a second click', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-approve-edits'));
-    expect(onChange).toHaveBeenLastCalledWith({ ...BASE_STEP, autoApprove: ['edits'] });
-  });
-
-  it('removes an already-active entry on a second click', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const step: AskAgentStep = { ...BASE_STEP, autoApprove: ['edits', 'git'] };
-    render(<AgentConfig step={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-approve-edits'));
-    expect(onChange).toHaveBeenLastCalledWith({ ...step, autoApprove: ['git'] });
-  });
+it('renders no auto-approve affordance — permissionMode is the sole execution-scope control', async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+  await user.click(screen.getByTestId('automations-agent-a-more'));
+  expect(screen.queryByTestId('automations-agent-a-approve-edits')).not.toBeInTheDocument();
 });
 
 describe('AgentConfig — More options: timeout + permission', () => {

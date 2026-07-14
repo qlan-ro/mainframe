@@ -17,7 +17,12 @@ const NOTIF = {
 };
 beforeEach(() => {
   useSettingsStore.setState({
-    general: { worktreeDir: '.worktrees', notifications: structuredClone(NOTIF), updateChannel: 'stable' },
+    general: {
+      worktreeDir: '.worktrees',
+      notifications: structuredClone(NOTIF),
+      updateChannel: 'stable',
+      defaultAdapterId: null,
+    },
   });
   updateGeneralSettings.mockClear();
 });

@@ -172,6 +172,10 @@ pub struct GeneralConfig {
     pub worktree_dir: String,
     pub notifications: NotificationConfig,
     pub update_channel: UpdateChannel,
+    /// Adapter id used to seed new chats. `None` = auto-pick the first installed
+    /// adapter. Not `skip_serializing_if`: the TS side always includes the key
+    /// (explicit `null`), so the wire shape stays 1:1.
+    pub default_adapter_id: Option<String>,
 }
 
 /// Mirrors the exported `NOTIFICATION_DEFAULTS` constant (all channels on).
@@ -199,6 +203,7 @@ impl Default for GeneralConfig {
             worktree_dir: ".worktrees".to_string(),
             notifications: NotificationConfig::default(),
             update_channel: UpdateChannel::Stable,
+            default_adapter_id: None,
         }
     }
 }
@@ -275,6 +280,16 @@ mod tests {
             GeneralConfig::default().update_channel,
             UpdateChannel::Stable
         );
+        assert_eq!(GeneralConfig::default().default_adapter_id, None);
+    }
+
+    /// `defaultAdapterId` always serializes (as `null` when absent) — no
+    /// `skip_serializing_if`, matching the TS route's explicit `GENERAL_DEFAULTS`
+    /// spread rather than an omitted key.
+    #[test]
+    fn general_config_default_adapter_id_serializes_as_explicit_null() {
+        let value = serde_json::to_value(GeneralConfig::default()).unwrap();
+        assert_eq!(value["defaultAdapterId"], serde_json::Value::Null);
     }
 
     #[test]
@@ -296,3 +311,7 @@ mod tests {
 // is crate::adapter::EffortLevel (the real enum). ProviderConfigUpdate's `X | ''`
 // sentinel fields (default_effort included) stay Option<String> so `''` round-trips
 // (a serde enum can't carry it).
+// catch-up (#236): GeneralConfig.default_adapter_id: Option<String> (TS
+// `defaultAdapterId: string | null`) has no skip_serializing_if, so it always
+// serializes (as `null` when unset) — matches the TS route always including the
+// key via the GENERAL_DEFAULTS spread.
