@@ -229,6 +229,7 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
         model: step.model.clone(),
         permission_mode: step.permission_mode.clone(),
         project_id: step.project_id.clone(),
+        run_id: ctx.run_id.to_string(),
         worktree: step.worktree.as_ref().map(|worktree| WorktreeRequest {
             base_branch: worktree.base_branch.clone(),
             branch_name: render(&worktree.branch_name, ctx.scope),

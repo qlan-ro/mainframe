@@ -151,7 +151,10 @@ async fn file_subscribe_rejects_chat_project_ownership_mismatch() {
     let chat_id = server
         .ctx
         .db
-        .call(move |db| db.chats.create(&proj_a_for_chat, "claude", None, None))
+        .call(move |db| {
+            db.chats
+                .create(&proj_a_for_chat, "claude", None, None, None)
+        })
         .await
         .unwrap()
         .id;

@@ -84,8 +84,9 @@ export class ChatLifecycleManager {
     permissionMode?: string,
     worktreePath?: string,
     branchName?: string,
+    automationRunId?: string,
   ): Promise<Chat> {
-    const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
+    const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode, automationRunId);
     if (worktreePath && branchName) {
       this.deps.db.chats.update(chat.id, { worktreePath, branchName });
       chat.worktreePath = worktreePath;
@@ -104,6 +105,7 @@ export class ChatLifecycleManager {
     permissionMode?: string,
     worktreePath?: string,
     branchName?: string,
+    automationRunId?: string,
   ): Promise<Chat> {
     let effectiveModel = model;
     let effectiveMode = permissionMode;
@@ -122,7 +124,15 @@ export class ChatLifecycleManager {
       if (defaultPlanMode === 'true') effectivePlanMode = true;
     }
 
-    const chat = await this.createChat(projectId, adapterId, effectiveModel, effectiveMode, worktreePath, branchName);
+    const chat = await this.createChat(
+      projectId,
+      adapterId,
+      effectiveModel,
+      effectiveMode,
+      worktreePath,
+      branchName,
+      automationRunId,
+    );
     if (effectivePlanMode) {
       chat.planMode = true;
       this.deps.db.chats.update(chat.id, { planMode: true });

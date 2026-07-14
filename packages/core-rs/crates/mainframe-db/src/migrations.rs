@@ -428,11 +428,24 @@ pub fn migrations() -> Vec<Migration> {
                 )
             },
         },
+        // Marks a chat as automation-created (ask_agent step) so the sessions
+        // sidebar can hide it from the default list. Mirrors TS migration 26.
+        Migration {
+            version: 26,
+            up: |db| {
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "automation_run_id",
+                    "ALTER TABLE chats ADD COLUMN automation_run_id TEXT",
+                )
+            },
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 25;
+pub const LATEST_VERSION: i64 = 26;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

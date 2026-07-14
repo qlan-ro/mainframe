@@ -26,7 +26,9 @@ fn setup() -> (ChatsRepository, ProjectsRepository, String) {
 #[test]
 fn defaults_to_false_on_new_chats() {
     let (chats, _projects, project_id) = setup();
-    let chat = chats.create(&project_id, "claude", None, None).unwrap();
+    let chat = chats
+        .create(&project_id, "claude", None, None, None)
+        .unwrap();
     assert_eq!(
         chats.get(&chat.id).unwrap().unwrap().transcript_missing,
         Some(false)
@@ -36,7 +38,9 @@ fn defaults_to_false_on_new_chats() {
 #[test]
 fn persists_transcript_missing_through_update_and_maps_it_back_as_a_boolean() {
     let (chats, _projects, project_id) = setup();
-    let chat = chats.create(&project_id, "claude", None, None).unwrap();
+    let chat = chats
+        .create(&project_id, "claude", None, None, None)
+        .unwrap();
 
     chats
         .update(
@@ -70,7 +74,9 @@ fn persists_transcript_missing_through_update_and_maps_it_back_as_a_boolean() {
 #[test]
 fn includes_transcript_missing_in_list_results() {
     let (chats, _projects, project_id) = setup();
-    let chat = chats.create(&project_id, "claude", None, None).unwrap();
+    let chat = chats
+        .create(&project_id, "claude", None, None, None)
+        .unwrap();
     chats
         .update(
             &chat.id,
@@ -92,7 +98,9 @@ fn includes_transcript_missing_in_list_results() {
 #[test]
 fn clear_session_clears_identity_and_resets_the_transcript_flag() {
     let (chats, _projects, project_id) = setup();
-    let chat = chats.create(&project_id, "claude", None, None).unwrap();
+    let chat = chats
+        .create(&project_id, "claude", None, None, None)
+        .unwrap();
     chats
         .update(
             &chat.id,
@@ -118,7 +126,9 @@ fn clear_session_clears_identity_and_resets_the_transcript_flag() {
 #[test]
 fn clear_worktree_clears_binding_so_chat_rebinds_to_project_root() {
     let (chats, _projects, project_id) = setup();
-    let chat = chats.create(&project_id, "claude", None, None).unwrap();
+    let chat = chats
+        .create(&project_id, "claude", None, None, None)
+        .unwrap();
     chats
         .update(
             &chat.id,

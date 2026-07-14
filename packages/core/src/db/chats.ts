@@ -19,6 +19,7 @@ type RawChatRow = Omit<
   | 'transcriptMissing'
   | 'lastContextTotalTokens'
   | 'lastContextMaxTokens'
+  | 'automationRunId'
 > & {
   mentions: string;
   lastContextTotalTokens: number | null;
@@ -33,6 +34,7 @@ type RawChatRow = Omit<
   ultracode: number | null;
   adaptive_thinking: number | null;
   transcriptMissing: number;
+  automationRunId: string | null;
 };
 
 const CHAT_SELECT_FIELDS = `
@@ -49,7 +51,8 @@ const CHAT_SELECT_FIELDS = `
   plan_mode as planMode, detected_prs as detectedPrs,
   session_file_path as sessionFilePath,
   transcript_missing as transcriptMissing,
-  fast, ultracode, adaptive_thinking
+  fast, ultracode, adaptive_thinking,
+  automation_run_id as automationRunId
 `.trim();
 
 export interface ChatListFilters {
@@ -109,6 +112,8 @@ export class ChatsRepository {
     if (!filters.includeArchived) {
       where.push("status != 'archived'");
     }
+    // Automation-created chats (ask_agent steps) are hidden from the default sidebar list.
+    where.push('automation_run_id IS NULL');
     if (filters.projectId) {
       where.push('project_id = ?');
       params.push(filters.projectId);
@@ -142,15 +147,21 @@ export class ChatsRepository {
     return chat;
   }
 
-  create(projectId: string, adapterId: string, model?: string, permissionMode?: string): Chat {
+  create(
+    projectId: string,
+    adapterId: string,
+    model?: string,
+    permissionMode?: string,
+    automationRunId?: string,
+  ): Chat {
     const id = nanoid();
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+      INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at, automation_run_id)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
     `);
-    stmt.run(id, adapterId, projectId, model || null, permissionMode || null, now, now);
+    stmt.run(id, adapterId, projectId, model || null, permissionMode || null, now, now, automationRunId || null);
 
     return {
       id,
@@ -166,6 +177,7 @@ export class ChatsRepository {
       totalTokensOutput: 0,
       lastContextTokensInput: 0,
       planMode: false,
+      automationRunId: automationRunId || undefined,
     };
   }
 
@@ -383,6 +395,7 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
       transcriptMissing: Boolean(row.transcriptMissing),
+      automationRunId: row.automationRunId ?? undefined,
     };
   }
 

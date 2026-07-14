@@ -207,6 +207,9 @@ pub struct Chat {
     /// User-source tags applied to this chat (synthetic chips excluded).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    /// Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub automation_run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

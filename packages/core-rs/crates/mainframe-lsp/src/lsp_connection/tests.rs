@@ -106,6 +106,7 @@ fn make_chat(
         adaptive_thinking: None,
         detected_prs: None,
         tags: None,
+        automation_run_id: None,
     }
 }
 

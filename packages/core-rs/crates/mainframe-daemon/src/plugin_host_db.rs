@@ -47,7 +47,7 @@ impl PluginHostDb for DaemonPluginHostDb {
         let mode = permission_mode.map(str::to_string);
         match self.db.call_blocking(move |d| {
             d.chats
-                .create(&pid, &aid, model.as_deref(), mode.as_deref())
+                .create(&pid, &aid, model.as_deref(), mode.as_deref(), None)
         }) {
             Ok(chat) => chat,
             Err(err) => {
@@ -150,6 +150,7 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         adaptive_thinking: None,
         detected_prs: None,
         tags: None,
+        automation_run_id: None,
     })
 }
 

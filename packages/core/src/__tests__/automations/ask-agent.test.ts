@@ -52,6 +52,7 @@ interface FakePortCall {
   permissionMode: string | undefined;
   worktree: { baseBranch?: string; branchName: string } | undefined;
   prompt: string;
+  automationRunId: string;
 }
 
 function fakeChatPort(chatIds: string[] = ['chat-1', 'chat-2', 'chat-3']): {
@@ -139,6 +140,7 @@ describe('ask_agent verb', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.prompt).toBe('do the thing');
     expect(calls[0]?.adapterId).toBe('claude');
+    expect(calls[0]?.automationRunId).toBe(run.id);
     expect(store.getRun(run.id)?.checkpoint.steps['agent-1']?.status).toBe('waiting');
     expect(waits.findByRunStep(run.id, 'agent-1')).toEqual({ chatId: 'chat-1' });
   });

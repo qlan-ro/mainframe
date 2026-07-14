@@ -28,6 +28,9 @@ pub struct AgentRequest {
     pub model: Option<String>,
     pub permission_mode: Option<String>,
     pub project_id: Option<String>,
+    /// The automation run creating this chat — the port stamps it onto the
+    /// new chat row (`automation_run_id`) so the sessions sidebar can hide it.
+    pub run_id: String,
     pub worktree: Option<WorktreeRequest>,
     pub auto_approve: Option<Vec<String>>,
     pub timeout_minutes: Option<u32>,

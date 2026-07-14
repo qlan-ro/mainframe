@@ -73,8 +73,12 @@ fn deleting_a_project_also_deletes_its_chats() {
     let chats = ChatsRepository::new(Rc::clone(&conn), Some(chat_tags));
 
     let project = repo.create("/some/path", None).unwrap();
-    chats.create(&project.id, "claude", None, None).unwrap();
-    chats.create(&project.id, "claude", None, None).unwrap();
+    chats
+        .create(&project.id, "claude", None, None, None)
+        .unwrap();
+    chats
+        .create(&project.id, "claude", None, None, None)
+        .unwrap();
 
     repo.remove(&project.id).unwrap();
 
@@ -109,7 +113,9 @@ fn delete_is_atomic() {
     let chats = ChatsRepository::new(Rc::clone(&conn), Some(chat_tags));
 
     let project = repo.create("/atomic/path", None).unwrap();
-    chats.create(&project.id, "claude", None, None).unwrap();
+    chats
+        .create(&project.id, "claude", None, None, None)
+        .unwrap();
 
     repo.remove(&project.id).unwrap();
 

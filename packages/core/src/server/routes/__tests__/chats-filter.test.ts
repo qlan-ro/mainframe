@@ -113,4 +113,18 @@ describe('GET /api/chats — filtered list', () => {
     const res = await request(app).get('/api/chats?tags=feature,BAD!');
     expect(res.status).toBe(400);
   });
+
+  it('excludes automation-created chats from the default list', async () => {
+    const { app, db } = makeApp();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO chats (id, adapter_id, project_id, status, created_at, updated_at, automation_run_id)
+       VALUES ('c6', 'claude', 'p1', 'active', ?, ?, 'run-1')`,
+    ).run(now, now);
+
+    const res = await request(app).get('/api/chats');
+
+    const ids = res.body.data.map((c: { id: string }) => c.id);
+    expect(ids).not.toContain('c6');
+  });
 });

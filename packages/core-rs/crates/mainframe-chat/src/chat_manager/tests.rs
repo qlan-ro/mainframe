@@ -71,6 +71,7 @@ impl ChatManagerDeps for StoreDeps {
         _adapter_id: &str,
         _model: Option<&str>,
         _permission_mode: Option<&str>,
+        _automation_run_id: Option<&str>,
     ) -> Chat {
         test_chat("new")
     }

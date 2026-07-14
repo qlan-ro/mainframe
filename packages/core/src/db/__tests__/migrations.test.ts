@@ -50,6 +50,7 @@ const ALL_CHATS_COLUMNS = [
   'detected_prs',
   'plan_mode',
   'session_file_path',
+  'automation_run_id',
 ];
 
 describe('migrations', () => {

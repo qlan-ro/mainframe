@@ -31,6 +31,7 @@ export interface AgentChatPort {
     permissionMode: string | undefined;
     worktree: { baseBranch?: string; branchName: string } | undefined;
     prompt: string;
+    automationRunId: string;
   }): Promise<{ chatId: string }>;
   sendMessage(chatId: string, content: string): Promise<void>;
 }
@@ -67,6 +68,7 @@ export function makeAskAgentExecutor(port: AgentChatPort, waits: AgentWaitServic
       permissionMode: step.permissionMode,
       worktree,
       prompt,
+      automationRunId: ctx.runId,
     });
 
     waits.register(chatId, ctx.runId, ctx.stepRef);

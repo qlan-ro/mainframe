@@ -136,6 +136,7 @@ pub trait ChatManagerDeps: Send + Sync {
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat;
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
@@ -393,9 +394,15 @@ impl LifecycleManagerDeps for LcDeps {
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat {
-        self.deps
-            .chats_create(project_id, adapter_id, model, permission_mode)
+        self.deps.chats_create(
+            project_id,
+            adapter_id,
+            model,
+            permission_mode,
+            automation_run_id,
+        )
     }
     fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate) {
         self.deps.chats_update(chat_id, &ChatUpdate::from(patch));
@@ -1017,7 +1024,15 @@ impl ChatManager {
         permission_mode: Option<&str>,
     ) -> Chat {
         self.lifecycle
-            .create_chat(project_id, adapter_id, model, permission_mode, None, None)
+            .create_chat(
+                project_id,
+                adapter_id,
+                model,
+                permission_mode,
+                None,
+                None,
+                None,
+            )
             .await
     }
 
@@ -1033,6 +1048,7 @@ impl ChatManager {
         permission_mode: Option<&str>,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat {
         self.lifecycle
             .create_chat_with_defaults(
@@ -1042,6 +1058,7 @@ impl ChatManager {
                 permission_mode,
                 worktree_path,
                 branch_name,
+                automation_run_id,
             )
             .await
     }

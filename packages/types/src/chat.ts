@@ -81,6 +81,8 @@ export interface Chat {
   detectedPrs?: DetectedPr[];
   /** User-source tags applied to this chat. Synthetic chips (has-pr, has-worktree) are NOT included. */
   tags?: string[];
+  /** Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list. */
+  automationRunId?: string | null;
 }
 
 export interface Project {

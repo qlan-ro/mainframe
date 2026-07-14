@@ -69,7 +69,7 @@ describe('ChatLifecycleManager.createChat — worktree attachment', () => {
       'feat-x',
     );
 
-    expect(deps.db.chats.create).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-5', 'default');
+    expect(deps.db.chats.create).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-5', 'default', undefined);
     expect(deps.db.chats.update).toHaveBeenCalledWith(chat.id, {
       worktreePath: '/projects/my-repo/.worktrees/feat-x',
       branchName: 'feat-x',
@@ -85,6 +85,15 @@ describe('ChatLifecycleManager.createChat — worktree attachment', () => {
     await lifecycle.createChat('proj-1', 'claude', 'claude-sonnet-4-5', 'default');
 
     expect(deps.db.chats.update).not.toHaveBeenCalled();
+  });
+
+  it('forwards automationRunId to db.chats.create', async () => {
+    const deps = makeDeps();
+    const lifecycle = new ChatLifecycleManager(deps);
+
+    await lifecycle.createChat('proj-1', 'claude', 'claude-sonnet-4-5', 'default', undefined, undefined, 'run-7');
+
+    expect(deps.db.chats.create).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-5', 'default', 'run-7');
   });
 
   it('emits chat.created with worktree fields populated', async () => {
@@ -161,6 +170,7 @@ describe('ChatLifecycleManager.createChatWithDefaults — worktree attachment', 
       'default',
       '/projects/my-repo/.worktrees/feat-x',
       'feat-x',
+      undefined,
     );
   });
 
@@ -222,6 +232,6 @@ describe('ChatLifecycleManager.createChatWithDefaults — worktree attachment', 
 
     await lifecycle.createChatWithDefaults('proj-1', 'claude');
 
-    expect(createChat).toHaveBeenCalledWith('proj-1', 'claude', undefined, undefined, undefined, undefined);
+    expect(createChat).toHaveBeenCalledWith('proj-1', 'claude', undefined, undefined, undefined, undefined, undefined);
   });
 });

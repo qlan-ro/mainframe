@@ -140,13 +140,20 @@ impl ChatManagerDeps for DaemonChatDeps {
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
+        automation_run_id: Option<&str>,
     ) -> Chat {
         let (pid, aid) = (project_id.to_string(), adapter_id.to_string());
         let model = model.map(str::to_string);
         let mode = permission_mode.map(str::to_string);
+        let run_id = automation_run_id.map(str::to_string);
         let created = self.db.call_blocking(move |d| {
-            d.chats
-                .create(&pid, &aid, model.as_deref(), mode.as_deref())
+            d.chats.create(
+                &pid,
+                &aid,
+                model.as_deref(),
+                mode.as_deref(),
+                run_id.as_deref(),
+            )
         });
         match created {
             Ok(chat) => chat,
@@ -729,6 +736,7 @@ pub(crate) fn fallback_chat(
         adaptive_thinking: None,
         detected_prs: None,
         tags: None,
+        automation_run_id: None,
     }
 }
 

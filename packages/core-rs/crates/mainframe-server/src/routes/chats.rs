@@ -531,7 +531,7 @@ mod tests {
                               worktree: Option<&str>,
                               archived: bool|
                  -> Result<(), mainframe_db::DbError> {
-                    let chat = db.chats.create(project, "claude", None, None)?;
+                    let chat = db.chats.create(project, "claude", None, None, None)?;
                     let update = ChatUpdate {
                         worktree_path: Some(worktree.map(str::to_string)),
                         status: archived.then_some(ChatStatus::Archived),
@@ -712,6 +712,34 @@ mod tests {
         let (status, body) = read(resp).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"], "Chat not found");
+    }
+
+    #[tokio::test]
+    async fn excludes_automation_created_chats_from_the_default_list() {
+        let ctx = AppCtx::test_ctx();
+        let ids = seed(&ctx).await;
+        let automated_id = ctx
+            .db
+            .call(|db| {
+                let p1 = db
+                    .projects
+                    .list()?
+                    .into_iter()
+                    .find(|p| p.path == "/tmp/p")
+                    .unwrap()
+                    .id;
+                Ok(db
+                    .chats
+                    .create(&p1, "claude", None, None, Some("run-1"))?
+                    .id)
+            })
+            .await
+            .unwrap();
+
+        let got = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
+
+        assert!(!got.contains(&automated_id));
+        assert_eq!(got, labels(&ids, &["c1", "c2", "c3", "c4", "c5"]));
     }
 }
 
