@@ -58,24 +58,37 @@ export const TaskCard = React.memo(function TaskCard({
     // ghost itself look lifted. Guarded: not every environment implements it.
     if (typeof e.dataTransfer.setDragImage === 'function') {
       const rect = e.currentTarget.getBoundingClientRect();
-      const ghost = e.currentTarget.cloneNode(true) as HTMLElement;
-      ghost.style.boxSizing = 'border-box';
-      ghost.style.width = `${rect.width}px`;
-      ghost.style.height = `${rect.height}px`;
-      ghost.style.margin = '0';
-      ghost.style.opacity = '0.85';
-      ghost.style.transform = 'rotate(-2deg)';
-      ghost.style.position = 'fixed';
-      ghost.style.top = '-9999px';
-      ghost.style.left = '-9999px';
-      ghost.style.pointerEvents = 'none';
-      document.body.appendChild(ghost);
-      // Force a synchronous layout before the browser snapshots the ghost for
-      // the drag image — without this it can be captured mid-collapse (wrong
-      // height, rounded corners not yet clipped), reading as a non-rectangle.
-      void ghost.offsetWidth;
-      e.dataTransfer.setDragImage(ghost, 16, 16);
-      setTimeout(() => ghost.remove(), 0);
+      const inner = e.currentTarget.cloneNode(true) as HTMLElement;
+      inner.style.boxSizing = 'border-box';
+      inner.style.width = `${rect.width}px`;
+      inner.style.height = `${rect.height}px`;
+      inner.style.margin = '0';
+      inner.style.transform = 'rotate(-2deg)';
+
+      // setDragImage snapshots exactly the passed element's own (un-rotated)
+      // layout box — a rotated card's corners visually overflow that box and
+      // get clipped by the capture itself, reading as a non-rectangular shape.
+      // Wrapping with slack padding gives the tilted corners room so nothing's
+      // cut off; the wrapper (not the card) is what's passed to setDragImage.
+      const PAD = 16;
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'fixed';
+      wrapper.style.top = '-9999px';
+      wrapper.style.left = '-9999px';
+      wrapper.style.width = `${rect.width + PAD * 2}px`;
+      wrapper.style.height = `${rect.height + PAD * 2}px`;
+      wrapper.style.padding = `${PAD}px`;
+      wrapper.style.boxSizing = 'border-box';
+      wrapper.style.opacity = '0.85';
+      wrapper.style.pointerEvents = 'none';
+      wrapper.appendChild(inner);
+      document.body.appendChild(wrapper);
+      // Force a synchronous layout before the browser snapshots the wrapper
+      // for the drag image — without this it can be captured mid-collapse
+      // (wrong size, rounded corners not yet clipped).
+      void wrapper.offsetWidth;
+      e.dataTransfer.setDragImage(wrapper, PAD + 16, PAD + 16);
+      setTimeout(() => wrapper.remove(), 0);
     }
 
     setIsDragging(true);

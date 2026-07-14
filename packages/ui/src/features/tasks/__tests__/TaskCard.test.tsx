@@ -84,7 +84,7 @@ describe('TaskCard — custom drag ghost image', () => {
   // before React repaints — so `opacity-50` on the source element never reaches
   // the thing actually following the cursor. A styled clone passed to
   // setDragImage is the only way to make the moving ghost itself look dragged.
-  it('passes a styled clone (not the source node) to setDragImage', () => {
+  it('passes a padded wrapper (not the source node) to setDragImage', () => {
     renderCard({ id: 't1', number: 3 });
     const card = screen.getByTestId('tasks-card-3');
     const setDragImage = vi.fn();
@@ -92,15 +92,23 @@ describe('TaskCard — custom drag ghost image', () => {
     fireEvent.dragStart(card, { dataTransfer: { setData: vi.fn(), setDragImage } });
 
     expect(setDragImage).toHaveBeenCalledTimes(1);
-    const ghost = setDragImage.mock.calls[0]![0];
-    expect(ghost).toBeInstanceOf(HTMLElement);
-    expect(ghost).not.toBe(card);
-    expect(ghost.style.opacity).toBe('0.85');
+    const wrapper = setDragImage.mock.calls[0]![0];
+    expect(wrapper).toBeInstanceOf(HTMLElement);
+    expect(wrapper).not.toBe(card);
+    expect(wrapper.style.opacity).toBe('0.85');
     // Both dimensions must be pinned (not just width) and box-sizing set to
     // border-box, or the ghost can be captured as the wrong shape.
-    expect(ghost.style.boxSizing).toBe('border-box');
-    expect(ghost.style.width).toMatch(/px$/);
-    expect(ghost.style.height).toMatch(/px$/);
+    expect(wrapper.style.boxSizing).toBe('border-box');
+    expect(wrapper.style.width).toMatch(/px$/);
+    expect(wrapper.style.height).toMatch(/px$/);
+    // The rotated clone must be padding-wrapped, not passed directly — a
+    // rotated element's corners overflow its own layout box, and setDragImage
+    // snapshots exactly that box, clipping the corners if there's no slack.
+    expect(wrapper.style.padding).toMatch(/px$/);
+    const inner = wrapper.firstElementChild as HTMLElement;
+    expect(inner).not.toBeNull();
+    expect(inner).not.toBe(card);
+    expect(inner.style.transform).toBe('rotate(-2deg)');
   });
 
   it('does not throw when dataTransfer has no setDragImage (defensive — not all environments support it)', () => {
