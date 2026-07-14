@@ -73,11 +73,11 @@ export function TaskColumn({
         <CountBadge count={todos.length} variant="info" />
       </div>
 
-      {/* Cards — 9px gap per design (12-todos.jsx:621, finding 9.14).
-          min-h keeps columns from collapsing to a single card's height when
-          sparsely populated (~3 cards' worth, so the board never looks like
-          it's missing content next to a fuller sibling column). */}
-      <div className="flex min-h-[320px] flex-1 flex-col gap-[9px] overflow-y-auto px-5 pb-5">
+      {/* Cards — 9px gap per design (12-todos.jsx:621, finding 9.14). Grid's
+          default stretch alignment (see TaskBoardView) equalizes column
+          heights once the modal itself has a min-height, so no per-column
+          min-height is needed here. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto px-5 pb-5">
         {todos.map((todo) => (
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}
