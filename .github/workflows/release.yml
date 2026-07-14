@@ -236,7 +236,13 @@ jobs:
       # tauri-action uploads the installer as `Mainframe_<ver>_<arch>.dmg` (arch =
       # aarch64|x64) — a name that says neither "tauri" nor a consistent arch, and
       # collides in spirit with the Electron dmg. Rename it in place to the shared
-      # `Mainframe-tauri-<ver>-macos-<arch>.dmg` scheme (arch normalized to arm64|x64).
+      # `Mainframe-tauri-<tag>-macos-<arch>.dmg` scheme (arch normalized to arm64|x64).
+      #
+      # <ver> in the source name is tauri.conf.json's static "version" field (currently
+      # "2.0.0"), which does NOT track the prerelease suffix — a v2.0.0-rc.8 tag still
+      # produces `Mainframe_2.0.0_aarch64.dmg`. Use $TAG for the renamed version instead,
+      # matching the Electron dmg naming (which does carry the rc suffix) and the
+      # canary dmg naming below.
       #
       # We rename ONLY the .dmg: it's the user-facing installer and is NOT referenced by
       # latest.json (the macOS updater downloads the `.app.tar.gz`), so renaming is safe
@@ -260,12 +266,13 @@ jobs:
             echo "No release found for $TAG yet — skipping dmg rename."
             exit 0
           fi
+          version="${TAG#v}"
           gh api "repos/$REPO/releases/$release_id/assets" \
             -q '.[] | select(.name | test("^Mainframe_.*\\.dmg$")) | "\(.id) \(.name)"' \
           | while read -r id name; do
               new=$(printf '%s' "$name" \
-                | sed -E 's/^Mainframe_(.+)_aarch64\.dmg$/Mainframe-tauri-\1-macos-arm64.dmg/;
-                          s/^Mainframe_(.+)_x64\.dmg$/Mainframe-tauri-\1-macos-x64.dmg/')
+                | sed -E "s/^Mainframe_.+_aarch64\.dmg\$/Mainframe-tauri-${version}-macos-arm64.dmg/;
+                          s/^Mainframe_.+_x64\.dmg\$/Mainframe-tauri-${version}-macos-x64.dmg/")
               echo "Renaming $name -> $new"
               gh api -X PATCH "repos/$REPO/releases/assets/$id" -f name="$new" >/dev/null
             done
