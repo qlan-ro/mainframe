@@ -4,6 +4,10 @@
  * "Never run" (inert). Ink policy: the semantic status hue lives on the dot
  * only — the label and time stay on `foreground`/`muted-foreground`, never
  * colored text (typography audit §1).
+ *
+ * Stops click propagation — its sole caller, `LibraryRow`, is itself
+ * clickable (todo #233's row → details/run navigation), and this pill's
+ * click should open the specific run it shows, not the row's routing.
  */
 import React from 'react';
 import { cn } from '@/lib/utils';
@@ -48,7 +52,10 @@ export function LastRunPill({ automationId, run, onOpen }: LastRunPillProps): Re
     <button
       type="button"
       data-testid={testId}
-      onClick={() => onOpen(run.id)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(run.id);
+      }}
       className="inline-flex items-center gap-[5px] rounded text-caption hover:underline"
     >
       {run.status === 'running' ? (

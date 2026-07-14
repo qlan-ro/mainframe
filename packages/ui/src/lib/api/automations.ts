@@ -25,7 +25,8 @@ export interface AutomationRunDetail {
 
 const b = () => `${apiBase()}/api`;
 
-export const listAutomations = (): Promise<AutomationSummary[]> => request('GET', `${b()}/automations`);
+export const listAutomations = (projectId?: string | null): Promise<AutomationSummary[]> =>
+  request('GET', projectId ? `${b()}/automations?projectId=${encodeURIComponent(projectId)}` : `${b()}/automations`);
 
 export const createAutomation = (input: AutomationCreateInput): Promise<AutomationSummary> =>
   request('POST', `${b()}/automations`, input);

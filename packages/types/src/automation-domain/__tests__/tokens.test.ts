@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionCatalogEntry, AutomationStep } from '../../automation.js';
-import { builtinTokens, findStepById, stepProduces, triggerTokens } from '../tokens.js';
+import { builtinTokens, findStepById, RESULT_TOKEN_DESCRIPTION, stepProduces, triggerTokens } from '../tokens.js';
 
 const RUN_COMMAND_CATALOG: ActionCatalogEntry[] = [
   {
@@ -52,6 +52,7 @@ describe('triggerTokens', () => {
         type: 'text',
         sourceKind: 'trigger',
         source: 'Trigger',
+        description: RESULT_TOKEN_DESCRIPTION,
       },
       {
         ref: { stepId: 'trigger', output: 'chatId' },
@@ -61,6 +62,10 @@ describe('triggerTokens', () => {
         source: 'Trigger',
       },
     ]);
+    // toEqual treats an absent key the same as one set to `undefined` — assert
+    // the description is genuinely present, not just missing on both sides.
+    expect(tokens[0]?.description).toBe(RESULT_TOKEN_DESCRIPTION);
+    expect(RESULT_TOKEN_DESCRIPTION).toBeTruthy();
   });
 
   it('produces no tokens for a schedule trigger', () => {
@@ -83,6 +88,7 @@ describe('stepProduces — named camelCase outputs', () => {
         type: 'text',
         sourceKind: 'agent',
         source: 'Ask agent',
+        description: RESULT_TOKEN_DESCRIPTION,
       },
       {
         ref: { stepId: 'pick-feature', output: 'chatId' },
@@ -100,6 +106,8 @@ describe('stepProduces — named camelCase outputs', () => {
         options: ['xs', 's', 'm'],
       },
     ]);
+    expect(tokens[0]?.description).toBe(RESULT_TOKEN_DESCRIPTION);
+    expect(tokens[0]?.description).toBeTruthy();
   });
 
   it('ask_me maps each field to a token typed by field type, multi becomes list', () => {

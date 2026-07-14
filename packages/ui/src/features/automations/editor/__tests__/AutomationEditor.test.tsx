@@ -4,19 +4,31 @@
  * `use-automations-store` directly (mirrors `LibraryRow`'s pattern), so
  * tests drive it through those stores rather than props. `useMemo(validate)`
  * is exercised indirectly via the footer's error count and the Save
- * button's disabled state. TDD: test written first, implemented after.
+ * button's disabled state.
+ *
+ * Project scoping (todo #234 bullet 1): the scope toggle is gone — every
+ * automation saves to `store.activeProjectId` (resolved upstream by
+ * `AutomationsHost` via `useActiveIdentity`, fed into the store directly so
+ * this test doesn't need the assistant-ui runtime provider).
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { AutomationSummary } from '../../contract';
+import type { AutomationCreateInput, AutomationSummary } from '../../contract';
+import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { AutomationEditor } from '../AutomationEditor';
 
 function resetStores() {
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  useAutomationsStore.setState({ definitions: [], catalog: [] });
+  useAutomationsStore.setState({ definitions: [], catalog: [], activeProjectId: null, gateway: fakeGateway() });
+}
+
+async function fillValidDraft(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByTestId('automations-editor-name'), 'My automation');
+  await user.click(screen.getByTestId('automations-recipe-root-add'));
+  await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
 }
 
 afterEach(() => {
@@ -37,6 +49,7 @@ const EXISTING: AutomationSummary = {
 
 describe('AutomationEditor — new automation', () => {
   it('starts with an empty name and the Create action, disabled (no name, no steps)', () => {
+    useAutomationsStore.setState({ activeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
     render(<AutomationEditor />);
     expect(screen.getByTestId('automations-editor-name')).toHaveValue('');
@@ -45,14 +58,29 @@ describe('AutomationEditor — new automation', () => {
     expect(save).toBeDisabled();
   });
 
-  it('enables Save once a name and a step exist', async () => {
+  it('enables Save once a name, a step, and an active project all exist', async () => {
+    const user = userEvent.setup();
+    useAutomationsStore.setState({ activeProjectId: 'proj-1' });
+    useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
+    render(<AutomationEditor />);
+    await fillValidDraft(user);
+    expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
+  });
+
+  it('keeps Save disabled with no active project, even once name and step are valid', async () => {
     const user = userEvent.setup();
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
     render(<AutomationEditor />);
-    await user.type(screen.getByTestId('automations-editor-name'), 'My automation');
-    await user.click(screen.getByTestId('automations-recipe-root-add'));
-    await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
-    expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
+    await fillValidDraft(user);
+    expect(screen.getByTestId('automations-editor-save')).toBeDisabled();
+    expect(screen.getByText(/project/i)).toBeInTheDocument();
+  });
+
+  it('renders no scope toggle — scoping is resolved automatically, not chosen', () => {
+    useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
+    render(<AutomationEditor />);
+    expect(screen.queryByTestId('automations-editor-scope-project')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('automations-editor-scope-global')).not.toBeInTheDocument();
   });
 
   it("pre-fills from editorTarget.draft when present (Describe-it's Open in editor)", () => {
@@ -70,8 +98,63 @@ describe('AutomationEditor — new automation', () => {
     render(<AutomationEditor />);
     expect(screen.getByTestId('automations-editor-name')).toHaveValue('Daily health log');
     expect(screen.getByTestId('automations-editor-description')).toHaveValue('Evening check-in');
-    expect(screen.getByTestId('automations-editor-scope-global')).toHaveClass('bg-card');
     expect(screen.getByTestId('automations-step-q')).toBeInTheDocument();
+  });
+
+  it('saving always sends scope "project" and the resolved active projectId, regardless of a draft\'s prior scope', async () => {
+    const user = userEvent.setup();
+    let sent: AutomationCreateInput | undefined;
+    useAutomationsStore.setState({
+      activeProjectId: 'proj-9',
+      gateway: fakeGateway({
+        createAutomation: async (input) => {
+          sent = input;
+          return { ...EXISTING, ...input, id: 'new-1', projectId: input.projectId ?? null };
+        },
+      }),
+    });
+    useAutomationsNav.setState({
+      editorTarget: {
+        mode: 'new',
+        draft: { name: 'Draft', scope: 'global', definition: { triggers: [], steps: [] } },
+      },
+    });
+    render(<AutomationEditor />);
+    await user.click(screen.getByTestId('automations-recipe-root-add'));
+    await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
+    await user.click(screen.getByTestId('automations-editor-save'));
+
+    await waitFor(() => expect(sent).toBeDefined());
+    expect(sent).toMatchObject({ scope: 'project', projectId: 'proj-9' });
+  });
+
+  it('stamps the resolved projectId onto every ask_agent step, not just the automation itself', async () => {
+    const user = userEvent.setup();
+    let sent: AutomationCreateInput | undefined;
+    useAutomationsStore.setState({
+      activeProjectId: 'proj-9',
+      gateway: fakeGateway({
+        createAutomation: async (input) => {
+          sent = input;
+          return { ...EXISTING, ...input, id: 'new-1', projectId: input.projectId ?? null };
+        },
+      }),
+    });
+    useAutomationsNav.setState({
+      editorTarget: {
+        mode: 'new',
+        draft: {
+          name: 'Draft',
+          scope: 'project',
+          definition: { triggers: [], steps: [{ id: 'a1', kind: 'ask_agent', prompt: ['hi'] }] },
+        },
+      },
+    });
+    render(<AutomationEditor />);
+    await user.click(screen.getByTestId('automations-editor-save'));
+
+    await waitFor(() => expect(sent).toBeDefined());
+    expect(sent?.definition.steps[0]).toMatchObject({ id: 'a1', kind: 'ask_agent', projectId: 'proj-9' });
   });
 });
 
@@ -94,6 +177,7 @@ describe('AutomationEditor — edit existing', () => {
 
 describe('AutomationEditor — footer validation summary', () => {
   it('shows the outstanding issue count when invalid', () => {
+    useAutomationsStore.setState({ activeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
     render(<AutomationEditor />);
     expect(screen.getByText(/to fix/)).toBeInTheDocument();
@@ -101,26 +185,24 @@ describe('AutomationEditor — footer validation summary', () => {
 
   it('shows "Looks good" once every issue is resolved', async () => {
     const user = userEvent.setup();
+    useAutomationsStore.setState({ activeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
     render(<AutomationEditor />);
-    await user.type(screen.getByTestId('automations-editor-name'), 'My automation');
-    await user.click(screen.getByTestId('automations-recipe-root-add'));
-    await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
+    await fillValidDraft(user);
     expect(screen.getByText(/Looks good/)).toBeInTheDocument();
   });
 
   it('appends "ready to create" for a new automation once valid', async () => {
     const user = userEvent.setup();
+    useAutomationsStore.setState({ activeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
     render(<AutomationEditor />);
-    await user.type(screen.getByTestId('automations-editor-name'), 'My automation');
-    await user.click(screen.getByTestId('automations-recipe-root-add'));
-    await user.click(screen.getByTestId('automations-recipe-root-add-verb-notify'));
+    await fillValidDraft(user);
     expect(screen.getByText('Looks good · ready to create')).toBeInTheDocument();
   });
 
   it('appends "ready to save" once valid when editing an existing automation', () => {
-    useAutomationsStore.setState({ definitions: [EXISTING] });
+    useAutomationsStore.setState({ definitions: [EXISTING], activeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: EXISTING.id } });
     render(<AutomationEditor />);
     expect(screen.getByText('Looks good · ready to save')).toBeInTheDocument();

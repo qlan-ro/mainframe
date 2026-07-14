@@ -90,6 +90,31 @@ describe('automation REST routes', () => {
     expect(listRes.body.data.map((a: { id: string }) => a.id)).toContain(createRes.body.data.id);
   });
 
+  it('GET /api/automations?projectId=X returns only automations scoped to that project', async () => {
+    const forProjectA = await request(app)
+      .post('/api/automations')
+      .send({ ...NOTIFY_ONLY, scope: 'project', projectId: 'proj-a' });
+    await request(app)
+      .post('/api/automations')
+      .send({ ...NOTIFY_ONLY, scope: 'project', projectId: 'proj-b' });
+
+    const res = await request(app).get('/api/automations?projectId=proj-a');
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((a: { id: string }) => a.id)).toEqual([forProjectA.body.data.id]);
+  });
+
+  it('GET /api/automations with no projectId returns every automation, unfiltered', async () => {
+    await request(app)
+      .post('/api/automations')
+      .send({ ...NOTIFY_ONLY, scope: 'project', projectId: 'proj-a' });
+    await request(app)
+      .post('/api/automations')
+      .send({ ...NOTIFY_ONLY, scope: 'project', projectId: 'proj-b' });
+
+    const res = await request(app).get('/api/automations');
+    expect(res.body.data).toHaveLength(2);
+  });
+
   it('POST /api/automations returns 400 {errors} for a scope-invalid definition', async () => {
     const res = await request(app)
       .post('/api/automations')

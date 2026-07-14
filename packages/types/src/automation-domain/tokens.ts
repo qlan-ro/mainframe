@@ -34,7 +34,13 @@ export interface TokenDescriptor {
   fields?: string[];
   /** For choice/multi tokens: the authored option set. */
   options?: string[];
+  /** One-line hint the token picker shows alongside this token (todo #234 bullet 5) — reserved for tokens whose name alone doesn't say what they carry, e.g. an agent step's raw "Result". */
+  description?: string;
 }
+
+/** `ask_agent`'s (and a curated event trigger's) "Result" token: the agent's raw final-message text, distinct from the named fields `expects` parses out of it. */
+export const RESULT_TOKEN_DESCRIPTION =
+  "The agent's full final reply, as plain text — use Expect results to pull out a specific field instead.";
 
 /**
  * Known item-shape for actions whose output is a list of records (contract §5
@@ -83,6 +89,7 @@ export function triggerTokens(triggers: AutomationTrigger[]): TokenDescriptor[] 
           type: 'text',
           sourceKind: 'trigger',
           source: 'Trigger',
+          description: RESULT_TOKEN_DESCRIPTION,
         },
         {
           ref: { stepId: TOKEN_STEP_TRIGGER, output: 'chatId' },
@@ -186,7 +193,14 @@ export function stepProduces(step: AutomationStep, catalog: ActionCatalogEntry[]
   switch (step.kind) {
     case 'ask_agent': {
       const out: TokenDescriptor[] = [
-        { ref: { stepId: step.id, output: 'result' }, label: 'Result', type: 'text', sourceKind: 'agent', source },
+        {
+          ref: { stepId: step.id, output: 'result' },
+          label: 'Result',
+          type: 'text',
+          sourceKind: 'agent',
+          source,
+          description: RESULT_TOKEN_DESCRIPTION,
+        },
         { ref: { stepId: step.id, output: 'chatId' }, label: 'Chat', type: 'text', sourceKind: 'agent', source },
       ];
       for (const expected of step.expects ?? []) {

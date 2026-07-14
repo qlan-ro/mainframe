@@ -24,6 +24,7 @@ const AGENT_RESULT: TokenDescriptor = {
   type: 'text',
   sourceKind: 'agent',
   source: 'Ask agent',
+  description: "The agent's full final reply, as plain text — use Expect results to pull out a specific field instead.",
 };
 
 const PR_TOKEN: TokenDescriptor = {
@@ -58,6 +59,17 @@ describe('TokenPicker', () => {
     expect(screen.getByTestId('picker-option-pick-feature-result')).toBeInTheDocument();
     // Nothing for a token that was never passed in (out of scope).
     expect(screen.queryByTestId('picker-option-open-pr-prUrl')).not.toBeInTheDocument();
+  });
+
+  it("carries a token's description as an inline hint, when it has one", async () => {
+    const user = userEvent.setup();
+    render(<TokenPicker tokens={[TODAY, AGENT_RESULT]} onInsert={vi.fn()} testId="picker" />);
+
+    await user.click(screen.getByTestId('picker'));
+
+    expect(screen.getByTestId('picker-option-pick-feature-result')).toHaveAttribute('title', AGENT_RESULT.description);
+    // A token with no description carries no hint at all.
+    expect(screen.getByTestId('picker-option-builtin-today')).not.toHaveAttribute('title');
   });
 
   it('clicking a leaf token inserts its ref and closes the menu', async () => {

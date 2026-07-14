@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionCatalogEntry, AutomationDefinition, AutomationStep } from '../../automation.js';
 import { findStep, resolveTokenRef } from '../resolve.js';
+import { RESULT_TOKEN_DESCRIPTION } from '../tokens.js';
 
 function askAgent(id: string): AutomationStep {
   return { id, kind: 'ask_agent', prompt: [] };
@@ -63,6 +64,7 @@ describe('resolveTokenRef', () => {
       type: 'text',
       sourceKind: 'agent',
       source: 'Ask agent',
+      description: RESULT_TOKEN_DESCRIPTION,
     });
   });
 

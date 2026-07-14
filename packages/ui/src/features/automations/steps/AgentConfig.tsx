@@ -1,8 +1,8 @@
 /**
- * AgentConfig — prompt ChipField (slash), model; More options: attachments,
- * worktree, auto-approve, timeout, permission, Expect results (A2),
- * FailureToggle (ts153 wf2-stepconfig.jsx `WfAgentConfig`, ported onto
- * `AskAgentStep`).
+ * AgentConfig — prompt ChipField (slash), provider+model picker; More
+ * options: attachments, worktree (branch picker), timeout, permission,
+ * Expect results (A2), FailureToggle (ts153 wf2-stepconfig.jsx
+ * `WfAgentConfig`, ported onto `AskAgentStep`).
  *
  * One deliberate contract-driven deviation from ts153: **Timeout, not a
  * free-text budget cap.** ts153's "$4.00 or 20m" text field is replaced by
@@ -13,25 +13,28 @@
  * design-conformance pass reverses that call — see `AttachmentsField`'s doc
  * comment for the contract/schema widening this required.
  *
- * The model list is a curated placeholder (ts153's `WF2_MODELS`) — this
- * phase has no live adapter catalog fetch (that's `lib/model-tuning.ts`'s
- * `AdapterModel` machinery, wired to a real chat's adapter, not an
- * unstarted automation step); Phase 6 replaces it with a live fetch.
+ * todo #234: the model list is now `AgentModelPicker`'s live `useAdapters()`
+ * catalog, replacing the hardcoded placeholder (bullet 7). Auto-approve is
+ * gone (bullet 3) — `permissionMode` is the sole execution-scope control.
+ * The worktree's base branch is the shared `BranchSelect` (bullet 4), scoped
+ * to the automation's own resolved project (`store.activeProjectId`) via
+ * `useProjectBranches` — the step needs no project picker of its own.
  */
 import { X } from 'lucide-react';
+import { BranchSelect } from '@/features/git/BranchSelect';
 import type { AskAgentStep } from '../contract';
 import { EXECUTION_MODES } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
+import { useAutomationsStore } from '../data/use-automations-store';
 import { ChipField } from '../fields/ChipField';
 import { MiniSelect } from '../fields/MiniSelect';
+import { AgentModelPicker } from './AgentModelPicker';
 import { AttachmentsField } from './AttachmentsField';
 import { ExpectResultsBuilder } from './ExpectResultsBuilder';
 import { FailureToggle } from './FailureToggle';
 import { FieldRow } from './FieldRow';
 import { MoreOptions } from './MoreOptions';
-
-const AGENT_MODELS = ['Claude Opus 4.6', 'Claude Sonnet 4.6', 'Codex GPT-5.2', 'Gemini 3 Pro'];
-const AUTO_APPROVE_OPTIONS = ['edits', 'pnpm', 'git', 'shell'];
+import { useProjectBranches } from './use-project-branches';
 
 export interface AgentConfigProps {
   step: AskAgentStep;
@@ -42,14 +45,8 @@ export interface AgentConfigProps {
 
 export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps) {
   const worktree = step.worktree;
-
-  function toggleApprove(entry: string) {
-    const current = step.autoApprove ?? [];
-    onChange({
-      ...step,
-      autoApprove: current.includes(entry) ? current.filter((a) => a !== entry) : [...current, entry],
-    });
-  }
+  const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
+  const { branches, currentBranch } = useProjectBranches(activeProjectId);
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -68,12 +65,12 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
       </div>
 
       <FieldRow label="Agent">
-        <MiniSelect
-          value={step.model ?? AGENT_MODELS[0]!}
-          options={AGENT_MODELS}
-          onChange={(model) => onChange({ ...step, model })}
-          testId={`${testId}-model`}
-          width={210}
+        <AgentModelPicker
+          adapterId={step.adapterId}
+          model={step.model}
+          onAdapterChange={(adapterId) => onChange({ ...step, adapterId, model: undefined })}
+          onModelChange={(model) => onChange({ ...step, model })}
+          testId={testId}
         />
       </FieldRow>
 
@@ -97,13 +94,15 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
                 testId={`${testId}-worktree-branch`}
               />
               <span className="text-caption text-muted-foreground">from</span>
-              <input
-                data-testid={`${testId}-worktree-base`}
-                value={worktree.baseBranch ?? ''}
-                onChange={(e) => onChange({ ...step, worktree: { ...worktree, baseBranch: e.target.value } })}
-                placeholder="main"
-                className="h-[28px] w-[110px] rounded-md border-[0.5px] border-input bg-card px-2 text-caption text-foreground outline-none placeholder:text-muted-foreground"
-              />
+              <span className="w-[140px]">
+                <BranchSelect
+                  value={worktree.baseBranch ?? ''}
+                  options={branches}
+                  currentBranch={currentBranch}
+                  onChange={(baseBranch) => onChange({ ...step, worktree: { ...worktree, baseBranch } })}
+                  testId={`${testId}-worktree-base`}
+                />
+              </span>
               <button
                 type="button"
                 data-testid={`${testId}-worktree-remove`}
@@ -124,29 +123,6 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
               + Run in a fresh worktree
             </button>
           )}
-        </FieldRow>
-
-        <FieldRow label="Auto-approve" top>
-          <div className="flex flex-wrap gap-1.5">
-            {AUTO_APPROVE_OPTIONS.map((entry) => {
-              const on = (step.autoApprove ?? []).includes(entry);
-              return (
-                <button
-                  key={entry}
-                  type="button"
-                  data-testid={`${testId}-approve-${entry}`}
-                  onClick={() => toggleApprove(entry)}
-                  className={
-                    on
-                      ? 'h-[24px] rounded-full border-[0.5px] border-primary/40 bg-primary/10 px-2.5 text-caption font-medium text-primary'
-                      : 'h-[24px] rounded-full border-[0.5px] border-border bg-card px-2.5 text-caption font-medium text-muted-foreground hover:bg-accent'
-                  }
-                >
-                  {entry}
-                </button>
-              );
-            })}
-          </div>
         </FieldRow>
 
         <FieldRow label="Timeout">
