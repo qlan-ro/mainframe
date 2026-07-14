@@ -50,6 +50,27 @@ export const TaskCard = React.memo(function TaskCard({
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData('todo-number', String(todo.number));
+
+    // The browser's default drag ghost is a static snapshot taken at dragstart,
+    // before React repaints — so `isDragging`'s opacity-50 below never reaches
+    // the thing actually following the cursor, only the card's resting spot.
+    // A styled clone passed to setDragImage is the only way to make the moving
+    // ghost itself look lifted. Guarded: not every environment implements it.
+    if (typeof e.dataTransfer.setDragImage === 'function') {
+      const source = e.currentTarget;
+      const ghost = source.cloneNode(true) as HTMLElement;
+      ghost.style.width = `${source.offsetWidth}px`;
+      ghost.style.opacity = '0.85';
+      ghost.style.transform = 'rotate(-2deg)';
+      ghost.style.position = 'absolute';
+      ghost.style.top = '-9999px';
+      ghost.style.left = '-9999px';
+      ghost.style.pointerEvents = 'none';
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, 16, 16);
+      setTimeout(() => ghost.remove(), 0);
+    }
+
     setIsDragging(true);
   };
 
