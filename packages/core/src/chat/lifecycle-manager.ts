@@ -116,9 +116,13 @@ export class ChatLifecycleManager {
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
       const defaultPlanMode = this.deps.db.settings.get('provider', `${adapterId}.defaultPlanMode`);
 
-      if (!effectiveModel && defaultModel) {
+      if (!effectiveModel) {
         const models = this.deps.adapters.getSnapshots().find((snapshot) => snapshot.id === adapterId)?.models ?? [];
-        effectiveModel = normalizeSavedDefaultModel(defaultModel, models);
+        // A saved default that no longer matches the catalog, or no saved default at all,
+        // falls back to the adapter's own default model — never leave `model` unset, since
+        // some adapters (e.g. codex) require it on every spawn request.
+        effectiveModel =
+          normalizeSavedDefaultModel(defaultModel ?? undefined, models) ?? models.find((m) => m.isDefault)?.id;
       }
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
       if (defaultPlanMode === 'true') effectivePlanMode = true;

@@ -4,17 +4,22 @@
  * The horizontal pill-cloud became a vertical one-click switcher list: "All
  * projects" row at top (clears the filter), then one row per project
  * (colored avatar + name + attention badge), collapsible past
- * DEFAULT_VISIBLE_PROJECTS (5) via a "Show N more"/"Show less" toggle, and
+ * DEFAULT_VISIBLE_PROJECTS (3) via a "Show N more"/"Show less" toggle, and
  * the "Add project" affordance as a trailing row action. Selecting a project
  * row is a plain single-select switch now — clicking the ALREADY-active row
  * does NOT deselect it (that toggle-to-"All" behavior belonged to the old
  * pill-cloud bar); only the "All projects" row clears the filter.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Project } from '@qlan-ro/mainframe-types';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { ProjectFilterPillBar } from '../ProjectFilterPillBar';
+
+beforeEach(() => {
+  useUiPrefs.setState({ collapsedSidebarSections: {} });
+});
 
 const PROJECTS: Project[] = [
   {
@@ -147,8 +152,8 @@ describe('ProjectFilterPillBar — colored avatar', () => {
   });
 });
 
-describe('ProjectFilterPillBar — collapsible past 5 projects', () => {
-  it('shows only the first 5 project rows by default, hiding the rest', () => {
+describe('ProjectFilterPillBar — collapsible past 3 projects', () => {
+  it('shows only the first 3 project rows by default, hiding the rest', () => {
     render(
       <ProjectFilterPillBar
         projects={SEVEN_PROJECTS}
@@ -157,12 +162,11 @@ describe('ProjectFilterPillBar — collapsible past 5 projects', () => {
         onSelect={() => undefined}
       />,
     );
-    for (let i = 1; i <= 5; i++) expect(screen.getByTestId(`sessions-filter-pill-p${i}`)).toBeTruthy();
-    expect(screen.queryByTestId('sessions-filter-pill-p6')).toBeNull();
-    expect(screen.queryByTestId('sessions-filter-pill-p7')).toBeNull();
+    for (let i = 1; i <= 3; i++) expect(screen.getByTestId(`sessions-filter-pill-p${i}`)).toBeTruthy();
+    for (let i = 4; i <= 7; i++) expect(screen.queryByTestId(`sessions-filter-pill-p${i}`)).toBeNull();
   });
 
-  it('renders a "Show 2 more" toggle when 2 projects are hidden', () => {
+  it('renders a "Show 4 more" toggle when 4 projects are hidden', () => {
     render(
       <ProjectFilterPillBar
         projects={SEVEN_PROJECTS}
@@ -172,7 +176,7 @@ describe('ProjectFilterPillBar — collapsible past 5 projects', () => {
       />,
     );
     const more = screen.getByTestId('sessions-projects-more');
-    expect(more.textContent).toContain('Show 2 more');
+    expect(more.textContent).toContain('Show 4 more');
     expect(more).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -186,8 +190,7 @@ describe('ProjectFilterPillBar — collapsible past 5 projects', () => {
       />,
     );
     await userEvent.click(screen.getByTestId('sessions-projects-more'));
-    expect(screen.getByTestId('sessions-filter-pill-p6')).toBeTruthy();
-    expect(screen.getByTestId('sessions-filter-pill-p7')).toBeTruthy();
+    for (let i = 4; i <= 7; i++) expect(screen.getByTestId(`sessions-filter-pill-p${i}`)).toBeTruthy();
     const more = screen.getByTestId('sessions-projects-more');
     expect(more.textContent).toContain('Show less');
     expect(more).toHaveAttribute('aria-expanded', 'true');
@@ -205,10 +208,10 @@ describe('ProjectFilterPillBar — collapsible past 5 projects', () => {
     const toggle = screen.getByTestId('sessions-projects-more');
     await userEvent.click(toggle);
     await userEvent.click(toggle);
-    expect(screen.queryByTestId('sessions-filter-pill-p6')).toBeNull();
+    expect(screen.queryByTestId('sessions-filter-pill-p4')).toBeNull();
   });
 
-  it('does not render the toggle when there are 5 or fewer projects', () => {
+  it('does not render the toggle when there are 3 or fewer projects', () => {
     render(
       <ProjectFilterPillBar
         projects={PROJECTS}
@@ -306,10 +309,51 @@ describe('ProjectFilterPillBar — right-click project management', () => {
         onRemoveProject={handleRemove}
       />,
     );
-    const { fireEvent } = await import('@testing-library/react');
     fireEvent.contextMenu(screen.getByTestId('sessions-filter-pill-p1-wrap'));
     expect(screen.getByTestId('sessions-project-rename-p1')).toHaveAttribute('data-disabled');
     await userEvent.click(screen.getByTestId('sessions-project-remove-p1'));
     expect(handleRemove).toHaveBeenCalledWith(PROJECTS[0]);
+  });
+});
+
+describe('ProjectFilterPillBar — collapsible', () => {
+  it('renders a chevron next to the "Projects" label', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(document.querySelector('svg.lucide-chevron-down[aria-hidden="true"]')).toBeTruthy();
+  });
+
+  it('clicking the toggle hides the "All" row and project rows', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId('sessions-filter-pill-all')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('sessions-projects-section-toggle'));
+    expect(screen.queryByTestId('sessions-filter-pill-all')).toBeNull();
+  });
+
+  it('clicking the toggle again shows the section again', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('sessions-projects-section-toggle'));
+    fireEvent.click(screen.getByTestId('sessions-projects-section-toggle'));
+    expect(screen.getByTestId('sessions-filter-pill-all')).toBeTruthy();
   });
 });

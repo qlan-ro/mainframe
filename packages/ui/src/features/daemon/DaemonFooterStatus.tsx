@@ -11,14 +11,14 @@
  * Visual spec: 17-daemon.jsx DaemonFooterStatus + task-B9-brief.md.
  */
 import { useState, useCallback } from 'react';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { ConnectionOverlay } from '@/app/ConnectionOverlay';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
 import { DaemonPicker } from './DaemonPicker';
-import { ConnDot, DaemonGlyph } from './DaemonRow';
+import { ConnDot, DaemonGlyph, DAEMON_STATUS } from './DaemonRow';
 import type { DaemonStatus } from './DaemonRow';
 import { AddRemoteDialog } from './AddRemoteDialog';
 import { DaemonSmallDialog } from './DaemonSmallDialog';
@@ -146,15 +146,40 @@ export function DaemonFooterStatus() {
             type="button"
             data-testid="daemon-footer-trigger"
             className={cn(
-              'flex max-w-[168px] min-w-0 items-center gap-[5px] rounded-md px-[5px] py-[2px]',
-              'text-micro text-mf-text-3 hover:bg-accent hover:text-foreground transition-colors',
-              pickerOpen && 'bg-accent text-foreground',
+              'flex w-full min-w-0 items-center gap-[10px] rounded-xl border border-border bg-mf-chip/40 px-[11px] py-[9px] text-left transition-colors',
+              'hover:bg-accent',
+              pickerOpen && 'bg-accent',
             )}
           >
-            <ConnDot status={activeStatus} size={6} />
-            <DaemonGlyph kind={activeKind} size={11} />
-            <span className="min-w-0 flex-1 truncate">{activeLabel}</span>
-            <ChevronsUpDown size={10} className="shrink-0 text-mf-text-4" aria-hidden />
+            <span className="flex size-[38px] shrink-0 items-center justify-center rounded-md bg-mf-chip">
+              <DaemonGlyph kind={activeKind} size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-[7px]">
+                <span
+                  data-testid="daemon-footer-trigger-label"
+                  className="min-w-0 truncate text-heading font-semibold text-foreground"
+                >
+                  {activeLabel}
+                </span>
+                <ConnDot status={activeStatus} size={6} />
+                <span
+                  data-testid="daemon-footer-trigger-status"
+                  className={cn('shrink-0 text-caption font-semibold', DAEMON_STATUS[activeStatus].wordClass)}
+                >
+                  {DAEMON_STATUS[activeStatus].word}
+                </span>
+              </span>
+              {activeMeta.host && (
+                <span
+                  data-testid="daemon-footer-trigger-host"
+                  className="mt-[2px] block truncate font-mono text-micro text-mf-text-3"
+                >
+                  {activeMeta.host}
+                </span>
+              )}
+            </span>
+            <ChevronDown size={14} className="shrink-0 text-mf-text-3" aria-hidden />
           </button>
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="p-0 w-auto">

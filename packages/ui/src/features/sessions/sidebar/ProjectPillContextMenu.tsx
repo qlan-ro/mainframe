@@ -58,7 +58,7 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
         aria-pressed={active}
         onClick={onSelect}
         type="button"
-        className="flex h-full min-w-0 flex-1 items-center gap-[8px] px-2 text-label font-medium tracking-normal"
+        className="flex h-full min-w-0 flex-1 items-center gap-[9px] px-[12px] text-label font-medium tracking-normal"
       >
         <span data-testid={`sessions-filter-pill-avatar-${project.id}`}>
           <ProjectAvatar name={project.name} color={avatarColor} />
