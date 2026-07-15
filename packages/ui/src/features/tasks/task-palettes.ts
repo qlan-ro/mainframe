@@ -96,17 +96,3 @@ export function priorityDotClass(priority: TodoPriority): string {
       return 'bg-mf-priority-low-dot';
   }
 }
-
-/** Dot color class for a status indicator dot. */
-export function statusDotColor(status: TodoStatus): string {
-  switch (status) {
-    case 'open':
-      return 'bg-muted-foreground';
-    case 'in_progress':
-      return 'bg-blue-500';
-    case 'done':
-      return 'bg-green-500';
-    default:
-      return 'bg-muted-foreground';
-  }
-}

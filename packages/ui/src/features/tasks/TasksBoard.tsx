@@ -4,9 +4,9 @@
  * Header: checklist glyph + "Tasks" + active/done chip + List/Board switch + New.
  * Body: TasksFilterBar + TaskListView or TaskBoardView.
  *
- * SINGLE loader owner: the Inspector drawer (TasksDrawer/TasksDrawerList) owns the
- * project-scoped useTodosStore.load() effect. TasksBoard does NOT install its own
- * load effect; it reuses the already-cached store state.
+ * SINGLE loader owner: the sidebar Tasks section (TasksSidebarSection/TasksSidebarList)
+ * owns the project-scoped useTodosStore.load() effect. TasksBoard does NOT install
+ * its own load effect; it reuses the already-cached store state.
  *
  * data-testid="tasks-board-modal".
  */

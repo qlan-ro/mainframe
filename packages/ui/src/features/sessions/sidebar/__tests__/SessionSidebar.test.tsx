@@ -35,6 +35,7 @@ import type { Project, SyntheticTag } from '@qlan-ro/mainframe-types';
 import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 // ---------------------------------------------------------------------------
 // Mutable control state — set per test before rendering
@@ -229,6 +230,12 @@ vi.mock('../../filter/TagFilterBar', () => ({
   TagFilterBar: () => <div data-testid="sessions-tag-filter-bar" />,
 }));
 
+// Stub TasksSidebarSection — reads useActiveIdentity/useDaemonPort/useTodosStore,
+// none of which this file sets up; a sentinel div is enough to assert ordering.
+vi.mock('@/features/tasks/TasksSidebarSection', () => ({
+  TasksSidebarSection: () => <div data-testid="tasks-sidebar-section-stub" />,
+}));
+
 // ---------------------------------------------------------------------------
 // Stub daemon-port-context + use-tag-registry so the sidebar can call them
 // ---------------------------------------------------------------------------
@@ -312,6 +319,7 @@ beforeEach(() => {
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
   useDraftReturnTarget.setState({ returnThreadId: null });
+  useUiPrefs.setState({ collapsedSidebarSections: {} });
 });
 
 // ---------------------------------------------------------------------------
@@ -342,16 +350,31 @@ describe('SessionSidebar — new-button is present', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2a. The "SESSIONS" group header has no leading chevron (finding 1.9 — the
-// artboard's actual Sidebar() header has no chevron; it only exists on the
-// unused generic SidebarGroup component).
+// 2a. The "Sessions" group header IS collapsible — supersedes the old finding
+// 1.9 no-chevron artboard-parity assertion. All four root sections (Projects/
+// Sessions/Tasks/Tags) got a disclosure chevron so the whole sidebar is
+// collapsible, section by section, backed by useUiPrefs.collapsedSidebarSections.
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — Sessions group header has no leading chevron (finding 1.9)', () => {
-  it('does not render a chevron-down icon next to the "Sessions" label', () => {
+describe('SessionSidebar — Sessions group header is collapsible', () => {
+  it('renders a chevron-down icon next to the "Sessions" label', () => {
     render(<SessionSidebar />);
     expect(screen.getByText('Sessions')).toBeTruthy();
-    expect(document.querySelector('svg.lucide-chevron-down[aria-hidden="true"]')).toBeNull();
+    expect(document.querySelector('svg.lucide-chevron-down[aria-hidden="true"]')).toBeTruthy();
+  });
+
+  it('clicking the toggle hides the new-session button and session list', () => {
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-new-button')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('sessions-section-toggle'));
+    expect(screen.queryByTestId('sessions-new-button')).toBeNull();
+  });
+
+  it('clicking the toggle again shows the section again', () => {
+    render(<SessionSidebar />);
+    fireEvent.click(screen.getByTestId('sessions-section-toggle'));
+    fireEvent.click(screen.getByTestId('sessions-section-toggle'));
+    expect(screen.getByTestId('sessions-new-button')).toBeTruthy();
   });
 });
 
@@ -599,6 +622,8 @@ describe('SessionSidebar — archived sessions are excluded from the list', () =
 // 8. TagFilterBar is mounted (sessions-tag-filter-bar present)
 // Per the warm-chrome artboard it is now pinned at the BOTTOM, AFTER the
 // scrollable session list — assert it renders AND comes after the list region.
+// TasksSidebarSection sits between the two: right after the session list,
+// before the tag filter footer.
 // ---------------------------------------------------------------------------
 
 describe('SessionSidebar — TagFilterBar is mounted at the bottom, after the list', () => {
@@ -613,6 +638,13 @@ describe('SessionSidebar — TagFilterBar is mounted at the bottom, after the li
     const tagBar = screen.getByTestId('sessions-tag-filter-bar');
     // compareDocumentPosition: FOLLOWING (4) means tagBar comes after pills.
     expect(pills.compareDocumentPosition(tagBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders the tasks section right after the session list, before the tag filter bar', () => {
+    render(<SessionSidebar />);
+    const tasks = screen.getByTestId('tasks-sidebar-section-stub');
+    const tagBar = screen.getByTestId('sessions-tag-filter-bar');
+    expect(tasks.compareDocumentPosition(tagBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

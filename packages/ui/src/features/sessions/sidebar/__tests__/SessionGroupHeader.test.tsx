@@ -6,8 +6,8 @@
  * `groupContent`. It replaced the retired SessionGroup component (which owned
  * both the header AND the item list). Behaviors covered:
  *  1. Renders the group label text in `sessions-group-header-<label>`.
- *  2. Shows a pin glyph (`sessions-group-pin-glyph`) when label === 'Pinned'.
- *  3. Does not show a pin glyph for any other label.
+ *  2. No leading pin glyph on the "Pinned" label — not a macOS pattern (plain
+ *     text header, matching every other label).
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -27,13 +27,13 @@ describe('SessionGroupHeader — renders the label text', () => {
   });
 });
 
-describe('SessionGroupHeader — pin glyph only for the Pinned label', () => {
-  it('shows the pin glyph when label is "Pinned"', () => {
+describe('SessionGroupHeader — no pin glyph, even for the Pinned label', () => {
+  it('does not render a pin glyph for "Pinned"', () => {
     render(<SessionGroupHeader label="Pinned" />);
-    expect(screen.getByTestId('sessions-group-pin-glyph')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-group-pin-glyph')).toBeNull();
   });
 
-  it('does not show the pin glyph for a non-Pinned label', () => {
+  it('does not render a pin glyph for any other label', () => {
     render(<SessionGroupHeader label="Today" />);
     expect(screen.queryByTestId('sessions-group-pin-glyph')).toBeNull();
   });

@@ -4,21 +4,28 @@
  *
  * Rendered by the virtualized list (`SessionListVirtuoso`) as GroupedVirtuoso's
  * `groupContent`. GroupedVirtuoso owns the sticky positioning of the active
- * group header, so this element carries only the visual chrome (warm glass +
- * blur) and the leading pin glyph on the 'Pinned' group — not `sticky top-0`.
+ * group header — not `sticky top-0` here. No background/blur of its own: it
+ * sits directly on the sidebar panel's own glass (SidebarShell), same as every
+ * row. The ONE case that needs an opaque backing — the sticky pinned copy, so
+ * scrolled-under rows don't ghost through it — gets it from the Virtuoso
+ * TopItemList wrapper (SessionListVirtuoso's SessionsTopItemList), not here.
+ * Painting glass again on this element too would double the tint/blur only
+ * for headers, visibly seaming them against the rows around them.
+ *
+ * No leading pin glyph on the "Pinned" label itself — not a macOS pattern
+ * (Finder/Mail section headers are plain text). Individual pinned rows still
+ * carry their own pin glyph when shown outside the Pinned group (SessionRow's
+ * `custom.pinned && !inPinnedGroup`), which is the actual per-item indicator.
  */
-import { PinIcon } from 'lucide-react';
+import { sidebarIndentPx } from '@/layout/sidebar-indent';
 
 export function SessionGroupHeader({ label }: { label: string }) {
-  const inPinnedGroup = label === 'Pinned';
   return (
     <div
       data-testid={`sessions-group-header-${label}`}
-      className="flex items-center gap-[4px] bg-mf-glass px-[12px] pb-[3px] pt-[7px] text-caption font-medium text-muted-foreground backdrop-blur-[40px] backdrop-saturate-[1.8]"
+      style={{ paddingLeft: sidebarIndentPx(1) }}
+      className="flex items-center gap-[4px] pb-[3px] pr-5 pt-[7px] text-caption font-medium text-muted-foreground"
     >
-      {inPinnedGroup && (
-        <PinIcon data-testid="sessions-group-pin-glyph" className="size-[12px] flex-shrink-0 text-primary" />
-      )}
       {label}
     </div>
   );

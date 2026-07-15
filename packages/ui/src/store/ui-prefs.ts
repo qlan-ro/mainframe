@@ -13,6 +13,9 @@ import { clampSidebarWidth, SIDEBAR_EXPANDED_WIDTH } from '@/layout/SidebarShell
 
 export type BottomPanelTab = 'context' | 'skills' | 'agents';
 
+/** The four root sections in the left sidebar, each independently collapsible. */
+export type SidebarSection = 'projects' | 'sessions' | 'tasks' | 'tags';
+
 export const BOTTOM_PANEL_MIN_HEIGHT = 120;
 export const BOTTOM_PANEL_DEFAULT_HEIGHT = 280;
 export const BOTTOM_PANEL_MAX_FALLBACK = 600;
@@ -29,12 +32,24 @@ interface UiPrefsState {
   bottomPanelHeight: number;
   /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
   rightClickHintDismissed: boolean;
+  /** Per-section collapse state for the left sidebar's four root sections.
+   *  Absent keys read as expanded (false) — see isSidebarSectionCollapsed. */
+  collapsedSidebarSections: Partial<Record<SidebarSection, boolean>>;
   toggleSidebar: () => void;
   toggleInspector: () => void;
   setSidebarWidth: (width: number) => void;
   setBottomPanelTab: (tab: BottomPanelTab) => void;
   setBottomPanelHeight: (height: number) => void;
   dismissRightClickHint: () => void;
+  toggleSidebarSection: (section: SidebarSection) => void;
+}
+
+/** Selector helper: a section with no recorded state is expanded by default. */
+export function isSidebarSectionCollapsed(
+  collapsed: Partial<Record<SidebarSection, boolean>>,
+  section: SidebarSection,
+): boolean {
+  return collapsed[section] ?? false;
 }
 
 export const useUiPrefs = create<UiPrefsState>()(
@@ -46,6 +61,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       bottomPanelTab: 'context',
       bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
       rightClickHintDismissed: false,
+      collapsedSidebarSections: {},
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -53,6 +69,13 @@ export const useUiPrefs = create<UiPrefsState>()(
       setBottomPanelHeight: (height) =>
         set({ bottomPanelHeight: clampBottomPanelHeight(height, BOTTOM_PANEL_MAX_FALLBACK) }),
       dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
+      toggleSidebarSection: (section) =>
+        set((s) => ({
+          collapsedSidebarSections: {
+            ...s.collapsedSidebarSections,
+            [section]: !isSidebarSectionCollapsed(s.collapsedSidebarSections, section),
+          },
+        })),
     }),
     {
       name: 'mf:ui-prefs',
@@ -64,6 +87,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         bottomPanelTab: s.bottomPanelTab,
         bottomPanelHeight: s.bottomPanelHeight,
         rightClickHintDismissed: s.rightClickHintDismissed,
+        collapsedSidebarSections: s.collapsedSidebarSections,
       }),
     },
   ),
