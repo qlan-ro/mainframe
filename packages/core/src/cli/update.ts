@@ -70,7 +70,7 @@ interface SemVer {
 }
 
 function parseSemver(version: string): SemVer {
-  const [core, ...preParts] = version.replace(/^v/, '').split('-');
+  const [core = '', ...preParts] = version.replace(/^v/, '').split('-');
   const [major = 0, minor = 0, patch = 0] = core.split('.').map((n) => Number(n) || 0);
   const prerelease = preParts.join('-');
   return { major, minor, patch, prerelease: prerelease ? prerelease.split('.') : [] };
