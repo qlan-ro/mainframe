@@ -45,6 +45,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
     - `@qlan-ro/mainframe-app-electron`: Electron desktop shell (legacy, being replaced by app-tauri).
     - `@qlan-ro/mainframe-e2e`: Playwright end-to-end suite.
     - `@qlan-ro/mainframe-mobile`: Git submodule (separate repo — cross-cutting changes need their own PR there; don't bump the pointer in feature PRs).
+- **`packages/core-rs`**: a separate Cargo workspace (no `package.json`, invisible to pnpm) porting the Node daemon route-for-route to Rust — `mainframe-server` mirrors `packages/core`'s HTTP/WS routes, `mainframe-types` mirrors `packages/types`. Landed via PR #445 (merged 2026-07-12); runs as a canary behind `MAINFRAME_DAEMON_IMPL` for the Tauri shell only — Electron always runs the Node daemon. See the golden rule under [Code Rules](#code-rules).
 - **Metadata Storage**: SQLite (`better-sqlite3`) for project tracking and chat metadata. Message history is NOT duplicated; CLI agents replay it via `--resume`.
 
 ## Terminology
@@ -78,6 +79,7 @@ Domain skills (typescript-expert, nodejs-best-practices, vercel-react-best-pract
 
 Each rule exists because a violation required cleanup.
 
+- **Port daemon changes to Rust too, until Node is retired** — `packages/core-rs/crates/mainframe-server` ports `packages/core`'s routes and DB logic 1:1 (see Architecture). Any fix or feature touching a daemon route, DB schema, or shared settings/domain type needs the matching change in `mainframe-server` + `mainframe-types`, in the *same PR*. Grep the Node route path under `packages/core-rs/crates/mainframe-server/src/routes/` for its Rust counterpart, and extend the matching test in `.../tests/`. Nothing in CI catches a missed port — it was missed once already (PR #458) and caught only by manual review.
 - **No shell interpolation** — `execFile`/`execGit` with array args; never `execSync` with template strings.
 - **Validate input** — `resolveAndValidatePath()` for user-supplied paths; identifiers match `^[a-zA-Z0-9_-]+$`; Zod on every endpoint and WS message.
 - **Max 300 lines/file, 50/function** — decompose before merging.
