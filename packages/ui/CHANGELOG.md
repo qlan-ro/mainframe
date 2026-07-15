@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-ui
 
+## 2.0.0-rc.10
+
+### Patch Changes
+
+- [#470](https://github.com/qlan-ro/mainframe/pull/470) [`7db6b53`](https://github.com/qlan-ro/mainframe/commit/7db6b535c6ac400833446816112388917964cd71) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Overhaul the left sidebar's visual density and information architecture: unified per-level indentation across Projects/Sessions/Tasks/Tags (matching macOS outline conventions, full-width selection highlights on indented rows), all four root sections now independently collapsible and persisted, Context/Skills/Agents moved into the right inspector while Tasks moved into the left sidebar as its own section (per HIG, contextual detail vs. navigable collections), colored tag pills replacing neutral chips with color dots, a redesigned daemon selector card matching the mobile app's pattern, and numerous row-height/padding/font/scroll-behavior fixes throughout.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.9
+
 ## 2.0.0-rc.9
 
 ### Minor Changes
