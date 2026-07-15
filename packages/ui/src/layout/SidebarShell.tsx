@@ -1,6 +1,4 @@
 import { SessionSidebar } from '@/features/sessions/sidebar/SessionSidebar';
-import { BottomPanel } from '@/features/context-panel/BottomPanel';
-import { PanelResizeHandle } from '@/features/context-panel/PanelResizeHandle';
 import { cn } from '@/lib/utils';
 import type { WindowStyle } from '@/store/theme';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
@@ -54,10 +52,14 @@ export function SidebarShell({
         style={{ width, minWidth: SIDEBAR_EXPANDED_WIDTH }}
       >
         <SidebarHeader />
+        {/* SessionSidebar also composes TasksSidebarSection + TagFilterBar, right
+            after its own session list. The footer follows immediately after —
+            NOT mt-auto-pinned to the panel's true bottom edge: on a short list
+            that would leave a gap between Tags and the footer instead. Natural
+            flow keeps them adjacent always; any leftover space falls below the
+            footer (invisible — just more of the glass panel) instead of between
+            two visually related elements. */}
         <SessionSidebar />
-        {/* Sidebar chrome below the session list — not part of the sessions feature. */}
-        <PanelResizeHandle />
-        <BottomPanel />
         <SidebarFooter />
       </div>
     </div>

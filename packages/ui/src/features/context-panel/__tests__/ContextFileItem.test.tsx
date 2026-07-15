@@ -7,6 +7,7 @@ const emitSurfaceIntent = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => emitSurfaceIntent(...a) }));
 
 import { ContextFileItem } from '../ContextFileItem';
+import { CONTEXT_SECTION_BASE_INSET_PX, CONTEXT_INDENT_STEP_PX } from '../layout-constants';
 
 // The app mounts a global TooltipProvider at the root; wrap for test isolation.
 const renderItem = (ui: ReactElement) => render(<TooltipProvider>{ui}</TooltipProvider>);
@@ -24,6 +25,12 @@ describe('ContextFileItem', () => {
   it('prefers displayName over the basename', () => {
     renderItem(<ContextFileItem path="skills/run.sh" displayName="Run Tests" />);
     expect(screen.getByTestId('sidebar-context-item-skills/run.sh')).toHaveTextContent('Run Tests');
+  });
+
+  it('indents by one fixed step past the parent section base inset, not a measured header column', () => {
+    renderItem(<ContextFileItem path="src/deep/file.ts" />);
+    const btn = screen.getByTestId('sidebar-context-item-src/deep/file.ts');
+    expect(btn).toHaveStyle({ paddingLeft: `${CONTEXT_SECTION_BASE_INSET_PX + CONTEXT_INDENT_STEP_PX}px` });
   });
 
   it.each([

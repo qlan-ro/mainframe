@@ -82,7 +82,7 @@ function Wrapper({ children }: { children: ReactNode }) {
 // Tests
 // ---------------------------------------------------------------------------
 
-it('renders the daemon-footer-trigger and per-status counts', () => {
+it('renders the daemon-footer-trigger', () => {
   render(
     <SidebarFooterView counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 2, waiting: 1, idle: 3 }} />,
     {
@@ -90,12 +90,26 @@ it('renders the daemon-footer-trigger and per-status counts', () => {
     },
   );
   expect(screen.getByTestId('daemon-footer-trigger')).toBeInTheDocument();
-  expect(screen.getByTestId('sidebar-footer-count-working')).toHaveTextContent('2');
-  expect(screen.getByTestId('sidebar-footer-count-waiting')).toHaveTextContent('1');
+});
+
+// Session counts (Working/Waiting/Idle) are hidden for now per product
+// request — this guards the hidden state rather than asserting the (currently
+// unreachable) per-status content, which the earlier "Phase-3"/"1.7-1.12"
+// suites below covered when the counts were visible.
+it('does not render the session-count cluster while counts are hidden', () => {
+  render(
+    <SidebarFooterView counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 2, waiting: 1, idle: 3 }} />,
+    {
+      wrapper: Wrapper,
+    },
+  );
+  expect(screen.queryByTestId('sidebar-footer-counts')).not.toBeInTheDocument();
 });
 
 describe('SidebarFooter — design-parity (Phase-3)', () => {
-  it('root element has h-[25px] class (artboard specifies height: 25)', () => {
+  // Superseded by the 2026-07 daemon-card redesign: the footer now sizes to
+  // its two-line card content instead of a fixed 25px strip.
+  it('root element no longer forces the old fixed 25px strip height', () => {
     render(
       <SidebarFooterView
         counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 0, waiting: 0, idle: 0 }}
@@ -105,22 +119,8 @@ describe('SidebarFooter — design-parity (Phase-3)', () => {
       },
     );
     const footer = screen.getByTestId('sidebar-footer');
-    expect(footer.className).toContain('h-[25px]');
-    expect(footer.className).not.toContain('h-7');
-  });
-
-  it('working-count dot has animate-pulse class (artboard shows tw-pulse animation)', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 1, waiting: 0, idle: 0 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const workingCount = screen.getByTestId('sidebar-footer-count-working');
-    const dot = workingCount.querySelector('.animate-pulse');
-    expect(dot).toBeTruthy();
+    expect(footer.className).not.toContain('h-[25px]');
+    expect(footer.className).toContain('flex-shrink-0');
   });
 });
 
@@ -137,74 +137,5 @@ describe('SidebarFooter — design-parity findings 1.7/1.10/1.11/1.12', () => {
     const footer = screen.getByTestId('sidebar-footer');
     expect(footer.className).toContain('px-[12px]');
     expect(footer.className).not.toContain('px-3');
-  });
-
-  it('count-cluster wrapper uses gap-[9px] between working/waiting/idle groups (finding 1.10)', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 1, waiting: 1, idle: 1 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const clusterWrap = screen.getByTestId('sidebar-footer-counts');
-    expect(clusterWrap.className).toContain('gap-[9px]');
-  });
-
-  it('each count span uses gap-[4px] between dot and digit (finding 1.11 — gap-1 compresses to 2px)', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 1, waiting: 0, idle: 0 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const workingCount = screen.getByTestId('sidebar-footer-count-working');
-    expect(workingCount.className).toContain('gap-[4px]');
-    expect(workingCount.className).not.toContain('gap-1 ');
-  });
-
-  it('working count digit carries text-primary + font-semibold (finding 1.12)', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 1, waiting: 0, idle: 0 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const workingCount = screen.getByTestId('sidebar-footer-count-working');
-    expect(workingCount.className).toContain('text-primary');
-    expect(workingCount.className).toContain('font-semibold');
-  });
-
-  it('waiting count digit carries text-mf-warning + font-semibold (finding 1.12)', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 0, waiting: 1, idle: 0 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const waitingCount = screen.getByTestId('sidebar-footer-count-waiting');
-    expect(waitingCount.className).toContain('text-mf-warning');
-    expect(waitingCount.className).toContain('font-semibold');
-  });
-
-  it('idle count digit carries a legible muted-foreground + font-semibold', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 0, waiting: 0, idle: 1 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const idleCount = screen.getByTestId('sidebar-footer-count-idle');
-    expect(idleCount.className).toContain('text-muted-foreground');
-    expect(idleCount.className).toContain('font-semibold');
   });
 });

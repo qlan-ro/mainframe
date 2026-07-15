@@ -2,6 +2,11 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import { CountBadge } from '@/components/ui/count-badge';
+import {
+  CONTEXT_SECTION_BASE_INSET_PX,
+  CONTEXT_DISCLOSURE_ICON_PX,
+  CONTEXT_DISCLOSURE_GAP_PX,
+} from './layout-constants';
 
 interface ContextSectionProps {
   icon: LucideIcon;
@@ -29,14 +34,19 @@ export function ContextSection({
         type="button"
         data-testid={`sidebar-context-section-${title.toLowerCase()}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1.5 px-[12px] py-1.5 text-left"
+        style={{
+          paddingLeft: CONTEXT_SECTION_BASE_INSET_PX,
+          paddingRight: CONTEXT_SECTION_BASE_INSET_PX,
+          gap: CONTEXT_DISCLOSURE_GAP_PX,
+        }}
+        className="flex w-full items-center py-1.5 text-left"
       >
         <ChevronDown
-          size={14}
+          size={CONTEXT_DISCLOSURE_ICON_PX}
           aria-hidden
           className={`shrink-0 text-muted-foreground transition-transform ${open ? '' : '-rotate-90'}`}
         />
-        <Icon size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+        <Icon size={CONTEXT_DISCLOSURE_ICON_PX} className="shrink-0 text-muted-foreground" aria-hidden />
         <span
           className={`text-caption font-medium text-muted-foreground ${trailing != null ? 'flex-none' : 'min-w-0 flex-1 truncate'}`}
         >

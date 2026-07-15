@@ -3,11 +3,17 @@
 import { useRef } from 'react';
 import { useUiPrefs, clampBottomPanelHeight, BOTTOM_PANEL_MAX_FALLBACK } from '@/store/ui-prefs';
 
-/** Reserve for the session list above the panel (matches the artboard's clientHeight − 200). */
+/** Reserve for the content above the panel (matches the artboard's clientHeight − 200). */
 const LIST_RESERVE = 200;
 
+interface PanelResizeHandleProps {
+  /** Ancestor whose height bounds the drag — the left sidebar shell by default;
+   *  pass 'inspector-pane' to mount this handle in the right Inspector instead. */
+  containerTestId?: string;
+}
+
 /** 5px row-resize bar above the bottom panel. Dragging up grows the panel. */
-export function PanelResizeHandle() {
+export function PanelResizeHandle({ containerTestId = 'sessions-sidebar' }: PanelResizeHandleProps = {}) {
   const setHeight = useUiPrefs((s) => s.setBottomPanelHeight);
   const cleanupRef = useRef<(() => void) | null>(null);
 
@@ -15,7 +21,7 @@ export function PanelResizeHandle() {
     e.preventDefault();
     const startY = e.clientY;
     const startHeight = useUiPrefs.getState().bottomPanelHeight;
-    const sidebar = (e.currentTarget as HTMLElement).closest('[data-testid="sessions-sidebar"]');
+    const sidebar = (e.currentTarget as HTMLElement).closest(`[data-testid="${containerTestId}"]`);
     const measured = sidebar?.clientHeight ?? 0;
     const sidebarHeight = measured > 0 ? measured : BOTTOM_PANEL_MAX_FALLBACK + LIST_RESERVE;
     const maxHeight = Math.max(0, sidebarHeight - LIST_RESERVE);

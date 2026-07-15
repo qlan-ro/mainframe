@@ -22,4 +22,18 @@ describe('PanelResizeHandle', () => {
     fireEvent.pointerUp(window, { clientY: 460 });
     expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT + 40);
   });
+
+  it('accepts a custom containerTestId so a non-sidebar ancestor (e.g. the Inspector) bounds the drag', () => {
+    render(
+      <div data-testid="inspector-pane">
+        <PanelResizeHandle containerTestId="inspector-pane" />
+      </div>,
+    );
+    const handle = screen.getByTestId('sidebar-bottom-resize');
+    fireEvent.pointerDown(handle, { clientY: 500 });
+    fireEvent.pointerMove(window, { clientY: 460 }); // dragged up 40px
+    fireEvent.pointerUp(window, { clientY: 460 });
+    // Same drag math applies regardless of which ancestor testid was matched.
+    expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT + 40);
+  });
 });

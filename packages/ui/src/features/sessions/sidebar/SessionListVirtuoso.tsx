@@ -18,7 +18,7 @@
  * flat item array and per-group counts are derived from it (GroupedVirtuoso
  * addresses items by a flat index alongside the group index).
  */
-import { forwardRef, useMemo, type ComponentPropsWithoutRef, type ReactNode } from 'react';
+import { forwardRef, useMemo, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
 import type { SessionGroupResult } from '../view-model/group-sessions';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
@@ -74,12 +74,32 @@ const VIRTUOSO_COMPONENTS = { Scroller: SessionsScroller, TopItemList: SessionsT
 export function SessionListVirtuoso({ groups, showProject, renderItem }: SessionListVirtuosoProps) {
   const groupCounts = useMemo(() => groups.map((g) => g.items.length), [groups]);
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  // Shrink-to-content, capped by the flex-1 space: `flex-1` alone always stretches
+  // to fill whatever room is available (its default flex-basis), leaving a blank
+  // gap below a short list and pushing TasksSidebarSection/TagFilterBar down with
+  // it. Track the real rendered height via Virtuoso's own measurement and cap the
+  // element to it with `maxHeight` — flex-grow still governs sizing (and internal
+  // virtualized scrolling) once the session count is large enough to exceed it.
+  //
+  // flex-[9999_1_0%], not flex-1: SessionSidebar.tsx has a second flex-grow
+  // sibling (the spacer before TagFilterBar) competing for the same leftover
+  // space. Equal flex-grow (both flex-1) splits that space ~50/50 BEFORE
+  // max-height is applied — if the list's content needs more than its half,
+  // it gets frozen at the smaller half and scrolls internally even though the
+  // spacer would happily have yielded more room. A much larger grow weight
+  // here means the list is offered virtually all the leftover space first (so
+  // it reaches its content-based max-height and stops growing there); only
+  // once content genuinely exceeds the *entire* available space does it stay
+  // capped and hand the (now real) leftover back to the spacer.
+  const [contentHeight, setContentHeight] = useState<number>();
 
   return (
     // pb only: top padding on the scroller opens a see-through band above the
     // pinned group header (sticky pins to the content edge, below the padding).
     <GroupedVirtuoso
-      className="min-h-0 flex-1 pb-0.5"
+      className="min-h-0 flex-[9999_1_0%] pb-0.5"
+      style={contentHeight != null ? { maxHeight: contentHeight } : undefined}
+      totalListHeightChanged={setContentHeight}
       groupCounts={groupCounts}
       components={VIRTUOSO_COMPONENTS}
       // Skip the visible window as fast as it can; overscan a little so a quick

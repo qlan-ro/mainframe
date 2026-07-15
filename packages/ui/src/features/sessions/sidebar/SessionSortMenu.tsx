@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ChevronsUpDownIcon } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { MenuLabel, MenuSelectRow } from '@/components/ui/menu';
 import { Hint } from '@/components/ui/hint';
 import { SESSION_SORTS, type SortMode } from '../view-model/group-sessions';
@@ -31,7 +31,7 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
             type="button"
             className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
           >
-            <ChevronsUpDownIcon className="size-3.5" />
+            <ArrowUpDown className="size-3.5" />
           </button>
         </PopoverTrigger>
       </Hint>
