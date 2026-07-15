@@ -248,7 +248,7 @@ describe('SessionRow — data-active="true" when mainThreadId matches item.id', 
     const title = screen.getByTestId('sessions-row-title');
     expect(title.className).not.toContain('group-data-[active=true]:font-semibold');
     expect(title.className).not.toContain('group-data-[active=true]:text-foreground');
-    expect(title.className).toContain('font-medium text-foreground');
+    expect(title.className).toContain('font-medium text-muted-foreground');
   });
 });
 
@@ -258,7 +258,7 @@ describe('SessionRow — pinned read sessions do not use unread typography', () 
 
     const title = screen.getByTestId('sessions-row-title');
     expect(title.className).not.toContain('font-bold');
-    expect(title.className).toContain('font-medium text-foreground');
+    expect(title.className).toContain('font-medium text-muted-foreground');
     expect(screen.getByTestId('sessions-row-pin-glyph')).toBeTruthy();
   });
 });
@@ -588,6 +588,52 @@ describe('SessionRow hover-action glyphs match the artboard (finding 1.16)', () 
     const btn = screen.getByTestId('sessions-row-action-archive');
     expect(btn.querySelector('svg.lucide-x')).toBeTruthy();
     expect(btn.querySelector('svg.lucide-archive')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21. Hover-actions cluster carries a Pin/Unpin toggle (primary-interface entry
+// point — previously pin/unpin only lived in the right-click context menu).
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — hover-actions Pin/Unpin toggle', () => {
+  it('calls pinChat(port, id, true) and reloads when unpinned and the hover pin action is clicked', async () => {
+    render(<SessionRow item={makeItem({ pinned: false })} />);
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('sessions-row-action-pin'));
+    });
+
+    expect(pinChatSpy).toHaveBeenCalledTimes(1);
+    expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', true);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls pinChat(port, id, false) and reloads when pinned and the hover pin action is clicked', async () => {
+    render(<SessionRow item={makeItem({ pinned: true })} />);
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('sessions-row-action-pin'));
+    });
+
+    expect(pinChatSpy).toHaveBeenCalledTimes(1);
+    expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', false);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not select the row when the hover pin action is clicked (stopPropagation)', async () => {
+    const rowClickSpy = vi.fn();
+    render(
+      <div onClick={rowClickSpy}>
+        <SessionRow item={makeItem({ pinned: false })} />
+      </div>,
+    );
+
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('sessions-row-action-pin'));
+    });
+
+    expect(rowClickSpy).not.toHaveBeenCalled();
   });
 });
 

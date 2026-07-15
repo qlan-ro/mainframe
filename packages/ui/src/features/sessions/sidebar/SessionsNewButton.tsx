@@ -20,8 +20,11 @@ import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
 import { NewSessionPickerPopover } from './NewSessionPickerPopover';
 import { useNewSessionPickerTarget } from './use-new-session-picker-target';
 
+// px-[12px] (not px-2/4px): matches SIDEBAR_BASE_INSET_PX, so the wrapping
+// SIDEBAR_INDENT_STEP_PX margin in SessionSidebar.tsx lands this row's content
+// at the same Level-1 position as SessionGroupHeader's time-group labels.
 const ROW_BTN =
-  'flex h-[28px] w-full items-center gap-[8px] rounded-md px-2 text-label font-medium tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
+  'flex h-[28px] w-full items-center gap-[8px] rounded-md px-[12px] text-label font-medium tracking-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 
 interface SessionsNewButtonProps {
   filterProjectId: string | null;

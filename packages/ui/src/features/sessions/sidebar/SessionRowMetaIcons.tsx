@@ -52,7 +52,7 @@ export function SessionRowMetaIcons({
             data-testid="sessions-row-meta-icon-worktree"
             className={['inline-flex items-center', worktreeMissing ? 'text-destructive' : ''].join(' ').trim()}
           >
-            <FolderGit2 size={11} aria-hidden />
+            <FolderGit2 size={14} aria-hidden />
           </span>
         </Hint>
       )}

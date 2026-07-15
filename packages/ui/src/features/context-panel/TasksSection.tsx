@@ -38,7 +38,7 @@ export function TasksSection({ todos }: { todos: readonly TodoItem[] }): React.R
               <div
                 key={todo.content}
                 data-testid={`context-task-row-${todo.content}`}
-                className="flex items-center gap-[7px] px-[14px] py-[4px] text-label tracking-tight"
+                className="flex items-center gap-[7px] px-[12px] py-[4px] text-label tracking-tight"
               >
                 <span
                   className={cn(

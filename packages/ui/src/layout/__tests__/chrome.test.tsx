@@ -16,15 +16,12 @@ vi.mock('@assistant-ui/react', () => ({
   useAui: () => ({ composer: () => ({ setText: vi.fn() }) }),
 }));
 
+// SessionSidebar now composes the real TasksSidebarSection (reads
+// useActiveIdentity/useDaemonPort/useTodosStore) right after its session list;
+// stubbing SessionSidebar wholesale keeps this test — which exercises the
+// toolbar/sidebar chrome, not the tasks section — from needing a DaemonPortProvider.
 vi.mock('@/features/sessions/sidebar/SessionSidebar', () => ({
   SessionSidebar: () => <div data-testid="session-sidebar-content" />,
-}));
-
-// SidebarShell (rendered by AppShell) mounts the real BottomPanel, which reads
-// useSessionContext → useDaemonPort. Stub it so the shell renders without a
-// DaemonPortProvider (this test exercises the toolbar/sidebar chrome, not the panel).
-vi.mock('@/features/context-panel/BottomPanel', () => ({
-  BottomPanel: () => <div data-testid="bottom-panel-stub" />,
 }));
 
 // SidebarShell also mounts SidebarFooter, which reads useConnectionStatus from
