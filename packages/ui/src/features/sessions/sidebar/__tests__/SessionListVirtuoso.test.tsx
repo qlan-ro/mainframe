@@ -107,8 +107,30 @@ describe('SessionListVirtuoso — scroller test hook is present', () => {
         renderItem={(item) => <div key={item.id}>{item.id}</div>}
       />,
     );
-    expect(screen.getByTestId('sessions-list-scroll').className).toContain('bg-transparent');
-    expect(screen.getByTestId('sessions-list-scroll').className).toContain('virtuoso-scroller');
+    const viewport = screen.getByTestId('sessions-list-scroll');
+    expect(viewport.className).toContain('bg-transparent');
+    // Virtuoso passes the Scroller's className to the ScrollArea Root (the outermost
+    // node it lays out), not to the Viewport that carries the test hook.
+    expect(viewport.parentElement?.className).toContain('virtuoso-scroller');
+  });
+
+  // Regression: globals.css sets `scrollbar-width: thin` on `*`, which WebKit renders as a
+  // CLASSIC, space-reserving scrollbar — the session list permanently lost a 13px gutter and rows
+  // shrank (326px instead of 339px), even though the thumb is transparent at rest. Radix ScrollArea
+  // is the fix: it hides the native bar and paints an absolutely-positioned thumb that overlays the
+  // rows at zero layout cost. jsdom renders no scrollbars, so pin the structure that guarantees it —
+  // Radix stamps `data-radix-scroll-area-viewport` on the viewport (and ships the scoped
+  // `scrollbar-width:none` rule keyed off that attribute). A plain-div scroller has no such attr.
+  it('renders the scroller as a Radix ScrollArea viewport so the native gutter is suppressed', () => {
+    render(
+      <SessionListVirtuoso
+        groups={[TODAY_GROUP]}
+        showProject
+        renderItem={(item) => <div key={item.id}>{item.id}</div>}
+      />,
+    );
+    const viewport = screen.getByTestId('sessions-list-scroll');
+    expect(viewport.hasAttribute('data-radix-scroll-area-viewport')).toBe(true);
   });
 });
 

@@ -43,13 +43,24 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
   { project, active, badgeCount, badgeTestId, avatarColor, onSelect, className, ...props },
   ref,
 ) {
+  // Mirrors SessionRow's title convention: full-strength foreground is the
+  // UNREAD signal, never the resting state. Rest is muted (matching the "All"
+  // and "Add project" rows above); a project with unread sessions goes bold
+  // foreground; active wins over both.
+  const hasUnread = badgeCount > 0;
   const containerClass = [
     'flex h-[28px] w-full items-center rounded-md transition-colors',
-    active ? 'bg-mf-selection text-primary' : 'text-foreground hover:bg-accent',
+    active ? 'bg-mf-selection' : 'hover:bg-accent',
     className,
   ]
     .filter(Boolean)
     .join(' ');
+
+  const nameClass = active
+    ? 'text-primary font-medium'
+    : hasUnread
+      ? 'text-foreground font-bold'
+      : 'text-muted-foreground font-medium';
 
   return (
     <div ref={ref} data-testid={`sessions-filter-pill-${project.id}-wrap`} className={containerClass} {...props}>
@@ -58,12 +69,12 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
         aria-pressed={active}
         onClick={onSelect}
         type="button"
-        className="flex h-full min-w-0 flex-1 items-center gap-[9px] px-[12px] text-label font-medium tracking-normal"
+        className="flex h-full min-w-0 flex-1 items-center gap-[9px] px-[12px] text-label tracking-normal"
       >
         <span data-testid={`sessions-filter-pill-avatar-${project.id}`}>
           <ProjectAvatar name={project.name} color={avatarColor} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
+        <span className={`min-w-0 flex-1 truncate text-left ${nameClass}`}>{project.name}</span>
         {badgeTestId != null && (
           <CountBadge count={badgeCount} variant="unread" onAccent={active} data-testid={badgeTestId} />
         )}

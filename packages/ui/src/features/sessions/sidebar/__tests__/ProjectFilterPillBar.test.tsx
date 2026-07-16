@@ -107,6 +107,56 @@ describe('ProjectFilterPillBar — attention badge', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Name color convention — mirrors SessionRow's title: full-strength foreground
+// is the UNREAD signal only. A project with no unread sessions must render its
+// name muted, never black.
+// ---------------------------------------------------------------------------
+
+describe('ProjectFilterPillBar — project name color signals unread, not rest state', () => {
+  /** p1's name span — the element carrying the color/weight classes. */
+  const nameSpan = (): HTMLElement => screen.getByText('mainframe');
+
+  it('renders a project with no unread sessions muted, not foreground', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{ p1: 0, p2: 0 }}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(nameSpan().className).toContain('text-muted-foreground');
+    expect(nameSpan().className).not.toContain('text-foreground');
+  });
+
+  it('renders a project WITH unread sessions bold foreground', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{ p1: 3, p2: 0 }}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(nameSpan().className).toContain('text-foreground');
+    expect(nameSpan().className).toContain('font-bold');
+  });
+
+  it('renders the active project in the selection color, not the unread black', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId="p1"
+        attentionCounts={{ p1: 3, p2: 0 }}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(nameSpan().className).toContain('text-primary');
+    expect(nameSpan().className).not.toContain('font-bold');
+  });
+});
+
 describe('ProjectFilterPillBar — single-select click semantics', () => {
   it('clicking an inactive project row calls onSelect with its id', async () => {
     const handleSelect = vi.fn();
