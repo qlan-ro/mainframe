@@ -16,9 +16,7 @@ import { useAdapters } from '@/store/adapters';
 import { getDraftConfig, setDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { isDraftDiscarded } from './discarded-drafts';
-
-/** Last-resort adapter when no default is configured and nothing is installed yet. */
-const FALLBACK_ADAPTER_ID = 'claude';
+import { resolveDefaultAdapterId } from './default-adapter';
 
 export function useNewThreadAutoConfig(): void {
   const localId = useAuiState((s) => s.threadListItem?.id ?? null);
@@ -37,7 +35,7 @@ export function useNewThreadAutoConfig(): void {
     // hasn't landed yet. Without this guard we'd instantly re-seed the exact
     // draft the user just closed (see discarded-drafts.ts).
     if (!isNewLocal || isReady || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
-    const adapterId = defaultAdapterId ?? adapters.find((a) => a.installed)?.id ?? FALLBACK_ADAPTER_ID;
+    const adapterId = resolveDefaultAdapterId(defaultAdapterId, adapters);
     // No permissionMode: chat creation omits it so the daemon applies the user's
     // provider defaultMode (matching desktop). A deliberate pick sets it later.
     setDraftConfig(localId, { projectId: filterProjectId, adapterId });

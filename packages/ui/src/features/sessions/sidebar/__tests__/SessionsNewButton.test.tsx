@@ -1,18 +1,33 @@
 /**
- * SessionsNewButton — behavior tests for the "All view" project-picker's
- * lifted open state (use-new-session-picker-target).
+ * SessionsNewButton — behavior tests for the "All view" project picker.
  *
- * The picker must open both from its own "+" trigger click AND from an
- * external `useNewSessionPickerTarget.setOpen(true)` call (the seam the
- * global ⌘N hotkey and the zero-session boot fallback use) — so the SAME
- * anchored popover serves every entry point, never a second instance.
+ * The `useAssistantRuntime` mock below models the REAL assistant-ui contract
+ * (verified against node_modules/@assistant-ui/core RemoteThreadListThreadListRuntimeCore):
+ * `newThreadId` is `undefined` until `switchToNewThread()` mints a `__LOCALID_*`
+ * slot — it is NOT always present. A mock that hands back a ready-made
+ * `__LOCALID_1` regardless of whether switchToNewThread was called cannot catch
+ * the regression this file guards against: `pick()` used to read `newThreadId`
+ * BEFORE switching, saw `undefined` in the common case (boot auto-selects a real
+ * session, so no draft slot pre-exists), and silently no-opped — "New session"
+ * then picking a project did nothing.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { Project } from '@qlan-ro/mainframe-types';
+import { getDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
+import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
+import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
+import { useSettingsStore } from '@/store/settings';
+import { useAdaptersStore } from '@/store/adapters';
 
-const switchToNewThread = vi.fn();
-const mainThreadIdMock = { current: null as string | null };
+const runtimeState = { newThreadId: undefined as string | undefined, mainThreadId: null as string | null };
+let switchCounter = 0;
+const switchToNewThread = vi.fn(async () => {
+  switchCounter += 1;
+  runtimeState.newThreadId = `__LOCALID_${switchCounter}`;
+  // Mirrors the real runtime: switching activates the new local slot.
+  runtimeState.mainThreadId = runtimeState.newThreadId;
+});
 
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
@@ -20,7 +35,7 @@ vi.mock('@assistant-ui/react', async () => {
     ...actual,
     useAssistantRuntime: () => ({
       threads: {
-        getState: () => ({ newThreadId: '__LOCALID_1', mainThreadId: mainThreadIdMock.current }),
+        getState: () => ({ newThreadId: runtimeState.newThreadId, mainThreadId: runtimeState.mainThreadId }),
         switchToNewThread,
       },
     }),
@@ -44,9 +59,24 @@ function renderAllView() {
   );
 }
 
+async function pickProjectP1() {
+  fireEvent.click(screen.getByTestId('sessions-new-button'));
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('sessions-new-picker-project-p1'));
+  });
+}
+
 beforeEach(() => {
-  switchToNewThread.mockReset();
+  switchToNewThread.mockClear();
+  switchCounter = 0;
+  runtimeState.newThreadId = undefined;
+  runtimeState.mainThreadId = null;
   useNewSessionPickerTarget.setState({ open: false });
+  useDraftConfigStore.setState({ drafts: new Map() });
+  useNewThreadReady.setState({ readyIds: new Set() });
+  useDraftReturnTarget.setState({ returnThreadId: null });
+  useSettingsStore.setState((s) => ({ general: { ...s.general, defaultAdapterId: null } }));
+  useAdaptersStore.setState({ byId: {} });
 });
 
 describe('SessionsNewButton — All view, clicking the "+" trigger', () => {
@@ -79,5 +109,50 @@ describe('SessionsNewButton — All view, picking a project closes the shared st
     fireEvent.click(screen.getByTestId('sessions-new-picker-project-p1'));
 
     expect(useNewSessionPickerTarget.getState().open).toBe(false);
+  });
+});
+
+describe('SessionsNewButton — All view, picking a project with NO pre-existing draft slot (bug repro)', () => {
+  it('mints a new-thread slot via switchToNewThread and seeds its draft config', async () => {
+    expect(runtimeState.newThreadId).toBeUndefined();
+    renderAllView();
+
+    await pickProjectP1();
+
+    expect(switchToNewThread).toHaveBeenCalledTimes(1);
+    expect(getDraftConfig('__LOCALID_1')).toEqual({ projectId: 'p1', adapterId: 'claude' });
+  });
+
+  it('marks the minted id ready so the composer can render', async () => {
+    renderAllView();
+
+    await pickProjectP1();
+
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
+  });
+});
+
+describe('SessionsNewButton — All view, picking a project uses the configured default adapter', () => {
+  it('seeds the draft with the user default adapter instead of always "claude"', async () => {
+    useSettingsStore.setState((s) => ({ general: { ...s.general, defaultAdapterId: 'codex' } }));
+    renderAllView();
+
+    await pickProjectP1();
+
+    expect(getDraftConfig('__LOCALID_1')).toEqual({ projectId: 'p1', adapterId: 'codex' });
+  });
+});
+
+describe('SessionsNewButton — All view, picking a project remembers the pre-switch session', () => {
+  it('snapshots the session active BEFORE switchToNewThread, not the new local slot', async () => {
+    runtimeState.mainThreadId = 'chat-existing';
+    renderAllView();
+
+    await pickProjectP1();
+
+    // switchToNewThread's mock reassigns mainThreadId to the new local slot;
+    // the remembered return target must be the PRE-switch value.
+    expect(runtimeState.mainThreadId).toBe('__LOCALID_1');
+    expect(useDraftReturnTarget.getState().returnThreadId).toBe('chat-existing');
   });
 });
