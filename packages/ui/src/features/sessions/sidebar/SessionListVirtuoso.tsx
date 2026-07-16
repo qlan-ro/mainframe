@@ -125,10 +125,14 @@ export function SessionListVirtuoso({ groups, showProject, renderItem }: Session
   const [contentHeight, setContentHeight] = useState<number>();
 
   return (
-    // pb only: top padding on the scroller opens a see-through band above the
-    // pinned group header (sticky pins to the content edge, below the padding).
+    // mb, not pb: the scroller is capped at `maxHeight: contentHeight`, so bottom
+    // PADDING is subtracted from the viewport inside that cap — leaving the list
+    // permanently 2px short of its own content and Radix painting a thumb for an
+    // overflow that isn't real. A margin sits outside the cap and buys the same
+    // gap for free. Bottom only: a top gap on the scroller opens a see-through
+    // band above the pinned group header (sticky pins to the content edge).
     <GroupedVirtuoso
-      className="min-h-0 flex-[9999_1_0%] pb-0.5"
+      className="mb-0.5 min-h-0 flex-[9999_1_0%]"
       style={contentHeight != null ? { maxHeight: contentHeight } : undefined}
       totalListHeightChanged={setContentHeight}
       groupCounts={groupCounts}

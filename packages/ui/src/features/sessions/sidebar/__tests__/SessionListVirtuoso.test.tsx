@@ -34,12 +34,14 @@ import type { SessionGroupResult } from '../../view-model/group-sessions';
 
 vi.mock('react-virtuoso', () => ({
   GroupedVirtuoso: (props: {
+    className?: string;
+    style?: React.CSSProperties;
     groupCounts: number[];
     components: { Scroller: React.ComponentType<React.HTMLAttributes<HTMLDivElement>> };
     groupContent: (groupIndex: number) => React.ReactNode;
     itemContent: (index: number, groupIndex: number) => React.ReactNode;
   }) => {
-    const { groupCounts, components, groupContent, itemContent } = props;
+    const { className, style, groupCounts, components, groupContent, itemContent } = props;
     const Scroller = components.Scroller;
     const rows: React.ReactNode[] = [];
     let flatIndex = 0;
@@ -50,7 +52,15 @@ vi.mock('react-virtuoso', () => ({
         flatIndex++;
       }
     });
-    return <Scroller className="virtuoso-scroller">{rows}</Scroller>;
+    // Real Virtuoso forwards the className/style it was given down to the Scroller
+    // component (alongside its own marker class), which is how SessionListVirtuoso's
+    // layout classes reach the ScrollArea Root. Mirror that, or the mock silently
+    // swallows the very props some tests assert on.
+    return (
+      <Scroller className={['virtuoso-scroller', className].filter(Boolean).join(' ')} style={style}>
+        {rows}
+      </Scroller>
+    );
   },
 }));
 
@@ -131,6 +141,29 @@ describe('SessionListVirtuoso — scroller test hook is present', () => {
     );
     const viewport = screen.getByTestId('sessions-list-scroll');
     expect(viewport.hasAttribute('data-radix-scroll-area-viewport')).toBe(true);
+  });
+
+  // Regression: the scroller's bottom gap must not be padding. The Root is capped at
+  // `maxHeight: contentHeight` (Virtuoso's own measured content height) and is
+  // border-box, so bottom padding is subtracted from the viewport INSIDE that cap:
+  // a 272px Root gave a 270px viewport holding 272px of content (measured live:
+  // vpOffsetH 270, vpScrollH 272, overflowBy 2). Radix read that phantom 2px
+  // overflow as "scrollable" and painted a near-full-height thumb on a list that
+  // comfortably fit. A margin sits outside the cap and buys the same gap for free.
+  // jsdom does no layout, so pin the cause: no bottom padding on the Root, gap via margin.
+  it('gives the scroller its bottom gap with a margin, never padding that fakes an overflow', () => {
+    render(
+      <SessionListVirtuoso
+        groups={[TODAY_GROUP]}
+        showProject
+        renderItem={(item) => <div key={item.id}>{item.id}</div>}
+      />,
+    );
+    // Virtuoso's className lands on the ScrollArea Root — the viewport's parent.
+    const root = screen.getByTestId('sessions-list-scroll').parentElement;
+    const rootClasses = root?.className.split(/\s+/) ?? [];
+    expect(rootClasses).toContain('mb-0.5');
+    expect(rootClasses.filter((c) => /^-?pb-/.test(c))).toEqual([]);
   });
 });
 
