@@ -167,6 +167,27 @@ jobs:
             packages/app-tauri/src-tauri
             packages/core-rs
 
+      # tauri-action's `tagName` input only names the GitHub release — it does NOT
+      # stamp the app's own version. The bundle's version (baked into the binary
+      # AND into latest.json's "version" field, which the in-app updater compares
+      # against) comes from tauri.conf.json/Cargo.toml, which otherwise stay pinned
+      # at the last hand-edited value (currently "2.0.0") across every release. That
+      # means the updater compares e.g. "2.0.0" to "2.0.0" on every RC and never
+      # finds an update. Stamp the real tag version in before the build reads it —
+      # CI-local edit only, never committed.
+      - name: Stamp release version into tauri.conf.json / Cargo.toml
+        working-directory: packages/app-tauri/src-tauri
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg v "$version" '.version = $v' tauri.conf.json > tauri.conf.json.tmp
+          mv tauri.conf.json.tmp tauri.conf.json
+          # BSD sed (macOS runners) doesn't support GNU's "0,/regex/" range address;
+          # the [package] version is the only bare `^version = ` line in this file,
+          # so an unranged substitution is unambiguous.
+          sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" Cargo.toml
+          rm Cargo.toml.bak
+
       # Tauri's Linux build needs the system WebKitGTK / GTK stack.
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -236,13 +257,10 @@ jobs:
       # tauri-action uploads the installer as `Mainframe_<ver>_<arch>.dmg` (arch =
       # aarch64|x64) — a name that says neither "tauri" nor a consistent arch, and
       # collides in spirit with the Electron dmg. Rename it in place to the shared
-      # `Mainframe-tauri-<tag>-macos-<arch>.dmg` scheme (arch normalized to arm64|x64).
-      #
-      # <ver> in the source name is tauri.conf.json's static "version" field (currently
-      # "2.0.0"), which does NOT track the prerelease suffix — a v2.0.0-rc.8 tag still
-      # produces `Mainframe_2.0.0_aarch64.dmg`. Use $TAG for the renamed version instead,
-      # matching the Electron dmg naming (which does carry the rc suffix) and the
-      # canary dmg naming below.
+      # `Mainframe-tauri-<tag>-macos-<arch>.dmg` scheme (arch normalized to arm64|x64),
+      # matching the Electron dmg naming and the canary dmg naming below. Use $TAG
+      # rather than re-deriving from the (now tag-stamped, see above) source filename
+      # so this rename stays correct even if that stamping step ever changes.
       #
       # We rename ONLY the .dmg: it's the user-facing installer and is NOT referenced by
       # latest.json (the macOS updater downloads the `.app.tar.gz`), so renaming is safe
