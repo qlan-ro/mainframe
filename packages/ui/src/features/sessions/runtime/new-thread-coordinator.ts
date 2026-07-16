@@ -27,15 +27,19 @@
  * cache entry AND the draft are left intact so the user can retry.
  */
 import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';
-import { createChat, setChatConfig, setChatTuning } from '../../../lib/api/chats';
+import { archiveChat, createChat, setChatConfig, setChatTuning } from '../../../lib/api/chats';
 import { enableWorktree } from '../../../lib/api/git';
 import { mfToast } from '../../../lib/toast';
 import { getDraftConfig, clearDraftConfig, type DraftCfg } from './draft-config';
 import { useNewThreadReady } from './new-thread-ready-store';
 
 interface CreateWorkflow {
+  cfg: InitializedDraft;
+  port: number;
   chatId?: string;
   worktreeApplied: boolean;
+  abandoned: boolean;
+  archiveRequested: boolean;
   promise?: Promise<{ remoteId: string }>;
 }
 
@@ -53,6 +57,22 @@ function requireInitializedDraft(localId: string, cfg: DraftCfg): InitializedDra
     throw new Error(`new-thread-coordinator: incomplete draft config for ${localId}: ${missing.join(', ')}`);
   }
   return cfg as InitializedDraft;
+}
+
+function archiveAbandonedWorkflow(workflow: CreateWorkflow): void {
+  if (!workflow.chatId || workflow.archiveRequested) return;
+  workflow.archiveRequested = true;
+  void archiveChat(workflow.port, workflow.chatId, true).catch((err: unknown) =>
+    console.warn('[new-thread-coordinator] abandon archive failed', { chatId: workflow.chatId, err }),
+  );
+}
+
+export function abandonCreateForLocal(localId: string): void {
+  const workflow = workflows.get(localId);
+  if (!workflow) return;
+  workflows.delete(localId);
+  workflow.abandoned = true;
+  archiveAbandonedWorkflow(workflow);
 }
 
 /**
@@ -105,20 +125,29 @@ async function applyPendingWorktree(port: number, chatId: string, cfg: DraftCfg)
 export function createForLocal(localId: string, port: number): Promise<{ remoteId: string }> {
   const existing = workflows.get(localId);
   if (existing?.promise) return existing.promise;
-
-  const stored = getDraftConfig(localId);
-  if (!stored) {
-    return Promise.reject(new Error(`new-thread-coordinator: no draft config for ${localId}`));
+  let workflow = existing;
+  if (!workflow) {
+    const stored = getDraftConfig(localId);
+    if (!stored) return Promise.reject(new Error(`new-thread-coordinator: no draft config for ${localId}`));
+    let cfg: InitializedDraft;
+    try {
+      cfg = requireInitializedDraft(localId, stored);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    workflow = {
+      cfg: {
+        ...cfg,
+        ...(cfg.pendingWorktree ? { pendingWorktree: { ...cfg.pendingWorktree } } : {}),
+      },
+      port,
+      worktreeApplied: false,
+      abandoned: false,
+      archiveRequested: false,
+    };
   }
-  let cfg: InitializedDraft;
-  try {
-    cfg = requireInitializedDraft(localId, stored);
-  } catch (error) {
-    return Promise.reject(error);
-  }
-
-  const workflow = existing ?? { worktreeApplied: false };
   workflows.set(localId, workflow);
+  const cfg = workflow.cfg;
   const promise = (async () => {
     try {
       if (!workflow.chatId) {
@@ -132,18 +161,32 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
         });
         workflow.chatId = chat.id;
       }
+      if (workflow.abandoned) {
+        archiveAbandonedWorkflow(workflow);
+        throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+      }
       if (!workflow.worktreeApplied) {
         await applyPendingWorktree(port, workflow.chatId, cfg);
         workflow.worktreeApplied = true;
       }
+      if (workflow.abandoned) {
+        archiveAbandonedWorkflow(workflow);
+        throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+      }
       await applyDraftTuning(port, workflow.chatId, cfg);
+      if (workflow.abandoned || workflows.get(localId) !== workflow) {
+        archiveAbandonedWorkflow(workflow);
+        throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+      }
       clearDraftConfig(localId);
       useNewThreadReady.getState().clearReady(localId);
       workflows.delete(localId);
       return { remoteId: workflow.chatId };
     } catch (error) {
-      workflow.promise = undefined;
-      if (!workflow.chatId) workflows.delete(localId);
+      if (workflows.get(localId) === workflow) {
+        workflow.promise = undefined;
+        if (!workflow.chatId) workflows.delete(localId);
+      }
       throw error;
     }
   })();
