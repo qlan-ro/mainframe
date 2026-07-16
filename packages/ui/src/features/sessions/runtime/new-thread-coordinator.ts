@@ -36,6 +36,20 @@ import { useNewThreadReady } from './new-thread-ready-store';
 /** In-flight (and just-settled) create promises, keyed by the local thread id. */
 const inFlight = new Map<string, Promise<{ remoteId: string }>>();
 
+type InitializedDraft = DraftCfg &
+  Required<
+    Pick<DraftCfg, 'model' | 'permissionMode' | 'planMode' | 'effort' | 'fast' | 'ultracode' | 'adaptiveThinking'>
+  >;
+
+function requireInitializedDraft(localId: string, cfg: DraftCfg): InitializedDraft {
+  const fields = ['model', 'permissionMode', 'planMode', 'effort', 'fast', 'ultracode', 'adaptiveThinking'] as const;
+  const missing = fields.filter((field) => cfg[field] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`new-thread-coordinator: incomplete draft config for ${localId}: ${missing.join(', ')}`);
+  }
+  return cfg as InitializedDraft;
+}
+
 /**
  * Apply the draft fields createChat does NOT accept — planMode (PATCH /config)
  * and effort/features (PATCH /tuning) — to the freshly created chat, before the
@@ -87,18 +101,22 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
   const existing = inFlight.get(localId);
   if (existing) return existing;
 
-  const cfg = getDraftConfig(localId);
-  if (!cfg) {
+  const stored = getDraftConfig(localId);
+  if (!stored) {
     return Promise.reject(new Error(`new-thread-coordinator: no draft config for ${localId}`));
+  }
+  let cfg: InitializedDraft;
+  try {
+    cfg = requireInitializedDraft(localId, stored);
+  } catch (error) {
+    return Promise.reject(error);
   }
 
   const promise = createChat(port, {
     projectId: cfg.projectId,
     adapterId: cfg.adapterId,
-    ...(cfg.model !== undefined ? { model: cfg.model } : {}),
-    // Omit when unset so the daemon's createChatWithDefaults applies the user's
-    // provider defaultMode (matching desktop) instead of forcing 'default'.
-    ...(cfg.permissionMode !== undefined ? { permissionMode: cfg.permissionMode } : {}),
+    model: cfg.model,
+    permissionMode: cfg.permissionMode,
     ...(cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
     ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
   })

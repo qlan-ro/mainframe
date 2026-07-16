@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi, type MockedFunction } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { setDraftConfig, clearDraftConfig } from '../draft-config';
+import { setDraftConfig as setStoredDraftConfig, clearDraftConfig, type DraftCfg } from '../draft-config';
 
 // ---------------------------------------------------------------------------
 // Mock createChat, setChatTuning, setChatConfig — no HTTP calls
@@ -39,6 +39,19 @@ const mockSetChatTuning = setChatTuning as MockedFunction<typeof setChatTuning>;
 const mockSetChatConfig = setChatConfig as MockedFunction<typeof setChatConfig>;
 const mockEnableWorktree = enableWorktree as MockedFunction<typeof enableWorktree>;
 
+function setDraftConfig(localId: string, cfg: DraftCfg): void {
+  setStoredDraftConfig(localId, {
+    model: 'snapshot-model',
+    permissionMode: 'default',
+    planMode: false,
+    effort: null,
+    fast: false,
+    ultracode: false,
+    adaptiveThinking: false,
+    ...cfg,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Reset draft-config singleton state + mock call counts between cases
 // ---------------------------------------------------------------------------
@@ -69,6 +82,7 @@ describe('new-thread-coordinator — happy path calls createChat with required f
     expect(mockCreateChat).toHaveBeenCalledWith(31415, {
       projectId: 'p1',
       adapterId: 'claude',
+      model: 'snapshot-model',
       permissionMode: 'default',
     });
   });
@@ -185,6 +199,38 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
 // ---------------------------------------------------------------------------
 
 describe('new-thread-coordinator — draft with tuning calls setChatTuning and setChatConfig', () => {
+  it('creates and tunes the first chat from the complete stored snapshot', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      model: 'snapshotted-model',
+      permissionMode: 'acceptEdits',
+      planMode: true,
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockCreateChat).toHaveBeenCalledWith(
+      31415,
+      expect.objectContaining({
+        model: 'snapshotted-model',
+        permissionMode: 'acceptEdits',
+      }),
+    );
+    expect(mockSetChatConfig).toHaveBeenCalledWith(31415, 'chat-1', { planMode: true });
+    expect(mockSetChatTuning).toHaveBeenCalledWith(31415, 'chat-1', {
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
+  });
+
   it('calls setChatTuning with effort and setChatConfig with planMode', async () => {
     setDraftConfig('__LOCALID_a', {
       projectId: 'p1',
@@ -203,24 +249,19 @@ describe('new-thread-coordinator — draft with tuning calls setChatTuning and s
     expect(mockSetChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', {
       effort: 'high',
       fast: true,
+      ultracode: false,
+      adaptiveThinking: false,
     });
     expect(mockSetChatConfig).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', { planMode: true });
   });
 });
 
-describe('new-thread-coordinator — draft with no tuning fields calls neither setChatTuning nor setChatConfig', () => {
-  it('does NOT call setChatTuning or setChatConfig when the draft has only base fields', async () => {
-    setDraftConfig('__LOCALID_a', {
-      projectId: 'p1',
-      adapterId: 'claude',
-      permissionMode: 'default',
-    });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-43' } as Chat);
+describe('new-thread-coordinator — incomplete drafts are rejected before creation', () => {
+  it('does not create a chat from legacy state that lacks initialized fields', async () => {
+    setStoredDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
 
-    await createForLocal('__LOCALID_a', 31415);
-
-    expect(mockSetChatTuning).not.toHaveBeenCalled();
-    expect(mockSetChatConfig).not.toHaveBeenCalled();
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow(/incomplete draft config/);
+    expect(mockCreateChat).not.toHaveBeenCalled();
   });
 });
 
@@ -246,16 +287,21 @@ describe('new-thread-coordinator — setChatTuning rejection does NOT reject cre
 // permissionMode omission fix — the key behaviour this covers
 // ---------------------------------------------------------------------------
 
-describe('new-thread-coordinator — permissionMode omission fix', () => {
-  it('omits permissionMode from the createChat body when the draft has none', async () => {
-    setDraftConfig('__LOCALID_b', { projectId: 'p1', adapterId: 'claude' });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+describe('new-thread-coordinator — explicit snapshot permissionMode', () => {
+  it('rejects a snapshot with no explicit permissionMode', async () => {
+    setStoredDraftConfig('__LOCALID_b', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      model: 'snapshot-model',
+      planMode: false,
+      effort: null,
+      fast: false,
+      ultracode: false,
+      adaptiveThinking: false,
+    });
 
-    await createForLocal('__LOCALID_b', 31415);
-
-    const body = mockCreateChat.mock.calls[0]![1];
-    expect('permissionMode' in body).toBe(false);
-    expect(body).toMatchObject({ projectId: 'p1', adapterId: 'claude' });
+    await expect(createForLocal('__LOCALID_b', 31415)).rejects.toThrow(/permissionMode/);
+    expect(mockCreateChat).not.toHaveBeenCalled();
   });
 
   it('includes permissionMode in the createChat body when the draft set one', async () => {
