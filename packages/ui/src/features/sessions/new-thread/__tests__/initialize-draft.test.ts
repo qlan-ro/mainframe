@@ -6,7 +6,7 @@ import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 const getProviderSettings = vi.fn();
 vi.mock('@/lib/api/settings', () => ({ getProviderSettings: (...args: unknown[]) => getProviderSettings(...args) }));
 
-const { initializeDraft } = await import('../initialize-draft');
+const { initializeDraft, reinitializeDraftAdapter } = await import('../initialize-draft');
 
 const adapters: AdapterInfo[] = [
   {
@@ -15,6 +15,14 @@ const adapters: AdapterInfo[] = [
     description: 'Claude Code',
     installed: true,
     models: [{ id: 'sonnet', label: 'Sonnet', isDefault: true, supportedEfforts: ['low', 'medium'] }],
+    capabilities: { planMode: true },
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    description: 'Codex CLI',
+    installed: true,
+    models: [{ id: 'gpt-5', label: 'GPT-5', isDefault: true, supportedEfforts: ['high'] }],
     capabilities: { planMode: true },
   },
 ];
@@ -190,5 +198,95 @@ describe('initializeDraft', () => {
     provider.defaultEffort = 'medium';
 
     expect(getDraftConfig('__LOCALID_1')).toMatchObject({ effort: 'low' });
+  });
+});
+
+describe('reinitializeDraftAdapter', () => {
+  it('keeps the complete snapshot ready while switching and after a rejection', async () => {
+    const prior = { ...expectedCompleteSnapshot };
+    useDraftConfigStore.getState().setDraft('__LOCALID_1', prior);
+    useNewThreadReady.getState().markReady('__LOCALID_1');
+    const request = deferred<Record<string, ProviderConfig>>();
+    getProviderSettings.mockReturnValue(request.promise);
+
+    const result = reinitializeDraftAdapter({
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+      adapterId: 'codex',
+    });
+
+    expect(getDraftConfig('__LOCALID_1')).toEqual(prior);
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
+    expect(useNewThreadReady.getState().getInitialization('__LOCALID_1').status).toBe('ready');
+
+    request.reject(new Error('settings unavailable'));
+    await expect(result).rejects.toThrow('settings unavailable');
+    expect(getDraftConfig('__LOCALID_1')).toEqual(prior);
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
+    expect(useNewThreadReady.getState().getInitialization('__LOCALID_1').status).toBe('ready');
+  });
+
+  it('atomically replaces config and preserves draft-scoped worktree selections', async () => {
+    const prior: DraftCfg = {
+      ...expectedCompleteSnapshot,
+      worktreePath: '/repo/.worktrees/feature',
+      branchName: 'feature',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feature-next' },
+    };
+    useDraftConfigStore.getState().setDraft('__LOCALID_1', prior);
+    useNewThreadReady.getState().markReady('__LOCALID_1');
+    const request = deferred<Record<string, ProviderConfig>>();
+    getProviderSettings.mockReturnValue(request.promise);
+
+    const result = reinitializeDraftAdapter({
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+      adapterId: 'codex',
+    });
+    expect(getDraftConfig('__LOCALID_1')).toEqual(prior);
+
+    request.resolve({ codex: { defaultMode: 'yolo', defaultEffort: 'high' } });
+    await result;
+
+    expect(getDraftConfig('__LOCALID_1')).toEqual({
+      projectId: 'p1',
+      adapterId: 'codex',
+      model: 'gpt-5',
+      permissionMode: 'yolo',
+      planMode: false,
+      effort: 'high',
+      fast: false,
+      ultracode: false,
+      adaptiveThinking: false,
+      worktreePath: '/repo/.worktrees/feature',
+      branchName: 'feature',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feature-next' },
+    });
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
+  });
+
+  it('prevents a stale adapter response from winning over a newer switch', async () => {
+    useDraftConfigStore.getState().setDraft('__LOCALID_1', expectedCompleteSnapshot);
+    useNewThreadReady.getState().markReady('__LOCALID_1');
+    const oldRequest = deferred<Record<string, ProviderConfig>>();
+    const latestRequest = deferred<Record<string, ProviderConfig>>();
+    getProviderSettings.mockReturnValueOnce(oldRequest.promise).mockReturnValueOnce(latestRequest.promise);
+    const base = { localId: '__LOCALID_1', projectId: 'p1', port: 31415, defaultAdapterId: null, adapters };
+
+    const oldResult = reinitializeDraftAdapter({ ...base, adapterId: 'codex' });
+    const latestResult = reinitializeDraftAdapter({ ...base, adapterId: 'claude' });
+    latestRequest.resolve({ claude: { defaultMode: 'acceptEdits', defaultEffort: 'medium' } });
+    await latestResult;
+    oldRequest.resolve({ codex: { defaultMode: 'yolo', defaultEffort: 'high' } });
+    await oldResult;
+
+    expect(getDraftConfig('__LOCALID_1')).toMatchObject({ adapterId: 'claude', effort: 'medium' });
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
   });
 });

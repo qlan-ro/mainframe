@@ -36,6 +36,7 @@ interface NewThreadReadyState {
   isReady: (localId: string) => boolean;
   getInitialization: (localId: string) => DraftInitialization;
   beginInitialization: (localId: string, retry: () => Promise<DraftCfg>) => number;
+  beginReadyReplacement: (localId: string) => number;
   completeInitialization: (localId: string, attempt: number) => boolean;
   failInitialization: (localId: string, attempt: number, error: unknown) => void;
   cancelInitialization: (localId: string, attempt: number) => void;
@@ -55,6 +56,17 @@ export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
       initializations.set(localId, { status: 'initializing', retry, attempt });
       const readyIds = new Set(state.readyIds);
       readyIds.delete(localId);
+      return { initializations, readyIds };
+    });
+    return attempt;
+  },
+  beginReadyReplacement: (localId) => {
+    const attempt = ++nextInitializationAttempt;
+    set((state) => {
+      const initializations = new Map(state.initializations);
+      initializations.set(localId, { status: 'ready', attempt });
+      const readyIds = new Set(state.readyIds);
+      readyIds.add(localId);
       return { initializations, readyIds };
     });
     return attempt;

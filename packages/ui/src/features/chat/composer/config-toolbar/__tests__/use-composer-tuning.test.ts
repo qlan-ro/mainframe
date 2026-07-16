@@ -58,7 +58,7 @@ vi.mock('@/features/sessions/runtime/draft-config', () => ({
 }));
 
 vi.mock('@/features/sessions/new-thread/initialize-draft', () => ({
-  initializeDraft: (...args: unknown[]) => initializeDraftSpy(...args),
+  reinitializeDraftAdapter: (...args: unknown[]) => initializeDraftSpy(...args),
 }));
 
 // ---------------------------------------------------------------------------

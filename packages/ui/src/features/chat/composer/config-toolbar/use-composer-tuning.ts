@@ -36,7 +36,7 @@ import type {
 import { getProviderSettings } from '@/lib/api/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
-import { initializeDraft } from '@/features/sessions/new-thread/initialize-draft';
+import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 
@@ -217,7 +217,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
       if (draftMode && chatId && draft && port != null) {
         if (adapterInitializations.current.has(id)) return;
         adapterInitializations.current.add(id);
-        void initializeDraft({
+        void reinitializeDraftAdapter({
           localId: chatId,
           projectId: draft.projectId,
           port,
