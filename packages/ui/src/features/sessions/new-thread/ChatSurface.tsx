@@ -84,6 +84,7 @@ export function ChatSurface({ port: _port }: { port: number }) {
   const initialization = useNewThreadReady((s) =>
     mainThreadId ? s.getInitialization(mainThreadId) : { status: 'idle' as const },
   );
+  const isReady = useNewThreadReady((s) => (mainThreadId ? s.readyIds.has(mainThreadId) : false));
 
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
@@ -103,12 +104,16 @@ export function ChatSurface({ port: _port }: { port: number }) {
     );
   }
 
-  if (isNewLocal && (initialization.status === 'initializing' || initialization.status === 'error')) {
+  const isInitializing =
+    initialization.status === 'initializing' ||
+    (initialization.status === 'idle' && filterProjectId != null && draftCfg == null && !isReady);
+
+  if (isNewLocal && (isInitializing || initialization.status === 'error')) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <ChatCardHeader />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-6">
-          <p>{initialization.status === 'initializing' ? 'Initializing session…' : 'Couldn’t initialize session'}</p>
+          <p>{isInitializing ? 'Initializing session…' : 'Couldn’t initialize session'}</p>
           {initialization.status === 'error' && (
             <button
               type="button"

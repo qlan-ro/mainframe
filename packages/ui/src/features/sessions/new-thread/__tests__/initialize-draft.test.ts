@@ -147,6 +147,35 @@ describe('initializeDraft', () => {
     expect(useNewThreadReady.getState().getInitialization('__LOCALID_1').status).toBe('idle');
   });
 
+  it('ignores an old response after cancellation and replacement initialization', async () => {
+    const oldRequest = deferred<Record<string, ProviderConfig>>();
+    const replacementRequest = deferred<Record<string, ProviderConfig>>();
+    getProviderSettings.mockReturnValueOnce(oldRequest.promise).mockReturnValueOnce(replacementRequest.promise);
+    const args = {
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+    };
+
+    const oldResult = initializeDraft(args);
+    const oldAttempt = useNewThreadReady.getState().getInitialization(args.localId).attempt;
+    if (oldAttempt == null) throw new Error('Expected old initialization attempt');
+    useNewThreadReady.getState().cancelInitialization(args.localId, oldAttempt);
+    const replacementResult = initializeDraft(args);
+    oldRequest.resolve({ claude: { defaultMode: 'yolo' } });
+    await oldResult;
+
+    expect(getDraftConfig(args.localId)).toBeUndefined();
+    expect(useNewThreadReady.getState().isReady(args.localId)).toBe(false);
+
+    replacementRequest.resolve({ claude: { defaultMode: 'acceptEdits' } });
+    await replacementResult;
+    expect(getDraftConfig(args.localId)).toMatchObject({ permissionMode: 'acceptEdits' });
+    expect(useNewThreadReady.getState().isReady(args.localId)).toBe(true);
+  });
+
   it('stores an immutable snapshot of the resolved provider settings', async () => {
     const provider: ProviderConfig = { defaultMode: 'acceptEdits', defaultEffort: 'low' };
     getProviderSettings.mockResolvedValue({ claude: provider });

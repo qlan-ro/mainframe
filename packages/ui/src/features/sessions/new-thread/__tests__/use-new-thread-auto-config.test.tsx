@@ -53,6 +53,18 @@ const setDraftConfigSpy = vi.fn();
 let getDraftConfigResult: unknown = undefined;
 let initializationGate: Promise<void> | null = null;
 
+const completeSnapshot = (projectId: string, adapterId: string) => ({
+  projectId,
+  adapterId,
+  model: 'default-model',
+  permissionMode: 'default',
+  planMode: false,
+  effort: 'medium',
+  fast: false,
+  ultracode: false,
+  adaptiveThinking: false,
+});
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -91,9 +103,10 @@ vi.mock('../initialize-draft', () => ({
   }) => {
     if (initializationGate) await initializationGate;
     const adapterId = args.defaultAdapterId ?? args.adapters.find((adapter) => adapter.installed)?.id ?? 'claude';
-    setDraftConfigSpy(args.localId, { projectId: args.projectId, adapterId });
+    const snapshot = completeSnapshot(args.projectId, adapterId);
+    setDraftConfigSpy(args.localId, snapshot);
     useNewThreadReady.getState().markReady(args.localId);
-    return { projectId: args.projectId, adapterId };
+    return snapshot;
   },
 }));
 
@@ -148,10 +161,7 @@ describe('useNewThreadAutoConfig — project filter active on new local thread',
       renderHook(() => useNewThreadAutoConfig());
     });
 
-    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
-      projectId: 'proj-42',
-      adapterId: 'claude',
-    });
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', completeSnapshot('proj-42', 'claude'));
   });
 
   it('marks the local id ready in the store', async () => {
@@ -317,10 +327,7 @@ describe('useNewThreadAutoConfig — adapterId resolution', () => {
 
     renderHook(() => useNewThreadAutoConfig());
 
-    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
-      projectId: 'proj-42',
-      adapterId: 'gemini',
-    });
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', completeSnapshot('proj-42', 'gemini'));
   });
 
   it('falls back to the first installed adapter when defaultAdapterId is unset', () => {
@@ -333,10 +340,7 @@ describe('useNewThreadAutoConfig — adapterId resolution', () => {
 
     renderHook(() => useNewThreadAutoConfig());
 
-    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
-      projectId: 'proj-42',
-      adapterId: 'gemini',
-    });
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', completeSnapshot('proj-42', 'gemini'));
   });
 
   it('falls back to "claude" when defaultAdapterId is unset and nothing is installed', () => {
@@ -346,9 +350,6 @@ describe('useNewThreadAutoConfig — adapterId resolution', () => {
 
     renderHook(() => useNewThreadAutoConfig());
 
-    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', {
-      projectId: 'proj-42',
-      adapterId: 'claude',
-    });
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', completeSnapshot('proj-42', 'claude'));
   });
 });

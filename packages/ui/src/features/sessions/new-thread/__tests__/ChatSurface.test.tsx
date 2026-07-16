@@ -45,7 +45,11 @@ vi.mock('../../runtime/draft-config', () => ({
   useDraftConfigStore: (sel: (s: unknown) => unknown) => sel({ drafts: __draftMap }),
 }));
 vi.mock('../../runtime/new-thread-ready-store', () => ({
-  useNewThreadReady: (sel: (s: unknown) => unknown) => sel({ getInitialization: () => __initialization }),
+  useNewThreadReady: (sel: (s: unknown) => unknown) =>
+    sel({
+      getInitialization: () => __initialization,
+      readyIds: __initialization.status === 'ready' ? new Set(['__LOCALID_1']) : new Set(),
+    }),
 }));
 vi.mock('@/store/session-filters', () => ({
   useSessionFilters: (sel: (s: { filterProjectId: string | null }) => unknown) =>
@@ -109,6 +113,16 @@ describe('ChatSurface', () => {
 
   it('hides ChatThread and its composer while initialization is pending', () => {
     __initialization = { status: 'initializing' };
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.getByText('Initializing session…')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('hides ChatThread during the initial idle render for a project-filtered draft', () => {
+    __draftMap = new Map();
+    __filterProjectId = 'proj-a';
+    __initialization = { status: 'idle' };
     render(<ChatSurface port={31415} />);
 
     expect(screen.getByText('Initializing session…')).toBeInTheDocument();

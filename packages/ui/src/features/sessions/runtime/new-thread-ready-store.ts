@@ -27,6 +27,7 @@ export interface DraftInitialization {
 }
 
 const IDLE_INITIALIZATION: DraftInitialization = { status: 'idle' };
+let nextInitializationAttempt = 0;
 
 interface NewThreadReadyState {
   /** Local thread ids whose draft config is complete (project+adapter chosen). */
@@ -48,7 +49,7 @@ export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
   isReady: (localId) => get().readyIds.has(localId),
   getInitialization: (localId) => get().initializations.get(localId) ?? IDLE_INITIALIZATION,
   beginInitialization: (localId, retry) => {
-    const attempt = (get().initializations.get(localId)?.attempt ?? 0) + 1;
+    const attempt = ++nextInitializationAttempt;
     set((state) => {
       const initializations = new Map(state.initializations);
       initializations.set(localId, { status: 'initializing', retry, attempt });

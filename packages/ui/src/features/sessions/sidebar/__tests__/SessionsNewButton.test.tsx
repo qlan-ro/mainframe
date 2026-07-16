@@ -23,6 +23,17 @@ import { useAdaptersStore } from '@/store/adapters';
 const runtimeState = { newThreadId: undefined as string | undefined, mainThreadId: null as string | null };
 let switchCounter = 0;
 let initializationGate: Promise<void> | null = null;
+const completeSnapshot = (projectId: string, adapterId: string) => ({
+  projectId,
+  adapterId,
+  model: 'default-model',
+  permissionMode: 'default' as const,
+  planMode: false,
+  effort: 'medium' as const,
+  fast: false,
+  ultracode: false,
+  adaptiveThinking: false,
+});
 const switchToNewThread = vi.fn(async () => {
   switchCounter += 1;
   runtimeState.newThreadId = `__LOCALID_${switchCounter}`;
@@ -49,9 +60,10 @@ vi.mock('../../new-thread/initialize-draft', () => ({
   initializeDraft: async (args: { localId: string; projectId: string; defaultAdapterId: string | null }) => {
     if (initializationGate) await initializationGate;
     const adapterId = args.defaultAdapterId ?? 'claude';
-    useDraftConfigStore.getState().setDraft(args.localId, { projectId: args.projectId, adapterId });
+    const snapshot = completeSnapshot(args.projectId, adapterId);
+    useDraftConfigStore.getState().setDraft(args.localId, snapshot);
     useNewThreadReady.getState().markReady(args.localId);
-    return { projectId: args.projectId, adapterId };
+    return snapshot;
   },
 }));
 
@@ -134,7 +146,7 @@ describe('SessionsNewButton — All view, picking a project with NO pre-existing
     await pickProjectP1();
 
     expect(switchToNewThread).toHaveBeenCalledTimes(1);
-    expect(getDraftConfig('__LOCALID_1')).toEqual({ projectId: 'p1', adapterId: 'claude' });
+    expect(getDraftConfig('__LOCALID_1')).toEqual(completeSnapshot('p1', 'claude'));
   });
 
   it('marks the minted id ready so the composer can render', async () => {
@@ -153,7 +165,7 @@ describe('SessionsNewButton — All view, picking a project uses the configured 
 
     await pickProjectP1();
 
-    expect(getDraftConfig('__LOCALID_1')).toEqual({ projectId: 'p1', adapterId: 'codex' });
+    expect(getDraftConfig('__LOCALID_1')).toEqual(completeSnapshot('p1', 'codex'));
   });
 });
 
