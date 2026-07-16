@@ -22,6 +22,7 @@ import { useAdaptersStore } from '@/store/adapters';
 
 const runtimeState = { newThreadId: undefined as string | undefined, mainThreadId: null as string | null };
 let switchCounter = 0;
+let initializationGate: Promise<void> | null = null;
 const switchToNewThread = vi.fn(async () => {
   switchCounter += 1;
   runtimeState.newThreadId = `__LOCALID_${switchCounter}`;
@@ -41,6 +42,18 @@ vi.mock('@assistant-ui/react', async () => {
     }),
   };
 });
+
+vi.mock('../../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
+
+vi.mock('../../new-thread/initialize-draft', () => ({
+  initializeDraft: async (args: { localId: string; projectId: string; defaultAdapterId: string | null }) => {
+    if (initializationGate) await initializationGate;
+    const adapterId = args.defaultAdapterId ?? 'claude';
+    useDraftConfigStore.getState().setDraft(args.localId, { projectId: args.projectId, adapterId });
+    useNewThreadReady.getState().markReady(args.localId);
+    return { projectId: args.projectId, adapterId };
+  },
+}));
 
 import { useNewSessionPickerTarget } from '../use-new-session-picker-target';
 import { SessionsNewButton } from '../SessionsNewButton';
@@ -69,6 +82,7 @@ async function pickProjectP1() {
 beforeEach(() => {
   switchToNewThread.mockClear();
   switchCounter = 0;
+  initializationGate = null;
   runtimeState.newThreadId = undefined;
   runtimeState.mainThreadId = null;
   useNewSessionPickerTarget.setState({ open: false });
@@ -154,5 +168,23 @@ describe('SessionsNewButton — All view, picking a project remembers the pre-sw
     // the remembered return target must be the PRE-switch value.
     expect(runtimeState.mainThreadId).toBe('__LOCALID_1');
     expect(useDraftReturnTarget.getState().returnThreadId).toBe('chat-existing');
+  });
+});
+
+describe('SessionsNewButton — asynchronous initialization', () => {
+  it('does not mark the minted id ready before initialization resolves', async () => {
+    let release!: () => void;
+    initializationGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    renderAllView();
+
+    void pickProjectP1();
+    await act(async () => undefined);
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(false);
+
+    release();
+    await act(async () => undefined);
+    expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
   });
 });

@@ -16,14 +16,14 @@ import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
-import { resolveDefaultAdapterId } from '../new-thread/default-adapter';
-import { setDraftConfig } from '../runtime/draft-config';
-import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { initializeDraft } from '../new-thread/initialize-draft';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
 import { useSettingsStore } from '@/store/settings';
 import { useAdapters } from '@/store/adapters';
 import { NewSessionPickerPopover } from './NewSessionPickerPopover';
 import { useNewSessionPickerTarget } from './use-new-session-picker-target';
+import { useDaemonPort } from '../runtime/daemon-port-context';
+import { mfToast } from '@/lib/toast';
 
 // px-[12px] (not px-2/4px): matches SIDEBAR_BASE_INSET_PX, so the wrapping
 // SIDEBAR_INDENT_STEP_PX margin in SessionSidebar.tsx lands this row's content
@@ -53,6 +53,7 @@ export function SessionsNewButton({
   const setPickerOpen = useNewSessionPickerTarget((s) => s.setOpen);
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
+  const port = useDaemonPort();
 
   /** Snapshot the currently-active session so a discard can return to it. */
   const rememberReturn = () => {
@@ -89,8 +90,13 @@ export function SessionsNewButton({
       await runtime.threads.switchToNewThread();
       const nid = runtime.threads.getState().newThreadId;
       if (nid == null) return;
-      setDraftConfig(nid, { projectId, adapterId: resolveDefaultAdapterId(defaultAdapterId, adapters) });
-      useNewThreadReady.getState().markReady(nid);
+      try {
+        await initializeDraft({ localId: nid, projectId, port, defaultAdapterId, adapters });
+      } catch (error) {
+        mfToast.error('Couldn’t initialize session', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
     })();
   };
 

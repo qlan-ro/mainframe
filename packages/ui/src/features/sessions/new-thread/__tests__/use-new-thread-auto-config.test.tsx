@@ -51,6 +51,7 @@ let fakeAdapters: { id: string; installed: boolean }[] = [];
 
 const setDraftConfigSpy = vi.fn();
 let getDraftConfigResult: unknown = undefined;
+let initializationGate: Promise<void> | null = null;
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -74,9 +75,26 @@ vi.mock('@/store/adapters', () => ({
   useAdapters: () => fakeAdapters,
 }));
 
+vi.mock('../../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
+
 vi.mock('../../runtime/draft-config', () => ({
   setDraftConfig: (...args: unknown[]) => setDraftConfigSpy(...args),
   getDraftConfig: (_id: string) => getDraftConfigResult,
+}));
+
+vi.mock('../initialize-draft', () => ({
+  initializeDraft: async (args: {
+    localId: string;
+    projectId: string;
+    defaultAdapterId: string | null;
+    adapters: { id: string; installed: boolean }[];
+  }) => {
+    if (initializationGate) await initializationGate;
+    const adapterId = args.defaultAdapterId ?? args.adapters.find((adapter) => adapter.installed)?.id ?? 'claude';
+    setDraftConfigSpy(args.localId, { projectId: args.projectId, adapterId });
+    useNewThreadReady.getState().markReady(args.localId);
+    return { projectId: args.projectId, adapterId };
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -94,6 +112,7 @@ const { useNewThreadAutoConfig } = await import('../use-new-thread-auto-config')
 beforeEach(() => {
   setDraftConfigSpy.mockReset();
   getDraftConfigResult = undefined;
+  initializationGate = null;
   fakeFilterProjectId = null;
   fakeDefaultAdapterId = null;
   fakeAdapters = [];
@@ -143,6 +162,20 @@ describe('useNewThreadAutoConfig — project filter active on new local thread',
     });
 
     expect(useNewThreadReady.getState().readyIds.has('__LOCALID_x')).toBe(true);
+  });
+
+  it('does not mark the local id ready before asynchronous initialization resolves', async () => {
+    let release!: () => void;
+    initializationGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+
+    renderHook(() => useNewThreadAutoConfig());
+    expect(useNewThreadReady.getState().isReady('__LOCALID_x')).toBe(false);
+
+    await act(async () => release());
+    expect(useNewThreadReady.getState().isReady('__LOCALID_x')).toBe(true);
   });
 });
 
