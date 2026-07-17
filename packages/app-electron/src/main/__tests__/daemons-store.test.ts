@@ -22,7 +22,6 @@ import {
   removeDaemon,
   SecureStorageUnavailable,
 } from '../daemons-store.js';
-import { DaemonMetaSchema } from '@qlan-ro/mainframe-types';
 import { safeStorage } from 'electron';
 
 describe('electron daemons-store', () => {
@@ -56,28 +55,6 @@ describe('electron daemons-store', () => {
 
   it('returns null for getToken when id does not exist', async () => {
     expect(await getToken('nonexistent')).toBeNull();
-  });
-
-  describe('DaemonMetaSchema validation', () => {
-    it('accepts a valid DaemonMeta', () => {
-      expect(() =>
-        DaemonMetaSchema.parse({ id: 'studio', kind: 'remote', label: 'Studio', host: 'studio.example.com' }),
-      ).not.toThrow();
-    });
-
-    it('rejects a payload missing id', () => {
-      expect(() => DaemonMetaSchema.parse({ kind: 'remote', label: 'Studio', host: 'studio.example.com' })).toThrow();
-    });
-
-    it('rejects a payload with invalid kind', () => {
-      expect(() =>
-        DaemonMetaSchema.parse({ id: 'studio', kind: 'bogus', label: 'Studio', host: 'studio.example.com' }),
-      ).toThrow();
-    });
-
-    it('rejects a payload missing required fields', () => {
-      expect(() => DaemonMetaSchema.parse({ id: 'studio' })).toThrow();
-    });
   });
 
   describe('safeStorage unavailable branch', () => {

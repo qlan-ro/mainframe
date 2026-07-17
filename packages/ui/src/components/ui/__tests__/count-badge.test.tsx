@@ -16,42 +16,39 @@ describe('CountBadge', () => {
     expect(el).toHaveTextContent('7');
   });
 
-  it('info variant is capsule-less muted gray, not a filled capsule', () => {
-    render(<CountBadge count={4} variant="info" data-testid="cb" />);
-    const cls = screen.getByTestId('cb').className;
-    expect(cls).toContain('text-muted-foreground');
-    expect(cls).toContain('text-caption');
-    expect(cls).toContain('tabular-nums');
-    expect(cls).not.toContain('rounded-full');
-    expect(cls).not.toContain('bg-primary');
-  });
-
-  it('unread variant uses the accent ink', () => {
-    render(<CountBadge count={2} variant="unread" data-testid="cb" />);
-    const cls = screen.getByTestId('cb').className;
-    expect(cls).toContain('text-primary');
-    expect(cls).not.toContain('text-muted-foreground');
-  });
-
-  it('onAccent forces primary-foreground and drops the muted/accent ink', () => {
-    render(<CountBadge count={5} variant="unread" onAccent data-testid="cb" />);
-    const cls = screen.getByTestId('cb').className;
-    expect(cls).toContain('text-primary-foreground');
-  });
-
-  it('alert variant is a filled primary capsule', () => {
-    render(<CountBadge count={1} variant="alert" data-testid="cb" />);
-    const cls = screen.getByTestId('cb').className;
-    expect(cls).toContain('rounded-full');
-    expect(cls).toContain('bg-primary');
-    expect(cls).toContain('text-primary-foreground');
-    expect(cls).not.toContain('bg-destructive');
-  });
-
-  it('alert variant honors the destructive tone', () => {
-    render(<CountBadge count={1} variant="alert" tone="destructive" data-testid="cb" />);
-    const cls = screen.getByTestId('cb').className;
-    expect(cls).toContain('bg-destructive');
-    expect(cls).not.toContain('bg-primary');
-  });
+  it.each([
+    [
+      'info is capsule-less muted gray',
+      { variant: 'info' },
+      ['text-muted-foreground', 'text-caption', 'tabular-nums'],
+      ['rounded-full', 'bg-primary'],
+    ],
+    ['unread uses the accent ink', { variant: 'unread' }, ['text-primary'], ['text-muted-foreground']],
+    [
+      'unread + onAccent forces primary-foreground',
+      { variant: 'unread', onAccent: true },
+      ['text-primary-foreground'],
+      [],
+    ],
+    [
+      'alert is a filled primary capsule',
+      { variant: 'alert' },
+      ['rounded-full', 'bg-primary', 'text-primary-foreground'],
+      ['bg-destructive'],
+    ],
+    [
+      'alert honors the destructive tone',
+      { variant: 'alert', tone: 'destructive' },
+      ['bg-destructive'],
+      ['bg-primary'],
+    ],
+  ] as [string, Record<string, unknown>, string[], string[]][])(
+    'variant recipe: %s',
+    (_name, props, contains, notContains) => {
+      render(<CountBadge count={4} data-testid="cb" {...props} />);
+      const cls = screen.getByTestId('cb').className;
+      for (const c of contains) expect(cls).toContain(c);
+      for (const c of notContains) expect(cls).not.toContain(c);
+    },
+  );
 });

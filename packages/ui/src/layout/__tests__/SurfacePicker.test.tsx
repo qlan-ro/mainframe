@@ -87,4 +87,11 @@ describe('SurfacePicker (run surface)', () => {
     const btn = screen.getByTestId('run-picker-new-terminal');
     expect(btn).not.toBeDisabled();
   });
+
+  it('clicking run-picker-new-terminal emits a new-terminal intent', async () => {
+    const user = userEvent.setup();
+    render(<SurfacePicker surface="run" />);
+    await user.click(screen.getByTestId('run-picker-new-terminal'));
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'new-terminal' });
+  });
 });

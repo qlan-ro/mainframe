@@ -14,16 +14,6 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 describe('CodexAdapter', () => {
-  it('has id "codex"', () => {
-    const adapter = new CodexAdapter();
-    expect(adapter.id).toBe('codex');
-  });
-
-  it('has name "Codex"', () => {
-    const adapter = new CodexAdapter();
-    expect(adapter.name).toBe('Codex');
-  });
-
   it('isInstalled returns true when codex --version succeeds', async () => {
     const adapter = new CodexAdapter();
     expect(await adapter.isInstalled()).toBe(true);

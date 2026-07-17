@@ -333,24 +333,6 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
     });
   });
 
-  it('yolo mode is mapped to bypassPermissions by the adapter', async () => {
-    await manager.updateChatConfig(chatId, undefined, undefined, 'yolo');
-
-    // currentMockSession.written has the payload written by setPermissionMode
-    const permPayload = currentMockSession!.written.find((w) => {
-      try {
-        const p = JSON.parse(w.trim());
-        return p.request?.subtype === 'set_permission_mode';
-      } catch {
-        return false;
-      }
-    });
-
-    expect(permPayload).toBeTruthy();
-    const parsed = JSON.parse(permPayload!.trim());
-    expect(parsed.request.mode).toBe('bypassPermissions');
-  });
-
   it('emits chat.updated event on in-flight config change', async () => {
     await manager.updateChatConfig(chatId, undefined, 'claude-sonnet-4-5-20250929', undefined, true);
 

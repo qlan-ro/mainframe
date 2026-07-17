@@ -145,23 +145,11 @@ describe('TasksSidebarSection — header', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5-6. New / Expand buttons
-// ---------------------------------------------------------------------------
-
-describe('TasksSidebarSection — key testids are rendered', () => {
-  it('renders tasks-sidebar-new (New task row)', () => {
-    renderSection();
-    expect(screen.getByTestId('tasks-sidebar-new')).toBeTruthy();
-  });
-
-  it('renders tasks-sidebar-expand (expand button)', () => {
-    renderSection();
-    expect(screen.getByTestId('tasks-sidebar-expand')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 7-8. Rows rendered for non-done todos
+//
+// (tasks-sidebar-new/tasks-sidebar-expand testid presence is exercised
+// implicitly by the click-interaction tests below — no bare presence
+// smokes needed.)
 // ---------------------------------------------------------------------------
 
 describe('TasksSidebarSection — renders rows for active (non-done) todos', () => {

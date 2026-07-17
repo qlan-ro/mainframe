@@ -283,20 +283,6 @@ describe('TaskCard — pending state (result===undefined)', () => {
     expect(screen.getByLabelText('Subagent running')).toBeInTheDocument();
   });
 
-  it('shows the running pulse dot when status.type is running (even with result)', () => {
-    render(
-      <Wrap>
-        <TaskCard
-          {...baseProps}
-          args={{ subagent_type: 'worker', description: 'Still running' }}
-          result={undefined}
-          status={runningStatus}
-        />
-      </Wrap>,
-    );
-    expect(screen.getByLabelText('Subagent running')).toBeInTheDocument();
-  });
-
   it('still renders the agent name and description in pending state', () => {
     render(
       <Wrap>

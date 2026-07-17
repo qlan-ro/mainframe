@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { groupToolCallParts } from '../tool-grouping.js';
 import { prepareMessagesForClient } from '../display-pipeline.js';
+import { convertAssistantContent } from '../display-helpers.js';
+import type { GroupedMessage } from '../message-grouping.js';
 import type { ToolCategories } from '@qlan-ro/mainframe-types';
 
 const categories: ToolCategories = {
@@ -32,6 +34,22 @@ describe('groupToolCallParts — AskUserQuestion', () => {
     const out = groupToolCallParts([part('b', false)] as never, categories);
     expect(out.some((p) => (p as { toolCallId?: string }).toolCallId === 'b')).toBe(false);
   });
+});
+
+// Layer-specific: convertAssistantContent must categorize a resultless
+// AskUserQuestion as hidden — the answered path is covered end-to-end below.
+it('convertAssistantContent keeps a pending (resultless) AskUserQuestion hidden', () => {
+  const grouped = {
+    type: 'assistant',
+    content: [
+      { type: 'tool_use', id: 'tu2', name: 'AskUserQuestion', input: { questions: [{ question: 'Which DB?' }] } },
+    ],
+    _toolResults: new Map(),
+  } as unknown as GroupedMessage;
+
+  const out = convertAssistantContent(grouped, categories);
+  const call = out.find((c) => c.type === 'tool_call') as { category: string };
+  expect(call.category).toBe('hidden');
 });
 
 it('prepareMessagesForClient yields one default AskUserQuestion tool_call with parsed answers', () => {

@@ -91,14 +91,6 @@ describe('FileWatcherService', () => {
     expect(mockWatcher.close).toHaveBeenCalled();
   });
 
-  it('stopAll closes all watchers', () => {
-    service.subscribe('/tmp/a.ts');
-    // Need separate mock instances for different paths, but our mock always returns the same object
-    // Just verify stopAll calls cleanup for all tracked paths
-    service.stopAll();
-    expect(mockWatcher.close).toHaveBeenCalled();
-  });
-
   it('unsubscribe for unknown path is a no-op', () => {
     expect(() => service.unsubscribe('/tmp/unknown.ts')).not.toThrow();
   });

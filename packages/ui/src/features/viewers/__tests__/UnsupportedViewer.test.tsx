@@ -121,31 +121,6 @@ describe('UnsupportedViewer', () => {
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
   });
 
-  it('"Open externally" button has primary accent fill (bg-primary class)', () => {
-    renderUnsupported('/archive.zip');
-    const btn = screen.getByTestId('viewer-unsupported-open');
-    expect(btn.className).toContain('bg-primary');
-    // Should NOT have outline/ghost style
-    expect(btn.className).not.toContain('bg-transparent');
-  });
-
-  it('icon chip has 46×46 size and rounded-[11px] bg-mf-chip container', () => {
-    renderUnsupported('/archive.zip');
-    const root = screen.getByTestId('viewer-unsupported');
-    // The chip is the div wrapping the icon
-    const chip = root.querySelector('[data-testid="viewer-unsupported-icon-chip"]');
-    expect(chip).not.toBeNull();
-    expect(chip?.className).toContain('bg-mf-chip');
-  });
-
-  it('card uses bg-background class (not bg-card or bg-mf-tab-bar)', () => {
-    renderUnsupported('/archive.zip');
-    const card = screen.getByTestId('viewer-unsupported-card');
-    expect(card.className).toContain('bg-background');
-    expect(card.className).not.toContain('bg-card');
-    expect(card.className).not.toContain('bg-mf-tab-bar');
-  });
-
   describe('toFileUrl — path resolution', () => {
     it('resolves a relative path against projectPath to an absolute file:// URL', async () => {
       mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/myproject' });

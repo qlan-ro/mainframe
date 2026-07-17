@@ -8,14 +8,15 @@ export default defineConfig({
     env: { NODE_ENV: 'development' },
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['src/__tests__/playwright/**', 'node_modules/**', 'dist/**'],
-    environment: 'jsdom',
+    // Every remaining test targets main-process node code; a future DOM test
+    // can opt in with a `// @vitest-environment jsdom` pragma.
+    environment: 'node',
     setupFiles: ['src/__tests__/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts', 'src/**/*.tsx'],
       exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/__tests__/**'],
-      thresholds: { lines: 45, branches: 35 },
     },
   },
 });

@@ -12,11 +12,9 @@ import { SessionRowMetaIcons } from '../SessionRowMetaIcons';
 
 const NO_PRS: never[] = [];
 
-describe('SessionRowMetaIcons — empty state', () => {
-  it('renders nothing when worktree/PR/tags are all absent', () => {
-    const { container } = render(<SessionRowMetaIcons detectedPrs={NO_PRS} tags={[]} />);
-    expect(container.firstChild).toBeNull();
-  });
+it('renders nothing when worktree/PR/tags are all absent', () => {
+  const { container } = render(<SessionRowMetaIcons detectedPrs={NO_PRS} tags={[]} />);
+  expect(container.firstChild).toBeNull();
 });
 
 describe('SessionRowMetaIcons — worktree glyph', () => {

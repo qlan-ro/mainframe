@@ -4,6 +4,10 @@
  * Covers the in-body tunnel-failure state added alongside `tunnelPending`:
  * it must win over the `running` branch (status IS 'running' when the
  * tunnel fails) and surface the tunnel error text when present.
+ *
+ * (The three tunnelError-presence checks collapsed into one it.each: the old
+ * null-case test only re-checked the card testid without ever asserting the
+ * error line was actually absent, so the merge also fixes that gap.)
  */
 import { createRef } from 'react';
 import { render, screen } from '@testing-library/react';
@@ -25,24 +29,25 @@ function renderState(overrides: Partial<React.ComponentProps<typeof PreviewBodyS
 }
 
 describe('PreviewBodyState — tunnel failed', () => {
-  it('renders the tunnel-failed card instead of the running webview body', () => {
-    renderState({ tunnelFailed: true, tunnelError: 'cloudflared missing' });
+  it.each([
+    ['cloudflared missing', true],
+    [null, false],
+  ] as const)(
+    'renders the tunnel-failed card instead of the running body, showing the error line only when tunnelError=%s',
+    (tunnelError, showsErrorLine) => {
+      const { container } = renderState({ tunnelFailed: true, tunnelError });
 
-    expect(screen.getByTestId('preview-body-tunnel-failed')).toBeInTheDocument();
-    expect(screen.queryByTestId('preview-body-running')).toBeNull();
-  });
+      expect(screen.getByTestId('preview-body-tunnel-failed')).toBeInTheDocument();
+      expect(screen.queryByTestId('preview-body-running')).toBeNull();
 
-  it('shows the tunnel error text when present', () => {
-    renderState({ tunnelFailed: true, tunnelError: 'cloudflared missing' });
-
-    expect(screen.getByText('cloudflared missing')).toBeInTheDocument();
-  });
-
-  it('omits the error line when tunnelError is null', () => {
-    renderState({ tunnelFailed: true, tunnelError: null });
-
-    expect(screen.getByTestId('preview-body-tunnel-failed')).toBeInTheDocument();
-  });
+      const errorLine = container.querySelector('.font-mono');
+      if (showsErrorLine) {
+        expect(errorLine).toHaveTextContent(tunnelError!);
+      } else {
+        expect(errorLine).toBeNull();
+      }
+    },
+  );
 
   it('shows a hint pointing at the console drawer', () => {
     renderState({ tunnelFailed: true, tunnelError: null });

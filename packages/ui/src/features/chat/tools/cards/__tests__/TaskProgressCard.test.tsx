@@ -90,55 +90,22 @@ function makeUpdate(taskId: string, status: string): TaskProgressItem {
 // ---------------------------------------------------------------------------
 
 describe('TaskProgressCard — done state', () => {
-  it('renders the card root element', () => {
-    render(
-      <Wrap>
-        <TaskProgressCard {...tp({ items: [makeCreate('1', 'Write tests')] })} />
-      </Wrap>,
-    );
-    expect(screen.getByTestId('chat-task-progress-card')).toBeInTheDocument();
-  });
-
-  it('renders the "Tasks" header label', () => {
-    render(
-      <Wrap>
-        <TaskProgressCard {...tp({ items: [makeCreate('1', 'Write tests')] })} />
-      </Wrap>,
-    );
-    expect(screen.getByText('Tasks')).toBeInTheDocument();
-  });
-
-  it('shows the task count in parentheses next to the label', () => {
+  it('renders the card root, "Tasks" header, task count, and subjects, opened by default', () => {
     render(
       <Wrap>
         <TaskProgressCard
           {...tp({
-            items: [makeCreate('1', 'Task one'), makeCreate('2', 'Task two'), makeCreate('3', 'Task three')],
+            items: [makeCreate('1', 'Write tests'), makeCreate('2', 'Task two'), makeCreate('3', 'Task three')],
           })}
         />
       </Wrap>,
     );
+    expect(screen.getByTestId('chat-task-progress-card')).toBeInTheDocument();
+    expect(screen.getByText('Tasks')).toBeInTheDocument();
     // count label is "(3)" for 3 tasks
     expect(screen.getByText('(3)')).toBeInTheDocument();
-  });
-
-  it('renders a pending task subject', () => {
-    render(
-      <Wrap>
-        <TaskProgressCard {...tp({ items: [makeCreate('1', 'Refactor database layer')] })} />
-      </Wrap>,
-    );
-    expect(screen.getByText('Refactor database layer')).toBeInTheDocument();
-  });
-
-  it('card opens by default (tasks visible without clicking)', () => {
-    render(
-      <Wrap>
-        <TaskProgressCard {...tp({ items: [makeCreate('1', 'Do the thing')] })} />
-      </Wrap>,
-    );
-    // defaultOpen — content is rendered immediately
-    expect(screen.getByText('Do the thing')).toBeInTheDocument();
+    // defaultOpen — subjects are visible without clicking
+    expect(screen.getByText('Write tests')).toBeInTheDocument();
   });
 
   it('clicking the toggle collapses the task list', () => {

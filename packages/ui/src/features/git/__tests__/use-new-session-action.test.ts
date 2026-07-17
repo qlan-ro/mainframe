@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useNewSessionAction — BranchPopover's "new session in worktree" action.
  *

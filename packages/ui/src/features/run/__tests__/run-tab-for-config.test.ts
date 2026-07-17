@@ -45,16 +45,3 @@ describe('runTabForConfig', () => {
     expect(runTabForConfig(cfg({ name: 'App Tauri Preview' })).scopeKey).toBeUndefined();
   });
 });
-
-describe('runTabForConfig — no remote gate', () => {
-  it('preview config always produces a preview tab (remote parity — no null)', () => {
-    const tab = runTabForConfig(cfg({ name: 'App Tauri Preview', preview: true, port: 5357 }));
-    expect(tab.kind).toBe('preview');
-    expect(tab.port).toBe(5357);
-  });
-
-  it('process config produces a console tab', () => {
-    const tab = runTabForConfig(cfg({ name: 'Core Daemon', preview: false }));
-    expect(tab.kind).toBe('console');
-  });
-});

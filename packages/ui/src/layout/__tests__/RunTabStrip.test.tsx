@@ -1,8 +1,6 @@
 /**
- * RunTabStrip — strip height regression (finding 15.5: FilesTabStrip/RunTabStrip/
- * ChatCardHeader must share one uniform 36px strip height, matching the design's
- * `SurfaceTabStrip` and chat surface header, both height:36) plus the tab-type
- * glyph + running-config Stop affordance (todo #206, revised per user feedback):
+ * RunTabStrip — tab-type glyph + running-config Stop affordance (todo #206,
+ * revised per user feedback):
  *
  * The tab's leading glyph is a STATIC type identifier — it never flips with the
  * process's running/stopped state. Each of the three launch/terminal tab kinds
@@ -63,14 +61,6 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.clearAllMocks());
-
-describe('RunTabStrip — strip height', () => {
-  it('has the fixed h-[36px] height class', () => {
-    const { container } = render(<RunTabStrip pane={paneWith([])} primary />);
-    const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain('h-[36px]');
-  });
-});
 
 describe('RunTabStrip — static type glyph (independent of run state)', () => {
   it('console (cli) tab keeps its square-terminal glyph whether stopped or running — never Play, never flips to Square', () => {

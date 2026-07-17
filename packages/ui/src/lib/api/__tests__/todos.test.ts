@@ -6,12 +6,14 @@
  *  2.  createTodo — POST with body; extracts `.todo`.
  *  3.  updateTodo — PATCH to /:id; extracts `.todo`.
  *  4.  moveTodo — PATCH to /:id/move with {status}; extracts `.todo`.
- *  5.  deleteTodo — DELETE /:id; resolves void on 204.
+ *  5.  deleteTodo — DELETE /:id.
  *  6.  startTodoSession — POST /:id/start-session; returns {chatId, initialMessage}.
  *  7.  listAttachments — GET /:id/attachments; extracts `.attachments`.
  *  8.  getAttachment — GET /:id/attachments/:attachmentId; returns {data, meta}.
  *  9.  uploadAttachment — POST /:id/attachments; extracts `.attachment`.
- *  10. deleteAttachment — DELETE /:id/attachments/:attachmentId; resolves void on 204.
+ *  10. deleteAttachment — DELETE /:id/attachments/:attachmentId.
+ *
+ * 204/error handling for plugin routes is pinned once in http-plugin.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
@@ -96,17 +98,6 @@ function mockFetchNoContent(): void {
   );
 }
 
-function mockFetchHttpError(status: number, error: string): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: false,
-      status,
-      json: () => Promise.resolve({ error }),
-    }),
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Reset
 // ---------------------------------------------------------------------------
@@ -155,12 +146,6 @@ describe('listTodos', () => {
       `http://127.0.0.1:${PORT}/api/plugins/todos/todos?projectId=proj%2Fwith%20spaces`,
       { method: 'GET' },
     );
-  });
-
-  it('throws when HTTP error occurs', async () => {
-    mockFetchHttpError(500, 'internal error');
-
-    await expect(listTodos(PORT, PROJECT_ID)).rejects.toThrow('internal error');
   });
 });
 
@@ -264,22 +249,6 @@ describe('deleteTodo', () => {
       method: 'DELETE',
       headers: {},
     });
-  });
-
-  it('resolves void on 204 — does not call json()', async () => {
-    const jsonSpy = vi.fn().mockRejectedValue(new Error('no body'));
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204, json: jsonSpy }));
-
-    const result = await deleteTodo(PORT, TODO_ID);
-
-    expect(result).toBeUndefined();
-    expect(jsonSpy).not.toHaveBeenCalled();
-  });
-
-  it('throws on HTTP error', async () => {
-    mockFetchHttpError(404, 'todo not found');
-
-    await expect(deleteTodo(PORT, TODO_ID)).rejects.toThrow('todo not found');
   });
 });
 
@@ -451,19 +420,5 @@ describe('deleteAttachment', () => {
       `http://127.0.0.1:${PORT}/api/plugins/todos/todos/${TODO_ID}/attachments/att-1`,
       { method: 'DELETE', headers: {} },
     );
-  });
-
-  it('resolves void on 204', async () => {
-    mockFetchNoContent();
-
-    const result = await deleteAttachment(PORT, TODO_ID, 'att-1');
-
-    expect(result).toBeUndefined();
-  });
-
-  it('throws on HTTP error', async () => {
-    mockFetchHttpError(404, 'attachment not found');
-
-    await expect(deleteAttachment(PORT, TODO_ID, 'att-1')).rejects.toThrow('attachment not found');
   });
 });

@@ -1,12 +1,11 @@
+// @vitest-environment jsdom
 /**
  * use-launch-actions — unit tests for the effective-selection logic.
  *
  * Behaviors covered:
- *  - returns the FIRST config's name as selectedConfigName when nothing is stored for the scope
- *  - returns the STORED config name when its name is present in configs for the active scope
- *  - falls back to the first config when the stored name is NOT in the current configs
- *  - ignores a selection stored under a DIFFERENT scopeKey
- *  - returns null for selectedConfigName when configs is []
+ *  - ignores a selection stored under a DIFFERENT scopeKey (the fallback truth
+ *    table itself — first-config default, stale-selection fallback, empty
+ *    configs — is owned by derive-launch-control.test.ts)
  *  - handleSelect records the selection under the active scopeKey in the real sandbox store
  *
  * The real useSandboxStore is used (reset via setState in beforeEach) so the
@@ -105,30 +104,14 @@ beforeEach(() => {
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
+// The exhaustive selectedConfigName fallback truth table (first-config default,
+// stale-selection fallback, empty-configs, etc.) is owned by
+// derive-launch-control.test.ts, which tests the pure derivation directly.
+// This hook wraps that logic with scope-keyed storage reads from the real
+// sandbox store — the one behavior worth re-proving here is that the hook
+// actually scopes its read (a global/other-scope value must never bleed in),
+// since that plumbing is unique to this layer.
 describe('useLaunchActions — selectedConfigName derivation', () => {
-  it('returns the first config name when nothing is stored for the scope', async () => {
-    mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
-    const { useLaunchActions } = await import('../use-launch-actions');
-    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
-    expect(result.current.selectedConfigName).toBe('dev server');
-  });
-
-  it('returns the stored config name when it exists in configs for the active scope', async () => {
-    useSandboxStore.setState({ selectedConfigByScope: { [SCOPE_KEY]: 'preview-app' } });
-    mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
-    const { useLaunchActions } = await import('../use-launch-actions');
-    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
-    expect(result.current.selectedConfigName).toBe('preview-app');
-  });
-
-  it('falls back to the first config when the stored name is not in the current configs', async () => {
-    useSandboxStore.setState({ selectedConfigByScope: { [SCOPE_KEY]: 'deleted-config' } });
-    mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
-    const { useLaunchActions } = await import('../use-launch-actions');
-    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
-    expect(result.current.selectedConfigName).toBe('dev server');
-  });
-
   it('ignores a selection stored under a different scopeKey', async () => {
     // 'other:/x' is a completely unrelated scope; proj-1:/repo has nothing stored
     useSandboxStore.setState({ selectedConfigByScope: { 'other:/x': 'preview-app' } });
@@ -136,13 +119,6 @@ describe('useLaunchActions — selectedConfigName derivation', () => {
     const { useLaunchActions } = await import('../use-launch-actions');
     const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
     expect(result.current.selectedConfigName).toBe('dev server');
-  });
-
-  it('returns null when configs is empty', async () => {
-    mockLaunchConfigsResult = { configs: [], statusData, refetch: mockRefetch };
-    const { useLaunchActions } = await import('../use-launch-actions');
-    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
-    expect(result.current.selectedConfigName).toBeNull();
   });
 });
 

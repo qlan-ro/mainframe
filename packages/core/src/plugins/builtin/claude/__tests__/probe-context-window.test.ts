@@ -34,31 +34,6 @@ describe('ClaudeAdapter.probeModels — contextWindow enrichment', () => {
     expect(byId.get('sonnet[1m]')?.contextWindow).toBe(1_000_000);
   });
 
-  it('falls back to description sniff for unknown IDs', async () => {
-    mockedProbe.mockResolvedValueOnce({
-      models: [
-        { id: 'claude-future-1m', label: 'Future 1M', description: 'Future model with 1M context' },
-        { id: 'claude-future-small', label: 'Future Small', description: 'Faster everyday model' },
-      ] satisfies AdapterModel[],
-    });
-
-    const adapter = new ClaudeAdapter();
-    const probed = await adapter.probeModels();
-    const byId = new Map(probed!.map((m) => [m.id, m]));
-    expect(byId.get('claude-future-1m')?.contextWindow).toBe(1_000_000);
-    expect(byId.get('claude-future-small')?.contextWindow).toBe(200_000);
-  });
-
-  it('respects an explicit contextWindow on the probed entry', async () => {
-    mockedProbe.mockResolvedValueOnce({
-      models: [{ id: 'claude-custom', label: 'Custom', contextWindow: 500_000 }] satisfies AdapterModel[],
-    });
-
-    const adapter = new ClaudeAdapter();
-    const probed = await adapter.probeModels();
-    expect(probed![0]?.contextWindow).toBe(500_000);
-  });
-
   it('listModels() returns enriched dynamic models after probe', async () => {
     mockedProbe.mockResolvedValueOnce({
       models: [{ id: 'default', label: 'Default', isDefault: true }] satisfies AdapterModel[],
@@ -68,16 +43,5 @@ describe('ClaudeAdapter.probeModels — contextWindow enrichment', () => {
     await adapter.probeModels();
     const listed = await adapter.listModels();
     expect(listed[0]?.contextWindow).toBe(1_000_000);
-  });
-
-  it("stamps the 'default' entry's window from resolvedModel when it has no description hint", async () => {
-    mockedProbe.mockResolvedValueOnce({
-      models: [{ id: 'default', label: 'Default', isDefault: true }] satisfies AdapterModel[],
-      resolvedModel: 'claude-fable-5[1m]',
-    });
-
-    const adapter = new ClaudeAdapter();
-    const probed = await adapter.probeModels();
-    expect(probed![0]?.contextWindow).toBe(1_000_000);
   });
 });

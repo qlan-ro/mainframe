@@ -87,28 +87,26 @@ describe('new-thread-coordinator — happy path calls createChat with required f
   });
 });
 
-describe('new-thread-coordinator — optional fields are forwarded when present', () => {
-  it('passes model, worktreePath and branchName to createChat when set in the draft', async () => {
-    setDraftConfig('__LOCALID_a', {
-      projectId: 'p2',
-      adapterId: 'codex',
-      model: 'gpt-5',
-      permissionMode: 'plan',
-      worktreePath: '/wt/feat',
-      branchName: 'feat/x',
-    });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-77' } as Chat);
+it('passes optional fields (model, worktreePath, branchName) to createChat when set in the draft', async () => {
+  setDraftConfig('__LOCALID_a', {
+    projectId: 'p2',
+    adapterId: 'codex',
+    model: 'gpt-5',
+    permissionMode: 'plan',
+    worktreePath: '/wt/feat',
+    branchName: 'feat/x',
+  });
+  mockCreateChat.mockResolvedValueOnce({ id: 'chat-77' } as Chat);
 
-    await createForLocal('__LOCALID_a', 31415);
+  await createForLocal('__LOCALID_a', 31415);
 
-    expect(mockCreateChat).toHaveBeenCalledWith(31415, {
-      projectId: 'p2',
-      adapterId: 'codex',
-      model: 'gpt-5',
-      permissionMode: 'plan',
-      worktreePath: '/wt/feat',
-      branchName: 'feat/x',
-    });
+  expect(mockCreateChat).toHaveBeenCalledWith(31415, {
+    projectId: 'p2',
+    adapterId: 'codex',
+    model: 'gpt-5',
+    permissionMode: 'plan',
+    worktreePath: '/wt/feat',
+    branchName: 'feat/x',
   });
 });
 
@@ -180,66 +178,55 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
   });
 });
 
-// ---------------------------------------------------------------------------
-// Draft tuning fields — applyDraftTuning called post-create
-// ---------------------------------------------------------------------------
-
-describe('new-thread-coordinator — draft with tuning calls setChatTuning and setChatConfig', () => {
-  it('calls setChatTuning with effort and setChatConfig with planMode', async () => {
-    setDraftConfig('__LOCALID_a', {
-      projectId: 'p1',
-      adapterId: 'claude',
-      permissionMode: 'default',
-      effort: 'high',
-      fast: true,
-      planMode: true,
-    });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-42' } as Chat);
-    mockSetChatTuning.mockResolvedValueOnce(undefined as unknown as Chat);
-    mockSetChatConfig.mockResolvedValueOnce(undefined as unknown as Chat);
-
-    await createForLocal('__LOCALID_a', 31415);
-
-    expect(mockSetChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', {
-      effort: 'high',
-      fast: true,
-    });
-    expect(mockSetChatConfig).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', { planMode: true });
+it('calls setChatTuning with effort/fast and setChatConfig with planMode when the draft has tuning fields', async () => {
+  setDraftConfig('__LOCALID_a', {
+    projectId: 'p1',
+    adapterId: 'claude',
+    permissionMode: 'default',
+    effort: 'high',
+    fast: true,
+    planMode: true,
   });
+  mockCreateChat.mockResolvedValueOnce({ id: 'chat-42' } as Chat);
+  mockSetChatTuning.mockResolvedValueOnce(undefined as unknown as Chat);
+  mockSetChatConfig.mockResolvedValueOnce(undefined as unknown as Chat);
+
+  await createForLocal('__LOCALID_a', 31415);
+
+  expect(mockSetChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', {
+    effort: 'high',
+    fast: true,
+  });
+  expect(mockSetChatConfig).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', { planMode: true });
 });
 
-describe('new-thread-coordinator — draft with no tuning fields calls neither setChatTuning nor setChatConfig', () => {
-  it('does NOT call setChatTuning or setChatConfig when the draft has only base fields', async () => {
-    setDraftConfig('__LOCALID_a', {
-      projectId: 'p1',
-      adapterId: 'claude',
-      permissionMode: 'default',
-    });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-43' } as Chat);
-
-    await createForLocal('__LOCALID_a', 31415);
-
-    expect(mockSetChatTuning).not.toHaveBeenCalled();
-    expect(mockSetChatConfig).not.toHaveBeenCalled();
+it('does NOT call setChatTuning or setChatConfig when the draft has only base fields (no tuning)', async () => {
+  setDraftConfig('__LOCALID_a', {
+    projectId: 'p1',
+    adapterId: 'claude',
+    permissionMode: 'default',
   });
+  mockCreateChat.mockResolvedValueOnce({ id: 'chat-43' } as Chat);
+
+  await createForLocal('__LOCALID_a', 31415);
+
+  expect(mockSetChatTuning).not.toHaveBeenCalled();
+  expect(mockSetChatConfig).not.toHaveBeenCalled();
 });
 
-describe('new-thread-coordinator — setChatTuning rejection does NOT reject createForLocal', () => {
-  it('still resolves to {remoteId} even when setChatTuning rejects', async () => {
-    setDraftConfig('__LOCALID_a', {
-      projectId: 'p1',
-      adapterId: 'claude',
-      permissionMode: 'default',
-      effort: 'medium',
-    });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-44' } as Chat);
-    mockSetChatTuning.mockRejectedValueOnce(new Error('tuning failed'));
-
-    // The tuning hiccup is swallowed; createForLocal still resolves.
-    const result = await createForLocal('__LOCALID_a', 31415);
-
-    expect(result).toEqual({ remoteId: 'chat-44' });
+it('still resolves to {remoteId} even when setChatTuning rejects (the tuning hiccup is swallowed)', async () => {
+  setDraftConfig('__LOCALID_a', {
+    projectId: 'p1',
+    adapterId: 'claude',
+    permissionMode: 'default',
+    effort: 'medium',
   });
+  mockCreateChat.mockResolvedValueOnce({ id: 'chat-44' } as Chat);
+  mockSetChatTuning.mockRejectedValueOnce(new Error('tuning failed'));
+
+  const result = await createForLocal('__LOCALID_a', 31415);
+
+  expect(result).toEqual({ remoteId: 'chat-44' });
 });
 
 // ---------------------------------------------------------------------------

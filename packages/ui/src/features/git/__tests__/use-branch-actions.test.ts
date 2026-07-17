@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * use-branch-actions.test.ts — per-action flow tests.
  *

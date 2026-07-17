@@ -50,4 +50,19 @@ describe('enrichWithContextWindow', () => {
     ];
     expect(enrichWithContextWindow(probed)[0]!.contextWindow).toBe(1_000_000);
   });
+
+  it('sniffs 1M from the description when an unknown id has no [1m] suffix or resolvedModel', () => {
+    const probed: AdapterModel[] = [
+      { id: 'claude-future-1m', label: 'Future 1M', description: 'Future model with 1M context' },
+      { id: 'claude-future-small', label: 'Future Small', description: 'Faster everyday model' },
+    ];
+    const enriched = enrichWithContextWindow(probed);
+    expect(enriched[0]!.contextWindow).toBe(1_000_000);
+    expect(enriched[1]!.contextWindow).toBe(200_000);
+  });
+
+  it('leaves an already-set contextWindow untouched', () => {
+    const probed: AdapterModel[] = [{ id: 'claude-custom', label: 'Custom', contextWindow: 500_000 }];
+    expect(enrichWithContextWindow(probed)[0]!.contextWindow).toBe(500_000);
+  });
 });

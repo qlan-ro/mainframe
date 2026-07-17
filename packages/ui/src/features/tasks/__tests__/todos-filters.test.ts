@@ -274,6 +274,30 @@ describe('sortTodos — by type alphabetically', () => {
 });
 
 // ---------------------------------------------------------------------------
+// sortTodos — by updated_at (folded in from the deleted sort-updated.test.ts)
+// ---------------------------------------------------------------------------
+
+describe('sortTodos — by updated_at', () => {
+  const todos = [
+    makeTodo({ id: 'a', title: 'A', updated_at: '2026-01-10T00:00:00.000Z' }),
+    makeTodo({ id: 'b', title: 'B', updated_at: '2026-06-15T00:00:00.000Z' }),
+    makeTodo({ id: 'c', title: 'C', updated_at: '2026-03-01T00:00:00.000Z' }),
+  ];
+
+  it('descending: newest updated_at first', () => {
+    const sort: TodoSort = { key: 'updated', dir: 'desc' };
+    const result = sortTodos(todos, sort);
+    expect(result.map((t) => t.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('ascending: oldest updated_at first', () => {
+    const sort: TodoSort = { key: 'updated', dir: 'asc' };
+    const result = sortTodos(todos, sort);
+    expect(result.map((t) => t.id)).toEqual(['a', 'c', 'b']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // sortTodos — does not mutate original
 // ---------------------------------------------------------------------------
 

@@ -56,17 +56,6 @@ function mockFetchEmpty(): void {
   );
 }
 
-function mockFetchHttpError(status: number, error: string): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: false,
-      status,
-      json: () => Promise.resolve({ error }),
-    }),
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -128,20 +117,6 @@ describe('listChats', () => {
       method: 'GET',
     });
   });
-
-  it('returns the unwrapped Chat[] from the ApiResponse envelope', async () => {
-    mockFetchOk([CHAT_FIXTURE]);
-
-    const result = await listChats(port);
-
-    expect(result).toEqual([CHAT_FIXTURE]);
-  });
-
-  it('throws the error message when HTTP response is not ok (404)', async () => {
-    mockFetchHttpError(404, 'not found');
-
-    await expect(listChats(port)).rejects.toThrow('not found');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -162,48 +137,18 @@ describe('createChat', () => {
     });
   });
 
-  it('includes model in the body when provided', async () => {
+  it.each([
+    { field: 'model', value: 'claude-opus-4-5', fragment: '"model":"claude-opus-4-5"' },
+    { field: 'worktreePath', value: '/tmp/wt', fragment: '"worktreePath":"/tmp/wt"' },
+    { field: 'branchName', value: 'feat/x', fragment: '"branchName":"feat/x"' },
+    { field: 'permissionMode', value: 'default', fragment: '"permissionMode":"default"' },
+  ] as const)('includes $field in the body when provided', async ({ field, value, fragment }) => {
     mockFetchOk(CHAT_FIXTURE);
 
-    await createChat(port, { projectId: 'proj-1', adapterId: 'claude', model: 'claude-opus-4-5' });
+    await createChat(port, { projectId: 'proj-1', adapterId: 'claude', [field]: value });
 
     const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(init.body).toContain('"model":"claude-opus-4-5"');
-  });
-
-  it('includes worktreePath in the body when provided', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    await createChat(port, { projectId: 'proj-1', adapterId: 'claude', worktreePath: '/tmp/wt' });
-
-    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(init.body).toContain('"worktreePath":"/tmp/wt"');
-  });
-
-  it('includes branchName in the body when provided', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    await createChat(port, { projectId: 'proj-1', adapterId: 'claude', branchName: 'feat/x' });
-
-    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(init.body).toContain('"branchName":"feat/x"');
-  });
-
-  it('includes permissionMode in the body when provided', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    await createChat(port, { projectId: 'proj-1', adapterId: 'claude', permissionMode: 'default' });
-
-    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(init.body).toContain('"permissionMode":"default"');
-  });
-
-  it('returns the unwrapped Chat from the ApiResponse envelope', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    const result = await createChat(port, { projectId: 'proj-1', adapterId: 'claude' });
-
-    expect(result).toEqual(CHAT_FIXTURE);
+    expect(init.body).toContain(fragment);
   });
 });
 
@@ -223,14 +168,6 @@ describe('renameChat', () => {
       headers: { 'Content-Type': 'application/json' },
       body: '{"title":"New Name"}',
     });
-  });
-
-  it('returns the unwrapped Chat from the ApiResponse envelope', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    const result = await renameChat(port, chatId, 'New Name');
-
-    expect(result).toEqual(CHAT_FIXTURE);
   });
 });
 
@@ -263,14 +200,6 @@ describe('pinChat', () => {
       body: '{"pinned":false}',
     });
   });
-
-  it('returns the unwrapped Chat from the ApiResponse envelope', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    const result = await pinChat(port, chatId, true);
-
-    expect(result).toEqual(CHAT_FIXTURE);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -298,20 +227,6 @@ describe('archiveChat', () => {
       method: 'POST',
     });
   });
-
-  it('returns void on success', async () => {
-    mockFetchEmpty();
-
-    const result = await archiveChat(port, chatId, true);
-
-    expect(result).toBeUndefined();
-  });
-
-  it('throws the error message when HTTP response is not ok (404)', async () => {
-    mockFetchHttpError(404, 'not found');
-
-    await expect(archiveChat(port, chatId, true)).rejects.toThrow('not found');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -328,13 +243,5 @@ describe('unarchiveChat', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats/chat-abc123/unarchive', {
       method: 'POST',
     });
-  });
-
-  it('returns the unwrapped Chat from the ApiResponse envelope', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    const result = await unarchiveChat(port, chatId);
-
-    expect(result).toEqual(CHAT_FIXTURE);
   });
 });

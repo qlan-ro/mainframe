@@ -71,14 +71,12 @@ describe('ProjectFilterPillBar — All row active state', () => {
   });
 });
 
-describe('ProjectFilterPillBar — a project row active state', () => {
-  it('the matching project row is active and All is not', () => {
-    render(
-      <ProjectFilterPillBar projects={PROJECTS} filterProjectId="p1" attentionCounts={{}} onSelect={() => undefined} />,
-    );
-    expect(screen.getByTestId('sessions-filter-pill-p1')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('sessions-filter-pill-all')).toHaveAttribute('aria-pressed', 'false');
-  });
+it('the matching project row is active and All is not', () => {
+  render(
+    <ProjectFilterPillBar projects={PROJECTS} filterProjectId="p1" attentionCounts={{}} onSelect={() => undefined} />,
+  );
+  expect(screen.getByTestId('sessions-filter-pill-p1')).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByTestId('sessions-filter-pill-all')).toHaveAttribute('aria-pressed', 'false');
 });
 
 describe('ProjectFilterPillBar — attention badge', () => {
@@ -137,19 +135,12 @@ describe('ProjectFilterPillBar — single-select click semantics', () => {
   });
 });
 
-describe('ProjectFilterPillBar — colored avatar', () => {
-  it('renders an avatar with the project initial for each project row', () => {
-    render(
-      <ProjectFilterPillBar
-        projects={PROJECTS}
-        filterProjectId={null}
-        attentionCounts={{}}
-        onSelect={() => undefined}
-      />,
-    );
-    const avatar = screen.getByTestId('sessions-filter-pill-avatar-p1');
-    expect(avatar.textContent).toBe('M');
-  });
+it('renders an avatar with the project initial for each project row', () => {
+  render(
+    <ProjectFilterPillBar projects={PROJECTS} filterProjectId={null} attentionCounts={{}} onSelect={() => undefined} />,
+  );
+  const avatar = screen.getByTestId('sessions-filter-pill-avatar-p1');
+  expect(avatar.textContent).toBe('M');
 });
 
 describe('ProjectFilterPillBar — collapsible past 3 projects', () => {

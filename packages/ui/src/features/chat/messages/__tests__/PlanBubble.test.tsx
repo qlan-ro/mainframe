@@ -12,18 +12,10 @@ import { render, screen } from '@testing-library/react';
 import { PlanBubble } from '../PlanBubble';
 
 describe('PlanBubble', () => {
-  it('renders the root element with data-testid="chat-plan-bubble"', () => {
+  it('renders the root, the "Implementing plan" heading, and the "Approved" pill', () => {
     render(<PlanBubble plan="Some plan text" />);
     expect(screen.getByTestId('chat-plan-bubble')).toBeInTheDocument();
-  });
-
-  it('renders the "Implementing plan" heading', () => {
-    render(<PlanBubble plan="Some plan text" />);
     expect(screen.getByText('Implementing plan')).toBeInTheDocument();
-  });
-
-  it('renders the "Approved" pill', () => {
-    render(<PlanBubble plan="Some plan text" />);
     expect(screen.getByText('Approved')).toBeInTheDocument();
   });
 

@@ -514,6 +514,27 @@ describe('groupTaskChildren', () => {
     expect(group.isError).toBe(false);
   });
 
+  // Folded from the deleted root message-grouping.test.ts: the thinking
+  // sentinel ('\0ng:0') must survive grouping verbatim for downstream decode.
+  it('preserves an interleaved thinking sentinel (\\0ng:0) among tagged text/tool-call children', () => {
+    const parts: PartEntry[] = [
+      tc('Task', 't1', 'ok'),
+      { type: 'text', text: 'Run echo hi via Bash and report the output.', parentToolUseId: 't1' },
+      { type: 'text', text: '\0ng:0', parentToolUseId: 't1' },
+      tcTagged('Bash', 'b1', 't1', 'hi'),
+    ];
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(1);
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
+    expect(group.children).toHaveLength(3);
+    expect(group.children[0]!.type).toBe('text');
+    expect((group.children[0]! as { text: string }).text).toContain('Run echo hi');
+    expect((group.children[1]! as { text: string }).text).toBe('\0ng:0');
+    expect((group.children[2]! as { toolName?: string }).toolName).toBe('Bash');
+  });
+
   // Reproduces the screenshot bug: a subagent that runs an explore burst
   // (Read/Glob/Grep) gets its tool calls collapsed into a `_ToolGroup` by
   // groupToolCallParts. groupTaskChildren then needs that wrapper to carry

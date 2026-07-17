@@ -67,27 +67,6 @@ beforeEach(() => {
   wsHandler = () => {};
 });
 
-describe('createHttpGateway — pass-through verbs', () => {
-  it('delegates setEnabled to setAutomationEnabled', async () => {
-    vi.mocked(api.setAutomationEnabled).mockResolvedValue({ id: 'auto-1' } as never);
-    const gateway = createHttpGateway();
-
-    await gateway.setEnabled('auto-1', false);
-
-    expect(api.setAutomationEnabled).toHaveBeenCalledWith('auto-1', false);
-  });
-
-  it('delegates startRun to startAutomationRun', async () => {
-    vi.mocked(api.startAutomationRun).mockResolvedValue(RUN_SUMMARY);
-    const gateway = createHttpGateway();
-
-    const result = await gateway.startRun('auto-1');
-
-    expect(api.startAutomationRun).toHaveBeenCalledWith('auto-1');
-    expect(result).toEqual(RUN_SUMMARY);
-  });
-});
-
 describe('createHttpGateway — getRun / getRunTimeline', () => {
   it('getRun calls getAutomationRun once and returns the run summary', async () => {
     vi.mocked(api.getAutomationRun).mockResolvedValue({ run: RUN_SUMMARY, timeline: TIMELINE });

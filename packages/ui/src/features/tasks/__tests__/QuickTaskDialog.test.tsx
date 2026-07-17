@@ -2,17 +2,16 @@
  * QuickTaskDialog.test.tsx
  *
  * Behaviors covered:
- *  1.  Renders data-testid="tasks-quick-dialog" when open=true.
- *  2.  Renders data-testid="tasks-quick-title" input.
- *  3.  Renders data-testid="tasks-quick-body" textarea.
- *  4.  Renders data-testid="tasks-quick-create" button.
- *  5.  Create button is disabled when title is empty.
- *  6.  Create button is enabled when title is non-empty.
- *  7.  Clicking Create with a title calls store.create with the right args.
- *  8.  ⌘↵ on the title input calls store.create.
- *  9.  ⌘↵ on the body textarea calls store.create.
- *  10. Does NOT render when open=false.
- *  11. store.create receives projectId in the input body.
+ *  1. Renders data-testid="tasks-quick-dialog" when open=true.
+ *  2. Create button is disabled when title is empty.
+ *  3. Create button is enabled when title is non-empty.
+ *  4. Clicking Create with a title calls store.create with the right args.
+ *  5. ⌘↵ on the title input and on the body textarea both call store.create.
+ *  6. Does NOT render when open=false.
+ *  7. store.create receives projectId in the input body.
+ *
+ * (title/body/create testid presence is exercised implicitly by the gating
+ * and create-flow tests below — no bare presence smokes needed.)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -90,27 +89,6 @@ describe('QuickTaskDialog — renders root testid when open', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2–4. Key testids present
-// ---------------------------------------------------------------------------
-
-describe('QuickTaskDialog — key testids are rendered', () => {
-  it('renders tasks-quick-title input', () => {
-    renderDialog();
-    expect(screen.getByTestId('tasks-quick-title')).toBeTruthy();
-  });
-
-  it('renders tasks-quick-body textarea', () => {
-    renderDialog();
-    expect(screen.getByTestId('tasks-quick-body')).toBeTruthy();
-  });
-
-  it('renders tasks-quick-create button', () => {
-    renderDialog();
-    expect(screen.getByTestId('tasks-quick-create')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Priority pills — quick-add excludes Critical (design: 12-todos.jsx:793,
 // finding 9.16). Fast-capture only offers low/medium/high.
 // ---------------------------------------------------------------------------
@@ -179,34 +157,18 @@ describe('QuickTaskDialog — clicking Create calls store.create', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. ⌘↵ on title input triggers create
+// 5. ⌘↵ on either the title input or the body textarea triggers create
 // ---------------------------------------------------------------------------
 
-describe('QuickTaskDialog — ⌘↵ on title triggers create', () => {
-  it('calls store.create when Meta+Enter is pressed on the title input', async () => {
+describe('QuickTaskDialog — ⌘↵ triggers create from either field', () => {
+  it.each([
+    ['the title input', 'tasks-quick-title'],
+    ['the body textarea', 'tasks-quick-body'],
+  ])('calls store.create when Meta+Enter is pressed on %s', async (_label, testId) => {
     renderDialog();
 
-    const titleInput = screen.getByTestId('tasks-quick-title');
-    await userEvent.type(titleInput, 'Keyboard shortcut task');
-    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledOnce();
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9. ⌘↵ on body textarea triggers create
-// ---------------------------------------------------------------------------
-
-describe('QuickTaskDialog — ⌘↵ on body textarea triggers create', () => {
-  it('calls store.create when Meta+Enter is pressed on the body textarea', async () => {
-    renderDialog();
-
-    await userEvent.type(screen.getByTestId('tasks-quick-title'), 'Task with body');
-    const bodyArea = screen.getByTestId('tasks-quick-body');
-    await userEvent.click(bodyArea);
+    await userEvent.type(screen.getByTestId('tasks-quick-title'), 'Keyboard shortcut task');
+    await userEvent.click(screen.getByTestId(testId));
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
 
     await waitFor(() => {

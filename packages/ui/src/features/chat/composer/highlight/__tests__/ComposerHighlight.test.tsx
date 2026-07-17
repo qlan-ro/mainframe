@@ -1,8 +1,6 @@
 /**
  * ComposerHighlight — unit tests for the color-only overlay component.
  *
- * TDD: tests written FIRST (RED) before the implementation.
- *
  * Strategy:
  *  - Mock `@assistant-ui/react` to expose a controlled `useAuiState` that
  *    returns a fixed composer.text slice. This exercises the real selector

@@ -110,7 +110,7 @@ describe('GET /api/projects/:id/search/content', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: expect.any(String) }));
   });
 
-  it('returns 400 for too-short query', async () => {
+  it('returns 400 with canonical envelope for too-short query', async () => {
     const ctx = createCtx(projectDir);
     const router = contentSearchRoutes(ctx);
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
@@ -120,6 +120,21 @@ describe('GET /api/projects/:id/search/content', () => {
     await flushPromises();
 
     expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: expect.any(String) }));
+  });
+
+  it('returns 404 with canonical envelope when project is not found', async () => {
+    const ctx = createCtx(projectDir);
+    (ctx.db.projects.get as any).mockReturnValue(null);
+    const router = contentSearchRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
+    const res = mockRes();
+
+    await handler({ params: { id: 'missing' }, query: { q: 'hello', path: '.' } }, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Project not found' });
   });
 
   it('skips binary files by extension', async () => {

@@ -1,4 +1,4 @@
-import { it, describe, expect, vi, beforeEach, afterEach } from 'vitest';
+import { it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { DaemonTarget } from '@qlan-ro/mainframe-types';
@@ -106,36 +106,12 @@ it('does not render the session-count cluster while counts are hidden', () => {
   expect(screen.queryByTestId('sidebar-footer-counts')).not.toBeInTheDocument();
 });
 
-describe('SidebarFooter — design-parity (Phase-3)', () => {
-  // Superseded by the 2026-07 daemon-card redesign: the footer now sizes to
-  // its two-line card content instead of a fixed 25px strip.
-  it('root element no longer forces the old fixed 25px strip height', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 0, waiting: 0, idle: 0 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const footer = screen.getByTestId('sidebar-footer');
-    expect(footer.className).not.toContain('h-[25px]');
-    expect(footer.className).toContain('flex-shrink-0');
-  });
-});
-
-describe('SidebarFooter — design-parity findings 1.7/1.10/1.11/1.12', () => {
-  it('root element uses px-[12px] horizontal padding (finding 1.7 — design wants 12px, px-3 compresses to 6px)', () => {
-    render(
-      <SidebarFooterView
-        counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 0, waiting: 0, idle: 0 }}
-      />,
-      {
-        wrapper: Wrapper,
-      },
-    );
-    const footer = screen.getByTestId('sidebar-footer');
-    expect(footer.className).toContain('px-[12px]');
-    expect(footer.className).not.toContain('px-3');
-  });
+it('renders the sidebar-footer root', () => {
+  render(
+    <SidebarFooterView counts={{ 'worktree-missing': 0, 'transcript-missing': 0, working: 0, waiting: 0, idle: 0 }} />,
+    {
+      wrapper: Wrapper,
+    },
+  );
+  expect(screen.getByTestId('sidebar-footer')).toBeInTheDocument();
 });

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useStartTodoSession — behavior tests.
  *

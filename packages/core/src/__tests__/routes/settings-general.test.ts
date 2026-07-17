@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { settingRoutes } from '../settings.js';
-import { NOTIFICATION_DEFAULTS } from '@qlan-ro/mainframe-types';
+import { settingRoutes } from '../../server/routes/settings.js';
+import { GENERAL_DEFAULTS, NOTIFICATION_DEFAULTS } from '@qlan-ro/mainframe-types';
 
 function makeDb(initial: Record<string, string> = {}) {
   const store: Record<string, string> = { ...initial };
@@ -33,6 +33,75 @@ function makeApp(db = makeDb()) {
   return { app, db };
 }
 
+describe('GET /api/settings/general', () => {
+  it('returns defaults when nothing is stored', async () => {
+    const { app } = makeApp();
+    const res = await request(app).get('/api/settings/general');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, data: GENERAL_DEFAULTS });
+  });
+
+  it('returns stored worktreeDir override', async () => {
+    const { app } = makeApp(makeDb({ 'general:worktreeDir': 'my-worktrees' }));
+    const res = await request(app).get('/api/settings/general');
+    expect(res.status).toBe(200);
+    expect(res.body.data.worktreeDir).toBe('my-worktrees');
+  });
+
+  it('returns the stored defaultAdapterId override', async () => {
+    const { app } = makeApp(makeDb({ 'general:defaultAdapterId': 'codex' }));
+    const res = await request(app).get('/api/settings/general');
+    expect(res.status).toBe(200);
+    expect(res.body.data.defaultAdapterId).toBe('codex');
+  });
+});
+
+describe('PUT /api/settings/general', () => {
+  it('persists a non-default worktreeDir', async () => {
+    const { app, db } = makeApp();
+    const res = await request(app).put('/api/settings/general').send({ worktreeDir: 'custom-dir' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(db.settings.get('general', 'worktreeDir')).toBe('custom-dir');
+  });
+
+  it('deletes the stored key when set back to the default value', async () => {
+    const { app, db } = makeApp(makeDb({ 'general:worktreeDir': 'custom-dir' }));
+    const res = await request(app).put('/api/settings/general').send({ worktreeDir: '.worktrees' });
+    expect(res.status).toBe(200);
+    expect(db.settings.get('general', 'worktreeDir')).toBeNull();
+  });
+
+  it('rejects a worktreeDir containing path separators', async () => {
+    const { app } = makeApp();
+    const res = await request(app).put('/api/settings/general').send({ worktreeDir: '../escape' });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('persists a defaultAdapterId', async () => {
+    const { app, db } = makeApp();
+    const res = await request(app).put('/api/settings/general').send({ defaultAdapterId: 'gemini' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(db.settings.get('general', 'defaultAdapterId')).toBe('gemini');
+  });
+
+  it('deletes the stored defaultAdapterId when set back to null', async () => {
+    const { app, db } = makeApp(makeDb({ 'general:defaultAdapterId': 'gemini' }));
+    const res = await request(app).put('/api/settings/general').send({ defaultAdapterId: null });
+    expect(res.status).toBe(200);
+    expect(db.settings.get('general', 'defaultAdapterId')).toBeNull();
+  });
+
+  it('rejects a defaultAdapterId with invalid characters', async () => {
+    const { app } = makeApp();
+    const res = await request(app).put('/api/settings/general').send({ defaultAdapterId: '../escape' });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+});
+
 describe('GET /api/settings/general — notifications', () => {
   it('returns default notification config when nothing is stored', async () => {
     const { app } = makeApp();
@@ -49,8 +118,7 @@ describe('GET /api/settings/general — notifications', () => {
       permission: { toolRequest: true, userQuestion: false, planApproval: true },
       other: { plugin: false },
     });
-    const db = makeDb({ 'general:notifications': stored });
-    const { app } = makeApp(db);
+    const { app } = makeApp(makeDb({ 'general:notifications': stored }));
 
     const res = await request(app).get('/api/settings/general');
 
@@ -61,8 +129,7 @@ describe('GET /api/settings/general — notifications', () => {
   });
 
   it('falls back to defaults when stored value is invalid JSON', async () => {
-    const db = makeDb({ 'general:notifications': 'not-json' });
-    const { app } = makeApp(db);
+    const { app } = makeApp(makeDb({ 'general:notifications': 'not-json' }));
 
     const res = await request(app).get('/api/settings/general');
 
@@ -103,8 +170,7 @@ describe('PUT /api/settings/general — notifications', () => {
       .put('/api/settings/general')
       .send({ notifications: { other: { plugin: false } } });
 
-    const stored = db.settings.get('general', 'notifications');
-    const parsed = JSON.parse(stored!);
+    const parsed = JSON.parse(db.settings.get('general', 'notifications')!);
     expect(parsed.chat.taskComplete).toBe(false);
     expect(parsed.other.plugin).toBe(false);
   });

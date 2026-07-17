@@ -12,10 +12,8 @@ beforeEach(() => {
   useNewSessionPickerTarget.setState({ open: false });
 });
 
-describe('useNewSessionPickerTarget — initial state', () => {
-  it('starts closed', () => {
-    expect(useNewSessionPickerTarget.getState().open).toBe(false);
-  });
+it('starts closed', () => {
+  expect(useNewSessionPickerTarget.getState().open).toBe(false);
 });
 
 describe('useNewSessionPickerTarget — setOpen', () => {

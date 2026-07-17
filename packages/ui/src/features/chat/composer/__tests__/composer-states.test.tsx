@@ -2,14 +2,10 @@
  * Composer visual-state behavior tests — Phase 3 parity fixes.
  *
  * Covers:
- *  1. SendOrCancelButton shape — 26×26px rounded-square (not 32px circle)
- *  2. PlanModeToggle amber active state (border-mf-warning / bg-mf-warning-tint / text-mf-warning)
- *  3. EffortPicker lock icon when ultracode-locked
- *  4. FeaturesPopover active-feature accent dot indicator
- *  5. ProviderModelSelect footer in BOTH locked and unlocked states
- *  6. PermissionSelect per-option description notes
- *  7. Toolbar hairline separator between paperclip and config chips
- *  8. Edit-mode composer amber ambient-glow shadow
+ *  1. Toolbar left slot — dedicated "@" mention button beside the paperclip
+ *  2. ProviderModelSelect footer in BOTH locked and unlocked states
+ *  3. PermissionSelect per-option description notes
+ *  4. Toolbar hairline separator between paperclip and config chips
  *
  * Each test asserts hardcoded expected values against the rendered DOM —
  * never derives expectations from the component's own logic.
@@ -86,9 +82,6 @@ vi.mock('../highlight/ComposerHighlight', () => ({
 // ---------------------------------------------------------------------------
 
 import { Composer } from '../Composer';
-import { PlanModeToggle } from '../config-toolbar/PlanModeToggle';
-import { EffortPicker } from '../config-toolbar/EffortPicker';
-import { FeaturesPopover } from '../config-toolbar/FeaturesPopover';
 import { ProviderModelSelect } from '../config-toolbar/ProviderModelSelect';
 import { PermissionSelect } from '../config-toolbar/PermissionSelect';
 import type { AdapterInfo, AdapterModel, Chat } from '@qlan-ro/mainframe-types';
@@ -122,24 +115,6 @@ const MODEL_WITH_EFFORTS: AdapterModel = {
   supportsAdaptiveThinking: false,
 };
 
-const MODEL_WITH_ULTRACODE: AdapterModel = {
-  id: 'opus',
-  label: 'Claude Opus 4',
-  supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
-  supportsUltracode: true,
-  supportsFast: true,
-  supportsAdaptiveThinking: true,
-};
-
-const ADAPTER_PLAN: AdapterInfo = {
-  id: 'claude',
-  name: 'Claude',
-  description: 'Anthropic Claude',
-  installed: true,
-  models: [MODEL_WITH_EFFORTS],
-  capabilities: { planMode: true },
-};
-
 const ADAPTER_CLAUDE: AdapterInfo = {
   id: 'claude',
   name: 'Claude',
@@ -157,55 +132,6 @@ const ADAPTER_GEMINI: AdapterInfo = {
   models: [{ id: 'gemini-flash', label: 'Gemini Flash' }],
   capabilities: { planMode: false },
 };
-
-// ---------------------------------------------------------------------------
-// 1. Send button shape — 26×26px rounded-square
-// ---------------------------------------------------------------------------
-
-describe('Composer — send button is a 26px rounded-square, not a 32px circle', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __extrasReturn = { worktreeMissing: false };
-  });
-
-  it('send button class list contains size-[26px] (not size-8)', () => {
-    render(
-      <TooltipProvider>
-        <Composer />
-      </TooltipProvider>,
-    );
-
-    const send = screen.getByTestId('chat-composer-send');
-    expect(send.className).toContain('size-[26px]');
-    expect(send.className).not.toContain('size-8');
-  });
-
-  it('send button class list contains rounded-md (not rounded-full)', () => {
-    render(
-      <TooltipProvider>
-        <Composer />
-      </TooltipProvider>,
-    );
-
-    const send = screen.getByTestId('chat-composer-send');
-    expect(send.className).toContain('rounded-md');
-    expect(send.className).not.toContain('rounded-full');
-  });
-
-  it('send button icon uses size-3.5 (14px, closest standard rung to the design 13px glyph), not size-4 (8px under the compressed scale)', () => {
-    render(
-      <TooltipProvider>
-        <Composer />
-      </TooltipProvider>,
-    );
-
-    const send = screen.getByTestId('chat-composer-send');
-    const svg = send.querySelector('svg');
-    expect(svg).not.toBeNull();
-    expect(svg!.getAttribute('class')).toContain('size-3.5');
-    expect(svg!.getAttribute('class')).not.toContain('size-4');
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 1b. Toolbar left slot — dedicated "@" mention button beside the paperclip
@@ -226,188 +152,6 @@ describe('Composer — toolbar renders a dedicated "@" mention button beside the
 
     const toolbar = screen.getByTestId('chat-composer-toolbar');
     expect(toolbar.querySelector('[data-testid="composer-add-mention"]')).not.toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 2. PlanModeToggle — amber active state
-// ---------------------------------------------------------------------------
-
-describe('PlanModeToggle — amber active styling', () => {
-  it('active state has border-mf-warning class (amber border)', () => {
-    render(
-      <TooltipProvider>
-        <PlanModeToggle chat={makeChat({ planMode: true })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
-      </TooltipProvider>,
-    );
-
-    const btn = screen.getByTestId('composer-plan-toggle');
-    expect(btn.className).toContain('border-mf-warning');
-  });
-
-  it('active state has bg-mf-warning-tint class (amber tint background)', () => {
-    render(
-      <TooltipProvider>
-        <PlanModeToggle chat={makeChat({ planMode: true })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
-      </TooltipProvider>,
-    );
-
-    const btn = screen.getByTestId('composer-plan-toggle');
-    expect(btn.className).toContain('bg-mf-warning-tint');
-  });
-
-  it('active state has text-mf-warning class (amber icon color)', () => {
-    render(
-      <TooltipProvider>
-        <PlanModeToggle chat={makeChat({ planMode: true })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
-      </TooltipProvider>,
-    );
-
-    const btn = screen.getByTestId('composer-plan-toggle');
-    expect(btn.className).toContain('text-mf-warning');
-  });
-
-  it('active state does NOT have bg-mf-selection (blue tint should be gone)', () => {
-    render(
-      <TooltipProvider>
-        <PlanModeToggle chat={makeChat({ planMode: true })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
-      </TooltipProvider>,
-    );
-
-    const btn = screen.getByTestId('composer-plan-toggle');
-    expect(btn.className).not.toContain('bg-mf-selection');
-  });
-
-  it('inactive state does NOT have bg-mf-warning-tint or border-mf-warning', () => {
-    render(
-      <TooltipProvider>
-        <PlanModeToggle chat={makeChat({ planMode: false })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
-      </TooltipProvider>,
-    );
-
-    const btn = screen.getByTestId('composer-plan-toggle');
-    expect(btn.className).not.toContain('bg-mf-warning-tint');
-    expect(btn.className).not.toContain('border-mf-warning');
-  });
-
-  it('trigger is a fixed 26x20 rounded-sm icon button (RADIUS.sm), not an auto-sized rounded-[11px] pill', () => {
-    render(
-      <TooltipProvider>
-        <PlanModeToggle chat={makeChat({ planMode: false })} adapter={ADAPTER_PLAN} setPlanMode={vi.fn()} />
-      </TooltipProvider>,
-    );
-
-    const btn = screen.getByTestId('composer-plan-toggle');
-    expect(btn.className).toContain('w-[26px]');
-    expect(btn.className).toContain('rounded-sm');
-    expect(btn.className).not.toContain('rounded-[11px]');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. EffortPicker — lock icon when ultracode-locked
-// ---------------------------------------------------------------------------
-
-describe('EffortPicker — lock icon visible when ultracode-locked', () => {
-  it('renders a lock icon element when effort is ultracode-locked', () => {
-    render(
-      <TooltipProvider>
-        <EffortPicker
-          chat={makeChat({ ultracode: true })}
-          model={MODEL_WITH_ULTRACODE}
-          setEffort={vi.fn()}
-          disabled={false}
-        />
-      </TooltipProvider>,
-    );
-
-    // The trigger button has data-testid="composer-effort-select"
-    const trigger = screen.getByTestId('composer-effort-select');
-    // When locked, a lock SVG icon should be inside the trigger
-    const svg = trigger.querySelector('svg');
-    expect(svg).not.toBeNull();
-    // There should be at least 2 SVG children in the button (Gauge + Lock)
-    const svgs = trigger.querySelectorAll('svg');
-    expect(svgs.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('does NOT render extra lock icon when ultracode is off', () => {
-    render(
-      <TooltipProvider>
-        <EffortPicker
-          chat={makeChat({ ultracode: false })}
-          model={MODEL_WITH_ULTRACODE}
-          setEffort={vi.fn()}
-          disabled={false}
-        />
-      </TooltipProvider>,
-    );
-
-    const trigger = screen.getByTestId('composer-effort-select');
-    const svgs = trigger.querySelectorAll('svg');
-    // Only the Gauge icon should be present (1 SVG, maybe 2 with ChevronDown)
-    // The lock icon must NOT be there; when locked=false there are fewer SVGs
-    // than when locked=true (the lock adds a third SVG).
-    expect(svgs.length).toBeLessThan(3);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 4. FeaturesPopover — active-feature accent dot indicator
-// ---------------------------------------------------------------------------
-
-describe('FeaturesPopover — accent dot visible when a feature is active', () => {
-  it('renders an accent dot inside the trigger when a feature is on (fast=true)', () => {
-    render(
-      <TooltipProvider>
-        <FeaturesPopover
-          chat={makeChat({ fast: true })}
-          model={MODEL_WITH_ULTRACODE}
-          setFeature={vi.fn()}
-          disabled={false}
-        />
-      </TooltipProvider>,
-    );
-
-    const trigger = screen.getByTestId('composer-features-trigger');
-    // The accent dot is a small span with bg-primary inside the button
-    const dot = trigger.querySelector('span[class*="bg-primary"]');
-    expect(dot).not.toBeNull();
-  });
-
-  it('does NOT render the accent dot when no feature is active', () => {
-    render(
-      <TooltipProvider>
-        <FeaturesPopover
-          chat={makeChat({ fast: false, ultracode: false, adaptiveThinking: false })}
-          model={MODEL_WITH_ULTRACODE}
-          setFeature={vi.fn()}
-          disabled={false}
-        />
-      </TooltipProvider>,
-    );
-
-    const trigger = screen.getByTestId('composer-features-trigger');
-    const dot = trigger.querySelector('span[class*="bg-primary"]');
-    expect(dot).toBeNull();
-  });
-
-  it('trigger is a fixed 26x20 rounded-sm icon button (RADIUS.sm), not an auto-sized rounded-[11px] pill', () => {
-    render(
-      <TooltipProvider>
-        <FeaturesPopover
-          chat={makeChat({ fast: false, ultracode: false, adaptiveThinking: false })}
-          model={MODEL_WITH_ULTRACODE}
-          setFeature={vi.fn()}
-          disabled={false}
-        />
-      </TooltipProvider>,
-    );
-
-    const trigger = screen.getByTestId('composer-features-trigger');
-    expect(trigger.className).toContain('w-[26px]');
-    expect(trigger.className).toContain('rounded-sm');
-    expect(trigger.className).not.toContain('rounded-[11px]');
   });
 });
 

@@ -70,13 +70,19 @@ function renderQueued({
 }
 
 // ---------------------------------------------------------------------------
-// P1 — single queued item: generic label
+// P1-P5 — FIFO position label text across the queue-length/position matrix
 // ---------------------------------------------------------------------------
 
-describe('QueuedUserTurn — P1: single item (default position/total)', () => {
-  it('renders the generic queued label', () => {
-    renderQueued();
-    expect(screen.getByText(/Claude will pick this up shortly/)).toBeInTheDocument();
+describe('QueuedUserTurn — position/total label text', () => {
+  it.each([
+    ['P1: default position/total (single item)', undefined, undefined, /Claude will pick this up shortly/],
+    ['P2: head of a 3-item queue', 1, 3, /Claude will pick this up shortly/],
+    ['P3: second of 3', 2, 3, /2nd in line/],
+    ['P4: third of 3', 3, 3, /3rd in line/],
+    ['P5: fourth of 4 (th suffix)', 4, 4, /4th in line/],
+  ])('%s', (_label, position, total, expected) => {
+    renderQueued({ position, total });
+    expect(screen.getByText(expected)).toBeInTheDocument();
   });
 });
 
@@ -94,116 +100,40 @@ describe('QueuedUserTurn — Q1: root data-queued-id', () => {
 });
 
 // ---------------------------------------------------------------------------
-// P2 — first of multiple: head-of-queue copy
+// S1/A1/AG/A2 — hover-reveal ghost treatment (bubble, action buttons, row gap,
+// slide-in animation) all present on one render (presence matrix, not 6 renders)
 // ---------------------------------------------------------------------------
 
-describe('QueuedUserTurn — P2: head of multi-item queue', () => {
-  it('renders "Claude will pick this up shortly" for position=1 total=3', () => {
-    renderQueued({ position: 1, total: 3 });
-    expect(screen.getByText(/Claude will pick this up shortly/)).toBeInTheDocument();
-  });
-});
+describe('QueuedUserTurn — hover-reveal ghost treatment', () => {
+  it('bubble, Edit/Cancel actions, action-row gap, and slide-in classes are all present', () => {
+    const { container } = renderQueued({ content: 'some text' });
 
-// ---------------------------------------------------------------------------
-// P3 — second item in queue
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — P3: second in queue', () => {
-  it('renders "2nd in line" for position=2 total=3', () => {
-    renderQueued({ position: 2, total: 3 });
-    expect(screen.getByText(/2nd in line/)).toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// P4 — third item in queue
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — P4: third in queue', () => {
-  it('renders "3rd in line" for position=3 total=3', () => {
-    renderQueued({ position: 3, total: 3 });
-    expect(screen.getByText(/3rd in line/)).toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// P5 — fourth item (cardinal suffix "th")
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — P5: fourth in queue uses "th" suffix', () => {
-  it('renders "4th in line" for position=4 total=4', () => {
-    renderQueued({ position: 4, total: 4 });
-    expect(screen.getByText(/4th in line/)).toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// S1 — bubble ghost treatment: dashed border + opacity
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — S1: bubble ghost treatment', () => {
-  it('bubble div has border-dashed class and opacity-[0.82]', () => {
-    const { container } = renderQueued();
-    // Find the bubble: it's the div with border-dashed
+    // S1 — bubble ghost treatment: dashed border + opacity
     const bubble = container.querySelector('.border-dashed');
     expect(bubble).toBeInTheDocument();
     expect(bubble!.className).toContain('opacity-[0.82]');
-  });
-});
 
-// ---------------------------------------------------------------------------
-// A1 — QueuedAction ghost border classes
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — A1: QueuedAction ghost border', () => {
-  it('Edit action button has border and border-transparent classes', () => {
-    renderQueued({ content: 'some text' });
+    // A1 — QueuedAction ghost border classes (+ Edit-specific gap/radius)
     const editBtn = screen.getByTestId('chat-queued-edit');
     expect(editBtn.className).toContain('border');
     expect(editBtn.className).toContain('border-transparent');
-  });
+    expect(editBtn.className).toContain('gap-[4px]');
+    expect(editBtn.className).toContain('rounded-[7px]');
 
-  it('Cancel action button has border and border-transparent classes', () => {
-    renderQueued({ content: 'text' });
     const cancelBtn = screen.getByTestId('chat-queued-cancel');
     expect(cancelBtn.className).toContain('border');
     expect(cancelBtn.className).toContain('border-transparent');
-  });
 
-  it('Edit action has gap-[4px] (icon/label gap) and rounded-[7px] (7.10)', () => {
-    renderQueued({ content: 'some text' });
-    const editBtn = screen.getByTestId('chat-queued-edit');
-    expect(editBtn.className).toContain('gap-[4px]');
-    expect(editBtn.className).toContain('rounded-[7px]');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// AG — action-row-to-bubble gap matches the design (7.6)
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — AG: action row to bubble gap', () => {
-  it('the row wrapping the actions + bubble has gap-4 (8px)', () => {
-    renderQueued({ content: 'some text' });
-    const actionsDiv = screen.getByTestId('chat-queued-edit').parentElement;
-    const row = actionsDiv?.parentElement;
-    expect(row).not.toBeNull();
-    expect(row!.className).toContain('gap-4');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// A2 — actions container has slide-in translate-x classes
-// ---------------------------------------------------------------------------
-
-describe('QueuedUserTurn — A2: actions container slide-in animation', () => {
-  it('actions container has translate-x-[6px] and group-hover/queued:translate-x-0 classes', () => {
-    renderQueued({ content: 'text' });
-    // The actions container wraps Edit and Cancel buttons
-    const actionsDiv = screen.getByTestId('chat-queued-edit').parentElement;
+    // A2 — actions container has slide-in translate-x classes
+    const actionsDiv = editBtn.parentElement;
     expect(actionsDiv).not.toBeNull();
     expect(actionsDiv!.className).toContain('translate-x-[6px]');
     expect(actionsDiv!.className).toContain('group-hover/queued:translate-x-0');
+
+    // AG — action-row-to-bubble gap matches the design (7.6)
+    const row = actionsDiv?.parentElement;
+    expect(row).not.toBeNull();
+    expect(row!.className).toContain('gap-4');
   });
 });
 

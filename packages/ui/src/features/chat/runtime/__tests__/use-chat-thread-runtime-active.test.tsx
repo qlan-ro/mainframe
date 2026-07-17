@@ -7,7 +7,6 @@
  *   toggle active  — re-render with { active:true } after { active:false } opens the live sub.
  *   onNew local    — controller without a remoteId → createForLocal → setRemoteId → sendMessage.
  *   onNew remote   — controller already has a remoteId → createForLocal NOT called; sendMessage called.
- *   return value   — the hook returns a defined runtime in all cases.
  *
  * Fake controller exposes the minimal surface the hook uses:
  *   subscribeState, subscribeLive, getState, getThreadId, hasRemoteId, load, setRemoteId, sendMessage.
@@ -231,68 +230,7 @@ describe('useChatThreadRuntime — toggling active false→true opens the live s
 // ---------------------------------------------------------------------------
 
 describe('useChatThreadRuntime — onNew on a local controller (no remoteId)', () => {
-  it('calls createForLocal with the threadId and port when hasRemoteId is false', async () => {
-    const fake = makeFakeController('__LOCALID_abc', false);
-
-    const { unmount } = renderHook(() => useChatThreadRuntime(fake.controller, PORT, { active: false }));
-
-    const msg = {
-      role: 'user',
-      content: [{ type: 'text', text: 'hello' }],
-      attachments: [],
-      parentId: null,
-    } as unknown as AppendMessage;
-
-    await act(async () => {
-      await capturedOnNew.current?.(msg);
-    });
-
-    expect(vi.mocked(createForLocal)).toHaveBeenCalledWith('__LOCALID_abc', PORT);
-    unmount();
-  });
-
-  it('calls controller.setRemoteId("chat-77") after createForLocal resolves', async () => {
-    const fake = makeFakeController('__LOCALID_abc', false);
-
-    const { unmount } = renderHook(() => useChatThreadRuntime(fake.controller, PORT, { active: false }));
-
-    const msg = {
-      role: 'user',
-      content: [{ type: 'text', text: 'hello' }],
-      attachments: [],
-      parentId: null,
-    } as unknown as AppendMessage;
-
-    await act(async () => {
-      await capturedOnNew.current?.(msg);
-    });
-
-    expect(fake.setRemoteIdCalls).toEqual(['chat-77']);
-    unmount();
-  });
-
-  it('calls controller.sendMessage with the original message after setRemoteId', async () => {
-    const fake = makeFakeController('__LOCALID_abc', false);
-
-    const { unmount } = renderHook(() => useChatThreadRuntime(fake.controller, PORT, { active: false }));
-
-    const msg = {
-      role: 'user',
-      content: [{ type: 'text', text: 'hello' }],
-      attachments: [],
-      parentId: null,
-    } as unknown as AppendMessage;
-
-    await act(async () => {
-      await capturedOnNew.current?.(msg);
-    });
-
-    expect(fake.sendMessageCalls).toHaveLength(1);
-    expect(fake.sendMessageCalls[0]).toBe(msg);
-    unmount();
-  });
-
-  it('runs createForLocal before setRemoteId before sendMessage (order constraint)', async () => {
+  it('runs createForLocal before setRemoteId before sendMessage (order constraint), passing the threadId/port and original message through', async () => {
     const order: string[] = [];
 
     vi.mocked(createForLocal).mockImplementationOnce(async (_localId: string, _port: number) => {
@@ -343,6 +281,9 @@ describe('useChatThreadRuntime — onNew on a local controller (no remoteId)', (
     });
 
     expect(order).toEqual(['createForLocal', 'setRemoteId', 'sendMessage']);
+    expect(vi.mocked(createForLocal)).toHaveBeenCalledWith(chatId, PORT);
+    expect(setRemoteIdCalls).toEqual(['chat-77']);
+    expect(sendMessageCalls).toEqual([msg]);
     unmount();
   });
 });
@@ -389,33 +330,6 @@ describe('useChatThreadRuntime — onNew on a controller with a remoteId (existi
     });
 
     expect(fake.sendMessageCalls).toHaveLength(1);
-    unmount();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. The hook returns a defined runtime in every case
-// ---------------------------------------------------------------------------
-
-describe('useChatThreadRuntime — returns a defined runtime', () => {
-  it('returns a defined value with { active:true }', () => {
-    const fake = makeFakeController('chat-1');
-    const { result, unmount } = renderHook(() => useChatThreadRuntime(fake.controller, PORT, { active: true }));
-    expect(result.current).toBeDefined();
-    unmount();
-  });
-
-  it('returns a defined value with { active:false }', () => {
-    const fake = makeFakeController('chat-1');
-    const { result, unmount } = renderHook(() => useChatThreadRuntime(fake.controller, PORT, { active: false }));
-    expect(result.current).toBeDefined();
-    unmount();
-  });
-
-  it('returns a defined value with no opts', () => {
-    const fake = makeFakeController('chat-1');
-    const { result, unmount } = renderHook(() => useChatThreadRuntime(fake.controller, PORT));
-    expect(result.current).toBeDefined();
     unmount();
   });
 });

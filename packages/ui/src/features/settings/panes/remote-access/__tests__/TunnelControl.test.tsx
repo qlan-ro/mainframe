@@ -43,11 +43,4 @@ describe('TunnelControl', () => {
     expect(await screen.findByTestId('named-tunnel-toggle')).toBeInTheDocument();
     expect(screen.queryByTestId('quick-tunnel-toggle')).toBeNull();
   });
-  it('renders neither pairing nor devices for a default (unverified) tunnel — Task 12 builds those', async () => {
-    render(<TunnelControl port={31415} tunnel={makeTunnel({ verified: false })} />);
-    await screen.findByTestId('quick-tunnel-toggle');
-    // Task 11 gates both sections to null; nothing half-built is committed.
-    expect(screen.queryByTestId('pairing-generate-code')).toBeNull();
-    expect(screen.queryByTestId('remote-access-device-remove-d1')).toBeNull();
-  });
 });

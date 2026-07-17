@@ -14,9 +14,10 @@
  *  - When a config is 'running', the row shows a STOP button; clicking it calls stopLaunchConfig
  *  - Run button (main-toolbar-play): clicking starts the first config when none is running
  *  - Run button (main-toolbar-play): clicking stops the config when its status is 'running'
- *  - Bug 1 (cross-scope isolation): a selection stored under a DIFFERENT scope key doesn't bleed
- *  - Bug 1 (stale within scope): a stored name not in current configs falls back to the default first config
- *  - Bug 1 (selection respected): a stored name that IS in configs is shown and marked selected
+ *  - Bug 1 (selection respected): a stored name that IS in configs is shown in the trigger
+ *    (the cross-scope-isolation / stale-selection fallback truth table itself is owned by
+ *    derive-launch-control.test.ts — this is the one integration test proving the derived
+ *    label reaches the DOM)
  *
  * Mocked dependencies:
  *  - @/lib/api/launch — startLaunchConfig, stopLaunchConfig, fetchLaunchConfigs, fetchLaunchStatuses
@@ -133,27 +134,12 @@ describe('ToolbarLaunchControls', () => {
     });
   });
 
-  // ── Bug 1 fix: cross-scope isolation ─────────────────────────────────────
-
-  it('ignores a selection stored under a different scope: shows "dev server" not the other scope\'s name', async () => {
-    // 'other-proj:/x' is a completely different scope; it must not affect proj-1:/repo
-    mockSelectedByScope = { 'other-proj:/x': 'ghost' };
-    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
-    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
-    await waitFor(() => {
-      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('dev server');
-    });
-  });
-
-  it('falls back to the first config when stored name is not in current configs', async () => {
-    // 'deleted-config' is stored for the right scope but no longer exists in configs
-    mockSelectedByScope = { [SCOPE_KEY]: 'deleted-config' };
-    const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
-    render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
-    await waitFor(() => {
-      expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('dev server');
-    });
-  });
+  // ── Bug 1 fix: derived label reaches the DOM ─────────────────────────────
+  //
+  // The selection-fallback truth table itself (cross-scope isolation, stale
+  // selection, empty configs) is owned by derive-launch-control.test.ts as
+  // pure logic; this is the one integration test proving the derived name
+  // actually reaches the toolbar trigger's text.
 
   it('uses the stored name when it matches a config in the current scope', async () => {
     // 'preview-app' exists in configs and is stored for the correct scope
@@ -163,17 +149,6 @@ describe('ToolbarLaunchControls', () => {
     await waitFor(() => {
       expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('preview-app');
     });
-  });
-
-  it('marks the stored config row as selected when it matches a current config', async () => {
-    mockSelectedByScope = { [SCOPE_KEY]: 'preview-app' };
-    await renderAndOpen();
-    // The selected row gets 'bg-accent' class; inspect via aria or check the row renders
-    const previewRow = screen.getByTestId('main-toolbar-launch-config-preview-app');
-    expect(previewRow).toBeInTheDocument();
-    // The row for the non-selected config should NOT carry the selected styling
-    // (We verify this by checking the trigger shows "preview-app" and not "dev server")
-    expect(screen.getByTestId('main-toolbar-launch')).toHaveTextContent('preview-app');
   });
 
   // ── Dropdown contents ────────────────────────────────────────────────────

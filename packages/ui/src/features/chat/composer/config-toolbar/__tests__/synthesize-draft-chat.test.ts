@@ -29,28 +29,12 @@ describe('synthesizeDraftChat — maps base fields', () => {
     expect(chat.model).toBe('claude-3-sonnet');
   });
 
-  it('maps permissionMode "default" directly', () => {
-    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', permissionMode: 'default' };
+  it.each(['default', 'acceptEdits', 'yolo'] as const)('maps permissionMode "%s" directly', (permissionMode) => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', permissionMode };
 
     const chat = synthesizeDraftChat('__LOCALID_x', draft);
 
-    expect(chat.permissionMode).toBe('default');
-  });
-
-  it('maps permissionMode "acceptEdits" directly', () => {
-    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', permissionMode: 'acceptEdits' };
-
-    const chat = synthesizeDraftChat('__LOCALID_x', draft);
-
-    expect(chat.permissionMode).toBe('acceptEdits');
-  });
-
-  it('maps permissionMode "yolo" directly', () => {
-    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', permissionMode: 'yolo' };
-
-    const chat = synthesizeDraftChat('__LOCALID_x', draft);
-
-    expect(chat.permissionMode).toBe('yolo');
+    expect(chat.permissionMode).toBe(permissionMode);
   });
 });
 

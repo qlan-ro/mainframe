@@ -28,14 +28,12 @@ describe('DiffHeader', () => {
     expect(screen.getByText('index.ts')).toBeTruthy();
   });
 
-  it('renders "N changes" fallback when no additions/deletions provided', () => {
-    render(<DiffHeader fileName="app.tsx" changeCount={5} onPrev={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByText('5 changes')).toBeTruthy();
-  });
-
-  it('renders "0 changes" fallback when changeCount is 0 and no stats', () => {
-    render(<DiffHeader fileName="app.tsx" changeCount={0} onPrev={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByText('0 changes')).toBeTruthy();
+  it.each([
+    [5, '5 changes'],
+    [0, '0 changes'],
+  ])('renders the "%i changes" fallback when no additions/deletions provided', (changeCount, label) => {
+    render(<DiffHeader fileName="app.tsx" changeCount={changeCount} onPrev={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByText(label)).toBeTruthy();
   });
 
   it('renders "+N" and "−N" counts when additions and deletions are provided', () => {
@@ -48,32 +46,28 @@ describe('DiffHeader', () => {
     expect(screen.queryByText('3 changes')).toBeNull();
   });
 
-  it('calls onPrev when the diff-prev-change button is clicked', async () => {
+  it('calls onPrev / onNext when the matching nav button is clicked', async () => {
     const user = userEvent.setup();
     const onPrev = vi.fn();
-    render(<DiffHeader fileName="file.ts" changeCount={2} onPrev={onPrev} onNext={vi.fn()} />);
+    const onNext = vi.fn();
+    render(<DiffHeader fileName="file.ts" changeCount={2} onPrev={onPrev} onNext={onNext} />);
     await user.click(screen.getByTestId('diff-prev-change'));
+    expect(onPrev).toHaveBeenCalledOnce();
+    expect(onNext).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('diff-next-change'));
+    expect(onNext).toHaveBeenCalledOnce();
     expect(onPrev).toHaveBeenCalledOnce();
   });
 
-  it('calls onNext when the diff-next-change button is clicked', async () => {
-    const user = userEvent.setup();
-    const onNext = vi.fn();
-    render(<DiffHeader fileName="file.ts" changeCount={2} onPrev={vi.fn()} onNext={onNext} />);
-    await user.click(screen.getByTestId('diff-next-change'));
-    expect(onNext).toHaveBeenCalledOnce();
-  });
-
-  it('disables both buttons when changeCount === 0', () => {
-    render(<DiffHeader fileName="file.ts" changeCount={0} onPrev={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByTestId('diff-prev-change')).toBeDisabled();
-    expect(screen.getByTestId('diff-next-change')).toBeDisabled();
-  });
-
-  it('enables both buttons when changeCount > 0', () => {
-    render(<DiffHeader fileName="file.ts" changeCount={1} onPrev={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByTestId('diff-prev-change')).not.toBeDisabled();
-    expect(screen.getByTestId('diff-next-change')).not.toBeDisabled();
+  it.each([
+    ['disables', 0],
+    ['enables', 1],
+  ])('%s both nav buttons when changeCount is %i', (mode, changeCount) => {
+    render(<DiffHeader fileName="file.ts" changeCount={changeCount} onPrev={vi.fn()} onNext={vi.fn()} />);
+    for (const id of ['diff-prev-change', 'diff-next-change']) {
+      if (mode === 'disables') expect(screen.getByTestId(id)).toBeDisabled();
+      else expect(screen.getByTestId(id)).not.toBeDisabled();
+    }
   });
 
   it('renders the toolbar with aria-label="Diff navigation"', () => {
@@ -81,12 +75,12 @@ describe('DiffHeader', () => {
     expect(screen.getByRole('toolbar', { name: 'Diff navigation' })).toBeTruthy();
   });
 
-  it('renders a Reveal button (diff-reveal) when filePath is provided', () => {
-    render(<DiffHeader fileName="file.ts" changeCount={1} filePath="/src/file.ts" onPrev={vi.fn()} onNext={vi.fn()} />);
+  it('renders the Reveal button (diff-reveal) only when filePath is provided', () => {
+    const { unmount } = render(
+      <DiffHeader fileName="file.ts" changeCount={1} filePath="/src/file.ts" onPrev={vi.fn()} onNext={vi.fn()} />,
+    );
     expect(screen.getByTestId('diff-reveal')).toBeTruthy();
-  });
-
-  it('does not render a Reveal button when filePath is not provided', () => {
+    unmount();
     render(<DiffHeader fileName="file.ts" changeCount={1} onPrev={vi.fn()} onNext={vi.fn()} />);
     expect(screen.queryByTestId('diff-reveal')).toBeNull();
   });

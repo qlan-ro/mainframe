@@ -1,29 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import {
-  MenuRow,
-  MenuDivider,
-  MenuLabel,
-  MenuCheckRow,
-  MenuSearchField,
-  MENU_CONTENT_PADDING,
-  menuItemVariants,
-} from '../menu';
+import { MenuRow, MenuDivider, MenuLabel, MenuCheckRow, MenuSearchField } from '../menu';
 
 describe('menu vocabulary', () => {
-  it('MENU_CONTENT_PADDING is the canonical 5px', () => {
-    expect(MENU_CONTENT_PADDING).toBe('p-[5px]');
-  });
-
-  it('menuItemVariants encodes the row geometry once', () => {
-    const cls = menuItemVariants();
-    expect(cls).toContain('gap-[9px]');
-    expect(cls).toContain('px-[8px]');
-    expect(cls).toContain('py-[7px]');
-    expect(cls).toContain('text-label');
-    expect(cls).toContain('rounded-sm');
-  });
-
   it('MenuRow renders label + forwards click and testid', () => {
     const onClick = vi.fn();
     render(<MenuRow data-testid="x-row" label="Update all" onClick={onClick} />);

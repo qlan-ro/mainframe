@@ -2,18 +2,18 @@
  * TaskEditModal.test.tsx
  *
  * Behaviors covered:
- *  1.  Renders data-testid="tasks-edit-title" input.
- *  2.  Renders data-testid="tasks-edit-save" button.
- *  3.  Renders data-testid="tasks-edit-cancel" button.
- *  4.  Save button is disabled when title is empty.
- *  5.  Save button is disabled when title is whitespace-only.
- *  6.  Save button is enabled when title has non-whitespace content.
- *  7.  New-task mode: clicking Save with a title calls store.create.
- *  8.  Edit-task mode: clicking Save calls store.update with the existing todo's id.
- *  9.  Clicking Cancel calls onClose without saving.
- *  10. In edit mode, renders tasks-edit-delete button.
- *  11. In new mode, tasks-edit-delete button is NOT rendered.
- *  12. Dialog title says "New Task" in create mode and "Edit Task" in edit mode.
+ *  1. Save button is disabled when title is empty.
+ *  2. Save button is disabled when title is whitespace-only.
+ *  3. Save button is enabled when title has non-whitespace content.
+ *  4. New-task mode: clicking Save with a title calls store.create.
+ *  5. Edit-task mode: clicking Save calls store.update with the existing todo's id.
+ *  6. Clicking Cancel calls onClose without saving.
+ *  7. In edit mode, renders tasks-edit-delete button.
+ *  8. In new mode, tasks-edit-delete button is NOT rendered.
+ *  9. Dialog title says "New Task" in create mode and "Edit Task" in edit mode.
+ *
+ * (title/save/cancel testid presence is exercised implicitly by the gating,
+ * create/update, and cancel tests below — no bare presence smokes needed.)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -111,28 +111,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1–3. Key testids present
-// ---------------------------------------------------------------------------
-
-describe('TaskEditModal — key testids are rendered', () => {
-  it('renders tasks-edit-title input', () => {
-    renderModal();
-    expect(screen.getByTestId('tasks-edit-title')).toBeTruthy();
-  });
-
-  it('renders tasks-edit-save button', () => {
-    renderModal();
-    expect(screen.getByTestId('tasks-edit-save')).toBeTruthy();
-  });
-
-  it('renders tasks-edit-cancel button', () => {
-    renderModal();
-    expect(screen.getByTestId('tasks-edit-cancel')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 4–6. Required-title gating
+//
+// (title/save/cancel testid presence is exercised implicitly by the gating,
+// create/update, and cancel tests below — no bare presence smokes needed.)
 // ---------------------------------------------------------------------------
 
 describe('TaskEditModal — Save button is gated on a non-empty title', () => {

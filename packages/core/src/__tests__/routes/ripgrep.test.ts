@@ -141,11 +141,4 @@ describe('listFilesWithRipgrep', () => {
     expect(files).not.toContain('ignored.txt');
     expect(files).toContain('visible.txt');
   });
-
-  it('returns null when ripgrep is unavailable', async () => {
-    const { listFilesWithRipgrep } = await import('../../server/ripgrep.js');
-    // This test validates the return type — actual rg availability varies by environment
-    const result = await listFilesWithRipgrep(testDir);
-    expect(Array.isArray(result) || result === null).toBe(true);
-  });
 });

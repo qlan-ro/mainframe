@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useDraftRow — navigation-away discard behavior (final-review fix).
  *

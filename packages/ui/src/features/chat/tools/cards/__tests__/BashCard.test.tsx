@@ -80,13 +80,6 @@ describe('BashCard', () => {
     vi.clearAllMocks();
   });
 
-  // --- Root element ---
-
-  it('renders the card root with data-testid="chat-bash-card"', () => {
-    renderCard(makePart({ args: { command: 'ls -la' } }));
-    expect(screen.getByTestId('chat-bash-card')).toBeInTheDocument();
-  });
-
   // --- Header: command text ---
 
   it('shows the command from args.command in the header', () => {

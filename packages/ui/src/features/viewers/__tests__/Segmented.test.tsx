@@ -7,10 +7,7 @@
  *  3. Inactive options get the idle text classes, not the active classes.
  *  4. Clicking an option calls onChange with that option's id.
  *  5. aria-pressed reflects active state per option.
- *  6. Inner buttons use rounded-md (8px), not the design's 6px rounded-sm —
- *     wait: the design wants inner radius 6px (rounded-sm). Verify the fix.
- *  7. Outer track keeps its 8px radius (rounded-[8px]).
- *  8. testId prop is forwarded to the button's data-testid when provided.
+ *  6. testId prop is forwarded to the button's data-testid when provided.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -54,18 +51,5 @@ describe('Segmented', () => {
     render(<Segmented value="fit" onChange={vi.fn()} options={OPTIONS} />);
     expect(screen.getByTestId('seg-fit')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('seg-actual')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  it('inner buttons use rounded-sm (6px), matching the design inner radius', () => {
-    render(<Segmented value="fit" onChange={vi.fn()} options={OPTIONS} />);
-    const btn = screen.getByTestId('seg-fit');
-    expect(btn.className).toContain('rounded-sm');
-    expect(btn.className).not.toContain('rounded-md');
-  });
-
-  it('outer track keeps the 8px radius', () => {
-    const { container } = render(<Segmented value="fit" onChange={vi.fn()} options={OPTIONS} />);
-    const track = container.firstElementChild as HTMLElement;
-    expect(track.className).toContain('rounded-[8px]');
   });
 });

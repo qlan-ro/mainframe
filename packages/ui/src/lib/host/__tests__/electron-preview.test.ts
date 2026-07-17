@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountElectronPreview, scaleCropRect } from '../electron-preview';
 
@@ -111,31 +112,45 @@ describe('mountElectronPreview', () => {
     expect(wv.style.width).toBe('100%');
   });
 
-  it('refit() is a no-op and does not throw', () => {
-    const container = document.createElement('div');
-    const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
-    expect(() => handle.refit()).not.toThrow();
-  });
-
-  it('onInspect subscribers receive picks and unsubscribe stops them', () => {
+  it('onInspect unsubscribe stops delivery of a fired pick', async () => {
     const container = document.createElement('div');
     const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
     const cb = vi.fn();
     const unsub = handle.onInspect(cb);
     unsub();
-    expect(cb).not.toHaveBeenCalled(); // no pick fired; asserts wiring/teardown does not throw
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    wv.executeJavaScript = () =>
+      Promise.resolve({
+        selector: '#btn',
+        rect: { x: 5, y: 10, width: 50, height: 20 },
+        viewport: { width: 800, height: 600 },
+      });
+    await handle.startInspect();
+    expect(cb).not.toHaveBeenCalled();
   });
 
-  it('onInspect multiple subscribers all receive results', () => {
+  it('onInspect multiple subscribers all receive a fired pick', async () => {
     const container = document.createElement('div');
     const handle = mountElectronPreview(container, 'http://x', { projectId: 'p1' });
     const cb1 = vi.fn();
     const cb2 = vi.fn();
     handle.onInspect(cb1);
     handle.onInspect(cb2);
-    // Both are registered — just assert no throw on registration (actual pick needs real webview)
-    expect(cb1).not.toHaveBeenCalled();
-    expect(cb2).not.toHaveBeenCalled();
+    const wv = container.querySelector('webview') as HTMLElement & {
+      executeJavaScript: (js: string) => Promise<unknown>;
+    };
+    wv.executeJavaScript = () =>
+      Promise.resolve({
+        selector: '#btn',
+        rect: { x: 5, y: 10, width: 50, height: 20 },
+        viewport: { width: 800, height: 600 },
+      });
+    await handle.startInspect();
+    expect(cb1).toHaveBeenCalledTimes(1);
+    expect(cb2).toHaveBeenCalledTimes(1);
+    expect(cb1.mock.calls[0]![0]).toMatchObject({ selector: '#btn' });
   });
 
   it('navigate resolves without throwing when loadURL is absent (jsdom fallback)', async () => {

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * use-todos-store.test.ts
  *

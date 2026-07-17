@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RouteContext } from '../../server/routes/types.js';
+import { GitService } from '../../git/git-service.js';
 
 // Mock GitService before importing the routes
 const mockSvc = {
@@ -204,6 +205,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
     handler({ params: { id: 'proj-1' }, query: {}, body: { chatId: 'chat-1' } }, res, vi.fn());
     await waitForResponse(res);
 
+    expect(GitService.forProject).toHaveBeenCalledWith('/some/project/.worktrees/feat-x');
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: true,

@@ -4,11 +4,9 @@
  * Behaviors covered:
  *  - chatId is item.id (stable, not remoteId): __LOCALID_x with remoteId 'chat-5'
  *    → registry keyed by '__LOCALID_x', NOT 'chat-5'.
- *  - pre-existing thread: id 'chat-9' with remoteId 'chat-9' → registry keyed by 'chat-9'.
  *  - active derivation (true): item.id === mainThreadId AND item.remoteId != null → active:true.
  *  - active derivation (false, different mainThreadId): active:false.
  *  - active derivation (false, no remoteId): __LOCALID with no remoteId → active:false even when main.
- *  - return value: hook returns exactly the sentinel runtime from useChatThreadRuntime.
  */
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -93,23 +91,6 @@ describe('use-chat-runtime-hook — chatId is item.id (stable), not remoteId', (
 });
 
 // ---------------------------------------------------------------------------
-// 2. Pre-existing thread: id matches remoteId
-// ---------------------------------------------------------------------------
-
-describe('use-chat-runtime-hook — pre-existing thread uses item.id as registry key', () => {
-  it('calls getOrCreate("chat-9", 31415) for a thread whose id equals its remoteId', () => {
-    fakeAuiState = {
-      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
-      threads: { mainThreadId: 'other' },
-    };
-
-    renderHook(() => useChatRuntimeHook());
-
-    expect(mockGetOrCreate).toHaveBeenCalledWith('chat-9', 31415);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 3. active derivation — true when item.id === mainThreadId AND remoteId set
 // ---------------------------------------------------------------------------
 
@@ -160,22 +141,5 @@ describe('use-chat-runtime-hook — active:false when remoteId is absent (new lo
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
     expect(thirdArg).toEqual({ active: false });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. Return value is exactly the sentinel runtime
-// ---------------------------------------------------------------------------
-
-describe('use-chat-runtime-hook — return value is the runtime from useChatThreadRuntime', () => {
-  it('returns exactly the sentinel runtime (toBe)', () => {
-    fakeAuiState = {
-      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
-      threads: { mainThreadId: 'chat-9' },
-    };
-
-    const { result } = renderHook(() => useChatRuntimeHook());
-
-    expect(result.current).toBe(SENTINEL_RUNTIME);
   });
 });

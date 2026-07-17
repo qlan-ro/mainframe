@@ -11,6 +11,7 @@ vi.mock('../../adapters/resolve-executable.js', () => ({
 }));
 
 import { settingRoutes } from '../../server/routes/settings.js';
+import { resolveAdapterExecutableCached } from '../../adapters/resolve-executable.js';
 import type { RouteContext } from '../../server/routes/types.js';
 
 function createMockContext(): RouteContext {
@@ -54,6 +55,7 @@ describe('settingRoutes', () => {
 
   beforeEach(() => {
     ctx = createMockContext();
+    (resolveAdapterExecutableCached as any).mockResolvedValue({ path: 'claude', source: 'fallback', valid: false });
   });
 
   describe('GET /api/settings/providers', () => {
@@ -152,88 +154,132 @@ describe('settingRoutes', () => {
       // resolvedExecutable is now added per adapter; use toMatchObject to tolerate the new key
       expect(call.data.claude).toMatchObject({ model: 'opus' });
     });
+
+    it('includes a resolved executable for every registered adapter', async () => {
+      (ctx.db.settings.getByCategory as any).mockReturnValue({});
+      (ctx.adapters.getAll as any).mockReturnValue([{ id: 'claude' }, { id: 'codex' }]);
+      (resolveAdapterExecutableCached as any).mockImplementation(async (id: string) => ({
+        path: `/usr/local/bin/${id}`,
+        source: 'detected',
+        valid: true,
+      }));
+
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/settings/providers');
+      const res = mockRes();
+      await handler({ params: {}, query: {} }, res, vi.fn());
+
+      const { data } = res.json.mock.calls[0][0];
+      expect(data.claude.resolvedExecutable).toMatchObject({ path: '/usr/local/bin/claude', valid: true });
+      expect(data.codex.resolvedExecutable).toMatchObject({ path: '/usr/local/bin/codex', valid: true });
+    });
+
+    it('still enriches stored settings for an adapter that is no longer registered', async () => {
+      (ctx.db.settings.getByCategory as any).mockReturnValue({ 'ghost.defaultModel': 'gpt-ghost' });
+      (ctx.adapters.getAll as any).mockReturnValue([{ id: 'claude' }]);
+
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/settings/providers');
+      const res = mockRes();
+      await handler({ params: {}, query: {} }, res, vi.fn());
+
+      const { data } = res.json.mock.calls[0][0];
+      expect(data.ghost).toMatchObject({ defaultModel: 'gpt-ghost' });
+      expect(data.ghost.resolvedExecutable).toBeDefined();
+    });
   });
 
   describe('PUT /api/settings/providers/:adapterId', () => {
-    it('sets defaultModel', () => {
+    // setAssert/deleteAssert/checkJson mirror exactly what each original test
+    // asserted — some checked only the positive set/delete call, some also
+    // asserted the other was never called, some checked res.json, some didn't.
+    it.each([
+      {
+        label: 'sets defaultModel',
+        body: { defaultModel: 'sonnet' },
+        setAssert: ['claude.defaultModel', 'sonnet'] as const,
+        deleteAssert: undefined,
+        checkJson: true,
+      },
+      {
+        label: 'deletes defaultModel when value is falsy',
+        body: { defaultModel: '' },
+        setAssert: 'not-called' as const,
+        deleteAssert: 'claude.defaultModel',
+        checkJson: false,
+      },
+      {
+        label: 'sets defaultMode and cleans up skipPermissions',
+        body: { defaultMode: 'yolo' },
+        setAssert: ['claude.defaultMode', 'yolo'] as const,
+        deleteAssert: 'claude.skipPermissions',
+        checkJson: false,
+      },
+      {
+        label: 'sets defaultPlanMode',
+        body: { defaultPlanMode: 'true' },
+        setAssert: ['claude.defaultPlanMode', 'true'] as const,
+        deleteAssert: undefined,
+        checkJson: true,
+      },
+      {
+        label: 'sets executablePath',
+        body: { executablePath: '/usr/local/bin/claude' },
+        setAssert: ['claude.executablePath', '/usr/local/bin/claude'] as const,
+        deleteAssert: undefined,
+        checkJson: true,
+      },
+      {
+        label: 'deletes executablePath when empty',
+        body: { executablePath: '' },
+        setAssert: undefined,
+        deleteAssert: 'claude.executablePath',
+        checkJson: false,
+      },
+      {
+        label: 'ignores undefined fields',
+        body: {},
+        setAssert: 'not-called' as const,
+        deleteAssert: 'not-called' as const,
+        checkJson: true,
+      },
+    ])('$label', ({ body, setAssert, deleteAssert, checkJson }) => {
       const router = settingRoutes(ctx);
       const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
       const res = mockRes();
 
-      handler({ params: { adapterId: 'claude' }, query: {}, body: { defaultModel: 'sonnet' } }, res, vi.fn());
+      handler({ params: { adapterId: 'claude' }, query: {}, body }, res, vi.fn());
 
-      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultModel', 'sonnet');
-      expect(res.json).toHaveBeenCalledWith({ success: true });
+      if (setAssert === 'not-called') {
+        expect(ctx.db.settings.set).not.toHaveBeenCalled();
+      } else if (setAssert) {
+        expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', ...setAssert);
+      }
+
+      if (deleteAssert === 'not-called') {
+        expect(ctx.db.settings.delete).not.toHaveBeenCalled();
+      } else if (deleteAssert) {
+        expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', deleteAssert);
+      }
+
+      if (checkJson) {
+        expect(res.json).toHaveBeenCalledWith({ success: true });
+      }
     });
 
-    it('deletes defaultModel when value is falsy', () => {
+    it.each([
+      ['defaultMode', 'bogus-mode'],
+      ['defaultEffort', 'ultra'],
+    ])('rejects invalid %s enum value with 400', (field, value) => {
       const router = settingRoutes(ctx);
       const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
       const res = mockRes();
 
-      handler({ params: { adapterId: 'claude' }, query: {}, body: { defaultModel: '' } }, res, vi.fn());
+      handler({ params: { adapterId: 'claude' }, query: {}, body: { [field]: value } }, res, vi.fn());
 
-      expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.defaultModel');
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
       expect(ctx.db.settings.set).not.toHaveBeenCalled();
-    });
-
-    it('sets defaultMode and cleans up skipPermissions', () => {
-      const router = settingRoutes(ctx);
-      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
-      const res = mockRes();
-
-      handler({ params: { adapterId: 'claude' }, query: {}, body: { defaultMode: 'yolo' } }, res, vi.fn());
-
-      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultMode', 'yolo');
-      expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.skipPermissions');
-    });
-
-    it('sets defaultPlanMode', () => {
-      const router = settingRoutes(ctx);
-      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
-      const res = mockRes();
-
-      handler({ params: { adapterId: 'claude' }, query: {}, body: { defaultPlanMode: 'true' } }, res, vi.fn());
-
-      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultPlanMode', 'true');
-      expect(res.json).toHaveBeenCalledWith({ success: true });
-    });
-
-    it('sets executablePath', () => {
-      const router = settingRoutes(ctx);
-      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
-      const res = mockRes();
-
-      handler(
-        { params: { adapterId: 'claude' }, query: {}, body: { executablePath: '/usr/local/bin/claude' } },
-        res,
-        vi.fn(),
-      );
-
-      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.executablePath', '/usr/local/bin/claude');
-      expect(res.json).toHaveBeenCalledWith({ success: true });
-    });
-
-    it('deletes executablePath when empty', () => {
-      const router = settingRoutes(ctx);
-      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
-      const res = mockRes();
-
-      handler({ params: { adapterId: 'claude' }, query: {}, body: { executablePath: '' } }, res, vi.fn());
-
-      expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.executablePath');
-    });
-
-    it('ignores undefined fields', () => {
-      const router = settingRoutes(ctx);
-      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
-      const res = mockRes();
-
-      handler({ params: { adapterId: 'claude' }, query: {}, body: {} }, res, vi.fn());
-
-      expect(ctx.db.settings.set).not.toHaveBeenCalled();
-      expect(ctx.db.settings.delete).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith({ success: true });
     });
   });
 

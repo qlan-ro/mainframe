@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { setHostForTesting, resetHostForTesting } from '@/lib/host';

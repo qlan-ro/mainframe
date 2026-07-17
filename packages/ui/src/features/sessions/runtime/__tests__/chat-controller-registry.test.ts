@@ -1,9 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Mock ChatThreadController — no WS / REST runs
-// ---------------------------------------------------------------------------
-
 // The mock implementation is a regular `function` (not an arrow): vitest 4 /
 // tinyspy invokes the spy's implementation via Reflect.construct on `new`, and
 // arrow functions are not constructable. A plain function returning an object
@@ -20,108 +16,69 @@ import { ChatThreadController } from '../../../chat/controller/chat-thread-contr
 
 const MockCtor = vi.mocked(ChatThreadController);
 
-// ---------------------------------------------------------------------------
-// Reset singleton state + mock call counts between cases
-// ---------------------------------------------------------------------------
-
-afterEach(() => {
-  chatControllerRegistry.dispose('chat-1');
-  chatControllerRegistry.dispose('chat-2');
-  chatControllerRegistry.dispose('__LOCALID_a');
-  vi.clearAllMocks();
-});
-
-// ---------------------------------------------------------------------------
-// chat-controller-registry
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Helper — the mock returns a plain object; cast to access the chatId field
-// that the mock exposes but the real class keeps private.
-// ---------------------------------------------------------------------------
+// The mock factory returns a plain object; cast to access the fields the
+// real class keeps private (`chatId`) or typed as `unknown` (`dispose`).
 function chatId(ctrl: unknown): string {
   return (ctrl as { chatId: string }).chatId;
 }
+function disposeSpyOf(ctrl: unknown): ReturnType<typeof vi.fn> {
+  return (ctrl as { dispose: ReturnType<typeof vi.fn> }).dispose;
+}
 
-describe('chat-controller-registry — getOrCreate returns controller keyed by id', () => {
-  it('returns a controller whose chatId matches the requested id', () => {
-    const ctrl = chatControllerRegistry.getOrCreate('chat-1', 31415);
-    expect(chatId(ctrl)).toBe('chat-1');
-  });
-
-  it('constructs exactly one controller on first call', () => {
-    chatControllerRegistry.getOrCreate('chat-1', 31415);
-    expect(MockCtor).toHaveBeenCalledTimes(1);
-  });
+afterEach(() => {
+  chatControllerRegistry.disposeAll();
+  vi.clearAllMocks();
 });
 
-describe('chat-controller-registry — getOrCreate is idempotent (StrictMode-safe)', () => {
-  it('returns the same reference on a second call for the same id', () => {
-    const first = chatControllerRegistry.getOrCreate('chat-1', 31415);
-    const second = chatControllerRegistry.getOrCreate('chat-1', 31415);
-    expect(second).toBe(first);
-  });
+describe('chatControllerRegistry', () => {
+  it.each(['chat-1', '__LOCALID_a'])(
+    'getOrCreate(%s) returns a matching controller and caches it across repeated calls',
+    (id) => {
+      const first = chatControllerRegistry.getOrCreate(id, 31415);
+      expect(chatId(first)).toBe(id);
+      expect(MockCtor).toHaveBeenCalledTimes(1);
 
-  it('does not construct a second controller on a repeated call', () => {
-    chatControllerRegistry.getOrCreate('chat-1', 31415);
-    chatControllerRegistry.getOrCreate('chat-1', 31415);
-    expect(MockCtor).toHaveBeenCalledTimes(1);
-  });
-});
+      const second = chatControllerRegistry.getOrCreate(id, 31415);
+      expect(second).toBe(first);
+      expect(MockCtor).toHaveBeenCalledTimes(1);
+    },
+  );
 
-describe('chat-controller-registry — getOrCreate creates separate instances for different ids', () => {
-  it('returns a different reference for a different id', () => {
+  it('creates a separate instance for a different id and bumps the construction count', () => {
     const ctrl1 = chatControllerRegistry.getOrCreate('chat-1', 31415);
     const ctrl2 = chatControllerRegistry.getOrCreate('chat-2', 31415);
     expect(ctrl2).not.toBe(ctrl1);
-  });
-
-  it('bumps the construction count to 2 when a second distinct id is requested', () => {
-    chatControllerRegistry.getOrCreate('chat-1', 31415);
-    chatControllerRegistry.getOrCreate('chat-2', 31415);
     expect(MockCtor).toHaveBeenCalledTimes(2);
   });
-});
 
-describe('chat-controller-registry — __LOCALID_* ids are treated like any other id', () => {
-  it('returns a controller whose chatId matches the local id', () => {
-    const ctrl = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
-    expect(chatId(ctrl)).toBe('__LOCALID_a');
-  });
-
-  it('returns the same reference on a repeated call for the same local id', () => {
-    const first = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
-    const second = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
-    expect(second).toBe(first);
-  });
-
-  it('does not construct a second controller on a repeated call for the local id', () => {
-    chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
-    chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
-    expect(MockCtor).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('chat-controller-registry — dispose calls the controller dispose and evicts the entry', () => {
-  it('calls the controller dispose method exactly once', () => {
+  it('dispose calls the controller dispose method and evicts the entry so a later getOrCreate constructs fresh', () => {
     const ctrl = chatControllerRegistry.getOrCreate('chat-2', 31415);
     chatControllerRegistry.dispose('chat-2');
-    // The mock factory returns { dispose: vi.fn() }; cast to access the spy.
-    const disposeSpy = (ctrl as unknown as { dispose: ReturnType<typeof vi.fn> }).dispose;
-    expect(disposeSpy).toHaveBeenCalledTimes(1);
-  });
+    expect(disposeSpyOf(ctrl)).toHaveBeenCalledTimes(1);
 
-  it('constructs a fresh controller after dispose when getOrCreate is called again', () => {
-    chatControllerRegistry.getOrCreate('chat-2', 31415);
-    chatControllerRegistry.dispose('chat-2');
     vi.clearAllMocks();
     chatControllerRegistry.getOrCreate('chat-2', 31415);
     expect(MockCtor).toHaveBeenCalledTimes(1);
   });
-});
 
-describe('chat-controller-registry — dispose of unknown id is a no-op', () => {
-  it('does not throw when disposing an id that was never registered', () => {
+  it('dispose of an id that was never registered is a no-op', () => {
     expect(() => chatControllerRegistry.dispose('never-registered')).not.toThrow();
+  });
+
+  it('disposeAll calls dispose on every registered controller and empties the registry so a later getOrCreate constructs fresh instances', () => {
+    const ctrlA = chatControllerRegistry.getOrCreate('a', 1);
+    const ctrlB = chatControllerRegistry.getOrCreate('b', 1);
+
+    chatControllerRegistry.disposeAll();
+
+    expect(disposeSpyOf(ctrlA)).toHaveBeenCalledTimes(1);
+    expect(disposeSpyOf(ctrlB)).toHaveBeenCalledTimes(1);
+
+    const freshA = chatControllerRegistry.getOrCreate('a', 1);
+    expect(freshA).not.toBe(ctrlA);
+  });
+
+  it('disposeAll on an already-empty registry is a no-op', () => {
+    expect(() => chatControllerRegistry.disposeAll()).not.toThrow();
   });
 });

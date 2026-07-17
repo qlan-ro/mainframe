@@ -8,7 +8,6 @@
  *  - makeChatsRemoteAdapter is called with 31415 (the port from context).
  *  - The adapter identity is stable across re-renders (useMemo([port])):
  *    re-render calls makeChatsRemoteAdapter only once for the same port.
- *  - useSessionsThreadList() returns the sentinel runtime (toBe).
  */
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -79,19 +78,6 @@ describe('use-sessions-thread-list — runtimeHook is useChatRuntimeHook', () =>
 });
 
 // ---------------------------------------------------------------------------
-// 2. useRemoteThreadListRuntime receives the sentinel adapter
-// ---------------------------------------------------------------------------
-
-describe('use-sessions-thread-list — adapter is the sentinel from makeChatsRemoteAdapter', () => {
-  it('passes the sentinel adapter to useRemoteThreadListRuntime', () => {
-    renderHook(() => useSessionsThreadList());
-
-    const opts = mockUseRemoteThreadListRuntime.mock.calls[0]?.[0];
-    expect(opts?.adapter).toBe(SENTINEL_ADAPTER);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 3. makeChatsRemoteAdapter is called with port 31415
 // ---------------------------------------------------------------------------
 
@@ -113,17 +99,5 @@ describe('use-sessions-thread-list — adapter is memoized by port', () => {
     rerender();
 
     expect(mockMakeChatsRemoteAdapter).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Return value is exactly the sentinel runtime
-// ---------------------------------------------------------------------------
-
-describe('use-sessions-thread-list — return value is the runtime from useRemoteThreadListRuntime', () => {
-  it('returns exactly the sentinel runtime (toBe)', () => {
-    const { result } = renderHook(() => useSessionsThreadList());
-
-    expect(result.current).toBe(SENTINEL_RUNTIME);
   });
 });

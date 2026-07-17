@@ -2,13 +2,15 @@
  * ConsolePane — unit tests.
  *
  * Behaviors covered:
- *  - Renders the pane root with data-testid="run-console-pane"
  *  - Renders a log line for each matching entry (stdout + stderr)
  *  - Applies destructive styling class to stderr lines
- *  - Renders a clear button with data-testid="run-console-clear"
  *  - Calling the clear button calls clearLogsForProcess on the sandbox store
  *  - Does NOT render entries from a different scope or process name
  *  - Drawer variant renders, collapses by default, expands on toggle
+ *
+ * (Root-pane and clear-button bare presence smokes were dropped — every
+ * interaction test below already queries those same testids to drive a
+ * click, so their presence is exercised implicitly.)
  */
 import { it, expect, vi, beforeEach, describe } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -36,12 +38,6 @@ describe('ConsolePane', () => {
     } as never);
   });
 
-  it('renders the pane root with data-testid="run-console-pane"', async () => {
-    const { ConsolePane } = await import('../ConsolePane');
-    render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" />);
-    expect(screen.getByTestId('run-console-pane')).toBeInTheDocument();
-  });
-
   it('renders only matching log lines for the scope + process', async () => {
     const { ConsolePane } = await import('../ConsolePane');
     render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" />);
@@ -56,12 +52,6 @@ describe('ConsolePane', () => {
     render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" />);
     const errLine = screen.getByText('Error: port in use').closest('[data-stream]');
     expect(errLine).toHaveAttribute('data-stream', 'stderr');
-  });
-
-  it('renders the clear button with correct testid', async () => {
-    const { ConsolePane } = await import('../ConsolePane');
-    render(<ConsolePane scopeKey="proj-1:/repo" processName="dev" />);
-    expect(screen.getByTestId('run-console-clear')).toBeInTheDocument();
   });
 
   it('calls clearLogsForProcess when the clear button is clicked', async () => {

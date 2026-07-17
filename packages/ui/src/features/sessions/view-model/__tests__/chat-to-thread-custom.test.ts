@@ -23,259 +23,152 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
 }
 
 // ---------------------------------------------------------------------------
-// status mapping
+// Field-mapping tables — every row asserts one field of the chatToThreadCustom
+// output against a fixed expected value, given a Chat override.
 // ---------------------------------------------------------------------------
 
-describe('chatToThreadCustom — status mapping', () => {
-  it('returns archived when chat.status is archived', () => {
-    expect(chatToThreadCustom(makeChat({ status: 'archived' })).status).toBe('archived');
-  });
+type Result = ReturnType<typeof chatToThreadCustom>;
+type FieldRow = [name: string, overrides: Partial<Chat>, actual: (r: Result) => unknown, expected: unknown];
 
-  it('returns regular when chat.status is active', () => {
-    expect(chatToThreadCustom(makeChat({ status: 'active' })).status).toBe('regular');
+function runFieldRows(rows: FieldRow[]) {
+  it.each<FieldRow>(rows)('%s', (_name, overrides, actual, expected) => {
+    expect(actual(chatToThreadCustom(makeChat(overrides)))).toEqual(expected);
   });
+}
 
-  it('returns regular when chat.status is ended', () => {
-    expect(chatToThreadCustom(makeChat({ status: 'ended' })).status).toBe('regular');
-  });
-
-  it('returns regular when chat.status is paused', () => {
-    expect(chatToThreadCustom(makeChat({ status: 'paused' })).status).toBe('regular');
-  });
+describe('chatToThreadCustom — top-level fields (status, remoteId, title, externalId)', () => {
+  runFieldRows([
+    ['returns archived when chat.status is archived', { status: 'archived' }, (r) => r.status, 'archived'],
+    ['returns regular when chat.status is active', { status: 'active' }, (r) => r.status, 'regular'],
+    ['returns regular when chat.status is ended', { status: 'ended' }, (r) => r.status, 'regular'],
+    ['returns regular when chat.status is paused', { status: 'paused' }, (r) => r.status, 'regular'],
+    ['remoteId equals chat.id', {}, (r) => r.remoteId, 'chat-1'],
+    ['title reflects chat.title when present', { title: 'My Session' }, (r) => r.title, 'My Session'],
+    ['title is undefined when chat.title is absent', {}, (r) => r.title, undefined],
+    ['externalId is always undefined', {}, (r) => r.externalId, undefined],
+  ]);
 });
 
-// ---------------------------------------------------------------------------
-// remoteId
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — remoteId', () => {
-  it('equals chat.id', () => {
-    expect(chatToThreadCustom(makeChat()).remoteId).toBe('chat-1');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// title
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — title', () => {
-  it('reflects chat.title when present', () => {
-    expect(chatToThreadCustom(makeChat({ title: 'My Session' })).title).toBe('My Session');
-  });
-
-  it('is undefined when chat.title is absent', () => {
-    expect(chatToThreadCustom(makeChat()).title).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// externalId
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — externalId', () => {
-  it('is always undefined', () => {
-    expect(chatToThreadCustom(makeChat()).externalId).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.projectId
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.projectId', () => {
-  it('equals chat.projectId', () => {
-    expect(chatToThreadCustom(makeChat()).custom.projectId).toBe('proj-1');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.adapterId
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.adapterId', () => {
-  it('equals chat.adapterId', () => {
-    expect(chatToThreadCustom(makeChat()).custom.adapterId).toBe('claude');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.claudeSessionId — the agent CLI's own session id (copied via the
-// row context menu), NOT the mainframe chat id.
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.claudeSessionId', () => {
-  it('forwards chat.claudeSessionId when present', () => {
-    expect(chatToThreadCustom(makeChat({ claudeSessionId: 'cli-sess-abc' })).custom.claudeSessionId).toBe(
+describe('chatToThreadCustom — identity & status custom fields', () => {
+  runFieldRows([
+    ['custom.projectId equals chat.projectId', {}, (r) => r.custom.projectId, 'proj-1'],
+    ['custom.adapterId equals chat.adapterId', {}, (r) => r.custom.adapterId, 'claude'],
+    [
+      // the agent CLI's own session id (copied via the row context menu), NOT the mainframe chat id
+      'custom.claudeSessionId forwards chat.claudeSessionId when present',
+      { claudeSessionId: 'cli-sess-abc' },
+      (r) => r.custom.claudeSessionId,
       'cli-sess-abc',
-    );
-  });
-
-  it('is undefined when chat.claudeSessionId is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.claudeSessionId).toBeUndefined();
-  });
-
-  it('does not equal the mainframe chat id', () => {
-    const result = chatToThreadCustom(makeChat({ id: 'chat-1', claudeSessionId: 'cli-sess-abc' }));
-    expect(result.custom.claudeSessionId).not.toBe(result.remoteId);
-  });
+    ],
+    [
+      'custom.claudeSessionId is undefined when chat.claudeSessionId is absent',
+      {},
+      (r) => r.custom.claudeSessionId,
+      undefined,
+    ],
+    [
+      'custom.claudeSessionId does not equal the mainframe chat id',
+      { id: 'chat-1', claudeSessionId: 'cli-sess-abc' },
+      (r) => r.custom.claudeSessionId !== r.remoteId,
+      true,
+    ],
+    ['custom.status equals chat.status', { status: 'paused' }, (r) => r.custom.status, 'paused'],
+    ['custom.tags defaults to empty array when chat.tags is absent', {}, (r) => r.custom.tags, []],
+    [
+      'custom.tags forwards chat.tags when present',
+      { tags: ['bug', 'urgent'] },
+      (r) => r.custom.tags,
+      ['bug', 'urgent'],
+    ],
+    ['custom.pinned is false when chat.pinned is absent', {}, (r) => r.custom.pinned, false],
+    ['custom.pinned is true when chat.pinned is true', { pinned: true }, (r) => r.custom.pinned, true],
+  ]);
 });
 
-// ---------------------------------------------------------------------------
-// custom.tags
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.tags', () => {
-  it('defaults to empty array when chat.tags is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.tags).toEqual([]);
-  });
-
-  it('forwards chat.tags when present', () => {
-    expect(chatToThreadCustom(makeChat({ tags: ['bug', 'urgent'] })).custom.tags).toEqual(['bug', 'urgent']);
-  });
+describe('chatToThreadCustom — display/pending status & detected PRs', () => {
+  runFieldRows([
+    [
+      'custom.displayStatus defaults to idle when chat.displayStatus is absent',
+      {},
+      (r) => r.custom.displayStatus,
+      'idle',
+    ],
+    [
+      'custom.displayStatus forwards working when chat.displayStatus is working',
+      { displayStatus: 'working' },
+      (r) => r.custom.displayStatus,
+      'working',
+    ],
+    [
+      'custom.hasPending is true only when displayStatus is waiting',
+      { displayStatus: 'waiting' },
+      (r) => r.custom.hasPending,
+      true,
+    ],
+    [
+      'custom.hasPending is false when displayStatus is working',
+      { displayStatus: 'working' },
+      (r) => r.custom.hasPending,
+      false,
+    ],
+    [
+      'custom.hasPending is false when displayStatus is absent (defaults to idle)',
+      {},
+      (r) => r.custom.hasPending,
+      false,
+    ],
+    ['custom.detectedPrs defaults to empty array when chat.detectedPrs is absent', {}, (r) => r.custom.detectedPrs, []],
+    [
+      'custom.detectedPrs forwards detectedPrs and preserves number',
+      { detectedPrs: [{ url: 'https://github.com/o/r/pull/1', owner: 'o', repo: 'r', number: 1, source: 'created' }] },
+      (r) => ({ length: r.custom.detectedPrs.length, firstNumber: r.custom.detectedPrs[0]?.number }),
+      { length: 1, firstNumber: 1 },
+    ],
+  ]);
 });
 
-// ---------------------------------------------------------------------------
-// custom.pinned
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.pinned', () => {
-  it('is false when chat.pinned is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.pinned).toBe(false);
-  });
-
-  it('is true when chat.pinned is true', () => {
-    expect(chatToThreadCustom(makeChat({ pinned: true })).custom.pinned).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.status
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.status', () => {
-  it('equals chat.status', () => {
-    expect(chatToThreadCustom(makeChat({ status: 'paused' })).custom.status).toBe('paused');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.displayStatus
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.displayStatus', () => {
-  it('defaults to idle when chat.displayStatus is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.displayStatus).toBe('idle');
-  });
-
-  it('forwards working when chat.displayStatus is working', () => {
-    expect(chatToThreadCustom(makeChat({ displayStatus: 'working' })).custom.displayStatus).toBe('working');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.hasPending
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.hasPending', () => {
-  it('is true only when displayStatus is waiting', () => {
-    expect(chatToThreadCustom(makeChat({ displayStatus: 'waiting' })).custom.hasPending).toBe(true);
-  });
-
-  it('is false when displayStatus is working', () => {
-    expect(chatToThreadCustom(makeChat({ displayStatus: 'working' })).custom.hasPending).toBe(false);
-  });
-
-  it('is false when displayStatus is absent (defaults to idle)', () => {
-    expect(chatToThreadCustom(makeChat()).custom.hasPending).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.detectedPrs
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.detectedPrs', () => {
-  it('defaults to empty array when chat.detectedPrs is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.detectedPrs).toEqual([]);
-  });
-
-  it('forwards detectedPrs and preserves number', () => {
-    const result = chatToThreadCustom(
-      makeChat({
-        detectedPrs: [{ url: 'https://github.com/o/r/pull/1', owner: 'o', repo: 'r', number: 1, source: 'created' }],
-      }),
-    );
-    expect(result.custom.detectedPrs).toHaveLength(1);
-    expect(result.custom.detectedPrs[0]?.number).toBe(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.worktreePath
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.worktreePath', () => {
-  it('is undefined when chat.worktreePath is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.worktreePath).toBeUndefined();
-  });
-
-  it('forwards chat.worktreePath when present', () => {
-    expect(chatToThreadCustom(makeChat({ worktreePath: '/home/user/wt' })).custom.worktreePath).toBe('/home/user/wt');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.worktreeMissing
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.worktreeMissing', () => {
-  it('is false when chat.worktreeMissing is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.worktreeMissing).toBe(false);
-  });
-
-  it('is true when chat.worktreeMissing is true', () => {
-    expect(chatToThreadCustom(makeChat({ worktreeMissing: true })).custom.worktreeMissing).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.updatedAt
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.updatedAt', () => {
-  it('converts ISO updatedAt to numeric milliseconds — 2026-06-01T12:00:00.000Z is 1780315200000', () => {
-    expect(chatToThreadCustom(makeChat({ updatedAt: '2026-06-01T12:00:00.000Z' })).custom.updatedAt).toBe(
+describe('chatToThreadCustom — worktree, branch, transcript & timestamp fields', () => {
+  runFieldRows([
+    ['custom.worktreePath is undefined when chat.worktreePath is absent', {}, (r) => r.custom.worktreePath, undefined],
+    [
+      'custom.worktreePath forwards chat.worktreePath when present',
+      { worktreePath: '/home/user/wt' },
+      (r) => r.custom.worktreePath,
+      '/home/user/wt',
+    ],
+    ['custom.worktreeMissing is false when chat.worktreeMissing is absent', {}, (r) => r.custom.worktreeMissing, false],
+    [
+      'custom.worktreeMissing is true when chat.worktreeMissing is true',
+      { worktreeMissing: true },
+      (r) => r.custom.worktreeMissing,
+      true,
+    ],
+    [
+      'custom.updatedAt converts ISO updatedAt to numeric milliseconds — 2026-06-01T12:00:00.000Z is 1780315200000',
+      { updatedAt: '2026-06-01T12:00:00.000Z' },
+      (r) => r.custom.updatedAt,
       1780315200000,
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.branchName
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.branchName', () => {
-  it('forwards chat.branchName when present', () => {
-    expect(chatToThreadCustom(makeChat({ branchName: 'feat/x' })).custom.branchName).toBe('feat/x');
-  });
-
-  it('is undefined when chat.branchName is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.branchName).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// custom.transcriptMissing
-// ---------------------------------------------------------------------------
-
-describe('chatToThreadCustom — custom.transcriptMissing', () => {
-  it('is false when chat.transcriptMissing is absent', () => {
-    expect(chatToThreadCustom(makeChat()).custom.transcriptMissing).toBe(false);
-  });
-
-  it('is true when chat.transcriptMissing is true', () => {
-    expect(chatToThreadCustom(makeChat({ transcriptMissing: true })).custom.transcriptMissing).toBe(true);
-  });
+    ],
+    [
+      'custom.branchName forwards chat.branchName when present',
+      { branchName: 'feat/x' },
+      (r) => r.custom.branchName,
+      'feat/x',
+    ],
+    ['custom.branchName is undefined when chat.branchName is absent', {}, (r) => r.custom.branchName, undefined],
+    [
+      'custom.transcriptMissing is false when chat.transcriptMissing is absent',
+      {},
+      (r) => r.custom.transcriptMissing,
+      false,
+    ],
+    [
+      'custom.transcriptMissing is true when chat.transcriptMissing is true',
+      { transcriptMissing: true },
+      (r) => r.custom.transcriptMissing,
+      true,
+    ],
+  ]);
 });
 
 // ---------------------------------------------------------------------------

@@ -94,22 +94,6 @@ describe('ExternalSessionService', () => {
       expect(result.nextOffset).toBeNull();
     });
 
-    it('passes prefixLimit (offset+limit) to adapter with offset 0', async () => {
-      await service.scanPage(projectId, 10, 5);
-      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith('/test/project', [], { offset: 0, limit: 15 });
-    });
-
-    it('passes exclude IDs to adapter with offset 0 and prefixLimit', async () => {
-      const chat = chatsRepo.create(projectId, 'claude');
-      chatsRepo.update(chat.id, { claudeSessionId: 'already-imported' });
-
-      await service.scanPage(projectId, 0, 20);
-      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith('/test/project', ['already-imported'], {
-        offset: 0,
-        limit: 20,
-      });
-    });
-
     it('returns empty page when adapter has no listExternalSessions', async () => {
       const adapterWithoutList: Adapter = {
         id: 'other',

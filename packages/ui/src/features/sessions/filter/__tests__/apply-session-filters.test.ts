@@ -45,112 +45,43 @@ const s4 = item('s4', 'proj-b', []);
 // applySessionFilters
 // ---------------------------------------------------------------------------
 
-describe('applySessionFilters — no filters returns all', () => {
-  it('returns all 4 items when no filters are active', () => {
+type Case = [
+  name: string,
+  filterProjectId: string | null,
+  tags: string[],
+  synthetic: SyntheticTag[],
+  expectedIds: string[],
+];
+
+describe('applySessionFilters — single filter dimension', () => {
+  it.each<Case>([
+    ['returns all 4 items when no filters are active', null, [], [], ['s1', 's2', 's3', 's4']],
+    ['returns only items belonging to proj-a', 'proj-a', [], [], ['s1', 's2']],
+    ['returns items that have the tag "bug"', null, ['bug'], [], ['s1', 's2']],
+    ['returns only items that have both "bug" and "urgent"', null, ['bug', 'urgent'], [], ['s1']],
+    ['returns only items with detectedPrs (has-pr)', null, [], ['has-pr'], ['s3']],
+    ['returns only items with a worktreePath (has-worktree)', null, [], ['has-worktree'], ['s2']],
+  ])('%s', (_name, filterProjectId, tags, synthetic, expectedIds) => {
     const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(),
-      selectedSynthetic: new Set<SyntheticTag>(),
+      filterProjectId,
+      selectedTags: new Set(tags),
+      selectedSynthetic: new Set<SyntheticTag>(synthetic),
     });
-    expect(result).toHaveLength(4);
+    expect(result.map((i) => i.id)).toEqual(expectedIds);
   });
 });
 
-describe('applySessionFilters — project filter alone', () => {
-  it('returns only items belonging to proj-a', () => {
+describe('applySessionFilters — cross-dimension AND-match', () => {
+  it.each<Case>([
+    ['returns only proj-a items that also have "urgent"', 'proj-a', ['urgent'], [], ['s1']],
+    ['returns only items that have "bug" AND have a worktreePath', null, ['bug'], ['has-worktree'], ['s2']],
+    ['returns empty array when no items match project + tag combination', 'proj-a', ['perf'], [], []],
+  ])('%s', (_name, filterProjectId, tags, synthetic, expectedIds) => {
     const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: 'proj-a',
-      selectedTags: new Set(),
-      selectedSynthetic: new Set<SyntheticTag>(),
+      filterProjectId,
+      selectedTags: new Set(tags),
+      selectedSynthetic: new Set<SyntheticTag>(synthetic),
     });
-    expect(result.map((i) => i.id)).toEqual(['s1', 's2']);
-  });
-});
-
-describe('applySessionFilters — single tag filter', () => {
-  it('returns items that have the tag "bug"', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(['bug']),
-      selectedSynthetic: new Set<SyntheticTag>(),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s1', 's2']);
-  });
-});
-
-describe('applySessionFilters — multiple tags AND-match', () => {
-  it('returns only items that have both "bug" and "urgent"', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(['bug', 'urgent']),
-      selectedSynthetic: new Set<SyntheticTag>(),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s1']);
-  });
-});
-
-describe('applySessionFilters — has-pr synthetic filter', () => {
-  it('returns only items with detectedPrs', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(),
-      selectedSynthetic: new Set<SyntheticTag>(['has-pr']),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s3']);
-  });
-});
-
-describe('applySessionFilters — has-worktree synthetic filter', () => {
-  it('returns only items with a worktreePath', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(),
-      selectedSynthetic: new Set<SyntheticTag>(['has-worktree']),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s2']);
-  });
-});
-
-describe('applySessionFilters — project + tag AND-match', () => {
-  it('returns only proj-a items that also have "urgent"', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: 'proj-a',
-      selectedTags: new Set(['urgent']),
-      selectedSynthetic: new Set<SyntheticTag>(),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s1']);
-  });
-});
-
-describe('applySessionFilters — tag + synthetic AND-match', () => {
-  it('returns only items that have "bug" AND have a worktreePath', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(['bug']),
-      selectedSynthetic: new Set<SyntheticTag>(['has-worktree']),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s2']);
-  });
-});
-
-describe('applySessionFilters — empty result', () => {
-  it('returns empty array when no items match project + tag combination', () => {
-    const result = applySessionFilters([s1, s2, s3, s4], {
-      filterProjectId: 'proj-a',
-      selectedTags: new Set(['perf']),
-      selectedSynthetic: new Set<SyntheticTag>(),
-    });
-    expect(result).toEqual([]);
-  });
-});
-
-describe('applySessionFilters — has-pr excludes items with empty detectedPrs', () => {
-  it('excludes s4 which has no detectedPrs when has-pr filter is active', () => {
-    const result = applySessionFilters([s3, s4], {
-      filterProjectId: null,
-      selectedTags: new Set(),
-      selectedSynthetic: new Set<SyntheticTag>(['has-pr']),
-    });
-    expect(result.map((i) => i.id)).toEqual(['s3']);
+    expect(result.map((i) => i.id)).toEqual(expectedIds);
   });
 });

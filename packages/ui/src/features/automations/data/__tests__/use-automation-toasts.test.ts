@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useAutomationToasts — daemon-driven toast notifications for automation
  * events (ts153 has no artboard for this; ported from the v1

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useAutomationEvents — daemonWs.onEvent singleton subscription patching the
  * automations store from the five `automation.*` WS events (contract §4).

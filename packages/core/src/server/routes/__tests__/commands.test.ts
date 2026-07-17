@@ -20,7 +20,10 @@ describe('GET /api/commands', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'clear', source: 'claude' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'clear', source: 'claude' }),
+        expect.objectContaining({ name: 'launch-config', source: 'mainframe' }),
+      ]),
     );
   });
 });

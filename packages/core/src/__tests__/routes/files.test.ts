@@ -86,6 +86,19 @@ describe('GET /api/projects/:id/tree', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
   });
 
+  it('returns 404 envelope when project is not found', async () => {
+    const ctx = createCtx(projectDir);
+    (ctx.db.projects.get as any).mockReturnValue(null);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
+    const res = mockRes();
+
+    await handler({ params: { id: 'missing' }, query: { path: '.' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Project not found' });
+  });
+
   it('classifies a symlink to a directory as a directory', async () => {
     await mkdir(join(projectDir, 'real-dir'));
     await symlink(join(projectDir, 'real-dir'), join(projectDir, 'link-to-dir'));
@@ -541,7 +554,10 @@ describe('GET /api/projects/:id/files', () => {
     await handler({ params: { id: 'proj-1' }, query: { path: 'hello.txt' } }, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: true, data: expect.objectContaining({ content: 'world' }) }),
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ path: 'hello.txt', content: 'world' }),
+      }),
     );
   });
 
@@ -554,6 +570,19 @@ describe('GET /api/projects/:id/files', () => {
     await handler({ params: { id: 'proj-1' }, query: { path: '../../etc/passwd' } }, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('returns 404 envelope when project is not found', async () => {
+    const ctx = createCtx(projectDir);
+    (ctx.db.projects.get as any).mockReturnValue(null);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/files');
+    const res = mockRes();
+
+    await handler({ params: { id: 'missing' }, query: { path: 'hello.txt' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Project not found' });
   });
 });
 
@@ -617,6 +646,78 @@ describe('GET /api/files/external', () => {
     await handler({ query: { path: join(homedir(), '.ssh', 'id_rsa') } } as any, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('returns base64 content when encoding=base64', async () => {
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]);
+    const binPath = join(projectDir, 'img.png');
+    await writeFile(binPath, bytes);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: binPath, encoding: 'base64' } } as any, res, vi.fn());
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ content: bytes.toString('base64'), encoding: 'base64' }),
+      }),
+    );
+  });
+
+  it('rejects invalid encoding values with 400', async () => {
+    const extFile = join(projectDir, 'plain.txt');
+    await writeFile(extFile, 'hello');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: extFile, encoding: 'hex' } } as any, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it.each([
+    '/etc/shadow',
+    '/etc/sudoers/extra',
+    '/home/user/.ssh/id_ed25519',
+    '/home/user/.aws/credentials',
+    '/home/user/.netrc',
+    '/home/user/.gnupg/private-keys-v1.d/key.key',
+  ])('blocks sensitive path %s', async (blocked) => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: blocked } } as any, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Access to this path is not allowed' });
+  });
+
+  it('blocks a symlink that resolves to a sensitive path', async () => {
+    const sshDir = join(projectDir, '.ssh');
+    await mkdir(sshDir);
+    await writeFile(join(sshDir, 'id_rsa'), 'PRIVATE');
+    const link = join(projectDir, 'innocent.txt');
+    await symlink(join(sshDir, 'id_rsa'), link);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: link } } as any, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Access to this path is not allowed' });
   });
 });
 

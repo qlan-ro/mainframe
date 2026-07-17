@@ -42,12 +42,6 @@ describe('makeChatGroupBy', () => {
     expect(groupBy(toolCallPart('b'))).toEqual(['group-tool-g1']);
   });
 
-  it('two members of the same daemon group share the exact same key string', () => {
-    const keyA = groupBy(toolCallPart('a'));
-    const keyB = groupBy(toolCallPart('b'));
-    expect(keyA).toEqual(keyB);
-  });
-
   it('returns [] for a tool-call whose id is NOT in the map', () => {
     expect(groupBy(toolCallPart('z'))).toEqual([]);
   });

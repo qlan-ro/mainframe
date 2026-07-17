@@ -78,83 +78,26 @@ describe('Hint', () => {
     });
   });
 
-  describe('empty string label', () => {
-    it('renders the child directly without a tooltip wrapper', () => {
+  describe('bare labels (empty string / undefined / null)', () => {
+    // TooltipProvider is active so a tooltip COULD appear if Hint wrongly rendered one.
+    it.each([
+      ['empty string', ''],
+      ['undefined', undefined],
+      ['null', null],
+    ])('renders the child bare and shows no tooltip on hover when label is %s', async (_name, label) => {
+      const user = userEvent.setup();
       renderWithProvider(
-        <Hint label="">
+        <Hint label={label}>
           <button data-testid="bare-btn">Action</button>
         </Hint>,
       );
       expect(screen.getByTestId('bare-btn')).toBeInTheDocument();
-    });
-
-    it('does not show a tooltip role element on hover when label is empty string', async () => {
-      const user = userEvent.setup();
-      // TooltipProvider is active so a tooltip COULD appear if Hint wrongly rendered one.
-      renderWithProvider(
-        <Hint label="">
-          <button data-testid="bare-btn">Action</button>
-        </Hint>,
-      );
       await user.hover(screen.getByTestId('bare-btn'));
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     });
   });
 
-  describe('undefined label', () => {
-    it('renders the child directly without a tooltip wrapper', () => {
-      renderWithProvider(
-        <Hint label={undefined}>
-          <button data-testid="undef-btn">Action</button>
-        </Hint>,
-      );
-      expect(screen.getByTestId('undef-btn')).toBeInTheDocument();
-    });
-
-    it('does not show a tooltip role element on hover when label is undefined', async () => {
-      const user = userEvent.setup();
-      renderWithProvider(
-        <Hint label={undefined}>
-          <button data-testid="undef-btn">Action</button>
-        </Hint>,
-      );
-      await user.hover(screen.getByTestId('undef-btn'));
-      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('null label', () => {
-    it('renders the child directly without a tooltip wrapper', () => {
-      renderWithProvider(
-        <Hint label={null}>
-          <button data-testid="null-btn">Action</button>
-        </Hint>,
-      );
-      expect(screen.getByTestId('null-btn')).toBeInTheDocument();
-    });
-
-    it('does not show a tooltip role element on hover when label is null', async () => {
-      const user = userEvent.setup();
-      renderWithProvider(
-        <Hint label={null}>
-          <button data-testid="null-btn">Action</button>
-        </Hint>,
-      );
-      await user.hover(screen.getByTestId('null-btn'));
-      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    });
-  });
-
   describe('child props forwarding', () => {
-    it('preserves data-testid on the child when wrapped in a tooltip', () => {
-      renderWithProvider(
-        <Hint label="Copy to clipboard">
-          <button data-testid="copy-btn">Copy</button>
-        </Hint>,
-      );
-      expect(screen.getByTestId('copy-btn')).toBeInTheDocument();
-    });
-
     it('fires the onClick handler on the wrapped child when clicked', async () => {
       const handleClick = vi.fn();
       const user = userEvent.setup();

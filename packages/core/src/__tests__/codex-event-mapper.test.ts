@@ -604,7 +604,34 @@ describe('handleNotification', () => {
     expect(sink.onCompact).toHaveBeenCalled();
   });
 
-  it('item/completed todoList calls onTodoUpdate with normalized TodoItems', () => {
+  it.each([
+    {
+      label: 'calls onTodoUpdate with normalized TodoItems',
+      items: [
+        { text: 'Write tests', completed: false },
+        { text: 'Fix bug', completed: true },
+        { text: 'Ship it', completed: false },
+      ],
+      expectedCall: [
+        { content: 'Write tests', status: 'pending', activeForm: 'Write tests' },
+        { content: 'Fix bug', status: 'completed', activeForm: 'Fix bug' },
+        { content: 'Ship it', status: 'pending', activeForm: 'Ship it' },
+      ],
+      checkMessageNotCalled: true,
+    },
+    {
+      label: 'with empty items does not call onTodoUpdate',
+      items: [],
+      expectedCall: undefined,
+      checkMessageNotCalled: false,
+    },
+    {
+      label: 'all completed maps all to completed status',
+      items: [{ text: 'Done task', completed: true }],
+      expectedCall: [{ content: 'Done task', status: 'completed', activeForm: 'Done task' }],
+      checkMessageNotCalled: false,
+    },
+  ])('item/completed todoList $label', ({ items, expectedCall, checkMessageNotCalled }) => {
     const sink = createSink();
     const state = createState();
     handleNotification(
@@ -612,62 +639,18 @@ describe('handleNotification', () => {
       {
         threadId: 't1',
         turnId: 'turn_1',
-        item: {
-          id: 'todo_1',
-          type: 'todoList',
-          items: [
-            { text: 'Write tests', completed: false },
-            { text: 'Fix bug', completed: true },
-            { text: 'Ship it', completed: false },
-          ],
-        },
+        item: { id: 'todo_1', type: 'todoList', items },
       },
       sink,
       state,
     );
-    expect(sink.onTodoUpdate).toHaveBeenCalledWith([
-      { content: 'Write tests', status: 'pending', activeForm: 'Write tests' },
-      { content: 'Fix bug', status: 'completed', activeForm: 'Fix bug' },
-      { content: 'Ship it', status: 'pending', activeForm: 'Ship it' },
-    ]);
-    expect(sink.onMessage).not.toHaveBeenCalled();
-  });
-
-  it('item/completed todoList with empty items does not call onTodoUpdate', () => {
-    const sink = createSink();
-    const state = createState();
-    handleNotification(
-      'item/completed',
-      {
-        threadId: 't1',
-        turnId: 'turn_1',
-        item: { id: 'todo_2', type: 'todoList', items: [] },
-      },
-      sink,
-      state,
-    );
-    expect(sink.onTodoUpdate).not.toHaveBeenCalled();
-  });
-
-  it('item/completed todoList all completed maps all to completed status', () => {
-    const sink = createSink();
-    const state = createState();
-    handleNotification(
-      'item/completed',
-      {
-        threadId: 't1',
-        turnId: 'turn_1',
-        item: {
-          id: 'todo_3',
-          type: 'todoList',
-          items: [{ text: 'Done task', completed: true }],
-        },
-      },
-      sink,
-      state,
-    );
-    expect(sink.onTodoUpdate).toHaveBeenCalledWith([
-      { content: 'Done task', status: 'completed', activeForm: 'Done task' },
-    ]);
+    if (expectedCall) {
+      expect(sink.onTodoUpdate).toHaveBeenCalledWith(expectedCall);
+    } else {
+      expect(sink.onTodoUpdate).not.toHaveBeenCalled();
+    }
+    if (checkMessageNotCalled) {
+      expect(sink.onMessage).not.toHaveBeenCalled();
+    }
   });
 });

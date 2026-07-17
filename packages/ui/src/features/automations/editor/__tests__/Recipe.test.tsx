@@ -25,11 +25,16 @@ function askAgent(id: string, extra: Partial<AutomationStep> = {}): AutomationSt
 }
 
 describe('Recipe — running scope accumulation', () => {
-  it('the first step only sees the tokens passed in (no prior siblings)', () => {
+  it('the first step only sees the tokens passed in (no prior siblings)', async () => {
+    const user = userEvent.setup();
     const steps = [askAgent('a'), askAgent('b')];
     render(<Recipe steps={steps} onChange={vi.fn()} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
-    // "a" is first, so its prompt field's picker only ever offers Today (never "a"'s own result).
-    expect(screen.getByTestId('automations-step-a')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('automations-step-setup-a'));
+    await user.click(screen.getByTestId('automations-step-config-a-prompt-picker'));
+
+    expect(screen.getByTestId('automations-step-config-a-prompt-picker-option-builtin-today')).toBeInTheDocument();
+    expect(screen.queryByTestId('automations-step-config-a-prompt-picker-option-a-result')).not.toBeInTheDocument();
   });
 
   it('a later step sees tokens produced by earlier siblings, an earlier step does not', async () => {
@@ -37,17 +42,13 @@ describe('Recipe — running scope accumulation', () => {
     const steps = [askAgent('a'), askAgent('b')];
     render(<Recipe steps={steps} onChange={vi.fn()} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
 
-    // Open "b"'s Set up disclosure is not required for this assertion — the
-    // token scope threading is exercised directly through the prompt field's
-    // picker, reachable once "Set up" is open on the leaf step.
     await user.click(screen.getByTestId('automations-step-setup-b'));
-    // "b" is a leaf step (ask_agent) whose config panel isn't wired until
-    // Phase 4, so the scope itself is verified via StepCard's summary chip
-    // resolution instead: give "a" a prompt referencing a not-yet-existing
-    // token and confirm "b" doesn't error on load (i.e. Recipe rendered
-    // without throwing while accumulating scope for both cards).
-    expect(screen.getByTestId('automations-step-a')).toBeInTheDocument();
-    expect(screen.getByTestId('automations-step-b')).toBeInTheDocument();
+    await user.click(screen.getByTestId('automations-step-config-b-prompt-picker'));
+    expect(screen.getByTestId('automations-step-config-b-prompt-picker-option-a-result')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('automations-step-setup-a'));
+    await user.click(screen.getByTestId('automations-step-config-a-prompt-picker'));
+    expect(screen.queryByTestId('automations-step-config-a-prompt-picker-option-b-result')).not.toBeInTheDocument();
   });
 
   it('an If block leaks its branch outputs to later siblings, visible after the block', () => {

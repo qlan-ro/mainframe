@@ -32,18 +32,17 @@ describe('SnippetBlock — long snippet (> 7 lines): clamp + toggle', () => {
     expect(screen.getByTestId('chat-user-snippet-expand-a')).toHaveTextContent('Show all 12 lines');
   });
 
-  it('applies a max-height clamp to the scroll container before expanding', () => {
+  it('clamps the scroll container to the 7-line collapsed height (7 x 18px) before expanding', () => {
     render(<SnippetBlock id="a" lines={lines(12)} start={1} />);
     const scrollArea = screen.getByTestId('chat-user-snippet-scroll-a');
-    expect(scrollArea.className).toContain('overflow-hidden');
+    expect(scrollArea.style.maxHeight).toBe('126px');
   });
 
-  it('expands to a scrollable max-h-[240px] container and flips the toggle to "Collapse"', () => {
+  it('expands to the 240px scroll cap and flips the toggle to "Collapse"', () => {
     render(<SnippetBlock id="a" lines={lines(12)} start={1} />);
     fireEvent.click(screen.getByTestId('chat-user-snippet-expand-a'));
     const scrollArea = screen.getByTestId('chat-user-snippet-scroll-a');
-    expect(scrollArea.className).toContain('max-h-[240px]');
-    expect(scrollArea.className).toContain('overflow-y-auto');
+    expect(scrollArea.style.maxHeight).toBe('240px');
     const toggle = screen.getByTestId('chat-user-snippet-expand-a');
     expect(toggle).toHaveTextContent('Collapse');
   });
@@ -65,8 +64,7 @@ describe('SnippetBlock — long snippet (> 7 lines): clamp + toggle', () => {
     const toggleAfterCollapse = screen.getByTestId('chat-user-snippet-expand-a');
     expect(toggleAfterCollapse).toHaveTextContent('Show all 12 lines');
     const scrollArea = screen.getByTestId('chat-user-snippet-scroll-a');
-    expect(scrollArea.className).toContain('overflow-hidden');
-    expect(scrollArea.className).not.toContain('overflow-y-auto');
+    expect(scrollArea.style.maxHeight).toBe('126px');
   });
 });
 

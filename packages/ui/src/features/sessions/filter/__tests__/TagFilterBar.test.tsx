@@ -15,10 +15,9 @@
  *  8. selectedSynthetic contains 'has-pr' → sessions-tag-filter-synthetic-has-pr
  *     has aria-pressed="true".
  *  9. selectedTags is empty → sessions-tag-filter-alpha has aria-pressed="false".
- * 10. 6 tags, no synthetics → all 6 render at once, no "+N more" toggle ever appears.
- * 11. The pill grid wraps (flex-wrap) and caps its height (TAG_GRID_MAX_HEIGHT_PX)
+ * 10. The pill grid wraps (flex-wrap) and caps its height (TAG_GRID_MAX_HEIGHT_PX)
  *     with its own scroll instead of truncating.
- * 12. The section is collapsible via a chevron toggle.
+ * 11. The section is collapsible via a chevron toggle.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -146,133 +145,61 @@ describe('TagFilterBar — renders synthetic chips immediately when hasSynthetic
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Renders nothing when tagsInUse=[] and both synthetics are false
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — renders nothing when no tags and no synthetics', () => {
-  it('container.firstChild is null when tagsInUse=[] and both synthetics=false', () => {
-    __tagsInUseResult = [];
-    __hasSyntheticResults['has-pr'] = false;
-    __hasSyntheticResults['has-worktree'] = false;
-    const { container } = renderBar();
-    expect(container.firstChild).toBeNull();
-  });
+it('container.firstChild is null when tagsInUse=[] and both synthetics=false', () => {
+  __tagsInUseResult = [];
+  __hasSyntheticResults['has-pr'] = false;
+  __hasSyntheticResults['has-worktree'] = false;
+  const { container } = renderBar();
+  expect(container.firstChild).toBeNull();
 });
 
-// ---------------------------------------------------------------------------
-// 5. Clicking the alpha pill calls toggleTag('alpha') exactly once
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — clicking tag pill calls toggleTag with tag name', () => {
-  it("calls toggleTag('alpha') once when sessions-tag-filter-alpha is clicked", () => {
-    __tagsInUseResult = ['alpha', 'beta'];
-    renderBar();
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-alpha'));
-    expect(toggleTagSpy).toHaveBeenCalledTimes(1);
-    expect(toggleTagSpy).toHaveBeenCalledWith('alpha');
-  });
+it("calls toggleTag('alpha') once when sessions-tag-filter-alpha is clicked", () => {
+  __tagsInUseResult = ['alpha', 'beta'];
+  renderBar();
+  fireEvent.click(screen.getByTestId('sessions-tag-filter-alpha'));
+  expect(toggleTagSpy).toHaveBeenCalledTimes(1);
+  expect(toggleTagSpy).toHaveBeenCalledWith('alpha');
 });
 
-// ---------------------------------------------------------------------------
-// 6. Clicking the has-pr synthetic chip calls toggleSynthetic('has-pr') once
-// ---------------------------------------------------------------------------
-
-describe("TagFilterBar — clicking synthetic chip calls toggleSynthetic with 'has-pr'", () => {
-  it("calls toggleSynthetic('has-pr') once when sessions-tag-filter-synthetic-has-pr is clicked", () => {
-    __tagsInUseResult = ['alpha'];
-    __hasSyntheticResults['has-pr'] = true;
-    renderBar();
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-synthetic-has-pr'));
-    expect(toggleSyntheticSpy).toHaveBeenCalledTimes(1);
-    expect(toggleSyntheticSpy).toHaveBeenCalledWith('has-pr');
-  });
+it("calls toggleSynthetic('has-pr') once when sessions-tag-filter-synthetic-has-pr is clicked", () => {
+  __tagsInUseResult = ['alpha'];
+  __hasSyntheticResults['has-pr'] = true;
+  renderBar();
+  fireEvent.click(screen.getByTestId('sessions-tag-filter-synthetic-has-pr'));
+  expect(toggleSyntheticSpy).toHaveBeenCalledTimes(1);
+  expect(toggleSyntheticSpy).toHaveBeenCalledWith('has-pr');
 });
 
-// ---------------------------------------------------------------------------
-// 7. alpha pill has aria-pressed="true" when selectedTags contains 'alpha'
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — aria-pressed="true" when tag is in selectedTags', () => {
-  it('sessions-tag-filter-alpha has aria-pressed="true" when selectedTags contains alpha', () => {
-    __tagsInUseResult = ['alpha'];
-    __selectedTags = new Set(['alpha']);
-    renderBar();
-    expect(screen.getByTestId('sessions-tag-filter-alpha')).toHaveAttribute('aria-pressed', 'true');
-  });
+it('sessions-tag-filter-alpha has aria-pressed="true" when selectedTags contains alpha', () => {
+  __tagsInUseResult = ['alpha'];
+  __selectedTags = new Set(['alpha']);
+  renderBar();
+  expect(screen.getByTestId('sessions-tag-filter-alpha')).toHaveAttribute('aria-pressed', 'true');
 });
 
-// ---------------------------------------------------------------------------
-// 8. has-pr chip has aria-pressed="true" when selectedSynthetic contains 'has-pr'
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — aria-pressed="true" when synthetic is in selectedSynthetic', () => {
-  it('sessions-tag-filter-synthetic-has-pr has aria-pressed="true" when selectedSynthetic contains \'has-pr\'', () => {
-    __tagsInUseResult = ['alpha'];
-    __hasSyntheticResults['has-pr'] = true;
-    __selectedSynthetic = new Set<SyntheticTag>(['has-pr']);
-    renderBar();
-    expect(screen.getByTestId('sessions-tag-filter-synthetic-has-pr')).toHaveAttribute('aria-pressed', 'true');
-  });
+it('sessions-tag-filter-synthetic-has-pr has aria-pressed="true" when selectedSynthetic contains \'has-pr\'', () => {
+  __tagsInUseResult = ['alpha'];
+  __hasSyntheticResults['has-pr'] = true;
+  __selectedSynthetic = new Set<SyntheticTag>(['has-pr']);
+  renderBar();
+  expect(screen.getByTestId('sessions-tag-filter-synthetic-has-pr')).toHaveAttribute('aria-pressed', 'true');
 });
 
-// ---------------------------------------------------------------------------
-// 9. alpha pill has aria-pressed="false" when selectedTags is empty
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — aria-pressed="false" when tag is not in selectedTags', () => {
-  it('sessions-tag-filter-alpha has aria-pressed="false" when selectedTags is empty', () => {
-    __tagsInUseResult = ['alpha'];
-    __selectedTags = new Set();
-    renderBar();
-    expect(screen.getByTestId('sessions-tag-filter-alpha')).toHaveAttribute('aria-pressed', 'false');
-  });
+it('sessions-tag-filter-alpha has aria-pressed="false" when selectedTags is empty', () => {
+  __tagsInUseResult = ['alpha'];
+  __selectedTags = new Set();
+  renderBar();
+  expect(screen.getByTestId('sessions-tag-filter-alpha')).toHaveAttribute('aria-pressed', 'false');
 });
 
-// ---------------------------------------------------------------------------
-// 10. All tags render at once; no "+N more" toggle ever appears
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — renders every tag at once, no overflow toggle', () => {
-  it('renders all 6 tags with no sessions-tag-filter-more button', () => {
-    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
-    renderBar();
-    for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) {
-      expect(screen.getByTestId(`sessions-tag-filter-${name}`)).toBeTruthy();
-    }
-    expect(screen.queryByTestId('sessions-tag-filter-more')).toBeNull();
-  });
-
-  it('renders synthetic chips alongside tags with no overflow toggle', () => {
-    __tagsInUseResult = ['alpha'];
-    __hasSyntheticResults['has-pr'] = true;
-    __hasSyntheticResults['has-worktree'] = true;
-    renderBar();
-    expect(screen.getByTestId('sessions-tag-filter-alpha')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-synthetic-has-pr')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-synthetic-has-worktree')).toBeTruthy();
-    expect(screen.queryByTestId('sessions-tag-filter-more')).toBeNull();
-  });
+it('applies flex-wrap and a max-height style to the pill container', () => {
+  __tagsInUseResult = ['a', 'b', 'c'];
+  renderBar();
+  const bar = screen.getByTestId('sessions-tag-filter-bar');
+  expect(bar.className).toContain('flex-wrap');
+  expect(bar.className).toContain('overflow-y-auto');
+  expect(bar.style.maxHeight).toBe('72px');
 });
-
-// ---------------------------------------------------------------------------
-// 11. The grid wraps and caps its height with its own scroll
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — grid wraps and caps height instead of truncating', () => {
-  it('applies flex-wrap and a max-height style to the pill container', () => {
-    __tagsInUseResult = ['a', 'b', 'c'];
-    renderBar();
-    const bar = screen.getByTestId('sessions-tag-filter-bar');
-    expect(bar.className).toContain('flex-wrap');
-    expect(bar.className).toContain('overflow-y-auto');
-    expect(bar.style.maxHeight).toBe('72px');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 12. Collapsible
-// ---------------------------------------------------------------------------
 
 describe('TagFilterBar — collapsible', () => {
   it('renders a chevron next to the "Tags" label', () => {

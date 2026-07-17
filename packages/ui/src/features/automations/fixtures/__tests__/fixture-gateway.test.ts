@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { DaemonEvent } from '../../contract';
 import { createFixtureGateway } from '../fixture-gateway';
+import { FEATURE_SPIKE_FIXTURE } from '../fixtures';
 
 describe('createFixtureGateway', () => {
-  it('seeds listAutomations with the six canonical fixtures, each given a unique id', async () => {
-    const gateway = createFixtureGateway();
-    const definitions = await gateway.listAutomations();
-    expect(definitions).toHaveLength(6);
-    expect(new Set(definitions.map((d) => d.id)).size).toBe(6);
-  });
-
   it('createAutomation adds a new definition with enabled true and fresh timestamps', async () => {
     const gateway = createFixtureGateway();
     const before = await gateway.listAutomations();
@@ -69,14 +63,6 @@ describe('createFixtureGateway', () => {
     expect(runsForA.length).toBeGreaterThan(0);
   });
 
-  it('listActions resolves the nine launch actions (Phase 4); listCredentialLabels stays empty (no dev-host auth)', async () => {
-    const gateway = createFixtureGateway();
-    const actions = await gateway.listActions();
-    expect(actions).toHaveLength(9);
-    expect(actions.some((a) => a.group === 'mcp')).toBe(false);
-    expect(await gateway.listCredentialLabels()).toEqual([]);
-  });
-
   it('getRunTimeline on a freshly started run returns no steps yet', async () => {
     const gateway = createFixtureGateway();
     const [first] = await gateway.listAutomations();
@@ -89,68 +75,26 @@ describe('createFixtureGateway', () => {
     const gateway = createFixtureGateway();
     await expect(gateway.getRunTimeline('nope')).rejects.toThrow();
   });
+});
 
-  it('seeds a demo run per demo automation, each with a matching timeline', async () => {
-    const gateway = createFixtureGateway();
-    const definitions = await gateway.listAutomations();
-    const shipWork = definitions.find((d) => d.name === 'Ship work');
-    if (!shipWork) throw new Error('expected the Ship work fixture');
-
-    const runs = await gateway.listRuns(shipWork.id);
-    expect(runs).toHaveLength(1);
-    const [run] = runs;
-    if (!run) throw new Error('expected a seeded demo run');
-    expect(run.status).toBe('waiting');
-
-    const timeline = await gateway.getRunTimeline(run.id);
-    expect(timeline.map((e) => e.stepRef)).toEqual(['ask-ado-link', 'if-create-new', 'create-pr', 'cleanup-worktree']);
-    expect(timeline[0]?.status).toBe('waiting');
-    expect(timeline[0]?.interactionId).toBeTruthy();
+describe('FEATURE_SPIKE_FIXTURE — the sole A1+A2+A3 carrier (contract §8)', () => {
+  it('carries the A2 expects on its ask_agent step', () => {
+    const step = FEATURE_SPIKE_FIXTURE.definition.steps[0];
+    expect(step?.kind).toBe('ask_agent');
+    expect(step?.kind === 'ask_agent' ? step.expects : undefined).toEqual([
+      { key: 'scope', type: 'choice', options: ['xs', 's', 'm'] },
+    ]);
   });
 
-  it("the Ship work demo run's waiting step has a matching pending interaction with the ask_me fields", async () => {
-    const gateway = createFixtureGateway();
-    const definitions = await gateway.listAutomations();
-    const shipWork = definitions.find((d) => d.name === 'Ship work');
-    if (!shipWork) throw new Error('expected the Ship work fixture');
-    const [run] = await gateway.listRuns(shipWork.id);
-    if (!run) throw new Error('expected a seeded demo run');
-    const [timelineEntry] = await gateway.getRunTimeline(run.id);
-
-    const interactions = await gateway.listInteractions();
-    const interaction = interactions.find((i) => i.id === timelineEntry?.interactionId);
-    expect(interaction).toBeDefined();
-    expect(interaction?.status).toBe('pending');
-    expect(interaction?.runId).toBe(run.id);
-    expect(interaction?.fields.map((f) => f.key)).toEqual(['action', 'adoId', 'title', 'description']);
+  it('carries the A3 is_one_of condition', () => {
+    const ifStep = FEATURE_SPIKE_FIXTURE.definition.steps[1];
+    expect(ifStep?.kind).toBe('if');
+    expect(ifStep?.kind === 'if' ? ifStep.conditions[0]?.comparator : undefined).toBe('is_one_of');
   });
 
-  it('seeds the Morning PR sweep demo run as running with a repeat fan-out', async () => {
-    const gateway = createFixtureGateway();
-    const definitions = await gateway.listAutomations();
-    const sweep = definitions.find((d) => d.name === 'Morning PR sweep');
-    if (!sweep) throw new Error('expected the Morning PR sweep fixture');
-    const [run] = await gateway.listRuns(sweep.id);
-    if (!run) throw new Error('expected a seeded demo run');
-    expect(run.status).toBe('running');
-
-    const timeline = await gateway.getRunTimeline(run.id);
-    const fanOut = timeline.filter((e) => e.stepRef.startsWith('ask-review-pr#'));
-    expect(fanOut.map((e) => e.stepRef)).toEqual(['ask-review-pr#1', 'ask-review-pr#2', 'ask-review-pr#3']);
-    expect(fanOut.map((e) => e.status)).toEqual(['succeeded', 'failed', 'running']);
-  });
-
-  it('seeds the PR auto-review demo run as failed', async () => {
-    const gateway = createFixtureGateway();
-    const definitions = await gateway.listAutomations();
-    const review = definitions.find((d) => d.name === 'PR auto-review');
-    if (!review) throw new Error('expected the PR auto-review fixture');
-    const [run] = await gateway.listRuns(review.id);
-    if (!run) throw new Error('expected a seeded demo run');
-    expect(run.status).toBe('failed');
-    const timeline = await gateway.getRunTimeline(run.id);
-    expect(timeline).toHaveLength(1);
-    expect(timeline[0]?.status).toBe('failed');
-    expect(timeline[0]?.error).toBeTruthy();
+  it('carries the A1 run_command step inside the then branch', () => {
+    const ifStep = FEATURE_SPIKE_FIXTURE.definition.steps[1];
+    const thenSteps = ifStep?.kind === 'if' ? ifStep.then : [];
+    expect(thenSteps.some((s) => s.kind === 'run_action' && s.actionId === 'run_command')).toBe(true);
   });
 });

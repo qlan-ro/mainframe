@@ -177,9 +177,9 @@ describe('chatRoutes', () => {
   });
 
   describe('GET /api/chats/:id/messages', () => {
-    it('returns display messages for chat', async () => {
+    it('returns the typed { messages, transcriptMissing } envelope', async () => {
       const messages = [{ id: 'm1', type: 'user', content: [{ type: 'text', text: 'hello' }] }];
-      (ctx.chats.getDisplayMessages as any).mockResolvedValue(messages);
+      (ctx.chats.getDisplayMessages as any).mockResolvedValue({ messages, transcriptMissing: true });
 
       const router = chatRoutes(ctx);
       const handler = extractHandler(router, 'get', '/api/chats/:id/messages');
@@ -189,7 +189,7 @@ describe('chatRoutes', () => {
       await flushPromises();
 
       expect(ctx.chats.getDisplayMessages).toHaveBeenCalledWith('c1');
-      expect(res.json).toHaveBeenCalledWith({ success: true, data: messages });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: { messages, transcriptMissing: true } });
     });
   });
 
@@ -305,32 +305,16 @@ describe('chatRoutes', () => {
       expect(res.json).toHaveBeenCalledWith({ success: true, data: updatedChat });
     });
 
-    it('returns 400 when title is missing', () => {
+    it.each([
+      ['title is missing', {}],
+      ['title is empty string', { title: '   ' }],
+      ['title is not a string', { title: 42 }],
+    ])('returns 400 when %s', (_label, body) => {
       const router = chatRoutes(ctx);
       const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
       const res = mockRes();
 
-      handler({ params: { id: 'c1' }, query: {}, body: {} }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-    });
-
-    it('returns 400 when title is empty string', () => {
-      const router = chatRoutes(ctx);
-      const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
-      const res = mockRes();
-
-      handler({ params: { id: 'c1' }, query: {}, body: { title: '   ' } }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-    });
-
-    it('returns 400 when title is not a string', () => {
-      const router = chatRoutes(ctx);
-      const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
-      const res = mockRes();
-
-      handler({ params: { id: 'c1' }, query: {}, body: { title: 42 } }, res, vi.fn());
+      handler({ params: { id: 'c1' }, query: {}, body }, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(400);
     });

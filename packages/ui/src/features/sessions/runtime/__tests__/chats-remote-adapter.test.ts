@@ -121,40 +121,17 @@ afterEach(() => {
 // chats-remote-adapter — list
 // ---------------------------------------------------------------------------
 
-describe('chats-remote-adapter — list maps active chat fields via chatToThreadCustom', () => {
-  it('threads[0].status is regular for an active chat', async () => {
+// Field-by-field mapping coverage (pinned/worktreePath/displayStatus/...) lives in
+// view-model/__tests__/chat-to-thread-custom.test.ts. This test only proves the
+// adapter wires listChats() through chatToThreadCustom() into the returned threads.
+describe('chats-remote-adapter — list maps chats via chatToThreadCustom', () => {
+  it('maps an active chat to a regular thread carrying its remoteId and custom fields', async () => {
     mockListChats.mockResolvedValueOnce([FIXTURE]);
     const adapter = makeChatsRemoteAdapter(31415);
     const result = await adapter.list();
     expect(result.threads[0]?.status).toBe('regular');
-  });
-
-  it('threads[0].remoteId equals chat.id', async () => {
-    mockListChats.mockResolvedValueOnce([FIXTURE]);
-    const adapter = makeChatsRemoteAdapter(31415);
-    const result = await adapter.list();
     expect(result.threads[0]?.remoteId).toBe('chat-1');
-  });
-
-  it('threads[0].custom.pinned is true when chat.pinned is true', async () => {
-    mockListChats.mockResolvedValueOnce([FIXTURE]);
-    const adapter = makeChatsRemoteAdapter(31415);
-    const result = await adapter.list();
     expect(custom(result.threads[0]?.custom).pinned).toBe(true);
-  });
-
-  it('threads[0].custom.worktreePath equals chat.worktreePath', async () => {
-    mockListChats.mockResolvedValueOnce([FIXTURE]);
-    const adapter = makeChatsRemoteAdapter(31415);
-    const result = await adapter.list();
-    expect(custom(result.threads[0]?.custom).worktreePath).toBe('/wt/a');
-  });
-
-  it('threads[0].custom.displayStatus is waiting when chat.displayStatus is waiting', async () => {
-    mockListChats.mockResolvedValueOnce([FIXTURE]);
-    const adapter = makeChatsRemoteAdapter(31415);
-    const result = await adapter.list();
-    expect(custom(result.threads[0]?.custom).displayStatus).toBe('waiting');
   });
 });
 

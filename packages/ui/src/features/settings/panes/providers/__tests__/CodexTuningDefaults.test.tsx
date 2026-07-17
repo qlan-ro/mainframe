@@ -1,17 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { CodexTuningDefaults } from '../CodexTuningDefaults';
 
 const config = {} as ProviderConfig;
 
 describe('CodexTuningDefaults', () => {
-  it('sizes the Reasoning Summary SelectTrigger to the pane 30px/11px control height (matches ModelDropdown)', () => {
-    render(<CodexTuningDefaults adapterId="codex" config={config} onChange={vi.fn()} />);
-    const trigger = screen.getByTestId('settings-codex-reasoning-summary');
-    expect(trigger.className).toContain('h-[30px]');
-    expect(trigger.className).toContain('px-[11px]');
-    expect(trigger.className).toContain('border-input');
-    expect(trigger.className).not.toMatch(/(?:^|\s)h-8(?:\s|$)/);
+  it('selecting a reasoning summary option emits the config update', () => {
+    const onChange = vi.fn();
+    render(<CodexTuningDefaults adapterId="codex" config={config} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('settings-codex-reasoning-summary'));
+    fireEvent.click(screen.getByTestId('settings-codex-reasoning-summary-option-concise'));
+    expect(onChange).toHaveBeenCalledWith({ reasoningSummary: 'concise' });
   });
 });

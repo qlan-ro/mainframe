@@ -124,26 +124,22 @@ describe('CodexSession', () => {
     // We need to parse it and respond
     await vi.waitFor(() => expect(written.length).toBeGreaterThan(0));
     const threadStartMsg = JSON.parse(written[written.length - 1]!.trim());
-    if (threadStartMsg.method === 'thread/start') {
-      expect(threadStartMsg.params.approvalPolicy).toBe('never');
-      expect(threadStartMsg.params.sandbox).toBe('danger-full-access');
-      expect(threadStartMsg.params).not.toHaveProperty('model');
-      // Respond to thread/start
-      proc.stdout.push(JSON.stringify({ id: threadStartMsg.id, result: { thread: { id: 'thr_1' } } }) + '\n');
-      // Respond to thread/started notification
-      proc.stdout.push(JSON.stringify({ method: 'thread/started', params: { thread: { id: 'thr_1' } } }) + '\n');
-    }
+    expect(threadStartMsg.method).toBe('thread/start');
+    expect(threadStartMsg.params.approvalPolicy).toBe('never');
+    expect(threadStartMsg.params.sandbox).toBe('danger-full-access');
+    expect(threadStartMsg.params).not.toHaveProperty('model');
+    // Respond to thread/start
+    proc.stdout.push(JSON.stringify({ id: threadStartMsg.id, result: { thread: { id: 'thr_1' } } }) + '\n');
+    // Respond to thread/started notification
+    proc.stdout.push(JSON.stringify({ method: 'thread/started', params: { thread: { id: 'thr_1' } } }) + '\n');
 
     // Wait for turn/start
     await vi.waitFor(() => expect(written.length).toBeGreaterThan(1));
     const lastMsg = JSON.parse(written[written.length - 1]!.trim());
-    if (lastMsg.method === 'turn/start') {
-      expect(lastMsg.params).not.toHaveProperty('model');
-      expect(lastMsg.params.collaborationMode.settings).not.toHaveProperty('model');
-      proc.stdout.push(
-        JSON.stringify({ id: lastMsg.id, result: { turn: { id: 'turn_1', status: 'running' } } }) + '\n',
-      );
-    }
+    expect(lastMsg.method).toBe('turn/start');
+    expect(lastMsg.params).not.toHaveProperty('model');
+    expect(lastMsg.params.collaborationMode.settings).not.toHaveProperty('model');
+    proc.stdout.push(JSON.stringify({ id: lastMsg.id, result: { turn: { id: 'turn_1', status: 'running' } } }) + '\n');
 
     await sendPromise;
   });

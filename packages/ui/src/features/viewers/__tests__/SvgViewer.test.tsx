@@ -96,33 +96,4 @@ describe('SvgViewer', () => {
     // SAMPLE_SVG has viewBox 0 0 10 10 → right should contain 10×10
     expect(footer.textContent).toMatch(/10×10/);
   });
-
-  it('active toggle is the raised bg-background segment, not bg-accent', () => {
-    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
-    const previewBtn = screen.getByTestId('viewer-svg-preview-toggle');
-    expect(previewBtn.className).toContain('bg-background');
-    expect(previewBtn.className).not.toContain('bg-accent');
-  });
-
-  it('source view uses the code surface (bg-mf-code-bg + code foreground)', () => {
-    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
-    fireEvent.click(screen.getByTestId('viewer-svg-source-toggle'));
-    const pre = screen.getByTestId('viewer-svg-source');
-    expect(pre.className).toContain('bg-mf-code-bg');
-    expect(pre.className).toContain('text-mf-code-fg');
-  });
-
-  it('preview mode shows the SVG inside a raised rounded card (not bare on the checkerboard)', () => {
-    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
-    const img = screen.getByTestId('viewer-svg').querySelector('img');
-    const card = img?.parentElement;
-    expect(card?.className).toMatch(/rounded-/);
-    expect(card?.className).toMatch(/shadow-/);
-  });
-
-  it('Preview/Code segmented toggle outer track uses the shared 8px radius (rounded-[8px])', () => {
-    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
-    const track = screen.getByTestId('viewer-svg-preview-toggle').parentElement as HTMLElement;
-    expect(track.className).toContain('rounded-[8px]');
-  });
 });

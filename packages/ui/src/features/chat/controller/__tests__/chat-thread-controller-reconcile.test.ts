@@ -217,8 +217,6 @@ describe('reconcilePendingOnAdd — no cross-contamination', () => {
 // message list but does NOT touch pendingUserMessages — so the optimistic
 // pending is never reconciled, leaving a duplicate user bubble.
 //
-// Tests 1 and 3 are EXPECTED TO FAIL today (TDD red).
-// Test 2 is a guard — it must stay green before and after the fix.
 // ---------------------------------------------------------------------------
 
 function setEvent(messages: DisplayMessage[]): DaemonEvent {

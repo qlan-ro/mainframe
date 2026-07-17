@@ -2,26 +2,19 @@
  * BranchSubmenu.test.tsx — disabled states, action callbacks, testids.
  *
  * Behaviors covered:
- *  1. Renders data-testid="git-submenu".
- *  2. Checkout is disabled when isCurrent=true.
- *  3. Checkout is disabled when isWorktree=true.
- *  4. Checkout is enabled for a non-current, non-worktree local branch.
- *  5. Merge and Rebase are disabled when isCurrent=true.
- *  6. Rename is disabled when isWorktree=true.
- *  7. Delete is disabled when isCurrent=true or isWorktree=true.
- *  8. Clicking Checkout fires onCheckout(branch).
- *  9. Clicking Pull fires onPull(branch).
- * 10. Clicking Push fires onPush(branch).
- * 11. Clicking Merge fires onMerge(branch).
- * 12. Clicking Rebase fires onRebase(branch).
- * 13. Clicking Rename fires onRename(branch).
- * 14. Clicking Delete fires onDelete(branch, false) for a local branch.
- * 15. Clicking "New Branch from" fires onNewBranchFrom(branch).
- * 16. isWorktree=true: Delete Worktree button fires onDeleteWorktree(branch).
- * 17. isWorktree=true + onNewSession provided: New Session button fires onNewSession(branch).
- * 18. isRemote=true: only remote-specific items are rendered (Checkout, New Branch From, Merge, Rebase, Delete Remote).
- * 19. isRemote + Delete fires onDelete(branch, true).
- * 20. busy=true disables all action buttons.
+ *  1. Checkout is disabled when isCurrent=true.
+ *  2. Checkout is disabled when isWorktree=true.
+ *  3. Checkout is enabled for a non-current, non-worktree local branch.
+ *  4. Merge and Rebase are disabled when isCurrent=true.
+ *  5. Rename is disabled when isWorktree=true.
+ *  6. Delete is disabled when isCurrent=true or isWorktree=true.
+ *  7. Clicking each action button fires its callback with the expected args
+ *     (Checkout/Pull/Push/Merge/Rebase/Rename/Delete/New Branch from) — table-driven.
+ *  8. isWorktree=true: Delete Worktree button fires onDeleteWorktree(branch).
+ *  9. isWorktree=true + onNewSession provided: New Session button fires onNewSession(branch).
+ * 10. isRemote=true: only remote-specific items are rendered (Checkout, New Branch From, Merge, Rebase, Delete Remote).
+ * 11. isRemote + Delete fires onDelete(branch, true).
+ * 12. busy=true disables all action buttons.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -54,18 +47,10 @@ function makeProps(overrides: Partial<BranchSubmenuProps> = {}): BranchSubmenuPr
 }
 
 // ---------------------------------------------------------------------------
-// 1. Renders root testid
-// ---------------------------------------------------------------------------
-
-describe('BranchSubmenu — renders root testid', () => {
-  it('renders data-testid="git-submenu"', () => {
-    render(<BranchSubmenu {...makeProps()} />);
-    expect(screen.getByTestId('git-submenu')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 2–3. Checkout disabled when isCurrent or isWorktree
+//
+// (root-testid presence is exercised implicitly by every test below that
+// queries a child testid — no bare presence smoke needed.)
 // ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — Checkout disabled states', () => {
@@ -129,60 +114,20 @@ describe('BranchSubmenu — Delete disabled states', () => {
 // ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — action callbacks', () => {
-  it('clicking Checkout fires onCheckout("feat/test")', async () => {
+  it.each([
+    ['Checkout', 'git-submenu-checkout', 'onCheckout', ['feat/test']],
+    ['Pull', 'git-submenu-pull', 'onPull', ['feat/test']],
+    ['Push', 'git-submenu-push', 'onPush', ['feat/test']],
+    ['Merge', 'git-submenu-merge', 'onMerge', ['feat/test']],
+    ['Rebase', 'git-submenu-rebase', 'onRebase', ['feat/test']],
+    ['Rename', 'git-submenu-rename', 'onRename', ['feat/test']],
+    ['Delete', 'git-submenu-delete', 'onDelete', ['feat/test', false]],
+    ['New Branch from', 'git-submenu-new-branch-from', 'onNewBranchFrom', ['feat/test']],
+  ] as const)('clicking %s fires %s(%s)', async (_label, testId, callbackName, args) => {
     const props = makeProps();
     render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-checkout'));
-    expect(props.onCheckout).toHaveBeenCalledWith('feat/test');
-  });
-
-  it('clicking Pull fires onPull("feat/test")', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-pull'));
-    expect(props.onPull).toHaveBeenCalledWith('feat/test');
-  });
-
-  it('clicking Push fires onPush("feat/test")', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-push'));
-    expect(props.onPush).toHaveBeenCalledWith('feat/test');
-  });
-
-  it('clicking Merge fires onMerge("feat/test")', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-merge'));
-    expect(props.onMerge).toHaveBeenCalledWith('feat/test');
-  });
-
-  it('clicking Rebase fires onRebase("feat/test")', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-rebase'));
-    expect(props.onRebase).toHaveBeenCalledWith('feat/test');
-  });
-
-  it('clicking Rename fires onRename("feat/test")', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-rename'));
-    expect(props.onRename).toHaveBeenCalledWith('feat/test');
-  });
-
-  it('clicking Delete fires onDelete("feat/test", false) for a local branch', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-delete'));
-    expect(props.onDelete).toHaveBeenCalledWith('feat/test', false);
-  });
-
-  it('clicking "New Branch from" fires onNewBranchFrom("feat/test")', async () => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-new-branch-from'));
-    expect(props.onNewBranchFrom).toHaveBeenCalledWith('feat/test');
+    await userEvent.click(screen.getByTestId(testId));
+    expect(props[callbackName]).toHaveBeenCalledWith(...args);
   });
 });
 

@@ -158,24 +158,4 @@ describe('ImageViewer', () => {
     const footer = shell.lastElementChild as HTMLElement;
     expect(footer.textContent).toMatch(/fit/i);
   });
-
-  it('image is wrapped in a white shadow card (not floating directly on checkerboard)', () => {
-    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
-    const root = screen.getByTestId('viewer-image');
-    // The image card should have bg-white class
-    const card = root.querySelector('.bg-white');
-    expect(card).not.toBeNull();
-  });
-
-  it('zoom buttons are 20px tall (h-[20px]), not the compressed h-5=12px', () => {
-    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
-    expect(screen.getByTestId('viewer-image-zoom-in').className).toContain('h-[20px]');
-    expect(screen.getByTestId('viewer-image-zoom-out').className).toContain('h-[20px]');
-  });
-
-  it('zoom buttons use rounded-sm (6px), not rounded-md (8px)', () => {
-    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
-    expect(screen.getByTestId('viewer-image-zoom-in').className).toContain('rounded-sm');
-    expect(screen.getByTestId('viewer-image-zoom-out').className).toContain('rounded-sm');
-  });
 });

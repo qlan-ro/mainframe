@@ -26,12 +26,10 @@ function baseProps() {
   };
 }
 
-describe('SessionMetaCard — title and time', () => {
-  it('renders the title and a non-empty relative time', () => {
-    render(<SessionMetaCard {...baseProps()} />);
-    expect(screen.getByTestId('sessions-meta-card-title').textContent).toBe('Build the sidebar');
-    expect(screen.getByTestId('sessions-meta-card-time').textContent?.length).toBeGreaterThan(0);
-  });
+it('renders the title and a non-empty relative time', () => {
+  render(<SessionMetaCard {...baseProps()} />);
+  expect(screen.getByTestId('sessions-meta-card-title').textContent).toBe('Build the sidebar');
+  expect(screen.getByTestId('sessions-meta-card-time').textContent?.length).toBeGreaterThan(0);
 });
 
 describe('SessionMetaCard — project', () => {
@@ -73,18 +71,16 @@ describe('SessionMetaCard — worktree / branch', () => {
   });
 });
 
-describe('SessionMetaCard — PR', () => {
-  it('renders "#42" for a detected PR', () => {
-    render(
-      <SessionMetaCard
-        {...baseProps()}
-        detectedPrs={[
-          { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
-        ]}
-      />,
-    );
-    expect(screen.getByTestId('sessions-meta-card-pr').textContent).toContain('#42');
-  });
+it('renders "#42" for a detected PR', () => {
+  render(
+    <SessionMetaCard
+      {...baseProps()}
+      detectedPrs={[
+        { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
+      ]}
+    />,
+  );
+  expect(screen.getByTestId('sessions-meta-card-pr').textContent).toContain('#42');
 });
 
 describe('SessionMetaCard — tags', () => {

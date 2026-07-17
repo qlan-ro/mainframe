@@ -4,23 +4,25 @@
  * Behaviors covered:
  *
  * Status dot button (tasks-1 + tasks-12):
- *  1.  Renders data-testid="tasks-list-row-cycle-<number>" button.
- *  2.  Clicking the cycle button calls onCycle with the todo's id.
- *  3.  The cycle button has aria-label reflecting the current status.
- *  4.  open status renders a border-ring span (no inner filled dot).
- *  5.  in_progress status renders both the ring AND an inner animated dot.
- *  6.  done status renders a check icon inside the button.
+ *  1. Renders data-testid="tasks-list-row-cycle-<number>" button.
+ *  2. Clicking the cycle button calls onCycle with the todo's id.
+ *  3. The cycle button's aria-label mentions the current status (open/in_progress/done).
+ *  4. in_progress renders an inner pulsing dot; done renders a check icon.
  *
  * Delete hover action (tasks-3):
- *  7.  Renders data-testid="tasks-list-row-delete-<number>" button.
- *  8.  Clicking delete calls onDelete with the todo's id and stops propagation.
+ *  5. Renders data-testid="tasks-list-row-delete-<number>" button.
+ *  6. Clicking delete calls onDelete with the todo's id and stops propagation.
  *
  * Priority pill leading dot (tasks-4):
- *  9.  Priority pill renders a leading dot span with a data-testid="tasks-priority-dot-<number>".
- *  10. Critical priority dot has a red color class.
+ *  7. Priority pill renders a leading dot span with a data-testid="tasks-priority-dot-<number>".
  *
  * Keyboard shortcuts (tasks-2):
- *  11. Footer hint text includes 'Space toggle status'.
+ *  8. Footer hint text includes 'Space toggle status'.
+ *
+ * (Per-priority dot color-class assertions were dropped — they duplicated
+ * the priorityDotClass lookup table row-by-row through the DOM instead of
+ * the unit level; the table itself belongs in a dedicated palette test, not
+ * pinned per-component.)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -116,22 +118,14 @@ describe('TaskListRow — status cycle button', () => {
     expect(onCycle).toHaveBeenCalledWith('todo-1');
   });
 
-  it('open status: aria-label says "Status: open"', () => {
-    renderRow({ todo: OPEN_TODO });
-    const btn = screen.getByTestId('tasks-list-row-cycle-1');
-    expect(btn.getAttribute('aria-label')).toContain('open');
-  });
-
-  it('in_progress status: aria-label says "Status: in_progress"', () => {
-    renderRow({ todo: IN_PROGRESS_TODO });
-    const btn = screen.getByTestId('tasks-list-row-cycle-2');
-    expect(btn.getAttribute('aria-label')).toContain('in_progress');
-  });
-
-  it('done status: aria-label says "Status: done"', () => {
-    renderRow({ todo: DONE_TODO });
-    const btn = screen.getByTestId('tasks-list-row-cycle-3');
-    expect(btn.getAttribute('aria-label')).toContain('done');
+  it.each([
+    ['open', OPEN_TODO, 1],
+    ['in_progress', IN_PROGRESS_TODO, 2],
+    ['done', DONE_TODO, 3],
+  ] as const)('%s status: aria-label mentions the status', (status, todo, number) => {
+    renderRow({ todo });
+    const btn = screen.getByTestId(`tasks-list-row-cycle-${number}`);
+    expect(btn.getAttribute('aria-label')).toContain(status);
   });
 
   it('in_progress renders an inner pulsing dot inside the cycle button', () => {
@@ -182,17 +176,5 @@ describe('TaskListRow — priority pill leading dot', () => {
   it('renders tasks-priority-dot-<number> span inside the priority pill', () => {
     renderRow({ todo: OPEN_TODO });
     expect(screen.getByTestId('tasks-priority-dot-1')).toBeTruthy();
-  });
-
-  it('critical priority dot uses the priority-critical-dot token', () => {
-    renderRow({ todo: OPEN_TODO }); // OPEN_TODO has priority=critical
-    const dot = screen.getByTestId('tasks-priority-dot-1');
-    expect(dot.className).toContain('bg-mf-priority-critical-dot');
-  });
-
-  it('medium priority dot uses the priority-medium-dot token', () => {
-    renderRow({ todo: DONE_TODO }); // DONE_TODO has priority=medium
-    const dot = screen.getByTestId('tasks-priority-dot-3');
-    expect(dot.className).toContain('bg-mf-priority-medium-dot');
   });
 });

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useLaunchConfigs — reconcile path: scope-aware tab creation.
  *

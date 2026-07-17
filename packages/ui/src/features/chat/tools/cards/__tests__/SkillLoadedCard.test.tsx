@@ -29,15 +29,6 @@ describe('SkillLoadedCard — pill label', () => {
     expect(pill).toHaveTextContent('systematic-debugging');
   });
 
-  it('renders pill with data-testid="chat-skill-loaded-pill"', () => {
-    render(
-      <Wrap>
-        <SkillLoadedCard skillName="brainstorming" />
-      </Wrap>,
-    );
-    expect(screen.getByTestId('chat-skill-loaded-pill')).toBeInTheDocument();
-  });
-
   it('renders empty skill name gracefully when skillName is an empty string', () => {
     render(
       <Wrap>

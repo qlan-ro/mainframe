@@ -52,17 +52,5 @@ describe('adapterRoutes', () => {
       expect(ctx.adapters.list).toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ success: true, data: adaptersList });
     });
-
-    it('returns empty list when no adapters available', async () => {
-      (ctx.adapters.list as any).mockResolvedValue([]);
-
-      const router = adapterRoutes(ctx);
-      const handler = extractHandler(router, 'get', '/api/adapters');
-      const res = mockRes();
-
-      await handler({ params: {}, query: {} }, res, vi.fn());
-
-      expect(res.json).toHaveBeenCalledWith({ success: true, data: [] });
-    });
   });
 });

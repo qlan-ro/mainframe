@@ -8,6 +8,11 @@
  *      icon + "needs re-pairing" copy; clicking still switches to local.
  *  2. The "Add remote daemon" footer fires onAdd (and close).
  *  3. With no remote daemons: the empty-state element renders.
+ *
+ * (Dropped a duplicate render-only test in the needs-repair describe that
+ * repeated behavior-1's banner-presence check with a different status fn —
+ * the Lock-icon/copy test right below it already asserts the banner is
+ * present via getByTestId, which throws if absent.)
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -103,20 +108,6 @@ describe('DaemonPicker — fallback banner (needs-repair branch)', () => {
     if (id === 'hel1') return 'needs-repair';
     return 'connected';
   }
-
-  it('renders the fallback banner with needs-repair status', () => {
-    render(
-      <DaemonPicker
-        daemons={ALL_DAEMONS}
-        statusOf={statusOfRepair}
-        activeId="hel1"
-        onSwitch={vi.fn()}
-        onAdd={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByTestId('daemon-picker-fallback')).toBeInTheDocument();
-  });
 
   it('shows the Lock icon (svg) and "needs re-pairing" detail text', () => {
     render(

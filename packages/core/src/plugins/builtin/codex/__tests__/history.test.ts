@@ -84,7 +84,7 @@ const baseItems: ThreadItem[] = [
 ];
 
 describe('convertThreadItems — stable/deterministic ids', () => {
-  it('produces identical message ids on repeated reconstructions of the same items [EXPECTED FAIL — TDD red]', () => {
+  it('produces identical message ids on repeated reconstructions of the same items', () => {
     const a = convertThreadItems(baseItems, 'chat1').map((m) => m.id);
     const b = convertThreadItems(baseItems, 'chat1').map((m) => m.id);
     expect(a).toEqual(b);
@@ -95,7 +95,7 @@ describe('convertThreadItems — stable/deterministic ids', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('appending an item preserves the ids of the original messages as a stable prefix [EXPECTED FAIL — TDD red]', () => {
+  it('appending an item preserves the ids of the original messages as a stable prefix', () => {
     const extraItem: AgentMessageItem = {
       id: 'a2',
       type: 'agentMessage',

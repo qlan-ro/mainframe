@@ -90,24 +90,12 @@ describe('filterRunByScope — null run', () => {
 // t1 kept (SCOPE_A matches), t2 dropped (SCOPE_B ≠ SCOPE_A), t3 dropped (no scopeKey ≠ non-null)
 // ---------------------------------------------------------------------------
 describe('filterRunByScope — single pane, filter by SCOPE_A (strict)', () => {
-  it('keeps only t1; drops t2 (wrong scope) and t3 (no scope under non-null active)', () => {
+  it('keeps only t1, fixes active to it, preserves dir, and resets flex to [1,1]', () => {
     const result = filterRunByScope(buildMixedPaneRun(), SCOPE_A);
     expect(result).not.toBeNull();
     expect(result!.panes[0]!.tabs.map((t) => t.id)).toEqual(['t1']);
-  });
-
-  it('fixes active to t1 (first survivor) because t2 was dropped', () => {
-    const result = filterRunByScope(buildMixedPaneRun(), SCOPE_A);
     expect(result!.panes[0]!.active).toBe('t1');
-  });
-
-  it('preserves dir', () => {
-    const result = filterRunByScope(buildMixedPaneRun(), SCOPE_A);
     expect(result!.dir).toBe('v');
-  });
-
-  it('sets flex to [1, 1] when exactly one pane survives', () => {
-    const result = filterRunByScope(buildMixedPaneRun(), SCOPE_A);
     expect(result!.flex).toEqual([1, 1]);
   });
 });

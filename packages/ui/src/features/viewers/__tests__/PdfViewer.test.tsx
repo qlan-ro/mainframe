@@ -13,13 +13,9 @@
  *     fallback with data-testid="viewer-pdf-fallback".
  *  5. Renders inside ViewerShell (viewer-shell present).
  *  6. Footer status (viewer-shell-status) shows PDF metadata.
- *  7. (toFileUrl) Relative path + projectPath → absolute file:// URL.
- *  8. (toFileUrl) Absolute path → file:// URL passed through unchanged.
- *  9. (toFileUrl) Relative path + no projectPath → button is disabled.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { PdfViewer } from '../PdfViewer';
@@ -106,29 +102,7 @@ describe('PdfViewer', () => {
     expect(status.textContent).toMatch(/PDF/);
   });
 
-  describe('toFileUrl — path resolution', () => {
-    it('resolves a relative path against projectPath to an absolute file:// URL', async () => {
-      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/myproject' });
-      const user = userEvent.setup();
-      renderPdf({ base64: FAKE_PDF_B64, mimeType: 'application/pdf', path: 'src/spec.pdf' });
-      const btn = screen.getByTestId('viewer-pdf-fallback');
-      expect(btn).not.toBeDisabled();
-      await user.click(btn);
-      expect(fakeHost.shell.openExternal).toHaveBeenCalledWith('file:///home/user/myproject/src/spec.pdf');
-    });
-
-    it('passes an already-absolute path through as a file:// URL unchanged', async () => {
-      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/myproject' });
-      const user = userEvent.setup();
-      renderPdf({ base64: FAKE_PDF_B64, mimeType: 'application/pdf', path: '/docs/spec.pdf' });
-      await user.click(screen.getByTestId('viewer-pdf-fallback'));
-      expect(fakeHost.shell.openExternal).toHaveBeenCalledWith('file:///docs/spec.pdf');
-    });
-
-    it('disables "Open externally" when path is relative and projectPath is unavailable', () => {
-      mockUseActiveIdentity.mockReturnValue({ projectPath: undefined });
-      renderPdf({ base64: FAKE_PDF_B64, mimeType: 'application/pdf', path: 'src/spec.pdf' });
-      expect(screen.getByTestId('viewer-pdf-fallback')).toBeDisabled();
-    });
-  });
+  // toFileUrl path-resolution behavior (relative-path resolution, absolute
+  // passthrough, disabled without projectPath) is covered once in
+  // UnsupportedViewer.test.tsx — the logic is shared.
 });

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { it, expect, vi, beforeEach, describe, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { PreviewHandle, InspectResult, RegionSelectResult } from '@qlan-ro/mainframe-types';

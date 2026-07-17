@@ -23,22 +23,12 @@ import type { QueuedEdit } from '../composer-edit-context';
 const EDIT: QueuedEdit = { messageId: 'm1', content: 'hello' };
 
 describe('ComposerEditMode — muted toolbar desaturates as well as dims', () => {
-  it('toolbar wrapper has opacity-40 (not opacity-50)', () => {
+  it('toolbar wrapper dims (opacity-40), desaturates (saturate-[0.6]), and disables pointer events while editing', () => {
     render(<ComposerEditMode edit={EDIT} onDone={vi.fn()} />);
     const wrapper = screen.getByTestId('chat-composer-edit-toolbar');
     expect(wrapper.className).toContain('opacity-40');
     expect(wrapper.className).not.toContain('opacity-50');
-  });
-
-  it('toolbar wrapper has a saturate filter class', () => {
-    render(<ComposerEditMode edit={EDIT} onDone={vi.fn()} />);
-    const wrapper = screen.getByTestId('chat-composer-edit-toolbar');
     expect(wrapper.className).toMatch(/saturate-\[0\.6\]/);
-  });
-
-  it('toolbar wrapper still has pointer-events-none', () => {
-    render(<ComposerEditMode edit={EDIT} onDone={vi.fn()} />);
-    const wrapper = screen.getByTestId('chat-composer-edit-toolbar');
     expect(wrapper.className).toContain('pointer-events-none');
   });
 });
