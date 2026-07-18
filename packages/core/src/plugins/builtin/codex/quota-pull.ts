@@ -18,13 +18,14 @@ export interface PullCodexQuotaDeps {
  * concurrently over the same connection — the caller (manual-refresh puller) owns
  * spawning/closing the app-server, never spawning purely to poll.
  */
-export async function pullCodexQuota(deps: PullCodexQuotaDeps): Promise<ProviderQuota> {
+export async function pullCodexQuota(deps: PullCodexQuotaDeps): Promise<ProviderQuota | null> {
   const now = deps.now ?? Date.now();
   const [result, accountIdentity] = await Promise.all([
     deps.runRateLimits(),
     readCodexAccountIdentity({ readAccount: deps.readAccount }),
   ]);
   const quota = normalizeRateLimitSnapshot(result.rateLimits, now);
+  if (!quota) return null;
   quota.accountIdentity = accountIdentity;
   return quota;
 }
@@ -34,7 +35,7 @@ export async function pullCodexQuota(deps: PullCodexQuotaDeps): Promise<Provider
  * `account/read` back-to-back, then close it. Used by the manual-refresh puller only —
  * never wired to a scheduler (Codex has no timer-based polling, unlike Claude).
  */
-export async function pullCodexQuotaViaTempAppServer(executable: string): Promise<ProviderQuota> {
+export async function pullCodexQuotaViaTempAppServer(executable: string): Promise<ProviderQuota | null> {
   const client = await spawnTempAppServer(executable);
   try {
     return await pullCodexQuota({

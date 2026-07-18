@@ -21,9 +21,13 @@ function windowDurationMs(kind: QuotaWindow['kind']): number {
   return kind === 'session' ? SESSION_WINDOW_DURATION_MS : WEEKLY_WINDOW_DURATION_MS;
 }
 
-/** A null resetsAt is synthesized into a ceiling so a window can't display forever. */
+/**
+ * A null resetsAt is synthesized into a ceiling so a window can't display forever.
+ * The ceiling anchors to the window's own observedAt when set, so a data-free push
+ * (which bumps the blob-level observedAt) can't float this window's ceiling forward.
+ */
 export function effectiveResetAt(window: QuotaWindow, observedAt: number): number {
-  return window.resetsAt ?? observedAt + windowDurationMs(window.kind);
+  return window.resetsAt ?? (window.observedAt ?? observedAt) + windowDurationMs(window.kind);
 }
 
 export function isWindowTrusted(window: QuotaWindow, observedAt: number, now: number): boolean {
@@ -36,24 +40,18 @@ export function isProviderStale(quota: ProviderQuota, now: number): boolean {
 }
 
 export function collectQuotaWindows(quota: ProviderQuota): QuotaWindow[] {
-  return [quota.session, quota.weekly, ...quota.modelWindows].filter(
-    (window): window is QuotaWindow => window != null,
-  );
+  return [quota.session, quota.weekly, ...quota.modelWindows].filter((window): window is QuotaWindow => window != null);
 }
 
 /** Fail-closed (#251): zero trusted windows fails the whole provider to `unknown`. */
 export function deriveProviderStatus(quota: ProviderQuota, now: number): 'ok' | 'unknown' {
-  const hasTrustedWindow = collectQuotaWindows(quota).some((window) =>
-    isWindowTrusted(window, quota.observedAt, now),
-  );
+  const hasTrustedWindow = collectQuotaWindows(quota).some((window) => isWindowTrusted(window, quota.observedAt, now));
   return hasTrustedWindow ? 'ok' : 'unknown';
 }
 
 /** The single number that will actually stop the user: max usedPercent among trusted windows. */
 export function selectTightestWindow(quota: ProviderQuota, now: number): QuotaWindow | undefined {
-  const trusted = collectQuotaWindows(quota).filter((window) =>
-    isWindowTrusted(window, quota.observedAt, now),
-  );
+  const trusted = collectQuotaWindows(quota).filter((window) => isWindowTrusted(window, quota.observedAt, now));
   if (trusted.length === 0) return undefined;
   return trusted.reduce((tightest, window) => (window.usedPercent > tightest.usedPercent ? window : tightest));
 }

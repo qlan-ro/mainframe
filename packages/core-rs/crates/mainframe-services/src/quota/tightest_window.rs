@@ -33,6 +33,7 @@ mod tests {
             kind,
             used_percent,
             resets_at: Some(resets_at),
+            observed_at: None,
             label: label.map(str::to_string),
         }
     }

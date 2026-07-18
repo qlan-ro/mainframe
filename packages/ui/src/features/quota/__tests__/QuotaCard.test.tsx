@@ -4,7 +4,7 @@
  * mixed, plus the tightest-window collapsed row and the all-windows popover.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ProviderQuota } from '@qlan-ro/mainframe-types';
 
@@ -75,19 +75,25 @@ describe('QuotaCard — near-wall severities', () => {
   it('normal (<75) uses the healthy foreground percent colour', () => {
     applyProviderQuota('claude', singleSession(36));
     render(<QuotaCard now={NOW} />);
-    expect(within(screen.getByTestId('provider-quota-row-claude')).getByText('36%').className).toContain('text-foreground');
+    expect(within(screen.getByTestId('provider-quota-row-claude')).getByText('36%').className).toContain(
+      'text-foreground',
+    );
   });
 
   it('amber at 80 (≥75)', () => {
     applyProviderQuota('claude', singleSession(80));
     render(<QuotaCard now={NOW} />);
-    expect(within(screen.getByTestId('provider-quota-row-claude')).getByText('80%').className).toContain('text-mf-warning');
+    expect(within(screen.getByTestId('provider-quota-row-claude')).getByText('80%').className).toContain(
+      'text-mf-warning',
+    );
   });
 
   it('red at 92 (≥90)', () => {
     applyProviderQuota('claude', singleSession(92));
     render(<QuotaCard now={NOW} />);
-    expect(within(screen.getByTestId('provider-quota-row-claude')).getByText('92%').className).toContain('text-destructive');
+    expect(within(screen.getByTestId('provider-quota-row-claude')).getByText('92%').className).toContain(
+      'text-destructive',
+    );
   });
 });
 
@@ -109,6 +115,35 @@ describe('QuotaCard — expired fails closed, stale still shows', () => {
     const row = screen.getByTestId('provider-quota-row-claude');
     expect(row).toHaveAttribute('data-state-kind', 'ok');
     expect(row).toHaveAttribute('aria-label', expect.stringContaining('stale'));
+  });
+});
+
+describe('QuotaCard — rounding parity across providers', () => {
+  it('rounds a fractional (Codex-style) usedPercent the same way an integer (Claude-style) one displays', () => {
+    applyProviderQuota('codex', singleSession(41.7));
+    render(<QuotaCard now={NOW} />);
+    const row = screen.getByTestId('provider-quota-row-codex');
+    expect(within(row).getByText('42%')).toBeInTheDocument();
+    expect(within(row).queryByText('41.7%')).not.toBeInTheDocument();
+  });
+});
+
+describe('QuotaCard — ticking clock', () => {
+  it('re-evaluates staleness on a 30s ticker when no now is injected', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW - 40_000);
+    applyProviderQuota('claude', singleSession(44, NOW - 40_000));
+    render(<QuotaCard />);
+
+    expect(screen.getByTestId('provider-quota-row-claude').getAttribute('aria-label')).not.toContain('stale');
+
+    vi.setSystemTime(NOW - 40_000 + 13 * 60 * 1000);
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(screen.getByTestId('provider-quota-row-claude').getAttribute('aria-label')).toContain('stale');
+    vi.useRealTimers();
   });
 });
 

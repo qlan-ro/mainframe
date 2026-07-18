@@ -47,6 +47,16 @@ describe('ui quota store', () => {
     expect(useQuotaStore.getState().byId.claude!.session!.usedPercent).toBe(55);
   });
 
+  it('applies a same-observedAt re-emission (strictly-greater guard, not >=)', () => {
+    applyProviderQuota('claude', quota(OBSERVED, 30));
+    applyProviderQuota('claude', quota(OBSERVED, 30)); // same timestamp, daemon re-evaluation nudge
+    expect(useQuotaStore.getState().byId.claude!.session!.usedPercent).toBe(30);
+    // The re-emission must have actually replaced the object (not been dropped),
+    // so a same-timestamp update with different windows also lands.
+    applyProviderQuota('claude', quota(OBSERVED, 77));
+    expect(useQuotaStore.getState().byId.claude!.session!.usedPercent).toBe(77);
+  });
+
   it('the subscriber applies provider.quota.updated events and ignores others', () => {
     const unsub = installProviderQuotaSubscriber();
     handlers.forEach((h) => h({ type: 'adapter.models.updated', adapterId: 'claude', models: [], modelsRevision: 1 }));

@@ -85,7 +85,11 @@ export class ChatManager {
       (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
       (chatId) => this.clearAllQueuedForChat(chatId),
       (chatId) => this.getQueuedForChat(chatId),
-      (adapterId, quota) => this.quota?.ingest(adapterId, quota, 'push'),
+      (adapterId, quota) => {
+        this.quota
+          ?.ingest(adapterId, quota, 'push')
+          .catch((error) => logger.warn({ adapterId, error }, 'quota push ingest failed'));
+      },
       this.tracker,
     );
     this.planMode = new PlanModeHandler({

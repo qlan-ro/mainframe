@@ -39,6 +39,13 @@ describe('effectiveResetAt — null reset synthesizes a per-kind ceiling', () =>
     expect(effectiveResetAt(model, NOW)).toBe(NOW + WEEKLY_WINDOW_DURATION_MS);
     expect(WEEKLY_WINDOW_DURATION_MS).toBe(7 * 24 * HOUR);
   });
+
+  it('anchors the null-reset ceiling to the window observedAt, ignoring the blob observedAt', () => {
+    const w: QuotaWindow = { kind: 'session', usedPercent: 10, resetsAt: null, observedAt: NOW - 4 * HOUR };
+    // The blob observedAt (NOW) is bumped by a data-free push; the window's own observedAt
+    // must still anchor the ceiling so it doesn't float forward.
+    expect(effectiveResetAt(w, NOW)).toBe(NOW - 4 * HOUR + SESSION_WINDOW_DURATION_MS);
+  });
 });
 
 describe('isWindowTrusted — trusted until the (real or synthesized) ceiling passes', () => {

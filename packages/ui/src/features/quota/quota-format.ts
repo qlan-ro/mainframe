@@ -4,18 +4,18 @@
  * components, so the render layer is pure wiring.
  */
 import type { ProviderQuota, QuotaWindow } from '@qlan-ro/mainframe-types';
-import {
-  collectQuotaWindows,
-  deriveProviderStatus,
-  isProviderStale,
-  selectTightestWindow,
-} from './quota-lifecycle';
+import { collectQuotaWindows, deriveProviderStatus, isProviderStale, selectTightestWindow } from './quota-lifecycle';
 
 /** Near-wall thresholds (tunable). At/above amber the ring warns; at/above red it alarms. */
 export const QUOTA_AMBER_THRESHOLD = 75;
 export const QUOTA_RED_THRESHOLD = 90;
 
 export type QuotaSeverity = 'normal' | 'amber' | 'red';
+
+/** Display rounding for a used-percent value — providers disagree on precision. */
+export function formatUsedPercent(usedPercent: number): number {
+  return Math.round(usedPercent);
+}
 
 export function severityOf(usedPercent: number): QuotaSeverity {
   if (usedPercent >= QUOTA_RED_THRESHOLD) return 'red';

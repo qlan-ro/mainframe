@@ -329,7 +329,8 @@ function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, sta
 }
 
 function handleAccountRateLimitsUpdated(params: AccountRateLimitsUpdatedParams, sink: SessionSink): void {
-  sink.onProviderQuota?.('codex', normalizeRateLimitSnapshot(params.rateLimits, Date.now()));
+  const quota = normalizeRateLimitSnapshot(params.rateLimits, Date.now());
+  if (quota) sink.onProviderQuota?.('codex', quota);
 }
 
 function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, state: CodexSessionState): void {

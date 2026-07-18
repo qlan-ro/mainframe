@@ -1419,6 +1419,7 @@ mod tests {
             kind,
             used_percent: used,
             resets_at: Some(NOW + 3 * 60 * 60 * 1000),
+            observed_at: Some(NOW),
             label: None,
         };
         let full = |session, weekly| ProviderQuota {

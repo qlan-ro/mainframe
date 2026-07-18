@@ -11,7 +11,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { QuotaRing, QuotaUnknownRing } from './QuotaRing';
 import { QuotaPopover } from './QuotaPopover';
-import { deriveQuotaRow, formatRelativeReset, type QuotaSeverity } from './quota-format';
+import { deriveQuotaRow, formatRelativeReset, formatUsedPercent, type QuotaSeverity } from './quota-format';
 
 const PERCENT_TEXT: Record<QuotaSeverity, string> = {
   normal: 'text-foreground',
@@ -24,7 +24,7 @@ function rowAriaLabel(label: string, quota: ProviderQuota | undefined, now: numb
   if (row.state === 'unknown') return `${label} quota: unknown`;
   const rel = formatRelativeReset(row.resetsAt, now);
   const reset = rel ? `, resets in ${rel}` : '';
-  return `${label} quota: ${row.usedPercent}% used${reset}${row.stale ? ', stale' : ''}`;
+  return `${label} quota: ${formatUsedPercent(row.usedPercent)}% used${reset}${row.stale ? ', stale' : ''}`;
 }
 
 export function QuotaProviderRow({
@@ -65,13 +65,18 @@ export function QuotaProviderRow({
             testId={`provider-quota-glyph-${providerId}`}
             className="size-[15px] rounded"
           />
-          <span className={cn('flex-1 text-caption', row.state === 'unknown' ? 'italic text-mf-text-3' : 'text-muted-foreground')}>
+          <span
+            className={cn(
+              'flex-1 text-caption',
+              row.state === 'unknown' ? 'italic text-mf-text-3' : 'text-muted-foreground',
+            )}
+          >
             {label}
           </span>
           {row.state === 'ok' ? (
             <>
               <span className={cn('text-caption font-semibold tabular-nums', PERCENT_TEXT[row.severity])}>
-                {row.usedPercent}%
+                {formatUsedPercent(row.usedPercent)}%
               </span>
               <span className="w-[46px] text-right text-micro text-mf-text-4">{rel ?? '—'}</span>
             </>

@@ -16,12 +16,15 @@ fn window_duration_ms(kind: QuotaWindowKind) -> i64 {
     }
 }
 
-/// A null `resetsAt` is synthesized into a ceiling so a window can't display forever.
+/// A null `resetsAt` is synthesized into a ceiling so a window can't display
+/// forever. The ceiling anchors on the window's own `observedAt` when present
+/// (#268) — falling back to the blob's `observed_at` — so a kept window's ceiling
+/// doesn't float forward as the blob is re-observed on data-free pushes.
 #[must_use]
 pub fn effective_reset_at(window: &QuotaWindow, observed_at: i64) -> i64 {
-    window
-        .resets_at
-        .unwrap_or_else(|| observed_at + window_duration_ms(window.kind))
+    window.resets_at.unwrap_or_else(|| {
+        window.observed_at.unwrap_or(observed_at) + window_duration_ms(window.kind)
+    })
 }
 
 #[must_use]
@@ -61,6 +64,7 @@ mod tests {
             kind,
             used_percent,
             resets_at,
+            observed_at: None,
             label: None,
         }
     }
@@ -88,6 +92,22 @@ mod tests {
         assert_eq!(
             effective_reset_at(&window, 1_000),
             1_000 + SESSION_WINDOW_DURATION_MS
+        );
+    }
+
+    #[test]
+    fn effective_reset_anchors_the_ceiling_on_the_windows_own_observed_at() {
+        let window = QuotaWindow {
+            kind: QuotaWindowKind::Session,
+            used_percent: 10.0,
+            resets_at: None,
+            observed_at: Some(2_000),
+            label: None,
+        };
+        // Blob observed_at (9_000) is ignored in favour of the window's own 2_000.
+        assert_eq!(
+            effective_reset_at(&window, 9_000),
+            2_000 + SESSION_WINDOW_DURATION_MS
         );
     }
 
@@ -153,6 +173,7 @@ mod tests {
             kind: QuotaWindowKind::WeeklyModel,
             used_percent: 3.0,
             resets_at: None,
+            observed_at: None,
             label: Some("opus".into()),
         };
         let q = ProviderQuota {

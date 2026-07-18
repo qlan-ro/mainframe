@@ -30,16 +30,37 @@ pub fn merge_provider_quota(
         weekly: update
             .weekly
             .or_else(|| prior.and_then(|p| p.weekly.clone())),
-        model_windows: update
-            .model_windows
-            .or_else(|| prior.map(|p| p.model_windows.clone()))
-            .unwrap_or_default(),
+        model_windows: merge_model_windows(
+            prior.map(|p| p.model_windows.as_slice()),
+            update.model_windows,
+        ),
         observed_at: update.observed_at,
         account_identity: update
             .account_identity
             .or_else(|| prior.and_then(|p| p.account_identity.clone())),
     };
     merged.status = derive_provider_status(&merged, now);
+    merged
+}
+
+/// Upsert incoming model windows onto the prior set by label (#268 F3): each
+/// incoming entry replaces its same-label prior (or appends when new), while labels
+/// absent from the incoming set keep their prior entry — expiry, not the merge,
+/// removes stale model windows. An omitted (`None`) incoming set keeps prior whole.
+fn merge_model_windows(
+    prior: Option<&[QuotaWindow]>,
+    incoming: Option<Vec<QuotaWindow>>,
+) -> Vec<QuotaWindow> {
+    let mut merged: Vec<QuotaWindow> = prior.map(<[QuotaWindow]>::to_vec).unwrap_or_default();
+    let Some(incoming) = incoming else {
+        return merged;
+    };
+    for window in incoming {
+        match merged.iter_mut().find(|w| w.label == window.label) {
+            Some(existing) => *existing = window,
+            None => merged.push(window),
+        }
+    }
     merged
 }
 
@@ -55,6 +76,7 @@ mod tests {
             kind,
             used_percent,
             resets_at: Some(resets_at),
+            observed_at: None,
             label: label.map(str::to_string),
         }
     }
@@ -109,6 +131,60 @@ mod tests {
         );
 
         assert_eq!(merged.model_windows, vec![model]);
+    }
+
+    #[test]
+    fn upserts_incoming_model_window_by_label_and_keeps_untouched_labels() {
+        let opus = win(QuotaWindowKind::WeeklyModel, 30.0, NOW + 10_000, Some("opus"));
+        let sonnet = win(QuotaWindowKind::WeeklyModel, 40.0, NOW + 10_000, Some("sonnet"));
+        let prior = ProviderQuota {
+            status: ProviderQuotaStatus::Ok,
+            session: None,
+            weekly: None,
+            model_windows: vec![opus.clone(), sonnet.clone()],
+            observed_at: NOW - 1_000,
+            account_identity: None,
+        };
+        let new_opus = win(QuotaWindowKind::WeeklyModel, 88.0, NOW + 20_000, Some("opus"));
+
+        let merged = merge_provider_quota(
+            Some(&prior),
+            ProviderQuotaUpdate {
+                model_windows: Some(vec![new_opus.clone()]),
+                observed_at: NOW,
+                ..Default::default()
+            },
+            NOW,
+        );
+
+        // opus is updated in place; sonnet (absent from the incoming set) is kept.
+        assert_eq!(merged.model_windows, vec![new_opus, sonnet]);
+    }
+
+    #[test]
+    fn appends_a_new_label_while_keeping_prior_model_windows() {
+        let opus = win(QuotaWindowKind::WeeklyModel, 30.0, NOW + 10_000, Some("opus"));
+        let prior = ProviderQuota {
+            status: ProviderQuotaStatus::Ok,
+            session: None,
+            weekly: None,
+            model_windows: vec![opus.clone()],
+            observed_at: NOW - 1_000,
+            account_identity: None,
+        };
+        let sonnet = win(QuotaWindowKind::WeeklyModel, 40.0, NOW + 10_000, Some("sonnet"));
+
+        let merged = merge_provider_quota(
+            Some(&prior),
+            ProviderQuotaUpdate {
+                model_windows: Some(vec![sonnet.clone()]),
+                observed_at: NOW,
+                ..Default::default()
+            },
+            NOW,
+        );
+
+        assert_eq!(merged.model_windows, vec![opus, sonnet]);
     }
 
     #[test]

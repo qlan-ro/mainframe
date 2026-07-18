@@ -10,14 +10,12 @@ import { cn } from '@/lib/utils';
 import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { refreshQuota } from '@/lib/api/quota';
 import { applyProviderQuota } from '@/store/quota';
-import {
-  deriveProviderStatus,
-  isProviderStale,
-} from './quota-lifecycle';
+import { deriveProviderStatus, isProviderStale } from './quota-lifecycle';
 import {
   deriveWindowList,
   formatAbsoluteReset,
   formatRelativeReset,
+  formatUsedPercent,
   minutesAgo,
   type QuotaSeverity,
 } from './quota-format';
@@ -79,7 +77,11 @@ export function QuotaPopover({
     <div data-testid={`provider-quota-popover-${providerId}`} className="w-[262px] p-[13px] text-caption">
       <div className="mb-[8px] flex items-center justify-between">
         <span className="flex items-center gap-[7px] font-semibold text-foreground">
-          <ProviderLogo adapterId={providerId} testId={`provider-quota-popover-glyph-${providerId}`} className="size-[15px] rounded" />
+          <ProviderLogo
+            adapterId={providerId}
+            testId={`provider-quota-popover-glyph-${providerId}`}
+            className="size-[15px] rounded"
+          />
           {label}
         </span>
         <span data-testid={`provider-quota-freshness-${providerId}`} className="text-micro text-mf-text-3">
@@ -100,14 +102,19 @@ export function QuotaPopover({
               <li
                 key={`${w.kind}-${w.label}`}
                 data-testid={`provider-quota-window-${providerId}-${w.kind}`}
-                aria-label={`${label} ${w.label}: ${w.usedPercent}% used, ${resetSpeech}`}
+                aria-label={`${label} ${w.label}: ${formatUsedPercent(w.usedPercent)}% used, ${resetSpeech}`}
               >
                 <div className="mb-[4px] flex items-baseline justify-between">
                   <span className="font-medium text-foreground">{w.label}</span>
-                  <span className={cn('font-semibold tabular-nums', PERCENT_TEXT[w.severity])}>{w.usedPercent}%</span>
+                  <span className={cn('font-semibold tabular-nums', PERCENT_TEXT[w.severity])}>
+                    {formatUsedPercent(w.usedPercent)}%
+                  </span>
                 </div>
                 <div className="h-[5px] w-full overflow-hidden rounded-[3px] bg-border">
-                  <span className={cn('block h-full rounded-[3px]', BAR_FILL[w.severity])} style={{ width: `${w.usedPercent}%` }} />
+                  <span
+                    className={cn('block h-full rounded-[3px]', BAR_FILL[w.severity])}
+                    style={{ width: `${w.usedPercent}%` }}
+                  />
                 </div>
                 {w.resetsAt != null && (
                   <div className="mt-[4px] flex justify-between text-micro text-mf-text-3">

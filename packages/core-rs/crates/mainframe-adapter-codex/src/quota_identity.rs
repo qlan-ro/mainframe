@@ -86,6 +86,20 @@ pub(crate) async fn read_codex_account_identity(deps: ReadCodexAccountIdentityDe
     synthetic_bucket(account.as_ref())
 }
 
+/// Identity-resolver entry (#268 F2): resolve the Codex account identity from the
+/// cheap `~/.codex/auth.json` fallback, without opening an app-server connection.
+/// `account/read` is reported absent so the email fast-path is skipped and the
+/// disk `account_id`/synthetic bucket decides. Returns the transient sentinel on an
+/// unreadable auth file so the caller reuses last-known.
+pub async fn read_codex_account_identity_from_disk() -> String {
+    let read_account: Box<ReadAccount> = Box::new(|| Box::pin(async { Ok(None) }));
+    read_codex_account_identity(ReadCodexAccountIdentityDeps {
+        read_account: &read_account,
+        read_auth_file: None,
+    })
+    .await
+}
+
 fn synthetic_bucket(account: Option<&Account>) -> String {
     match account {
         Some(Account::ApiKey) => "apiKey".to_string(),

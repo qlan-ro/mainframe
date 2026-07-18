@@ -18,7 +18,9 @@ use crate::history::{
     tool_result_block, tool_use_block, with_parent,
 };
 use crate::item_types::{CollabAgentToolCallItem, ThreadItem, TodoListItem};
-use crate::quota_rate_limit::normalize_rate_limit_snapshot;
+use crate::quota_rate_limit::{
+    has_recognized_window, normalize_rate_limit_snapshot, snapshot_has_window,
+};
 use crate::thread_registry::{agent_title, describe_agent, lookup_agent_metadata};
 use crate::types::{
     AccountRateLimitsUpdatedParams, ItemCompletedParams, ItemStartedParams, PlanDeltaParams,
@@ -147,6 +149,15 @@ fn handle_account_rate_limits_updated(
 ) {
     let quota =
         normalize_rate_limit_snapshot(&params.rate_limits, chrono::Utc::now().timestamp_millis());
+    // C2 (#268): a snapshot that recognizes zero windows must not ingest — it would
+    // bump freshness with no data behind it. Warn only when slots were present but
+    // unrecognized (a genuine format drift), staying quiet on a benign empty snapshot.
+    if !has_recognized_window(&quota) {
+        if snapshot_has_window(&params.rate_limits) {
+            tracing::warn!("codex rate limit: snapshot had windows but none were recognized; skipping ingest");
+        }
+        return;
+    }
     sink.on_provider_quota("codex", quota);
 }
 

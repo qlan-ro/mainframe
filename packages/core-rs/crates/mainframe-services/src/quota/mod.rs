@@ -16,7 +16,8 @@ pub use backoff::{handle_pull_failure, unknown_provider_quota};
 pub use constants::{SESSION_WINDOW_DURATION_MS, STALE_THRESHOLD_MS, WEEKLY_WINDOW_DURATION_MS};
 pub use keying::{compute_quota_key, resolve_account_identity, UNKNOWN_ACCOUNT_IDENTITY};
 pub use manager::{
-    IngestMode, QuotaManager, QuotaManagerDeps, QuotaPuller, QuotaService, QuotaSettingsStore,
+    IdentityResolver, IngestMode, QuotaManager, QuotaManagerDeps, QuotaPuller, QuotaService,
+    QuotaSettingsStore,
 };
 pub use merge::{merge_provider_quota, ProviderQuotaUpdate};
 pub use scheduler::{

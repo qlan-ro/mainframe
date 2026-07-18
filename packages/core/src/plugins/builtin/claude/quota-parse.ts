@@ -12,7 +12,9 @@ const NO_DATA = /only available (for|on)|subscription plan|api[- ]?key/i;
 const SESSION_LINE = /^Current session:/i;
 const WEEKLY_ALL_LINE = /^Current week \(all models\):/i;
 const WEEKLY_MODEL_LINE = /^Current week \(([^)]+)\):/i;
-const PERCENT = /(\d+)%\s+used/i;
+// Whitespace before "used" and before am/pm (in RESET_RE) is optional so "50%used"
+// and "3pm" parse identically to "50% used" and "3 pm" — parity with the Rust arm.
+const PERCENT = /(\d+)%\s*used/i;
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const RESET_RE = /resets\s+([A-Za-z]{3,})\s+(\d{1,2})\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(([^)]+)\)/i;
@@ -77,12 +79,7 @@ function failClosed(line: string, now: number): ProviderQuota {
   return unknown(now);
 }
 
-function parseWindow(
-  kind: QuotaWindow['kind'],
-  line: string,
-  now: number,
-  label?: string,
-): QuotaWindow | null {
+function parseWindow(kind: QuotaWindow['kind'], line: string, now: number, label?: string): QuotaWindow | null {
   const pm = PERCENT.exec(line);
   if (!pm) return null;
   const window: QuotaWindow = { kind, usedPercent: Number(pm[1]), resetsAt: parseResetToEpochMs(line, now) };

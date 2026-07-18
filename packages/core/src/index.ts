@@ -16,6 +16,8 @@ import { ChatManager } from './chat/index.js';
 import { QuotaManager, ClaudeQuotaScheduler } from './quota/index.js';
 import { pullClaudeQuota, spawnClaudeUsage } from './plugins/builtin/claude/quota-pull.js';
 import { pullCodexQuotaViaTempAppServer } from './plugins/builtin/codex/quota-pull.js';
+import { readClaudeAccountIdentity } from './plugins/builtin/claude/trust-store.js';
+import { readCodexAccountIdentity } from './plugins/builtin/codex/quota-identity.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
@@ -94,14 +96,31 @@ async function main(): Promise<void> {
   });
   // Codex has no scheduler (unlike Claude) — this puller only fires on manual refresh
   // or piggybacks on an app-server already up; it must never spawn purely to poll.
-  quota.registerPuller('codex', async () => {
-    const resolved = await resolveAdapterExecutable('codex', { settings: db.settings, run: defaultRun });
-    if (!resolved.valid) throw new Error('codex executable not resolved for quota pull');
-    return pullCodexQuotaViaTempAppServer(resolved.path);
-  });
-  quota.loadFromDisk();
+  // Its snapshot is sparse (a single window at a time), so pull results merge rather than replace.
+  quota.registerPuller(
+    'codex',
+    async () => {
+      const resolved = await resolveAdapterExecutable('codex', { settings: db.settings, run: defaultRun });
+      if (!resolved.valid) throw new Error('codex executable not resolved for quota pull');
+      return pullCodexQuotaViaTempAppServer(resolved.path);
+    },
+    { mergeOnPull: true },
+  );
+  // Identity resolvers stamp the account onto identity-less pushes (Codex rate-limit events)
+  // and pick the live account's blob on boot. Codex has no live app-server here, so it reads
+  // ~/.codex/auth.json (readAccount returns null → auth-file fallback).
+  quota.registerIdentityResolver('claude', () => readClaudeAccountIdentity());
+  quota.registerIdentityResolver('codex', () => readCodexAccountIdentity({ readAccount: async () => null }));
+  await quota.loadFromDisk();
 
-  const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event), quota);
+  const chats = new ChatManager(
+    db,
+    adapters,
+    backgroundTasks,
+    attachmentStore,
+    (event) => broadcastEvent(event),
+    quota,
+  );
   // No in-memory CLI sessions survive a restart, so reset any persisted
   // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
   // otherwise those chats look "running" and new messages queue forever.

@@ -1,15 +1,18 @@
 import type { DaemonEvent, ProviderQuota } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import { computeQuotaKey, resolveAccountIdentity } from './keying.js';
-import { mergeProviderQuota, type ProviderQuotaUpdate } from './merge.js';
+import { mergeProviderQuota, stampWindowObservedAt, type ProviderQuotaUpdate } from './merge.js';
 import { handlePullFailure } from './backoff.js';
 import { deriveProviderStatus } from './status.js';
+import { safeParseQuota } from './quota-schema.js';
 
 const log = createChildLogger('quota:manager');
 
 const QUOTA_CATEGORY = 'quota';
 /** Identity sentinel prefix meaning "read failed transiently" — reuse last-known, never re-key. */
 const TRANSIENT_IDENTITY_PREFIX = 'transient:';
+/** How long a resolved account identity is trusted before the resolver is consulted again. */
+const IDENTITY_CACHE_TTL_MS = 60_000;
 
 export interface QuotaManagerDeps {
   settings: {
@@ -21,8 +24,16 @@ export interface QuotaManagerDeps {
   now?: () => number;
 }
 
-/** Harvests a fresh full-replacement blob for one adapter (e.g. Claude `/usage`). */
-export type QuotaPuller = () => Promise<ProviderQuota>;
+/** Harvests a fresh blob for one adapter (e.g. Claude `/usage`). Null ⇒ nothing to ingest. */
+export type QuotaPuller = () => Promise<ProviderQuota | null>;
+
+/** Reads the live account identity for an adapter (concrete uuid/email, `unknown`, or a `transient:` sentinel). */
+export type IdentityResolver = () => Promise<string>;
+
+interface CachedIdentity {
+  identity: string;
+  expiresAt: number;
+}
 
 /**
  * In-memory quota state for the daemon. Adapters push escalations (sparse merges) and
@@ -35,19 +46,33 @@ export class QuotaManager {
   private readonly currentKey = new Map<string, string>();
   private readonly lastKnownIdentity = new Map<string, string>();
   private readonly pullers = new Map<string, QuotaPuller>();
+  private readonly mergeOnPull = new Set<string>();
+  private readonly identityResolvers = new Map<string, IdentityResolver>();
+  private readonly identityCache = new Map<string, CachedIdentity>();
   private readonly now: () => number;
 
   constructor(private readonly deps: QuotaManagerDeps) {
     this.now = deps.now ?? Date.now;
   }
 
-  registerPuller(adapterId: string, puller: QuotaPuller): void {
+  /** `mergeOnPull` folds pull results sparsely (Codex) instead of full-replacing them (Claude). */
+  registerPuller(adapterId: string, puller: QuotaPuller, options?: { mergeOnPull?: boolean }): void {
     this.pullers.set(adapterId, puller);
+    if (options?.mergeOnPull) this.mergeOnPull.add(adapterId);
   }
 
-  /** Rehydrate persisted blobs; the newest-observed per adapter becomes the current one. */
-  loadFromDisk(): void {
+  /** Resolves the account identity for identity-less pushes (Codex rate-limit events) and boot selection. */
+  registerIdentityResolver(adapterId: string, resolver: IdentityResolver): void {
+    this.identityResolvers.set(adapterId, resolver);
+  }
+
+  /**
+   * Rehydrate persisted blobs. Per adapter the resolver picks the live account's blob when its
+   * identity is concrete and present on disk; otherwise the newest-observed blob wins.
+   */
+  async loadFromDisk(): Promise<void> {
     const stored = this.deps.settings.getByCategory(QUOTA_CATEGORY);
+    const keysByAdapter = new Map<string, string[]>();
     for (const [key, value] of Object.entries(stored)) {
       const blob = safeParseQuota(value);
       if (!blob) {
@@ -57,10 +82,17 @@ export class QuotaManager {
       this.blobs.set(key, blob);
       const adapterId = adapterIdFromKey(key);
       if (!adapterId) continue;
-      const current = this.getCurrentBlob(adapterId);
-      if (!current || blob.observedAt > current.observedAt) {
-        this.currentKey.set(adapterId, key);
-        if (blob.accountIdentity) this.lastKnownIdentity.set(adapterId, blob.accountIdentity);
+      const keys = keysByAdapter.get(adapterId) ?? [];
+      keys.push(key);
+      keysByAdapter.set(adapterId, keys);
+    }
+    for (const [adapterId, keys] of keysByAdapter) {
+      const key = await this.selectBootKey(adapterId, keys);
+      if (!key) continue;
+      this.currentKey.set(adapterId, key);
+      const identity = this.blobs.get(key)?.accountIdentity;
+      if (identity && !identity.startsWith(TRANSIENT_IDENTITY_PREFIX)) {
+        this.lastKnownIdentity.set(adapterId, identity);
       }
     }
   }
@@ -74,11 +106,12 @@ export class QuotaManager {
 
   /**
    * Fold a harvested quota into state. `pull` fully replaces the account's blob; `push`
-   * sparse-merges (an omitted window keeps the prior value). Persists and emits either way.
+   * sparse-merges (an omitted window keeps the prior value). An identity-less push resolves
+   * the live account through the registered resolver. Persists and emits either way.
    */
-  ingest(adapterId: string, quota: ProviderQuota, mode: 'pull' | 'push'): ProviderQuota {
+  async ingest(adapterId: string, quota: ProviderQuota, mode: 'pull' | 'push'): Promise<ProviderQuota> {
     const now = this.now();
-    const identity = this.resolveIdentity(adapterId, quota.accountIdentity);
+    const identity = await this.resolveIngestIdentity(adapterId, quota.accountIdentity, mode);
     const key = computeQuotaKey(adapterId, identity);
     const next =
       mode === 'pull'
@@ -88,12 +121,14 @@ export class QuotaManager {
     return next;
   }
 
-  /** Puller-driven refresh. On failure keep the last-known blob (backoff); no puller ⇒ last-known. */
+  /** Puller-driven refresh. On failure/no-data keep the last-known blob; no puller ⇒ last-known. */
   async refresh(adapterId: string): Promise<ProviderQuota | undefined> {
     const puller = this.pullers.get(adapterId);
     if (!puller) return this.get(adapterId);
     try {
-      return this.ingest(adapterId, await puller(), 'pull');
+      const quota = await puller();
+      if (!quota) return this.reevaluate(adapterId);
+      return await this.ingest(adapterId, quota, this.mergeOnPull.has(adapterId) ? 'push' : 'pull');
     } catch (err) {
       log.warn({ err, adapterId }, 'quota pull failed; keeping last-known');
       return this.reevaluate(adapterId);
@@ -115,10 +150,46 @@ export class QuotaManager {
     return key ? this.blobs.get(key) : undefined;
   }
 
+  private async resolveIngestIdentity(
+    adapterId: string,
+    rawIdentity: string | undefined,
+    mode: 'pull' | 'push',
+  ): Promise<string | undefined> {
+    if (rawIdentity !== undefined) return this.resolveIdentity(adapterId, rawIdentity);
+    const resolved = mode === 'push' ? await this.cachedResolve(adapterId) : undefined;
+    return this.resolveIdentity(adapterId, resolved);
+  }
+
   private resolveIdentity(adapterId: string, rawIdentity: string | undefined): string | undefined {
     const isTransient = !rawIdentity || rawIdentity.startsWith(TRANSIENT_IDENTITY_PREFIX);
     if (isTransient) return resolveAccountIdentity(null, this.lastKnownIdentity.get(adapterId));
     return rawIdentity;
+  }
+
+  private async selectBootKey(adapterId: string, keys: string[]): Promise<string | undefined> {
+    const resolved = await this.cachedResolve(adapterId);
+    if (resolved && !resolved.startsWith(TRANSIENT_IDENTITY_PREFIX)) {
+      const key = computeQuotaKey(adapterId, resolved);
+      if (this.blobs.has(key)) return key;
+    }
+    return newestKey(keys, this.blobs);
+  }
+
+  /** Resolve the adapter identity through a TTL cache so bursty pushes don't re-read auth each time. */
+  private async cachedResolve(adapterId: string): Promise<string | undefined> {
+    const resolver = this.identityResolvers.get(adapterId);
+    if (!resolver) return undefined;
+    const now = this.now();
+    const cached = this.identityCache.get(adapterId);
+    if (cached && now < cached.expiresAt) return cached.identity;
+    try {
+      const identity = await resolver();
+      this.identityCache.set(adapterId, { identity, expiresAt: now + IDENTITY_CACHE_TTL_MS });
+      return identity;
+    } catch (err) {
+      log.warn({ err, adapterId }, 'quota: identity resolver failed; reusing last-known');
+      return undefined;
+    }
   }
 
   private commit(adapterId: string, key: string, identity: string | undefined, blob: ProviderQuota): void {
@@ -132,13 +203,13 @@ export class QuotaManager {
   }
 }
 
-/** A full-replacement pull: take exactly the harvested windows, re-deriving status. */
+/** A full-replacement pull: take exactly the harvested windows (stamped), re-deriving status. */
 function replaceBlob(quota: ProviderQuota, identity: string | undefined, now: number): ProviderQuota {
   const blob: ProviderQuota = {
     status: 'unknown',
-    session: quota.session,
-    weekly: quota.weekly,
-    modelWindows: quota.modelWindows ?? [],
+    session: stampWindowObservedAt(quota.session, quota.observedAt),
+    weekly: stampWindowObservedAt(quota.weekly, quota.observedAt),
+    modelWindows: (quota.modelWindows ?? []).map((window) => ({ ...window, observedAt: quota.observedAt })),
     observedAt: quota.observedAt,
     accountIdentity: identity,
   };
@@ -163,12 +234,16 @@ function adapterIdFromKey(key: string): string | undefined {
   return colon > 0 ? key.slice(0, colon) : undefined;
 }
 
-function safeParseQuota(value: string): ProviderQuota | undefined {
-  try {
-    const parsed = JSON.parse(value) as ProviderQuota;
-    if (typeof parsed?.observedAt === 'number' && Array.isArray(parsed.modelWindows)) return parsed;
-  } catch {
-    return undefined; /* malformed persisted blob — caller logs and skips */
+/** The key whose blob was observed most recently, used as the boot fallback. */
+function newestKey(keys: string[], blobs: Map<string, ProviderQuota>): string | undefined {
+  let best: string | undefined;
+  let bestObservedAt = -Infinity;
+  for (const key of keys) {
+    const observedAt = blobs.get(key)?.observedAt ?? -Infinity;
+    if (observedAt > bestObservedAt) {
+      best = key;
+      bestObservedAt = observedAt;
+    }
   }
-  return undefined;
+  return best;
 }

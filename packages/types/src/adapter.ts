@@ -117,6 +117,12 @@ export interface QuotaWindow {
   usedPercent: number;
   resetsAt: number | null;
   label?: string;
+  /**
+   * When this window last carried real data (epoch ms). Anchors the synthesized
+   * null-reset ceiling per-window so a data-free push can't float it forward.
+   * Omitted when absent; the blob-level observedAt is the fallback.
+   */
+  observedAt?: number;
 }
 
 export interface ProviderQuota {

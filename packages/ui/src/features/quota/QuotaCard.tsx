@@ -6,9 +6,22 @@
  * each row reads its own blob from the quota store and derives its view via
  * `quota-format`.
  */
+import { useEffect, useState } from 'react';
 import { useProviderQuota } from '@/store/quota';
 import { QUOTA_PROVIDERS } from './quota-format';
 import { QuotaProviderRow } from './QuotaProviderRow';
+
+const TICK_INTERVAL_MS = 30_000;
+
+/** Re-renders every 30s so an idle card still crosses resetsAt/staleness thresholds. */
+function useTickingNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), TICK_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
 
 function ConnectedQuotaRow({ providerId, label, now }: { providerId: string; label: string; now: number }) {
   const quota = useProviderQuota(providerId);
@@ -16,7 +29,9 @@ function ConnectedQuotaRow({ providerId, label, now }: { providerId: string; lab
 }
 
 /** `now` is injectable so the derived staleness/expiry states are deterministic in tests. */
-export function QuotaCard({ now = Date.now() }: { now?: number }) {
+export function QuotaCard({ now }: { now?: number }) {
+  const ticking = useTickingNow();
+  const effectiveNow = now ?? ticking;
   return (
     <div
       data-testid="provider-quota-card"
@@ -24,7 +39,7 @@ export function QuotaCard({ now = Date.now() }: { now?: number }) {
     >
       <span className="px-[4px] pb-[3px] text-micro font-bold uppercase tracking-wide text-mf-text-3">Quota</span>
       {QUOTA_PROVIDERS.map((p) => (
-        <ConnectedQuotaRow key={p.id} providerId={p.id} label={p.label} now={now} />
+        <ConnectedQuotaRow key={p.id} providerId={p.id} label={p.label} now={effectiveNow} />
       ))}
     </div>
   );

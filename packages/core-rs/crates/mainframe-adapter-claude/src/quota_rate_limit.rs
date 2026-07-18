@@ -38,6 +38,7 @@ pub fn normalize_rate_limit_event(info: Option<&Value>, now: i64) -> Option<Prov
         kind: mapping.kind,
         used_percent: (utilization * 100.0).round(),
         resets_at: info.get("resetsAt").and_then(Value::as_i64).map(|s| s * 1000),
+        observed_at: Some(now),
         label: mapping.label.map(str::to_string),
     };
 
@@ -77,6 +78,7 @@ mod tests {
                 kind: QuotaWindowKind::Session,
                 used_percent: 93.0,
                 resets_at: Some(1_789_999_999_000),
+                observed_at: Some(NOW),
                 label: None,
             })
         );
@@ -88,7 +90,7 @@ mod tests {
         let quota = normalize_rate_limit_event(Some(&info), NOW).unwrap();
         assert_eq!(
             quota.weekly,
-            Some(QuotaWindow { kind: QuotaWindowKind::Weekly, used_percent: 50.0, resets_at: Some(1_789_999_999_000), label: None })
+            Some(QuotaWindow { kind: QuotaWindowKind::Weekly, used_percent: 50.0, resets_at: Some(1_789_999_999_000), observed_at: Some(NOW), label: None })
         );
         assert_eq!(quota.session, None);
     }
@@ -99,7 +101,7 @@ mod tests {
         let quota = normalize_rate_limit_event(Some(&info), NOW).unwrap();
         assert_eq!(
             quota.model_windows,
-            vec![QuotaWindow { kind: QuotaWindowKind::WeeklyModel, used_percent: 80.0, resets_at: None, label: Some("opus".to_string()) }]
+            vec![QuotaWindow { kind: QuotaWindowKind::WeeklyModel, used_percent: 80.0, resets_at: None, observed_at: Some(NOW), label: Some("opus".to_string()) }]
         );
     }
 

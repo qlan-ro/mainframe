@@ -1250,15 +1250,13 @@ mod tests {
         assert_eq!(rec.provider_quota.len(), 1);
         let (adapter_id, quota) = &rec.provider_quota[0];
         assert_eq!(adapter_id, "claude");
-        assert_eq!(
-            quota.session,
-            Some(mainframe_types::adapter::QuotaWindow {
-                kind: mainframe_types::adapter::QuotaWindowKind::Session,
-                used_percent: 42.0,
-                resets_at: Some(1_789_999_999_000),
-                label: None,
-            })
-        );
+        let session = quota.session.as_ref().unwrap();
+        assert_eq!(session.kind, mainframe_types::adapter::QuotaWindowKind::Session);
+        assert_eq!(session.used_percent, 42.0);
+        assert_eq!(session.resets_at, Some(1_789_999_999_000));
+        assert_eq!(session.label, None);
+        // observedAt (#268) is stamped from the wall clock at handling time.
+        assert!(session.observed_at.is_some());
     }
 
     #[test]

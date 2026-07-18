@@ -32,8 +32,8 @@ describe('normalizeRateLimitSnapshot', () => {
       },
       NOW,
     );
-    expect(quota.weekly).toEqual({ kind: 'weekly', usedPercent: 71, resetsAt: 1_784_845_911_000 });
-    expect(quota.session).toBeUndefined();
+    expect(quota?.weekly).toEqual({ kind: 'weekly', usedPercent: 71, resetsAt: 1_784_845_911_000 });
+    expect(quota?.session).toBeUndefined();
   });
 
   it('window identity is by duration, not by slot — a weekly window reported as primary still maps to weekly', () => {
@@ -46,8 +46,8 @@ describe('normalizeRateLimitSnapshot', () => {
       },
       NOW,
     );
-    expect(quota.weekly?.usedPercent).toBe(22);
-    expect(quota.session).toBeUndefined();
+    expect(quota?.weekly?.usedPercent).toBe(22);
+    expect(quota?.session).toBeUndefined();
   });
 
   it('sparse: both windows null leaves session and weekly unset (keep-previous, never clear)', () => {
@@ -68,7 +68,7 @@ describe('normalizeRateLimitSnapshot', () => {
       },
       NOW,
     );
-    expect(quota.session).toEqual({ kind: 'session', usedPercent: 10, resetsAt: null });
+    expect(quota?.session).toEqual({ kind: 'session', usedPercent: 10, resetsAt: null });
   });
 
   it('drops a window whose windowDurationMins is unrecognized (untrusted, not session/weekly)', () => {
@@ -81,11 +81,11 @@ describe('normalizeRateLimitSnapshot', () => {
       },
       NOW,
     );
-    expect(quota.session).toBeUndefined();
-    expect(quota.weekly?.usedPercent).toBe(71);
+    expect(quota?.session).toBeUndefined();
+    expect(quota?.weekly?.usedPercent).toBe(71);
   });
 
-  it('drops a window whose windowDurationMins is null (unclassifiable)', () => {
+  it('returns null when the only window is unclassifiable (C2 — skip ingest, no observedAt bump)', () => {
     const quota = normalizeRateLimitSnapshot(
       {
         limitId: 'codex',
@@ -95,7 +95,19 @@ describe('normalizeRateLimitSnapshot', () => {
       },
       NOW,
     );
-    expect(quota.session).toBeUndefined();
-    expect(quota.weekly).toBeUndefined();
+    expect(quota).toBeNull();
+  });
+
+  it('returns null when every present window is unrecognized (C2)', () => {
+    const quota = normalizeRateLimitSnapshot(
+      {
+        limitId: 'codex',
+        limitName: null,
+        primary: { usedPercent: 40, windowDurationMins: 60, resetsAt: 1_784_845_911 },
+        secondary: { usedPercent: 71, windowDurationMins: 120, resetsAt: 1_784_845_911 },
+      },
+      NOW,
+    );
+    expect(quota).toBeNull();
   });
 });

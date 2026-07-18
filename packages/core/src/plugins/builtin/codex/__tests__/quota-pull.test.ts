@@ -18,11 +18,11 @@ describe('pullCodexQuota', () => {
       now: NOW,
     });
 
-    expect(quota.status).toBe('ok');
-    expect(quota.session).toEqual({ kind: 'session', usedPercent: 41, resetsAt: 1_784_800_000_000 });
-    expect(quota.weekly).toEqual({ kind: 'weekly', usedPercent: 12, resetsAt: 1_784_845_911_000 });
-    expect(quota.accountIdentity).toBe('a@b.com');
-    expect(quota.observedAt).toBe(NOW);
+    expect(quota?.status).toBe('ok');
+    expect(quota?.session).toEqual({ kind: 'session', usedPercent: 41, resetsAt: 1_784_800_000_000 });
+    expect(quota?.weekly).toEqual({ kind: 'weekly', usedPercent: 12, resetsAt: 1_784_845_911_000 });
+    expect(quota?.accountIdentity).toBe('a@b.com');
+    expect(quota?.observedAt).toBe(NOW);
   });
 
   it('stamps the transient identity sentinel when account/read fails, without failing the whole pull', async () => {
@@ -36,7 +36,7 @@ describe('pullCodexQuota', () => {
       now: NOW,
     });
 
-    expect(quota.status).toBe('ok');
-    expect(quota.accountIdentity).toBe('transient:identity-read-failed');
+    expect(quota?.status).toBe('ok');
+    expect(quota?.accountIdentity).toBe('transient:identity-read-failed');
   });
 });

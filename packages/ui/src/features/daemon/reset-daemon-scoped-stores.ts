@@ -21,6 +21,7 @@ import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useSandboxStore } from '@/store/sandbox';
 import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
+import { resetQuota } from '@/store/quota';
 
 export function resetDaemonScopedStores(): void {
   useSessionTodosStore.setState({ byChat: {} });
@@ -51,4 +52,6 @@ export function resetDaemonScopedStores(): void {
     selectedTags: new Set<string>(),
     selectedSynthetic: new Set(),
   });
+
+  resetQuota();
 }

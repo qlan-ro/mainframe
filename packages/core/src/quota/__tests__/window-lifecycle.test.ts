@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ProviderQuota, QuotaWindow } from '@qlan-ro/mainframe-types';
-import {
-  effectiveResetAt,
-  isWindowTrusted,
-  isProviderStale,
-  collectQuotaWindows,
-} from '../window-lifecycle.js';
+import { effectiveResetAt, isWindowTrusted, isProviderStale, collectQuotaWindows } from '../window-lifecycle.js';
 import { SESSION_WINDOW_DURATION_MS, WEEKLY_WINDOW_DURATION_MS, STALE_THRESHOLD_MS } from '../constants.js';
 
 const NOW = 1_720_000_000_000;
@@ -29,6 +24,13 @@ describe('effectiveResetAt', () => {
   it('synthesizes a weekly-model ceiling of observedAt + 7d when resetsAt is null', () => {
     const window: QuotaWindow = { kind: 'weekly-model', usedPercent: 10, resetsAt: null };
     expect(effectiveResetAt(window, 1_000)).toBe(1_000 + WEEKLY_WINDOW_DURATION_MS);
+  });
+
+  it('anchors the null-reset ceiling to the window observedAt, ignoring the blob observedAt', () => {
+    const window: QuotaWindow = { kind: 'session', usedPercent: 10, resetsAt: null, observedAt: 500 };
+    // Blob-level observedAt (9_000) is bumped by a data-free push; the window's own
+    // observedAt (500) must still anchor the ceiling so it doesn't float forward.
+    expect(effectiveResetAt(window, 9_000)).toBe(500 + SESSION_WINDOW_DURATION_MS);
   });
 });
 

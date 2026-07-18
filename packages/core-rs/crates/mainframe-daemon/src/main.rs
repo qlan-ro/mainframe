@@ -32,8 +32,12 @@ use mainframe_adapter_claude::adapter::ClaudeAdapter;
 use mainframe_adapter_claude::quota_pull::{
     PullClaudeQuotaDeps, pull_claude_quota, spawn_claude_usage,
 };
+use mainframe_adapter_claude::trust_store::{
+    read_claude_account_identity, CLAUDE_IDENTITY_TRANSIENT,
+};
 use mainframe_adapter_codex::CodexAdapter;
 use mainframe_adapter_codex::quota_pull::pull_codex_quota_via_temp_app_server;
+use mainframe_adapter_codex::{read_codex_account_identity_from_disk, CODEX_IDENTITY_TRANSIENT};
 use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
@@ -59,8 +63,8 @@ use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
 use mainframe_services::quota::{
-    ClaudeQuotaScheduler, ClaudeQuotaSchedulerDeps, QuotaManager, QuotaManagerDeps, QuotaPuller,
-    QuotaService,
+    ClaudeQuotaScheduler, ClaudeQuotaSchedulerDeps, IdentityResolver, IngestMode, QuotaManager,
+    QuotaManagerDeps, QuotaPuller, QuotaService,
 };
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
@@ -245,7 +249,8 @@ async fn run_daemon() {
         }),
         now: None,
     }));
-    quota_manager.load_from_disk();
+    register_quota_identity_resolvers(&quota_manager);
+    quota_manager.load_from_disk().await;
     register_quota_pullers(&quota_manager, &db, &resolved_path);
 
     // ChatManager: constructed after the AdapterRegistry + BackgroundTaskTracker
@@ -717,7 +722,7 @@ fn register_quota_pullers(
             .map_err(|err| err.to_string())
         })
     });
-    quota.register_puller("claude", claude_puller);
+    quota.register_puller("claude", IngestMode::Pull, claude_puller);
 
     let codex_db = db.clone();
     let codex_path = resolved_path.clone();
@@ -733,7 +738,31 @@ fn register_quota_pullers(
                 .map_err(|err| err.to_string())
         })
     });
-    quota.register_puller("codex", codex_puller);
+    // Codex reads the app-server sparsely, so its pull merges like a push (#268 F5).
+    quota.register_puller("codex", IngestMode::Push, codex_puller);
+}
+
+/// Register per-adapter account-identity resolvers (#268 F2). On a push with no
+/// concrete identity (and at boot) the manager consults these to name the account,
+/// keeping a same-provider swap from landing on the wrong bucket. Both read cheaply
+/// off disk (Claude trust-store, Codex `~/.codex/auth.json`); the transient sentinel
+/// maps to `None` so a momentary read failure reuses last-known.
+fn register_quota_identity_resolvers(quota: &Arc<QuotaManager>) {
+    let claude_resolver: IdentityResolver = Arc::new(|| {
+        Box::pin(async {
+            let identity = read_claude_account_identity(None).await;
+            (identity != CLAUDE_IDENTITY_TRANSIENT).then_some(identity)
+        })
+    });
+    quota.register_identity_resolver("claude", claude_resolver);
+
+    let codex_resolver: IdentityResolver = Arc::new(|| {
+        Box::pin(async {
+            let identity = read_codex_account_identity_from_disk().await;
+            (identity != CODEX_IDENTITY_TRANSIENT).then_some(identity)
+        })
+    });
+    quota.register_identity_resolver("codex", codex_resolver);
 }
 
 /// Wall-clock epoch-ms for the quota pullers' `observedAt` stamp (the harvesters

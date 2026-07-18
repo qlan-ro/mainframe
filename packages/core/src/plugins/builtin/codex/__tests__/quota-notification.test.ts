@@ -49,6 +49,28 @@ describe('Codex account/rateLimits/updated wiring', () => {
     expect(quota.weekly).toEqual({ kind: 'weekly', usedPercent: 22, resetsAt: 1_784_845_911_000 });
   });
 
+  it('skips onProviderQuota when no window is recognized (C2 — never bump observedAt)', () => {
+    const onProviderQuota = vi.fn();
+    const sink: SessionSink = { ...NULL_SINK, onProviderQuota };
+    const state: CodexSessionState = { threadId: 't1', currentTurnId: null, currentTurnPlan: null };
+
+    handleNotification(
+      'account/rateLimits/updated',
+      {
+        rateLimits: {
+          limitId: 'codex',
+          limitName: null,
+          primary: { usedPercent: 40, windowDurationMins: 60, resetsAt: 1_784_845_911 },
+          secondary: null,
+        },
+      },
+      sink,
+      state,
+    );
+
+    expect(onProviderQuota).not.toHaveBeenCalled();
+  });
+
   it('no-ops when the sink has no onProviderQuota (optional sink method)', () => {
     const state: CodexSessionState = { threadId: 't1', currentTurnId: null, currentTurnPlan: null };
     expect(() =>

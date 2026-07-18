@@ -29,7 +29,7 @@ pub fn normalize_rate_limit_snapshot(snapshot: &RateLimitSnapshot, now: i64) -> 
     };
 
     for raw in [&snapshot.primary, &snapshot.secondary] {
-        let Some((kind, window)) = map_window(raw.as_ref()) else {
+        let Some((kind, window)) = map_window(raw.as_ref(), now) else {
             continue;
         };
         match kind {
@@ -45,7 +45,7 @@ pub fn normalize_rate_limit_snapshot(snapshot: &RateLimitSnapshot, now: i64) -> 
     quota
 }
 
-fn map_window(window: Option<&RateLimitWindow>) -> Option<(QuotaWindowKind, QuotaWindow)> {
+fn map_window(window: Option<&RateLimitWindow>, now: i64) -> Option<(QuotaWindowKind, QuotaWindow)> {
     let window = window?;
     let kind = window.window_duration_mins.and_then(kind_by_duration_mins);
     let Some(kind) = kind else {
@@ -61,9 +61,26 @@ fn map_window(window: Option<&RateLimitWindow>) -> Option<(QuotaWindowKind, Quot
             kind,
             used_percent: window.used_percent,
             resets_at: window.resets_at.map(|secs| secs * 1000),
+            observed_at: Some(now),
             label: None,
         },
     ))
+}
+
+/// Whether a normalized snapshot recognized at least one window. Zero recognized
+/// windows (an all-unrecognized or empty snapshot) must not ingest — it would bump
+/// freshness without any data behind it (#268/C2).
+#[must_use]
+pub fn has_recognized_window(quota: &ProviderQuota) -> bool {
+    quota.session.is_some() || quota.weekly.is_some() || !quota.model_windows.is_empty()
+}
+
+/// Whether the raw snapshot carried any window slot at all. Used to distinguish a
+/// genuine format drift (windows present but none recognized -> warn) from a benign
+/// empty snapshot.
+#[must_use]
+pub fn snapshot_has_window(snapshot: &RateLimitSnapshot) -> bool {
+    snapshot.primary.is_some() || snapshot.secondary.is_some()
 }
 
 #[cfg(test)]
@@ -172,6 +189,42 @@ mod tests {
         assert_eq!(quota.status, ProviderQuotaStatus::Ok);
         assert!(quota.session.is_none());
         assert!(quota.weekly.is_none());
+    }
+
+    #[test]
+    fn stamps_each_window_with_the_observed_at_clock() {
+        let quota = normalize_rate_limit_snapshot(
+            &snapshot(Some(window(19.0, Some(300), Some(1_752_828_600))), None),
+            NOW,
+        );
+        assert_eq!(quota.session.unwrap().observed_at, Some(NOW));
+    }
+
+    #[test]
+    fn has_recognized_window_is_false_for_an_all_unrecognized_snapshot() {
+        let quota = normalize_rate_limit_snapshot(
+            &snapshot(Some(window(19.0, Some(60), Some(1_752_828_600))), None),
+            NOW,
+        );
+        assert!(!has_recognized_window(&quota));
+    }
+
+    #[test]
+    fn has_recognized_window_is_true_when_at_least_one_window_maps() {
+        let quota = normalize_rate_limit_snapshot(
+            &snapshot(Some(window(19.0, Some(300), Some(1_752_828_600))), None),
+            NOW,
+        );
+        assert!(has_recognized_window(&quota));
+    }
+
+    #[test]
+    fn snapshot_has_window_distinguishes_present_slots_from_an_empty_snapshot() {
+        assert!(snapshot_has_window(&snapshot(
+            Some(window(19.0, Some(60), Some(1_752_828_600))),
+            None
+        )));
+        assert!(!snapshot_has_window(&snapshot(None, None)));
     }
 }
 

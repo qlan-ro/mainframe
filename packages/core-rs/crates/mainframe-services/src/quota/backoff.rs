@@ -44,6 +44,7 @@ mod tests {
             kind: QuotaWindowKind::Session,
             used_percent,
             resets_at: Some(resets_at),
+            observed_at: None,
             label: None,
         }
     }

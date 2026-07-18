@@ -7,6 +7,7 @@ import {
   deriveWindowList,
   formatAbsoluteReset,
   formatRelativeReset,
+  formatUsedPercent,
   minutesAgo,
   severityOf,
   windowLabel,
@@ -136,6 +137,17 @@ describe('formatAbsoluteReset', () => {
   it('renders a friendly absolute timestamp for the popover (UTC-pinned)', () => {
     expect(formatAbsoluteReset(NOW)).toBe('Jul 17, 11:00 AM');
     expect(formatAbsoluteReset(NOW + 2 * HOUR + 20 * 60_000)).toBe('Jul 17, 1:20 PM');
+  });
+});
+
+describe('formatUsedPercent — one formatter for every provider (rounding parity)', () => {
+  it('rounds fractional percents the way a provider that reports raw floats would (Codex-style)', () => {
+    expect(formatUsedPercent(41.7)).toBe(42);
+    expect(formatUsedPercent(41.4)).toBe(41);
+  });
+
+  it('passes through an already-integer percent unchanged (Claude-style)', () => {
+    expect(formatUsedPercent(36)).toBe(36);
   });
 });
 

@@ -53,6 +53,26 @@ describe('parseClaudeUsage — fail-closed', () => {
   });
 });
 
+describe('parseClaudeUsage — whitespace-tolerant parsing (Rust-arm parity)', () => {
+  it('parses percent with no space before "used" ("50%used")', () => {
+    const quota = parseClaudeUsage('Current session: 50%used · resets Jul 18 at 10:10am (Europe/Bucharest)', NOW);
+    expect(quota.session).toEqual({ kind: 'session', usedPercent: 50, resetsAt: SESSION_RESET });
+  });
+
+  it('parses a glued am/pm reset ("3pm") the same as a spaced one', () => {
+    const glued = parseClaudeUsage(
+      'Current week (all models): 25% used · resets Jul 23 at 4pm (Europe/Bucharest)',
+      NOW,
+    );
+    const spaced = parseClaudeUsage(
+      'Current week (all models): 25% used · resets Jul 23 at 4 pm (Europe/Bucharest)',
+      NOW,
+    );
+    expect(glued.weekly?.resetsAt).toBe(WEEKLY_RESET);
+    expect(spaced.weekly?.resetsAt).toBe(WEEKLY_RESET);
+  });
+});
+
 describe('parseClaudeUsage — no data', () => {
   it('returns unknown for the recognized non-subscriber message', () => {
     const quota = parseClaudeUsage('/usage is only available for subscription plans', NOW);

@@ -147,6 +147,7 @@ fn parse_window(kind: QuotaWindowKind, line: &str, now: i64, label: Option<&str>
         kind,
         used_percent: percent,
         resets_at: parse_reset_to_epoch_ms(line, now),
+        observed_at: Some(now),
         label: label.map(str::to_string),
     })
 }
@@ -189,10 +190,8 @@ fn parse_reset_to_epoch_ms(line: &str, now: i64) -> Option<i64> {
     let rest = strip_prefix_ci(rest.trim_start(), "at ").or_else(|| strip_prefix_ci(rest.trim_start(), "at"))?;
     let rest = rest.trim_start();
 
-    let (time_tok, rest) = take_token(rest)?;
-    let (hour12, minute) = parse_hour_minute_ampm(time_tok)?;
-    let am_pm = time_tok.to_lowercase();
-    let is_pm = am_pm.ends_with("pm");
+    let (time_tok, after_time) = take_token(rest)?;
+    let (hour12, minute, is_pm, rest) = parse_time_and_meridiem(time_tok, after_time)?;
 
     let rest = rest.trim_start();
     let paren_start = rest.find('(')?;
@@ -216,15 +215,35 @@ fn take_token(s: &str) -> Option<(&str, &str)> {
     Some((&s[..end], &s[end..]))
 }
 
-/// Parses `10`, `10:10`, `10am`, `10:10am`, `10:10pm` (case-insensitive am/pm suffix).
-fn parse_hour_minute_ampm(tok: &str) -> Option<(u32, u32)> {
-    let lower = tok.to_lowercase();
-    let (digits_part, _) = if lower.ends_with("am") || lower.ends_with("pm") {
-        lower.split_at(lower.len() - 2)
-    } else {
-        return None;
-    };
-    let mut parts = digits_part.splitn(2, ':');
+/// Resolves the clock + meridiem, accepting the meridiem glued to the time
+/// (`10:10am`) or separated by whitespace (`10:10 am`, already split into a
+/// following token). Returns `(hour12, minute, is_pm, remaining)`; the meridiem is
+/// required — a bare `10:10` yields `None`, mirroring the TS `(am|pm)` group.
+fn parse_time_and_meridiem<'a>(
+    time_tok: &str,
+    after_time: &'a str,
+) -> Option<(u32, u32, bool, &'a str)> {
+    let lower = time_tok.to_lowercase();
+    if let Some(digits) = lower.strip_suffix("am") {
+        let (hour, minute) = parse_hour_minute(digits)?;
+        return Some((hour, minute, false, after_time));
+    }
+    if let Some(digits) = lower.strip_suffix("pm") {
+        let (hour, minute) = parse_hour_minute(digits)?;
+        return Some((hour, minute, true, after_time));
+    }
+    let (hour, minute) = parse_hour_minute(&lower)?;
+    let (meridiem_tok, rest) = take_token(after_time)?;
+    match meridiem_tok.to_lowercase().as_str() {
+        "am" => Some((hour, minute, false, rest)),
+        "pm" => Some((hour, minute, true, rest)),
+        _ => None,
+    }
+}
+
+/// Parses `10` or `10:10` into `(hour, minute)`; a missing minute defaults to 0.
+fn parse_hour_minute(digits: &str) -> Option<(u32, u32)> {
+    let mut parts = digits.splitn(2, ':');
     let hour: u32 = parts.next()?.parse().ok()?;
     let minute: u32 = match parts.next() {
         Some(m) => m.parse().ok()?,
@@ -293,6 +312,7 @@ mod tests {
                 kind: QuotaWindowKind::Session,
                 used_percent: 19.0,
                 resets_at: Some(session_reset()),
+                observed_at: Some(now()),
                 label: None,
             })
         );
@@ -302,6 +322,7 @@ mod tests {
                 kind: QuotaWindowKind::Weekly,
                 used_percent: 25.0,
                 resets_at: Some(weekly_reset()),
+                observed_at: Some(now()),
                 label: None,
             })
         );
@@ -311,6 +332,7 @@ mod tests {
                 kind: QuotaWindowKind::WeeklyModel,
                 used_percent: 33.0,
                 resets_at: Some(weekly_reset()),
+                observed_at: Some(now()),
                 label: Some("Fable".to_string()),
             }]
         );
@@ -332,6 +354,7 @@ mod tests {
                 kind: QuotaWindowKind::Session,
                 used_percent: 42.0,
                 resets_at: None,
+                observed_at: Some(now()),
                 label: None,
             })
         );
@@ -359,6 +382,32 @@ mod tests {
         assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
         assert_eq!(quota.model_windows, Vec::<QuotaWindow>::new());
         assert_eq!(quota.observed_at, now());
+    }
+
+    #[test]
+    fn parses_the_reset_with_the_meridiem_glued_to_the_time() {
+        let quota = parse_claude_usage(
+            "Current session: 19% used \u{b7} resets Jul 18 at 10:10am (Europe/Bucharest)",
+            now(),
+        );
+        assert_eq!(quota.session.unwrap().resets_at, Some(session_reset()));
+    }
+
+    #[test]
+    fn parses_the_reset_with_a_space_before_the_meridiem() {
+        let quota = parse_claude_usage(
+            "Current session: 19% used \u{b7} resets Jul 18 at 10:10 am (Europe/Bucharest)",
+            now(),
+        );
+        assert_eq!(quota.session.unwrap().resets_at, Some(session_reset()));
+    }
+
+    #[test]
+    fn parses_the_percent_with_and_without_a_space_before_used() {
+        let spaced = parse_claude_usage("Current session: 50% used", now());
+        let glued = parse_claude_usage("Current session: 50%used", now());
+        assert_eq!(spaced.session.unwrap().used_percent, 50.0);
+        assert_eq!(glued.session.unwrap().used_percent, 50.0);
     }
 
     #[test]

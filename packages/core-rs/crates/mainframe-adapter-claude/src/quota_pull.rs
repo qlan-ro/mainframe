@@ -46,6 +46,10 @@ pub async fn pull_claude_quota(deps: PullClaudeQuotaDeps<'_>) -> Result<Provider
     Ok(quota)
 }
 
+/// How much of stderr to surface on a nonzero exit — enough to diagnose without
+/// bloating the log line.
+const STDERR_SNIPPET_LEN: usize = 500;
+
 /// Default `run_usage`: a stateless one-shot `claude -p "/usage"` spawn mirroring
 /// the title-generator (stdin closed, no session persistence). Zero model tokens,
 /// ~1s. The CLI uses its own auth — no credential handling here.
@@ -58,7 +62,7 @@ pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, Adap
         .env("NO_COLOR", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .output();
 
@@ -66,7 +70,37 @@ pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, Adap
         Ok(res) => res.map_err(AdapterError::from)?,
         Err(_) => return Err(AdapterError::Message("claude /usage pull timed out".into())),
     };
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    usage_output_to_result(
+        output.status.success(),
+        output.status.code(),
+        &output.stdout,
+        &output.stderr,
+    )
+}
+
+/// Maps a finished `claude -p "/usage"` process to its stdout, or an `Err` on a
+/// nonzero exit. Failing (rather than returning empty stdout) is load-bearing: an
+/// `Ok("")` parses fail-closed and would ingest as a successful pull, wiping the
+/// last-known quota. Returning `Err` routes the manager into keep-last-known
+/// backoff instead (#268 F1, mirroring the Node throw).
+fn usage_output_to_result(
+    success: bool,
+    code: Option<i32>,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Result<String, AdapterError> {
+    if success {
+        return Ok(String::from_utf8_lossy(stdout).into_owned());
+    }
+    let snippet: String = String::from_utf8_lossy(stderr)
+        .trim()
+        .chars()
+        .take(STDERR_SNIPPET_LEN)
+        .collect();
+    let code = code.map_or_else(|| "signal".to_string(), |c| c.to_string());
+    Err(AdapterError::Message(format!(
+        "claude /usage pull exited with code {code}: {snippet}"
+    )))
 }
 
 #[cfg(test)]
@@ -99,6 +133,28 @@ mod tests {
         assert_eq!(quota.session.as_ref().unwrap().used_percent, 19.0);
         assert_eq!(quota.account_identity.as_deref(), Some("uuid-123"));
         assert_eq!(quota.observed_at, NOW);
+    }
+
+    #[test]
+    fn usage_output_returns_stdout_on_a_successful_exit() {
+        let result = usage_output_to_result(true, Some(0), USAGE.as_bytes(), b"");
+        assert_eq!(result.unwrap(), USAGE);
+    }
+
+    #[test]
+    fn usage_output_errors_with_code_and_stderr_snippet_on_a_nonzero_exit() {
+        let result = usage_output_to_result(false, Some(1), b"", b"boom: not logged in");
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("code 1"), "err was: {err}");
+        assert!(err.contains("boom: not logged in"), "err was: {err}");
+    }
+
+    #[test]
+    fn usage_output_errors_even_when_stdout_is_nonempty_on_a_nonzero_exit() {
+        // A nonzero exit must never surface stdout as success — that would ingest
+        // and wipe the last-known quota.
+        let result = usage_output_to_result(false, None, USAGE.as_bytes(), b"killed");
+        assert!(result.is_err());
     }
 
     #[tokio::test]

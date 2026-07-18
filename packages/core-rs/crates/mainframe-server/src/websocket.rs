@@ -749,6 +749,7 @@ mod tests {
                     kind: QuotaWindowKind::Session,
                     used_percent: 55.0,
                     resets_at: Some(1_700_010_000_000),
+                    observed_at: None,
                     label: None,
                 }),
                 weekly: None,

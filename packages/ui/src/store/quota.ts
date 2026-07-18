@@ -5,8 +5,11 @@
  * by the `provider.quota.updated` subscriber installed once at the app root.
  *
  * Keyed by adapter id. Only-if-newer by `observedAt` so a late REST seed can't
- * clobber a fresher WS push (or vice-versa). No quota logic here — pure wiring;
- * the render layer derives its view via `features/quota/quota-format.ts`.
+ * clobber a fresher WS push (or vice-versa); a re-emission at the same
+ * `observedAt` still passes through, since the daemon reuses it to nudge
+ * re-evaluation (staleness/expiry) without a genuinely new observation. No
+ * quota logic here — pure wiring; the render layer derives its view via
+ * `features/quota/quota-format.ts`.
  */
 import { create } from 'zustand';
 import type { ProviderQuota } from '@qlan-ro/mainframe-types';
@@ -23,11 +26,11 @@ export function useProviderQuota(adapterId: string): ProviderQuota | undefined {
   return useQuotaStore((s) => s.byId[adapterId]);
 }
 
-/** Apply a quota blob, keeping the existing one when it is at least as fresh. */
+/** Apply a quota blob, keeping the existing one when it is strictly fresher. */
 export function applyProviderQuota(adapterId: string, quota: ProviderQuota): void {
   useQuotaStore.setState((s) => {
     const cur = s.byId[adapterId];
-    if (cur && cur.observedAt >= quota.observedAt) return s;
+    if (cur && cur.observedAt > quota.observedAt) return s;
     return { byId: { ...s.byId, [adapterId]: quota } };
   });
 }

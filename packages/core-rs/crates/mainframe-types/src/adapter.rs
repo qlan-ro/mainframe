@@ -233,6 +233,11 @@ pub struct QuotaWindow {
     pub kind: QuotaWindowKind,
     pub used_percent: f64,
     pub resets_at: Option<i64>,
+    /// When this window last carried real data. A null `resets_at` synthesizes its
+    /// ceiling from this instant (not the blob's), so a kept window's ceiling can't
+    /// float forward on a data-free push. Omitted for windows built before #268.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }

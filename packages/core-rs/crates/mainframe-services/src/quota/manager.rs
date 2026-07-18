@@ -6,7 +6,7 @@
 //! on boot. Status is always re-derived at read time so expiry reflects the real
 //! clock.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -23,6 +23,10 @@ const QUOTA_CATEGORY: &str = "quota";
 /// Identity sentinel prefix meaning "read failed transiently" — reuse last-known,
 /// never re-key.
 const TRANSIENT_IDENTITY_PREFIX: &str = "transient:";
+/// How long a resolved account identity is trusted before the resolver is
+/// re-consulted (#268 F2). Short enough to catch a same-provider swap promptly,
+/// long enough that a burst of pushes doesn't hammer the trust-store read.
+const IDENTITY_TTL_MS: i64 = 60_000;
 
 /// Whether a harvested quota fully replaces (`Pull`) or sparse-merges (`Push`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,8 +49,16 @@ pub type QuotaPuller = Arc<
     dyn Fn() -> Pin<Box<dyn Future<Output = Result<ProviderQuota, String>> + Send>> + Send + Sync,
 >;
 
+/// Resolves the current logged-in account identity for one adapter (Claude
+/// trust-store read, Codex quota-identity read). `None` means the resolver could
+/// not produce a concrete identity right now (transient/absent) — reuse last-known.
+pub type IdentityResolver = Arc<
+    dyn Fn() -> Pin<Box<dyn Future<Output = Option<String>> + Send>> + Send + Sync,
+>;
+
 type EmitFn = Box<dyn Fn(DaemonEvent) + Send + Sync>;
 type ClockFn = Box<dyn Fn() -> i64 + Send + Sync>;
+type SharedClock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 /// The read + manual-refresh surface the quota routes depend on. A trait (not the
 /// concrete `QuotaManager`) so the route-unit harness can inject a fake, mirroring
@@ -87,12 +99,21 @@ struct QuotaState {
     last_known_identity: HashMap<String, String>,
 }
 
+/// A resolved identity trusted until `expires_at` (#268 F2 TTL cache).
+#[derive(Clone)]
+struct CachedIdentity {
+    identity: String,
+    expires_at: i64,
+}
+
 pub struct QuotaManager {
     state: Mutex<QuotaState>,
-    pullers: Mutex<HashMap<String, QuotaPuller>>,
+    pullers: Mutex<HashMap<String, (IngestMode, QuotaPuller)>>,
+    identity_resolvers: Mutex<HashMap<String, IdentityResolver>>,
+    identity_cache: Arc<Mutex<HashMap<String, CachedIdentity>>>,
     settings: Box<dyn QuotaSettingsStore>,
     emit_event: EmitFn,
-    now: ClockFn,
+    now: SharedClock,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -102,45 +123,84 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl QuotaManager {
     #[must_use]
     pub fn new(deps: QuotaManagerDeps) -> Self {
-        let now = deps.now.unwrap_or_else(|| Box::new(default_now));
+        let now: SharedClock = deps
+            .now
+            .map_or_else(|| Arc::new(default_now) as SharedClock, Arc::from);
         Self {
             state: Mutex::new(QuotaState::default()),
             pullers: Mutex::new(HashMap::new()),
+            identity_resolvers: Mutex::new(HashMap::new()),
+            identity_cache: Arc::new(Mutex::new(HashMap::new())),
             settings: deps.settings,
             emit_event: deps.emit_event,
             now,
         }
     }
 
-    pub fn register_puller(&self, adapter_id: &str, puller: QuotaPuller) {
-        lock(&self.pullers).insert(adapter_id.to_string(), puller);
+    /// Register an adapter's puller and how its pull result folds in: Claude
+    /// `/usage` is a full snapshot (`Pull`/replace); Codex reads the app-server
+    /// sparsely, so its pull merges like a push (#268 F5).
+    pub fn register_puller(&self, adapter_id: &str, mode: IngestMode, puller: QuotaPuller) {
+        lock(&self.pullers).insert(adapter_id.to_string(), (mode, puller));
     }
 
-    /// Rehydrate persisted blobs; the newest-observed per adapter becomes the
-    /// current one.
-    pub fn load_from_disk(&self) {
+    /// Register an adapter's account-identity resolver (#268 F2). Consulted through
+    /// the TTL cache when a push arrives without a concrete identity, and at boot to
+    /// select the right persisted blob for a swapped account.
+    pub fn register_identity_resolver(&self, adapter_id: &str, resolver: IdentityResolver) {
+        lock(&self.identity_resolvers)
+            .insert(adapter_id.to_string(), resolver);
+    }
+
+    /// Rehydrate persisted blobs. The newest-observed per adapter is the default
+    /// current one; when a registered resolver names a concrete identity with a
+    /// persisted blob, that blob wins instead (#268 F2 boot selection).
+    pub async fn load_from_disk(&self) {
         let stored = self.settings.get_by_category(QUOTA_CATEGORY);
-        let mut st = lock(&self.state);
-        for (key, value) in stored {
-            let Some(blob) = safe_parse_quota(&value) else {
-                tracing::warn!(key = %key, "quota: discarding unparseable persisted blob");
-                continue;
-            };
-            st.blobs.insert(key.clone(), blob.clone());
-            let Some(adapter_id) = adapter_id_from_key(&key) else {
-                continue;
-            };
-            let is_newer = match get_current_blob(&st, adapter_id) {
-                Some(current) => blob.observed_at > current.observed_at,
-                None => true,
-            };
-            if is_newer {
-                let adapter_id = adapter_id.to_string();
-                st.current_key.insert(adapter_id.clone(), key.clone());
-                if let Some(identity) = &blob.account_identity {
-                    st.last_known_identity.insert(adapter_id, identity.clone());
+        let mut adapters: HashSet<String> = HashSet::new();
+        {
+            let mut st = lock(&self.state);
+            for (key, value) in stored {
+                let Some(blob) = safe_parse_quota(&value) else {
+                    tracing::warn!(key = %key, "quota: discarding unparseable persisted blob");
+                    continue;
+                };
+                st.blobs.insert(key.clone(), blob.clone());
+                let Some(adapter_id) = adapter_id_from_key(&key) else {
+                    continue;
+                };
+                adapters.insert(adapter_id.to_string());
+                let is_newer = match get_current_blob(&st, adapter_id) {
+                    Some(current) => blob.observed_at > current.observed_at,
+                    None => true,
+                };
+                if is_newer {
+                    let adapter_id = adapter_id.to_string();
+                    st.current_key.insert(adapter_id.clone(), key.clone());
+                    if let Some(identity) = &blob.account_identity {
+                        st.last_known_identity.insert(adapter_id, identity.clone());
+                    }
                 }
             }
+        }
+        for adapter_id in adapters {
+            self.apply_boot_identity(&adapter_id).await;
+        }
+    }
+
+    /// If a resolver names a concrete identity whose blob is persisted, make it the
+    /// current blob (overriding the newest-observed fallback). A transient/absent
+    /// resolution leaves the fallback in place.
+    async fn apply_boot_identity(&self, adapter_id: &str) {
+        let Some(identity) = self.refresh_cached_identity(adapter_id).await else {
+            return;
+        };
+        let key = compute_quota_key(adapter_id, Some(&identity));
+        let mut st = lock(&self.state);
+        if st.blobs.contains_key(&key) {
+            st.current_key.insert(adapter_id.to_string(), key);
+            st.last_known_identity
+                .insert(adapter_id.to_string(), identity);
         }
     }
 
@@ -162,7 +222,14 @@ impl QuotaManager {
         let now = (self.now)();
         let (key, next) = {
             let mut st = lock(&self.state);
-            let identity = self.resolve_identity(&st, adapter_id, quota.account_identity.as_deref());
+            let identity = match mode {
+                IngestMode::Pull => {
+                    self.resolve_identity(&st, adapter_id, quota.account_identity.as_deref())
+                }
+                IngestMode::Push => {
+                    self.resolve_push_identity(&st, adapter_id, quota.account_identity.as_deref())
+                }
+            };
             let key = compute_quota_key(adapter_id, identity.as_deref());
             let next = match mode {
                 IngestMode::Pull => replace_blob(&quota, identity.clone(), now),
@@ -182,12 +249,12 @@ impl QuotaManager {
     /// Puller-driven refresh. On failure keep the last-known blob (backoff); no
     /// puller ⇒ last-known.
     pub async fn refresh(&self, adapter_id: &str) -> Option<ProviderQuota> {
-        let puller = lock(&self.pullers).get(adapter_id).cloned();
-        let Some(puller) = puller else {
+        let entry = lock(&self.pullers).get(adapter_id).cloned();
+        let Some((mode, puller)) = entry else {
             return self.get(adapter_id);
         };
         match puller().await {
-            Ok(quota) => Some(self.ingest(adapter_id, quota, IngestMode::Pull)),
+            Ok(quota) => Some(self.ingest(adapter_id, quota, mode)),
             Err(err) => {
                 tracing::warn!(error = %err, adapter_id = %adapter_id, "quota pull failed; keeping last-known");
                 self.reevaluate(adapter_id)
@@ -222,6 +289,77 @@ impl QuotaManager {
         } else {
             raw_identity.map(str::to_string)
         }
+    }
+
+    /// Identity for a push (#268 F2). A concrete identity on the push wins outright.
+    /// Otherwise consult the TTL cache; on a cache miss warm it out-of-band for the
+    /// next push and fall back to last-known for this one (`ingest` stays sync, so we
+    /// never block on the resolver here).
+    fn resolve_push_identity(
+        &self,
+        st: &QuotaState,
+        adapter_id: &str,
+        raw_identity: Option<&str>,
+    ) -> Option<String> {
+        if let Some(raw) = raw_identity
+            && !raw.starts_with(TRANSIENT_IDENTITY_PREFIX)
+        {
+            return Some(raw.to_string());
+        }
+        if let Some(identity) = self.fresh_cached_identity(adapter_id) {
+            return Some(identity);
+        }
+        self.spawn_identity_warm(adapter_id);
+        resolve_account_identity(None, st.last_known_identity.get(adapter_id).map(String::as_str))
+    }
+
+    /// The cached identity for an adapter if it hasn't passed its TTL.
+    fn fresh_cached_identity(&self, adapter_id: &str) -> Option<String> {
+        let now = (self.now)();
+        lock(&self.identity_cache)
+            .get(adapter_id)
+            .filter(|cached| cached.expires_at > now)
+            .map(|cached| cached.identity.clone())
+    }
+
+    /// Fire-and-forget resolver read that refills the TTL cache for the next push.
+    /// A no-op without a runtime (sync-only tests) or a registered resolver.
+    fn spawn_identity_warm(&self, adapter_id: &str) {
+        if tokio::runtime::Handle::try_current().is_err() {
+            return;
+        }
+        let Some(resolver) = lock(&self.identity_resolvers).get(adapter_id).cloned() else {
+            return;
+        };
+        let cache = Arc::clone(&self.identity_cache);
+        let now = Arc::clone(&self.now);
+        let adapter_id = adapter_id.to_string();
+        tokio::spawn(async move {
+            if let Some(identity) = resolver().await {
+                lock(&cache).insert(
+                    adapter_id,
+                    CachedIdentity {
+                        identity,
+                        expires_at: (now)() + IDENTITY_TTL_MS,
+                    },
+                );
+            }
+        });
+    }
+
+    /// Await the resolver and refill the TTL cache (boot path). `None` on a
+    /// transient/absent resolution leaves the cache untouched.
+    async fn refresh_cached_identity(&self, adapter_id: &str) -> Option<String> {
+        let resolver = lock(&self.identity_resolvers).get(adapter_id).cloned()?;
+        let identity = resolver().await?;
+        lock(&self.identity_cache).insert(
+            adapter_id.to_string(),
+            CachedIdentity {
+                identity: identity.clone(),
+                expires_at: (self.now)() + IDENTITY_TTL_MS,
+            },
+        );
+        Some(identity)
     }
 
     fn persist_and_emit(&self, adapter_id: &str, key: &str, blob: &ProviderQuota) {
@@ -350,6 +488,7 @@ mod tests {
             kind: QuotaWindowKind::Session,
             used_percent,
             resets_at: Some(NOW + 3 * 60 * 60 * 1000),
+            observed_at: Some(NOW),
             label: None,
         }
     }
@@ -359,6 +498,7 @@ mod tests {
             kind: QuotaWindowKind::Weekly,
             used_percent,
             resets_at: Some(NOW + 3 * 24 * 60 * 60 * 1000),
+            observed_at: Some(NOW),
             label: None,
         }
     }
@@ -532,7 +672,7 @@ mod tests {
             .unwrap(),
         );
         let ctx = make_manager(settings);
-        ctx.manager.load_from_disk();
+        ctx.manager.load_from_disk().await;
         assert_eq!(ctx.manager.get("claude").unwrap().session.unwrap().used_percent, 70.0);
     }
 
@@ -541,7 +681,7 @@ mod tests {
         let settings = MapSettings::default();
         settings.set("quota", "claude:uuid-1", "not-json");
         let ctx = make_manager(settings);
-        ctx.manager.load_from_disk();
+        ctx.manager.load_from_disk().await;
         assert!(ctx.manager.get("claude").is_none());
     }
 
@@ -556,7 +696,7 @@ mod tests {
                 })
             })
         });
-        ctx.manager.register_puller("claude", puller);
+        ctx.manager.register_puller("claude", IngestMode::Pull, puller);
         let result = ctx.manager.refresh("claude").await;
         assert_eq!(result.unwrap().session.unwrap().used_percent, 33.0);
         assert_eq!(ctx.manager.get("claude").unwrap().session.unwrap().used_percent, 33.0);
@@ -575,7 +715,7 @@ mod tests {
         );
         let puller: QuotaPuller =
             Arc::new(|| Box::pin(async { Err("spawn failed".to_string()) }));
-        ctx.manager.register_puller("claude", puller);
+        ctx.manager.register_puller("claude", IngestMode::Pull, puller);
         let result = ctx.manager.refresh("claude").await;
         assert_eq!(result.unwrap().session.unwrap().used_percent, 60.0);
         assert_eq!(ctx.manager.get("claude").unwrap().session.unwrap().used_percent, 60.0);
@@ -594,6 +734,80 @@ mod tests {
         );
         let result = ctx.manager.refresh("codex").await;
         assert_eq!(result.unwrap().session.unwrap().used_percent, 40.0);
+    }
+
+    fn persist(settings: &MapSettings, key: &str, observed_at: i64, identity: &str, used: f64) {
+        settings.set(
+            "quota",
+            key,
+            &serde_json::to_string(&ProviderQuota {
+                observed_at,
+                session: Some(session(used)),
+                account_identity: Some(identity.into()),
+                ..claude_quota()
+            })
+            .unwrap(),
+        );
+    }
+
+    #[tokio::test]
+    async fn boot_resolver_selects_the_named_identitys_blob_over_newest_observed() {
+        let settings = MapSettings::default();
+        persist(&settings, "claude:uuid-old", NOW - 10_000, "uuid-old", 20.0);
+        persist(&settings, "claude:uuid-new", NOW - 1_000, "uuid-new", 70.0);
+        let ctx = make_manager(settings);
+        let resolver: IdentityResolver = Arc::new(|| Box::pin(async { Some("uuid-old".to_string()) }));
+        ctx.manager.register_identity_resolver("claude", resolver);
+
+        ctx.manager.load_from_disk().await;
+
+        // Resolver names uuid-old, so its blob is current even though uuid-new is newer.
+        assert_eq!(ctx.manager.get("claude").unwrap().session.unwrap().used_percent, 20.0);
+    }
+
+    #[tokio::test]
+    async fn boot_resolver_absent_keeps_the_newest_observed_blob() {
+        let settings = MapSettings::default();
+        persist(&settings, "claude:uuid-old", NOW - 10_000, "uuid-old", 20.0);
+        persist(&settings, "claude:uuid-new", NOW - 1_000, "uuid-new", 70.0);
+        let ctx = make_manager(settings);
+        let resolver: IdentityResolver = Arc::new(|| Box::pin(async { None }));
+        ctx.manager.register_identity_resolver("claude", resolver);
+
+        ctx.manager.load_from_disk().await;
+
+        assert_eq!(ctx.manager.get("claude").unwrap().session.unwrap().used_percent, 70.0);
+    }
+
+    #[tokio::test]
+    async fn push_warms_the_identity_cache_so_the_next_push_keys_to_the_resolved_account() {
+        let ctx = make_manager(MapSettings::default());
+        let resolver: IdentityResolver =
+            Arc::new(|| Box::pin(async { Some("openai-42".to_string()) }));
+        ctx.manager.register_identity_resolver("codex", resolver);
+
+        // First identity-less push finds nothing cached; it warms the cache out-of-band.
+        ctx.manager.ingest(
+            "codex",
+            ProviderQuota { account_identity: None, ..claude_quota() },
+            IngestMode::Push,
+        );
+        // Let the spawned warm task fill the cache.
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // The next identity-less push keys to the resolved account.
+        ctx.manager.ingest(
+            "codex",
+            ProviderQuota {
+                account_identity: None,
+                session: Some(session(77.0)),
+                ..claude_quota()
+            },
+            IngestMode::Push,
+        );
+
+        assert!(ctx.settings.get("quota", "codex:openai-42").is_some());
     }
 
     #[test]
