@@ -2,6 +2,7 @@ import type { ContextUsage, ControlRequest, ControlUpdate, SessionSink } from '@
 import type { ClaudeSession } from './session.js';
 import { handleAssistantEvent } from './assistant-event.js';
 import { handleUserEvent } from './user-event.js';
+import { normalizeRateLimitEvent } from './quota-rate-limit.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('claude:events');
@@ -144,6 +145,12 @@ export function handleControlResponseEvent(
   if (requestId) session.control.resolve(requestId, response);
 }
 
+function handleRateLimitEvent(event: Record<string, unknown>, sink: SessionSink): void {
+  const info = event.rate_limit_info as Record<string, unknown> | undefined;
+  const quota = normalizeRateLimitEvent(info, Date.now());
+  if (quota) sink.onProviderQuota?.('claude', quota);
+}
+
 function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   // Surface CLI slash-command errors that reach us only via the `result`
   // event. When `shouldQuery: false` (unknown /cmd, bad /cmd args), the CLI
@@ -226,6 +233,8 @@ function handleEvent(session: ClaudeSession, event: Record<string, unknown>, sin
       return handleControlRequestEvent(session, event, sink);
     case 'control_response':
       return handleControlResponseEvent(session, event, sink);
+    case 'rate_limit_event':
+      return handleRateLimitEvent(event, sink);
     case 'result':
       // Subagent result events carry `parent_tool_use_id` and represent an
       // inner Task/Agent sub-turn completing, NOT the top-level chat turn.

@@ -13,6 +13,9 @@ import { startLivenessScheduler } from './background-tasks/liveness.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { backfillAdapterExecutables, defaultRun, resolveAdapterExecutable } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
+import { QuotaManager, ClaudeQuotaScheduler } from './quota/index.js';
+import { pullClaudeQuota, spawnClaudeUsage } from './plugins/builtin/claude/quota-pull.js';
+import { pullCodexQuotaViaTempAppServer } from './plugins/builtin/codex/quota-pull.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
@@ -77,7 +80,28 @@ async function main(): Promise<void> {
   // Late-bound broadcast: set after server starts. Events emitted before
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
-  const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event));
+
+  // Provider quota state: adapters push escalations, the Claude puller refreshes full
+  // snapshots. Registered before ChatManager so the session sink can feed push events in.
+  const quota = new QuotaManager({
+    settings: db.settings,
+    emitEvent: (event) => broadcastEvent(event),
+  });
+  quota.registerPuller('claude', async () => {
+    const resolved = await resolveAdapterExecutable('claude', { settings: db.settings, run: defaultRun });
+    if (!resolved.valid) throw new Error('claude executable not resolved for quota pull');
+    return pullClaudeQuota({ runUsage: () => spawnClaudeUsage(resolved.path) });
+  });
+  // Codex has no scheduler (unlike Claude) — this puller only fires on manual refresh
+  // or piggybacks on an app-server already up; it must never spawn purely to poll.
+  quota.registerPuller('codex', async () => {
+    const resolved = await resolveAdapterExecutable('codex', { settings: db.settings, run: defaultRun });
+    if (!resolved.valid) throw new Error('codex executable not resolved for quota pull');
+    return pullCodexQuotaViaTempAppServer(resolved.path);
+  });
+  quota.loadFromDisk();
+
+  const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event), quota);
   // No in-memory CLI sessions survive a restart, so reset any persisted
   // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
   // otherwise those chats look "running" and new messages queue forever.
@@ -175,6 +199,7 @@ async function main(): Promise<void> {
     port: config.port,
     backgroundTasks,
     automations,
+    quota,
   });
 
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
@@ -228,6 +253,14 @@ async function main(): Promise<void> {
     logger.warn({ err }, 'Adapter catalog refresh failed');
   });
 
+  // Claude's always-fresh cadence: one warm-up pull now (executable is backfilled),
+  // then a ~5-minute timer gated on a connected client. Codex stays passive push only.
+  const claudeQuotaScheduler = new ClaudeQuotaScheduler({
+    refresh: () => quota.refresh('claude'),
+    hasClients: () => server.hasConnectedClients(),
+  });
+  claudeQuotaScheduler.start();
+
   if (config.tunnel === true) {
     try {
       const tunnelOpts = config.tunnelToken ? { token: config.tunnelToken, url: config.tunnelUrl } : undefined;
@@ -247,6 +280,7 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     logger.info('Shutting down...');
     automations.stop();
+    claudeQuotaScheduler.stop();
     chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();

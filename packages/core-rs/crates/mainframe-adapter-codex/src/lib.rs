@@ -21,6 +21,9 @@ pub mod history;
 pub mod item_types;
 pub mod jsonrpc;
 pub mod plan_mode_handler;
+pub mod quota_identity;
+pub mod quota_pull;
+pub mod quota_rate_limit;
 pub mod rollout_reader;
 pub mod session;
 pub mod thread_registry;
@@ -40,3 +43,6 @@ pub use transcript::is_codex_transcript_present;
 // notes: index.ts re-exports collapse here. TODO(port): index.ts `activate(ctx)`
 // notes: needs mainframe-plugins PluginContext (not yet ported) to call
 // notes: ctx.adapters.register + ctx.onUnload(killAll); deferred to that phase.
+// notes: quota_rate_limit/quota_identity/quota_pull port the quota harvester
+// notes: (quota-rate-limit.ts, quota-identity.ts, quota-pull.ts); event_mapper.rs
+// notes: wires account/rateLimits/updated to quota_rate_limit's normalizer.

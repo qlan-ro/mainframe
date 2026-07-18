@@ -11,6 +11,7 @@ import type {
   ToolCategories,
   ContextUsage,
   QueuedMessageRef,
+  ProviderQuota,
 } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
@@ -64,6 +65,7 @@ export class EventHandler {
     private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
     private onQueuedCleared: (chatId: string) => void = () => {},
     private getQueuedRefs: (chatId: string) => QueuedMessageRef[] = () => [],
+    private onProviderQuota: (adapterId: string, quota: ProviderQuota) => void = () => {},
     private tracker?: BackgroundTaskTracker,
   ) {}
 
@@ -96,6 +98,7 @@ export class EventHandler {
       this.onQueuedProcessed,
       this.onQueuedCleared,
       this.getQueuedRefs,
+      this.onProviderQuota,
       this.pushService,
       this.tracker,
     );
@@ -127,6 +130,7 @@ function buildSessionSink(
   onQueuedProcessedCb: (chatId: string, uuid: string) => void,
   onQueuedClearedCb: (chatId: string) => void,
   getQueuedRefs: (chatId: string) => QueuedMessageRef[],
+  onProviderQuotaCb: (adapterId: string, quota: ProviderQuota) => void,
   pushService?: PushService,
   tracker?: BackgroundTaskTracker,
 ): SessionSink {
@@ -621,6 +625,10 @@ function buildSessionSink(
 
     onTrustRequired(projectPath: string) {
       emitEvent({ type: 'chat.trustRequired', chatId, projectPath });
+    },
+
+    onProviderQuota(adapterId: string, quota: ProviderQuota) {
+      onProviderQuotaCb(adapterId, quota);
     },
   };
 }

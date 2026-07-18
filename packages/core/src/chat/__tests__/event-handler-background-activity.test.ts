@@ -26,6 +26,7 @@ describe('EventHandler — background activity lifecycle', () => {
       () => {},
       () => {},
       () => [],
+      () => {},
       tracker,
     );
     return handler.buildSink(chatId, vi.fn().mockResolvedValue(undefined));

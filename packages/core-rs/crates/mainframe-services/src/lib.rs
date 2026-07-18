@@ -14,6 +14,7 @@ pub mod commands;
 pub mod files;
 pub mod notifications;
 pub mod push;
+pub mod quota;
 pub mod settings;
 pub mod todos;
 pub mod workspace;

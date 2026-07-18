@@ -18,10 +18,11 @@ use crate::history::{
     tool_result_block, tool_use_block, with_parent,
 };
 use crate::item_types::{CollabAgentToolCallItem, ThreadItem, TodoListItem};
+use crate::quota_rate_limit::normalize_rate_limit_snapshot;
 use crate::thread_registry::{agent_title, describe_agent, lookup_agent_metadata};
 use crate::types::{
-    ItemCompletedParams, ItemStartedParams, PlanDeltaParams, ThreadStartedParams,
-    TokenUsageUpdatedParams, TurnCompletedParams, TurnStartedParams,
+    AccountRateLimitsUpdatedParams, ItemCompletedParams, ItemStartedParams, PlanDeltaParams,
+    ThreadStartedParams, TokenUsageUpdatedParams, TurnCompletedParams, TurnStartedParams,
 };
 
 /// The `{ id, text }` plan captured incrementally across a turn.
@@ -101,6 +102,12 @@ pub fn handle_notification(
                 handle_item_started(p, sink, state);
             }
         }
+        "account/rateLimits/updated" => {
+            if let Ok(p) = serde_json::from_value::<AccountRateLimitsUpdatedParams>(params.clone())
+            {
+                handle_account_rate_limits_updated(p, sink);
+            }
+        }
         // Known-but-unhandled notifications — silently ignore.
         "turn/diff/updated"
         | "turn/plan/updated"
@@ -111,7 +118,6 @@ pub fn handle_notification(
         | "item/fileChange/outputDelta"
         | "item/reasoning/summaryTextDelta"
         | "item/reasoning/textDelta"
-        | "account/rateLimits/updated"
         | "thread/name/updated" => {}
         _ => {
             if method.starts_with("codex/event/") {
@@ -133,6 +139,15 @@ fn handle_thread_started(
 ) {
     state.thread_id = Some(params.thread.id.clone());
     sink.on_init(&params.thread.id);
+}
+
+fn handle_account_rate_limits_updated(
+    params: AccountRateLimitsUpdatedParams,
+    sink: &Arc<dyn SessionSink>,
+) {
+    let quota =
+        normalize_rate_limit_snapshot(&params.rate_limits, chrono::Utc::now().timestamp_millis());
+    sink.on_provider_quota("codex", quota);
 }
 
 fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
@@ -615,4 +630,8 @@ fn base64_encode(bytes: &[u8]) -> String {
 // notes: `contextTokens === undefined → fall back to usage` path (event-handler.ts:366)
 // notes: here because Option<i64> can't carry the undefined/null distinction downstream.
 // notes: Tests in tests/event_mapper.rs (collab-agent-spawn + plan-item-capture +
-// notes: turn-completed context/usage).
+// notes: turn-completed context/usage). `account/rateLimits/updated` moved out of
+// notes: the silent-ignore arm into handle_account_rate_limits_updated, which
+// notes: normalizes via quota_rate_limit and calls sink.on_provider_quota (no `?.`
+// notes: needed — the trait's default no-op body covers sinks that don't override
+// notes: it). Tested in tests/quota_notification.rs.

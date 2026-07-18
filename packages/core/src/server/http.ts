@@ -29,6 +29,7 @@ import {
   tagRoutes,
   automationRoutes,
   suggestionRoutes,
+  quotaRoutes,
 } from './routes/index.js';
 import { automationAdminRoutes } from './routes/automation-admin.js';
 import { automationWebhookRoutes } from './routes/automation-webhook.js';
@@ -43,6 +44,7 @@ import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { LspManager } from '../lsp/index.js';
 import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import type { AutomationService } from '../automations/service.js';
+import type { QuotaManager } from '../quota/manager.js';
 
 const log = createChildLogger('http');
 
@@ -59,6 +61,7 @@ export interface HttpServerDeps {
   lspManager?: LspManager;
   backgroundTasks?: BackgroundTaskTracker;
   automations?: AutomationService;
+  quota?: QuotaManager;
 }
 
 export function createHttpServer(deps: HttpServerDeps): { app: Express; pushService: PushService } {
@@ -75,6 +78,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     lspManager,
     backgroundTasks,
     automations,
+    quota,
   } = deps;
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -133,6 +137,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
     port,
     backgroundTasks,
     automations,
+    quota,
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
@@ -158,6 +163,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(chatRecoveryRoutes(ctx));
   app.use(tagRoutes(ctx));
   app.use(automationRoutes(ctx));
+  app.use(quotaRoutes(ctx));
   app.use(automationAdminRoutes(ctx));
   app.use(automationWebhookRoutes(ctx));
 

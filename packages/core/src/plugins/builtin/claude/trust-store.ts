@@ -6,6 +6,48 @@ import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('claude:trust');
 
+/** Keyless/unidentifiable account → a fixed synthetic bucket (carries no quota). */
+export const CLAUDE_IDENTITY_UNKNOWN = 'unknown';
+/** A transient read failure (lock, torn write) → the engine reuses the last-known identity. */
+export const CLAUDE_IDENTITY_TRANSIENT = 'transient:identity-read-failed';
+
+/**
+ * Resolve the logged-in Claude account identity from ~/.claude.json (plaintext,
+ * no keychain, no OAuth token). Returns the `oauthAccount.accountUuid`, falling
+ * back to `emailAddress`. A missing file or a config with no `oauthAccount` yields
+ * `CLAUDE_IDENTITY_UNKNOWN` (degrade safe); a read/parse failure yields
+ * `CLAUDE_IDENTITY_TRANSIENT` so a momentary file lock never flips a healthy
+ * gauge to the wrong account.
+ */
+export async function readClaudeAccountIdentity(
+  claudeJsonPath: string = join(homedir(), '.claude.json'),
+): Promise<string> {
+  let raw: string;
+  try {
+    raw = await readFile(claudeJsonPath, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      log.info({ claudeJsonPath }, 'claude.json missing; account identity unknown');
+      return CLAUDE_IDENTITY_UNKNOWN;
+    }
+    log.warn({ err, claudeJsonPath }, 'claude.json unreadable; identity transient');
+    return CLAUDE_IDENTITY_TRANSIENT;
+  }
+
+  let account: { accountUuid?: unknown; emailAddress?: unknown } | undefined;
+  try {
+    account = (JSON.parse(raw) as { oauthAccount?: typeof account }).oauthAccount;
+  } catch {
+    log.warn({ claudeJsonPath }, 'claude.json malformed; identity transient');
+    return CLAUDE_IDENTITY_TRANSIENT;
+  }
+
+  if (account && typeof account.accountUuid === 'string' && account.accountUuid) return account.accountUuid;
+  if (account && typeof account.emailAddress === 'string' && account.emailAddress) return account.emailAddress;
+  log.info({ claudeJsonPath }, 'claude.json has no oauthAccount identity; unknown');
+  return CLAUDE_IDENTITY_UNKNOWN;
+}
+
 /**
  * Marks a project as trusted in ~/.claude.json (the CLI's per-project trust store),
  * so Claude stops ignoring the project's permissions.allow entries. Read-modify-write

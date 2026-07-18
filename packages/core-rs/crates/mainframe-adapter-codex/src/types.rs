@@ -279,6 +279,64 @@ pub struct Usage {
     pub output_tokens: i64,
 }
 
+// --- Rate limits (plan quota; not context-window usage) ---
+
+/// `usedPercent` is 0-100; `resetsAt` is unix seconds (not ms).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RateLimitWindow {
+    pub used_percent: f64,
+    pub window_duration_mins: Option<i64>,
+    pub resets_at: Option<i64>,
+}
+
+/// At most two windows per snapshot; identify by `windowDurationMins`, never by slot name.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RateLimitSnapshot {
+    pub limit_id: Option<String>,
+    pub limit_name: Option<String>,
+    pub primary: Option<RateLimitWindow>,
+    pub secondary: Option<RateLimitWindow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountRateLimitsUpdatedParams {
+    pub rate_limits: RateLimitSnapshot,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAccountRateLimitsResult {
+    pub rate_limits: RateLimitSnapshot,
+}
+
+// --- Account identity ---
+
+/// Tagged on `type`; `Chatgpt`/`AmazonBedrock` camelCase to `chatgpt`/`amazonBedrock`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Account {
+    ApiKey,
+    Chatgpt {
+        email: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan_type: Option<String>,
+    },
+    AmazonBedrock {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        credential_source: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAccountResult {
+    pub account: Option<Account>,
+    pub requires_openai_auth: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

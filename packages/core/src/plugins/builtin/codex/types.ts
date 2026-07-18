@@ -258,3 +258,40 @@ export interface Usage {
   cached_input_tokens?: number;
   output_tokens: number;
 }
+
+// --- Rate limits (plan quota; not context-window usage) ---
+
+/** `usedPercent` is 0–100; `resetsAt` is unix seconds (not ms). */
+export interface RateLimitWindow {
+  usedPercent: number;
+  windowDurationMins: number | null;
+  resetsAt: number | null;
+}
+
+/** At most two windows per snapshot; identify by `windowDurationMins`, never by slot name. */
+export interface RateLimitSnapshot {
+  limitId: string | null;
+  limitName: string | null;
+  primary: RateLimitWindow | null;
+  secondary: RateLimitWindow | null;
+}
+
+export interface AccountRateLimitsUpdatedParams {
+  rateLimits: RateLimitSnapshot;
+}
+
+export interface GetAccountRateLimitsResult {
+  rateLimits: RateLimitSnapshot;
+}
+
+// --- Account identity ---
+
+export type Account =
+  | { type: 'apiKey' }
+  | { type: 'chatgpt'; email: string | null; planType?: string | null }
+  | { type: 'amazonBedrock'; credentialSource?: string };
+
+export interface GetAccountResult {
+  account: Account | null;
+  requiresOpenaiAuth: boolean;
+}

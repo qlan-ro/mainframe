@@ -13,6 +13,7 @@ use mainframe_types::adapter::{
 };
 
 use crate::assistant_event::handle_assistant_event;
+use crate::quota_rate_limit::normalize_rate_limit_event;
 use crate::session::ClaudeSession;
 use crate::task_events::{
     TaskNotificationPayload, TaskNotificationUsage, TaskStartedCtx, TaskStartedPayload,
@@ -299,6 +300,14 @@ pub fn handle_control_response_event(
     }
 }
 
+fn handle_rate_limit_event(event: &Value, sink: &dyn SessionSink) {
+    let info = event.get("rate_limit_info");
+    let now = chrono::Utc::now().timestamp_millis();
+    if let Some(quota) = normalize_rate_limit_event(info, now) {
+        sink.on_provider_quota("claude", quota);
+    }
+}
+
 fn handle_result_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
     // Surface CLI slash-command errors that reach us only via `result`.
     let result_text = event
@@ -392,6 +401,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
         Some("user") => handle_user_event(session, event, sink),
         Some("control_request") => handle_control_request_event(event, sink),
         Some("control_response") => handle_control_response_event(session, event, sink),
+        Some("rate_limit_event") => handle_rate_limit_event(event, sink),
         Some("result") => {
             // Subagent result events (parent_tool_use_id present) are inner
             // sub-turns — dropping them keeps the parent processState 'working'.
@@ -444,6 +454,7 @@ mod tests {
         prs: Vec<DetectedPr>,
         queued: Vec<String>,
         permissions: Vec<ControlRequest>,
+        provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
     }
 
     #[derive(Default)]
@@ -512,6 +523,9 @@ mod tests {
         }
         fn on_trust_required(&self, project_path: &str) {
             self.r().trust.push(project_path.to_string());
+        }
+        fn on_provider_quota(&self, adapter_id: &str, quota: mainframe_types::adapter::ProviderQuota) {
+            self.r().provider_quota.push((adapter_id.to_string(), quota));
         }
     }
 
@@ -1219,6 +1233,49 @@ mod tests {
         );
     }
 
+    // ---- rate_limit_event wiring (#255/#258) ----
+    #[test]
+    fn rate_limit_event_emits_a_normalized_provider_quota_via_on_provider_quota() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "rate_limit_event",
+                "rate_limit_info": { "rateLimitType": "five_hour", "utilization": 0.42, "resetsAt": 1_789_999_999i64 },
+            }),
+        );
+        let rec = sink.r();
+        assert_eq!(rec.provider_quota.len(), 1);
+        let (adapter_id, quota) = &rec.provider_quota[0];
+        assert_eq!(adapter_id, "claude");
+        assert_eq!(
+            quota.session,
+            Some(mainframe_types::adapter::QuotaWindow {
+                kind: mainframe_types::adapter::QuotaWindowKind::Session,
+                used_percent: 42.0,
+                resets_at: Some(1_789_999_999_000),
+                label: None,
+            })
+        );
+    }
+
+    #[test]
+    fn rate_limit_event_without_usable_utilization_emits_nothing() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "rate_limit_event",
+                "rate_limit_info": { "status": "allowed", "rateLimitType": "five_hour" },
+            }),
+        );
+        assert!(sink.r().provider_quota.is_empty());
+    }
+
     // ---- stop-task-routing (control_response forwarding) ----
     #[tokio::test]
     async fn control_response_resolves_a_real_pending_stop_task_awaiter() {
@@ -1290,3 +1347,6 @@ mod tests {
 // notes: result isolation), todo-extraction, task-events-integration (real
 // notes: tracker keyed by mainframeChatId), and stop-task-routing (the resolve()
 // notes: spy assertion is exercised via a real pending awaiter — same fact).
+// notes: rate_limit_event (#255/#258) normalizes via quota_rate_limit and emits
+// notes: through sink.on_provider_quota; chrono::Utc::now() is read only at this
+// notes: wiring boundary, mirroring the TS Date.now() call at the same layer.

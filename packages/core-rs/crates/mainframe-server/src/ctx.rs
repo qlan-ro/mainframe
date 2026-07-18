@@ -17,6 +17,7 @@ use mainframe_runtime::ResolvedPath;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
+use mainframe_services::quota::QuotaService;
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::broadcast;
 
@@ -133,6 +134,10 @@ pub struct AppCtx {
     /// the route-unit harness — automation routes answer 503 while absent
     /// (Node parity: "automation service not available").
     pub automations: Option<Arc<AutomationsEngine>>,
+    /// The account-wide provider quota service (`quota` handle). Backs the
+    /// `/api/providers/:id/quota*` routes; `None` in the route-unit harness and
+    /// when quota harvesting is not wired — routes answer `okEmpty` / `503`.
+    pub quota: Option<Arc<dyn QuotaService>>,
     pub data_dir: PathBuf,
     pub version: String,
     /// The daemon listen port (`config.port`). The tunnel `start` route needs it to
@@ -238,6 +243,7 @@ impl AppCtx {
             lsp_manager: None,
             plugin_manager: None,
             automations: None,
+            quota: None,
             data_dir: std::env::temp_dir(),
             version: "0.0.0-test".into(),
             port: 0,

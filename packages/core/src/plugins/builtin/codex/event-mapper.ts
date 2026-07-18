@@ -9,7 +9,9 @@ import type {
   TurnStartedParams,
   ThreadStartedParams,
   TokenUsageUpdatedParams,
+  AccountRateLimitsUpdatedParams,
 } from './types.js';
+import { normalizeRateLimitSnapshot } from './quota-rate-limit.js';
 import type { PatchChangeKind, FileChangeItem, CollabAgentToolCallItem, TodoListItem } from './item-types.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { lookupAgentMetadata, describeAgent, agentTitle } from './thread-registry.js';
@@ -63,6 +65,8 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
       return;
     case 'item/started':
       return handleItemStarted(params as ItemStartedParams, sink, state);
+    case 'account/rateLimits/updated':
+      return handleAccountRateLimitsUpdated(params as AccountRateLimitsUpdatedParams, sink);
     // TODO: future — map turn/diff/updated to file change tracking / context.updated
     // TODO: future — map turn/plan/updated to Plans panel structured plan state
     case 'turn/diff/updated':
@@ -74,7 +78,6 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
     case 'item/fileChange/outputDelta':
     case 'item/reasoning/summaryTextDelta':
     case 'item/reasoning/textDelta':
-    case 'account/rateLimits/updated':
     case 'thread/name/updated':
       return; // silently ignore known-but-unhandled notifications
     default:
@@ -323,6 +326,10 @@ function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, sta
     result: turn.error?.message,
   });
   state.lastUsage = undefined;
+}
+
+function handleAccountRateLimitsUpdated(params: AccountRateLimitsUpdatedParams, sink: SessionSink): void {
+  sink.onProviderQuota?.('codex', normalizeRateLimitSnapshot(params.rateLimits, Date.now()));
 }
 
 function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, state: CodexSessionState): void {

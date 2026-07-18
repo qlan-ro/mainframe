@@ -28,6 +28,7 @@ import { ChatPermissionHandler } from './permission-handler.js';
 import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
+import type { QuotaManager } from '../quota/manager.js';
 import { ExternalSessionService } from './external-session-service.js';
 import { IdleSessionScanner } from './idle-scanner.js';
 import type { ActiveChat } from './types.js';
@@ -67,6 +68,7 @@ export class ChatManager {
     private tracker: BackgroundTaskTracker,
     private attachmentStore?: AttachmentStore,
     private onEvent: (event: DaemonEvent) => void = () => {},
+    private quota?: QuotaManager,
   ) {
     this.permissions = new PermissionManager();
     this.eventHandler = new EventHandler(
@@ -83,6 +85,7 @@ export class ChatManager {
       (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
       (chatId) => this.clearAllQueuedForChat(chatId),
       (chatId) => this.getQueuedForChat(chatId),
+      (adapterId, quota) => this.quota?.ingest(adapterId, quota, 'push'),
       this.tracker,
     );
     this.planMode = new PlanModeHandler({
