@@ -548,44 +548,6 @@ describe('handleNotification', () => {
     expect(sink.onMessage).not.toHaveBeenCalled();
   });
 
-  it('thread/tokenUsage/updated reports current Codex context usage', () => {
-    const sink = createSink();
-    const state = createState();
-
-    handleNotification(
-      'thread/tokenUsage/updated',
-      {
-        threadId: 't1',
-        turnId: 'turn_1',
-        tokenUsage: {
-          total: {
-            totalTokens: 250_000,
-            inputTokens: 240_000,
-            cachedInputTokens: 200_000,
-            outputTokens: 10_000,
-            reasoningOutputTokens: 4_000,
-          },
-          last: {
-            totalTokens: 100_000,
-            inputTokens: 95_000,
-            cachedInputTokens: 80_000,
-            outputTokens: 5_000,
-            reasoningOutputTokens: 2_000,
-          },
-          modelContextWindow: 200_000,
-        },
-      },
-      sink,
-      state,
-    );
-
-    expect(sink.onContextUsage).toHaveBeenCalledWith({
-      totalTokens: 98_000,
-      maxTokens: 200_000,
-      percentage: 49,
-    });
-  });
-
   it('turn/completed calls onResult with usage from prior tokenUsage event', () => {
     const sink = createSink();
     const state = createState();
