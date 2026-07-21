@@ -101,6 +101,7 @@ pub(crate) async fn automations_ctx() -> AutomationsHarness {
         lsp_manager: None,
         plugin_manager: None,
         automations: Some(engine.clone()),
+        quota: None,
         data_dir: base.data_dir.clone(),
         version: base.version.clone(),
         port: base.port,

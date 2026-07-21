@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use mainframe_adapter_api::SessionSink;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, DetectedPr, MessageMetadata, SessionResult,
+    ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
 };
 use mainframe_types::chat::{
     ChatMessage, ChatMessageType, MessageContent, MessageContentNode, ProcessState,
@@ -95,6 +95,12 @@ pub trait EventHandlerDeps: Send + Sync {
     /// end (the CLI owns them; none can report completion after it dies). Default
     /// no-op mirrors the TS optional `tracker?`.
     fn tracker_end_all_running(&self, _chat_id: &str) {}
+
+    /// `onProviderQuota(adapterId, quota)` — an account-wide provider-plan quota
+    /// escalation pushed from a session event (Codex `account/rateLimits/updated`,
+    /// Claude `rate_limit_event`). Default no-op mirrors the TS optional callback: a
+    /// ChatManager built without a QuotaManager simply drops it.
+    fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 }
 
 /// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
@@ -1125,6 +1131,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             project_path: project_path.to_string(),
         });
     }
+
+    fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
+        self.deps.on_provider_quota(adapter_id, quota);
+    }
 }
 
 fn now_ms() -> i64 {
@@ -1135,6 +1145,7 @@ fn now_ms() -> i64 {
 mod tests {
     use super::*;
     use crate::test_support::test_chat;
+    use mainframe_services::quota::{IngestMode, QuotaManager};
     use mainframe_types::adapter::MessageUsage;
 
     /// A fake `EventHandlerDeps` recording emitted events; `get_queued_refs` reads
@@ -1145,6 +1156,7 @@ mod tests {
         events: Mutex<Vec<DaemonEvent>>,
         refs: Mutex<Vec<QueuedMessageRef>>,
         updates: Mutex<Vec<EventChatUpdate>>,
+        quota: Option<Arc<QuotaManager>>,
     }
 
     impl FakeDeps {
@@ -1154,6 +1166,16 @@ mod tests {
                 events: Mutex::new(Vec::new()),
                 refs: Mutex::new(refs),
                 updates: Mutex::new(Vec::new()),
+                quota: None,
+            })
+        }
+        fn with_quota(cell: Arc<Mutex<ActiveChat>>, quota: Arc<QuotaManager>) -> Arc<Self> {
+            Arc::new(Self {
+                cell,
+                events: Mutex::new(Vec::new()),
+                refs: Mutex::new(Vec::new()),
+                updates: Mutex::new(Vec::new()),
+                quota: Some(quota),
             })
         }
         fn events(&self) -> Vec<DaemonEvent> {
@@ -1212,6 +1234,12 @@ mod tests {
         }
         fn notify_session_error(&self) -> bool {
             false
+        }
+        fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
+            // Mirror DaemonChatDeps: session-pushed quota sparse-merges (Push).
+            if let Some(q) = &self.quota {
+                q.ingest(adapter_id, quota, IngestMode::Push);
+            }
         }
     }
 
@@ -1346,6 +1374,122 @@ mod tests {
         assert!(deps.events().iter().any(
             |e| matches!(e, DaemonEvent::MessageQueuedProcessed { uuid, .. } if uuid == "u1")
         ));
+    }
+
+    // ── session-pushed provider quota (Codex account/rateLimits/updated) ──────
+    // Seam-3: a `sink.on_provider_quota` emission from a live session event must
+    // reach the real QuotaManager, sparse-merge (Push keeps the prior weekly
+    // window a partial blob omits), and fan out `provider.quota.updated`.
+    #[test]
+    fn sink_provider_quota_sparse_merges_into_the_quota_manager_and_fans_out() {
+        use mainframe_services::quota::{QuotaManagerDeps, QuotaSettingsStore};
+        use mainframe_types::adapter::{ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
+        use std::collections::HashMap as StdHashMap;
+
+        const NOW: i64 = 1_700_000_000_000;
+
+        #[derive(Clone, Default)]
+        struct MapSettings {
+            store: Arc<Mutex<StdHashMap<String, String>>>,
+        }
+        impl QuotaSettingsStore for MapSettings {
+            fn get(&self, category: &str, key: &str) -> Option<String> {
+                self.store
+                    .lock()
+                    .unwrap()
+                    .get(&format!("{category} {key}"))
+                    .cloned()
+            }
+            fn get_by_category(&self, category: &str) -> StdHashMap<String, String> {
+                let mut out = StdHashMap::new();
+                for (k, v) in self.store.lock().unwrap().iter() {
+                    if let Some((cat, key)) = k.split_once(' ')
+                        && cat == category
+                    {
+                        out.insert(key.to_string(), v.clone());
+                    }
+                }
+                out
+            }
+            fn set(&self, category: &str, key: &str, value: &str) {
+                self.store
+                    .lock()
+                    .unwrap()
+                    .insert(format!("{category} {key}"), value.to_string());
+            }
+        }
+
+        let window = |kind, used| QuotaWindow {
+            kind,
+            used_percent: used,
+            resets_at: Some(NOW + 3 * 60 * 60 * 1000),
+            observed_at: Some(NOW),
+            label: None,
+        };
+        let full = |session, weekly| ProviderQuota {
+            status: ProviderQuotaStatus::Ok,
+            observed_at: NOW,
+            model_windows: vec![],
+            session,
+            weekly,
+            account_identity: Some("acct-1".into()),
+        };
+
+        let quota_events = Arc::new(Mutex::new(Vec::<DaemonEvent>::new()));
+        let quota_events_emit = Arc::clone(&quota_events);
+        let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
+            settings: Box::new(MapSettings::default()),
+            emit_event: Box::new(move |e| quota_events_emit.lock().unwrap().push(e)),
+            now: Some(Box::new(|| NOW)),
+        }));
+
+        // Seed a prior full blob (as a pull would) so the sparse push has a weekly
+        // window to retain.
+        quota.ingest(
+            "codex",
+            full(
+                Some(window(QuotaWindowKind::Session, 20.0)),
+                Some(window(QuotaWindowKind::Weekly, 55.0)),
+            ),
+            IngestMode::Pull,
+        );
+
+        let deps = FakeDeps::with_quota(cell(ProcessState::Working, None), Arc::clone(&quota));
+        let handler = EventHandler::new(
+            Arc::new(Mutex::new(MessageCache::new())),
+            Arc::new(Mutex::new(PermissionManager::new())),
+            deps,
+        );
+        let sink = handler.build_sink("c1", None);
+
+        // The live session path: Codex pushes a session-only partial (weekly omitted).
+        sink.on_provider_quota(
+            "codex",
+            full(Some(window(QuotaWindowKind::Session, 80.0)), None),
+        );
+
+        let merged = quota.get("codex").expect("quota persisted for codex");
+        assert_eq!(merged.session.as_ref().unwrap().used_percent, 80.0);
+        assert_eq!(
+            merged.weekly.as_ref().unwrap().used_percent,
+            55.0,
+            "sparse Push retains the prior weekly window the partial omitted"
+        );
+
+        let events = quota_events.lock().unwrap();
+        assert_eq!(
+            events.len(),
+            2,
+            "one fan-out for the seed pull, one for the push"
+        );
+        match &events[1] {
+            DaemonEvent::ProviderQuotaUpdated { adapter_id, quota } => {
+                assert_eq!(adapter_id, "codex");
+                assert_eq!(quota.session.as_ref().unwrap().used_percent, 80.0);
+                assert_eq!(quota.weekly.as_ref().unwrap().used_percent, 55.0);
+            }
+            other => panic!("expected provider.quota.updated, got {other:?}"),
+        }
     }
 
     // ── onResult orphan-reconcile path ───────────────────────────────────────

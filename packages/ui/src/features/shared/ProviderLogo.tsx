@@ -4,6 +4,8 @@ type ProviderLogoId = 'claude' | 'openai' | 'gemini' | 'opencode' | 'unknown';
 
 interface ProviderLogoProps extends HTMLAttributes<HTMLSpanElement> {
   adapterId: string;
+  /** Override the default `sessions-row-provider-logo` testid for other surfaces. */
+  testId?: string;
 }
 
 const AVATAR_META: Partial<Record<ProviderLogoId, { background: string; color: string }>> = {
@@ -47,14 +49,14 @@ function ProviderPath({ id }: { id: ProviderLogoId }) {
   }
 }
 
-export function ProviderLogo({ adapterId, className, ...props }: ProviderLogoProps) {
+export function ProviderLogo({ adapterId, className, testId = 'sessions-row-provider-logo', ...props }: ProviderLogoProps) {
   const id = providerLogoId(adapterId);
   const avatar = AVATAR_META[id];
   return (
     <span
       {...props}
       data-provider-id={id}
-      data-testid="sessions-row-provider-logo"
+      data-testid={testId}
       aria-hidden="true"
       className={className}
       style={{

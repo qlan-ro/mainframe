@@ -1,6 +1,6 @@
 //! Ported from `packages/types/src/events.ts`.
 //!
-//! The daemon WebSocket wire contract: `DaemonEvent` (server→client, 54
+//! The daemon WebSocket wire contract: `DaemonEvent` (server→client, 55
 //! variants) and `ClientEvent` (client→server, 6 variants). Both are internally
 //! tagged on `type`; tag values are copied verbatim (dotted / colon-delimited)
 //! via per-variant `#[serde(rename = ...)]`, and struct-variant fields are
@@ -9,7 +9,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapter::{AdapterModel, AdapterProcess, ControlRequest, ControlResponse, DetectedPr};
+use crate::adapter::{
+    AdapterModel, AdapterProcess, ControlRequest, ControlResponse, DetectedPr, ProviderQuota,
+};
 use crate::automation::{
     AutomationCompletedStatus, AutomationInteractionSummary, AutomationNotificationLinks,
     AutomationRunSummary,
@@ -288,6 +290,11 @@ pub enum DaemonEvent {
         adapter_id: String,
         models: Vec<AdapterModel>,
         models_revision: i64,
+    },
+    #[serde(rename = "provider.quota.updated")]
+    ProviderQuotaUpdated {
+        adapter_id: String,
+        quota: ProviderQuota,
     },
     #[serde(rename = "todos.updated")]
     TodosUpdated {

@@ -5,7 +5,9 @@
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, ControlRequest, LoadedSkill, SessionSink};
-use mainframe_types::adapter::{ContextUsage, DetectedPr, MessageMetadata, SessionResult};
+use mainframe_types::adapter::{
+    ContextUsage, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
+};
 use mainframe_types::chat::{MessageContent, TodoItem};
 use mainframe_types::context::SkillFileEntry;
 
@@ -18,6 +20,7 @@ pub struct Recorded {
     pub todos: Vec<Vec<TodoItem>>,
     pub inits: Vec<String>,
     pub compacts: usize,
+    pub provider_quotas: Vec<(String, ProviderQuota)>,
 }
 
 #[derive(Clone, Default)]
@@ -44,6 +47,9 @@ impl Recorder {
     }
     pub fn clear_messages(&self) {
         self.0.lock().unwrap().messages.clear();
+    }
+    pub fn provider_quotas(&self) -> Vec<(String, ProviderQuota)> {
+        self.0.lock().unwrap().provider_quotas.clone()
     }
 }
 
@@ -82,4 +88,11 @@ impl SessionSink for RecordingSink {
     fn on_cli_message(&self, _text: &str) {}
     fn on_skill_loaded(&self, _entry: LoadedSkill) {}
     fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
+    fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
+        self.0
+            .lock()
+            .unwrap()
+            .provider_quotas
+            .push((adapter_id.to_string(), quota));
+    }
 }

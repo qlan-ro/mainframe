@@ -235,6 +235,11 @@ export class WebSocketManager {
     }
   }
 
+  /** Focus proxy for quota cadence: at least one client is connected. */
+  hasClients(): boolean {
+    return this.clients.size > 0;
+  }
+
   close(): void {
     for (const client of this.clients.values()) {
       if (client.ws.readyState === WebSocket.OPEN) {

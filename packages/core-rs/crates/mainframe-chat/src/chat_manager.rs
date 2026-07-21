@@ -16,7 +16,9 @@ use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, ImageInput,
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
-use mainframe_types::adapter::{ControlResponse, DetectedPr, EffortLevel, SessionOptions};
+use mainframe_types::adapter::{
+    ControlResponse, DetectedPr, EffortLevel, ProviderQuota, SessionOptions,
+};
 use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,
 };
@@ -221,6 +223,12 @@ pub trait ChatManagerDeps: Send + Sync {
     fn notify_session_error(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
 
+    /// `onProviderQuota(adapterId, quota)` — account-wide provider-plan quota pushed
+    /// from a session event (Codex `account/rateLimits/updated`, Claude
+    /// `rate_limit_event`). Default no-op mirrors the TS optional callback: a
+    /// ChatManager built without a QuotaManager simply drops it.
+    fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
+
     /// `extractMentionsFromText(chatId, text, db)` — returns whether any mention
     /// was newly recorded (Claude-agnostic but db-backed → injected).
     fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool;
@@ -375,6 +383,9 @@ impl EventHandlerDeps for EhDeps {
     }
     fn send_push(&self, msg: PushOut) {
         self.deps.send_push(msg);
+    }
+    fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
+        self.deps.on_provider_quota(adapter_id, quota);
     }
 }
 
