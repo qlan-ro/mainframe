@@ -1,5 +1,5 @@
 // packages/core/src/plugins/builtin/codex/adapter.ts
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import type {
   Adapter,
   AdapterModel,
@@ -11,9 +11,10 @@ import { CodexSession } from './session.js';
 import { CodexPlanModeHandler } from './plan-mode-handler.js';
 import { isCodexTranscriptPresent } from './transcript.js';
 import { listExternalSessions } from './external-sessions.js';
-import { JsonRpcClient } from './jsonrpc.js';
+import type { JsonRpcClient } from './jsonrpc.js';
+import { spawnTempAppServer } from './app-server-spawn.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
-import type { InitializeResult, ModelInfo, ModelListResult } from './types.js';
+import type { ModelInfo, ModelListResult } from './types.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:adapter');
@@ -82,7 +83,7 @@ export class CodexAdapter implements Adapter {
     if (this.cachedModels) return this.cachedModels;
     let client: JsonRpcClient | null = null;
     try {
-      client = await this.spawnTempAppServer(executable);
+      client = await spawnTempAppServer(executable);
       const result = await client.request<ModelListResult>('model/list');
       const models = result.data.filter((m) => !m.hidden).map(mapCodexModel);
       if (models.length > 0) this.cachedModels = models; // don't cache transient failures (empty)
@@ -134,27 +135,5 @@ export class CodexAdapter implements Adapter {
 
   async isTranscriptPresent(sessionId: string): Promise<boolean | null> {
     return isCodexTranscriptPresent(sessionId);
-  }
-
-  private async spawnTempAppServer(executable: string): Promise<JsonRpcClient> {
-    const child = spawn(executable, ['app-server'], {
-      detached: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
-    });
-
-    const client = new JsonRpcClient(child, {
-      onNotification: () => {},
-      onRequest: () => {},
-      onError: () => {},
-      onExit: () => {},
-    });
-
-    await client.request<InitializeResult>('initialize', {
-      clientInfo: { name: 'mainframe', title: 'Mainframe', version: '1.0.0' },
-    });
-    client.notify('initialized');
-
-    return client;
   }
 }

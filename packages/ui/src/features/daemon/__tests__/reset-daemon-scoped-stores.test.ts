@@ -9,7 +9,8 @@
  *  4. sandbox store resets processStatuses / logsOutput / captures / selectedConfigByScope / lastStartedProcess
  *  5. settings store clears providers, resets general to defaults, sets loading true, clears selectedProvider
  *  6. session-filters store clears filterProjectId, selectedTags, selectedSynthetic
- *  7. Integration: switchTo invokes the reset (useUnreadStore is empty after a switch)
+ *  7. quota store clears byId (a daemon switch never shows the previous daemon's quota)
+ *  8. Integration: switchTo invokes the reset (useUnreadStore is empty after a switch)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -70,6 +71,7 @@ import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useSandboxStore } from '@/store/sandbox';
 import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
+import { useQuotaStore, applyProviderQuota } from '@/store/quota';
 import { resetDaemonScopedStores } from '../reset-daemon-scoped-stores';
 
 // ---------------------------------------------------------------------------
@@ -97,6 +99,12 @@ function seedStores() {
     selectedTags: new Set(['tag-a']),
     selectedSynthetic: new Set(['unread'] as any),
   });
+  applyProviderQuota('claude', {
+    status: 'ok',
+    observedAt: Date.now(),
+    modelWindows: [],
+    session: { kind: 'session', usedPercent: 42, resetsAt: Date.now() + 3_600_000 },
+  } as any);
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +171,14 @@ describe('resetDaemonScopedStores — session-filters', () => {
     expect(state.filterProjectId).toBeNull();
     expect([...state.selectedTags]).toEqual([]);
     expect([...state.selectedSynthetic]).toEqual([]);
+  });
+});
+
+describe('resetDaemonScopedStores — quota', () => {
+  it("clears byId so a daemon switch never shows the previous daemon's quota", () => {
+    expect(Object.keys(useQuotaStore.getState().byId)).toContain('claude');
+    resetDaemonScopedStores();
+    expect(useQuotaStore.getState().byId).toEqual({});
   });
 });
 

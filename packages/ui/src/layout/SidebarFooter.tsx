@@ -4,6 +4,7 @@ import { useUnreadStore } from '@/store/unread-store';
 import { threadListStateToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { countByBaseStatus, type BaseStatusCounts } from '@/features/sessions/view-model/count-by-base-status';
 import { DaemonFooterStatus } from '@/features/daemon/DaemonFooterStatus';
+import { QuotaCard } from '@/features/quota/QuotaCard';
 
 const COUNT_META: { key: keyof BaseStatusCounts; label: string; dot: string; text: string }[] = [
   { key: 'working', label: 'Working', dot: 'bg-primary animate-pulse', text: 'text-primary' },
@@ -22,6 +23,7 @@ export function SidebarFooterView({ counts }: { counts: BaseStatusCounts }) {
       data-testid="sidebar-footer"
       className="flex flex-shrink-0 flex-col gap-[6px] px-[12px] pb-[12px] pt-[10px] text-caption text-muted-foreground"
     >
+      <QuotaCard />
       <DaemonFooterStatus />
       {SHOW_SESSION_COUNTS && (
         <span data-testid="sidebar-footer-counts" className="flex items-center justify-end gap-[9px]">

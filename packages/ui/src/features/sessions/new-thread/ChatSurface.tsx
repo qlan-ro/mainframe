@@ -35,6 +35,7 @@ import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
 import { useNewSessionPickerTarget } from '../sidebar/use-new-session-picker-target';
+import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 
 /** How long to wait, once we look like the zero-session boot dead-end, before
  *  forcing the project picker open. Long enough for useSessionListRouter's
@@ -80,6 +81,10 @@ export function ChatSurface({ port: _port }: { port: number }) {
   const draftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.get(mainThreadId) : undefined));
   const { projects, loading } = useProjects();
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
+  const initialization = useNewThreadReady((s) =>
+    mainThreadId ? s.getInitialization(mainThreadId) : { status: 'idle' as const },
+  );
+  const isReady = useNewThreadReady((s) => (mainThreadId ? s.readyIds.has(mainThreadId) : false));
 
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
@@ -94,6 +99,31 @@ export function ChatSurface({ port: _port }: { port: number }) {
         <ChatCardHeader />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6">
           <ChatEmptyState variant="firstrun" />
+        </div>
+      </div>
+    );
+  }
+
+  const isInitializing =
+    initialization.status === 'initializing' ||
+    (initialization.status === 'idle' && filterProjectId != null && draftCfg == null && !isReady);
+
+  if (isNewLocal && (isInitializing || initialization.status === 'error')) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ChatCardHeader />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-6">
+          <p>{isInitializing ? 'Initializing session…' : 'Couldn’t initialize session'}</p>
+          {initialization.status === 'error' && (
+            <button
+              type="button"
+              data-testid="new-session-initialization-retry"
+              className="rounded-md border px-3 py-1.5 text-body"
+              onClick={() => void initialization.retry?.().catch(() => undefined)}
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );

@@ -50,11 +50,16 @@ vi.mock('@/lib/api/adapters', () => ({
 
 // Draft-config mock — patchDraftConfig spy + useDraftConfig stub.
 const patchDraftConfigSpy = vi.fn();
+const initializeDraftSpy = vi.fn();
 let draftConfigStub: unknown = undefined;
 
 vi.mock('@/features/sessions/runtime/draft-config', () => ({
   patchDraftConfig: (...args: unknown[]) => patchDraftConfigSpy(...args),
   useDraftConfig: (_localId: string | null) => draftConfigStub,
+}));
+
+vi.mock('@/features/sessions/new-thread/initialize-draft', () => ({
+  reinitializeDraftAdapter: (...args: unknown[]) => initializeDraftSpy(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -127,6 +132,7 @@ function makeFakeExtras(chat: Chat | null = makeChat()) {
 beforeEach(() => {
   vi.clearAllMocks();
   patchDraftConfigSpy.mockReset();
+  initializeDraftSpy.mockReset();
   draftConfigStub = undefined;
   vi.mocked(useAuiState).mockReturnValue(false);
   vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
@@ -413,6 +419,11 @@ function makeDraft(overrides?: Partial<DraftCfg>): DraftCfg {
     adapterId: 'claude',
     permissionMode: 'default',
     model: 'claude-3-sonnet',
+    planMode: true,
+    effort: 'high',
+    fast: true,
+    ultracode: false,
+    adaptiveThinking: true,
     ...overrides,
   };
 }
@@ -435,6 +446,61 @@ describe('useComposerTuning — draft mode: chat is synthesized from the draft',
     const { result } = renderHook(() => useComposerTuning([]));
 
     expect(result.current.chat?.model).toBe('claude-3-opus');
+  });
+
+  it('keeps every initialized snapshot field after provider settings change', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+    vi.mocked(getProviderSettings).mockResolvedValue({
+      claude: {
+        defaultModel: 'claude-3-haiku',
+        defaultMode: 'yolo',
+        defaultPlanMode: 'false',
+        defaultEffort: 'low',
+        defaultFast: 'false',
+        defaultUltracode: 'true',
+        defaultAdaptiveThinking: 'false',
+      },
+    });
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+    await waitFor(() => expect(result.current.providerDefaults).toBeDefined());
+
+    expect(result.current.chat).toMatchObject({
+      adapterId: 'claude',
+      model: 'claude-3-sonnet',
+      permissionMode: 'default',
+      planMode: true,
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
+  });
+});
+
+describe('useComposerTuning — draft mode: adapter switch reinitializes the snapshot', () => {
+  it('awaits initialization for the selected adapter and ignores a repeated in-flight choice', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+    const pending = new Promise<DraftCfg>(() => undefined);
+    initializeDraftSpy.mockReturnValue(pending);
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+    act(() => {
+      result.current.setAdapter('gemini');
+      result.current.setAdapter('gemini');
+    });
+
+    expect(initializeDraftSpy).toHaveBeenCalledExactlyOnceWith({
+      localId: LOCAL_DRAFT_ID,
+      projectId: 'proj-draft',
+      port: DRAFT_PORT,
+      defaultAdapterId: null,
+      adapters: [ADAPTER_CLAUDE],
+      adapterId: 'gemini',
+    });
+    expect(patchDraftConfigSpy).not.toHaveBeenCalled();
   });
 });
 

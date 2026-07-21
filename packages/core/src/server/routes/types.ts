@@ -7,11 +7,13 @@ import type { LaunchRegistry } from '../../launch/index.js';
 import type { TunnelManager } from '../../tunnel/tunnel-manager.js';
 import type { BackgroundTaskTracker } from '../../background-tasks/tracker.js';
 import type { AutomationService } from '../../automations/service.js';
+import type { QuotaManager } from '../../quota/manager.js';
 
 export interface RouteContext {
   db: DatabaseManager;
   chats: ChatManager;
   adapters: AdapterRegistry;
+  quota?: QuotaManager;
   attachmentStore?: AttachmentStore;
   launchRegistry?: LaunchRegistry;
   tunnelUrl?: string | null;

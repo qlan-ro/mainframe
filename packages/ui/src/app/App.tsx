@@ -15,6 +15,8 @@ import { daemonWs } from '../lib/daemon/ws-client';
 import { installSessionTodosSubscriber } from '@/store/session-todos';
 import { installAdapterModelsSubscriber } from '@/store/adapters';
 import { seedAdaptersFor } from '@/store/adapters-seed';
+import { installProviderQuotaSubscriber } from '@/store/quota';
+import { seedQuota } from '@/store/quota-seed';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
@@ -55,6 +57,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   useEffect(() => {
     if (activePort <= 0) return;
     seedAdaptersFor(activePort);
+    seedQuota(activePort);
   }, [activePort]);
 
   // Transparent reconnect (same-port daemon restart): reseed off the WS reconnect signal —
@@ -64,7 +67,10 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   useEffect(
     () =>
       daemonWs.subscribeConnection(() => {
-        if (daemonWs.connected && activePort > 0) seedAdaptersFor(activePort);
+        if (daemonWs.connected && activePort > 0) {
+          seedAdaptersFor(activePort);
+          seedQuota(activePort);
+        }
       }),
     [activePort],
   );
@@ -99,6 +105,10 @@ export function App() {
   // Always-on adapter-catalog subscriber (adapter.models.updated). Mounted once at the
   // app root so a warm-mount thread updates when the daemon's post-backfill probe fires.
   useEffect(() => installAdapterModelsSubscriber(), []);
+
+  // Always-on provider-quota subscriber (provider.quota.updated). Account-wide,
+  // chatId-less — mounted once so a push is never missed by a late-mounting card.
+  useEffect(() => installProviderQuotaSubscriber(), []);
 
   return (
     <MfErrorBoundary>

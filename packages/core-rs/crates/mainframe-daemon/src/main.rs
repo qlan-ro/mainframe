@@ -14,19 +14,31 @@
 mod builtin_plugins;
 mod cli;
 mod plugin_host_db;
+mod quota_store;
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 
 use crate::plugin_host_db::DaemonPluginHostDb;
+use crate::quota_store::DaemonQuotaSettings;
 use mainframe_adapter_api::resolve_executable::{
     ResolverDeps, SettingsWriter, resolve_adapter_executable,
 };
-use mainframe_adapter_api::{AdapterRegistry, BoxFuture, RefreshDeps, RunResult};
+use mainframe_adapter_api::{AdapterError, AdapterRegistry, BoxFuture, RefreshDeps, RunResult};
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
+use mainframe_adapter_claude::quota_pull::{
+    PullClaudeQuotaDeps, pull_claude_quota, spawn_claude_usage,
+};
+use mainframe_adapter_claude::trust_store::{
+    CLAUDE_IDENTITY_TRANSIENT, read_claude_account_identity,
+};
 use mainframe_adapter_codex::CodexAdapter;
+use mainframe_adapter_codex::quota_pull::pull_codex_quota_via_temp_app_server;
+use mainframe_adapter_codex::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
 use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
@@ -50,6 +62,10 @@ use mainframe_server::{
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
+use mainframe_services::quota::{
+    ClaudeQuotaScheduler, ClaudeQuotaSchedulerDeps, IdentityResolver, IngestMode, QuotaManager,
+    QuotaManagerDeps, QuotaPuller, QuotaService,
+};
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use tokio::signal;
@@ -220,6 +236,23 @@ async fn run_daemon() {
         watcher: Arc::new(watcher),
     };
 
+    // Provider quota manager (quota/manager.ts): persists per-account blobs into
+    // the mirrored `quota` settings category and broadcasts provider.quota.updated
+    // account-wide. Rehydrate on boot so the first read after a restart is warm.
+    // Built before the ChatManager so session-pushed quota (Codex
+    // `account/rateLimits/updated`, Claude `rate_limit_event`) can sparse-merge in.
+    let quota_emit = broadcast.clone();
+    let quota_manager = Arc::new(QuotaManager::new(QuotaManagerDeps {
+        settings: Box::new(DaemonQuotaSettings::new(db.clone())),
+        emit_event: Box::new(move |event| {
+            let _ = quota_emit.send(event);
+        }),
+        now: None,
+    }));
+    register_quota_identity_resolvers(&quota_manager);
+    quota_manager.load_from_disk().await;
+    register_quota_pullers(&quota_manager, &db, &resolved_path);
+
     // ChatManager: constructed after the AdapterRegistry + BackgroundTaskTracker
     // (its DB accessors reach the single WAL connection through the Db actor's
     // sync bridge; launch/todos/notifications wire through the ported services and
@@ -234,6 +267,7 @@ async fn run_daemon() {
         GitFactory,
         broadcast.clone(),
         Arc::new(RegistryLaunchStopper::new(Arc::clone(&launch_registry))),
+        Arc::clone(&quota_manager),
         resolved_path.clone(),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
@@ -314,6 +348,10 @@ async fn run_daemon() {
     // (see manager.rs) — the Rust PluginManager is builtin-only, so there is no
     // `load_all` to call. User-installed plugins are not loaded in v1.
 
+    // Shared WS registry: the ctx reads it for fan-out; the quota scheduler reads
+    // it to gate the pull cadence on "at least one client connected".
+    let ws_clients = Arc::new(dashmap::DashMap::new());
+
     let ctx = Arc::new(AppCtx {
         db: db.clone(),
         git: GitFactory,
@@ -325,7 +363,7 @@ async fn run_daemon() {
         auth_secret,
         resolved_path: resolved_path.clone(),
         tunnel_url: Arc::new(RwLock::new(None)),
-        ws_clients: Arc::new(dashmap::DashMap::new()),
+        ws_clients: Arc::clone(&ws_clients),
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),
         chat_manager: Some(Arc::clone(&chats)),
@@ -334,6 +372,7 @@ async fn run_daemon() {
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
         automations: automations.clone(),
+        quota: Some(quota_manager.clone() as Arc<dyn QuotaService>),
     });
 
     spawn_broadcast_pump(Arc::clone(&ctx));
@@ -384,6 +423,24 @@ async fn run_daemon() {
     tokio::spawn(async move {
         refresh_adapters.refresh_all().await;
     });
+
+    // Claude quota pull cadence (index.ts starts ClaudeQuotaScheduler post-listen):
+    // a warm-up pull, then every 5 min while at least one client is connected.
+    // Held for the daemon's lifetime — its Drop aborts the loop on shutdown.
+    let scheduler_quota = Arc::clone(&quota_manager);
+    let scheduler_clients = Arc::clone(&ws_clients);
+    let mut claude_quota_scheduler = ClaudeQuotaScheduler::new(ClaudeQuotaSchedulerDeps {
+        refresh: Arc::new(move || {
+            let quota = Arc::clone(&scheduler_quota);
+            Box::pin(async move {
+                quota.refresh("claude").await;
+                Ok::<(), String>(())
+            })
+        }),
+        has_clients: Arc::new(move || !scheduler_clients.is_empty()),
+        interval_ms: None,
+    });
+    claude_quota_scheduler.start();
 
     // Daemon tunnel (index.ts): auto-start when configured (opt-in), else adopt a
     // pre-configured URL. Failure is non-fatal — the daemon serves loopback anyway.
@@ -566,35 +623,8 @@ struct DaemonRefreshDeps {
 impl RefreshDeps for DaemonRefreshDeps {
     fn resolve_executable_path(&self, adapter_id: String) -> BoxFuture<'_, Option<String>> {
         let db = self.db.clone();
-        let runner = DefaultRunner::new(self.resolved_path.clone());
-        Box::pin(async move {
-            // Read the persisted provider path on the DB actor, snapshot it into a
-            // one-key SettingsWriter, then run the shared resolver (which falls
-            // back to `which` detection when unset). resolveAdapterExecutable never
-            // writes, so a read snapshot is faithful.
-            let key = format!("{adapter_id}.executablePath");
-            let lookup_key = key.clone();
-            let configured = db
-                .call(move |d| Ok(d.settings.get("provider", &lookup_key).ok().flatten()))
-                .await
-                .ok()
-                .flatten();
-            let settings = OneSetting {
-                category: "provider".to_string(),
-                key,
-                value: configured,
-            };
-            let resolved = resolve_adapter_executable(
-                &adapter_id,
-                &ResolverDeps {
-                    settings: &settings,
-                    run: &runner,
-                    platform: None,
-                },
-            )
-            .await;
-            resolved.valid.then_some(resolved.path)
-        })
+        let resolved_path = self.resolved_path.clone();
+        Box::pin(async move { resolve_adapter_path(&db, &resolved_path, &adapter_id).await })
     }
 
     fn run(
@@ -618,6 +648,129 @@ impl RefreshDeps for DaemonRefreshDeps {
     fn emit_event(&self, event: DaemonEvent) {
         let _ = self.broadcast.send(event);
     }
+}
+
+/// Resolve an adapter's executable path off the DB actor + shared resolver,
+/// returning `None` when detection fails. Reads the persisted provider path,
+/// snapshots it into a one-key SettingsWriter, then runs the shared resolver
+/// (which falls back to `which` detection when unset). `resolveAdapterExecutable`
+/// never writes, so a read snapshot is faithful. Shared by the catalog refresh
+/// and both quota pullers — all need a validated binary before spawning.
+async fn resolve_adapter_path(
+    db: &Db,
+    resolved_path: &mainframe_runtime::ResolvedPath,
+    adapter_id: &str,
+) -> Option<String> {
+    let key = format!("{adapter_id}.executablePath");
+    let lookup_key = key.clone();
+    let configured = db
+        .call(move |d| Ok(d.settings.get("provider", &lookup_key).ok().flatten()))
+        .await
+        .ok()
+        .flatten();
+    let settings = OneSetting {
+        category: "provider".to_string(),
+        key,
+        value: configured,
+    };
+    let runner = DefaultRunner::new(resolved_path.clone());
+    let resolved = resolve_adapter_executable(
+        adapter_id,
+        &ResolverDeps {
+            settings: &settings,
+            run: &runner,
+            platform: None,
+        },
+    )
+    .await;
+    resolved.valid.then_some(resolved.path)
+}
+
+/// Register the Seam-1 quota harvesters (index.ts registers these before the
+/// pull-cadence scheduler starts). Claude pulls `/usage` off a one-shot spawn;
+/// Codex owns a temp app-server connection it opens and closes per pull. Both
+/// resolve their binary the same way the catalog refresh does, failing the pull
+/// (keep-last-known) when detection fails.
+fn register_quota_pullers(
+    quota: &Arc<QuotaManager>,
+    db: &Db,
+    resolved_path: &mainframe_runtime::ResolvedPath,
+) {
+    let claude_db = db.clone();
+    let claude_path = resolved_path.clone();
+    let claude_puller: QuotaPuller = Arc::new(move || {
+        let db = claude_db.clone();
+        let resolved_path = claude_path.clone();
+        Box::pin(async move {
+            let binary = resolve_adapter_path(&db, &resolved_path, "claude")
+                .await
+                .ok_or_else(|| "claude executable not found".to_string())?;
+            let path = resolved_path.as_str().to_string();
+            let run_usage =
+                move || -> Pin<Box<dyn Future<Output = Result<String, AdapterError>> + Send>> {
+                    let binary = binary.clone();
+                    let path = path.clone();
+                    Box::pin(async move { spawn_claude_usage(&binary, &path).await })
+                };
+            pull_claude_quota(PullClaudeQuotaDeps {
+                run_usage: &run_usage,
+                read_identity: None,
+                now: now_ms(),
+            })
+            .await
+            .map_err(|err| err.to_string())
+        })
+    });
+    quota.register_puller("claude", IngestMode::Pull, claude_puller);
+
+    let codex_db = db.clone();
+    let codex_path = resolved_path.clone();
+    let codex_puller: QuotaPuller = Arc::new(move || {
+        let db = codex_db.clone();
+        let resolved_path = codex_path.clone();
+        Box::pin(async move {
+            let binary = resolve_adapter_path(&db, &resolved_path, "codex")
+                .await
+                .ok_or_else(|| "codex executable not found".to_string())?;
+            pull_codex_quota_via_temp_app_server(&binary, resolved_path.as_str())
+                .await
+                .map_err(|err| err.to_string())
+        })
+    });
+    // Codex reads the app-server sparsely, so its pull merges like a push (#268 F5).
+    quota.register_puller("codex", IngestMode::Push, codex_puller);
+}
+
+/// Register per-adapter account-identity resolvers (#268 F2). On a push with no
+/// concrete identity (and at boot) the manager consults these to name the account,
+/// keeping a same-provider swap from landing on the wrong bucket. Both read cheaply
+/// off disk (Claude trust-store, Codex `~/.codex/auth.json`); the transient sentinel
+/// maps to `None` so a momentary read failure reuses last-known.
+fn register_quota_identity_resolvers(quota: &Arc<QuotaManager>) {
+    let claude_resolver: IdentityResolver = Arc::new(|| {
+        Box::pin(async {
+            let identity = read_claude_account_identity(None).await;
+            (identity != CLAUDE_IDENTITY_TRANSIENT).then_some(identity)
+        })
+    });
+    quota.register_identity_resolver("claude", claude_resolver);
+
+    let codex_resolver: IdentityResolver = Arc::new(|| {
+        Box::pin(async {
+            let identity = read_codex_account_identity_from_disk().await;
+            (identity != CODEX_IDENTITY_TRANSIENT).then_some(identity)
+        })
+    });
+    quota.register_identity_resolver("codex", codex_resolver);
+}
+
+/// Wall-clock epoch-ms for the quota pullers' `observedAt` stamp (the harvesters
+/// take an injected `now`; the pure engine still derives status off its own clock).
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 /// A single-entry read-only `SettingsWriter` snapshot: `get` returns the

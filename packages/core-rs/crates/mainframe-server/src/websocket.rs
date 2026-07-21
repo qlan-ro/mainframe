@@ -725,6 +725,67 @@ fn warn_permission_respond_seam() {
     });
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mainframe_types::adapter::{
+        ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind,
+    };
+
+    fn register_client(
+        clients: &WsClients,
+        id: &str,
+        chats: &[&str],
+    ) -> mpsc::UnboundedReceiver<String> {
+        let (tx, rx) = mpsc::unbounded_channel::<String>();
+        let subscriptions: Arc<Mutex<HashSet<String>>> =
+            Arc::new(Mutex::new(chats.iter().map(|c| c.to_string()).collect()));
+        clients.insert(id.to_string(), ClientHandle { tx, subscriptions });
+        rx
+    }
+
+    fn quota_event() -> DaemonEvent {
+        DaemonEvent::ProviderQuotaUpdated {
+            adapter_id: "claude".into(),
+            quota: ProviderQuota {
+                status: ProviderQuotaStatus::Ok,
+                observed_at: 1_700_000_000_000,
+                model_windows: vec![],
+                session: Some(QuotaWindow {
+                    kind: QuotaWindowKind::Session,
+                    used_percent: 55.0,
+                    resets_at: Some(1_700_010_000_000),
+                    observed_at: None,
+                    label: None,
+                }),
+                weekly: None,
+                account_identity: Some("uuid-1".into()),
+            },
+        }
+    }
+
+    // Seam-3 transport: a harvested quota carries no chatId, so the fan-out must
+    // reach every client account-wide — even one subscribed to no chat.
+    #[test]
+    fn delivers_provider_quota_updated_to_a_client_subscribed_to_no_chat() {
+        let clients: WsClients = Arc::new(DashMap::new());
+        let mut rx = register_client(&clients, "client-1", &[]);
+
+        fanout(&clients, &quota_event());
+
+        let payload = rx
+            .try_recv()
+            .expect("no-subscription client received the event");
+        let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["type"], serde_json::json!("provider.quota.updated"));
+        assert_eq!(value["adapterId"], serde_json::json!("claude"));
+        assert_eq!(
+            value["quota"]["session"]["usedPercent"],
+            serde_json::json!(55.0)
+        );
+    }
+}
+
 // PORT STATUS: src/server/websocket.ts (+ ws-file-watch wiring, ws-schemas seam)
 // confidence: medium
 // todos: 1

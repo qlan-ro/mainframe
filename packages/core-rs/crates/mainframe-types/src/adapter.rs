@@ -220,6 +220,50 @@ pub struct ContextUsage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum QuotaWindowKind {
+    Session,
+    Weekly,
+    WeeklyModel,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaWindow {
+    pub kind: QuotaWindowKind,
+    pub used_percent: f64,
+    pub resets_at: Option<i64>,
+    /// When this window last carried real data. A null `resets_at` synthesizes its
+    /// ceiling from this instant (not the blob's), so a kept window's ceiling can't
+    /// float forward on a data-free push. Omitted for windows built before #268.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderQuotaStatus {
+    Ok,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderQuota {
+    pub status: ProviderQuotaStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session: Option<QuotaWindow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weekly: Option<QuotaWindow>,
+    pub model_windows: Vec<QuotaWindow>,
+    pub observed_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_identity: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DetectedPrSource {
     Created,

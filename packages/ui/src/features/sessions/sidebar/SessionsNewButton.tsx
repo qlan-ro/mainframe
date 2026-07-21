@@ -5,7 +5,9 @@
  *
  * Pill active  → starts the draft in that project directly (native New; the
  *                auto-config hook seeds the draft on activation).
- * "All" view   → opens the NewSessionPickerPopover to resolve the project first.
+ * "All" view   → opens the NewSessionPickerPopover to resolve the project first,
+ *                then seeds the draft itself (auto-config stays out of the "All"
+ *                view — it has no project to seed from).
  *
  * Re-click retargets the single reused draft (never stacks); the pre-draft
  * selection is remembered so a discard can restore it.
@@ -14,11 +16,14 @@ import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
-import { setDraftConfig } from '../runtime/draft-config';
-import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { initializeDraft } from '../new-thread/initialize-draft';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
+import { useSettingsStore } from '@/store/settings';
+import { useAdapters } from '@/store/adapters';
 import { NewSessionPickerPopover } from './NewSessionPickerPopover';
 import { useNewSessionPickerTarget } from './use-new-session-picker-target';
+import { useDaemonPort } from '../runtime/daemon-port-context';
+import { mfToast } from '@/lib/toast';
 
 // px-[12px] (not px-2/4px): matches SIDEBAR_BASE_INSET_PX, so the wrapping
 // SIDEBAR_INDENT_STEP_PX margin in SessionSidebar.tsx lands this row's content
@@ -42,6 +47,13 @@ export function SessionsNewButton({
   onAddProject,
 }: SessionsNewButtonProps) {
   const runtime = useAssistantRuntime();
+  // Lifted so the global ⌘N hotkey and the zero-session boot fallback can open
+  // this SAME anchored popover (see useNewSessionPickerTarget).
+  const pickerOpen = useNewSessionPickerTarget((s) => s.open);
+  const setPickerOpen = useNewSessionPickerTarget((s) => s.setOpen);
+  const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
+  const adapters = useAdapters();
+  const port = useDaemonPort();
 
   /** Snapshot the currently-active session so a discard can return to it. */
   const rememberReturn = () => {
@@ -66,19 +78,26 @@ export function SessionsNewButton({
     );
   }
 
-  // Lifted so the global ⌘N hotkey and the zero-session boot fallback can open
-  // this SAME anchored popover (see useNewSessionPickerTarget).
-  const pickerOpen = useNewSessionPickerTarget((s) => s.open);
-  const setPickerOpen = useNewSessionPickerTarget((s) => s.setOpen);
-
   const pick = (projectId: string) => {
-    const nid = runtime.threads.getState().newThreadId;
-    if (nid == null) return;
-    rememberReturn();
-    resetNewThreadDraft(nid);
-    setDraftConfig(nid, { projectId, adapterId: 'claude' });
-    useNewThreadReady.getState().markReady(nid);
-    void runtime.threads.switchToNewThread();
+    void (async () => {
+      rememberReturn();
+      // Clear the CURRENT slot before switching, so a reused draft never flashes
+      // its stale project on activation. No-op when no slot exists.
+      resetNewThreadDraft(runtime.threads.getState().newThreadId);
+      // switchToNewThread OWNS the slot: `newThreadId` is undefined until it
+      // mints one (and again after each first send commits a draft), so the id
+      // is only readable once the switch has resolved.
+      await runtime.threads.switchToNewThread();
+      const nid = runtime.threads.getState().newThreadId;
+      if (nid == null) return;
+      try {
+        await initializeDraft({ localId: nid, projectId, port, defaultAdapterId, adapters });
+      } catch (error) {
+        mfToast.error('Couldn’t initialize session', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
   };
 
   return (

@@ -12,6 +12,8 @@ export interface ServerManager {
   start(port: number): Promise<void>;
   stop(): Promise<void>;
   broadcastEvent(event: DaemonEvent): void;
+  /** Focus proxy for the quota cadence: true when at least one client is connected. */
+  hasConnectedClients(): boolean;
 }
 
 export type ServerManagerDeps = Omit<HttpServerDeps, 'lspManager'>;
@@ -61,6 +63,10 @@ export function createServerManager(deps: ServerManagerDeps): ServerManager {
 
     broadcastEvent(event: DaemonEvent): void {
       _wsManager?.broadcastEvent(event);
+    },
+
+    hasConnectedClients(): boolean {
+      return _wsManager?.hasClients() ?? false;
     },
   };
 }

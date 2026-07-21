@@ -70,6 +70,11 @@ export type DaemonEvent =
       models: import('./adapter.js').AdapterModel[];
       modelsRevision: number;
     }
+  | {
+      type: 'provider.quota.updated';
+      adapterId: string;
+      quota: import('./adapter.js').ProviderQuota;
+    }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }
   | { type: 'chat.trustRequired'; chatId: string; projectPath: string }

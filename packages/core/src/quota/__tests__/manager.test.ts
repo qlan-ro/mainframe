@@ -1,0 +1,281 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { DaemonEvent, ProviderQuota, QuotaWindow } from '@qlan-ro/mainframe-types';
+import { QuotaManager, type QuotaManagerDeps } from '../manager.js';
+
+const NOW = 1_700_000_000_000;
+
+function sessionWindow(usedPercent: number): QuotaWindow {
+  return { kind: 'session', usedPercent, resetsAt: NOW + 3 * 60 * 60 * 1000 };
+}
+
+function weeklyWindow(usedPercent: number): QuotaWindow {
+  return { kind: 'weekly', usedPercent, resetsAt: NOW + 3 * 24 * 60 * 60 * 1000 };
+}
+
+function claudeQuota(overrides: Partial<ProviderQuota> = {}): ProviderQuota {
+  return {
+    status: 'ok',
+    observedAt: NOW,
+    modelWindows: [],
+    session: sessionWindow(40),
+    accountIdentity: 'uuid-1',
+    ...overrides,
+  };
+}
+
+function makeSettings() {
+  const store = new Map<string, string>();
+  return {
+    store,
+    get: (category: string, key: string) => store.get(`${category} ${key}`) ?? null,
+    getByCategory: (category: string) => {
+      const out: Record<string, string> = {};
+      for (const [k, v] of store) {
+        const [cat, key] = k.split(' ');
+        if (cat === category) out[key] = v;
+      }
+      return out;
+    },
+    set: (category: string, key: string, value: string) => {
+      store.set(`${category} ${key}`, value);
+    },
+  };
+}
+
+function makeManager(settings = makeSettings()) {
+  const events: DaemonEvent[] = [];
+  const deps: QuotaManagerDeps = {
+    settings,
+    emitEvent: (event) => events.push(event),
+    now: () => NOW,
+  };
+  return { manager: new QuotaManager(deps), events, settings };
+}
+
+describe('QuotaManager', () => {
+  let ctx: ReturnType<typeof makeManager>;
+
+  beforeEach(() => {
+    ctx = makeManager();
+  });
+
+  it('ingests a pull, persists under the compound key, and emits provider.quota.updated', async () => {
+    const result = await ctx.manager.ingest('claude', claudeQuota(), 'pull');
+
+    expect(result.status).toBe('ok');
+    expect(result.session?.usedPercent).toBe(40);
+    expect(ctx.settings.get('quota', 'claude:uuid-1')).not.toBeNull();
+    expect(ctx.events).toHaveLength(1);
+    expect(ctx.events[0]).toMatchObject({ type: 'provider.quota.updated', adapterId: 'claude' });
+    expect((ctx.events[0] as { quota: ProviderQuota }).quota.session?.usedPercent).toBe(40);
+  });
+
+  it('get() returns the current blob with status re-derived at now', async () => {
+    await ctx.manager.ingest('claude', claudeQuota(), 'pull');
+    const got = ctx.manager.get('claude');
+    expect(got?.session?.usedPercent).toBe(40);
+    expect(got?.status).toBe('ok');
+  });
+
+  it('stamps each pulled window with the harvest time (F9)', async () => {
+    await ctx.manager.ingest('claude', claudeQuota({ observedAt: NOW, weekly: weeklyWindow(10) }), 'pull');
+    const got = ctx.manager.get('claude');
+    expect(got?.session?.observedAt).toBe(NOW);
+    expect(got?.weekly?.observedAt).toBe(NOW);
+  });
+
+  it('push sparse-merges: a session-only push keeps the prior weekly window', async () => {
+    await ctx.manager.ingest('claude', claudeQuota({ weekly: weeklyWindow(10) }), 'pull');
+    await ctx.manager.ingest(
+      'claude',
+      { status: 'ok', observedAt: NOW, modelWindows: [], session: sessionWindow(80), accountIdentity: 'uuid-1' },
+      'push',
+    );
+    const got = ctx.manager.get('claude');
+    expect(got?.session?.usedPercent).toBe(80);
+    expect(got?.weekly?.usedPercent).toBe(10);
+  });
+
+  it('reuses last-known identity when a push carries a transient sentinel', async () => {
+    await ctx.manager.ingest('claude', claudeQuota(), 'pull');
+    await ctx.manager.ingest(
+      'claude',
+      {
+        status: 'ok',
+        observedAt: NOW,
+        modelWindows: [],
+        session: sessionWindow(90),
+        accountIdentity: 'transient:identity-read-failed',
+      },
+      'push',
+    );
+    // Same key ⇒ merged into the uuid-1 blob, not a new unknown bucket.
+    expect(ctx.settings.get('quota', 'claude:uuid-1')).not.toBeNull();
+    expect(ctx.settings.get('quota', 'claude:transient:identity-read-failed')).toBeNull();
+    expect(ctx.manager.get('claude')?.session?.usedPercent).toBe(90);
+  });
+
+  it('a same-provider account swap lands on a fresh key with no inherited windows', async () => {
+    await ctx.manager.ingest('claude', claudeQuota({ weekly: weeklyWindow(50) }), 'pull');
+    await ctx.manager.ingest(
+      'claude',
+      { status: 'ok', observedAt: NOW, modelWindows: [], session: sessionWindow(5), accountIdentity: 'uuid-2' },
+      'pull',
+    );
+    const got = ctx.manager.get('claude');
+    expect(got?.session?.usedPercent).toBe(5);
+    expect(got?.weekly).toBeUndefined();
+    expect(ctx.settings.get('quota', 'claude:uuid-2')).not.toBeNull();
+  });
+
+  describe('identity-on-push (F2)', () => {
+    it('resolves an identity-less push onto the live account key', async () => {
+      ctx.manager.registerIdentityResolver('codex', vi.fn().mockResolvedValue('openai-42'));
+      await ctx.manager.ingest(
+        'codex',
+        { status: 'ok', observedAt: NOW, modelWindows: [], session: sessionWindow(30) },
+        'push',
+      );
+      expect(ctx.settings.get('quota', 'codex:openai-42')).not.toBeNull();
+      expect(ctx.manager.get('codex')?.session?.usedPercent).toBe(30);
+    });
+
+    it('caches the resolver across bursty pushes (one read per TTL window)', async () => {
+      const resolver = vi.fn().mockResolvedValue('openai-42');
+      ctx.manager.registerIdentityResolver('codex', resolver);
+      const push: ProviderQuota = { status: 'ok', observedAt: NOW, modelWindows: [], session: sessionWindow(30) };
+      await ctx.manager.ingest('codex', push, 'push');
+      await ctx.manager.ingest('codex', push, 'push');
+      expect(resolver).toHaveBeenCalledOnce();
+    });
+
+    it('falls back to the last-known identity when the resolver fails', async () => {
+      await ctx.manager.ingest(
+        'codex',
+        { status: 'ok', observedAt: NOW, modelWindows: [], session: sessionWindow(20), accountIdentity: 'openai-1' },
+        'push',
+      );
+      ctx.manager.registerIdentityResolver('codex', vi.fn().mockRejectedValue(new Error('auth locked')));
+      await ctx.manager.ingest(
+        'codex',
+        { status: 'ok', observedAt: NOW, modelWindows: [], session: sessionWindow(55) },
+        'push',
+      );
+      expect(ctx.settings.get('quota', 'codex:openai-1')).not.toBeNull();
+      expect(ctx.manager.get('codex')?.session?.usedPercent).toBe(55);
+    });
+
+    it('boot selects the live account blob over a newer-observed stale one', async () => {
+      const settings = makeSettings();
+      settings.set(
+        'quota',
+        'codex:openai-stale',
+        JSON.stringify(
+          claudeQuota({ observedAt: NOW - 1_000, session: sessionWindow(11), accountIdentity: 'openai-stale' }),
+        ),
+      );
+      settings.set(
+        'quota',
+        'codex:openai-live',
+        JSON.stringify(
+          claudeQuota({ observedAt: NOW - 10_000, session: sessionWindow(77), accountIdentity: 'openai-live' }),
+        ),
+      );
+      const { manager } = makeManager(settings);
+      manager.registerIdentityResolver('codex', vi.fn().mockResolvedValue('openai-live'));
+
+      await manager.loadFromDisk();
+      expect(manager.get('codex')?.session?.usedPercent).toBe(77);
+    });
+  });
+
+  it('loadFromDisk rehydrates the newest-observed blob per adapter on boot', async () => {
+    const settings = makeSettings();
+    settings.set(
+      'quota',
+      'claude:uuid-old',
+      JSON.stringify(claudeQuota({ observedAt: NOW - 10_000, session: sessionWindow(20) })),
+    );
+    settings.set(
+      'quota',
+      'claude:uuid-new',
+      JSON.stringify(claudeQuota({ observedAt: NOW - 1_000, session: sessionWindow(70), accountIdentity: 'uuid-new' })),
+    );
+    const { manager } = makeManager(settings);
+
+    await manager.loadFromDisk();
+    expect(manager.get('claude')?.session?.usedPercent).toBe(70);
+  });
+
+  it('loadFromDisk discards an unparseable persisted blob without throwing', async () => {
+    const settings = makeSettings();
+    settings.set('quota', 'claude:uuid-1', 'not-json');
+    const { manager } = makeManager(settings);
+    await expect(manager.loadFromDisk()).resolves.toBeUndefined();
+    expect(manager.get('claude')).toBeUndefined();
+  });
+
+  it('loadFromDisk discards a structurally-invalid blob (F7 full-shape validation)', async () => {
+    const settings = makeSettings();
+    // Valid JSON but wrong shape: modelWindows missing, status invalid.
+    settings.set('quota', 'claude:uuid-1', JSON.stringify({ status: 'bogus', observedAt: NOW }));
+    const { manager } = makeManager(settings);
+    await manager.loadFromDisk();
+    expect(manager.get('claude')).toBeUndefined();
+  });
+
+  it('refresh() invokes the registered puller and ingests the result', async () => {
+    const puller = vi.fn().mockResolvedValue(claudeQuota({ session: sessionWindow(33) }));
+    ctx.manager.registerPuller('claude', puller);
+
+    const result = await ctx.manager.refresh('claude');
+    expect(puller).toHaveBeenCalledOnce();
+    expect(result?.session?.usedPercent).toBe(33);
+    expect(ctx.manager.get('claude')?.session?.usedPercent).toBe(33);
+  });
+
+  it('refresh() keeps the last-known blob when the puller throws', async () => {
+    await ctx.manager.ingest('claude', claudeQuota({ session: sessionWindow(60) }), 'pull');
+    ctx.manager.registerPuller('claude', vi.fn().mockRejectedValue(new Error('spawn failed')));
+
+    const result = await ctx.manager.refresh('claude');
+    expect(result?.session?.usedPercent).toBe(60);
+    expect(ctx.manager.get('claude')?.session?.usedPercent).toBe(60);
+  });
+
+  it('refresh() keeps the last-known blob when the puller returns null (no data)', async () => {
+    await ctx.manager.ingest('codex', claudeQuota({ session: sessionWindow(45), accountIdentity: 'openai-1' }), 'push');
+    ctx.manager.registerPuller('codex', vi.fn().mockResolvedValue(null), { mergeOnPull: true });
+
+    const result = await ctx.manager.refresh('codex');
+    expect(result?.session?.usedPercent).toBe(45);
+  });
+
+  it('refresh() with mergeOnPull sparse-merges the pull instead of replacing (F5)', async () => {
+    await ctx.manager.ingest(
+      'codex',
+      claudeQuota({ session: sessionWindow(45), weekly: weeklyWindow(70), accountIdentity: 'openai-1' }),
+      'push',
+    );
+    // The pull carries only a session window; a replace would drop the weekly one.
+    const puller = vi.fn().mockResolvedValue({
+      status: 'ok' as const,
+      observedAt: NOW,
+      modelWindows: [],
+      session: sessionWindow(50),
+      accountIdentity: 'openai-1',
+    });
+    ctx.manager.registerPuller('codex', puller, { mergeOnPull: true });
+
+    await ctx.manager.refresh('codex');
+    const got = ctx.manager.get('codex');
+    expect(got?.session?.usedPercent).toBe(50);
+    expect(got?.weekly?.usedPercent).toBe(70);
+  });
+
+  it('refresh() on an adapter with no puller returns the last-known blob', async () => {
+    await ctx.manager.ingest('codex', claudeQuota({ accountIdentity: 'openai-1' }), 'push');
+    const result = await ctx.manager.refresh('codex');
+    expect(result?.session?.usedPercent).toBe(40);
+  });
+});

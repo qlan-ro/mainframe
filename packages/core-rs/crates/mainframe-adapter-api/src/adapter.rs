@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, AdapterProcess, ContextUsage, ControlRequest,
-    ControlResponse, DetectedPr, MessageMetadata, SessionOptions, SessionResult,
+    ControlResponse, DetectedPr, MessageMetadata, ProviderQuota, SessionOptions, SessionResult,
     SessionSpawnOptions,
 };
 use mainframe_types::chat::{ChatMessage, MessageContent, ResolvedTuning, TodoItem};
@@ -92,6 +92,9 @@ pub trait SessionSink: Send + Sync {
     fn on_subagent_child(&self, parent_tool_use_id: &str, blocks: Vec<MessageContent>);
     /// Non-fatal advisory (`onTrustRequired?`) — optional in TS, default no-op.
     fn on_trust_required(&self, _project_path: &str) {}
+    /// Account-wide provider plan quota (`onProviderQuota?`) — optional in TS,
+    /// default no-op; no chatId, mirrors `on_context_usage`.
+    fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored

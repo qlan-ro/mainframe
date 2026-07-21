@@ -29,6 +29,7 @@ pub mod health;
 pub mod launch;
 pub mod lsp_routes;
 pub mod projects;
+pub mod quota;
 pub mod search;
 pub mod settings;
 pub mod skills;

@@ -20,5 +20,6 @@ export { deviceRoutes } from './device.js';
 export { tagRoutes } from './tags.js';
 export { automationRoutes } from './automations.js';
 export { suggestionRoutes } from './suggestions.js';
+export { quotaRoutes } from './quota.js';
 export { asyncHandler } from './async-handler.js';
 export type { RouteContext } from './types.js';

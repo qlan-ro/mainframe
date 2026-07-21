@@ -112,6 +112,28 @@ export interface ContextUsage {
   maxTokens: number;
 }
 
+export interface QuotaWindow {
+  kind: 'session' | 'weekly' | 'weekly-model';
+  usedPercent: number;
+  resetsAt: number | null;
+  label?: string;
+  /**
+   * When this window last carried real data (epoch ms). Anchors the synthesized
+   * null-reset ceiling per-window so a data-free push can't float it forward.
+   * Omitted when absent; the blob-level observedAt is the fallback.
+   */
+  observedAt?: number;
+}
+
+export interface ProviderQuota {
+  status: 'ok' | 'unknown';
+  session?: QuotaWindow;
+  weekly?: QuotaWindow;
+  modelWindows: QuotaWindow[];
+  observedAt: number;
+  accountIdentity?: string;
+}
+
 export interface DetectedPr {
   url: string;
   owner: string;
@@ -151,6 +173,8 @@ export interface SessionSink {
   onSubagentChild(parentToolUseId: string, blocks: import('./chat.js').MessageContent[]): void;
   /** Non-fatal: the CLI reported the workspace is untrusted (advisory, run continues). */
   onTrustRequired?(projectPath: string): void;
+  /** Account-wide provider plan quota (not context-window usage); no chatId — mirrors onContextUsage. */
+  onProviderQuota?(adapterId: string, quota: ProviderQuota): void;
 }
 
 export interface AdapterSession {

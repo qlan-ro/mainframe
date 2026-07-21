@@ -16,6 +16,8 @@
  *  8.  Done todos do NOT appear as rows.
  *  9.  Clicking Expand calls useTasksModal.openModal.
  *  10. Clicking New opens the TaskEditModal (create flow).
+ *  11. Overflow: at most 5 task rows render; a "View all N tasks" row appears
+ *      past 5 and opens the full Tasks view (no internal scroll region).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -202,7 +204,50 @@ describe('TasksSidebarSection — New button opens the create modal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. Section is collapsible
+// 11. Overflow — cap at 5 rows + "View all N tasks"
+// ---------------------------------------------------------------------------
+
+describe('TasksSidebarSection — caps visible rows and offers View all', () => {
+  const sevenActive = Array.from({ length: 7 }, (_, i) =>
+    makeTodo({ id: `todo-${i + 1}`, number: i + 1, title: `Task ${i + 1}`, status: 'open' }),
+  );
+
+  it('renders only the first 5 rows when there are 7 active todos', () => {
+    renderSection(sevenActive);
+    expect(screen.getByTestId('tasks-sidebar-row-5')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-sidebar-row-6')).toBeNull();
+    expect(screen.queryByTestId('tasks-sidebar-row-7')).toBeNull();
+  });
+
+  it('renders "View all 7 tasks" when there are 7 active todos', () => {
+    renderSection(sevenActive);
+    expect(screen.getByTestId('tasks-sidebar-view-all').textContent).toBe('View all 7 tasks');
+  });
+
+  it('does NOT render the View all row at exactly 5 active todos', () => {
+    renderSection(sevenActive.slice(0, 5));
+    expect(screen.getByTestId('tasks-sidebar-row-5')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-sidebar-view-all')).toBeNull();
+  });
+
+  it('does not count done todos toward the cap or the View all total', () => {
+    const fiveActivePlusDone = [
+      ...sevenActive.slice(0, 5),
+      makeTodo({ id: 'todo-done', number: 99, title: 'Done', status: 'done' }),
+    ];
+    renderSection(fiveActivePlusDone);
+    expect(screen.queryByTestId('tasks-sidebar-view-all')).toBeNull();
+  });
+
+  it('clicking View all opens the full Tasks view', async () => {
+    renderSection(sevenActive);
+    await userEvent.click(screen.getByTestId('tasks-sidebar-view-all'));
+    expect(mockOpenModal).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Section is collapsible
 // ---------------------------------------------------------------------------
 
 describe('TasksSidebarSection — collapsible', () => {

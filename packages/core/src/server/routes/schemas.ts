@@ -174,6 +174,11 @@ export const ProjectPathQuery = z.object({
   projectPath: z.string().min(1),
 });
 
+// Provider quota — the :id path param names an adapter (identifier charset only).
+export const QuotaProviderParams = z.object({
+  id: z.string().regex(/^[a-zA-Z0-9_-]+$/, 'invalid provider id'),
+});
+
 // --- Validation helper ---
 
 export function validate<T>(

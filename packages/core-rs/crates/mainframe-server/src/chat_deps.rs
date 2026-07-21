@@ -43,8 +43,9 @@ use mainframe_services::notifications::notification_config::{
 };
 use mainframe_services::push::PushService;
 use mainframe_services::push::push_service::{PushMessage, PushPriority};
+use mainframe_services::quota::{IngestMode, QuotaManager};
 use mainframe_services::settings::provider_config::SettingsReader;
-use mainframe_types::adapter::{AdapterModel, DetectedPr, SessionOptions};
+use mainframe_types::adapter::{AdapterModel, DetectedPr, ProviderQuota, SessionOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, ResolvedTuning, TodoItem};
 use mainframe_types::context::{
     SessionAttachment, SessionAttachmentKind, SessionMention, SkillFileEntry,
@@ -94,6 +95,7 @@ pub struct DaemonChatDeps {
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
+    quota: Arc<QuotaManager>,
 }
 
 impl ChatManagerDeps for DaemonChatDeps {
@@ -514,6 +516,12 @@ impl ChatManagerDeps for DaemonChatDeps {
         });
     }
 
+    fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
+        // Session-pushed quota sparse-merges (Push): a partial blob keeps prior
+        // windows. `ingest` persists + fans out `provider.quota.updated` itself.
+        self.quota.ingest(adapter_id, quota, IngestMode::Push);
+    }
+
     fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool {
         let ctx = CtxDbHandle {
             db: self.db.clone(),
@@ -540,6 +548,7 @@ pub fn build_chat_manager(
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
+    quota: Arc<QuotaManager>,
     // Title generation is now adapter-aware (#430) — the resolved PATH lives with
     // the adapter's title spawn, so the ChatManager no longer needs it. The param
     // is retained for the boot call site (mainframe-daemon) until it drops the arg.
@@ -554,6 +563,7 @@ pub fn build_chat_manager(
         git,
         broadcast,
         launch,
+        quota,
     });
     Arc::new(ChatManager::new(deps))
 }
