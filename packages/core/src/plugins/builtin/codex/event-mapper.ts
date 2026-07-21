@@ -16,6 +16,7 @@ import type { PatchChangeKind, FileChangeItem, CollabAgentToolCallItem, TodoList
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { lookupAgentMetadata, describeAgent, agentTitle } from './thread-registry.js';
 import { createChildLogger } from '../../../logger.js';
+import { handleTokenUsage } from './token-usage.js';
 
 const log = createChildLogger('codex:events');
 
@@ -331,14 +332,6 @@ function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, sta
 function handleAccountRateLimitsUpdated(params: AccountRateLimitsUpdatedParams, sink: SessionSink): void {
   const quota = normalizeRateLimitSnapshot(params.rateLimits, Date.now());
   if (quota) sink.onProviderQuota?.('codex', quota);
-}
-
-function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, state: CodexSessionState): void {
-  state.lastUsage = {
-    input_tokens: params.usage.input_tokens,
-    output_tokens: params.usage.output_tokens,
-    cache_read_input_tokens: params.usage.cached_input_tokens,
-  };
 }
 
 function mediaTypeFromExtension(path: string): string {
