@@ -94,8 +94,8 @@ async function main(): Promise<void> {
     if (!resolved.valid) throw new Error('claude executable not resolved for quota pull');
     return pullClaudeQuota({ runUsage: () => spawnClaudeUsage(resolved.path) });
   });
-  // Codex has no scheduler (unlike Claude) — this puller only fires on manual refresh
-  // or piggybacks on an app-server already up; it must never spawn purely to poll.
+  // Codex has no scheduler (unlike Claude) — this puller fires once at boot and on manual
+  // refresh; it must never spawn on a timer purely to poll.
   // Its snapshot is sparse (a single window at a time), so pull results merge rather than replace.
   quota.registerPuller(
     'codex',
@@ -273,12 +273,19 @@ async function main(): Promise<void> {
   });
 
   // Claude's always-fresh cadence: one warm-up pull now (executable is backfilled),
-  // then a ~5-minute timer gated on a connected client. Codex stays passive push only.
+  // then a ~5-minute timer gated on a connected client.
   const claudeQuotaScheduler = new ClaudeQuotaScheduler({
     refresh: () => quota.refresh('claude'),
     hasClients: () => server.hasConnectedClients(),
   });
   claudeQuotaScheduler.start();
+
+  // Codex gets a single boot warm-up pull too — the daemon boots with the app, so the
+  // first glance shouldn't need a manual refresh. One temp app-server spawn, no timer;
+  // beyond boot Codex stays manual refresh + session pushes.
+  quota.refresh('codex').catch((err) => {
+    logger.warn({ err }, 'codex quota warm-up pull failed');
+  });
 
   if (config.tunnel === true) {
     try {
