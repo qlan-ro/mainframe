@@ -47,8 +47,9 @@ pub async fn pull_codex_quota(deps: PullCodexQuotaDeps<'_>) -> Result<ProviderQu
 }
 
 /// Default connection: spawn one temp app-server, issue `account/rateLimits/read` and
-/// `account/read` back-to-back, then close it. Used by the manual-refresh puller only —
-/// never wired to a scheduler (Codex has no timer-based polling, unlike Claude).
+/// `account/read` back-to-back, then close it. Used by the puller on boot warm-up and
+/// manual refresh only — never wired to a scheduler (Codex has no timer-based polling,
+/// unlike Claude).
 pub async fn pull_codex_quota_via_temp_app_server(
     executable: &str,
     path: &str,

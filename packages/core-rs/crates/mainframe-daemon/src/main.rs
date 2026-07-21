@@ -442,6 +442,14 @@ async fn run_daemon() {
     });
     claude_quota_scheduler.start();
 
+    // Codex boot warm-up (index.ts parity): one pull so the first glance shouldn't
+    // need a manual refresh. One temp app-server spawn, no timer — beyond boot Codex
+    // stays manual refresh + session pushes.
+    let warmup_quota = Arc::clone(&quota_manager);
+    tokio::spawn(async move {
+        warmup_quota.refresh("codex").await;
+    });
+
     // Daemon tunnel (index.ts): auto-start when configured (opt-in), else adopt a
     // pre-configured URL. Failure is non-fatal — the daemon serves loopback anyway.
     if config.tunnel == Some(true) {
