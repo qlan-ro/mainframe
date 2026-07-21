@@ -32,6 +32,7 @@ use mainframe_chat::chat_manager::{
 use mainframe_chat::context_tracker::{
     AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
 };
+use mainframe_chat::attachment_processor;
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_runtime::ResolvedPath;
@@ -317,18 +318,21 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn process_attachments<'a>(
         &'a self,
         chat_id: &'a str,
-        _attachment_ids: &'a [String],
+        attachment_ids: &'a [String],
     ) -> BoxFuture<'a, ProcessedAttachments> {
         Box::pin(async move {
-            // TODO(port): attachment-processor.ts is not yet ported (skeleton in
-            // mainframe_chat::attachment_processor). Until it lands, no attachment
-            // is materialised — faithful to "no attachments" (the send path still
-            // delivers the text content).
-            tracing::warn!(
-                chat_id,
-                "processAttachments seam: attachment-processor not ported — dropping attachments"
-            );
-            ProcessedAttachments::default()
+            let mut fetched = Vec::with_capacity(attachment_ids.len());
+            for id in attachment_ids {
+                match self.attachments.get(chat_id, id).await {
+                    Some(attachment) => fetched.push(attachment),
+                    None => tracing::warn!(
+                        chat_id,
+                        attachment_id = %id,
+                        "processAttachments: attachment not found in store; skipping"
+                    ),
+                }
+            }
+            attachment_processor::process_attachments(&fetched)
         })
     }
 
@@ -753,7 +757,7 @@ pub(crate) fn fallback_chat(
 // PORT STATUS: (new — production ChatManagerDeps wiring for chat/chat-manager.ts
 // constructor injection + index.ts `new ChatManager(...)`)
 // confidence: medium
-// todos: 4
+// todos: 3
 // notes: The one production impl of ChatManagerDeps. DB accessors go through the
 // SYNC-DB BRIDGE (Db::call_blocking) — one WAL connection. notifications / per-chat
 // todos / push / mentions / tuning / title / kill / worktree-remove are wired to
@@ -761,8 +765,7 @@ pub(crate) fn fallback_chat(
 // bounds through the actor). Task 5.4 added chats_list_filtered (translates to the db
 // ChatListFilters), chats_add_mention (db write), and get_session_context (runs the
 // context-tracker read with the AdapterRegistry + an AttachmentListerHandle over the
-// AttachmentStore). Seams (TODO(port)): processAttachments
-// (attachment-processor unported), scanLoadedHistory (pr-detection unported + no
-// session handle), applyCodexProviderTuning (codex-only session method, Phase 5),
+// AttachmentStore). Seams (TODO(port)): scanLoadedHistory (pr-detection unported
+// + no session handle), applyCodexProviderTuning (codex-only session method, Phase 5),
 // stopLaunchProcesses (LaunchStopper seam, Phase 5). chats_create is infallible
 // per the ported trait; a DB failure logs + returns an unpersisted stub.
