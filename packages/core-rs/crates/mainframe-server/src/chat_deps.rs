@@ -32,13 +32,13 @@ use mainframe_background_tasks::kill::{
     KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_chat::attachment_processor;
 use mainframe_chat::chat_manager::{
     ChatManager, ChatManagerDeps, ChatUpdate, ProcessedAttachments,
 };
 use mainframe_chat::context_tracker::{
     AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
 };
-use mainframe_chat::attachment_processor;
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::external_session_service::{
     ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
@@ -165,10 +165,13 @@ impl DaemonChatDeps {
         }
         let persisted = self.add_detected_prs(chat_id, &scanned);
         for pr in persisted {
-            self.emit_event(DaemonEvent::ChatPrDetected {
-                chat_id: chat_id.to_string(),
-                pr,
-            });
+            ChatManagerDeps::emit_event(
+                self,
+                DaemonEvent::ChatPrDetected {
+                    chat_id: chat_id.to_string(),
+                    pr,
+                },
+            );
         }
     }
 
@@ -1284,6 +1287,7 @@ mod scan_loaded_history_tests {
             broadcast,
             launch: Arc::new(NoopLaunchStopper),
             quota: Arc::new(quota),
+            claude_external_session_cache: new_external_session_cache(),
         }
     }
 

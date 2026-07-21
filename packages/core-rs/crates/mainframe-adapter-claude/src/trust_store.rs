@@ -246,10 +246,7 @@ mod tests {
         let raw = tokio::fs::read_to_string(&path).await.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
         assert_eq!(parsed["oauthAccount"]["accountUuid"], "uuid-123");
-        assert_eq!(
-            parsed["projects"]["/other"]["hasTrustDialogAccepted"],
-            true
-        );
+        assert_eq!(parsed["projects"]["/other"]["hasTrustDialogAccepted"], true);
         assert_eq!(parsed["projects"]["/other"]["allowedTools"][0], "Bash");
         assert_eq!(
             parsed["projects"]["/home/me/proj"]["hasTrustDialogAccepted"],
@@ -259,9 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn write_workspace_trust_preserves_other_fields_on_the_same_project() {
-        let dir = write_claude_json(
-            r#"{"projects":{"/home/me/proj":{"allowedTools":["Bash"]}}}"#,
-        );
+        let dir = write_claude_json(r#"{"projects":{"/home/me/proj":{"allowedTools":["Bash"]}}}"#);
         let path = dir.path().join(".claude.json");
 
         write_workspace_trust("/home/me/proj", Some(&path))
@@ -270,7 +265,10 @@ mod tests {
 
         let raw = tokio::fs::read_to_string(&path).await.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(parsed["projects"]["/home/me/proj"]["allowedTools"][0], "Bash");
+        assert_eq!(
+            parsed["projects"]["/home/me/proj"]["allowedTools"][0],
+            "Bash"
+        );
         assert_eq!(
             parsed["projects"]["/home/me/proj"]["hasTrustDialogAccepted"],
             true

@@ -32,7 +32,8 @@ pub fn process_attachments(attachments: &[StoredAttachment]) -> ProcessedAttachm
                     }));
             }
             AttachmentKind::File => {
-                out.text_prefix.push(build_attached_file_path_tag(attachment));
+                out.text_prefix
+                    .push(build_attached_file_path_tag(attachment));
             }
         }
     }

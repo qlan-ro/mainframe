@@ -143,7 +143,10 @@ impl ChatManagerDeps for StoreDeps {
             if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
                 return Err(msg);
             }
-            self.trusted_paths.lock().unwrap().push(project_path.to_string());
+            self.trusted_paths
+                .lock()
+                .unwrap()
+                .push(project_path.to_string());
             Ok(())
         })
     }
@@ -1327,7 +1330,10 @@ async fn trust_workspace_prefers_the_chat_worktree_path_over_the_project_root() 
 
     mgr.trust_workspace("c1").await.unwrap();
 
-    assert_eq!(*deps.trusted_paths.lock().unwrap(), vec!["/home/me/proj-wt"]);
+    assert_eq!(
+        *deps.trusted_paths.lock().unwrap(),
+        vec!["/home/me/proj-wt"]
+    );
 }
 
 #[tokio::test]
