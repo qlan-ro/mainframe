@@ -17,12 +17,11 @@ import type { EffortLevel, PermissionMode } from '@qlan-ro/mainframe-types';
 export interface DraftCfg {
   projectId: string;
   adapterId: string;
-  model?: string;
   /**
-   * Optional. When unset, chat creation omits it so the daemon applies the
-   * user's provider `defaultMode` (e.g. yolo) — matching desktop. Only a
-   * deliberate per-chat pick sets it.
+   * Initialization resolves model, permission, plan, effort, and feature values
+   * explicitly. They remain optional for partial patches and legacy/retry state.
    */
+  model?: string;
   permissionMode?: PermissionMode;
   planMode?: boolean;
   effort?: EffortLevel | null;

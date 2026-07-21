@@ -9,16 +9,21 @@
  * `getDraftConfig(localId)` (auto-config) and `!isReady` (ChatSurface picker gate)
  * both short-circuit and the chat is created in the stale project.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { markDraftDiscarded, isDraftDiscarded, useDiscardedDraftStore } from '../discarded-drafts';
+const abandonCreateForLocal = vi.fn();
+vi.mock('../../runtime/new-thread-coordinator', () => ({
+  abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
+}));
 import { resetNewThreadDraft } from '../reset-new-thread-draft';
 
 beforeEach(() => {
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
   useDiscardedDraftStore.setState({ ids: new Set() });
+  abandonCreateForLocal.mockReset();
 });
 
 describe('resetNewThreadDraft', () => {
@@ -30,6 +35,7 @@ describe('resetNewThreadDraft', () => {
 
     expect(getDraftConfig('__LOCALID_1')).toBeUndefined();
     expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(false);
+    expect(abandonCreateForLocal).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
   });
 
   it('leaves other local ids untouched', () => {

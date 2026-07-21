@@ -62,6 +62,9 @@ vi.mock('../../../../lib/api/chats', () => ({
   getChat: vi.fn(async (_port: number, chatId: string): Promise<Chat> => ({ id: chatId }) as Chat),
   getChatMessages: vi.fn(async (): Promise<ChatHistoryPayload> => ({ messages: [], transcriptMissing: false })),
   listChats: vi.fn(async (): Promise<Chat[]> => []),
+  setChatTuning: vi.fn(async () => undefined),
+  setChatConfig: vi.fn(async () => undefined),
+  archiveChat: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../../../lib/api/attachments', () => ({
@@ -154,7 +157,17 @@ async function newThreadFirstSend(): Promise<{ runtime: AssistantRuntime; localI
   // ThreadListRuntimeImpl exposes ids via getState(), not as own properties.
   const localId = runtime.threads.getState().mainThreadId;
 
-  setDraftConfig(localId, { projectId: 'p1', adapterId: 'claude', permissionMode: 'default' });
+  setDraftConfig(localId, {
+    projectId: 'p1',
+    adapterId: 'claude',
+    model: 'sonnet',
+    permissionMode: 'default',
+    planMode: false,
+    effort: null,
+    fast: false,
+    ultracode: false,
+    adaptiveThinking: false,
+  });
 
   await act(async () => {
     const sendP = runtime.threads.main.append('hello');

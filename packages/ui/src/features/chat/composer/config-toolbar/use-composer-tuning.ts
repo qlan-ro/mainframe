@@ -21,7 +21,7 @@
  * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type {
   AdapterInfo,
@@ -36,6 +36,7 @@ import type {
 import { getProviderSettings } from '@/lib/api/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
+import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 
@@ -131,6 +132,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const isLocalDraft = chatId != null && chatId.startsWith('__LOCALID_') && realChat == null;
   const draft = useDraftConfig(isLocalDraft ? chatId : null);
   const draftMode = isLocalDraft && draft != null;
+  const adapterInitializations = useRef(new Set<string>());
   const chat: Chat | null = realChat ?? (chatId != null && draft != null ? synthesizeDraftChat(chatId, draft) : null);
 
   // Live run-state from the assistant-ui thread — stays accurate mid-run
@@ -212,14 +214,26 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   );
   const setAdapter = useCallback(
     (id: string) => {
-      // Switching adapter clears the model so it falls back to the new adapter's default.
-      if (draftMode && chatId) {
-        patchDraftConfig(chatId, { adapterId: id, model: undefined });
+      if (draftMode && chatId && draft && port != null) {
+        if (adapterInitializations.current.has(id)) return;
+        adapterInitializations.current.add(id);
+        void reinitializeDraftAdapter({
+          localId: chatId,
+          projectId: draft.projectId,
+          port,
+          defaultAdapterId: null,
+          adapters,
+          adapterId: id,
+        })
+          .catch((err: unknown) =>
+            console.warn('[composer/useComposerTuning] setAdapter draft initialization failed', { err }),
+          )
+          .finally(() => adapterInitializations.current.delete(id));
         return;
       }
       patchConfig({ adapterId: id }, 'setAdapter');
     },
-    [draftMode, chatId, patchConfig],
+    [adapters, draft, draftMode, chatId, patchConfig, port],
   );
   const setPlanMode = useCallback(
     (on: boolean) => {

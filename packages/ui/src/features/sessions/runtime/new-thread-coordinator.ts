@@ -27,33 +27,72 @@
  * cache entry AND the draft are left intact so the user can retry.
  */
 import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';
-import { createChat, setChatConfig, setChatTuning } from '../../../lib/api/chats';
+import { archiveChat, createChat, setChatConfig, setChatTuning } from '../../../lib/api/chats';
 import { enableWorktree } from '../../../lib/api/git';
 import { mfToast } from '../../../lib/toast';
 import { getDraftConfig, clearDraftConfig, type DraftCfg } from './draft-config';
 import { useNewThreadReady } from './new-thread-ready-store';
 
-/** In-flight (and just-settled) create promises, keyed by the local thread id. */
-const inFlight = new Map<string, Promise<{ remoteId: string }>>();
+interface CreateWorkflow {
+  cfg: InitializedDraft;
+  port: number;
+  chatId?: string;
+  worktreeApplied: boolean;
+  abandoned: boolean;
+  archiveRequested: boolean;
+  promise?: Promise<{ remoteId: string }>;
+}
+
+const workflows = new Map<string, CreateWorkflow>();
+
+type InitializedDraft = DraftCfg &
+  Required<
+    Pick<DraftCfg, 'model' | 'permissionMode' | 'planMode' | 'effort' | 'fast' | 'ultracode' | 'adaptiveThinking'>
+  >;
+
+function requireInitializedDraft(localId: string, cfg: DraftCfg): InitializedDraft {
+  const fields = ['model', 'permissionMode', 'planMode', 'effort', 'fast', 'ultracode', 'adaptiveThinking'] as const;
+  const missing = fields.filter((field) => cfg[field] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`new-thread-coordinator: incomplete draft config for ${localId}: ${missing.join(', ')}`);
+  }
+  return cfg as InitializedDraft;
+}
+
+function archiveAbandonedWorkflow(workflow: CreateWorkflow): void {
+  if (!workflow.chatId || workflow.archiveRequested) return;
+  workflow.archiveRequested = true;
+  void archiveChat(workflow.port, workflow.chatId, true).catch((err: unknown) =>
+    console.warn('[new-thread-coordinator] abandon archive failed', { chatId: workflow.chatId, err }),
+  );
+}
+
+export function abandonCreateForLocal(localId: string): void {
+  const workflow = workflows.get(localId);
+  if (!workflow) return;
+  workflows.delete(localId);
+  workflow.abandoned = true;
+  archiveAbandonedWorkflow(workflow);
+}
 
 /**
  * Apply the draft fields createChat does NOT accept — planMode (PATCH /config)
  * and effort/features (PATCH /tuning) — to the freshly created chat, before the
- * first send spawns the CLI. Best-effort: a tuning hiccup is logged, never
- * thrown, so it can't orphan an already-created chat.
+ * first send spawns the CLI. Both requests must settle so a failure in one does
+ * not skip the other required snapshot field.
  */
-async function applyDraftTuning(port: number, chatId: string, cfg: DraftCfg): Promise<void> {
+async function applyDraftTuning(port: number, chatId: string, cfg: InitializedDraft): Promise<void> {
   const tuning: SessionTuning = {};
-  if (cfg.effort !== undefined) tuning.effort = cfg.effort;
+  tuning.effort = cfg.effort;
   if (cfg.fast != null) tuning.fast = cfg.fast;
   if (cfg.ultracode != null) tuning.ultracode = cfg.ultracode;
   if (cfg.adaptiveThinking != null) tuning.adaptiveThinking = cfg.adaptiveThinking;
-  try {
-    if (Object.keys(tuning).length > 0) await setChatTuning(port, chatId, tuning);
-    if (cfg.planMode != null) await setChatConfig(port, chatId, { planMode: cfg.planMode });
-  } catch (err) {
-    console.warn('[new-thread-coordinator] applyDraftTuning failed', { chatId, err });
-  }
+  const results = await Promise.allSettled([
+    setChatTuning(port, chatId, tuning),
+    setChatConfig(port, chatId, { planMode: cfg.planMode }),
+  ]);
+  const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (failure) throw failure.reason;
 }
 
 /**
@@ -84,47 +123,73 @@ async function applyPendingWorktree(port: number, chatId: string, cfg: DraftCfg)
  * Throws if no draft exists or the POST fails (cache + draft preserved for retry).
  */
 export function createForLocal(localId: string, port: number): Promise<{ remoteId: string }> {
-  const existing = inFlight.get(localId);
-  if (existing) return existing;
-
-  const cfg = getDraftConfig(localId);
-  if (!cfg) {
-    return Promise.reject(new Error(`new-thread-coordinator: no draft config for ${localId}`));
+  const existing = workflows.get(localId);
+  if (existing?.promise) return existing.promise;
+  let workflow = existing;
+  if (!workflow) {
+    const stored = getDraftConfig(localId);
+    if (!stored) return Promise.reject(new Error(`new-thread-coordinator: no draft config for ${localId}`));
+    let cfg: InitializedDraft;
+    try {
+      cfg = requireInitializedDraft(localId, stored);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    workflow = {
+      cfg: {
+        ...cfg,
+        ...(cfg.pendingWorktree ? { pendingWorktree: { ...cfg.pendingWorktree } } : {}),
+      },
+      port,
+      worktreeApplied: false,
+      abandoned: false,
+      archiveRequested: false,
+    };
   }
-
-  const promise = createChat(port, {
-    projectId: cfg.projectId,
-    adapterId: cfg.adapterId,
-    ...(cfg.model !== undefined ? { model: cfg.model } : {}),
-    // Omit when unset so the daemon's createChatWithDefaults applies the user's
-    // provider defaultMode (matching desktop) instead of forcing 'default'.
-    ...(cfg.permissionMode !== undefined ? { permissionMode: cfg.permissionMode } : {}),
-    ...(cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
-    ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
-  })
-    .then(async (chat: Chat) => {
-      // Carry the draft fields createChat can't take (a pending new worktree,
-      // planMode/effort/features) onto the new chat BEFORE the first send
-      // spawns the CLI.
-      await applyPendingWorktree(port, chat.id, cfg);
-      await applyDraftTuning(port, chat.id, cfg);
-      // Created — the draft is consumed and the cache entry can be evicted so a
-      // future recycled localId starts fresh. The reactive ready flag is cleared
-      // too (its job — switching the surface to the composer — is done; the thread
-      // now flips to a real chat). The resolved value still flows to every awaiter
-      // that shares this promise.
+  workflows.set(localId, workflow);
+  const cfg = workflow.cfg;
+  const promise = (async () => {
+    try {
+      if (!workflow.chatId) {
+        const chat: Chat = await createChat(port, {
+          projectId: cfg.projectId,
+          adapterId: cfg.adapterId,
+          model: cfg.model,
+          permissionMode: cfg.permissionMode,
+          ...(cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
+          ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
+        });
+        workflow.chatId = chat.id;
+      }
+      if (workflow.abandoned) {
+        archiveAbandonedWorkflow(workflow);
+        throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+      }
+      if (!workflow.worktreeApplied) {
+        await applyPendingWorktree(port, workflow.chatId, cfg);
+        workflow.worktreeApplied = true;
+      }
+      if (workflow.abandoned) {
+        archiveAbandonedWorkflow(workflow);
+        throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+      }
+      await applyDraftTuning(port, workflow.chatId, cfg);
+      if (workflow.abandoned || workflows.get(localId) !== workflow) {
+        archiveAbandonedWorkflow(workflow);
+        throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+      }
       clearDraftConfig(localId);
       useNewThreadReady.getState().clearReady(localId);
-      inFlight.delete(localId);
-      return { remoteId: chat.id };
-    })
-    .catch((err: unknown) => {
-      // Keep the draft intact AND drop the cached rejection so the next call
-      // (user retry) starts a fresh POST rather than re-throwing the stale one.
-      inFlight.delete(localId);
-      throw err;
-    });
-
-  inFlight.set(localId, promise);
+      workflows.delete(localId);
+      return { remoteId: workflow.chatId };
+    } catch (error) {
+      if (workflows.get(localId) === workflow) {
+        workflow.promise = undefined;
+        if (!workflow.chatId) workflows.delete(localId);
+      }
+      throw error;
+    }
+  })();
+  workflow.promise = promise;
   return promise;
 }

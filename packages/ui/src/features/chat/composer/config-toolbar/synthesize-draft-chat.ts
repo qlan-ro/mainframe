@@ -14,12 +14,12 @@ import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 const EXEC_MODES = ['default', 'acceptEdits', 'yolo'] as const;
 
 export function synthesizeDraftChat(id: string, d: DraftCfg): Chat {
-  // Draft may omit permissionMode (so the daemon applies the provider defaultMode
-  // on create); show 'default' as the pre-send display fallback only.
   const permissionMode: Chat['permissionMode'] =
     d.permissionMode !== undefined && (EXEC_MODES as readonly string[]).includes(d.permissionMode)
       ? (d.permissionMode as Chat['permissionMode'])
-      : 'default';
+      : d.permissionMode === 'plan'
+        ? 'default'
+        : undefined;
   return {
     id,
     adapterId: d.adapterId,
