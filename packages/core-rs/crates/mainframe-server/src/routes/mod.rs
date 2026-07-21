@@ -33,6 +33,7 @@ pub mod quota;
 pub mod search;
 pub mod settings;
 pub mod skills;
+pub mod suggestions;
 pub mod tags;
 pub mod tunnel;
 pub mod worktree;
@@ -44,4 +45,5 @@ pub mod worktree;
 // are EMPTY `router()` stubs for the Phase-3 route agents. Phase 4/5 route files
 // (chats, chat-commands, context, worktree, external-sessions, background-tasks,
 // adapters, agents, skills, lsp-routes, tunnel, workflows, workflow-admin,
-// suggestions, launch) are intentionally absent — added when those phases land.
+// launch) are intentionally absent — added when those phases land. `suggestions`
+// landed as a Phase-6 gap fix (churn + TODO-scan starting-point suggestions).
