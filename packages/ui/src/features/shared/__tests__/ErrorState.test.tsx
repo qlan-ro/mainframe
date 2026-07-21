@@ -4,10 +4,17 @@
  * Behaviors covered:
  *  - ErrorState renders the error message in the mono detail block.
  *  - ErrorState uses fallback text when error is null/undefined.
- *  - Copy details button writes msg to clipboard and shows "Copied ✓" then reverts.
+ *  - Copy details button writes diagnostics (containing the message) to the
+ *    clipboard and shows "Copied ✓" then reverts.
+ *  - Copy details includes a "Component stack:" section when componentStack is
+ *    provided, and omits it when absent.
+ *  - The visible mono block always shows only the short message, even when a
+ *    componentStack is passed (it never leaks into the visible card).
  *  - Try again button calls onRetry.
  *  - MfErrorBoundary renders children when there is no error.
  *  - MfErrorBoundary renders ErrorState when a child throws.
+ *  - MfErrorBoundary logs durably via getHost().log on catch, including the
+ *    component stack.
  *  - MfErrorBoundary Try again resets the boundary and re-renders children.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,6 +26,7 @@ import { render, screen, act, fireEvent } from '@testing-library/react';
 
 const { ErrorState } = await import('../ErrorState');
 const { MfErrorBoundary } = await import('../MfErrorBoundary');
+const { getHost } = await import('../../../lib/host');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,6 +84,13 @@ describe('ErrorState — rendering', () => {
     expect(screen.getByTestId('error-state-reload')).toBeTruthy();
     expect(screen.getByTestId('error-state-retry')).toBeTruthy();
   });
+
+  it('shows only the short message in the visible mono block even when componentStack is passed', () => {
+    render(<ErrorState error={new Error('boom')} componentStack={'\n    in Foo\n    in Bar'} onRetry={vi.fn()} />);
+
+    expect(screen.getByText('boom')).toBeTruthy();
+    expect(screen.getByTestId('error-state-root').textContent).not.toContain('in Foo');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -83,13 +98,33 @@ describe('ErrorState — rendering', () => {
 // ---------------------------------------------------------------------------
 
 describe('ErrorState — Copy details', () => {
-  it('writes the error message to the clipboard when Copy details is clicked', () => {
+  it('writes diagnostics containing the error message to the clipboard when Copy details is clicked', () => {
     const error = new Error('clipboard-test-error');
     render(<ErrorState error={error} onRetry={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId('error-state-copy'));
 
-    expect(writeTextMock).toHaveBeenCalledWith('clipboard-test-error');
+    expect(writeTextMock).toHaveBeenCalledOnce();
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('clipboard-test-error'));
+  });
+
+  it('includes a "Component stack:" section in the copied text when componentStack is provided', () => {
+    const error = new Error('boom');
+    render(<ErrorState error={error} componentStack={'\n    in Foo\n    in Bar'} onRetry={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('error-state-copy'));
+
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('Component stack:'));
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('in Foo'));
+  });
+
+  it('omits the "Component stack:" section from the copied text when componentStack is absent', () => {
+    const error = new Error('boom');
+    render(<ErrorState error={error} onRetry={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('error-state-copy'));
+
+    expect(writeTextMock).toHaveBeenCalledWith(expect.not.stringContaining('Component stack:'));
   });
 
   it('shows "Copied ✓" immediately after clicking Copy details', () => {
@@ -162,6 +197,24 @@ describe('MfErrorBoundary — error caught', () => {
     );
     expect(screen.getByTestId('error-state-root')).toBeTruthy();
     expect(screen.getByText('test-error-message')).toBeTruthy();
+  });
+
+  it('logs durably via getHost().log with the error message and component stack on catch', () => {
+    const logSpy = vi.spyOn(getHost(), 'log').mockImplementation(() => {});
+
+    render(
+      <MfErrorBoundary>
+        <BoomChild boom={true} />
+      </MfErrorBoundary>,
+    );
+
+    expect(logSpy).toHaveBeenCalledOnce();
+    expect(logSpy).toHaveBeenCalledWith(
+      'error',
+      'mf-error-boundary',
+      'test-error-message',
+      expect.objectContaining({ componentStack: expect.stringContaining('BoomChild') }),
+    );
   });
 
   it('resets and re-renders children when Try again is clicked', () => {
