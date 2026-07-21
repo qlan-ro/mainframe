@@ -5,20 +5,29 @@ interface ErrorStateProps {
   error: Error | null | undefined;
   onRetry?: () => void;
   embedded?: boolean;
+  componentStack?: string | null;
+}
+
+/** Full diagnostic bundle for the clipboard: error stack + React component stack. */
+function buildDetails(error: Error | null | undefined, msg: string, componentStack?: string | null): string {
+  const base = error?.stack?.trim() || msg;
+  return componentStack ? `${base}\n\nComponent stack:${componentStack}` : base;
 }
 
 /**
  * Centered error panel rendered by MfErrorBoundary (and usable standalone).
- * Shows the error message in a mono detail block with Copy / Reload / Try again actions.
+ * Shows the error message in a mono detail block; Copy captures the full stack
+ * (error + component stack) for pasting into a bug report.
  */
-export function ErrorState({ error, onRetry, embedded = false }: ErrorStateProps) {
+export function ErrorState({ error, onRetry, embedded = false, componentStack }: ErrorStateProps) {
   const [copied, setCopied] = useState(false);
 
   const msg = error?.message ?? 'An unexpected error occurred while rendering this view.';
+  const details = buildDetails(error, msg, componentStack);
 
   const handleCopy = () => {
     try {
-      navigator.clipboard.writeText(msg).catch(() => {
+      navigator.clipboard.writeText(details).catch(() => {
         /* expected: clipboard may be unavailable in some environments */
       });
     } catch {
