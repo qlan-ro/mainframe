@@ -336,6 +336,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The suggestions-route tests shell out to ripgrep for the real
+      # TODO/FIXME scan, which silently returns no matches when rg is absent
+      # (mirrors the rust-port.yml check job).
+      - name: Install ripgrep
+        run: command -v rg >/dev/null 2>&1 || brew install ripgrep
+
       # Re-gate the Rust workspace at release time (rust-port.yml already gates
       # every PR touching packages/core-rs, but this is cheap insurance right
       # before we spend signing/notarization time on it — CUTOVER.md §6 step 2).
