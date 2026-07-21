@@ -38,7 +38,9 @@ describe('SessionAttachmentsGrid', () => {
 
   it('opens the lightbox when an image thumb is clicked', async () => {
     renderGrid(<SessionAttachmentsGrid chatId="chat-1" attachments={[IMG]} />);
-    await waitFor(() => expect(getAttachment).toHaveBeenCalled());
+    // Wait for the image data to load, not just for the fetch to fire: the thumb
+    // opens the lightbox only once its data is in state, so clicking earlier is a no-op.
+    await screen.findByRole('img');
     fireEvent.click(screen.getByTestId('sidebar-attachment-img1'));
     await waitFor(() => expect(screen.getByTestId('image-lightbox-dialog')).toBeInTheDocument());
   });
