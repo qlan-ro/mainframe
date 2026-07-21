@@ -1,6 +1,7 @@
 import { FileText } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { CONTEXT_SECTION_BASE_INSET_PX, CONTEXT_INDENT_STEP_PX } from './layout-constants';
 
 interface ContextFileItemProps {
   path: string;
@@ -41,7 +42,8 @@ export function ContextFileItem({ path, displayName, badge }: ContextFileItemPro
           data-testid={`sidebar-context-item-${path}`}
           aria-label={path}
           onClick={() => emitSurfaceIntent({ type: 'open-file', path })}
-          className="flex w-full min-w-0 items-center gap-2 rounded-md py-[3px] pl-[24px] pr-[14px] text-left text-label text-foreground hover:bg-accent"
+          style={{ paddingLeft: CONTEXT_SECTION_BASE_INSET_PX + CONTEXT_INDENT_STEP_PX }}
+          className="flex w-full min-w-0 items-center gap-2 rounded-md py-[3px] pr-[14px] text-left text-label text-foreground hover:bg-accent"
         >
           <FileText size={12} className="shrink-0 text-muted-foreground" aria-hidden />
           <span className="flex-1 truncate">{fileName}</span>

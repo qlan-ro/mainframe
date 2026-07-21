@@ -199,7 +199,7 @@ describe('ChatLifecycleManager.createChatWithDefaults — worktree attachment', 
     expect(deps.db.chats.update).toHaveBeenCalledWith(chat.id, { planMode: true });
   });
 
-  it('omits a saved default model absent from a non-empty catalog', async () => {
+  it('falls back to the catalog default model when the saved default is absent from the catalog', async () => {
     const deps = makeDeps({
       db: {
         chats: {
@@ -223,6 +223,111 @@ describe('ChatLifecycleManager.createChatWithDefaults — worktree attachment', 
               { id: 'default', label: 'Default - Opus 4.8', isDefault: true },
               { id: 'sonnet', label: 'Sonnet 5' },
             ],
+          },
+        ]),
+      } as any,
+    });
+    const lifecycle = new ChatLifecycleManager(deps);
+    const createChat = vi.spyOn(lifecycle, 'createChat');
+
+    await lifecycle.createChatWithDefaults('proj-1', 'claude');
+
+    expect(createChat).toHaveBeenCalledWith('proj-1', 'claude', 'default', undefined, undefined, undefined, undefined);
+  });
+
+  it('falls back to the catalog default model when no default model setting is saved', async () => {
+    const deps = makeDeps({
+      db: {
+        chats: {
+          get: vi.fn(() => makeChat()),
+          create: vi.fn(() => makeChat()),
+          update: vi.fn(),
+        },
+        projects: { get: vi.fn() },
+        settings: { get: vi.fn().mockReturnValue(undefined) } as any,
+      } as any,
+      adapters: {
+        get: vi.fn(),
+        getSnapshots: vi.fn().mockReturnValue([
+          {
+            id: 'codex',
+            models: [
+              { id: 'gpt-5.5', label: 'GPT-5.5' },
+              { id: 'gpt-5.5-codex', label: 'GPT-5.5 Codex', isDefault: true },
+            ],
+          },
+        ]),
+      } as any,
+    });
+    const lifecycle = new ChatLifecycleManager(deps);
+    const createChat = vi.spyOn(lifecycle, 'createChat');
+
+    await lifecycle.createChatWithDefaults('proj-1', 'codex');
+
+    expect(createChat).toHaveBeenCalledWith(
+      'proj-1',
+      'codex',
+      'gpt-5.5-codex',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('uses the saved default model when it matches a catalog entry', async () => {
+    const deps = makeDeps({
+      db: {
+        chats: {
+          get: vi.fn(() => makeChat()),
+          create: vi.fn(() => makeChat()),
+          update: vi.fn(),
+        },
+        projects: { get: vi.fn() },
+        settings: {
+          get: vi.fn((category: string, key: string) =>
+            category === 'provider' && key === 'claude.defaultModel' ? 'sonnet' : undefined,
+          ),
+        },
+      } as any,
+      adapters: {
+        get: vi.fn(),
+        getSnapshots: vi.fn().mockReturnValue([
+          {
+            id: 'claude',
+            models: [
+              { id: 'default', label: 'Default - Opus 4.8', isDefault: true },
+              { id: 'sonnet', label: 'Sonnet 5' },
+            ],
+          },
+        ]),
+      } as any,
+    });
+    const lifecycle = new ChatLifecycleManager(deps);
+    const createChat = vi.spyOn(lifecycle, 'createChat');
+
+    await lifecycle.createChatWithDefaults('proj-1', 'claude');
+
+    expect(createChat).toHaveBeenCalledWith('proj-1', 'claude', 'sonnet', undefined, undefined, undefined, undefined);
+  });
+
+  it('leaves model undefined when there is no saved default and the catalog has no default-flagged model', async () => {
+    const deps = makeDeps({
+      db: {
+        chats: {
+          get: vi.fn(() => makeChat()),
+          create: vi.fn(() => makeChat()),
+          update: vi.fn(),
+        },
+        projects: { get: vi.fn() },
+        settings: { get: vi.fn().mockReturnValue(undefined) } as any,
+      } as any,
+      adapters: {
+        get: vi.fn(),
+        getSnapshots: vi.fn().mockReturnValue([
+          {
+            id: 'claude',
+            models: [{ id: 'sonnet', label: 'Sonnet 5' }],
           },
         ]),
       } as any,

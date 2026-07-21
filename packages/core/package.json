@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-core",
-  "version": "2.0.0-rc.8",
+  "version": "2.0.0-rc.9",
   "description": "Mainframe daemon — session lifecycle, agent process management, and metadata storage",
   "license": "MIT",
   "repository": {

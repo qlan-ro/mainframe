@@ -39,7 +39,15 @@ import { useRowHoverCard } from './use-row-hover-card';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { sidebarIndentPx, SIDEBAR_ROW_GUTTER_PX } from '@/layout/sidebar-indent';
+
+/** Level 2 — one step deeper than SessionGroupHeader (level 1). Applied as the
+ *  Trigger div's own paddingLeft, NOT a margin on Root — Root also owns the
+ *  hover/active highlight background, and macOS sidebars keep that highlight
+ *  full-width even for indented/nested rows; only the row's CONTENT indents.
+ *  Subtract Root's own mx-2 gutter (see SIDEBAR_ROW_GUTTER_PX) so it isn't
+ *  double-counted on top of the level inset. */
+const SESSION_ROW_CONTENT_INSET_PX = sidebarIndentPx(2) - SIDEBAR_ROW_GUTTER_PX;
 
 export { StatusDot } from './SessionRowStatus';
 
@@ -151,7 +159,7 @@ function SessionRowInner({
         <ThreadListItemPrimitive.Root
           data-testid="sessions-row"
           data-chat-id={item.id}
-          className="group relative rounded-md transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
+          className="group relative mx-2 rounded-md transition-colors hover:bg-accent data-[active=true]:bg-mf-selection"
         >
           {/* Whole-row select target: the entire row body is the trigger, so a click
               anywhere (title, status dot, meta icons, empty space) changes the active
@@ -164,7 +172,8 @@ function SessionRowInner({
               }}
               onMouseEnter={hoverCard.onMouseEnter}
               onMouseLeave={hoverCard.onMouseLeave}
-              className="flex h-[30px] w-full cursor-pointer items-center gap-[9px] px-2.5 text-left"
+              style={{ paddingLeft: SESSION_ROW_CONTENT_INSET_PX }}
+              className="flex h-[28px] w-full cursor-pointer items-center gap-[9px] pr-[12px] text-left"
             >
               <div className="flex flex-shrink-0 items-center gap-[5px]">
                 {custom.pinned && !inPinnedGroup && (
@@ -179,15 +188,18 @@ function SessionRowInner({
                   onCancel={() => setIsRenaming(false)}
                 />
               ) : (
-                <TruncatedWithTooltip
+                // Plain truncation, no tooltip: SessionMetaCard (this row's
+                // richer hover card) already surfaces the full untruncated
+                // title, so a second tooltip here was pure duplication.
+                <span
                   data-testid="sessions-row-title"
-                  text={title}
-                  side="top"
                   className={[
-                    'min-w-0 flex-1 text-body tracking-normal',
-                    isUnread ? 'font-bold text-foreground' : 'font-medium text-foreground',
+                    'min-w-0 flex-1 truncate text-body tracking-normal group-data-[active=true]:text-primary',
+                    isUnread ? 'font-bold text-foreground' : 'font-medium text-muted-foreground',
                   ].join(' ')}
-                />
+                >
+                  {title}
+                </span>
               )}
               <div className="@max-[260px]:hidden">
                 <SessionRowMetaIcons
@@ -199,7 +211,13 @@ function SessionRowInner({
                 />
               </div>
               <RelativeTime updatedAt={custom.updatedAt} />
-              <RowHoverActions onTags={(rect) => handleTags(rect)} onArchive={() => void itemRuntime.archive()} />
+              <RowHoverActions
+                pinned={custom.pinned}
+                onPin={handlePin}
+                onUnpin={handleUnpin}
+                onTags={(rect) => handleTags(rect)}
+                onArchive={() => void itemRuntime.archive()}
+              />
             </div>
           </ThreadListItemPrimitive.Trigger>
         </ThreadListItemPrimitive.Root>

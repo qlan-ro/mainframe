@@ -3,29 +3,30 @@
  *
  * Behaviors covered:
  *  1. tagsInUse=['alpha','beta'], both synthetics false → two tag pills rendered,
- *     no synthetic chip, no toggle button (hiddenCount=0).
- *  2. hasSynthetic('has-pr')=true → expand first, then sessions-tag-filter-synthetic-has-pr visible.
- *  3. hasSynthetic('has-worktree')=true → expand first, then sessions-tag-filter-synthetic-has-worktree visible.
+ *     no synthetic chip.
+ *  2. hasSynthetic('has-pr')=true → sessions-tag-filter-synthetic-has-pr visible
+ *     immediately (no expand step — everything always renders).
+ *  3. hasSynthetic('has-worktree')=true → sessions-tag-filter-synthetic-has-worktree
+ *     visible immediately.
  *  4. tagsInUse=[], both synthetics false → renders nothing (container.firstChild is null).
  *  5. Clicking sessions-tag-filter-alpha calls toggleTag('alpha') exactly once.
- *  6. Clicking sessions-tag-filter-synthetic-has-pr (after expanding) calls toggleSynthetic('has-pr') once.
+ *  6. Clicking sessions-tag-filter-synthetic-has-pr calls toggleSynthetic('has-pr') once.
  *  7. selectedTags contains 'alpha' → sessions-tag-filter-alpha has aria-pressed="true".
  *  8. selectedSynthetic contains 'has-pr' → sessions-tag-filter-synthetic-has-pr
- *     has aria-pressed="true" (after expanding).
+ *     has aria-pressed="true".
  *  9. selectedTags is empty → sessions-tag-filter-alpha has aria-pressed="false".
- * 10. 6 tags, no synthetics → collapses to first 4; "+2 more" button present; e/f absent.
- * 11. After expanding 6 tags → e/f present, button reads "Less".
- * 12. Collapsing again after expanding → back to 4 + "+2 more".
- * 13. 1 tag + both synthetics true → collapsed shows tag + "+2 more", no synthetic chips.
- * 14. After expanding 1 tag + both synthetics → both synthetic chips present, button reads "Less".
- * 15. 2 tags, no synthetics → no toggle button (hiddenCount=0), both pills shown.
+ * 10. 6 tags, no synthetics → all 6 render at once, no "+N more" toggle ever appears.
+ * 11. The pill grid wraps (flex-wrap) and caps its height (TAG_GRID_MAX_HEIGHT_PX)
+ *     with its own scroll instead of truncating.
+ * 12. The section is collapsible via a chevron toggle.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { TagRegistry } from '../../tags/use-tag-registry';
 import type { SessionItem } from '../../view-model/chat-to-thread-custom';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 // ---------------------------------------------------------------------------
 // Controllable state for session-filters mock
@@ -88,64 +89,6 @@ const fakeRegistry: TagRegistry = {
 
 import { TagFilterBar } from '../TagFilterBar';
 
-// ---------------------------------------------------------------------------
-// Row-overflow measurement stubs.
-//
-// TagFilterBar fills the row by available width (useRowOverflow) instead of a
-// hardcoded cap. jsdom reports 0 for offsetWidth/clientWidth, so without these
-// stubs the bar shows every tag. We give each child a fixed 100px width and pin
-// the container's content width so width-driven collapse is deterministic.
-// (Synthetic-only collapse needs no stub: it triggers regardless of width.)
-// ---------------------------------------------------------------------------
-
-const ITEM_W = 100;
-const layoutPatches: Array<() => void> = [];
-
-function patchLayout(name: string, descriptor: PropertyDescriptor): void {
-  let proto: object | null = HTMLElement.prototype;
-  while (proto && !Object.getOwnPropertyDescriptor(proto, name)) proto = Object.getPrototypeOf(proto) as object | null;
-  const target = proto ?? HTMLElement.prototype;
-  const original = Object.getOwnPropertyDescriptor(target, name);
-  Object.defineProperty(target, name, { configurable: true, ...descriptor });
-  layoutPatches.push(() => {
-    if (original) Object.defineProperty(target, name, original);
-  });
-}
-
-function stubRowLayout(containerWidth: number): void {
-  patchLayout('clientWidth', { get: () => containerWidth });
-  patchLayout('getBoundingClientRect', {
-    value: () => ({
-      width: ITEM_W,
-      height: 0,
-      top: 0,
-      left: 0,
-      right: ITEM_W,
-      bottom: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    }),
-  });
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe(): void {}
-      unobserve(): void {}
-      disconnect(): void {}
-    },
-  );
-}
-
-function restoreRowLayout(): void {
-  while (layoutPatches.length > 0) layoutPatches.pop()?.();
-  vi.unstubAllGlobals();
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const EMPTY_ITEMS: SessionItem[] = [];
 
 function renderBar(filterProjectId: string | null = null) {
@@ -160,6 +103,7 @@ beforeEach(() => {
   __hasSyntheticResults['has-worktree'] = false;
   toggleTagSpy.mockReset();
   toggleSyntheticSpy.mockReset();
+  useUiPrefs.setState({ collapsedSidebarSections: {} });
 });
 
 // ---------------------------------------------------------------------------
@@ -183,31 +127,21 @@ describe('TagFilterBar — renders tag pills for each tag in use', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. has-pr synthetic chip appears when hasSynthetic('has-pr') is true (after expand)
+// 2-3. Synthetic chips render immediately — no expand step
 // ---------------------------------------------------------------------------
 
-describe('TagFilterBar — renders synthetic has-pr chip when hasSynthetic returns true', () => {
-  it('shows sessions-tag-filter-synthetic-has-pr after expanding when has-pr=true', () => {
+describe('TagFilterBar — renders synthetic chips immediately when hasSynthetic returns true', () => {
+  it('shows sessions-tag-filter-synthetic-has-pr with no prior interaction when has-pr=true', () => {
     __tagsInUseResult = ['alpha'];
     __hasSyntheticResults['has-pr'] = true;
     renderBar();
-    // Synthetic chips are hidden until expanded; the toggle button must be present.
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
     expect(screen.getByTestId('sessions-tag-filter-synthetic-has-pr')).toBeTruthy();
   });
-});
 
-// ---------------------------------------------------------------------------
-// 3. has-worktree synthetic chip appears when hasSynthetic('has-worktree') is true (after expand)
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — renders synthetic has-worktree chip when hasSynthetic returns true', () => {
-  it('shows sessions-tag-filter-synthetic-has-worktree after expanding when has-worktree=true', () => {
+  it('shows sessions-tag-filter-synthetic-has-worktree with no prior interaction when has-worktree=true', () => {
     __tagsInUseResult = ['alpha'];
     __hasSyntheticResults['has-worktree'] = true;
     renderBar();
-    // Synthetic chips are hidden until expanded; the toggle button must be present.
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
     expect(screen.getByTestId('sessions-tag-filter-synthetic-has-worktree')).toBeTruthy();
   });
 });
@@ -241,7 +175,7 @@ describe('TagFilterBar — clicking tag pill calls toggleTag with tag name', () 
 });
 
 // ---------------------------------------------------------------------------
-// 6. Clicking the has-pr synthetic chip calls toggleSynthetic('has-pr') once (after expand)
+// 6. Clicking the has-pr synthetic chip calls toggleSynthetic('has-pr') once
 // ---------------------------------------------------------------------------
 
 describe("TagFilterBar — clicking synthetic chip calls toggleSynthetic with 'has-pr'", () => {
@@ -249,8 +183,6 @@ describe("TagFilterBar — clicking synthetic chip calls toggleSynthetic with 'h
     __tagsInUseResult = ['alpha'];
     __hasSyntheticResults['has-pr'] = true;
     renderBar();
-    // Must expand before the synthetic chip is in the document.
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
     fireEvent.click(screen.getByTestId('sessions-tag-filter-synthetic-has-pr'));
     expect(toggleSyntheticSpy).toHaveBeenCalledTimes(1);
     expect(toggleSyntheticSpy).toHaveBeenCalledWith('has-pr');
@@ -271,7 +203,7 @@ describe('TagFilterBar — aria-pressed="true" when tag is in selectedTags', () 
 });
 
 // ---------------------------------------------------------------------------
-// 8. has-pr chip has aria-pressed="true" when selectedSynthetic contains 'has-pr' (after expand)
+// 8. has-pr chip has aria-pressed="true" when selectedSynthetic contains 'has-pr'
 // ---------------------------------------------------------------------------
 
 describe('TagFilterBar — aria-pressed="true" when synthetic is in selectedSynthetic', () => {
@@ -280,8 +212,6 @@ describe('TagFilterBar — aria-pressed="true" when synthetic is in selectedSynt
     __hasSyntheticResults['has-pr'] = true;
     __selectedSynthetic = new Set<SyntheticTag>(['has-pr']);
     renderBar();
-    // Expand to reveal the synthetic chip.
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
     expect(screen.getByTestId('sessions-tag-filter-synthetic-has-pr')).toHaveAttribute('aria-pressed', 'true');
   });
 });
@@ -300,143 +230,70 @@ describe('TagFilterBar — aria-pressed="false" when tag is not in selectedTags'
 });
 
 // ---------------------------------------------------------------------------
-// 10–12. Collapse / expand with 6 tags and no synthetics
+// 10. All tags render at once; no "+N more" toggle ever appears
 // ---------------------------------------------------------------------------
 
-describe('TagFilterBar — collapses to first 4 tags when 6 are in use', () => {
-  // At ITEM_W=100/gap=6, a 700px row fits the "Tags" label + 4 tag pills before
-  // the toggle, so 6 tags collapse to 4 + "+2 more".
-  beforeEach(() => stubRowLayout(700));
-  afterEach(() => restoreRowLayout());
-
-  it('shows only a,b,c,d and hides e,f with "+2 more" button when collapsed', () => {
+describe('TagFilterBar — renders every tag at once, no overflow toggle', () => {
+  it('renders all 6 tags with no sessions-tag-filter-more button', () => {
     __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
     renderBar();
-    expect(screen.getByTestId('sessions-tag-filter-a')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-b')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-c')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-d')).toBeTruthy();
-    expect(screen.queryByTestId('sessions-tag-filter-e')).toBeNull();
-    expect(screen.queryByTestId('sessions-tag-filter-f')).toBeNull();
-    expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('+2 more');
+    for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      expect(screen.getByTestId(`sessions-tag-filter-${name}`)).toBeTruthy();
+    }
+    expect(screen.queryByTestId('sessions-tag-filter-more')).toBeNull();
   });
 
-  it('renders the collapsed overflow control as accent text, not a filled pill', () => {
-    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
-    renderBar();
-    const more = screen.getByTestId('sessions-tag-filter-more');
-    expect(more.className).toContain('text-primary');
-    expect(more.className).not.toContain('bg-accent');
-    expect(more.className).not.toContain('rounded-[11px]');
-  });
-
-  it('shows all 6 tags and button reads "Less" after clicking the toggle', () => {
-    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
-    renderBar();
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
-    expect(screen.getByTestId('sessions-tag-filter-e')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-f')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('Less');
-  });
-
-  it('collapses back to 4 tags and "+2 more" after clicking the toggle a second time', () => {
-    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
-    renderBar();
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
-    expect(screen.queryByTestId('sessions-tag-filter-e')).toBeNull();
-    expect(screen.queryByTestId('sessions-tag-filter-f')).toBeNull();
-    expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('+2 more');
-  });
-
-  it('renders a chevron-down icon rotated 180deg next to "Less" once expanded (finding 1.15)', () => {
-    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
-    renderBar();
-    const toggle = screen.getByTestId('sessions-tag-filter-more');
-    expect(toggle.querySelector('svg.lucide-chevron-down')).toBeNull();
-
-    fireEvent.click(toggle);
-    const expandedIcon = screen.getByTestId('sessions-tag-filter-more').querySelector('svg.lucide-chevron-down');
-    expect(expandedIcon).toBeTruthy();
-    expect(expandedIcon?.getAttribute('class')).toContain('rotate-180');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 13–14. Collapse / expand with 1 tag + both synthetics true
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — collapses synthetic chips behind toggle when 1 tag + 2 synthetics', () => {
-  it('shows tag pill + "+2 more" button but NO synthetic chips when collapsed', () => {
+  it('renders synthetic chips alongside tags with no overflow toggle', () => {
     __tagsInUseResult = ['alpha'];
     __hasSyntheticResults['has-pr'] = true;
     __hasSyntheticResults['has-worktree'] = true;
     renderBar();
     expect(screen.getByTestId('sessions-tag-filter-alpha')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('+2 more');
-    expect(screen.queryByTestId('sessions-tag-filter-synthetic-has-pr')).toBeNull();
-    expect(screen.queryByTestId('sessions-tag-filter-synthetic-has-worktree')).toBeNull();
-  });
-
-  it('shows both synthetic chips and button reads "Less" after expanding', () => {
-    __tagsInUseResult = ['alpha'];
-    __hasSyntheticResults['has-pr'] = true;
-    __hasSyntheticResults['has-worktree'] = true;
-    renderBar();
-    fireEvent.click(screen.getByTestId('sessions-tag-filter-more'));
     expect(screen.getByTestId('sessions-tag-filter-synthetic-has-pr')).toBeTruthy();
     expect(screen.getByTestId('sessions-tag-filter-synthetic-has-worktree')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('Less');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 15. No toggle button when hiddenCount is 0 (2 tags, no synthetics)
-// ---------------------------------------------------------------------------
-
-describe('TagFilterBar — no toggle button when hiddenCount is 0', () => {
-  it('does NOT render sessions-tag-filter-more when only 2 tags and no synthetics', () => {
-    __tagsInUseResult = ['alpha', 'beta'];
-    renderBar();
     expect(screen.queryByTestId('sessions-tag-filter-more')).toBeNull();
-    expect(screen.getByTestId('sessions-tag-filter-alpha')).toBeTruthy();
-    expect(screen.getByTestId('sessions-tag-filter-beta')).toBeTruthy();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Resize observation must survive the empty→populated transition.
-//
-// The bar renders null until tags arrive. A one-shot observer effect would bind
-// to a null container on first commit and never re-run, so the bar would never
-// react to sidebar resizes (project pills did, tags didn't). The callback ref
-// must observe the container once it actually mounts.
+// 11. The grid wraps and caps its height with its own scroll
 // ---------------------------------------------------------------------------
 
-describe('TagFilterBar — observes resize after first rendering empty', () => {
-  it('attaches a ResizeObserver to the bar once tags arrive', () => {
-    const observed: Element[] = [];
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe(el: Element): void {
-          observed.push(el);
-        }
-        unobserve(): void {}
-        disconnect(): void {}
-      },
-    );
+describe('TagFilterBar — grid wraps and caps height instead of truncating', () => {
+  it('applies flex-wrap and a max-height style to the pill container', () => {
+    __tagsInUseResult = ['a', 'b', 'c'];
+    renderBar();
+    const bar = screen.getByTestId('sessions-tag-filter-bar');
+    expect(bar.className).toContain('flex-wrap');
+    expect(bar.className).toContain('overflow-y-auto');
+    expect(bar.style.maxHeight).toBe('72px');
+  });
+});
 
-    // First render: no tags in use → the bar renders null, nothing to observe.
-    __tagsInUseResult = [];
-    const { rerender } = renderBar();
-    expect(observed.some((el) => el.getAttribute('data-testid') === 'sessions-tag-filter-bar')).toBe(false);
+// ---------------------------------------------------------------------------
+// 12. Collapsible
+// ---------------------------------------------------------------------------
 
-    // Tags arrive → the bar mounts → its callback ref must observe it.
-    __tagsInUseResult = ['alpha', 'beta'];
-    rerender(<TagFilterBar items={EMPTY_ITEMS} filterProjectId={null} registry={fakeRegistry} />);
-    expect(observed.some((el) => el.getAttribute('data-testid') === 'sessions-tag-filter-bar')).toBe(true);
+describe('TagFilterBar — collapsible', () => {
+  it('renders a chevron next to the "Tags" label', () => {
+    __tagsInUseResult = ['alpha'];
+    renderBar();
+    expect(document.querySelector('svg.lucide-chevron-down[aria-hidden="true"]')).toBeTruthy();
+  });
 
-    vi.unstubAllGlobals();
+  it('clicking the toggle hides the pill grid', () => {
+    __tagsInUseResult = ['alpha'];
+    renderBar();
+    expect(screen.getByTestId('sessions-tag-filter-bar')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('sessions-tags-section-toggle'));
+    expect(screen.queryByTestId('sessions-tag-filter-bar')).toBeNull();
+  });
+
+  it('clicking the toggle again shows the pills again', () => {
+    __tagsInUseResult = ['alpha'];
+    renderBar();
+    fireEvent.click(screen.getByTestId('sessions-tags-section-toggle'));
+    fireEvent.click(screen.getByTestId('sessions-tags-section-toggle'));
+    expect(screen.getByTestId('sessions-tag-filter-bar')).toBeTruthy();
   });
 });

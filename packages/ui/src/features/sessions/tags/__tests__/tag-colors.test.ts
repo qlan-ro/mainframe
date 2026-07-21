@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tagColorValue, TAG_DOT_STYLE, TAG_CHIP_STYLE } from '../tag-colors';
+import { tagColorValue, TAG_DOT_STYLE, TAG_CHIP_STYLE, TAG_CHIP_ACTIVE_STYLE } from '../tag-colors';
 import { TAG_PALETTE } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,19 @@ describe('TAG_CHIP_STYLE — returns a color-mix background tint and matching te
     expect(TAG_CHIP_STYLE('blue')).toEqual({
       backgroundColor: 'color-mix(in oklch, oklch(0.65 0.18 250) 18%, transparent)',
       color: 'oklch(0.65 0.18 250)',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TAG_CHIP_ACTIVE_STYLE — solid fill + white text for the selected-state pill
+// ---------------------------------------------------------------------------
+
+describe('TAG_CHIP_ACTIVE_STYLE — returns a solid background and white text for blue', () => {
+  it('returns the exact inline style object for blue', () => {
+    expect(TAG_CHIP_ACTIVE_STYLE('blue')).toEqual({
+      backgroundColor: 'oklch(0.65 0.18 250)',
+      color: 'white',
     });
   });
 });

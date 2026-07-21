@@ -39,3 +39,9 @@ export function TAG_CHIP_STYLE(color: TagColor): CSSProperties {
   const value = tagColorValue(color);
   return { backgroundColor: `color-mix(in oklch, ${value} 18%, transparent)`, color: value };
 }
+
+/** Selected-state variant of TAG_CHIP_STYLE: a solid fill in the tag's own
+ *  color with white text, for toggleable filter pills (e.g. TagFilterBar). */
+export function TAG_CHIP_ACTIVE_STYLE(color: TagColor): CSSProperties {
+  return { backgroundColor: tagColorValue(color), color: 'white' };
+}

@@ -11,30 +11,36 @@ const COUNT_META: { key: keyof BaseStatusCounts; label: string; dot: string; tex
   { key: 'idle', label: 'Idle', dot: 'bg-mf-text-4', text: 'text-muted-foreground' },
 ];
 
+// Per-status session counts (Working/Waiting/Idle) are hidden for now per
+// product request — kept computed and ready to re-enable via this flag rather
+// than deleted (COUNT_META / countByBaseStatus stay intact).
+const SHOW_SESSION_COUNTS = false;
+
 export function SidebarFooterView({ counts }: { counts: BaseStatusCounts }) {
   return (
     <div
       data-testid="sidebar-footer"
-      className="flex h-[25px] flex-shrink-0 items-center gap-2 px-[12px] text-caption text-muted-foreground"
+      className="flex flex-shrink-0 flex-col gap-[6px] px-[12px] pb-[12px] pt-[10px] text-caption text-muted-foreground"
     >
       <DaemonFooterStatus />
-      <span className="flex-1" />
-      <span data-testid="sidebar-footer-counts" className="flex items-center gap-[9px]">
-        {COUNT_META.filter((m) => counts[m.key] > 0).map((m) => (
-          <Tooltip key={m.key}>
-            <TooltipTrigger asChild>
-              <span
-                data-testid={`sidebar-footer-count-${m.key}`}
-                className={`flex items-center gap-[4px] font-semibold tabular-nums ${m.text}`}
-              >
-                <span className={`size-1.5 rounded-full ${m.dot}`} />
-                {counts[m.key]}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{m.label}</TooltipContent>
-          </Tooltip>
-        ))}
-      </span>
+      {SHOW_SESSION_COUNTS && (
+        <span data-testid="sidebar-footer-counts" className="flex items-center justify-end gap-[9px]">
+          {COUNT_META.filter((m) => counts[m.key] > 0).map((m) => (
+            <Tooltip key={m.key}>
+              <TooltipTrigger asChild>
+                <span
+                  data-testid={`sidebar-footer-count-${m.key}`}
+                  className={`flex items-center gap-[4px] font-semibold tabular-nums ${m.text}`}
+                >
+                  <span className={`size-1.5 rounded-full ${m.dot}`} />
+                  {counts[m.key]}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{m.label}</TooltipContent>
+            </Tooltip>
+          ))}
+        </span>
+      )}
     </div>
   );
 }

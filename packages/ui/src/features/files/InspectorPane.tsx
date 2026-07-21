@@ -1,8 +1,10 @@
 /**
  * InspectorPane — the right-side Inspector (design: prototype/04-engine.jsx
  * `Inspector`). A Files-tree / Changes tabbed panel scoped to the active
- * session's project. Toggled from the MainToolbar (`inspectorVisible`).
- * The bottom Tasks drawer is composed below the body when a project is active.
+ * session's project, with the Context/Skills/Agents panel (contextual detail
+ * about the active session) composed below the body — HIG's right-inspector
+ * role, swapped in from the left sidebar where Tasks (a navigable collection)
+ * used to sit. Toggled from the MainToolbar (`inspectorVisible`).
  */
 import { useState, useEffect } from 'react';
 import { Folder, GitCompare } from 'lucide-react';
@@ -12,10 +14,10 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/store/theme';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { CountBadge } from '@/components/ui/count-badge';
+import { BottomPanel } from '@/features/context-panel/BottomPanel';
+import { PanelResizeHandle } from '@/features/context-panel/PanelResizeHandle';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
-import { TasksDrawer } from '../tasks/TasksDrawer';
-import { useStartTodoSession } from '../tasks/use-start-todo-session';
 import { useChangesCount } from './use-changes-count';
 
 type Tab = 'files' | 'changes';
@@ -28,7 +30,6 @@ export function InspectorPane({ port }: { port: number }) {
   const windowStyle = useTheme((s) => s.windowStyle);
   const geo = windowStyleGeometry(windowStyle);
   const [tab, setTab] = useState<Tab>('files');
-  const startTodoSession = useStartTodoSession(port, projectId);
   const changesCount = useChangesCount(port, projectId, chatId);
 
   // Subscribe to inspector-tab intents so external triggers (e.g. the
@@ -92,10 +93,9 @@ export function InspectorPane({ port }: { port: number }) {
         )}
       </div>
 
-      {/* Tasks drawer — mounted when a project is active; owns the load() effect */}
-      {projectId && (
-        <TasksDrawer port={port} projectId={projectId} onStartSession={(t) => void startTodoSession(t.id)} />
-      )}
+      {/* Context/Skills/Agents panel — contextual detail about the active session. */}
+      <PanelResizeHandle containerTestId="inspector-pane" />
+      <BottomPanel />
     </aside>
   );
 }

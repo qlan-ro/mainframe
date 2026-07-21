@@ -3,6 +3,7 @@ import { SIDEBAR_EXPANDED_WIDTH } from '@/layout/SidebarShell';
 import {
   useUiPrefs,
   clampBottomPanelHeight,
+  isSidebarSectionCollapsed,
   BOTTOM_PANEL_MIN_HEIGHT,
   BOTTOM_PANEL_DEFAULT_HEIGHT,
   BOTTOM_PANEL_MAX_FALLBACK,
@@ -20,6 +21,7 @@ beforeEach(() => {
     bottomPanelTab: 'context',
     bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
     rightClickHintDismissed: false,
+    collapsedSidebarSections: {},
   });
 });
 
@@ -32,6 +34,7 @@ describe('useUiPrefs defaults', () => {
     expect(s.bottomPanelTab).toBe('context');
     expect(s.bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
     expect(s.rightClickHintDismissed).toBe(false);
+    expect(s.collapsedSidebarSections).toEqual({});
   });
 });
 
@@ -71,6 +74,31 @@ describe('useUiPrefs actions', () => {
     useUiPrefs.getState().dismissRightClickHint();
     expect(useUiPrefs.getState().rightClickHintDismissed).toBe(true);
   });
+
+  it('toggleSidebarSection flips a section from expanded to collapsed and back', () => {
+    useUiPrefs.getState().toggleSidebarSection('tasks');
+    expect(useUiPrefs.getState().collapsedSidebarSections.tasks).toBe(true);
+    useUiPrefs.getState().toggleSidebarSection('tasks');
+    expect(useUiPrefs.getState().collapsedSidebarSections.tasks).toBe(false);
+  });
+
+  it('toggleSidebarSection only affects the given section', () => {
+    useUiPrefs.getState().toggleSidebarSection('tags');
+    expect(useUiPrefs.getState().collapsedSidebarSections).toEqual({ tags: true });
+    expect(useUiPrefs.getState().collapsedSidebarSections.projects).toBeUndefined();
+    expect(useUiPrefs.getState().collapsedSidebarSections.sessions).toBeUndefined();
+  });
+});
+
+describe('isSidebarSectionCollapsed', () => {
+  it('treats a section with no recorded state as expanded (false)', () => {
+    expect(isSidebarSectionCollapsed({}, 'projects')).toBe(false);
+  });
+
+  it('returns the recorded value when present', () => {
+    expect(isSidebarSectionCollapsed({ sessions: true }, 'sessions')).toBe(true);
+    expect(isSidebarSectionCollapsed({ sessions: false }, 'sessions')).toBe(false);
+  });
 });
 
 describe('clampBottomPanelHeight', () => {
@@ -93,6 +121,7 @@ describe('useUiPrefs persistence', () => {
       [
         'bottomPanelHeight',
         'bottomPanelTab',
+        'collapsedSidebarSections',
         'inspectorVisible',
         'rightClickHintDismissed',
         'sidebarVisible',

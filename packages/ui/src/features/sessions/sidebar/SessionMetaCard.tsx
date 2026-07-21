@@ -127,8 +127,8 @@ export function SessionMetaCard({
       className="z-50 w-[220px] max-w-xs rounded-lg border border-border bg-popover p-[10px] text-popover-foreground shadow-[var(--mf-shadow-pop)]"
     >
       <div className="flex flex-col gap-[6px]">
-        <div className="flex items-center justify-between gap-[8px]">
-          <span data-testid="sessions-meta-card-title" className="min-w-0 truncate text-body font-semibold">
+        <div className="flex items-start justify-between gap-[8px]">
+          <span data-testid="sessions-meta-card-title" className="min-w-0 break-words text-body font-semibold">
             {title}
           </span>
           <span data-testid="sessions-meta-card-time" className="flex-shrink-0 text-caption text-muted-foreground">
