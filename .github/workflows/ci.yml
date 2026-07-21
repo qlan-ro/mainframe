@@ -27,8 +27,7 @@ jobs:
         run: |
           pnpm --filter @qlan-ro/mainframe-ui typecheck
           pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
-          pnpm --filter @qlan-ro/mainframe-app-electron exec tsc --noEmit
-          pnpm --filter @qlan-ro/mainframe-app-electron exec tsc --noEmit -p tsconfig.node.json
+          pnpm --filter @qlan-ro/mainframe-app-electron exec tsc -b
 
       - name: Security audit
         run: pnpm audit --audit-level=high
