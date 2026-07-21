@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-types",
-  "version": "2.0.0-rc.9",
+  "version": "2.0.0-rc.10",
   "description": "Shared TypeScript types for Mainframe",
   "license": "MIT",
   "repository": {
