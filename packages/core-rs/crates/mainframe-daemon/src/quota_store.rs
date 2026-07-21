@@ -36,7 +36,10 @@ impl QuotaSettingsStore for DaemonQuotaSettings {
 
     fn set(&self, category: &str, key: &str, value: &str) {
         let (cat, k, val) = (category.to_string(), key.to_string(), value.to_string());
-        if let Err(err) = self.db.call_blocking(move |d| d.settings.set(&cat, &k, &val)) {
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.settings.set(&cat, &k, &val))
+        {
             tracing::warn!(%err, category, key, "quota settings.set failed");
         }
     }

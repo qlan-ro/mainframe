@@ -728,9 +728,15 @@ fn warn_permission_respond_seam() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
+    use mainframe_types::adapter::{
+        ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind,
+    };
 
-    fn register_client(clients: &WsClients, id: &str, chats: &[&str]) -> mpsc::UnboundedReceiver<String> {
+    fn register_client(
+        clients: &WsClients,
+        id: &str,
+        chats: &[&str],
+    ) -> mpsc::UnboundedReceiver<String> {
         let (tx, rx) = mpsc::unbounded_channel::<String>();
         let subscriptions: Arc<Mutex<HashSet<String>>> =
             Arc::new(Mutex::new(chats.iter().map(|c| c.to_string()).collect()));
@@ -767,11 +773,16 @@ mod tests {
 
         fanout(&clients, &quota_event());
 
-        let payload = rx.try_recv().expect("no-subscription client received the event");
+        let payload = rx
+            .try_recv()
+            .expect("no-subscription client received the event");
         let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
         assert_eq!(value["type"], serde_json::json!("provider.quota.updated"));
         assert_eq!(value["adapterId"], serde_json::json!("claude"));
-        assert_eq!(value["quota"]["session"]["usedPercent"], serde_json::json!(55.0));
+        assert_eq!(
+            value["quota"]["session"]["usedPercent"],
+            serde_json::json!(55.0)
+        );
     }
 }
 

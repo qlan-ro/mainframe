@@ -45,7 +45,10 @@ pub fn normalize_rate_limit_snapshot(snapshot: &RateLimitSnapshot, now: i64) -> 
     quota
 }
 
-fn map_window(window: Option<&RateLimitWindow>, now: i64) -> Option<(QuotaWindowKind, QuotaWindow)> {
+fn map_window(
+    window: Option<&RateLimitWindow>,
+    now: i64,
+) -> Option<(QuotaWindowKind, QuotaWindow)> {
     let window = window?;
     let kind = window.window_duration_mins.and_then(kind_by_duration_mins);
     let Some(kind) = kind else {

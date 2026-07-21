@@ -63,7 +63,9 @@ mod tests {
     use mainframe_services::files::FileWatcherService;
     use mainframe_services::push::PushService;
     use mainframe_services::quota::QuotaService;
-    use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
+    use mainframe_types::adapter::{
+        ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind,
+    };
     use mainframe_types::events::DaemonEvent;
     use std::future::Future;
     use std::path::Path as FsPath;
@@ -158,7 +160,10 @@ mod tests {
         let (status, body) = body_json(get_quota(State(ctx), Path("claude".into())).await).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["success"], serde_json::json!(true));
-        assert_eq!(body["data"]["session"]["usedPercent"], serde_json::json!(42.0));
+        assert_eq!(
+            body["data"]["session"]["usedPercent"],
+            serde_json::json!(42.0)
+        );
     }
 
     #[tokio::test]
@@ -196,7 +201,10 @@ mod tests {
         let (status, body) =
             body_json(refresh_quota(State(ctx), Path("claude".into())).await).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["data"]["session"]["usedPercent"], serde_json::json!(77.0));
+        assert_eq!(
+            body["data"]["session"]["usedPercent"],
+            serde_json::json!(77.0)
+        );
     }
 
     #[tokio::test]
@@ -206,8 +214,7 @@ mod tests {
             refresh_result: None,
         });
         let ctx = test_ctx(Some(quota));
-        let (status, body) =
-            body_json(refresh_quota(State(ctx), Path("codex".into())).await).await;
+        let (status, body) = body_json(refresh_quota(State(ctx), Path("codex".into())).await).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, serde_json::json!({ "success": true }));
     }

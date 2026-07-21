@@ -65,7 +65,10 @@ pub fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
             };
             model_windows.push(w);
         } else {
-            tracing::warn!(line, "claude /usage: unclassifiable line, failing provider to unknown");
+            tracing::warn!(
+                line,
+                "claude /usage: unclassifiable line, failing provider to unknown"
+            );
             return unknown(now);
         }
         saw_window = true;
@@ -86,7 +89,10 @@ pub fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
 }
 
 fn fail_closed(line: &str, now: i64) -> ProviderQuota {
-    tracing::warn!(line, "claude /usage: percent parse failed, failing provider to unknown");
+    tracing::warn!(
+        line,
+        "claude /usage: percent parse failed, failing provider to unknown"
+    );
     unknown(now)
 }
 
@@ -113,7 +119,8 @@ fn is_session_line(line: &str) -> bool {
 }
 
 fn is_weekly_all_line(line: &str) -> bool {
-    line.to_lowercase().starts_with("current week (all models):")
+    line.to_lowercase()
+        .starts_with("current week (all models):")
 }
 
 /// `^Current week \(([^)]+)\):` — returns the parenthetical label when the line
@@ -141,7 +148,12 @@ fn strip_prefix_ci<'a>(line: &'a str, prefix: &str) -> Option<&'a str> {
     }
 }
 
-fn parse_window(kind: QuotaWindowKind, line: &str, now: i64, label: Option<&str>) -> Option<QuotaWindow> {
+fn parse_window(
+    kind: QuotaWindowKind,
+    line: &str,
+    now: i64,
+    label: Option<&str>,
+) -> Option<QuotaWindow> {
     let percent = parse_percent(line)?;
     Some(QuotaWindow {
         kind,
@@ -187,7 +199,8 @@ fn parse_reset_to_epoch_ms(line: &str, now: i64) -> Option<i64> {
     let (day_tok, rest) = take_token(rest)?;
     let day: u32 = day_tok.parse().ok()?;
 
-    let rest = strip_prefix_ci(rest.trim_start(), "at ").or_else(|| strip_prefix_ci(rest.trim_start(), "at"))?;
+    let rest = strip_prefix_ci(rest.trim_start(), "at ")
+        .or_else(|| strip_prefix_ci(rest.trim_start(), "at"))?;
     let rest = rest.trim_start();
 
     let (time_tok, after_time) = take_token(rest)?;
@@ -199,7 +212,10 @@ fn parse_reset_to_epoch_ms(line: &str, now: i64) -> Option<i64> {
     let zone = rest[paren_start + 1..paren_end].trim();
 
     let hour = (hour12 % 12) + if is_pm { 12 } else { 0 };
-    let year = chrono::DateTime::from_timestamp_millis(now)?.naive_utc().date().year();
+    let year = chrono::DateTime::from_timestamp_millis(now)?
+        .naive_utc()
+        .date()
+        .year();
 
     future_wall_clock_to_epoch_ms(year, month, day, hour, minute, zone, now)
 }
@@ -279,7 +295,8 @@ fn wall_clock_in_zone_to_epoch_ms(
     zone: &str,
 ) -> Option<i64> {
     let tz: Tz = zone.parse().ok()?;
-    let naive = NaiveDate::from_ymd_opt(year, (month as u32) + 1, day)?.and_hms_opt(hour, minute, 0)?;
+    let naive =
+        NaiveDate::from_ymd_opt(year, (month as u32) + 1, day)?.and_hms_opt(hour, minute, 0)?;
     let local = tz.from_local_datetime(&naive).single()?;
     Some(local.timestamp_millis())
 }
@@ -292,13 +309,22 @@ mod tests {
 
     // A fixed clock before both reset instants so the future-year inference picks 2026.
     fn now() -> i64 {
-        chrono::Utc.with_ymd_and_hms(2026, 7, 18, 6, 0, 0).unwrap().timestamp_millis()
+        chrono::Utc
+            .with_ymd_and_hms(2026, 7, 18, 6, 0, 0)
+            .unwrap()
+            .timestamp_millis()
     }
     fn session_reset() -> i64 {
-        chrono::Utc.with_ymd_and_hms(2026, 7, 18, 7, 10, 0).unwrap().timestamp_millis()
+        chrono::Utc
+            .with_ymd_and_hms(2026, 7, 18, 7, 10, 0)
+            .unwrap()
+            .timestamp_millis()
     }
     fn weekly_reset() -> i64 {
-        chrono::Utc.with_ymd_and_hms(2026, 7, 23, 13, 0, 0).unwrap().timestamp_millis()
+        chrono::Utc
+            .with_ymd_and_hms(2026, 7, 23, 13, 0, 0)
+            .unwrap()
+            .timestamp_millis()
     }
 
     #[test]
@@ -371,7 +397,10 @@ mod tests {
 
     #[test]
     fn fails_the_whole_provider_to_unknown_when_a_recognized_window_line_has_no_percent() {
-        let quota = parse_claude_usage("Current session: resets Jul 18 at 10:10am (Europe/Bucharest)", now());
+        let quota = parse_claude_usage(
+            "Current session: resets Jul 18 at 10:10am (Europe/Bucharest)",
+            now(),
+        );
         assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
         assert_eq!(quota.session, None);
     }
@@ -412,7 +441,10 @@ mod tests {
 
     #[test]
     fn returns_unknown_when_no_windows_are_present_at_all() {
-        let quota = parse_claude_usage("You are currently using your subscription to power your Claude Code usage", now());
+        let quota = parse_claude_usage(
+            "You are currently using your subscription to power your Claude Code usage",
+            now(),
+        );
         assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
     }
 }

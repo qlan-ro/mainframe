@@ -524,8 +524,14 @@ mod tests {
         fn on_trust_required(&self, project_path: &str) {
             self.r().trust.push(project_path.to_string());
         }
-        fn on_provider_quota(&self, adapter_id: &str, quota: mainframe_types::adapter::ProviderQuota) {
-            self.r().provider_quota.push((adapter_id.to_string(), quota));
+        fn on_provider_quota(
+            &self,
+            adapter_id: &str,
+            quota: mainframe_types::adapter::ProviderQuota,
+        ) {
+            self.r()
+                .provider_quota
+                .push((adapter_id.to_string(), quota));
         }
     }
 
@@ -1251,7 +1257,10 @@ mod tests {
         let (adapter_id, quota) = &rec.provider_quota[0];
         assert_eq!(adapter_id, "claude");
         let session = quota.session.as_ref().unwrap();
-        assert_eq!(session.kind, mainframe_types::adapter::QuotaWindowKind::Session);
+        assert_eq!(
+            session.kind,
+            mainframe_types::adapter::QuotaWindowKind::Session
+        );
         assert_eq!(session.used_percent, 42.0);
         assert_eq!(session.resets_at, Some(1_789_999_999_000));
         assert_eq!(session.label, None);

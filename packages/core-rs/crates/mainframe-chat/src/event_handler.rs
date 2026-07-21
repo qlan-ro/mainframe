@@ -1394,7 +1394,11 @@ mod tests {
         }
         impl QuotaSettingsStore for MapSettings {
             fn get(&self, category: &str, key: &str) -> Option<String> {
-                self.store.lock().unwrap().get(&format!("{category} {key}")).cloned()
+                self.store
+                    .lock()
+                    .unwrap()
+                    .get(&format!("{category} {key}"))
+                    .cloned()
             }
             fn get_by_category(&self, category: &str) -> StdHashMap<String, String> {
                 let mut out = StdHashMap::new();
@@ -1473,7 +1477,11 @@ mod tests {
         );
 
         let events = quota_events.lock().unwrap();
-        assert_eq!(events.len(), 2, "one fan-out for the seed pull, one for the push");
+        assert_eq!(
+            events.len(),
+            2,
+            "one fan-out for the seed pull, one for the push"
+        );
         match &events[1] {
             DaemonEvent::ProviderQuotaUpdated { adapter_id, quota } => {
                 assert_eq!(adapter_id, "codex");

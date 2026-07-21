@@ -46,12 +46,16 @@ pub async fn read_claude_account_identity(claude_json_path: Option<&Path>) -> St
     };
 
     let account = parsed.get("oauthAccount");
-    if let Some(uuid) = account.and_then(|a| a.get("accountUuid")).and_then(|v| v.as_str())
+    if let Some(uuid) = account
+        .and_then(|a| a.get("accountUuid"))
+        .and_then(|v| v.as_str())
         && !uuid.is_empty()
     {
         return uuid.to_string();
     }
-    if let Some(email) = account.and_then(|a| a.get("emailAddress")).and_then(|v| v.as_str())
+    if let Some(email) = account
+        .and_then(|a| a.get("emailAddress"))
+        .and_then(|v| v.as_str())
         && !email.is_empty()
     {
         return email.to_string();
@@ -74,7 +78,9 @@ mod tests {
 
     #[tokio::test]
     async fn returns_the_oauth_account_uuid_when_present() {
-        let dir = write_claude_json(r#"{"oauthAccount":{"accountUuid":"uuid-123","emailAddress":"a@b.com"}}"#);
+        let dir = write_claude_json(
+            r#"{"oauthAccount":{"accountUuid":"uuid-123","emailAddress":"a@b.com"}}"#,
+        );
         let identity = read_claude_account_identity(Some(&dir.path().join(".claude.json"))).await;
         assert_eq!(identity, "uuid-123");
     }

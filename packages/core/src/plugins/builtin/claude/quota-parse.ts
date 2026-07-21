@@ -93,15 +93,20 @@ function parseResetToEpochMs(line: string, now: number): number | null {
     log.warn({ line }, 'claude /usage: reset unparseable, resetsAt=null');
     return null;
   }
-  const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase());
-  if (month < 0) {
-    log.warn({ line, month: m[1] }, 'claude /usage: reset month unrecognized, resetsAt=null');
+  const [, monthLabel, dayLabel, hourLabel, minuteLabel, meridiem, zoneLabel] = m;
+  if (!monthLabel || !dayLabel || !hourLabel || !meridiem || !zoneLabel) {
+    log.warn({ line }, 'claude /usage: reset missing a required group, resetsAt=null');
     return null;
   }
-  const day = Number(m[2]);
-  const minute = m[4] ? Number(m[4]) : 0;
-  const hour = (Number(m[3]) % 12) + (/pm/i.test(m[5]) ? 12 : 0);
-  const zone = m[6].trim();
+  const month = MONTHS.indexOf(monthLabel.slice(0, 3).toLowerCase());
+  if (month < 0) {
+    log.warn({ line, month: monthLabel }, 'claude /usage: reset month unrecognized, resetsAt=null');
+    return null;
+  }
+  const day = Number(dayLabel);
+  const minute = minuteLabel ? Number(minuteLabel) : 0;
+  const hour = (Number(hourLabel) % 12) + (/pm/i.test(meridiem) ? 12 : 0);
+  const zone = zoneLabel.trim();
   try {
     return futureWallClockToEpochMs(new Date(now).getUTCFullYear(), month, day, hour, minute, zone, now);
   } catch {

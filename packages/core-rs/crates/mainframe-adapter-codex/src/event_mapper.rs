@@ -154,7 +154,9 @@ fn handle_account_rate_limits_updated(
     // unrecognized (a genuine format drift), staying quiet on a benign empty snapshot.
     if !has_recognized_window(&quota) {
         if snapshot_has_window(&params.rate_limits) {
-            tracing::warn!("codex rate limit: snapshot had windows but none were recognized; skipping ingest");
+            tracing::warn!(
+                "codex rate limit: snapshot had windows but none were recognized; skipping ingest"
+            );
         }
         return;
     }

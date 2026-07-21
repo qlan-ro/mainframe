@@ -71,7 +71,12 @@ mod tests {
 
     const NOW: i64 = 1_720_000_000_000;
 
-    fn win(kind: QuotaWindowKind, used_percent: f64, resets_at: i64, label: Option<&str>) -> QuotaWindow {
+    fn win(
+        kind: QuotaWindowKind,
+        used_percent: f64,
+        resets_at: i64,
+        label: Option<&str>,
+    ) -> QuotaWindow {
         QuotaWindow {
             kind,
             used_percent,
@@ -111,7 +116,12 @@ mod tests {
 
     #[test]
     fn keeps_prior_model_windows_when_update_omits_them() {
-        let model = win(QuotaWindowKind::WeeklyModel, 30.0, NOW + 10_000, Some("opus"));
+        let model = win(
+            QuotaWindowKind::WeeklyModel,
+            30.0,
+            NOW + 10_000,
+            Some("opus"),
+        );
         let prior = ProviderQuota {
             status: ProviderQuotaStatus::Ok,
             session: None,
@@ -135,8 +145,18 @@ mod tests {
 
     #[test]
     fn upserts_incoming_model_window_by_label_and_keeps_untouched_labels() {
-        let opus = win(QuotaWindowKind::WeeklyModel, 30.0, NOW + 10_000, Some("opus"));
-        let sonnet = win(QuotaWindowKind::WeeklyModel, 40.0, NOW + 10_000, Some("sonnet"));
+        let opus = win(
+            QuotaWindowKind::WeeklyModel,
+            30.0,
+            NOW + 10_000,
+            Some("opus"),
+        );
+        let sonnet = win(
+            QuotaWindowKind::WeeklyModel,
+            40.0,
+            NOW + 10_000,
+            Some("sonnet"),
+        );
         let prior = ProviderQuota {
             status: ProviderQuotaStatus::Ok,
             session: None,
@@ -145,7 +165,12 @@ mod tests {
             observed_at: NOW - 1_000,
             account_identity: None,
         };
-        let new_opus = win(QuotaWindowKind::WeeklyModel, 88.0, NOW + 20_000, Some("opus"));
+        let new_opus = win(
+            QuotaWindowKind::WeeklyModel,
+            88.0,
+            NOW + 20_000,
+            Some("opus"),
+        );
 
         let merged = merge_provider_quota(
             Some(&prior),
@@ -163,7 +188,12 @@ mod tests {
 
     #[test]
     fn appends_a_new_label_while_keeping_prior_model_windows() {
-        let opus = win(QuotaWindowKind::WeeklyModel, 30.0, NOW + 10_000, Some("opus"));
+        let opus = win(
+            QuotaWindowKind::WeeklyModel,
+            30.0,
+            NOW + 10_000,
+            Some("opus"),
+        );
         let prior = ProviderQuota {
             status: ProviderQuotaStatus::Ok,
             session: None,
@@ -172,7 +202,12 @@ mod tests {
             observed_at: NOW - 1_000,
             account_identity: None,
         };
-        let sonnet = win(QuotaWindowKind::WeeklyModel, 40.0, NOW + 10_000, Some("sonnet"));
+        let sonnet = win(
+            QuotaWindowKind::WeeklyModel,
+            40.0,
+            NOW + 10_000,
+            Some("sonnet"),
+        );
 
         let merged = merge_provider_quota(
             Some(&prior),

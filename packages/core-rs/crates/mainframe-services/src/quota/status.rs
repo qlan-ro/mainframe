@@ -25,7 +25,12 @@ mod tests {
 
     const NOW: i64 = 1_720_000_000_000;
 
-    fn win(kind: QuotaWindowKind, used_percent: f64, resets_at: i64, label: Option<&str>) -> QuotaWindow {
+    fn win(
+        kind: QuotaWindowKind,
+        used_percent: f64,
+        resets_at: i64,
+        label: Option<&str>,
+    ) -> QuotaWindow {
         QuotaWindow {
             kind,
             used_percent,
@@ -35,7 +40,11 @@ mod tests {
         }
     }
 
-    fn quota(session: Option<QuotaWindow>, weekly: Option<QuotaWindow>, model: Vec<QuotaWindow>) -> ProviderQuota {
+    fn quota(
+        session: Option<QuotaWindow>,
+        weekly: Option<QuotaWindow>,
+        model: Vec<QuotaWindow>,
+    ) -> ProviderQuota {
         ProviderQuota {
             status: ProviderQuotaStatus::Unknown,
             session,
@@ -63,7 +72,10 @@ mod tests {
             Some(win(QuotaWindowKind::Weekly, 20.0, NOW - 1, None)),
             vec![],
         );
-        assert_eq!(derive_provider_status(&q, NOW), ProviderQuotaStatus::Unknown);
+        assert_eq!(
+            derive_provider_status(&q, NOW),
+            ProviderQuotaStatus::Unknown
+        );
     }
 
     #[test]
@@ -79,7 +91,10 @@ mod tests {
     #[test]
     fn unknown_when_no_windows_at_all() {
         let q = quota(None, None, vec![]);
-        assert_eq!(derive_provider_status(&q, NOW), ProviderQuotaStatus::Unknown);
+        assert_eq!(
+            derive_provider_status(&q, NOW),
+            ProviderQuotaStatus::Unknown
+        );
     }
 
     #[test]
@@ -87,8 +102,16 @@ mod tests {
         let q = quota(
             None,
             None,
-            vec![win(QuotaWindowKind::WeeklyModel, 50.0, NOW - 1, Some("opus"))],
+            vec![win(
+                QuotaWindowKind::WeeklyModel,
+                50.0,
+                NOW - 1,
+                Some("opus"),
+            )],
         );
-        assert_eq!(derive_provider_status(&q, NOW), ProviderQuotaStatus::Unknown);
+        assert_eq!(
+            derive_provider_status(&q, NOW),
+            ProviderQuotaStatus::Unknown
+        );
     }
 }

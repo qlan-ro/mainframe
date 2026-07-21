@@ -28,7 +28,12 @@ mod tests {
 
     const NOW: i64 = 1_720_000_000_000;
 
-    fn win(kind: QuotaWindowKind, used_percent: f64, resets_at: i64, label: Option<&str>) -> QuotaWindow {
+    fn win(
+        kind: QuotaWindowKind,
+        used_percent: f64,
+        resets_at: i64,
+        label: Option<&str>,
+    ) -> QuotaWindow {
         QuotaWindow {
             kind,
             used_percent,
@@ -38,7 +43,11 @@ mod tests {
         }
     }
 
-    fn quota(session: Option<QuotaWindow>, weekly: Option<QuotaWindow>, model: Vec<QuotaWindow>) -> ProviderQuota {
+    fn quota(
+        session: Option<QuotaWindow>,
+        weekly: Option<QuotaWindow>,
+        model: Vec<QuotaWindow>,
+    ) -> ProviderQuota {
         ProviderQuota {
             status: ProviderQuotaStatus::Ok,
             session,
@@ -75,7 +84,12 @@ mod tests {
     #[test]
     fn considers_model_windows_alongside_session_and_weekly() {
         let session = win(QuotaWindowKind::Session, 10.0, NOW + 10_000, None);
-        let model = win(QuotaWindowKind::WeeklyModel, 88.0, NOW + 10_000, Some("opus"));
+        let model = win(
+            QuotaWindowKind::WeeklyModel,
+            88.0,
+            NOW + 10_000,
+            Some("opus"),
+        );
         let q = quota(Some(session), None, vec![model.clone()]);
         assert_eq!(select_tightest_window(&q, NOW), Some(&model));
     }

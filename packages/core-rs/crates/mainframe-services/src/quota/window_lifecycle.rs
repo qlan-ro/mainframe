@@ -5,9 +5,7 @@
 
 use mainframe_types::adapter::{ProviderQuota, QuotaWindow, QuotaWindowKind};
 
-use super::constants::{
-    SESSION_WINDOW_DURATION_MS, STALE_THRESHOLD_MS, WEEKLY_WINDOW_DURATION_MS,
-};
+use super::constants::{SESSION_WINDOW_DURATION_MS, STALE_THRESHOLD_MS, WEEKLY_WINDOW_DURATION_MS};
 
 fn window_duration_ms(kind: QuotaWindowKind) -> i64 {
     match kind {

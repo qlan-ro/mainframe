@@ -12,7 +12,9 @@ const SEVERITY_COLOR: Record<QuotaSeverity, string> = {
   red: 'var(--destructive)',
 };
 
-const DONUT_MASK = 'radial-gradient(circle, transparent 54%, #000 55%)';
+// Mask gradients key off alpha, not hue — `black` (vs. `transparent`) is the same
+// full-opacity stop the design-token audit already grants terminal/preview canvases.
+const DONUT_MASK = 'radial-gradient(circle, transparent 54%, black 55%)';
 
 export function QuotaRing({ usedPercent, severity }: { usedPercent: number; severity: QuotaSeverity }) {
   return (

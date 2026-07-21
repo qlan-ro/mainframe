@@ -20,7 +20,8 @@ use crate::trust_store::read_claude_account_identity;
 
 const USAGE_TIMEOUT_MS: u64 = 30_000;
 
-type RunUsage = dyn Fn() -> Pin<Box<dyn Future<Output = Result<String, AdapterError>> + Send>> + Send + Sync;
+type RunUsage =
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<String, AdapterError>> + Send>> + Send + Sync;
 type ReadIdentity = dyn Fn() -> Pin<Box<dyn Future<Output = String> + Send>> + Send + Sync;
 
 /// Injected dependencies so tests need no real spawn / filesystem read.
@@ -33,13 +34,17 @@ pub struct PullClaudeQuotaDeps<'a> {
     pub now: i64,
 }
 
-pub async fn pull_claude_quota(deps: PullClaudeQuotaDeps<'_>) -> Result<ProviderQuota, AdapterError> {
+pub async fn pull_claude_quota(
+    deps: PullClaudeQuotaDeps<'_>,
+) -> Result<ProviderQuota, AdapterError> {
     let usage_fut = (deps.run_usage)();
     let identity_fut: Pin<Box<dyn Future<Output = String> + Send>> = match deps.read_identity {
         Some(read_identity) => read_identity(),
         None => Box::pin(async { read_claude_account_identity(None).await }),
     };
-    let (text, account_identity) = tokio::try_join!(usage_fut, async { Ok::<_, AdapterError>(identity_fut.await) })?;
+    let (text, account_identity) = tokio::try_join!(usage_fut, async {
+        Ok::<_, AdapterError>(identity_fut.await)
+    })?;
 
     let mut quota = parse_claude_usage(&text, deps.now);
     quota.account_identity = Some(account_identity);
@@ -55,7 +60,13 @@ const STDERR_SNIPPET_LEN: usize = 500;
 /// ~1s. The CLI uses its own auth — no credential handling here.
 pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, AdapterError> {
     let run = Command::new(binary)
-        .args(["-p", "/usage", "--no-session-persistence", "--output-format", "text"])
+        .args([
+            "-p",
+            "/usage",
+            "--no-session-persistence",
+            "--output-format",
+            "text",
+        ])
         // edition-2024 forbids mutating process env; PATH is threaded explicitly
         // so packaged builds find `claude`, mirroring the title-generator spawn.
         .env("PATH", path)
@@ -108,7 +119,8 @@ mod tests {
     use super::*;
 
     const NOW: i64 = 1_752_814_800_000; // 2026-07-18T06:00:00Z, before the fixture's reset instants
-    const USAGE: &str = "Current session: 19% used \u{b7} resets Jul 18 at 10:10am (Europe/Bucharest)";
+    const USAGE: &str =
+        "Current session: 19% used \u{b7} resets Jul 18 at 10:10am (Europe/Bucharest)";
 
     fn run_usage_ok(text: &'static str) -> Box<RunUsage> {
         Box::new(move || Box::pin(async move { Ok(text.to_string()) }))
@@ -129,7 +141,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(quota.status, mainframe_types::adapter::ProviderQuotaStatus::Ok);
+        assert_eq!(
+            quota.status,
+            mainframe_types::adapter::ProviderQuotaStatus::Ok
+        );
         assert_eq!(quota.session.as_ref().unwrap().used_percent, 19.0);
         assert_eq!(quota.account_identity.as_deref(), Some("uuid-123"));
         assert_eq!(quota.observed_at, NOW);
@@ -169,7 +184,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(quota.status, mainframe_types::adapter::ProviderQuotaStatus::Unknown);
+        assert_eq!(
+            quota.status,
+            mainframe_types::adapter::ProviderQuotaStatus::Unknown
+        );
         assert_eq!(quota.account_identity.as_deref(), Some("unknown"));
     }
 }

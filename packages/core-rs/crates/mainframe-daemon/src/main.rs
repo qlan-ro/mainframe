@@ -24,6 +24,7 @@ use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 
 use crate::plugin_host_db::DaemonPluginHostDb;
+use crate::quota_store::DaemonQuotaSettings;
 use mainframe_adapter_api::resolve_executable::{
     ResolverDeps, SettingsWriter, resolve_adapter_executable,
 };
@@ -33,11 +34,11 @@ use mainframe_adapter_claude::quota_pull::{
     PullClaudeQuotaDeps, pull_claude_quota, spawn_claude_usage,
 };
 use mainframe_adapter_claude::trust_store::{
-    read_claude_account_identity, CLAUDE_IDENTITY_TRANSIENT,
+    CLAUDE_IDENTITY_TRANSIENT, read_claude_account_identity,
 };
 use mainframe_adapter_codex::CodexAdapter;
 use mainframe_adapter_codex::quota_pull::pull_codex_quota_via_temp_app_server;
-use mainframe_adapter_codex::{read_codex_account_identity_from_disk, CODEX_IDENTITY_TRANSIENT};
+use mainframe_adapter_codex::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
 use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
@@ -58,7 +59,6 @@ use mainframe_server::{
     RegistryLaunchStopper, build_app, build_automations_engine, build_chat_manager,
     spawn_broadcast_pump,
 };
-use crate::quota_store::DaemonQuotaSettings;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
@@ -706,13 +706,12 @@ fn register_quota_pullers(
                 .await
                 .ok_or_else(|| "claude executable not found".to_string())?;
             let path = resolved_path.as_str().to_string();
-            let run_usage = move || -> Pin<
-                Box<dyn Future<Output = Result<String, AdapterError>> + Send>,
-            > {
-                let binary = binary.clone();
-                let path = path.clone();
-                Box::pin(async move { spawn_claude_usage(&binary, &path).await })
-            };
+            let run_usage =
+                move || -> Pin<Box<dyn Future<Output = Result<String, AdapterError>> + Send>> {
+                    let binary = binary.clone();
+                    let path = path.clone();
+                    Box::pin(async move { spawn_claude_usage(&binary, &path).await })
+                };
             pull_claude_quota(PullClaudeQuotaDeps {
                 run_usage: &run_usage,
                 read_identity: None,
