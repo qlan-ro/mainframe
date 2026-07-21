@@ -5,9 +5,9 @@
  *   header → ProjectFilterPillBar (the project switcher — "All projects" is
  *   its own top row, so no separate "Projects" section title is needed) →
  *   "Sessions" group header (chevron + count + new/sort/more) → scrollable
- *   TIME-grouped list (flex-1) → TasksSidebarSection (a second navigable
- *   collection, right after Sessions) → TagFilterBar pinned at the BOTTOM
- *   (border-t, flex-shrink-0)
+ *   TIME-grouped list (flex-1) → flexible spacer → bottom utility cluster:
+ *   TasksSidebarSection (capped backlog preview) → TagFilterBar, glued to
+ *   the daemon selector footer below
  *
  * Grouping is by TIME, not project (Pinned / Today / Yesterday / Earlier), with a
  * Sort By menu (Recent / Name / Status) — per the artboard `arrangeSessions`.
@@ -270,12 +270,8 @@ function SessionSidebarImpl() {
         </>
       )}
 
-      {/* Tasks — a navigable collection like Sessions, per HIG; sits right after the
-          session list, before the tag filter footer. */}
-      <TasksSidebarSection />
-
       {/* Flexible gap (not a fixed margin): absorbs whatever vertical space
-          Projects/Sessions/Tasks don't use, so Tags + the daemon selector
+          Projects/Sessions don't use, so Tasks + Tags + the daemon selector
           (SidebarFooter, rendered by SidebarShell right after this component)
           stay glued together as one bottom-anchored cluster instead of the
           footer floating up flush against Tags on a short list. A fixed
@@ -283,6 +279,12 @@ function SessionSidebarImpl() {
           shrinks below itself, so it always leaves a footer-sized dead zone
           either above or below the cluster depending on content length. */}
       <div className="min-h-3 flex-1" aria-hidden="true" />
+
+      {/* Bottom utility cluster: navigation (Projects/Sessions) flows from the
+          top; secondary project sections (Tasks backlog preview, tag filters)
+          anchor at the bottom with the daemon selector — the Finder/Mail
+          split of primary collections vs. end-of-sidebar utility sections. */}
+      <TasksSidebarSection />
 
       <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
     </>

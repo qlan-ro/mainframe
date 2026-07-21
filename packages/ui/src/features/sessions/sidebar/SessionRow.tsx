@@ -39,6 +39,7 @@ import { useRowHoverCard } from './use-row-hover-card';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
+import { useArchiveSession } from './use-archive-session';
 import { sidebarIndentPx, SIDEBAR_ROW_GUTTER_PX } from '@/layout/sidebar-indent';
 
 /** Level 2 — one step deeper than SessionGroupHeader (level 1). Applied as the
@@ -95,6 +96,7 @@ function SessionRowInner({
   // popover at the cursor (same coordinates the context menu opened at) rather
   // than the host's default (0,0).
   const contextMenuPoint = useRef<{ x: number; y: number } | null>(null);
+  const handleArchive = useArchiveSession(item.remoteId ?? item.id, custom.worktreePath != null);
 
   const title = item.title ?? 'Untitled session';
 
@@ -153,7 +155,7 @@ function SessionRowInner({
             handleTags(p ? new DOMRect(p.x, p.y, 0, 0) : null);
           }, 0);
         }}
-        onArchive={() => void itemRuntime.archive()}
+        onArchive={handleArchive}
         claudeSessionId={custom.claudeSessionId}
       >
         <ThreadListItemPrimitive.Root
@@ -216,7 +218,7 @@ function SessionRowInner({
                 onPin={handlePin}
                 onUnpin={handleUnpin}
                 onTags={(rect) => handleTags(rect)}
-                onArchive={() => void itemRuntime.archive()}
+                onArchive={handleArchive}
               />
             </div>
           </ThreadListItemPrimitive.Trigger>

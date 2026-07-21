@@ -107,6 +107,56 @@ describe('ProjectFilterPillBar — attention badge', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Name color convention — mirrors SessionRow's title: full-strength foreground
+// is the UNREAD signal only. A project with no unread sessions must render its
+// name muted, never black.
+// ---------------------------------------------------------------------------
+
+describe('ProjectFilterPillBar — project name color signals unread, not rest state', () => {
+  /** p1's name span — the element carrying the color/weight classes. */
+  const nameSpan = (): HTMLElement => screen.getByText('mainframe');
+
+  it('renders a project with no unread sessions muted, not foreground', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{ p1: 0, p2: 0 }}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(nameSpan().className).toContain('text-muted-foreground');
+    expect(nameSpan().className).not.toContain('text-foreground');
+  });
+
+  it('renders a project WITH unread sessions bold foreground', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{ p1: 3, p2: 0 }}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(nameSpan().className).toContain('text-foreground');
+    expect(nameSpan().className).toContain('font-bold');
+  });
+
+  it('renders the active project in the selection color, not the unread black', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId="p1"
+        attentionCounts={{ p1: 3, p2: 0 }}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(nameSpan().className).toContain('text-primary');
+    expect(nameSpan().className).not.toContain('font-bold');
+  });
+});
+
 describe('ProjectFilterPillBar — single-select click semantics', () => {
   it('clicking an inactive project row calls onSelect with its id', async () => {
     const handleSelect = vi.fn();
@@ -313,6 +363,51 @@ describe('ProjectFilterPillBar — right-click project management', () => {
     expect(screen.getByTestId('sessions-project-rename-p1')).toHaveAttribute('data-disabled');
     await userEvent.click(screen.getByTestId('sessions-project-remove-p1'));
     expect(handleRemove).toHaveBeenCalledWith(PROJECTS[0]);
+  });
+});
+
+describe('ProjectFilterPillBar — hover-revealed remove button on the project row', () => {
+  it('calls onRemoveProject with the project when the hover remove button is clicked', async () => {
+    const handleRemove = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={handleRemove}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('sessions-project-remove-action-p2'));
+    expect(handleRemove).toHaveBeenCalledTimes(1);
+    expect(handleRemove).toHaveBeenCalledWith(PROJECTS[1]);
+  });
+
+  it('does not call onSelect when the hover remove button is clicked (stopPropagation)', async () => {
+    const handleSelect = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={handleSelect}
+        onRemoveProject={() => undefined}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('sessions-project-remove-action-p1'));
+    expect(handleSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not render the hover remove button when onRemoveProject is omitted', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.queryByTestId('sessions-project-remove-action-p1')).toBeNull();
   });
 });
 

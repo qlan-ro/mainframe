@@ -12,9 +12,9 @@
  * active project via useActiveIdentity and renders nothing without one
  * (matches the old `{projectId && <TasksDrawer .../>}` guard).
  *
- * Capped own-scroll height (not flex-1) so a long task list can't crowd the
- * Sessions list off the visible sidebar — plain section, no manual resize
- * handle, closer to "just like Sessions" than the old resizable drawer.
+ * No internal scroll region: TasksSidebarList caps itself at a few rows and
+ * ends with a "View all N tasks" row into the full Tasks view, so a long
+ * backlog can't crowd the Sessions list off the visible sidebar.
  *
  * data-testid="tasks-sidebar-section".
  */
@@ -42,8 +42,6 @@ const ROW_BTN =
 /** Matches SessionsMoreMenu's ICON_BTN, for a consistent header icon-button look. */
 const ICON_BTN =
   'inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
-
-const LIST_MAX_HEIGHT = 240;
 
 export function TasksSidebarSection() {
   const { projectId } = useActiveIdentity();
@@ -104,9 +102,7 @@ export function TasksSidebarSection() {
             </button>
           </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: LIST_MAX_HEIGHT }}>
-            <TasksSidebarList port={port} projectId={projectId} onStartSession={(t) => void startTodoSession(t.id)} />
-          </div>
+          <TasksSidebarList port={port} projectId={projectId} onStartSession={(t) => void startTodoSession(t.id)} />
         </>
       )}
 

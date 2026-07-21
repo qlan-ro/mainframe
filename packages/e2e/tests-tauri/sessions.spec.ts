@@ -18,8 +18,7 @@
  *   sessions-row-action-archive   — hover action: archive
  *   sessions-rename-input         — inline rename input
  *   sessions-row-title            — the title span
- *   sessions-archive-confirm-dialog — dialog root (no-worktree + worktree chats)
- *   sessions-archive-confirm      — Archive button (no-worktree chat)
+ *   sessions-archive-confirm-dialog — dialog root (worktree-backed chats only)
  *   sessions-archived-dialog      — archived sessions dialog
  *   archived-session-item         — row inside archived dialog
  *   restore-session-btn           — restore button in archived dialog
@@ -29,8 +28,8 @@
  *   import-session-btn            — Import button on each external-session row
  *   sessions-new-picker           — sidebar "New" project picker (no filter pill active)
  *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
- *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button (hasWorktree=true)
- *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button (hasWorktree=true)
+ *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button
+ *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button
  *   sessions-import-load-more     — ImportSessionsDialog infinite-scroll sentinel (IntersectionObserver)
  *   sessions-import-retry         — ImportSessionsDialog "Try again" button (fetch error state)
  */
@@ -170,13 +169,9 @@ test.describe('§45 Sessions panel', () => {
       .first()
       .evaluate((el) => (el as HTMLElement).click());
 
-    // The ArchiveWorktreeDialog opens — for a chat with NO git worktree, click Archive.
-    const confirmDialog = page.getByTestId('sessions-archive-confirm-dialog');
-    await confirmDialog.waitFor({ timeout: 5_000 });
-    await page.getByTestId('sessions-archive-confirm').click();
-
-    // The row should disappear from the active list.
+    // A chat with NO worktree has nothing to decide, so it archives with no prompt.
     await expect(rows).toHaveCount(countBefore - 1, { timeout: 10_000 });
+    await expect(page.getByTestId('sessions-archive-confirm-dialog')).toHaveCount(0);
   });
 
   // SP9: view and restore an archived session.
@@ -208,18 +203,14 @@ test.describe('§45 Sessions panel', () => {
 
 // ─── §45 Sessions panel — archive dialog worktree branch ─────────────────────
 //
-// SP8 above covers the NO-worktree path: ArchiveWorktreeDialog renders only
-// `sessions-archive-confirm` (hasWorktree:false), which SP8 clicks. This block
-// covers the hasWorktree:true branch — the dialog swaps in
-// `sessions-archive-keep-worktree` / `sessions-archive-delete-worktree` instead
-// (ArchiveWorktreeDialog.tsx) — and exercises BOTH choices end to end, asserting
-// the worktree directory's fate on disk via node:fs (not just the dialog UI).
+// SP8 above covers the NO-worktree path, where archiving raises no dialog at all.
+// This block covers the only path that asks — a chat WITH a worktree, whose fate
+// is the question — and exercises BOTH answers end to end, asserting the worktree
+// directory's fate on disk via node:fs (not just the dialog UI).
 //
-// `hasWorktree` is derived by chats-remote-adapter.archiveWithConfirm from a
-// fresh `getChat` read of `chat.worktreePath` at archive-click time (not from
-// any cached list), so a chat REST-seeded with a worktree via `enable-worktree`
-// is picked up with no reload needed — same pattern as chat-header.spec.ts's
-// "review button (worktree gate)" block.
+// The row reads `custom.worktreePath` off its own thread-list entry (SessionRow →
+// useArchiveSession), so a chat REST-seeded with a worktree needs that entry
+// refreshed before the click: hence the reload in beforeAll.
 test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
@@ -252,6 +243,9 @@ test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
     chatDelete = await createTauriChat(app.page, project.projectId, 'default');
     worktreePathKeep = await enableWorktree(chatKeep, 'e2e-archive-keep');
     worktreePathDelete = await enableWorktree(chatDelete, 'e2e-archive-delete');
+    // Re-derive the thread list so both rows carry the freshly-seeded worktreePath.
+    await app.page.reload();
+    await waitConnected(app.page);
   });
 
   test.afterAll(async () => {
@@ -259,7 +253,7 @@ test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
     await closeTauriApp(app);
   });
 
-  test('a chat with a worktree shows keep/delete worktree buttons, not the single confirm', async () => {
+  test('a chat with a worktree is asked about it before archiving, and Keep spares the directory', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     const row = sidebar.row(chatKeep);
@@ -271,7 +265,8 @@ test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
     await confirmDialog.waitFor({ timeout: 5_000 });
     await expect(page.getByTestId('sessions-archive-keep-worktree')).toBeVisible();
     await expect(page.getByTestId('sessions-archive-delete-worktree')).toBeVisible();
-    await expect(page.getByTestId('sessions-archive-confirm')).toHaveCount(0);
+    // The row is still in the list: nothing is archived until the question is answered.
+    await expect(row).toHaveCount(1);
 
     // Keep worktree — the row leaves the active list but the directory survives on disk.
     await page.getByTestId('sessions-archive-keep-worktree').click();
