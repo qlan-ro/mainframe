@@ -20,9 +20,11 @@
  */
 import { forwardRef, useMemo, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
+import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 import type { SessionGroupResult } from '../view-model/group-sessions';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { SessionGroupHeader } from './SessionGroupHeader';
+import { ScrollBar } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 export interface SessionListVirtuosoProps {
@@ -32,24 +34,53 @@ export interface SessionListVirtuosoProps {
 }
 
 // The scroll viewport. Carries the list test hook; forwardRef is required —
-// Virtuoso attaches its scroll listener to this node. Defined at module scope
-// so its identity is stable across renders (an inline component would remount
-// the scroller every render).
-const SessionsScroller = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'div'>>(
-  function SessionsScroller(props, ref) {
-    const { className, ...rest } = props;
-    return (
-      <div
+// Virtuoso attaches its scroll listener to this node (hence the ref lands on the
+// Radix Viewport, the element that actually scrolls — not the Root). Defined at
+// module scope so its identity is stable across renders (an inline component
+// would remount the scroller every render).
+//
+// Radix ScrollArea rather than a plain div: globals.css sets `scrollbar-width:
+// thin` universally, which WebKit renders as a CLASSIC, space-reserving bar — so
+// rows lost width to a permanent gutter whose thumb is transparent until hover.
+// No CSS fixes that (the standard props can't be mixed with ::-webkit-scrollbar
+// rules, and scrollbar-gutter only ever reserves more). Radix hides the native
+// bar and paints an absolutely-positioned thumb instead: it overlays the rows, so
+// it costs no layout width. `type="hover"` keeps the old reveal-on-hover feel.
+//
+// Splitting Virtuoso's props across the two elements is load-bearing. The Root is
+// the flex child the sidebar lays out, so it takes the className (flex sizing) and
+// the `maxHeight` content cap. Everything else in Virtuoso's style — crucially
+// `overflow-y: auto` — must stay on the Viewport: handing it to the Root instead
+// makes the Root a SECOND scroll container, and since Virtuoso's ref/listener is
+// on the Viewport, the list then scrolls on an element Virtuoso never measures and
+// rows past the fold become unreachable.
+const SessionsScroller = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<'div'>>(function SessionsScroller(
+  { className, style, children, ...rest },
+  ref,
+) {
+  const { maxHeight, ...viewportStyle } = style ?? {};
+  return (
+    <ScrollAreaPrimitive.Root type="hover" className={cn('relative overflow-hidden', className)} style={{ maxHeight }}>
+      <ScrollAreaPrimitive.Viewport
         ref={ref}
-        className={cn('overscroll-contain bg-transparent', className)}
         {...rest}
+        style={viewportStyle}
+        // `[&>div]:block!`: Radix wraps viewport children in a `display:table`
+        // div. Left as a table it also shrink-wraps Virtuoso's item list, which
+        // collapses the measured content height to a single row.
+        className="size-full overscroll-contain bg-transparent [&>div]:block!"
         // After {...rest}: Virtuoso injects its own data-testid ("virtuoso-scroller")
         // which must not override the list's test hook.
         data-testid="sessions-list-scroll"
-      />
-    );
-  },
-);
+      >
+        {children}
+      </ScrollAreaPrimitive.Viewport>
+      {/* w-[9px], not the shared ScrollBar's w-2: integer spacing is compressed here
+            (w-2 = 4px), which after the border and padding leaves a 1px thumb. */}
+      <ScrollBar className="w-[9px]" />
+    </ScrollAreaPrimitive.Root>
+  );
+});
 
 // The pinned group-header host. Its SessionGroupHeader child paints translucent
 // glass, but WKWebView's backdrop-filter does not reliably sample sibling rows
@@ -94,10 +125,14 @@ export function SessionListVirtuoso({ groups, showProject, renderItem }: Session
   const [contentHeight, setContentHeight] = useState<number>();
 
   return (
-    // pb only: top padding on the scroller opens a see-through band above the
-    // pinned group header (sticky pins to the content edge, below the padding).
+    // mb, not pb: the scroller is capped at `maxHeight: contentHeight`, so bottom
+    // PADDING is subtracted from the viewport inside that cap — leaving the list
+    // permanently 2px short of its own content and Radix painting a thumb for an
+    // overflow that isn't real. A margin sits outside the cap and buys the same
+    // gap for free. Bottom only: a top gap on the scroller opens a see-through
+    // band above the pinned group header (sticky pins to the content edge).
     <GroupedVirtuoso
-      className="min-h-0 flex-[9999_1_0%] pb-0.5"
+      className="mb-0.5 min-h-0 flex-[9999_1_0%]"
       style={contentHeight != null ? { maxHeight: contentHeight } : undefined}
       totalListHeightChanged={setContentHeight}
       groupCounts={groupCounts}

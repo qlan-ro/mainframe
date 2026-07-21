@@ -622,8 +622,8 @@ describe('SessionSidebar — archived sessions are excluded from the list', () =
 // 8. TagFilterBar is mounted (sessions-tag-filter-bar present)
 // Per the warm-chrome artboard it is now pinned at the BOTTOM, AFTER the
 // scrollable session list — assert it renders AND comes after the list region.
-// TasksSidebarSection sits between the two: right after the session list,
-// before the tag filter footer.
+// TasksSidebarSection is part of the bottom utility cluster: after the
+// flexible spacer, directly above the tag filter footer.
 // ---------------------------------------------------------------------------
 
 describe('SessionSidebar — TagFilterBar is mounted at the bottom, after the list', () => {
@@ -640,7 +640,7 @@ describe('SessionSidebar — TagFilterBar is mounted at the bottom, after the li
     expect(pills.compareDocumentPosition(tagBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('renders the tasks section right after the session list, before the tag filter bar', () => {
+  it('renders the tasks section in the bottom cluster, directly before the tag filter bar', () => {
     render(<SessionSidebar />);
     const tasks = screen.getByTestId('tasks-sidebar-section-stub');
     const tagBar = screen.getByTestId('sessions-tag-filter-bar');
