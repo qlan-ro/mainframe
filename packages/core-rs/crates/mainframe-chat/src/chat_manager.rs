@@ -17,7 +17,7 @@ use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
 use mainframe_types::adapter::{
-    ControlResponse, DetectedPr, EffortLevel, ProviderQuota, SessionOptions,
+    ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
 use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,
@@ -37,6 +37,7 @@ use tracing::info;
 use crate::config_manager::{ChatConfigManager, ChatFieldUpdate, ConfigError, ConfigManagerDeps};
 use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
 use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};
+use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::lifecycle_manager::{
     ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
 };
@@ -262,6 +263,75 @@ pub trait ChatManagerDeps: Send + Sync {
         _adapter_id: &str,
     ) -> Vec<mainframe_types::adapter::AdapterModel> {
         Vec::new()
+    }
+}
+
+/// Object-safe facade over `ExternalSessionService<D>` (`ctx.chats.
+/// getExternalSessionService()`). `ChatManager` only ever holds the
+/// already-erased `Arc<dyn ChatManagerDeps>`, so the generic service is built
+/// once at boot from the concrete deps type (see
+/// `mainframe_server::chat_deps::build_chat_manager`, where that type is still
+/// known) and injected here pre-erased via [`ChatManager::with_external_sessions`].
+pub trait ExternalSessionFacade: Send + Sync {
+    fn start_auto_scan(&self, project_id: &str);
+    fn stop_auto_scan(&self, project_id: &str);
+    fn stop_all(&self);
+    fn scan_page<'a>(
+        &'a self,
+        project_id: &'a str,
+        offset: i64,
+        limit: i64,
+    ) -> BoxFuture<'a, ExternalSessionPage>;
+    #[allow(clippy::too_many_arguments)]
+    fn import_session<'a>(
+        &'a self,
+        project_id: &'a str,
+        session_id: &'a str,
+        adapter_id: &'a str,
+        title: Option<&'a str>,
+        created_at: Option<&'a str>,
+        modified_at: Option<&'a str>,
+    ) -> BoxFuture<'a, Chat>;
+}
+
+impl<D: ExternalSessionDeps + 'static> ExternalSessionFacade for ExternalSessionService<D> {
+    fn start_auto_scan(&self, project_id: &str) {
+        ExternalSessionService::start_auto_scan(self, project_id);
+    }
+    fn stop_auto_scan(&self, project_id: &str) {
+        ExternalSessionService::stop_auto_scan(self, project_id);
+    }
+    fn stop_all(&self) {
+        ExternalSessionService::stop_all(self);
+    }
+    fn scan_page<'a>(
+        &'a self,
+        project_id: &'a str,
+        offset: i64,
+        limit: i64,
+    ) -> BoxFuture<'a, ExternalSessionPage> {
+        Box::pin(async move { self.scan_page(project_id, offset, limit).await })
+    }
+    fn import_session<'a>(
+        &'a self,
+        project_id: &'a str,
+        session_id: &'a str,
+        adapter_id: &'a str,
+        title: Option<&'a str>,
+        created_at: Option<&'a str>,
+        modified_at: Option<&'a str>,
+    ) -> BoxFuture<'a, Chat> {
+        Box::pin(async move {
+            self.import_session(
+                project_id,
+                session_id,
+                adapter_id,
+                title,
+                created_at,
+                modified_at,
+            )
+            .await
+        })
     }
 }
 
@@ -848,6 +918,7 @@ pub struct ChatManager {
     permission_handler: ChatPermissionHandler<PhDeps>,
     config: ChatConfigManager<CmDeps>,
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
+    external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
 }
 
 impl ChatManager {
@@ -912,7 +983,23 @@ impl ChatManager {
             permission_handler,
             config,
             idle_scanner: Mutex::new(idle_scanner),
+            external_sessions: None,
         }
+    }
+
+    /// Inject the `ExternalSessionService` built from the concrete deps type
+    /// (`getExternalSessionService()`'s backing instance). Called once at boot,
+    /// before the manager is shared behind an `Arc`.
+    pub fn with_external_sessions(mut self, service: Arc<dyn ExternalSessionFacade>) -> Self {
+        self.external_sessions = Some(service);
+        self
+    }
+
+    /// `ctx.chats.getExternalSessionService()` — `None` when the manager was
+    /// built without one (e.g. a test harness that only needs the rest of the
+    /// facade).
+    pub fn external_session_service(&self) -> Option<Arc<dyn ExternalSessionFacade>> {
+        self.external_sessions.clone()
     }
 
     fn emit(&self, event: DaemonEvent) {
@@ -2025,9 +2112,14 @@ mod tests;
 // notes: guard (Rust default apply_tuning is Ok no-op) → an extra resolve for adapters
 // notes: without live tuning; behaviourally faithful. STILL DEFERRED (genuine blockers,
 // notes: not on this task's crate surface): trustWorkspace (writeWorkspaceTrust unported
-// notes: in mainframe-plugins), getExternalSessionService/start/stopExternalSessionScan
-// notes: (ExternalSessionService not wired into the facade — its routes are out of this
-// notes: task's ownership), plan-mode delegation (PhDeps createPlanModeHandler seam).
+// notes: in mainframe-plugins), plan-mode delegation (PhDeps createPlanModeHandler seam).
+// notes: getExternalSessionService(): `ExternalSessionService<D>` is generic over the
+// notes: concrete deps type, but `new()` only ever receives the already-erased
+// notes: `Arc<dyn ChatManagerDeps>` — so the object-safe `ExternalSessionFacade` trait
+// notes: (BoxFuture-based) is blanket-impl'd for `ExternalSessionService<D>` and injected
+// notes: post-construction via `with_external_sessions` from `build_chat_manager`, where
+// notes: the concrete `DaemonChatDeps` Arc still exists. `None` (no service) is a legal
+// notes: state for harnesses that only need the rest of the facade.
 // notes: setStopLaunchProcesses/setPushService are construction-time injection in Rust
 // notes: (LaunchStopper + send_push deps), so the TS late-bind setters are unnecessary.
 // notes: Ported tests: cli-queue (5), recover-working (5), turn-timing (1), command-

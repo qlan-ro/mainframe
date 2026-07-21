@@ -19,7 +19,11 @@
 
 use std::sync::Arc;
 
-use mainframe_adapter_api::{AdapterRegistry, AdapterSession, BoxFuture};
+use mainframe_adapter_api::{AdapterError, AdapterRegistry, AdapterSession, BoxFuture};
+use mainframe_adapter_claude::external_session_cache::{
+    ExternalSessionCache, new_external_session_cache,
+};
+use mainframe_adapter_claude::external_sessions::ExternalSessionListOpts;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::messages::message_parsing::strip_mainframe_command_tags;
 use mainframe_background_tasks::kill::{
@@ -34,6 +38,9 @@ use mainframe_chat::context_tracker::{
 };
 use mainframe_chat::attachment_processor;
 use mainframe_chat::event_handler::PushOut;
+use mainframe_chat::external_session_service::{
+    ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
+};
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_runtime::ResolvedPath;
 use mainframe_runtime::time::now_iso8601;
@@ -46,8 +53,10 @@ use mainframe_services::push::PushService;
 use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::quota::{IngestMode, QuotaManager};
 use mainframe_services::settings::provider_config::SettingsReader;
-use mainframe_types::adapter::{AdapterModel, DetectedPr, ProviderQuota, SessionOptions};
-use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, ResolvedTuning, TodoItem};
+use mainframe_types::adapter::{
+    AdapterModel, DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions,
+};
+use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, Project, ResolvedTuning, TodoItem};
 use mainframe_types::context::{
     SessionAttachment, SessionAttachmentKind, SessionMention, SkillFileEntry,
 };
@@ -85,6 +94,19 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
     }
 }
 
+/// Translate the external-session-import `Partial<Chat>` patch into the DB
+/// repository's `ChatUpdate`. `Object.assign(chat, updates)` in the TS only ever
+/// touches these four fields.
+fn to_external_chat_update(patch: &ExternalChatUpdate) -> mainframe_db::chats::ChatUpdate {
+    mainframe_db::chats::ChatUpdate {
+        claude_session_id: patch.claude_session_id.clone(),
+        title: patch.title.clone(),
+        created_at: patch.created_at.clone(),
+        updated_at: patch.updated_at.clone(),
+        ..Default::default()
+    }
+}
+
 /// The daemon-side `ChatManagerDeps`. Cheap to clone-share (every field is an
 /// `Arc`/handle), constructed once at boot in [`build_chat_manager`].
 pub struct DaemonChatDeps {
@@ -97,6 +119,10 @@ pub struct DaemonChatDeps {
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
     quota: Arc<QuotaManager>,
+    /// Process-lifetime Claude external-session enrichment cache — owned here
+    /// (not a module-level singleton, forbidden by PORTING.md §5) and threaded
+    /// into every `list_external_sessions("claude", ...)` call.
+    claude_external_session_cache: ExternalSessionCache,
 }
 
 impl ChatManagerDeps for DaemonChatDeps {
@@ -538,6 +564,134 @@ impl ChatManagerDeps for DaemonChatDeps {
     }
 }
 
+/// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
+/// backing instance). `listExternalSessions` is not on the ported `Adapter`
+/// trait (adapter-api TODO), so this dispatches to the concrete Claude/Codex
+/// scan functions directly by adapter id rather than through the registry.
+impl ExternalSessionDeps for DaemonChatDeps {
+    fn projects_get(&self, project_id: &str) -> Option<Project> {
+        let pid = project_id.to_string();
+        self.db
+            .call_blocking(move |d| d.projects.get(&pid))
+            .ok()
+            .flatten()
+    }
+
+    fn get_imported_session_ids(&self, project_id: &str) -> Vec<String> {
+        let pid = project_id.to_string();
+        self.db
+            .call_blocking(move |d| d.chats.get_imported_session_ids(&pid))
+            .unwrap_or_default()
+    }
+
+    fn find_by_external_session_id(&self, session_id: &str, project_id: &str) -> Option<Chat> {
+        let (sid, pid) = (session_id.to_string(), project_id.to_string());
+        self.db
+            .call_blocking(move |d| d.chats.find_by_external_session_id(&sid, &pid))
+            .ok()
+            .flatten()
+    }
+
+    fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat {
+        <Self as ChatManagerDeps>::chats_create(self, project_id, adapter_id, None, None, None)
+    }
+
+    fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate) {
+        let id = chat_id.to_string();
+        let db_patch = to_external_chat_update(updates);
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.update(&id, &db_patch))
+        {
+            tracing::warn!(%err, chat_id, "external-session chats.update failed");
+        }
+    }
+
+    fn chats_list(&self, project_id: &str) -> Vec<Chat> {
+        <Self as ChatManagerDeps>::chats_list(self, project_id)
+    }
+
+    fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
+        <Self as ChatManagerDeps>::settings_get(self, ns, key)
+    }
+
+    fn emit_event(&self, event: DaemonEvent) {
+        <Self as ChatManagerDeps>::emit_event(self, event)
+    }
+
+    fn generate_title<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        content: &'a str,
+        binary: &'a str,
+    ) -> BoxFuture<'a, Option<String>> {
+        <Self as ChatManagerDeps>::generate_title(self, adapter_id, content, binary)
+    }
+
+    /// `adapters.getAll().filter(a => a.listExternalSessions)` — the claude/codex
+    /// scan functions are free functions (not on the polymorphic `Adapter`
+    /// trait), so registration is keyed by id rather than a capability check.
+    fn external_session_adapter_ids(&self) -> Vec<String> {
+        self.adapters
+            .get_all()
+            .into_iter()
+            .map(|a| a.id().to_string())
+            .filter(|id| id == "claude" || id == "codex")
+            .collect()
+    }
+
+    fn list_external_sessions<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        project_path: &'a str,
+        exclude_ids: &'a [String],
+        offset: i64,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<ExternalSessionPage, AdapterError>> {
+        let adapter_id = adapter_id.to_string();
+        let project_path = project_path.to_string();
+        let exclude_ids = exclude_ids.to_vec();
+        Box::pin(async move {
+            let page = match adapter_id.as_str() {
+                "claude" => {
+                    mainframe_adapter_claude::external_sessions::list_external_sessions(
+                        &project_path,
+                        &exclude_ids,
+                        Some(ExternalSessionListOpts {
+                            offset: Some(offset),
+                            limit: Some(limit),
+                        }),
+                        &self.claude_external_session_cache,
+                    )
+                    .await
+                }
+                "codex" => {
+                    mainframe_adapter_codex::list_external_sessions(
+                        &project_path,
+                        &exclude_ids,
+                        Some(offset.max(0) as usize),
+                        Some(limit.max(0) as usize),
+                        None,
+                    )
+                    .await
+                }
+                other => {
+                    tracing::warn!(
+                        adapter_id = other,
+                        "list_external_sessions: unknown adapter id"
+                    );
+                    ExternalSessionPage {
+                        sessions: Vec::new(),
+                        total: 0,
+                        next_offset: None,
+                    }
+                }
+            };
+            Ok(page)
+        })
+    }
+}
+
 /// Assemble the production `ChatManager` from the daemon's live collaborators.
 /// Called once at boot (after the AdapterRegistry + BackgroundTaskTracker exist,
 /// before the server starts) — mirrors `new ChatManager(db, adapters, tracker,
@@ -568,8 +722,10 @@ pub fn build_chat_manager(
         broadcast,
         launch,
         quota,
+        claude_external_session_cache: new_external_session_cache(),
     });
-    Arc::new(ChatManager::new(deps))
+    let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
+    Arc::new(ChatManager::new(deps).with_external_sessions(external_sessions))
 }
 
 /// Bridge `Arc<dyn AdapterSession>` → the `SessionLike` the kill sweep wants.
@@ -769,3 +925,16 @@ pub(crate) fn fallback_chat(
 // + no session handle), applyCodexProviderTuning (codex-only session method, Phase 5),
 // stopLaunchProcesses (LaunchStopper seam, Phase 5). chats_create is infallible
 // per the ported trait; a DB failure logs + returns an unpersisted stub.
+// notes: ExternalSessionDeps (external-session-service.ts's DI surface) is also
+// implemented here and wired into `build_chat_manager` via
+// `ExternalSessionService::new(deps.clone())` + `ChatManager::with_external_sessions`.
+// `listExternalSessions` is not on the polymorphic Adapter trait (adapter-api TODO),
+// so `list_external_sessions` dispatches to the concrete
+// `mainframe_adapter_claude`/`mainframe_adapter_codex` free functions by id rather
+// than through the registry; `external_session_adapter_ids` mirrors the TS capability
+// filter as a hardcoded {claude, codex} id allowlist intersected with what is
+// actually registered. `claude_external_session_cache` is the process-lifetime,
+// injected (not module-singleton) enrichment cache the Claude scan needs.
+// `reconcile_transcript` is left at the trait's own `None` default (no
+// ChatManager.reconcileTranscript wiring) — out of this gap's scope; the
+// transcript-presence sweep is a no-op until that lands.
