@@ -182,8 +182,11 @@ fn signal_flag(signal: &str) -> String {
 /// one-run delay in an already-rare race.
 pub fn default_kill(pid: i64, signal: &str, group: bool) -> bool {
     let target = kill_target(pid, group);
+    // `--` is required: Linux `kill` parses a bare negative group target as a
+    // signal spec and exits 0 without delivering anything.
     match std::process::Command::new("kill")
         .arg(signal_flag(signal))
+        .arg("--")
         .arg(target.to_string())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
