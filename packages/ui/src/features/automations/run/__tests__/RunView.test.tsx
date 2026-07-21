@@ -182,15 +182,26 @@ describe('RunView — timeline states', () => {
     expect(screen.getByTestId('automations-run-step-create-pr')).toBeInTheDocument();
   });
 
-  it.each(['waiting', 'running', 'failed', 'cancelled'] as const)(
-    'renders a %s run without crashing',
-    async (status) => {
+  it.each([
+    ['waiting', 'Waiting', true],
+    ['running', 'Running', true],
+    ['failed', 'Failed', false],
+    ['cancelled', 'Cancelled', false],
+  ] as const)(
+    'renders a %s run with the matching status pill and cancel-button visibility',
+    async (status, label, cancellable) => {
       useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], interactions: [], catalog: [] });
       const timeline: AutomationTimelineEntry[] = [{ stepRef: 'q', stepId: 'q', kind: 'ask_me', status: 'waiting' }];
       const finishedAt = status === 'running' || status === 'waiting' ? null : Date.now();
       setup({ run: run({ id: `run-${status}`, status, finishedAt }), timeline });
       render(<RunView />);
       expect(await screen.findByTestId('automations-run-step-q')).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
+      if (cancellable) {
+        expect(screen.getByTestId('automations-run-cancel')).toBeInTheDocument();
+      } else {
+        expect(screen.queryByTestId('automations-run-cancel')).not.toBeInTheDocument();
+      }
     },
   );
 });

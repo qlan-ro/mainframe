@@ -7,6 +7,13 @@ import {
   isSubagentTool,
 } from '../../messages/tool-categorization.js';
 
+// These functions are `set.has(name)` lookups against an adapter-declared
+// ToolCategories value. The real per-adapter category sets are plain object
+// literals returned from ClaudeAdapter/CodexAdapter#getToolCategories() —
+// not standalone exports — so pinning "the real constants" here would just
+// re-import a whole adapter class to re-assert what
+// __tests__/plugins/builtin/claude/adapter.test.ts already pins directly.
+// This file stays a test-local fixture and focuses on the lookup behavior.
 const CLAUDE_CATEGORIES: ToolCategories = {
   explore: new Set(['Read', 'Glob', 'Grep']),
   hidden: new Set([
@@ -23,152 +30,72 @@ const CLAUDE_CATEGORIES: ToolCategories = {
   subagent: new Set(['Task']),
 };
 
+// Smaller categories object with a genuinely different `hidden` set, used to
+// prove the functions read from the passed-in categories argument rather
+// than a hardcoded/closed-over set.
+const ALT_CATEGORIES: ToolCategories = {
+  explore: new Set(['Read', 'Glob', 'Grep']),
+  hidden: new Set(['TaskList', 'Skill']),
+  progress: new Set(['TaskCreate']),
+  subagent: new Set(['Task']),
+};
+
 describe('isExploreTool', () => {
-  it('returns true for Read', () => {
-    expect(isExploreTool('Read', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for Glob', () => {
-    expect(isExploreTool('Glob', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for Grep', () => {
-    expect(isExploreTool('Grep', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns false for Bash', () => {
-    expect(isExploreTool('Bash', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for Edit', () => {
-    expect(isExploreTool('Edit', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for TaskCreate (not an explore tool)', () => {
-    expect(isExploreTool('TaskCreate', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isExploreTool('', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('is case-sensitive', () => {
-    expect(isExploreTool('read', CLAUDE_CATEGORIES)).toBe(false);
-    expect(isExploreTool('GLOB', CLAUDE_CATEGORIES)).toBe(false);
+  it.each([
+    ['Read', CLAUDE_CATEGORIES, true],
+    ['Glob', CLAUDE_CATEGORIES, true],
+    ['Grep', CLAUDE_CATEGORIES, true],
+    ['Bash', CLAUDE_CATEGORIES, false],
+    ['Edit', CLAUDE_CATEGORIES, false],
+    ['TaskCreate', CLAUDE_CATEGORIES, false],
+    ['', CLAUDE_CATEGORIES, false],
+    ['read', CLAUDE_CATEGORIES, false], // case-sensitive
+    ['GLOB', CLAUDE_CATEGORIES, false], // case-sensitive
+  ] as const)('isExploreTool(%s) → %s', (name, categories, expected) => {
+    expect(isExploreTool(name, categories)).toBe(expected);
   });
 });
 
 describe('isHiddenTool', () => {
-  it('returns true for TodoWrite', () => {
-    expect(isHiddenTool('TodoWrite', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for Skill', () => {
-    expect(isHiddenTool('Skill', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for TaskList', () => {
-    expect(isHiddenTool('TaskList', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for TaskGet', () => {
-    expect(isHiddenTool('TaskGet', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for TaskOutput', () => {
-    expect(isHiddenTool('TaskOutput', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for TaskStop', () => {
-    expect(isHiddenTool('TaskStop', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for EnterPlanMode', () => {
-    expect(isHiddenTool('EnterPlanMode', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for AskUserQuestion', () => {
-    expect(isHiddenTool('AskUserQuestion', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns false for Bash', () => {
-    expect(isHiddenTool('Bash', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for Read (explore tool, not hidden)', () => {
-    expect(isHiddenTool('Read', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for TaskCreate (task progress, not hidden)', () => {
-    expect(isHiddenTool('TaskCreate', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isHiddenTool('', CLAUDE_CATEGORIES)).toBe(false);
+  it.each([
+    ['TodoWrite', CLAUDE_CATEGORIES, true],
+    ['Skill', CLAUDE_CATEGORIES, true],
+    ['TaskList', CLAUDE_CATEGORIES, true],
+    ['TaskGet', CLAUDE_CATEGORIES, true],
+    ['TaskOutput', CLAUDE_CATEGORIES, true],
+    ['TaskStop', CLAUDE_CATEGORIES, true],
+    ['EnterPlanMode', CLAUDE_CATEGORIES, true],
+    ['AskUserQuestion', CLAUDE_CATEGORIES, true],
+    ['Bash', CLAUDE_CATEGORIES, false],
+    ['Read', CLAUDE_CATEGORIES, false], // explore tool, not hidden
+    ['TaskCreate', CLAUDE_CATEGORIES, false], // task progress, not hidden
+    ['', CLAUDE_CATEGORIES, false],
+    // Divergent case: TodoWrite is hidden under CLAUDE_CATEGORIES but not
+    // under ALT_CATEGORIES — proves the categories arg is actually consulted.
+    ['TodoWrite', ALT_CATEGORIES, false],
+  ] as const)('isHiddenTool(%s) → %s', (name, categories, expected) => {
+    expect(isHiddenTool(name, categories)).toBe(expected);
   });
 });
 
 describe('isTaskProgressTool', () => {
-  it('returns true for TaskCreate', () => {
-    expect(isTaskProgressTool('TaskCreate', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns true for TaskUpdate', () => {
-    expect(isTaskProgressTool('TaskUpdate', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns false for TaskList (hidden, not task progress)', () => {
-    expect(isTaskProgressTool('TaskList', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for Read', () => {
-    expect(isTaskProgressTool('Read', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isTaskProgressTool('', CLAUDE_CATEGORIES)).toBe(false);
+  it.each([
+    ['TaskCreate', CLAUDE_CATEGORIES, true],
+    ['TaskUpdate', CLAUDE_CATEGORIES, true],
+    ['TaskList', CLAUDE_CATEGORIES, false], // hidden, not task progress
+    ['Read', CLAUDE_CATEGORIES, false],
+    ['', CLAUDE_CATEGORIES, false],
+  ] as const)('isTaskProgressTool(%s) → %s', (name, categories, expected) => {
+    expect(isTaskProgressTool(name, categories)).toBe(expected);
   });
 });
 
 describe('isSubagentTool', () => {
-  it('returns true for Task', () => {
-    expect(isSubagentTool('Task', CLAUDE_CATEGORIES)).toBe(true);
-  });
-
-  it('returns false for Bash', () => {
-    expect(isSubagentTool('Bash', CLAUDE_CATEGORIES)).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isSubagentTool('', CLAUDE_CATEGORIES)).toBe(false);
-  });
-});
-
-describe('parameterized categorization', () => {
-  const categories: ToolCategories = {
-    explore: new Set(['Read', 'Glob', 'Grep']),
-    hidden: new Set(['TaskList', 'Skill']),
-    progress: new Set(['TaskCreate']),
-    subagent: new Set(['Task']),
-  };
-
-  it('isExploreTool checks against provided categories', () => {
-    expect(isExploreTool('Read', categories)).toBe(true);
-    expect(isExploreTool('Bash', categories)).toBe(false);
-  });
-
-  it('isHiddenTool checks against provided categories', () => {
-    expect(isHiddenTool('TaskList', categories)).toBe(true);
-    expect(isHiddenTool('Read', categories)).toBe(false);
-  });
-
-  it('isTaskProgressTool checks against provided categories', () => {
-    expect(isTaskProgressTool('TaskCreate', categories)).toBe(true);
-    expect(isTaskProgressTool('Bash', categories)).toBe(false);
-  });
-
-  it('isSubagentTool checks against provided categories', () => {
-    expect(isSubagentTool('Task', categories)).toBe(true);
-    expect(isSubagentTool('Bash', categories)).toBe(false);
+  it.each([
+    ['Task', CLAUDE_CATEGORIES, true],
+    ['Bash', CLAUDE_CATEGORIES, false],
+    ['', CLAUDE_CATEGORIES, false],
+  ] as const)('isSubagentTool(%s) → %s', (name, categories, expected) => {
+    expect(isSubagentTool(name, categories)).toBe(expected);
   });
 });

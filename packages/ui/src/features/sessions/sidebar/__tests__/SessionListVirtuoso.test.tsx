@@ -167,22 +167,16 @@ describe('SessionListVirtuoso — scroller test hook is present', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. One group header per group, via the real SessionGroupHeader
-// ---------------------------------------------------------------------------
-
-describe('SessionListVirtuoso — one group header per group', () => {
-  it('renders sessions-group-header-Pinned and sessions-group-header-Today for two groups', () => {
-    render(
-      <SessionListVirtuoso
-        groups={[PINNED_GROUP, TODAY_GROUP]}
-        showProject
-        renderItem={(item) => <div key={item.id}>{item.id}</div>}
-      />,
-    );
-    expect(screen.getByTestId('sessions-group-header-Pinned')).toBeTruthy();
-    expect(screen.getByTestId('sessions-group-header-Today')).toBeTruthy();
-  });
+it('renders sessions-group-header-Pinned and sessions-group-header-Today for two groups', () => {
+  render(
+    <SessionListVirtuoso
+      groups={[PINNED_GROUP, TODAY_GROUP]}
+      showProject
+      renderItem={(item) => <div key={item.id}>{item.id}</div>}
+    />,
+  );
+  expect(screen.getByTestId('sessions-group-header-Pinned')).toBeTruthy();
+  expect(screen.getByTestId('sessions-group-header-Today')).toBeTruthy();
 });
 
 // ---------------------------------------------------------------------------

@@ -106,42 +106,30 @@ describe('ClaudeTaskEvents', () => {
   });
 
   describe('background work kind mapping', () => {
-    it('maps local_bash → bash', () => {
-      te.handleTaskStarted('chat-a', { task_id: 'b1', description: 'x', task_type: 'local_bash' }, CTX);
-      expect(tracker.get('chat-a', 'b1')!.kind).toBe('bash');
-    });
-
-    it('maps local_agent → agent', () => {
-      te.handleTaskStarted('chat-a', { task_id: 'a1', description: 'x', task_type: 'local_agent' }, CTX);
-      expect(tracker.get('chat-a', 'a1')!.kind).toBe('agent');
-    });
-
-    it('maps remote agents and teammates → agent', () => {
-      te.handleTaskStarted('chat-a', { task_id: 'a2', description: 'x', task_type: 'remote_agent' }, CTX);
-      te.handleTaskStarted('chat-a', { task_id: 'a3', description: 'x', task_type: 'teammate' }, CTX);
-      expect(tracker.get('chat-a', 'a2')!.kind).toBe('agent');
-      expect(tracker.get('chat-a', 'a3')!.kind).toBe('agent');
-    });
-
-    it('maps local_workflow → workflow', () => {
-      te.handleTaskStarted('chat-a', { task_id: 'w1', description: 'x', task_type: 'local_workflow' }, CTX);
-      expect(tracker.get('chat-a', 'w1')!.kind).toBe('workflow');
-    });
-
-    it('maps an unknown task_type → other', () => {
-      te.handleTaskStarted('chat-a', { task_id: 'o1', description: 'x', task_type: 'local_quantum' }, CTX);
-      expect(tracker.get('chat-a', 'o1')!.kind).toBe('other');
-    });
-
-    it('falls back to bash when task_type is missing but a Bash tool_use was captured', () => {
-      te.captureToolUse('tu-k', { name: 'Bash', input: { command: 'pnpm dev', run_in_background: true } });
-      te.handleTaskStarted('chat-a', { task_id: 'k1', tool_use_id: 'tu-k', description: 'dev' }, CTX);
-      expect(tracker.get('chat-a', 'k1')!.kind).toBe('bash');
-    });
-
-    it('maps missing task_type with no captured tool_use → other', () => {
-      te.handleTaskStarted('chat-a', { task_id: 'k2', description: 'x' }, CTX);
-      expect(tracker.get('chat-a', 'k2')!.kind).toBe('other');
+    it.each([
+      ['b1', 'local_bash', false, 'bash'],
+      ['a1', 'local_agent', false, 'agent'],
+      ['a2', 'remote_agent', false, 'agent'],
+      ['a3', 'teammate', false, 'agent'],
+      ['w1', 'local_workflow', false, 'workflow'],
+      ['o1', 'local_quantum', false, 'other'],
+      ['k1', undefined, true, 'bash'],
+      ['k2', undefined, false, 'other'],
+    ] as const)('id=%s task_type=%s bashCaptured=%s → kind %s', (taskId, taskType, captureBash, expectedKind) => {
+      if (captureBash) {
+        te.captureToolUse('tu-' + taskId, { name: 'Bash', input: { command: 'pnpm dev', run_in_background: true } });
+      }
+      te.handleTaskStarted(
+        'chat-a',
+        {
+          task_id: taskId,
+          description: 'x',
+          ...(taskType ? { task_type: taskType } : {}),
+          ...(captureBash ? { tool_use_id: 'tu-' + taskId } : {}),
+        },
+        CTX,
+      );
+      expect(tracker.get('chat-a', taskId)!.kind).toBe(expectedKind);
     });
   });
 

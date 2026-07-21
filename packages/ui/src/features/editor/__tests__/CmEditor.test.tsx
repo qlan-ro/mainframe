@@ -170,12 +170,14 @@ describe('CmEditor', () => {
       });
     });
 
-    // Mount — the editor should restore without crashing
     render(
       <CmEditor value="abcdefghij" language="javascript" readOnly={false} onChange={() => undefined} path={path} />,
     );
     const root = screen.getByTestId('editor-code');
-    expect(root.querySelector('.cm-editor')).toBeTruthy();
+    const view = EditorView.findFromDOM(root.querySelector('.cm-editor') as HTMLElement);
+    expect(view).not.toBeNull();
+    expect(view!.state.selection.main.anchor).toBe(3);
+    expect(view!.state.selection.main.head).toBe(3);
   });
 
   describe('back/forward navigation keybindings (⌘⌥← / ⌘⌥→)', () => {

@@ -137,38 +137,4 @@ describe('ViewerShell', () => {
     );
     expect(screen.getByTestId('custom-action')).toBeInTheDocument();
   });
-
-  it('always renders the separator div regardless of actions presence', () => {
-    const { container } = render(
-      <ViewerShell path="/a/b/file.png" status="PNG">
-        <div>body</div>
-      </ViewerShell>,
-    );
-    // The separator is a w-px h-[13px] bg-border div inside the header.
-    const headerDiv = container.querySelector('[data-testid="viewer-shell"] > div:first-child');
-    const separator = headerDiv?.querySelector('.bg-border.w-px');
-    expect(separator).not.toBeNull();
-  });
-
-  it('reveal button is 20px tall (h-[20px]), not the compressed h-5=12px', () => {
-    render(
-      <ViewerShell path="/a/b/file.png" status="PNG">
-        <div>body</div>
-      </ViewerShell>,
-    );
-    const reveal = screen.getByTestId('viewer-shell-reveal');
-    expect(reveal.className).toContain('h-[20px]');
-    expect(reveal.className).not.toContain('h-5');
-  });
-
-  it('header breadcrumb bar uses bg-mf-tab-bar (matching the footer), not the code-surface tint', () => {
-    const { container } = render(
-      <ViewerShell path="/a/b/file.png" status="PNG">
-        <div>body</div>
-      </ViewerShell>,
-    );
-    const headerDiv = container.querySelector('[data-testid="viewer-shell"] > div:first-child') as HTMLElement;
-    expect(headerDiv.className).toContain('bg-mf-tab-bar');
-    expect(headerDiv.className).not.toContain('bg-[var(--mf-code-bg)]');
-  });
 });

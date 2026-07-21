@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { AutomationsHost } from '../AutomationsHost';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
+import { AUTOMATION_FIXTURES } from '../fixtures/fixtures';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 
 // Project resolution is out of scope here — most tests want the pre-scoping
@@ -28,7 +29,7 @@ it('loads automations even while closed, so the sidebar badge reflects pending i
   render(<AutomationsHost />);
 
   await vi.waitFor(() => {
-    expect(useAutomationsStore.getState().definitions.length).toBe(6);
+    expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
   });
 });
 
@@ -39,7 +40,7 @@ it('renders the view once opened, and loads automations from the gateway', async
 
   expect(screen.getByTestId('automations-host')).toBeInTheDocument();
   expect(await screen.findByTestId('automations-view')).toBeInTheDocument();
-  expect(useAutomationsStore.getState().definitions.length).toBe(6);
+  expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
 });
 
 it('clicking the backdrop closes the host', () => {

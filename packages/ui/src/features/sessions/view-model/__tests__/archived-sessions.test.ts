@@ -95,17 +95,6 @@ describe('filterArchivedSessions — narrows by projectId when filterProjectId i
 
     expect(filterArchivedSessions(items, 'proj-1')).toEqual([]);
   });
-
-  it('returns all archived items when filterProjectId is null', () => {
-    const items = [
-      item('a', 'archived', 'proj-1', BASE_UPDATED_AT + 1),
-      item('b', 'archived', 'proj-2', BASE_UPDATED_AT),
-    ];
-
-    const result = filterArchivedSessions(items, null);
-
-    expect(result.map((i) => i.id)).toEqual(['a', 'b']);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -123,18 +112,6 @@ describe('filterArchivedSessions — sorts by custom.updatedAt descending', () =
     const result = filterArchivedSessions(items, null);
 
     expect(result.map((i) => i.id)).toEqual(['newest', 'middle', 'oldest']);
-  });
-
-  it('returns the single archived item regardless of position in input', () => {
-    const items = [
-      item('a', 'regular', 'proj-1', 999),
-      item('b', 'archived', 'proj-1', 500),
-      item('c', 'regular', 'proj-1', 1),
-    ];
-
-    const result = filterArchivedSessions(items, null);
-
-    expect(result.map((i) => i.id)).toEqual(['b']);
   });
 
   it('applies project filter before sorting (proj-1 only, desc)', () => {

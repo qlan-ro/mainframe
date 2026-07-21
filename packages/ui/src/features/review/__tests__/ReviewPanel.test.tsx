@@ -134,19 +134,6 @@ describe('ReviewPanel — open', () => {
     });
   });
 
-  it('caps the modal at max-h-[880px] so it cannot grow past the design cap on tall viewports', async () => {
-    mockGetGitStatus.mockResolvedValue([]);
-
-    render(<ReviewPanel />);
-    openReview();
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('review-modal')).not.toBeNull();
-    });
-
-    expect(screen.getByTestId('review-modal').className).toContain('max-h-[880px]');
-  });
-
   it('renders "No changes to review" when git status is empty', async () => {
     mockGetGitStatus.mockResolvedValue([]);
 

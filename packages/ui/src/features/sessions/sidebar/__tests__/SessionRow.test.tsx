@@ -11,26 +11,13 @@
  *  - Mock `@/store/unread-store` so unread state is controlled per test.
  *  - Mock `../../runtime/daemon-port-context` so useDaemonPort returns 31415.
  *  - Mock `@/lib/api/chats` so pinChat is a spy (never hits the network).
- *
- * Behaviors covered:
- *  1. item.id="chat-1", item.title="Build the sidebar" → renders
- *     data-testid="sessions-row" and text "Build the sidebar".
- *  2. custom.displayStatus='working' → sessions-row-status-dot aria-label="working".
- *  3. custom.hasPending=true (resolves 'waiting'), isUnread=false →
- *     sessions-row-status-dot aria-label="waiting".
- *  4. isUnread=true → sessions-row-title has class containing "font-semibold".
- *  5. useAuiState reports mainThreadId==='chat-1' → row carries data-active="true".
- *  6. Right-click → click sessions-ctx-rename → sessions-rename-input appears;
- *     committing new title calls itemRuntime.rename spy once with "New name".
- *  7. Right-click → click sessions-ctx-archive → itemRuntime.archive spy called once.
- *  8. sessions-row-relative-time renders non-empty text for updatedAt=1749284160000.
- *  9. StatusDot badge presentation + tooltip-label coverage (AnswerPill removed).
  */
 import { isValidElement } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
+import type { SessionBadge } from '../../view-model/session-status';
 import { useTagPopoverTarget } from '../../tags/use-tag-popover-target';
 
 // ---------------------------------------------------------------------------
@@ -163,10 +150,6 @@ function makeItem(overrides?: Partial<SessionCustom>): SessionItem {
   return { id: 'chat-1', title: 'Build the sidebar', status: 'regular', custom };
 }
 
-// ---------------------------------------------------------------------------
-// Reset per test
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
   __mainThreadId = null;
   __isUnread = false;
@@ -178,293 +161,182 @@ beforeEach(() => {
   pinChatSpy.mockResolvedValue({});
 });
 
-// ---------------------------------------------------------------------------
-// 1. Row renders with title text
-// ---------------------------------------------------------------------------
+afterEach(() => {
+  // Some tests open the tag popover via the shared store; keep it from leaking.
+  useTagPopoverTarget.getState().close();
+});
 
-describe('SessionRow — renders row and title', () => {
-  it('renders data-testid="sessions-row" with text "Build the sidebar"', () => {
-    render(<SessionRow item={makeItem()} />);
-    expect(screen.getByTestId('sessions-row')).toBeTruthy();
-    expect(screen.getByText('Build the sidebar')).toBeTruthy();
+it('renders data-testid="sessions-row" with text "Build the sidebar"', () => {
+  render(<SessionRow item={makeItem()} />);
+  expect(screen.getByTestId('sessions-row')).toBeTruthy();
+  expect(screen.getByText('Build the sidebar')).toBeTruthy();
+});
+
+it('renders sessions-row-status-dot with aria-label="working"', () => {
+  render(<SessionRow item={makeItem({ adapterId: 'codex', displayStatus: 'working' })} />);
+  const dot = screen.getByTestId('sessions-row-status-dot');
+  expect(dot.getAttribute('aria-label')).toBe('working');
+  expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'openai');
+});
+
+it('renders sessions-row-status-dot with aria-label="waiting" when hasPending=true and not unread', () => {
+  __isUnread = false;
+  render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
+  const dot = screen.getByTestId('sessions-row-status-dot');
+  expect(dot.getAttribute('aria-label')).toBe('waiting');
+});
+
+it('sessions-row-title className contains "font-bold" when unread', () => {
+  __isUnread = true;
+  render(<SessionRow item={makeItem()} />);
+  const title = screen.getByTestId('sessions-row-title');
+  expect(title.className).toContain('font-bold');
+});
+
+it('does not make the selected read title use unread typography', () => {
+  __mainThreadId = 'chat-1';
+  __isUnread = false;
+  render(<SessionRow item={makeItem()} />);
+
+  const title = screen.getByTestId('sessions-row-title');
+  expect(title.className).not.toContain('group-data-[active=true]:font-semibold');
+  expect(title.className).not.toContain('group-data-[active=true]:text-foreground');
+  expect(title.className).toContain('font-medium text-muted-foreground');
+});
+
+it('keeps a pinned read title muted while still rendering the pin glyph', () => {
+  render(<SessionRow item={makeItem({ pinned: true })} />);
+
+  const title = screen.getByTestId('sessions-row-title');
+  expect(title.className).not.toContain('font-bold');
+  expect(title.className).toContain('font-medium text-muted-foreground');
+  expect(screen.getByTestId('sessions-row-pin-glyph')).toBeTruthy();
+});
+
+it('shows rename input after clicking sessions-ctx-rename, then calls rename once with "New name"', async () => {
+  render(<SessionRow item={makeItem()} />);
+
+  fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+
+  const renameItem = screen.getByTestId('sessions-ctx-rename');
+  await userEvent.click(renameItem);
+
+  const input = screen.getByTestId('sessions-rename-input') as HTMLInputElement;
+  expect(input).toBeTruthy();
+
+  await userEvent.clear(input);
+  await userEvent.type(input, 'New name');
+  await userEvent.keyboard('{Enter}');
+
+  expect(renameSpy).toHaveBeenCalledTimes(1);
+  expect(renameSpy).toHaveBeenCalledWith('New name');
+});
+
+it('calls archive spy exactly once when sessions-ctx-archive is clicked', async () => {
+  render(<SessionRow item={makeItem()} />);
+
+  fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+
+  await act(async () => {
+    await userEvent.click(screen.getByTestId('sessions-ctx-archive'));
   });
+
+  expect(archiveSpy).toHaveBeenCalledTimes(1);
+});
+
+it('sessions-row-relative-time is non-empty for updatedAt=1749284160000', () => {
+  render(<SessionRow item={makeItem({ updatedAt: 1749284160000 })} />);
+  const timeEl = screen.getByTestId('sessions-row-relative-time');
+  expect(timeEl.textContent?.trim().length).toBeGreaterThan(0);
 });
 
 // ---------------------------------------------------------------------------
-// 2. Status dot: displayStatus='working' → aria-label="working"
+// StatusDot badge presentation — one row per status/unread/adapter combination.
+// StatusDot is the row's sole status indicator (the old AnswerPill is gone).
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — status dot aria-label when displayStatus=working', () => {
-  it('renders sessions-row-status-dot with aria-label="working"', () => {
-    render(<SessionRow item={makeItem({ adapterId: 'codex', displayStatus: 'working' })} />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.getAttribute('aria-label')).toBe('working');
-    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'openai');
-  });
+it.each<{
+  name: string;
+  badge: SessionBadge;
+  adapterId: string;
+  toContain: string[];
+  notToContain: string[];
+  providerId?: string;
+}>([
+  {
+    name: 'waiting + unread → vivid pulsing provider logo, no warning color',
+    badge: { base: 'waiting', unread: true },
+    adapterId: 'claude',
+    toContain: ['animate-pulse'],
+    notToContain: ['text-mf-warning', 'opacity-50'],
+    providerId: 'claude',
+  },
+  {
+    name: 'idle + unread → accent-tinted, non-pulsing provider logo',
+    badge: { base: 'idle', unread: true },
+    adapterId: 'gemini',
+    toContain: ['text-primary'],
+    notToContain: ['animate-pulse'],
+    providerId: 'gemini',
+  },
+  {
+    name: 'idle + read → muted provider logo',
+    badge: { base: 'idle', unread: false },
+    adapterId: 'opencode',
+    toContain: ['text-mf-text-3'],
+    notToContain: ['opacity-50', 'grayscale', 'animate-pulse'],
+    providerId: 'opencode',
+  },
+  {
+    name: 'working + read → rotating full-colour provider logo',
+    badge: { base: 'working', unread: false },
+    adapterId: 'codex',
+    toContain: ['animate-spin', 'text-primary'],
+    notToContain: ['opacity-50', 'grayscale'],
+    providerId: 'openai',
+  },
+  {
+    name: 'working Claude → uses the Claude avatar motion instead of generic spin',
+    badge: { base: 'working', unread: false },
+    adapterId: 'claude',
+    toContain: ['animate-[mf-claude-logo-working_1.52s_linear_infinite]'],
+    notToContain: ['animate-spin'],
+    providerId: 'claude',
+  },
+  {
+    name: 'worktree missing + read → does not make the provider logo destructive',
+    badge: { base: 'worktree-missing', unread: false },
+    adapterId: 'claude',
+    toContain: [],
+    notToContain: ['text-destructive', 'opacity-50', 'grayscale'],
+  },
+])('StatusDot: $name', ({ badge, adapterId, toContain, notToContain, providerId }) => {
+  render(<StatusDot badge={badge} adapterId={adapterId} />);
+  const dot = screen.getByTestId('sessions-row-status-dot');
+  for (const cls of toContain) expect(dot.className).toContain(cls);
+  for (const cls of notToContain) expect(dot.className).not.toContain(cls);
+  if (providerId) {
+    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', providerId);
+  }
 });
 
 // ---------------------------------------------------------------------------
-// 3. Status dot: hasPending=true + isUnread=false → aria-label="waiting"
+// StatusDot — Hint tooltip labels per badge state
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — status dot aria-label when hasPending=true and not unread', () => {
-  it('renders sessions-row-status-dot with aria-label="waiting"', () => {
-    __isUnread = false;
-    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.getAttribute('aria-label')).toBe('waiting');
-  });
+it.each<{ base: SessionBadge['base']; unread: boolean; label: string }>([
+  { base: 'worktree-missing', unread: false, label: 'Worktree missing' },
+  { base: 'working', unread: false, label: 'Working' },
+  { base: 'waiting', unread: true, label: 'Your turn' },
+  { base: 'waiting', unread: false, label: 'Your turn' },
+  { base: 'idle', unread: true, label: 'Unread response' },
+  { base: 'idle', unread: false, label: 'Idle' },
+])('shows "$label" on hover when badge.base=$base and unread=$unread', async ({ base, unread, label }) => {
+  const user = userEvent.setup();
+  render(<StatusDot badge={{ base, unread }} />);
+  await user.hover(screen.getByTestId('sessions-row-status-dot'));
+  expect(screen.getByRole('tooltip')).toHaveTextContent(label);
 });
-
-// ---------------------------------------------------------------------------
-// 4. Unread → title has font-semibold class
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — title is bold when isUnread=true', () => {
-  it('sessions-row-title className contains "font-bold" when unread', () => {
-    __isUnread = true;
-    render(<SessionRow item={makeItem()} />);
-    const title = screen.getByTestId('sessions-row-title');
-    expect(title.className).toContain('font-bold');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Native data-active="true" when mainThreadId==='chat-1'
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — data-active="true" when mainThreadId matches item.id', () => {
-  it('row carries data-active="true" when useAuiState reports mainThreadId="chat-1"', () => {
-    __mainThreadId = 'chat-1';
-    render(<SessionRow item={makeItem()} />);
-    expect(screen.getByTestId('sessions-row').getAttribute('data-active')).toBe('true');
-  });
-
-  it('does not make the selected read title use unread typography', () => {
-    __mainThreadId = 'chat-1';
-    __isUnread = false;
-    render(<SessionRow item={makeItem()} />);
-
-    const title = screen.getByTestId('sessions-row-title');
-    expect(title.className).not.toContain('group-data-[active=true]:font-semibold');
-    expect(title.className).not.toContain('group-data-[active=true]:text-foreground');
-    expect(title.className).toContain('font-medium text-muted-foreground');
-  });
-});
-
-describe('SessionRow — pinned read sessions do not use unread typography', () => {
-  it('keeps a pinned read title muted while still rendering the pin glyph', () => {
-    render(<SessionRow item={makeItem({ pinned: true })} />);
-
-    const title = screen.getByTestId('sessions-row-title');
-    expect(title.className).not.toContain('font-bold');
-    expect(title.className).toContain('font-medium text-muted-foreground');
-    expect(screen.getByTestId('sessions-row-pin-glyph')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. Right-click → rename → input appears → commit calls rename spy
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — right-click rename flow calls itemRuntime.rename', () => {
-  it('shows rename input after clicking sessions-ctx-rename, then calls rename once with "New name"', async () => {
-    render(<SessionRow item={makeItem()} />);
-
-    // Open context menu via right-click on the row
-    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
-
-    // Click Rename in the context menu
-    const renameItem = screen.getByTestId('sessions-ctx-rename');
-    await userEvent.click(renameItem);
-
-    // Rename input should now be visible
-    const input = screen.getByTestId('sessions-rename-input') as HTMLInputElement;
-    expect(input).toBeTruthy();
-
-    // Type new title and press Enter to commit
-    await userEvent.clear(input);
-    await userEvent.type(input, 'New name');
-    await userEvent.keyboard('{Enter}');
-
-    expect(renameSpy).toHaveBeenCalledTimes(1);
-    expect(renameSpy).toHaveBeenCalledWith('New name');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. Right-click → archive → calls itemRuntime.archive once
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — right-click archive calls itemRuntime.archive', () => {
-  it('calls archive spy exactly once when sessions-ctx-archive is clicked', async () => {
-    render(<SessionRow item={makeItem()} />);
-
-    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
-
-    await act(async () => {
-      await userEvent.click(screen.getByTestId('sessions-ctx-archive'));
-    });
-
-    expect(archiveSpy).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. Relative time renders non-empty text for updatedAt=1749284160000
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — relative time renders non-empty text', () => {
-  it('sessions-row-relative-time is non-empty for updatedAt=1749284160000', () => {
-    render(<SessionRow item={makeItem({ updatedAt: 1749284160000 })} />);
-    const timeEl = screen.getByTestId('sessions-row-relative-time');
-    expect(timeEl.textContent?.trim().length).toBeGreaterThan(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9. Badge presentation — StatusDot standalone unit tests (AnswerPill removed;
-//    StatusDot is now the single status indicator and carries a Hint tooltip).
-// ---------------------------------------------------------------------------
-
-describe('session row badge presentation', () => {
-  it('waiting + unread → vivid pulsing provider logo, no warning color, no answer pill anywhere', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: true }} adapterId="claude" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('animate-pulse');
-    expect(dot.className).not.toContain('text-mf-warning');
-    expect(dot.className).not.toContain('opacity-50');
-    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'claude');
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-    expect(screen.queryByText('Answer ready')).toBeNull();
-  });
-  it('idle + unread → accent-tinted, non-pulsing provider logo, no pill', () => {
-    render(<StatusDot badge={{ base: 'idle', unread: true }} adapterId="gemini" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('text-primary');
-    expect(dot.className).not.toContain('animate-pulse');
-    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'gemini');
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-    expect(screen.queryByText('Answer ready')).toBeNull();
-  });
-  it('idle + read → muted provider logo, no pill', () => {
-    render(<StatusDot badge={{ base: 'idle', unread: false }} adapterId="opencode" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('text-mf-text-3');
-    expect(dot.className).not.toContain('opacity-50');
-    expect(dot.className).not.toContain('grayscale');
-    expect(dot.className).not.toContain('animate-pulse');
-    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'opencode');
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-  });
-  it('working + read → rotating full-colour provider logo', () => {
-    render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="codex" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('animate-spin');
-    expect(dot.className).toContain('text-primary');
-    expect(dot.className).not.toContain('opacity-50');
-    expect(dot.className).not.toContain('grayscale');
-    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'openai');
-  });
-  it('working Claude → uses the Claude avatar motion instead of generic spin', () => {
-    render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="claude" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('animate-[mf-claude-logo-working_1.52s_linear_infinite]');
-    expect(dot.className).not.toContain('animate-spin');
-    expect(screen.getByTestId('sessions-row-provider-logo')).toHaveAttribute('data-provider-id', 'claude');
-  });
-  it('worktree missing + read → does not make the provider logo destructive', () => {
-    render(<StatusDot badge={{ base: 'worktree-missing', unread: false }} adapterId="claude" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).not.toContain('text-destructive');
-    expect(dot.className).not.toContain('opacity-50');
-    expect(dot.className).not.toContain('grayscale');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9a. StatusDot tooltip labels (Hint) — one assertion per badge state, hardcoded
-// labels per the spec: worktree-missing → "Worktree missing", working →
-// "Working", waiting (both unread=true and unread=false) → "Your turn",
-// idle+unread → "Unread response", idle → "Idle".
-// ---------------------------------------------------------------------------
-
-describe('StatusDot — Hint tooltip labels per badge state', () => {
-  it('shows "Worktree missing" on hover when badge.base=worktree-missing', async () => {
-    const user = userEvent.setup();
-    render(<StatusDot badge={{ base: 'worktree-missing', unread: false }} />);
-    await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Worktree missing');
-  });
-
-  it('shows "Working" on hover when badge.base=working', async () => {
-    const user = userEvent.setup();
-    render(<StatusDot badge={{ base: 'working', unread: false }} />);
-    await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Working');
-  });
-
-  it('shows "Your turn" on hover when badge.base=waiting and unread=true', async () => {
-    const user = userEvent.setup();
-    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
-    await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Your turn');
-  });
-
-  it('shows "Your turn" on hover when badge.base=waiting and unread=false', async () => {
-    const user = userEvent.setup();
-    render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
-    await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Your turn');
-  });
-
-  it('shows "Unread response" on hover when badge.base=idle and unread=true', async () => {
-    const user = userEvent.setup();
-    render(<StatusDot badge={{ base: 'idle', unread: true }} />);
-    await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Unread response');
-  });
-
-  it('shows "Idle" on hover when badge.base=idle and unread=false', async () => {
-    const user = userEvent.setup();
-    render(<StatusDot badge={{ base: 'idle', unread: false }} />);
-    await user.hover(screen.getByTestId('sessions-row-status-dot'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Idle');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9b. Answer pill is fully removed from the full row render (was: visible when
-// hasPending=true via SessionRowMeta). Only the status dot remains.
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — answer pill is absent; status dot is the sole indicator', () => {
-  it('does not render sessions-row-answer-pill when hasPending=true and not unread; status dot is present', () => {
-    __isUnread = false;
-    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-    expect(screen.getByTestId('sessions-row-status-dot')).toBeTruthy();
-  });
-
-  it('does not render sessions-row-answer-pill when hasPending=true and unread; status dot is present', () => {
-    __isUnread = true;
-    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-    expect(screen.getByTestId('sessions-row-status-dot')).toBeTruthy();
-  });
-
-  it('does not render sessions-row-answer-pill when status is idle', () => {
-    render(<SessionRow item={makeItem({ hasPending: false, displayStatus: 'idle' })} />);
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 10. Compact tag-dot glyph cluster renders when custom.tags is non-empty
-// (2026-07 single-row rebuild: the old inline SessionRowMeta tag-dots testid
-// moved to the hover card; the row itself shows SessionRowMetaIcons' compact
-// glyph cluster instead.)
-// ---------------------------------------------------------------------------
 
 describe('SessionRow — compact tag-dot glyphs when tags are present', () => {
   it('renders sessions-row-meta-icon-tag-dots when custom.tags has entries', () => {
@@ -478,54 +350,24 @@ describe('SessionRow — compact tag-dot glyphs when tags are present', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 11. Pin triggers runtime.threads.reload() (MED-3/4)
-// ---------------------------------------------------------------------------
+it('calls reloadSpy once after pinChat(true) resolves when sessions-ctx-pin is clicked', async () => {
+  // pinned=false so the context menu shows the "Pin" action
+  render(<SessionRow item={makeItem({ pinned: false })} />);
 
-describe('SessionRow — pin calls runtime.threads.reload() on success', () => {
-  it('calls reloadSpy once after pinChat(true) resolves when sessions-ctx-pin is clicked', async () => {
-    // pinned=false so the context menu shows the "Pin" action
-    render(<SessionRow item={makeItem({ pinned: false })} />);
-
-    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
-    await act(async () => {
-      await userEvent.click(screen.getByTestId('sessions-ctx-pin'));
-    });
-
-    expect(pinChatSpy).toHaveBeenCalledTimes(1);
-    expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', true);
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+  await act(async () => {
+    await userEvent.click(screen.getByTestId('sessions-ctx-pin'));
   });
+
+  expect(pinChatSpy).toHaveBeenCalledTimes(1);
+  expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', true);
+  expect(reloadSpy).toHaveBeenCalledTimes(1);
 });
 
-// ---------------------------------------------------------------------------
-// 13. data-chat-id on the row for deterministic e2e selection
-// ---------------------------------------------------------------------------
-
-describe('SessionRow — exposes data-chat-id on the row', () => {
-  it('exposes the chat id on the row for deterministic e2e selection', () => {
-    render(<SessionRow item={makeItem()} />);
-    expect(screen.getByTestId('sessions-row')).toHaveAttribute('data-chat-id', 'chat-1');
-  });
+it('exposes the chat id on the row for deterministic e2e selection', () => {
+  render(<SessionRow item={makeItem()} />);
+  expect(screen.getByTestId('sessions-row')).toHaveAttribute('data-chat-id', 'chat-1');
 });
-
-// ---------------------------------------------------------------------------
-// 14. StatusDot is the SOLE status indicator now — AnswerPill no longer exists
-// as an exported component (verified indirectly: it is not imported above, and
-// no sessions-row-answer-pill testid appears anywhere in this suite).
-// ---------------------------------------------------------------------------
-
-describe('StatusDot is the only status indicator (AnswerPill removed)', () => {
-  it('renders no sessions-row-answer-pill for a waiting+unread badge rendered standalone', () => {
-    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
-    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 15. StatusDot provider logos. BOTH unread=true and unread=false waiting
-// sessions pulse — being "waiting" IS the call to respond, read or not.
-// ---------------------------------------------------------------------------
 
 describe('StatusDot provider logos', () => {
   it('waiting + unread status logo uses animate-pulse', () => {
@@ -557,17 +399,11 @@ describe('StatusDot provider logos', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 16. StatusDot 'working' provider logo size.
-// ---------------------------------------------------------------------------
-
-describe('StatusDot working provider logo size', () => {
-  it('working status logo uses the same 24px slot as every other status', () => {
-    render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="codex" />);
-    const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('size-6');
-    expect(dot.className).not.toContain('size-[8px]');
-  });
+it('working status logo uses the same 24px slot as every other status', () => {
+  render(<StatusDot badge={{ base: 'working', unread: false }} adapterId="codex" />);
+  const dot = screen.getByTestId('sessions-row-status-dot');
+  expect(dot.className).toContain('size-6');
+  expect(dot.className).not.toContain('size-[8px]');
 });
 
 // ---------------------------------------------------------------------------
@@ -590,11 +426,6 @@ describe('SessionRow hover-action glyphs', () => {
     expect(btn.querySelector('svg.lucide-x')).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 21. Hover-actions cluster carries a Pin/Unpin toggle (primary-interface entry
-// point — previously pin/unpin only lived in the right-click context menu).
-// ---------------------------------------------------------------------------
 
 describe('SessionRow — hover-actions Pin/Unpin toggle', () => {
   it('calls pinChat(port, id, true) and reloads when unpinned and the hover pin action is clicked', async () => {
@@ -637,28 +468,22 @@ describe('SessionRow — hover-actions Pin/Unpin toggle', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 12. Unpin triggers runtime.threads.reload() (MED-3/4)
-// ---------------------------------------------------------------------------
+it('calls reloadSpy once after pinChat(false) resolves when sessions-ctx-pin is clicked while pinned', async () => {
+  // pinned=true so the context menu shows the "Unpin" action
+  render(<SessionRow item={makeItem({ pinned: true })} />);
 
-describe('SessionRow — unpin calls runtime.threads.reload() on success', () => {
-  it('calls reloadSpy once after pinChat(false) resolves when sessions-ctx-pin is clicked while pinned', async () => {
-    // pinned=true so the context menu shows the "Unpin" action
-    render(<SessionRow item={makeItem({ pinned: true })} />);
-
-    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
-    await act(async () => {
-      await userEvent.click(screen.getByTestId('sessions-ctx-pin'));
-    });
-
-    expect(pinChatSpy).toHaveBeenCalledTimes(1);
-    expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', false);
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+  await act(async () => {
+    await userEvent.click(screen.getByTestId('sessions-ctx-pin'));
   });
+
+  expect(pinChatSpy).toHaveBeenCalledTimes(1);
+  expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', false);
+  expect(reloadSpy).toHaveBeenCalledTimes(1);
 });
 
 // ---------------------------------------------------------------------------
-// 16. Regression: Tags context-menu action anchors popover at right-click coords
+// Regression: Tags context-menu action anchors popover at right-click coords
 //
 // Bug: the context-menu "Tags" path called handleTags with no rect, so
 // anchorRect was null and the popover rendered at (0,0).
@@ -667,37 +492,30 @@ describe('SessionRow — unpin calls runtime.threads.reload() on success', () =>
 // This test guards against a regression to the null/(0,0) anchor.
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — Tags context-menu action passes right-click coords to useTagPopoverTarget', () => {
-  afterEach(() => {
-    // Prevent store state from leaking into subsequent tests.
-    useTagPopoverTarget.getState().close();
+it('sets anchorRect.left=120 and anchorRect.top=80 after right-clicking at (120, 80) and selecting Tags', async () => {
+  render(<SessionRow item={makeItem()} />);
+
+  // Dispatch contextMenu on an inner element (the title span) so the event
+  // bubbles through the div that carries onContextMenu and captures the coords.
+  fireEvent.contextMenu(screen.getByTestId('sessions-row-title'), {
+    clientX: 120,
+    clientY: 80,
   });
 
-  it('sets anchorRect.left=120 and anchorRect.top=80 after right-clicking at (120, 80) and selecting Tags', async () => {
-    render(<SessionRow item={makeItem()} />);
-
-    // Dispatch contextMenu on an inner element (the title span) so the event
-    // bubbles through the div that carries onContextMenu and captures the coords.
-    fireEvent.contextMenu(screen.getByTestId('sessions-row-title'), {
-      clientX: 120,
-      clientY: 80,
-    });
-
-    await act(async () => {
-      await userEvent.click(screen.getByTestId('sessions-ctx-tags'));
-    });
-
-    const { target } = useTagPopoverTarget.getState();
-    expect(target).not.toBeNull();
-    expect(target?.anchorRect).not.toBeNull();
-    // Hardcoded coords — must equal the right-click position, not (0,0).
-    expect(target?.anchorRect?.left).toBe(120);
-    expect(target?.anchorRect?.top).toBe(80);
+  await act(async () => {
+    await userEvent.click(screen.getByTestId('sessions-ctx-tags'));
   });
+
+  const { target } = useTagPopoverTarget.getState();
+  expect(target).not.toBeNull();
+  expect(target?.anchorRect).not.toBeNull();
+  // Hardcoded coords — must equal the right-click position, not (0,0).
+  expect(target?.anchorRect?.left).toBe(120);
+  expect(target?.anchorRect?.top).toBe(80);
 });
 
 // ---------------------------------------------------------------------------
-// 18. Regression (bug b): right-click "Tags" never opened the popover live.
+// Regression (bug b): right-click "Tags" never opened the popover live.
 //
 // A first attempt deferred the store update with `queueMicrotask` (mirroring
 // onRename). That is provably insufficient: Radix's ContextMenu is a MODAL
@@ -722,7 +540,6 @@ describe('SessionRow — Tags context-menu action defers past a macrotask (not j
   });
 
   afterEach(() => {
-    useTagPopoverTarget.getState().close();
     vi.useRealTimers();
   });
 
@@ -758,10 +575,6 @@ describe('SessionRow — Tags context-menu action defers past a macrotask (not j
     expect(useTagPopoverTarget.getState().target).not.toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 19. Hovering the row raises the SessionMetaCard (2026-07 single-row rebuild)
-// ---------------------------------------------------------------------------
 
 describe('SessionRow — hovering raises the SessionMetaCard', () => {
   beforeEach(() => {
@@ -805,11 +618,6 @@ describe('SessionRow — hovering raises the SessionMetaCard', () => {
     expect(screen.queryByTestId('sessions-meta-card')).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 20. Compact meta glyphs render inline on the row (worktree/PR), matching
-// the metaIcons algorithm — icon-only, no basename/PR text overflow risk.
-// ---------------------------------------------------------------------------
 
 describe('SessionRow — compact worktree/PR glyphs render inline', () => {
   it('renders sessions-row-meta-icon-worktree when custom.worktreePath is set', () => {

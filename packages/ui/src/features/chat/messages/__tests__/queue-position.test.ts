@@ -12,45 +12,32 @@ function ref(messageId: string, timestamp: string): QueuedMessageRef {
   return { messageId, chatId: 'c1', uuid: `u-${messageId}`, content: 'x', timestamp };
 }
 
+const THREE_IN_ORDER = [
+  ref('m1', '2026-07-02T10:00:00.000Z'),
+  ref('m2', '2026-07-02T10:00:01.000Z'),
+  ref('m3', '2026-07-02T10:00:02.000Z'),
+];
+
+const THREE_OUT_OF_ORDER = [
+  ref('m3', '2026-07-02T10:00:02.000Z'),
+  ref('m1', '2026-07-02T10:00:00.000Z'),
+  ref('m2', '2026-07-02T10:00:01.000Z'),
+];
+
 describe('queuePosition', () => {
-  it('returns position=1, total=1 for a single queued message', () => {
-    const queued = [ref('m1', '2026-07-02T10:00:00.000Z')];
-    expect(queuePosition(queued, 'm1')).toEqual({ position: 1, total: 1 });
-  });
-
-  it('returns position=1, total=3 for the earliest of three queued messages', () => {
-    const queued = [
-      ref('m1', '2026-07-02T10:00:00.000Z'),
-      ref('m2', '2026-07-02T10:00:01.000Z'),
-      ref('m3', '2026-07-02T10:00:02.000Z'),
-    ];
-    expect(queuePosition(queued, 'm1')).toEqual({ position: 1, total: 3 });
-  });
-
-  it('returns position=2, total=3 for the second-earliest of three queued messages', () => {
-    const queued = [
-      ref('m1', '2026-07-02T10:00:00.000Z'),
-      ref('m2', '2026-07-02T10:00:01.000Z'),
-      ref('m3', '2026-07-02T10:00:02.000Z'),
-    ];
-    expect(queuePosition(queued, 'm2')).toEqual({ position: 2, total: 3 });
-  });
-
-  it('orders strictly by timestamp regardless of input array order', () => {
-    const queued = [
-      ref('m3', '2026-07-02T10:00:02.000Z'),
-      ref('m1', '2026-07-02T10:00:00.000Z'),
-      ref('m2', '2026-07-02T10:00:01.000Z'),
-    ];
-    expect(queuePosition(queued, 'm3')).toEqual({ position: 3, total: 3 });
-  });
-
-  it('returns position=1, total=1 when the messageId is not found in the queue', () => {
-    const queued = [ref('m1', '2026-07-02T10:00:00.000Z')];
-    expect(queuePosition(queued, 'missing')).toEqual({ position: 1, total: 1 });
-  });
-
-  it('returns position=1, total=1 for an empty queue', () => {
-    expect(queuePosition([], 'm1')).toEqual({ position: 1, total: 1 });
+  it.each([
+    ['single queued message', [ref('m1', '2026-07-02T10:00:00.000Z')], 'm1', { position: 1, total: 1 }],
+    ['earliest of three queued messages', THREE_IN_ORDER, 'm1', { position: 1, total: 3 }],
+    ['second-earliest of three queued messages', THREE_IN_ORDER, 'm2', { position: 2, total: 3 }],
+    [
+      'orders strictly by timestamp regardless of input array order',
+      THREE_OUT_OF_ORDER,
+      'm3',
+      { position: 3, total: 3 },
+    ],
+    ['messageId not found in the queue', [ref('m1', '2026-07-02T10:00:00.000Z')], 'missing', { position: 1, total: 1 }],
+    ['empty queue', [], 'm1', { position: 1, total: 1 }],
+  ])('%s', (_label, queued, messageId, expected) => {
+    expect(queuePosition(queued, messageId)).toEqual(expected);
   });
 });

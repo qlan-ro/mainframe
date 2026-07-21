@@ -1,55 +1,63 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAutomationsNav } from '../use-automations-nav';
 
+type AutomationsNavState = ReturnType<typeof useAutomationsNav.getState>;
+
+type SetterCase = {
+  name: string;
+  setup: Partial<AutomationsNavState>;
+  act: (s: AutomationsNavState) => void;
+  expected: Partial<AutomationsNavState>;
+};
+
+const SETTER_CASES: SetterCase[] = [
+  {
+    name: 'openHost opens the host',
+    setup: {},
+    act: (s) => s.openHost(),
+    expected: { open: true },
+  },
+  {
+    name: 'close resets open, editorTarget, and runId together',
+    setup: { open: true, editorTarget: { mode: 'new' }, runId: 'r1' },
+    act: (s) => s.close(),
+    expected: { open: false, editorTarget: null, runId: null },
+  },
+  {
+    name: 'openEditor sets the target and clears any open run',
+    setup: { runId: 'r1' },
+    act: (s) => s.openEditor({ mode: 'edit', automationId: 'a1' }),
+    expected: { editorTarget: { mode: 'edit', automationId: 'a1' }, runId: null },
+  },
+  {
+    name: 'closeEditor clears only the editor target',
+    setup: { editorTarget: { mode: 'new' }, runId: 'r1' },
+    act: (s) => s.closeEditor(),
+    expected: { editorTarget: null, runId: 'r1' },
+  },
+  {
+    name: 'openRun sets the run id and clears any open editor',
+    setup: { editorTarget: { mode: 'new' } },
+    act: (s) => s.openRun('r2'),
+    expected: { runId: 'r2', editorTarget: null },
+  },
+  {
+    name: 'closeRun clears only the run id',
+    setup: { runId: 'r2', editorTarget: { mode: 'new' } },
+    act: (s) => s.closeRun(),
+    expected: { runId: null, editorTarget: { mode: 'new' } },
+  },
+];
+
 describe('useAutomationsNav', () => {
   beforeEach(() => {
     useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
   });
 
-  it('openHost opens the host', () => {
-    useAutomationsNav.getState().openHost();
-    expect(useAutomationsNav.getState().open).toBe(true);
-  });
-
-  it('close resets open, editorTarget, and runId together', () => {
-    useAutomationsNav.setState({ open: true, editorTarget: { mode: 'new' }, runId: 'r1' });
-    useAutomationsNav.getState().close();
-    const s = useAutomationsNav.getState();
-    expect(s.open).toBe(false);
-    expect(s.editorTarget).toBeNull();
-    expect(s.runId).toBeNull();
-  });
-
-  it('openEditor sets the target and clears any open run', () => {
-    useAutomationsNav.setState({ runId: 'r1' });
-    useAutomationsNav.getState().openEditor({ mode: 'edit', automationId: 'a1' });
-    const s = useAutomationsNav.getState();
-    expect(s.editorTarget).toEqual({ mode: 'edit', automationId: 'a1' });
-    expect(s.runId).toBeNull();
-  });
-
-  it('closeEditor clears only the editor target', () => {
-    useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
-    useAutomationsNav.getState().closeEditor();
-    const s = useAutomationsNav.getState();
-    expect(s.editorTarget).toBeNull();
-    expect(s.runId).toBe('r1');
-  });
-
-  it('openRun sets the run id and clears any open editor', () => {
-    useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
-    useAutomationsNav.getState().openRun('r2');
-    const s = useAutomationsNav.getState();
-    expect(s.runId).toBe('r2');
-    expect(s.editorTarget).toBeNull();
-  });
-
-  it('closeRun clears only the run id', () => {
-    useAutomationsNav.setState({ runId: 'r2', editorTarget: { mode: 'new' } });
-    useAutomationsNav.getState().closeRun();
-    const s = useAutomationsNav.getState();
-    expect(s.runId).toBeNull();
-    expect(s.editorTarget).toEqual({ mode: 'new' });
+  it.each(SETTER_CASES)('$name', ({ setup, act, expected }) => {
+    useAutomationsNav.setState(setup);
+    act(useAutomationsNav.getState());
+    expect(useAutomationsNav.getState()).toMatchObject(expected);
   });
 
   it('openEditor accepts an optional draft on the new-mode target (Describe-it → Open in editor)', () => {

@@ -319,21 +319,6 @@ describe('MainToolbar — launch controls', () => {
 });
 
 describe('MainToolbar — search button', () => {
-  it('search button is not disabled', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        windowStyle="glass"
-        port={31415}
-      />,
-    );
-
-    expect(screen.getByTestId('main-toolbar-search')).not.toBeDisabled();
-  });
-
   it('clicking main-toolbar-search emits open-search-palette', () => {
     render(
       <MainToolbar
@@ -376,23 +361,6 @@ describe('MainToolbar — inspector toggle', () => {
   });
 });
 
-describe('MainToolbar — height 40px', () => {
-  it('root element has h-[40px] class (artboard specifies height: 40)', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        windowStyle="glass"
-        port={31415}
-      />,
-    );
-    const toolbar = screen.getByTestId('main-toolbar');
-    expect(toolbar.className).toContain('h-[40px]');
-  });
-});
-
 describe('MainToolbar — CMD+O hint chip in search button', () => {
   it('renders the ⌘O keyboard hint chip inside the search button', () => {
     render(
@@ -406,7 +374,7 @@ describe('MainToolbar — CMD+O hint chip in search button', () => {
       />,
     );
     const hint = screen.getByTestId('main-toolbar-search-hint');
-    expect(hint).toBeTruthy();
+    expect(screen.getByTestId('main-toolbar-search')).toContainElement(hint);
     expect(hint.textContent).toBe('⌘O');
   });
 });
@@ -429,20 +397,5 @@ describe('MainToolbar — theme toggle', () => {
     fireEvent.click(screen.getByTestId('main-toolbar-theme'));
 
     expect(useTheme.getState().mode).toBe('dark');
-  });
-
-  it('main-toolbar-theme is not disabled', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        windowStyle="glass"
-        port={31415}
-      />,
-    );
-
-    expect(screen.getByTestId('main-toolbar-theme')).not.toBeDisabled();
   });
 });

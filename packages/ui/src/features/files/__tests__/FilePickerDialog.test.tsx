@@ -242,40 +242,7 @@ describe('FilePickerDialog — Escape closes dialog', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Store open/close toggle unit tests
-// ---------------------------------------------------------------------------
-
-describe('useFilesStore — pickerOpen', () => {
-  beforeEach(() => {
-    act(() => {
-      useFilesStore.setState({ pickerOpen: false });
-    });
-  });
-
-  it('starts with pickerOpen false', () => {
-    expect(useFilesStore.getState().pickerOpen).toBe(false);
-  });
-
-  it('setPickerOpen(true) sets pickerOpen to true', () => {
-    act(() => {
-      useFilesStore.getState().setPickerOpen(true);
-    });
-    expect(useFilesStore.getState().pickerOpen).toBe(true);
-  });
-
-  it('setPickerOpen(false) sets pickerOpen to false', () => {
-    act(() => {
-      useFilesStore.getState().setPickerOpen(true);
-    });
-    act(() => {
-      useFilesStore.getState().setPickerOpen(false);
-    });
-    expect(useFilesStore.getState().pickerOpen).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9. Arrow key navigation — active-row highlight moves through results
+// 8. Arrow key navigation — active-row highlight moves through results
 // ---------------------------------------------------------------------------
 
 describe('FilePickerDialog — keyboard navigation', () => {

@@ -41,11 +41,6 @@ describe('SlashCommandCard', () => {
     expect(screen.getByText('/systematic-debugging')).toBeInTheDocument();
   });
 
-  it('renders the row with data-testid="chat-slash-command-row"', () => {
-    renderCard({ skill: 'brainstorming' });
-    expect(screen.getByTestId('chat-slash-command-row')).toBeInTheDocument();
-  });
-
   it('does NOT render args span when args is empty string', () => {
     renderCard({ skill: 'brainstorming', args: '' });
     expect(screen.queryByTestId('chat-slash-command-args')).not.toBeInTheDocument();

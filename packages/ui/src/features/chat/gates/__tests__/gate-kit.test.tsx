@@ -1,17 +1,15 @@
 /**
- * gate-kit — behavior tests (TDD red phase).
+ * gate-kit — behavior tests for three shared presentational primitives:
+ * GateButton, GateCardShell, and GateHead (the last two exported from GateShell).
  *
  * Strategy:
- *  - No source modules exist yet; these tests drive the API contract for three
- *    shared presentational primitives: GateButton, GateCardShell,
- *    and GateHead (the last two exported from GateShell).
  *  - Wrap renders in TooltipProvider for Radix compatibility.
  *  - All expected values are hardcoded; no logic is duplicated from the
  *    components under test.
  *
  * Behaviors covered:
  *  - GateButton: children text, data-testid forwarding, onClick callback,
- *    kind="primary" classes, kind="danger" classes, default-kind class.
+ *    kind→class mapping (primary/danger/default).
  *  - GateCardShell: renders children, resolved/unresolved border classes.
  *  - GateHead: eyebrow text, title text, right slot, tileClassName on icon tile.
  */
@@ -50,29 +48,20 @@ describe('GateButton', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it('kind="primary" applies bg-primary and text-primary-foreground classes', () => {
+  it.each([
+    ['primary', ['bg-primary', 'text-primary-foreground']],
+    ['danger', ['text-destructive']],
+    [undefined, ['bg-background']],
+  ] as const)('kind=%s applies the expected classes', (kind, expectedClasses) => {
     wrap(
-      <GateButton data-testid="gb-primary" kind="primary">
-        Primary
+      <GateButton data-testid="gb-kind" kind={kind}>
+        Label
       </GateButton>,
     );
-    const el = screen.getByTestId('gb-primary');
-    expect(el).toHaveClass('bg-primary');
-    expect(el).toHaveClass('text-primary-foreground');
-  });
-
-  it('kind="danger" applies text-destructive class', () => {
-    wrap(
-      <GateButton data-testid="gb-danger" kind="danger">
-        Danger
-      </GateButton>,
-    );
-    expect(screen.getByTestId('gb-danger')).toHaveClass('text-destructive');
-  });
-
-  it('default kind (no kind prop) applies bg-background class', () => {
-    wrap(<GateButton data-testid="gb-default">Default</GateButton>);
-    expect(screen.getByTestId('gb-default')).toHaveClass('bg-background');
+    const el = screen.getByTestId('gb-kind');
+    for (const cls of expectedClasses) {
+      expect(el).toHaveClass(cls);
+    }
   });
 });
 

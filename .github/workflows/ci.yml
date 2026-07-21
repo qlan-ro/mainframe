@@ -8,41 +8,59 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  typecheck:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/setup-workspace
         with:
-          version: 9
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`.
-      # node-gyp is not on the install-script PATH on the runner, so install
-      # it globally before native deps are built.
-      - run: npm install -g node-gyp
-
-      - run: pnpm install --frozen-lockfile
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # types/dist and core/dist are import targets for the other packages;
+      # both are plain tsc emits — no Vite/electron-vite bundling.
+      - name: Build workspace dependencies
+        run: pnpm build:types && pnpm build:core
 
       - name: Type check
-        run: pnpm build
-        env:
-          NODE_OPTIONS: '--max-old-space-size=4096'
-
-      - name: Test
-        run: pnpm test
+        run: |
+          pnpm --filter @qlan-ro/mainframe-ui typecheck
+          pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
+          pnpm --filter @qlan-ro/mainframe-app-electron exec tsc -b
 
       - name: Security audit
         run: pnpm audit --audit-level=high
         continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    name: test (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: core
+            command: pnpm --filter @qlan-ro/mainframe-core exec vitest run --maxWorkers=4
+          - name: ui
+            command: pnpm --filter @qlan-ro/mainframe-ui exec vitest run --maxWorkers=4
+          - name: types-and-electron
+            command: >-
+              pnpm --filter @qlan-ro/mainframe-types exec vitest run --maxWorkers=4 &&
+              pnpm --filter @qlan-ro/mainframe-app-electron exec vitest run --maxWorkers=4
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-workspace
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build workspace dependencies
+        run: pnpm build:types && pnpm build:core
+
+      - name: Test
+        run: ${{ matrix.command }}
 
   changeset-check:
     if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'release/')

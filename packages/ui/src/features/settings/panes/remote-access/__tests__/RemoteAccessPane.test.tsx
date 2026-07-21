@@ -33,12 +33,4 @@ describe('RemoteAccessPane heading', () => {
     expect(heading.className).toContain('text-title');
     expect(heading.className).toContain('font-bold');
   });
-
-  it('applies the same heading style to the loading state', () => {
-    mockUseTunnelStatus.mockReturnValue(makeTunnel({ loading: true }));
-    render(<RemoteAccessPane port={31415} />);
-    const heading = screen.getByText('Remote Access');
-    expect(heading.className).toContain('text-title');
-    expect(heading.className).toContain('font-bold');
-  });
 });

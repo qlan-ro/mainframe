@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Behavior tests for useComposerTuning — pure-reader + fire-and-forget PATCH.
  *
@@ -503,84 +504,59 @@ describe('useComposerTuning — draft mode: adapter switch reinitializes the sna
   });
 });
 
-describe('useComposerTuning — draft mode: setModel calls patchDraftConfig, NOT setChatConfig', () => {
-  it('patchDraftConfig called with {model} and setChatConfig not called', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = makeDraft();
+describe('useComposerTuning — draft mode: setters patch draftConfig, never the live chat setter', () => {
+  it.each<{
+    label: string;
+    run: (result: ReturnType<typeof useComposerTuning>) => void;
+    expectedPatch: Partial<DraftCfg>;
+    liveSetter: typeof setChatConfig | typeof setChatTuning;
+  }>([
+    {
+      label: 'setModel',
+      run: (result) => result.setModel('claude-3-haiku'),
+      expectedPatch: { model: 'claude-3-haiku' },
+      liveSetter: setChatConfig,
+    },
+    {
+      label: 'setEffort',
+      run: (result) => result.setEffort('high'),
+      expectedPatch: { effort: 'high' },
+      liveSetter: setChatTuning,
+    },
+    {
+      label: 'setFeature("ultracode", true)',
+      run: (result) => result.setFeature('ultracode', true),
+      expectedPatch: { ultracode: true },
+      liveSetter: setChatTuning,
+    },
+    {
+      label: 'setPermissionMode',
+      run: (result) => result.setPermissionMode('yolo' as Parameters<typeof result.setPermissionMode>[0]),
+      expectedPatch: { permissionMode: 'yolo' },
+      liveSetter: setChatConfig,
+    },
+    {
+      label: 'setPlanMode',
+      run: (result) => result.setPlanMode(true),
+      expectedPatch: { planMode: true },
+      liveSetter: setChatConfig,
+    },
+  ])(
+    '$label patches draftConfig with the expected fields and does not call the live setter',
+    ({ run, expectedPatch, liveSetter }) => {
+      vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+      draftConfigStub = makeDraft();
 
-    const { result } = renderHook(() => useComposerTuning([]));
+      const { result } = renderHook(() => useComposerTuning([]));
 
-    act(() => {
-      result.current.setModel('claude-3-haiku');
-    });
+      act(() => {
+        run(result.current);
+      });
 
-    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { model: 'claude-3-haiku' });
-    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
-  });
-});
-
-describe('useComposerTuning — draft mode: setEffort calls patchDraftConfig, NOT setChatTuning', () => {
-  it('patchDraftConfig called with {effort} and setChatTuning not called', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = makeDraft();
-
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setEffort('high');
-    });
-
-    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { effort: 'high' });
-    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
-  });
-});
-
-describe('useComposerTuning — draft mode: setFeature calls patchDraftConfig, NOT setChatTuning', () => {
-  it('patchDraftConfig called with {ultracode: true} and setChatTuning not called', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = makeDraft();
-
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setFeature('ultracode', true);
-    });
-
-    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { ultracode: true });
-    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
-  });
-});
-
-describe('useComposerTuning — draft mode: setPermissionMode calls patchDraftConfig, NOT setChatConfig', () => {
-  it('patchDraftConfig called with {permissionMode} and setChatConfig not called', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = makeDraft();
-
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setPermissionMode('yolo' as Parameters<typeof result.current.setPermissionMode>[0]);
-    });
-
-    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { permissionMode: 'yolo' });
-    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
-  });
-});
-
-describe('useComposerTuning — draft mode: setPlanMode calls patchDraftConfig, NOT setChatConfig', () => {
-  it('patchDraftConfig called with {planMode: true} and setChatConfig not called', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = makeDraft();
-
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setPlanMode(true);
-    });
-
-    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { planMode: true });
-    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
-  });
+      expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, expectedPatch);
+      expect(vi.mocked(liveSetter)).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

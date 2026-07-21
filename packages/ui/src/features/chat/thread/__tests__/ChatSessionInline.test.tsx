@@ -258,25 +258,4 @@ describe('ChatSessionInline — status part has no status text', () => {
     expect(screen.queryByText('Compacting')).toBeNull();
     expect(screen.queryByText('Error')).toBeNull();
   });
-
-  it('does not render any status word anywhere in the status part output', () => {
-    const state = reduceChatThreadState(
-      reduceChatThreadState(stateWithChat(makeChat()), {
-        type: 'context.usage',
-        percentage: 42,
-        totalTokens: 84_000,
-        maxTokens: 200_000,
-      }),
-      { type: 'run.started' },
-    );
-    vi.mocked(useChatExtras).mockReturnValue(makeExtras(state) as ReturnType<typeof useChatExtras>);
-
-    const { container } = render(<ChatSessionInline part="status" />);
-
-    const text = container.textContent ?? '';
-    expect(text).not.toContain('Thinking');
-    expect(text).not.toContain('Awaiting');
-    expect(text).not.toContain('Compacting');
-    expect(text).not.toContain('Error');
-  });
 });

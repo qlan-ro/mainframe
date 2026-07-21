@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Integration test: open-file / reveal-file intent subscriber.
  * Tests the subscriber logic in isolation (not the React component).

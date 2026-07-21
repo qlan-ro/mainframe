@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SIDEBAR_EXPANDED_WIDTH } from '@/layout/SidebarShell';
 import {

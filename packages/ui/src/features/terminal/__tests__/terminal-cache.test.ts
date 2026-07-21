@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 // xterm touches canvas/DOM; mock it so the cache logic is testable in jsdom.

@@ -6,13 +6,12 @@
  *  2. Does NOT render when completed=true.
  *  3. Renders step 1 title "Start a session".
  *  4. Renders tour-label-card element.
- *  5. Clicking Next advances to step 2 (title "Hand work to your agent").
- *  6. Clicking Back at step 2 returns to step 1.
- *  7. Clicking Skip calls store.skip (sets completed=true, overlay unmounts).
- *  8. At the last step, the Next/Done button label is "Done"; clicking it completes.
- *  9. Back button is absent at step 1.
- * 10. Step dots render (tour-step-dot-0 … tour-step-dot-3).
- * 11. tour-spotlight renders when a [data-tut] target exists in DOM.
+ *  5. Step title tracks the store's step value.
+ *  6. At the last step, the Next/Done button label is "Done"; clicking it completes.
+ *  7. Back button is absent at step 1.
+ *  8. Step dots render (tour-step-dot-0 … tour-step-dot-3).
+ *  9. tour-spotlight renders when a [data-tut] target exists in DOM.
+ * 10. Un-anchorable steps auto-skip in the direction of travel.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -131,18 +130,6 @@ describe('TutorialOverlay', () => {
     removeAnchor(anchor);
   });
 
-  it('clicking Next calls store.next', async () => {
-    const user = userEvent.setup();
-    const anchor = insertAnchor('sessions');
-    render(<TutorialOverlay />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    await user.click(screen.getByTestId('tour-next-btn'));
-    expect(mockNext).toHaveBeenCalledOnce();
-    removeAnchor(anchor);
-  });
-
   it('shows step 2 title after step advances', async () => {
     // Simulate the store reporting step 1 (0-indexed)
     mockStep = 1;
@@ -152,31 +139,6 @@ describe('TutorialOverlay', () => {
       await new Promise((r) => setTimeout(r, 50));
     });
     expect(screen.getByText('Hand work to your agent')).toBeTruthy();
-    removeAnchor(anchor);
-  });
-
-  it('clicking Back at step > 0 calls store.back', async () => {
-    mockStep = 1;
-    const user = userEvent.setup();
-    const anchor = insertAnchor('composer');
-    render(<TutorialOverlay />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    await user.click(screen.getByTestId('tour-back-btn'));
-    expect(mockBack).toHaveBeenCalledOnce();
-    removeAnchor(anchor);
-  });
-
-  it('clicking Skip calls store.skip', async () => {
-    const user = userEvent.setup();
-    const anchor = insertAnchor('sessions');
-    render(<TutorialOverlay />);
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    await user.click(screen.getByTestId('tour-skip-btn'));
-    expect(mockSkip).toHaveBeenCalledOnce();
     removeAnchor(anchor);
   });
 

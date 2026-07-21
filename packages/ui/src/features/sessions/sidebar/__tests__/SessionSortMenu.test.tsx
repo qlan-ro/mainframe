@@ -12,21 +12,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SessionSortMenu } from '../SessionSortMenu';
 
-describe('SessionSortMenu — trigger present', () => {
-  it('renders data-testid="sessions-sort-button"', () => {
-    render(<SessionSortMenu mode="recent" onChange={vi.fn()} />);
-    expect(screen.getByTestId('sessions-sort-button')).toBeTruthy();
-  });
+it('renders data-testid="sessions-sort-button"', () => {
+  render(<SessionSortMenu mode="recent" onChange={vi.fn()} />);
+  expect(screen.getByTestId('sessions-sort-button')).toBeTruthy();
 });
 
-describe('SessionSortMenu — opens listing all options', () => {
-  it('shows recent / name / status options after opening', async () => {
-    render(<SessionSortMenu mode="recent" onChange={vi.fn()} />);
-    await userEvent.click(screen.getByTestId('sessions-sort-button'));
-    expect(screen.getByTestId('sessions-sort-recent')).toBeTruthy();
-    expect(screen.getByTestId('sessions-sort-name')).toBeTruthy();
-    expect(screen.getByTestId('sessions-sort-status')).toBeTruthy();
-  });
+it('shows recent / name / status options after opening', async () => {
+  render(<SessionSortMenu mode="recent" onChange={vi.fn()} />);
+  await userEvent.click(screen.getByTestId('sessions-sort-button'));
+  expect(screen.getByTestId('sessions-sort-recent')).toBeTruthy();
+  expect(screen.getByTestId('sessions-sort-name')).toBeTruthy();
+  expect(screen.getByTestId('sessions-sort-status')).toBeTruthy();
 });
 
 describe('SessionSortMenu — selecting an option', () => {
@@ -50,11 +46,9 @@ describe('SessionSortMenu — selecting an option', () => {
   });
 });
 
-describe('SessionSortMenu — active option is marked', () => {
-  it('marks the active option with aria-pressed="true"', async () => {
-    render(<SessionSortMenu mode="status" onChange={vi.fn()} />);
-    await userEvent.click(screen.getByTestId('sessions-sort-button'));
-    expect(screen.getByTestId('sessions-sort-status').getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByTestId('sessions-sort-recent').getAttribute('aria-pressed')).toBe('false');
-  });
+it('marks the active option with aria-pressed="true"', async () => {
+  render(<SessionSortMenu mode="status" onChange={vi.fn()} />);
+  await userEvent.click(screen.getByTestId('sessions-sort-button'));
+  expect(screen.getByTestId('sessions-sort-status').getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByTestId('sessions-sort-recent').getAttribute('aria-pressed')).toBe('false');
 });

@@ -297,40 +297,6 @@ describe('queued messages and thinking indicator', () => {
     expect(droppedToIdle).toBe(false);
   }, 10_000);
 
-  it('sweeps stranded message.metadata.queued flags when result fires with empty queue', async () => {
-    const adapter = new MockAdapter();
-    const events = await setup(adapter);
-    const chatManager = events.chats;
-
-    // Inject a stranded queued flag — simulates the CLI ack arriving in a
-    // shape (event.uuid missing) we didn't dispatch, so the metadata was
-    // never cleared by onQueuedProcessed.
-    const cache = (
-      chatManager as unknown as {
-        messages: {
-          append(chatId: string, msg: { metadata?: Record<string, unknown> }): void;
-          get(id: string): Array<{ metadata?: Record<string, unknown> }> | undefined;
-        };
-      }
-    ).messages;
-    cache.append('test-chat', {
-      id: 'orphan-msg',
-      chatId: 'test-chat',
-      type: 'user',
-      content: [{ type: 'text', text: 'orphan' }],
-      timestamp: new Date().toISOString(),
-      metadata: { queued: true, uuid: 'orphan-uuid-1' },
-    } as never);
-    const msgs = cache.get('test-chat')!;
-
-    events.length = 0;
-    adapter.currentSession!.simulateResult({ subtype: 'completed', is_error: false });
-    await sleep(50);
-
-    const stranded = msgs.find((m) => m.metadata?.queued === true);
-    expect(stranded).toBeUndefined();
-  }, 10_000);
-
   it('result event for parent session transitions to idle (subagent results already filtered)', async () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);

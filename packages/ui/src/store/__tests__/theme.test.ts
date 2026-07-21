@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme, applyStoredTheme } from '../theme';
 
@@ -130,11 +131,14 @@ describe('theme store — scheme + windowStyle axes', () => {
     expect(document.documentElement.hasAttribute('data-scheme')).toBe(false);
   });
 
-  it('invalid persisted values fall back to defaults', () => {
+  it('invalid persisted scheme and windowStyle fall back to defaults on a fresh import', async () => {
     localStorage.setItem('mf-scheme', 'bogus');
     localStorage.setItem('mf-window-style', 'bogus');
-    // re-read via a fresh getter
-    expect(['classic', 'ocean', 'velvet']).toContain(useTheme.getState().scheme);
+    // Module registry was reset in the outer beforeEach; a dynamic import
+    // re-runs module init, which is where the stored values are validated.
+    const { useTheme: freshTheme } = await import('../theme');
+    expect(freshTheme.getState().scheme).toBe('classic');
+    expect(freshTheme.getState().windowStyle).toBe('glass');
   });
 });
 

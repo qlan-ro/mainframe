@@ -4,15 +4,12 @@
  * Behaviors covered:
  *  1. Right-clicking children opens the menu; sessions-tag-registry-row-alpha
  *     (the children trigger) is rendered.
- *  2. After right-click, sessions-tag-registry-rename renders text "Rename".
- *  3. After right-click, sessions-tag-registry-recolor renders text "Change color".
- *  4. After right-click, sessions-tag-registry-delete renders text
- *     "Delete from all sessions".
- *  5. Clicking sessions-tag-registry-rename calls onRename('alpha') exactly once.
- *  6. Clicking sessions-tag-registry-recolor calls onRecolor('alpha') exactly once.
- *  7. Clicking sessions-tag-registry-delete calls onDelete('alpha') exactly once.
+ *  2. After right-click, each item renders its label: Rename / Change color /
+ *     Delete from all sessions.
+ *  3. Clicking each item calls the matching handler (onRename/onRecolor/
+ *     onDelete) with the tag name exactly once.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TagRegistryItemMenu } from '../TagRegistryItemMenu';
@@ -42,97 +39,29 @@ function renderAndOpen(props: {
   fireEvent.contextMenu(screen.getByTestId('sessions-tag-registry-row-alpha'));
 }
 
-// ---------------------------------------------------------------------------
-// 1. Children trigger is rendered
-// ---------------------------------------------------------------------------
-
-describe('TagRegistryItemMenu — renders children as the trigger', () => {
-  it('renders sessions-tag-registry-row-alpha as the trigger', () => {
-    renderAndOpen({});
-    expect(screen.getByTestId('sessions-tag-registry-row-alpha')).toBeTruthy();
-  });
+it('renders the children as the context-menu trigger', () => {
+  renderAndOpen({});
+  expect(screen.getByTestId('sessions-tag-registry-row-alpha')).toBeTruthy();
 });
 
-// ---------------------------------------------------------------------------
-// 2. Rename item renders text "Rename"
-// ---------------------------------------------------------------------------
+it('renders each item label after right-click: Rename, Change color, Delete from all sessions', () => {
+  renderAndOpen({});
 
-describe('TagRegistryItemMenu — rename item renders text "Rename"', () => {
-  it('sessions-tag-registry-rename has text content "Rename"', () => {
-    renderAndOpen({});
-    const item = screen.getByTestId('sessions-tag-registry-rename');
-    expect(item.textContent).toBe('Rename');
-  });
+  expect(screen.getByTestId('sessions-tag-registry-rename').textContent).toBe('Rename');
+  expect(screen.getByTestId('sessions-tag-registry-recolor').textContent).toBe('Change color');
+  expect(screen.getByTestId('sessions-tag-registry-delete').textContent).toBe('Delete from all sessions');
 });
 
-// ---------------------------------------------------------------------------
-// 3. Recolor item renders text "Change color"
-// ---------------------------------------------------------------------------
+it.each([
+  { testId: 'sessions-tag-registry-rename', propName: 'onRename' as const },
+  { testId: 'sessions-tag-registry-recolor', propName: 'onRecolor' as const },
+  { testId: 'sessions-tag-registry-delete', propName: 'onDelete' as const },
+])('clicking $testId calls $propName with the tag name exactly once', async ({ testId, propName }) => {
+  const handler = vi.fn();
+  renderAndOpen({ [propName]: handler });
 
-describe('TagRegistryItemMenu — recolor item renders text "Change color"', () => {
-  it('sessions-tag-registry-recolor has text content "Change color"', () => {
-    renderAndOpen({});
-    const item = screen.getByTestId('sessions-tag-registry-recolor');
-    expect(item.textContent).toBe('Change color');
-  });
-});
+  await userEvent.click(screen.getByTestId(testId));
 
-// ---------------------------------------------------------------------------
-// 4. Delete item renders text "Delete from all sessions"
-// ---------------------------------------------------------------------------
-
-describe('TagRegistryItemMenu — delete item renders text "Delete from all sessions"', () => {
-  it('sessions-tag-registry-delete has text content "Delete from all sessions"', () => {
-    renderAndOpen({});
-    const item = screen.getByTestId('sessions-tag-registry-delete');
-    expect(item.textContent).toBe('Delete from all sessions');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Clicking rename item calls onRename('alpha') exactly once
-// ---------------------------------------------------------------------------
-
-describe("TagRegistryItemMenu — clicking rename calls onRename('alpha') once", () => {
-  it("calls onRename with 'alpha' exactly once when sessions-tag-registry-rename is clicked", async () => {
-    const onRename = vi.fn();
-    renderAndOpen({ onRename });
-
-    await userEvent.click(screen.getByTestId('sessions-tag-registry-rename'));
-
-    expect(onRename).toHaveBeenCalledTimes(1);
-    expect(onRename).toHaveBeenCalledWith('alpha');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. Clicking recolor item calls onRecolor('alpha') exactly once
-// ---------------------------------------------------------------------------
-
-describe("TagRegistryItemMenu — clicking recolor calls onRecolor('alpha') once", () => {
-  it("calls onRecolor with 'alpha' exactly once when sessions-tag-registry-recolor is clicked", async () => {
-    const onRecolor = vi.fn();
-    renderAndOpen({ onRecolor });
-
-    await userEvent.click(screen.getByTestId('sessions-tag-registry-recolor'));
-
-    expect(onRecolor).toHaveBeenCalledTimes(1);
-    expect(onRecolor).toHaveBeenCalledWith('alpha');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. Clicking delete item calls onDelete('alpha') exactly once
-// ---------------------------------------------------------------------------
-
-describe("TagRegistryItemMenu — clicking delete calls onDelete('alpha') once", () => {
-  it("calls onDelete with 'alpha' exactly once when sessions-tag-registry-delete is clicked", async () => {
-    const onDelete = vi.fn();
-    renderAndOpen({ onDelete });
-
-    await userEvent.click(screen.getByTestId('sessions-tag-registry-delete'));
-
-    expect(onDelete).toHaveBeenCalledTimes(1);
-    expect(onDelete).toHaveBeenCalledWith('alpha');
-  });
+  expect(handler).toHaveBeenCalledTimes(1);
+  expect(handler).toHaveBeenCalledWith('alpha');
 });

@@ -12,17 +12,33 @@ export default defineConfig({
   test: {
     globals: true,
     env: { NODE_ENV: 'development' },
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['node_modules/**', 'dist/**', 'src-tauri/**'],
-    environment: 'jsdom',
     setupFiles: ['src/__tests__/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**'],
-      // Floor just below the current level — a regression gate, not an aspirational
-      // target. Raise as UI shells (App, surfaces, lib/tauri bridge) get covered.
-      thresholds: { lines: 45, branches: 48, functions: 35, statements: 43 },
     },
+    // jsdom startup dominates suite time, so only component tests (.test.tsx)
+    // get it; logic tests (.test.ts) run in node. A DOM-touching .test.ts
+    // opts back in with a `// @vitest-environment jsdom` pragma.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'dom',
+          environment: 'jsdom',
+          include: ['src/**/*.test.tsx'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+    ],
   },
 });

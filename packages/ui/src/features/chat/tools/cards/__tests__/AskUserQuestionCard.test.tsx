@@ -98,18 +98,6 @@ describe('AskUserQuestionCard', () => {
     vi.clearAllMocks();
   });
 
-  // --- Root element ---
-
-  it('renders the card root with data-testid="chat-ask-card"', () => {
-    renderCard(makePart({ args: SINGLE_QUESTION_ARGS }));
-    expect(screen.getByTestId('chat-ask-card')).toBeInTheDocument();
-  });
-
-  it('renders the trigger with data-testid="chat-ask-trigger"', () => {
-    renderCard(makePart({ args: SINGLE_QUESTION_ARGS }));
-    expect(screen.getByTestId('chat-ask-trigger')).toBeInTheDocument();
-  });
-
   // --- Header: uses firstQuestion.header ---
 
   it('shows the first question header text', () => {

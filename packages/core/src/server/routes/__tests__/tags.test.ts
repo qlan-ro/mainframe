@@ -84,23 +84,15 @@ describe('tag routes', () => {
     expect(res.status).toBe(400);
   });
 
-  it('DELETE /api/tags/:name removes', async () => {
+  // The empty body pins current behavior — see blockers: DELETE deviates from
+  // the rest of the API by ending with no body at all, not the {success} envelope.
+  it('DELETE /api/tags/:name removes the tag, returning 204 with an empty body', async () => {
     const { app, tags } = makeApp();
     tags.upsert('feature');
     const res = await request(app).delete('/api/tags/feature');
     expect(res.status).toBe(204);
-    expect(tags.get('feature')).toBeNull();
-  });
-
-  // pins current behavior — see blockers: DELETE deviates from the rest of the
-  // API by ending the response with no body at all, not the {success} envelope.
-  it('DELETE /api/tags/:name returns 204 with an empty body, not the {success} envelope', async () => {
-    const { app, tags } = makeApp();
-    tags.upsert('feature');
-    const res = await request(app).delete('/api/tags/feature');
-    expect(res.status).toBe(204);
-    expect(res.body).toEqual({});
     expect(res.text).toBe('');
+    expect(tags.get('feature')).toBeNull();
   });
 
   it('DELETE /api/tags/:name on missing returns 404', async () => {

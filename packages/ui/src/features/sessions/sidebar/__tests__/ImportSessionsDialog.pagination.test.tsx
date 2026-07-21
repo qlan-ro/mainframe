@@ -5,8 +5,8 @@
  *  1. Page 0 (nextOffset:2) renders 2 external-session-item rows + a
  *     sessions-import-load-more sentinel.
  *  2. After the IntersectionObserver fires (triggerScroll), page 1
- *     (nextOffset:null) is fetched and appended: 3 rows total, no sentinel.
- *  3. getExternalSessions is called exactly twice — first with offset:0,
+ *     (nextOffset:null) is fetched and appended: 3 rows total, no sentinel;
+ *     getExternalSessions is called exactly twice — first with offset:0,
  *     then with offset:2.
  *
  * Strategy:
@@ -18,7 +18,7 @@
  *    (avoids Dialog + project-picker step).
  *  - Use waitFor to let the useEffect + setState settle.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import type { ExternalSession, ExternalSessionPage } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -141,76 +141,40 @@ function renderSessionList() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// 1. Page 0: 2 rows + sentinel rendered
-// ---------------------------------------------------------------------------
+it('renders 2 external-session-item rows and a sessions-import-load-more sentinel after mount', async () => {
+  getExternalSessionsSpy.mockResolvedValueOnce(PAGE_0);
 
-describe('SessionList pagination — page 0 renders rows and sentinel', () => {
-  it('renders 2 external-session-item rows and a sessions-import-load-more sentinel after mount', async () => {
-    getExternalSessionsSpy.mockResolvedValueOnce(PAGE_0);
+  renderSessionList();
 
-    renderSessionList();
-
-    await waitFor(() => {
-      expect(screen.getAllByTestId('external-session-item')).toHaveLength(2);
-    });
-
-    expect(screen.getByTestId('sessions-import-load-more')).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getAllByTestId('external-session-item')).toHaveLength(2);
   });
+
+  expect(screen.getByTestId('sessions-import-load-more')).toBeTruthy();
 });
 
-// ---------------------------------------------------------------------------
-// 2. After IntersectionObserver fires: page 1 appended, sentinel gone
-// ---------------------------------------------------------------------------
+it('appends page 1 rows, removes the sentinel, and fetches with the correct offsets after triggerScroll', async () => {
+  getExternalSessionsSpy.mockResolvedValueOnce(PAGE_0).mockResolvedValueOnce(PAGE_1);
 
-describe('SessionList pagination — after sentinel scrolls into view, page 1 is appended', () => {
-  it('appends page 1 rows (total 3) and removes sentinel after triggerScroll', async () => {
-    getExternalSessionsSpy.mockResolvedValueOnce(PAGE_0).mockResolvedValueOnce(PAGE_1);
+  renderSessionList();
 
-    renderSessionList();
-
-    // Wait for page 0
-    await waitFor(() => {
-      expect(screen.getAllByTestId('external-session-item')).toHaveLength(2);
-    });
-
-    // Trigger the IntersectionObserver callback (sentinel enters viewport)
-    triggerScroll();
-
-    // Wait for page 1 to append
-    await waitFor(() => {
-      expect(screen.getAllByTestId('external-session-item')).toHaveLength(3);
-    });
-
-    // Sentinel must be gone (nextOffset === null)
-    expect(screen.queryByTestId('sessions-import-load-more')).toBeNull();
+  // Wait for page 0
+  await waitFor(() => {
+    expect(screen.getAllByTestId('external-session-item')).toHaveLength(2);
   });
-});
 
-// ---------------------------------------------------------------------------
-// 3. getExternalSessions called twice with correct offsets
-// ---------------------------------------------------------------------------
+  // Trigger the IntersectionObserver callback (sentinel enters viewport)
+  triggerScroll();
 
-describe('SessionList pagination — getExternalSessions is called with correct offsets', () => {
-  it('calls getExternalSessions twice: first offset:0, then offset:2', async () => {
-    getExternalSessionsSpy.mockResolvedValueOnce(PAGE_0).mockResolvedValueOnce(PAGE_1);
-
-    renderSessionList();
-
-    // Wait for page 0 load
-    await waitFor(() => {
-      expect(screen.getAllByTestId('external-session-item')).toHaveLength(2);
-    });
-
-    // Fire the observer to load page 1
-    triggerScroll();
-
-    await waitFor(() => {
-      expect(screen.getAllByTestId('external-session-item')).toHaveLength(3);
-    });
-
-    expect(getExternalSessionsSpy).toHaveBeenCalledTimes(2);
-    expect(getExternalSessionsSpy).toHaveBeenNthCalledWith(1, PORT, PROJECT_ID, { offset: 0, limit: 50 });
-    expect(getExternalSessionsSpy).toHaveBeenNthCalledWith(2, PORT, PROJECT_ID, { offset: 2, limit: 50 });
+  // Wait for page 1 to append
+  await waitFor(() => {
+    expect(screen.getAllByTestId('external-session-item')).toHaveLength(3);
   });
+
+  // Sentinel must be gone (nextOffset === null)
+  expect(screen.queryByTestId('sessions-import-load-more')).toBeNull();
+
+  expect(getExternalSessionsSpy).toHaveBeenCalledTimes(2);
+  expect(getExternalSessionsSpy).toHaveBeenNthCalledWith(1, PORT, PROJECT_ID, { offset: 0, limit: 50 });
+  expect(getExternalSessionsSpy).toHaveBeenNthCalledWith(2, PORT, PROJECT_ID, { offset: 2, limit: 50 });
 });

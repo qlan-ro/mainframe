@@ -55,26 +55,20 @@ describe('formatRelativeTime — same calendar day, duration-since', () => {
   });
 });
 
-describe('formatRelativeTime — yesterday', () => {
-  it('returns "Yest"', () => {
-    expect(formatRelativeTime(YESTERDAY, NOW)).toBe('Yest');
-  });
+it('returns "Yest" for yesterday', () => {
+  expect(formatRelativeTime(YESTERDAY, NOW)).toBe('Yest');
 });
 
-describe('formatRelativeTime — within 7 days (3 days ago)', () => {
-  it('returns a non-empty weekday abbreviation (no colon, not "Yest")', () => {
-    const result = formatRelativeTime(THREE_DAYS_AGO, NOW);
-    expect(result).not.toContain(':');
-    expect(result).not.toBe('Yest');
-    expect(result.length).toBeGreaterThan(0);
-  });
+it('returns a non-empty weekday abbreviation for 3 days ago (no colon, not "Yest")', () => {
+  const result = formatRelativeTime(THREE_DAYS_AGO, NOW);
+  expect(result).not.toContain(':');
+  expect(result).not.toBe('Yest');
+  expect(result.length).toBeGreaterThan(0);
 });
 
-describe('formatRelativeTime — older than 7 days (10 days ago)', () => {
-  it('returns a non-empty "MMM D" style string (no colon, not "Yest")', () => {
-    const result = formatRelativeTime(TEN_DAYS_AGO, NOW);
-    expect(result).not.toContain(':');
-    expect(result).not.toBe('Yest');
-    expect(result.length).toBeGreaterThan(0);
-  });
+it('returns a non-empty "MMM D" style string for 10 days ago (no colon, not "Yest")', () => {
+  const result = formatRelativeTime(TEN_DAYS_AGO, NOW);
+  expect(result).not.toContain(':');
+  expect(result).not.toBe('Yest');
+  expect(result.length).toBeGreaterThan(0);
 });

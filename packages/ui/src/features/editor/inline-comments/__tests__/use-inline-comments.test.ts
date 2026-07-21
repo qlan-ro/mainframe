@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * use-inline-comments — data model unit tests.
  *

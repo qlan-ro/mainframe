@@ -1,8 +1,7 @@
 /**
- * ChatGateMount — behavior tests (TDD red phase).
+ * ChatGateMount — behavior tests.
  *
  * Strategy:
- *  - `ChatGateMount` does not exist yet; these tests drive its API contract.
  *  - Only `useChatPermissionFront` is mocked — the real gate components are
  *    used so that routing decisions are verified through observable DOM state
  *    (data-testids), not through inspecting which JSX branch the component

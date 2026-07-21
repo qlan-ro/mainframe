@@ -190,129 +190,83 @@ describe('useNewThreadAutoConfig — project filter active on new local thread',
 });
 
 // ---------------------------------------------------------------------------
-// 2. filterProjectId is null → neither called
-// ---------------------------------------------------------------------------
-
-describe('useNewThreadAutoConfig — no project filter (All view)', () => {
-  it('does not call setDraftConfig and does not mark ready when filterProjectId is null', () => {
-    fakeAuiState = {
-      threadListItem: { id: '__LOCALID_x', status: 'new' },
-      thread: { messages: [] },
-    };
-    fakeFilterProjectId = null;
-
-    renderHook(() => useNewThreadAutoConfig());
-
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-    expect(useNewThreadReady.getState().readyIds.has('__LOCALID_x')).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. Thread already ready → neither called
-// ---------------------------------------------------------------------------
-
-describe('useNewThreadAutoConfig — thread already marked ready', () => {
-  it('does not call setDraftConfig when the thread is already ready', () => {
-    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
-    useNewThreadReady.getState().markReady('__LOCALID_x');
-
-    renderHook(() => useNewThreadAutoConfig());
-
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 4. Draft already exists → neither called (no overwrite)
-// ---------------------------------------------------------------------------
-
-describe('useNewThreadAutoConfig — draft already exists', () => {
-  it('does not overwrite an existing draft and does not mark ready', () => {
-    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
-    getDraftConfigResult = { projectId: 'proj-old', adapterId: 'claude', permissionMode: 'default' };
-
-    renderHook(() => useNewThreadAutoConfig());
-
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-    expect(useNewThreadReady.getState().readyIds.has('__LOCALID_x')).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Not a __LOCALID_* id → neither called
-// ---------------------------------------------------------------------------
-
-describe('useNewThreadAutoConfig — non-local thread id', () => {
-  it('does not call setDraftConfig for a regular chat id', () => {
-    fakeAuiState = {
-      threadListItem: { id: 'chat-server-123', status: 'regular' },
-      thread: { messages: [] },
-    };
-    fakeFilterProjectId = 'proj-42';
-
-    renderHook(() => useNewThreadAutoConfig());
-
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. itemStatus !== 'new' → neither called
-// ---------------------------------------------------------------------------
-
-describe('useNewThreadAutoConfig — thread status is not "new"', () => {
-  it('does not call setDraftConfig when status is "regular"', () => {
-    fakeAuiState = {
-      threadListItem: { id: '__LOCALID_x', status: 'regular' },
-      thread: { messages: [] },
-    };
-    fakeFilterProjectId = 'proj-42';
-
-    renderHook(() => useNewThreadAutoConfig());
-
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. Messages already present → neither called
-// ---------------------------------------------------------------------------
-
-describe('useNewThreadAutoConfig — thread already has messages', () => {
-  it('does not call setDraftConfig when the thread has messages', () => {
-    fakeAuiState = {
-      threadListItem: { id: '__LOCALID_x', status: 'new' },
-      thread: { messages: [{ id: 'm1' }] },
-    };
-    fakeFilterProjectId = 'proj-42';
-
-    renderHook(() => useNewThreadAutoConfig());
-
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. Regression: a just-discarded local id must not be instantly re-armed.
+// 2-8. Guard conditions: each leaves setDraftConfig uncalled.
 //
-// Bug: onDiscard resets the draft config + ready flag for the reused
-// __LOCALID_* slot, then asynchronously switches away — but switchToThread
-// hasn't landed yet, so this hook still sees the SAME slot as the active,
-// fresh, unconfigured thread and immediately re-seeds the very draft the user
-// just closed. Only reproducible with a project pill active — in "All" view
-// filterProjectId is null and this hook is already a no-op (case 2 above).
+// Case 8 is a regression: onDiscard resets the draft config + ready flag for
+// the reused __LOCALID_* slot, then asynchronously switches away — but
+// switchToThread hasn't landed yet, so this hook still sees the SAME slot as
+// the active, fresh, unconfigured thread and would immediately re-seed the
+// very draft the user just closed. Only reproducible with a project pill
+// active — in "All" view filterProjectId is null and the hook is already a
+// no-op (case 1 below).
 // ---------------------------------------------------------------------------
 
-describe('useNewThreadAutoConfig — a just-discarded local id is not re-armed', () => {
-  it('does not call setDraftConfig for a local id marked discarded, even though it still looks fresh', () => {
-    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
-    markDraftDiscarded('__LOCALID_x');
+const guardCases: { name: string; setup: () => void; expectedReady: boolean }[] = [
+  {
+    name: 'filterProjectId is null (All view)',
+    setup: () => {
+      fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'new' }, thread: { messages: [] } };
+      fakeFilterProjectId = null;
+    },
+    expectedReady: false,
+  },
+  {
+    name: 'the thread is already marked ready',
+    setup: () => {
+      setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+      useNewThreadReady.getState().markReady('__LOCALID_x');
+    },
+    expectedReady: true,
+  },
+  {
+    name: 'a draft already exists for the local id (no overwrite)',
+    setup: () => {
+      setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+      getDraftConfigResult = { projectId: 'proj-old', adapterId: 'claude', permissionMode: 'default' };
+    },
+    expectedReady: false,
+  },
+  {
+    name: 'the thread id is not a __LOCALID_* draft (a regular chat id)',
+    setup: () => {
+      fakeAuiState = { threadListItem: { id: 'chat-server-123', status: 'regular' }, thread: { messages: [] } };
+      fakeFilterProjectId = 'proj-42';
+    },
+    expectedReady: false,
+  },
+  {
+    name: 'the thread status is not "new"',
+    setup: () => {
+      fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'regular' }, thread: { messages: [] } };
+      fakeFilterProjectId = 'proj-42';
+    },
+    expectedReady: false,
+  },
+  {
+    name: 'the thread already has messages',
+    setup: () => {
+      fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'new' }, thread: { messages: [{ id: 'm1' }] } };
+      fakeFilterProjectId = 'proj-42';
+    },
+    expectedReady: false,
+  },
+  {
+    name: 'the local id was just marked discarded, even though it still looks fresh',
+    setup: () => {
+      setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+      markDraftDiscarded('__LOCALID_x');
+    },
+    expectedReady: false,
+  },
+];
 
-    renderHook(() => useNewThreadAutoConfig());
+it.each(guardCases)('does not call setDraftConfig when $name', ({ setup, expectedReady }) => {
+  setup();
 
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-  });
+  renderHook(() => useNewThreadAutoConfig());
+
+  expect(setDraftConfigSpy).not.toHaveBeenCalled();
+  expect(useNewThreadReady.getState().readyIds.has('__LOCALID_x')).toBe(expectedReady);
 });
 
 // ---------------------------------------------------------------------------

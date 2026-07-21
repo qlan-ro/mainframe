@@ -12,10 +12,9 @@
  *  8.  Clicking create calls registry.create('newt', undefined) then
  *      setChatTags(31415,'chat-1',['newt']).
  *  9.  Typing existing 'alpha' does NOT show the create button (exact match).
- *  10. Typing 'a' does NOT show the create button (too-short nameError).
- *  11. Typing 'mf:system' shows the error 'Tag names may not use the mf: prefix'
- *      and no create button.
- *  12. Typing 'x'.repeat(25) does NOT show the create button (too-long).
+ *  10. Typing 'mf:system' shows the error 'Tag names may not use the mf: prefix'
+ *      under a stable data-testid and hides the create button (smoke test —
+ *      exhaustive per-error-code coverage lives in validate-tag-name.test.ts).
  *  13. Typing 'AB' then clicking create calls registry.create('ab', undefined)
  *      (lowercased before send).
  *  14. Rename cascade: fire contextMenu on sessions-tag-registry-row-alpha, click
@@ -252,36 +251,14 @@ describe('TagPopover — typing an existing tag name suppresses the create butto
 });
 
 // ---------------------------------------------------------------------------
-// 10. Typing 'a' does NOT show create (too-short nameError)
+// 10. An invalid name surfaces its validation error and suppresses create.
+// Exhaustive per-error-code coverage (too-short/too-long/reserved-prefix/
+// invalid-chars + exact messages) lives in validate-tag-name.test.ts; this is
+// the one UI-level smoke test proving the popover wires that validation in.
 // ---------------------------------------------------------------------------
 
-describe('TagPopover — single-character query suppresses create (too-short)', () => {
-  it('does NOT render sessions-tag-popover-create when query is "a"', async () => {
-    renderPopover({});
-    const search = screen.getByTestId('sessions-tag-popover-search');
-
-    await userEvent.type(search, 'a');
-
-    expect(screen.queryByTestId('sessions-tag-popover-create')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 11. Typing 'mf:system' shows mf: prefix error and no create button
-// ---------------------------------------------------------------------------
-
-describe('TagPopover — reserved mf: prefix shows error and suppresses create', () => {
-  it('shows "Tag names may not use the mf: prefix" and no create button', async () => {
-    renderPopover({});
-    const search = screen.getByTestId('sessions-tag-popover-search');
-
-    await userEvent.type(search, 'mf:system');
-
-    expect(screen.getByText('Tag names may not use the mf: prefix')).toBeTruthy();
-    expect(screen.queryByTestId('sessions-tag-popover-create')).toBeNull();
-  });
-
-  it('renders the validation message under a stable data-testid', async () => {
+describe('TagPopover — invalid tag name shows a validation error and suppresses create', () => {
+  it('shows "Tag names may not use the mf: prefix" under a stable data-testid and hides the create button', async () => {
     renderPopover({});
     const search = screen.getByTestId('sessions-tag-popover-search');
 
@@ -290,20 +267,6 @@ describe('TagPopover — reserved mf: prefix shows error and suppresses create',
     expect(screen.getByTestId('sessions-tag-popover-name-error')).toHaveTextContent(
       'Tag names may not use the mf: prefix',
     );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 12. Typing 'x'.repeat(25) does NOT show create (too-long)
-// ---------------------------------------------------------------------------
-
-describe('TagPopover — 25-character query suppresses create (too-long)', () => {
-  it('does NOT render sessions-tag-popover-create when query is 25 chars', async () => {
-    renderPopover({});
-    const search = screen.getByTestId('sessions-tag-popover-search');
-
-    await userEvent.type(search, 'x'.repeat(25));
-
     expect(screen.queryByTestId('sessions-tag-popover-create')).toBeNull();
   });
 });

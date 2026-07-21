@@ -17,6 +17,10 @@
  * 10.  Re-clicking the selected branch row closes the submenu (no back/close control — finding 10.9).
  * 11.  Reopen race: a stale in-flight load from a closed popover must not clobber a
  *      fresher reopen's data (reopen-hang regression — batch56 git-branch report).
+ *
+ * (Two near-duplicate "re-click closes the submenu" tests were merged into one —
+ * both drove the same click sequence and only differed in which follow-on
+ * assertion they checked.)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
@@ -368,7 +372,7 @@ describe('BranchPopover — side-by-side submenu', () => {
     expect(screen.getByTestId('git-branch-row-main')).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('clicking the already-selected branch row again closes the submenu (toggle)', async () => {
+  it('clicking the already-selected branch row again closes the submenu, clears its aria-selected, and leaves the list visible', async () => {
     renderPopover({ open: true });
 
     await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
@@ -382,21 +386,6 @@ describe('BranchPopover — side-by-side submenu', () => {
       expect(screen.queryByTestId('git-submenu')).toBeNull();
     });
     expect(screen.getByTestId('git-branch-row-feat/login')).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByTestId('git-branch-search')).toBeTruthy();
-  });
-
-  it('re-clicking the selected row closes the submenu and the list remains visible', async () => {
-    renderPopover({ open: true });
-
-    await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
-    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
-    await waitFor(() => screen.getByTestId('git-submenu'));
-
-    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('git-submenu')).toBeNull();
-    });
     expect(screen.getByTestId('git-branch-search')).toBeTruthy();
   });
 });

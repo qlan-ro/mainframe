@@ -1,10 +1,8 @@
 /**
- * build-control-response — behavior tests (TDD red phase).
+ * build-control-response — behavior tests for three pure builder functions:
+ * buildPermissionResponse, buildAskUserQuestionResponse, and buildPlanResponse.
  *
  * Strategy:
- *  - Source modules do not exist yet; these tests define the API contract for
- *    three pure builder functions: buildPermissionResponse,
- *    buildAskUserQuestionResponse, and buildPlanResponse.
  *  - All expected values are hardcoded; no logic is duplicated from the
  *    functions under test.
  *

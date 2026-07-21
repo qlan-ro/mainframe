@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Behavior tests for toUploadItems and createAttachmentAdapter().add.
  *

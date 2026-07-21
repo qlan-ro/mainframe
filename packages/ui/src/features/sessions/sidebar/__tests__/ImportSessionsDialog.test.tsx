@@ -6,7 +6,8 @@
  *     picker and calls getExternalSessions(port, projectId) immediately.
  *  2. Each returned ExternalSession renders an external-session-item row.
  *  3. Clicking import-session-btn calls importExternalSession with the exact
- *     body built from the session's fields, then calls runtime.threads.reload().
+ *     body built from the session's fields, then calls runtime.threads.reload()
+ *     (asserted in one test to avoid re-running the render/click setup twice).
  *  4. When filterProjectId is null, the project picker step renders a button
  *     per project keyed by sessions-import-project-<id>.
  *
@@ -186,49 +187,28 @@ describe('ImportSessionsDialog — renders one external-session-item per returne
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Clicking import button calls importExternalSession + reload
-// ---------------------------------------------------------------------------
+it('calls importExternalSession with the exact body derived from the session, then reloads the thread list', async () => {
+  getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION], total: 1, nextOffset: null });
 
-describe('ImportSessionsDialog — clicking import-session-btn calls importExternalSession then reload', () => {
-  it('calls importExternalSession with the exact body derived from the session', async () => {
-    getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION], total: 1, nextOffset: null });
+  renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
 
-    renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('import-session-btn')).toBeTruthy();
-    });
-
-    await act(async () => {
-      await userEvent.click(screen.getByTestId('import-session-btn'));
-    });
-
-    expect(importExternalSessionSpy).toHaveBeenCalledTimes(1);
-    expect(importExternalSessionSpy).toHaveBeenCalledWith(31415, 'proj-1', {
-      sessionId: 'ext-sess-001',
-      adapterId: 'claude',
-      title: 'Fix the parser',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      modifiedAt: '2026-06-01T10:00:00.000Z',
-    });
+  await waitFor(() => {
+    expect(screen.getByTestId('import-session-btn')).toBeTruthy();
   });
 
-  it('calls runtime.threads.reload() after a successful import', async () => {
-    getExternalSessionsSpy.mockResolvedValue({ sessions: [EXTERNAL_SESSION], total: 1, nextOffset: null });
-
-    renderDialog({ projects: [PROJECT_1], filterProjectId: 'proj-1' });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('import-session-btn')).toBeTruthy();
-    });
-
-    await act(async () => {
-      await userEvent.click(screen.getByTestId('import-session-btn'));
-    });
-
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await userEvent.click(screen.getByTestId('import-session-btn'));
   });
+
+  expect(importExternalSessionSpy).toHaveBeenCalledTimes(1);
+  expect(importExternalSessionSpy).toHaveBeenCalledWith(31415, 'proj-1', {
+    sessionId: 'ext-sess-001',
+    adapterId: 'claude',
+    title: 'Fix the parser',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    modifiedAt: '2026-06-01T10:00:00.000Z',
+  });
+  expect(reloadSpy).toHaveBeenCalledTimes(1);
 });
 
 // ---------------------------------------------------------------------------

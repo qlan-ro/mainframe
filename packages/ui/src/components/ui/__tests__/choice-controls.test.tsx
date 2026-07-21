@@ -14,48 +14,28 @@ import { RadioGroup, RadioGroupItem } from '../radio-group';
 import { Switch } from '../switch';
 import { Label } from '../label';
 
-describe('Checkbox', () => {
-  it('uses the solid text-4 token for the unchecked ring', () => {
-    render(<Checkbox data-testid="cb" />);
-    expect(screen.getByTestId('cb').className).toContain('border-mf-text-4');
-  });
-
-  it('uses the app-wide 0.45 disabled opacity convention', () => {
-    render(<Checkbox data-testid="cb" disabled />);
-    expect(screen.getByTestId('cb').className).toContain('disabled:opacity-[0.45]');
-  });
-});
-
-describe('RadioGroupItem', () => {
-  it('uses the solid text-4 token for the unchecked ring', () => {
-    render(
+describe('choice-control style contract', () => {
+  it.each([
+    ['Checkbox unchecked ring', <Checkbox data-testid="el" />, 'border-mf-text-4'],
+    ['Checkbox disabled opacity', <Checkbox data-testid="el" disabled />, 'disabled:opacity-[0.45]'],
+    [
+      'RadioGroupItem unchecked ring',
       <RadioGroup>
-        <RadioGroupItem data-testid="rb" value="a" />
+        <RadioGroupItem data-testid="el" value="a" />
       </RadioGroup>,
-    );
-    expect(screen.getByTestId('rb').className).toContain('border-mf-text-4');
-  });
-
-  it('uses the app-wide 0.45 disabled opacity convention', () => {
-    render(
+      'border-mf-text-4',
+    ],
+    [
+      'RadioGroupItem disabled opacity',
       <RadioGroup>
-        <RadioGroupItem data-testid="rb" value="a" disabled />
+        <RadioGroupItem data-testid="el" value="a" disabled />
       </RadioGroup>,
-    );
-    expect(screen.getByTestId('rb').className).toContain('disabled:opacity-[0.45]');
-  });
-});
-
-describe('Switch', () => {
-  it('uses the app-wide 0.45 disabled opacity convention', () => {
-    render(<Switch data-testid="sw" disabled />);
-    expect(screen.getByTestId('sw').className).toContain('disabled:opacity-[0.45]');
-  });
-});
-
-describe('Label', () => {
-  it('uses the app-wide 0.45 disabled opacity convention when its peer is disabled', () => {
-    render(<Label data-testid="lbl">Field</Label>);
-    expect(screen.getByTestId('lbl').className).toContain('peer-disabled:opacity-[0.45]');
+      'disabled:opacity-[0.45]',
+    ],
+    ['Switch disabled opacity', <Switch data-testid="el" disabled />, 'disabled:opacity-[0.45]'],
+    ['Label peer-disabled opacity', <Label data-testid="el">Field</Label>, 'peer-disabled:opacity-[0.45]'],
+  ] as const)('%s', (_name, ui, expectedClass) => {
+    render(ui);
+    expect(screen.getByTestId('el').className).toContain(expectedClass);
   });
 });

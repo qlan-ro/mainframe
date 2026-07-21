@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * comment-gutter — CM6 extension unit tests.
  *

@@ -1,17 +1,15 @@
 /**
- * ComposerToolbar — integration test verifying WorktreePopover is mounted.
+ * ComposerToolbar — integration test verifying the toolbar guards on a null chat.
  *
  * Strategy:
- *  - Mock useComposerTuning to return a resolved chat so we control the toolbar state.
+ *  - Mock useComposerTuning to return a resolved chat by default, overridden per test.
  *  - Mock all external dependencies (API, hooks, git) to prevent real network calls.
- *  - When a resolved chat is present, composer-worktree-trigger must appear.
  *
  * Behaviors covered:
- *  1. composer-worktree-trigger is present when a chat is resolved
- *  2. toolbar renders nothing when chat is null
+ *  1. toolbar renders nothing when chat is null
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -109,19 +107,7 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1. trigger is present when chat is resolved
-// ---------------------------------------------------------------------------
-
-describe('ComposerToolbar — WorktreePopover mounted', () => {
-  it('renders composer-worktree-trigger when a chat is resolved', () => {
-    renderToolbar();
-
-    expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 2. toolbar renders nothing when chat is null
+// 1. toolbar renders nothing when chat is null
 // ---------------------------------------------------------------------------
 
 describe('ComposerToolbar — no render when chat is null', () => {

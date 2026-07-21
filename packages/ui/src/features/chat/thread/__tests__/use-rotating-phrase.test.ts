@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 /**
- * use-rotating-phrase — behavior tests (TDD red phase).
+ * use-rotating-phrase — behavior tests.
  *
  * Behaviors covered:
  *  1. Returns the first phrase immediately on mount (no advance before any tick).

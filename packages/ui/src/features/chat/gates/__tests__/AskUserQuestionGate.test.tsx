@@ -1,8 +1,6 @@
 /**
- * Behavior tests for AskUserQuestionGate (TDD red phase).
- *
- * The source module `../AskUserQuestionGate` does not exist yet. These tests
- * define the observable contract for the Back/Next wizard component:
+ * Behavior tests for AskUserQuestionGate — the observable contract for the
+ * Back/Next wizard component:
  *
  *  1. Single question: renders root, question text, option testids; submit
  *     shown (not Next); submit disabled until an option is selected.

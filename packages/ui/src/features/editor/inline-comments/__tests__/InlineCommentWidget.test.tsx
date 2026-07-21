@@ -10,7 +10,6 @@
  *   - Close (X) button in header calls onClose
  *   - "Add context" button is disabled when text is empty; enabled when non-empty
  *   - "Add context" button click calls onSave
- *   - data-testid attributes are present
  *   - optional lineNumber renders range label in the header
  *   - lineContent renders a code snippet preview block
  *   - Send button fires onSend when text is non-empty
@@ -28,44 +27,18 @@ describe('InlineCommentWidget', () => {
     onClose: () => undefined,
   };
 
-  it('renders the editor-comment-widget testid', () => {
+  it('renders the widget root and "Review comment" header label', () => {
     render(<InlineCommentWidget {...defaultProps} />);
     expect(screen.getByTestId('editor-comment-widget')).toBeTruthy();
-  });
-
-  it('renders a textarea with the editor-comment-widget-input testid', () => {
-    render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.getByTestId('editor-comment-widget-input')).toBeTruthy();
-  });
-
-  it('renders the cancel button with editor-comment-widget-cancel testid', () => {
-    render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.getByTestId('editor-comment-widget-cancel')).toBeTruthy();
-  });
-
-  it('renders the save button with editor-comment-widget-save testid', () => {
-    render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.getByTestId('editor-comment-widget-save')).toBeTruthy();
-  });
-
-  it('renders the header close button with editor-comment-widget-close testid', () => {
-    render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.getByTestId('editor-comment-widget-close')).toBeTruthy();
-  });
-
-  it('renders "Review comment" header label', () => {
-    render(<InlineCommentWidget {...defaultProps} />);
     expect(screen.getByText('Review comment')).toBeTruthy();
   });
 
-  it('renders range label "L4–5" when lineNumber=4 and endLine=5', () => {
-    render(<InlineCommentWidget {...defaultProps} lineNumber={4} endLine={5} />);
-    expect(screen.getByText('L4–5')).toBeTruthy();
-  });
-
-  it('renders range label "L4" when lineNumber=4 with no endLine', () => {
-    render(<InlineCommentWidget {...defaultProps} lineNumber={4} />);
-    expect(screen.getByText('L4')).toBeTruthy();
+  it.each([
+    ['L4–5', { lineNumber: 4, endLine: 5 }],
+    ['L4', { lineNumber: 4 }],
+  ])('renders range label "%s"', (label, props) => {
+    render(<InlineCommentWidget {...defaultProps} {...props} />);
+    expect(screen.getByText(label)).toBeTruthy();
   });
 
   it('does not render a line label when lineNumber is not provided', () => {
@@ -74,24 +47,18 @@ describe('InlineCommentWidget', () => {
     expect(/L\d/.test(text)).toBe(false);
   });
 
-  it('renders snippet block when lineContent is set', () => {
+  it('renders both lines in the snippet block when lineContent is set', () => {
     render(<InlineCommentWidget {...defaultProps} lineContent={'const a = 1\nconst b = 2'} lineNumber={4} />);
     expect(screen.getByTestId('editor-comment-widget-snippet')).toBeTruthy();
-  });
-
-  it('renders both lines in the snippet block', () => {
-    render(<InlineCommentWidget {...defaultProps} lineContent={'const a = 1\nconst b = 2'} lineNumber={4} />);
     expect(screen.getByText('const a = 1')).toBeTruthy();
     expect(screen.getByText('const b = 2')).toBeTruthy();
   });
 
-  it('does NOT render snippet block when lineContent is empty/undefined', () => {
-    render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.queryByTestId('editor-comment-widget-snippet')).toBeNull();
-  });
-
-  it('does NOT render snippet block when lineContent is empty string', () => {
-    render(<InlineCommentWidget {...defaultProps} lineContent="" />);
+  it.each([
+    ['undefined', undefined],
+    ['empty string', ''],
+  ])('does NOT render snippet block when lineContent is %s', (_name, lineContent) => {
+    render(<InlineCommentWidget {...defaultProps} lineContent={lineContent} />);
     expect(screen.queryByTestId('editor-comment-widget-snippet')).toBeNull();
   });
 

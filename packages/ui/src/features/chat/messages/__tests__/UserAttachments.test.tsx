@@ -349,33 +349,3 @@ describe('UserAttachments — B7: image attachment with no matching capture rend
     expect(screen.queryByTestId('chat-capture-selector')).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Tests — B9: capture selector chip carries data-testid and full selector text
-// ---------------------------------------------------------------------------
-
-describe('UserAttachments — B9: capture selector has chat-capture-selector testid', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __attachmentType = 'image';
-    __src = 'data:img';
-  });
-
-  it('renders the capture selector in a tooltip-bearing chip with a testid', () => {
-    __attachmentName = 'el.png';
-    __meta = {
-      captures: [
-        {
-          label: 'el',
-          imageName: 'el.png',
-          selector: 'div > div.min-h-screen.bg-background',
-        },
-      ],
-    };
-
-    renderAttachments();
-
-    const el = screen.getByTestId('chat-capture-selector');
-    expect(el).toHaveTextContent('div > div.min-h-screen.bg-background');
-  });
-});

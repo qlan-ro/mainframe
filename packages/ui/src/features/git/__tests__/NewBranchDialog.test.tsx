@@ -2,20 +2,18 @@
  * NewBranchDialog.test.tsx — name validation + create callback + testids.
  *
  * Behaviors covered:
- *  1.  Renders data-testid="git-new-branch-dialog".
- *  2.  Renders data-testid="git-new-branch-name" input.
- *  3.  Renders data-testid="git-new-branch-start" select seeded with local branches.
- *  4.  Back button (git-new-branch-back) fires onBack.
- *  5.  Cancel button (git-new-branch-cancel) fires onBack.
- *  6.  Create button is disabled when name is empty.
- *  7.  Submitting an empty name shows "Branch name is required" error.
- *  8.  Submitting an invalid name (starts with '-') shows "Invalid branch name" error.
- *  9.  Submitting an existing local name shows "Branch already exists" error.
- * 10.  Submitting a valid new name calls onCreate(name, startPoint).
- * 11.  startFrom prop pre-selects the start-point select.
- * 12.  Remote branches appear in a "Remote" optgroup when provided.
- * 13.  A valid name 'feat/my-branch' (with slash) is accepted — no error.
- * 14.  A name starting with '/' fails BRANCH_NAME_RE validation.
+ *  1.  Renders data-testid="git-new-branch-start" select seeded with local branches.
+ *  2.  Back button (git-new-branch-back) fires onBack.
+ *  3.  Cancel button (git-new-branch-cancel) fires onBack.
+ *  4.  Create button is disabled when name is empty.
+ *  5.  Submitting an empty name shows "Branch name is required" error.
+ *  6.  Submitting an invalid name (starts with '-') shows "Invalid branch name" error.
+ *  7.  Submitting an existing local name shows "Branch already exists" error.
+ *  8.  Submitting a valid new name calls onCreate(name, startPoint).
+ *  9.  startFrom prop pre-selects the start-point select.
+ * 10.  Remote branches appear in a "Remote" optgroup when provided.
+ * 11.  A valid name 'feat/my-branch' (with slash) is accepted — no error.
+ * 12.  A name starting with '/' fails BRANCH_NAME_RE validation.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -38,29 +36,11 @@ function makeProps(overrides: Partial<NewBranchDialogProps> = {}): NewBranchDial
 }
 
 // ---------------------------------------------------------------------------
-// 1. Renders root testid
-// ---------------------------------------------------------------------------
-
-describe('NewBranchDialog — renders root testid', () => {
-  it('renders data-testid="git-new-branch-dialog"', () => {
-    render(<NewBranchDialog {...makeProps()} />);
-    expect(screen.getByTestId('git-new-branch-dialog')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 2. Renders name input
-// ---------------------------------------------------------------------------
-
-describe('NewBranchDialog — renders name input', () => {
-  it('renders data-testid="git-new-branch-name"', () => {
-    render(<NewBranchDialog {...makeProps()} />);
-    expect(screen.getByTestId('git-new-branch-name')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 3. Start-from select seeded with local branches
+//
+// (Root-dialog and name-input presence smokes were dropped — every test
+// below already queries git-new-branch-dialog/git-new-branch-name to drive
+// its interaction, so bare presence is exercised implicitly.)
 // ---------------------------------------------------------------------------
 
 describe('NewBranchDialog — start-point select', () => {

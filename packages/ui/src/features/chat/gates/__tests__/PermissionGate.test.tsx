@@ -1,9 +1,7 @@
 /**
- * PermissionGate — behavior tests (TDD red phase).
+ * PermissionGate — behavior tests.
  *
  * Strategy:
- *  - No source module exists yet; these tests drive the API contract for
- *    the PermissionGate component.
  *  - Component is fully prop-driven: no hooks, no context dependencies beyond
  *    TooltipProvider.
  *  - All expected values are hardcoded; the ControlResponse objects are the

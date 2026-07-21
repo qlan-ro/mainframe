@@ -11,8 +11,10 @@ function setup() {
 }
 
 describe('TagsRepository', () => {
-  it('list returns empty initially', () => {
-    expect(setup().list()).toEqual([]);
+  it('list returns [] and get returns null on a fresh repo', () => {
+    const repo = setup();
+    expect(repo.list()).toEqual([]);
+    expect(repo.get('nonexistent')).toBeNull();
   });
 
   it('upsert creates a tag with auto-color when missing', () => {
@@ -31,11 +33,24 @@ describe('TagsRepository', () => {
     expect(repo.list()).toHaveLength(1);
   });
 
-  it('rejects reserved prefix', () => {
-    expect(() => setup().upsert('has-pr')).toThrow(/reserved/i);
+  it.each([
+    ['upsert rejects a reserved-prefix name', (repo: TagsRepository) => repo.upsert('has-pr'), /reserved/i],
+    [
+      'rename rejects a reserved-prefix target',
+      (repo: TagsRepository) => {
+        repo.upsert('feature');
+        repo.rename('feature', 'has-pr');
+      },
+      /reserved/i,
+    ],
+    ['setColor throws when the tag is missing', (repo: TagsRepository) => repo.setColor('nope', 'red'), /not found/i],
+    ['remove throws when the tag is missing', (repo: TagsRepository) => repo.remove('nope'), /not found/i],
+  ])('%s', (_label, act, matcher) => {
+    expect(() => act(setup())).toThrow(matcher);
   });
 
-  it('rename moves the row and cascades chat_tags', () => {
+  // chat_tags cascading on rename is asserted separately below with real chat_tags rows.
+  it('rename moves the row', () => {
     const repo = setup();
     repo.upsert('feat');
     repo.rename('feat', 'feature');
@@ -147,23 +162,5 @@ describe('TagsRepository', () => {
     repo.rename('feat', 'feature');
     const tags = db.prepare('SELECT tag FROM chat_tags ORDER BY chat_id').all() as { tag: string }[];
     expect(tags.map((r) => r.tag)).toEqual(['feature', 'feature']);
-  });
-
-  it('get returns null for missing tag', () => {
-    expect(setup().get('nonexistent')).toBeNull();
-  });
-
-  it('rename rejects reserved-prefix target', () => {
-    const repo = setup();
-    repo.upsert('feature');
-    expect(() => repo.rename('feature', 'has-pr')).toThrow(/reserved/i);
-  });
-
-  it('setColor throws when tag missing', () => {
-    expect(() => setup().setColor('nope', 'red')).toThrow(/not found/i);
-  });
-
-  it('remove throws when tag missing', () => {
-    expect(() => setup().remove('nope')).toThrow(/not found/i);
   });
 });

@@ -182,6 +182,15 @@ describe('extractPrFromToolResult', () => {
   it('returns null for text without PR URLs', () => {
     expect(extractPrFromToolResult('just some output')).toBeNull();
   });
+
+  it('returns the first match when multiple PR URLs are present', () => {
+    const content = `
+      First PR: https://github.com/org/repo1/pull/111
+      Second PR: https://github.com/org/repo2/pull/222
+    `;
+    const pr = extractPrFromToolResult(content);
+    expect(pr?.number).toBe(111);
+  });
 });
 
 describe('command-level PR detection', () => {

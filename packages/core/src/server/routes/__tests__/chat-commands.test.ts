@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import express from 'express';
+import request from 'supertest';
 import { chatCommandRoutes } from '../chat-commands.js';
 import type { RouteContext } from '../types.js';
 
@@ -20,27 +22,20 @@ function ctxWith(over: Partial<RouteContext['chats']> = {}): RouteContext {
   };
 }
 
-function mockRes() {
-  const res: any = { json: vi.fn(), status: vi.fn().mockReturnThis() };
-  return res;
+function makeApp(ctx: RouteContext) {
+  const app = express();
+  app.use(express.json());
+  app.use(chatCommandRoutes(ctx));
+  return app;
 }
 
-function handlerFor(router: any, method: string, path: string) {
-  const l = router.stack.find((x: any) => x.route?.path === path && x.route?.methods[method]);
-  if (!l) throw new Error(`No handler for ${method.toUpperCase()} ${path}`);
-  return l.route.stack[l.route.stack.length - 1].handle;
-}
+type Method = 'post' | 'patch' | 'delete';
 
 describe('chatCommandRoutes', () => {
-  // POST /api/chats
   it('POST /api/chats creates and returns the chat enveloped', async () => {
     const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats')(
-      { params: {}, body: { projectId: 'p1', adapterId: 'claude' } },
-      res,
-      vi.fn(),
-    );
+    const res = await request(makeApp(ctx)).post('/api/chats').send({ projectId: 'p1', adapterId: 'claude' });
+
     expect(ctx.chats.createChatWithDefaults).toHaveBeenCalledWith(
       'p1',
       'claude',
@@ -49,162 +44,70 @@ describe('chatCommandRoutes', () => {
       undefined,
       undefined,
     );
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { id: 'c1', projectId: 'p1', title: 'T' } });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, data: { id: 'c1', projectId: 'p1', title: 'T' } });
   });
 
-  it('POST /api/chats rejects invalid body with 400', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats')({ params: {}, body: {} }, res, vi.fn());
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  it.each([
+    ['invalid body', {}],
+    [
+      'mismatched worktreePath without branchName',
+      { projectId: 'p1', adapterId: 'claude', worktreePath: '/some/path' },
+    ],
+  ])('POST /api/chats rejects %s with 400', async (_label, body) => {
+    const res = await request(makeApp(ctxWith())).post('/api/chats').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ success: false });
   });
 
-  it('POST /api/chats rejects mismatched worktreePath/branchName with 400', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats')(
-      { params: {}, body: { projectId: 'p1', adapterId: 'claude', worktreePath: '/some/path' } },
-      res,
-      vi.fn(),
-    );
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
-  });
-
-  // PATCH /api/chats/:id/config
   it('PATCH /api/chats/:id/config returns updated chat', async () => {
     const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'patch', '/api/chats/:id/config')(
-      { params: { id: 'c1' }, body: {} },
-      res,
-      vi.fn(),
-    );
+    const res = await request(makeApp(ctx)).patch('/api/chats/c1/config').send({});
+
     expect(ctx.chats.updateChatConfig).toHaveBeenCalledWith('c1', undefined, undefined, undefined, undefined);
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { id: 'c1', projectId: 'p1', title: 'T2' } });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, data: { id: 'c1', projectId: 'p1', title: 'T2' } });
   });
 
-  it('PATCH /api/chats/:id/config returns 404 for unknown chat', async () => {
+  it.each([
+    ['post', '/api/chats/c1/interrupt', {}, 'interruptChat', ['c1']],
+    ['post', '/api/chats/c1/resume', {}, 'resumeChat', ['c1']],
+    ['post', '/api/chats/c1/trust-workspace', {}, 'trustWorkspace', ['c1']],
+    ['patch', '/api/chats/c1/queue/m1', { content: 'new text' }, 'editQueuedMessage', ['c1', 'm1', 'new text']],
+    ['delete', '/api/chats/c1/queue/m1', {}, 'cancelQueuedMessage', ['c1', 'm1']],
+  ] as [Method, string, object, string, unknown[]][])(
+    '%s %s → okEmpty and delegates to the service',
+    async (method, path, body, service, args) => {
+      const ctx = ctxWith();
+      const res = await request(makeApp(ctx))[method](path).send(body);
+
+      expect((ctx.chats as any)[service]).toHaveBeenCalledWith(...args);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true });
+    },
+  );
+
+  it.each([
+    ['patch', '/api/chats/nope/config', {}],
+    ['post', '/api/chats/nope/interrupt', {}],
+    ['post', '/api/chats/nope/resume', {}],
+    ['post', '/api/chats/nope/trust-workspace', {}],
+    ['patch', '/api/chats/nope/queue/m1', { content: 'x' }],
+    ['delete', '/api/chats/nope/queue/m1', {}],
+  ] as [Method, string, object][])('%s %s returns 404 for an unknown chat', async (method, path, body) => {
     const ctx = ctxWith({ getChat: vi.fn().mockReturnValue(null) });
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'patch', '/api/chats/:id/config')(
-      { params: { id: 'nope' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    const res = await request(makeApp(ctx))[method](path).send(body);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ success: false });
   });
 
-  // POST /api/chats/:id/interrupt
-  it('POST /api/chats/:id/interrupt → okEmpty', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/interrupt')(
-      { params: { id: 'c1' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(ctx.chats.interruptChat).toHaveBeenCalledWith('c1');
-    expect(res.json).toHaveBeenCalledWith({ success: true });
-  });
-
-  it('POST /api/chats/:id/interrupt returns 404 for unknown chat', async () => {
-    const ctx = ctxWith({ getChat: vi.fn().mockReturnValue(null) });
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/interrupt')(
-      { params: { id: 'nope' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  // POST /api/chats/:id/resume
-  it('POST /api/chats/:id/resume → okEmpty', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/resume')(
-      { params: { id: 'c1' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(ctx.chats.resumeChat).toHaveBeenCalledWith('c1');
-    expect(res.json).toHaveBeenCalledWith({ success: true });
-  });
-
-  // POST /api/chats/:id/trust-workspace
-  it('POST /api/chats/:id/trust-workspace → okEmpty', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/trust-workspace')(
-      { params: { id: 'c1' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(ctx.chats.trustWorkspace).toHaveBeenCalledWith('c1');
-    expect(res.json).toHaveBeenCalledWith({ success: true });
-  });
-
-  it('POST /api/chats/:id/trust-workspace returns 404 for unknown chat', async () => {
-    const ctx = ctxWith({ getChat: vi.fn().mockReturnValue(null) });
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'post', '/api/chats/:id/trust-workspace')(
-      { params: { id: 'nope' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  // PATCH /api/chats/:id/queue/:messageId
-  it('PATCH /api/chats/:id/queue/:messageId edits queued message', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'patch', '/api/chats/:id/queue/:messageId')(
-      { params: { id: 'c1', messageId: 'm1' }, body: { content: 'new text' } },
-      res,
-      vi.fn(),
-    );
-    expect(ctx.chats.editQueuedMessage).toHaveBeenCalledWith('c1', 'm1', 'new text');
-    expect(res.json).toHaveBeenCalledWith({ success: true });
-  });
-
-  it('PATCH /api/chats/:id/queue/:messageId returns 400 on bad body', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'patch', '/api/chats/:id/queue/:messageId')(
-      { params: { id: 'c1', messageId: 'm1' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
-  });
-
-  it('PATCH /api/chats/:id/queue/:messageId returns 400 on empty content', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'patch', '/api/chats/:id/queue/:messageId')(
-      { params: { id: 'c1', messageId: 'm1' }, body: { content: '' } },
-      res,
-      vi.fn(),
-    );
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
-  });
-
-  // DELETE /api/chats/:id/queue/:messageId
-  it('DELETE /api/chats/:id/queue/:messageId cancels queued message', async () => {
-    const ctx = ctxWith();
-    const res = mockRes();
-    await handlerFor(chatCommandRoutes(ctx), 'delete', '/api/chats/:id/queue/:messageId')(
-      { params: { id: 'c1', messageId: 'm1' }, body: {} },
-      res,
-      vi.fn(),
-    );
-    expect(ctx.chats.cancelQueuedMessage).toHaveBeenCalledWith('c1', 'm1');
-    expect(res.json).toHaveBeenCalledWith({ success: true });
+  it.each([
+    ['missing content', {}],
+    ['empty content', { content: '' }],
+  ])('PATCH /api/chats/:id/queue/:messageId returns 400 on %s', async (_label, body) => {
+    const res = await request(makeApp(ctxWith())).patch('/api/chats/c1/queue/m1').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ success: false });
   });
 });

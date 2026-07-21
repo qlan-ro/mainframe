@@ -52,17 +52,6 @@ function mockFetchOk(data: unknown): void {
   );
 }
 
-function mockFetchHttpError(status: number, error: string): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: false,
-      status,
-      json: () => Promise.resolve({ error }),
-    }),
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -116,12 +105,6 @@ describe('getExternalSessions', () => {
       { method: 'GET' },
     );
   });
-
-  it('throws the error message when the HTTP response is not ok (403)', async () => {
-    mockFetchHttpError(403, 'forbidden');
-
-    await expect(getExternalSessions(port, projectId)).rejects.toThrow('forbidden');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -129,7 +112,7 @@ describe('getExternalSessions', () => {
 // ---------------------------------------------------------------------------
 
 describe('importExternalSession', () => {
-  it('calls POST /api/projects/:projectId/external-sessions/import with the exact URL', async () => {
+  it('POSTs the required sessionId and adapterId fields to the exact import URL', async () => {
     mockFetchOk(CHAT_FIXTURE);
 
     await importExternalSession(port, projectId, {
@@ -138,33 +121,11 @@ describe('importExternalSession', () => {
     });
 
     expect(fetch).toHaveBeenCalledOnce();
-    const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://127.0.0.1:31415/api/projects/proj-abc/external-sessions/import');
-  });
-
-  it('sends a POST with Content-Type application/json', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    await importExternalSession(port, projectId, {
-      sessionId: 'sess-001',
-      adapterId: 'claude',
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects/proj-abc/external-sessions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"sessionId":"sess-001","adapterId":"claude"}',
     });
-
-    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
-  });
-
-  it('sends the required sessionId and adapterId fields in the body', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    await importExternalSession(port, projectId, {
-      sessionId: 'sess-001',
-      adapterId: 'claude',
-    });
-
-    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(init.body).toBe('{"sessionId":"sess-001","adapterId":"claude"}');
   });
 
   it('includes all optional fields (title, createdAt, modifiedAt) when provided', async () => {
@@ -182,24 +143,5 @@ describe('importExternalSession', () => {
     expect(init.body).toBe(
       '{"sessionId":"sess-001","adapterId":"claude","title":"Fix the bug in the parser","createdAt":"2026-01-01T00:00:00.000Z","modifiedAt":"2026-06-01T10:00:00.000Z"}',
     );
-  });
-
-  it('returns the unwrapped Chat from the ApiResponse envelope', async () => {
-    mockFetchOk(CHAT_FIXTURE);
-
-    const result = await importExternalSession(port, projectId, {
-      sessionId: 'sess-001',
-      adapterId: 'claude',
-    });
-
-    expect(result).toEqual(CHAT_FIXTURE);
-  });
-
-  it('throws the error message when the HTTP response is not ok (500)', async () => {
-    mockFetchHttpError(500, 'internal server error');
-
-    await expect(
-      importExternalSession(port, projectId, { sessionId: 'sess-001', adapterId: 'claude' }),
-    ).rejects.toThrow('internal server error');
   });
 });

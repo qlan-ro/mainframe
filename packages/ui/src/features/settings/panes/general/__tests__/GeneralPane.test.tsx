@@ -34,14 +34,6 @@ describe('GeneralPane', () => {
     fireEvent.click(screen.getByTestId('settings-worktree-dir-save'));
     expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { worktreeDir: 'wt' });
   });
-  it('Save button is flex-centered to match the remote-access button pattern (Preflight resets line-height)', () => {
-    render(<GeneralPane port={31415} />);
-    fireEvent.change(screen.getByTestId('settings-worktree-dir-input'), { target: { value: 'wt' } });
-    const saveButton = screen.getByTestId('settings-worktree-dir-save');
-    expect(saveButton.className).toContain('inline-flex');
-    expect(saveButton.className).toContain('items-center');
-    expect(saveButton.className).toContain('justify-center');
-  });
   it('mode toggle writes useTheme without any PUT', () => {
     useTheme.setState({ mode: 'light' });
     render(<GeneralPane port={31415} />);

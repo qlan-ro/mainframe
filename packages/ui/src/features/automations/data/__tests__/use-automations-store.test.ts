@@ -17,7 +17,7 @@ describe('useAutomationsStore', () => {
     });
   });
 
-  it('defaults to a seeded fixture gateway (no network needed before Phase 6)', async () => {
+  it('defaults to a seeded fixture gateway (no network needed)', async () => {
     const definitions = await useAutomationsStore.getState().gateway.listAutomations();
     expect(definitions.length).toBe(6);
   });

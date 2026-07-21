@@ -129,4 +129,38 @@ describe('title generation dispatch (adapter-aware)', () => {
     expect(titles).toHaveLength(1);
     expect(titles[0]).toMatch(/^Fix the login bug/);
   });
+
+  it('does not call LLM when title generation is disabled', async () => {
+    adapter.generateTitleFn = vi.fn().mockResolvedValue('Should not be used');
+    const settingsGet = vi.fn().mockImplementation((category: string, key: string) => {
+      if (category === 'general' && key === 'titleGeneration.disabled') return 'true';
+      return null;
+    });
+    const db = createMockDb(settingsGet);
+    const manager = new ChatManager(db as never, registry, new BackgroundTaskTracker());
+
+    await manager.sendMessage(chatId, 'This should not trigger LLM');
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(adapter.generateTitleFn).not.toHaveBeenCalled();
+    expect(titleUpdates(db)).toHaveLength(1);
+  });
+
+  it('does not regenerate title on subsequent messages', async () => {
+    adapter.generateTitleFn = vi.fn().mockResolvedValue('Refined Title');
+    const db = createMockDb();
+    const manager = new ChatManager(db as never, registry, new BackgroundTaskTracker());
+
+    await manager.sendMessage(chatId, 'First message about authentication');
+    await vi.waitFor(() => expect(titleUpdates(db).length).toBeGreaterThanOrEqual(2), { timeout: 2000 });
+
+    const titlesAfterFirst = titleUpdates(db).length;
+    const callsAfterFirst = (adapter.generateTitleFn as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    await manager.sendMessage(chatId, 'Now do something completely different about databases');
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(titleUpdates(db).length).toBe(titlesAfterFirst);
+    expect((adapter.generateTitleFn as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAfterFirst);
+  });
 });

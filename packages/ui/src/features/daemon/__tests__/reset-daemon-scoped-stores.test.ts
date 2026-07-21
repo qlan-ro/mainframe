@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * resetDaemonScopedStores() — unit + integration tests.
  *

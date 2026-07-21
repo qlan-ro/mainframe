@@ -1,12 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { suggestionRoutes } from '../../server/routes/suggestions.js';
 import type { RouteContext } from '../../server/routes/types.js';
 
 const waitForResponse = (res: any) => vi.waitFor(() => expect(res.json).toHaveBeenCalled(), { timeout: 8000 });
-const REAL_GIT_PATH = new URL('../../../../..', import.meta.url).pathname;
 
 function mockRes() {
   return { json: vi.fn(), status: vi.fn().mockReturnThis() } as any;
+}
+
+function initGitRepo(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'suggestions-test-'));
+  execFileSync('git', ['init', dir], { stdio: 'pipe' });
+  execFileSync('git', ['-C', dir, 'config', 'user.email', 'test@test.com'], { stdio: 'pipe' });
+  execFileSync('git', ['-C', dir, 'config', 'user.name', 'Test'], { stdio: 'pipe' });
+  writeFileSync(path.join(dir, 'file.txt'), 'hello\n');
+  execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe' });
+  execFileSync('git', ['commit', '-m', 'init'], { cwd: dir, stdio: 'pipe' });
+  return dir;
 }
 
 function createCtx(projectPath: string | null): RouteContext {
@@ -26,15 +40,37 @@ function extractHandler(router: any, routePath: string) {
 const PATH = '/api/projects/:id/suggestions';
 
 describe('GET /api/projects/:id/suggestions', () => {
-  it('returns an enveloped Suggestion[] (≤3) for a real repo', async () => {
-    const router = suggestionRoutes(createCtx(REAL_GIT_PATH));
+  let repoDir: string;
+
+  beforeEach(() => {
+    repoDir = initGitRepo();
+  });
+
+  afterEach(() => {
+    rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  it('returns a churn suggestion for a repo with uncommitted changes', async () => {
+    writeFileSync(path.join(repoDir, 'file.txt'), 'hello\nmodified\n');
+
+    const router = suggestionRoutes(createCtx(repoDir));
     const res = mockRes();
     extractHandler(router, PATH)({ params: { id: 'p1' }, query: {} }, res, vi.fn());
     await waitForResponse(res);
     const result = res.json.mock.calls[0][0] as { success: boolean; data: unknown[] };
-    expect(result.success).toBe(true);
-    expect(Array.isArray(result.data)).toBe(true);
-    expect(result.data.length).toBeLessThanOrEqual(3);
+    expect(result).toEqual({
+      success: true,
+      data: [
+        {
+          icon: 'git-compare',
+          tint: 'accent',
+          title: 'Review the working changes',
+          meta: 'git · 1 file uncommitted',
+          prefill:
+            'Review the uncommitted changes in the working tree, summarize what they do, and flag anything unsafe to commit.',
+        },
+      ],
+    });
   });
 
   it('returns success:true with [] for a non-git directory', async () => {

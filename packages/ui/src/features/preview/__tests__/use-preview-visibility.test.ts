@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
@@ -14,17 +15,13 @@ const base = {
   compositesAboveDom: true,
 };
 
-it('hidden when the tab is not the active pane tab', () => {
-  expect(computePreviewVisible({ ...base, isActiveTab: false })).toBe(false);
-});
-it('hidden when an overlay/modal is mounted over it', () => {
-  expect(computePreviewVisible({ ...base, overlayMounted: true })).toBe(false);
-});
-it('hidden when the Run surface is not visible', () => {
-  expect(computePreviewVisible({ ...base, surfaceVisible: false })).toBe(false);
-});
-it('hidden when a DOM overlay overlaps it (occluded)', () => {
-  expect(computePreviewVisible({ ...base, occluded: true })).toBe(false);
+it.each([
+  ['isActiveTab is false', { isActiveTab: false }],
+  ['overlayMounted is true', { overlayMounted: true }],
+  ['surfaceVisible is false', { surfaceVisible: false }],
+  ['occluded is true', { occluded: true }],
+] as const)('hidden when %s', (_label, override) => {
+  expect(computePreviewVisible({ ...base, ...override })).toBe(false);
 });
 it('visible only when active + surface-visible + no overlay + not occluded', () => {
   expect(computePreviewVisible(base)).toBe(true);
@@ -32,65 +29,39 @@ it('visible only when active + surface-visible + no overlay + not occluded', () 
 
 // --- compositesAboveDom gating ---
 
-it('does NOT hide for overlayMounted/occluded when compositesAboveDom is false (Electron)', () => {
-  expect(
-    computePreviewVisible({
-      isActiveTab: true,
-      surfaceVisible: true,
-      overlayMounted: true,
-      occluded: false,
-      compositesAboveDom: false,
-    }),
-  ).toBe(true);
-  expect(
-    computePreviewVisible({
-      isActiveTab: true,
-      surfaceVisible: true,
-      overlayMounted: false,
-      occluded: true,
-      compositesAboveDom: false,
-    }),
-  ).toBe(true);
-});
-it('hides for overlayMounted/occluded when compositesAboveDom is true (Tauri)', () => {
-  expect(
-    computePreviewVisible({
-      isActiveTab: true,
-      surfaceVisible: true,
-      overlayMounted: true,
-      occluded: false,
-      compositesAboveDom: true,
-    }),
-  ).toBe(false);
-  expect(
-    computePreviewVisible({
-      isActiveTab: true,
-      surfaceVisible: true,
-      overlayMounted: false,
-      occluded: true,
-      compositesAboveDom: true,
-    }),
-  ).toBe(false);
-});
-it('still hides when the tab is inactive or the surface is hidden, regardless of compositesAboveDom', () => {
-  expect(
-    computePreviewVisible({
-      isActiveTab: false,
-      surfaceVisible: true,
-      overlayMounted: false,
-      occluded: false,
-      compositesAboveDom: false,
-    }),
-  ).toBe(false);
-  expect(
-    computePreviewVisible({
-      isActiveTab: true,
-      surfaceVisible: false,
-      overlayMounted: false,
-      occluded: false,
-      compositesAboveDom: false,
-    }),
-  ).toBe(false);
+it.each([
+  [
+    'overlayMounted, compositesAboveDom=false (Electron) → not hidden',
+    { isActiveTab: true, surfaceVisible: true, overlayMounted: true, occluded: false, compositesAboveDom: false },
+    true,
+  ],
+  [
+    'occluded, compositesAboveDom=false (Electron) → not hidden',
+    { isActiveTab: true, surfaceVisible: true, overlayMounted: false, occluded: true, compositesAboveDom: false },
+    true,
+  ],
+  [
+    'overlayMounted, compositesAboveDom=true (Tauri) → hidden',
+    { isActiveTab: true, surfaceVisible: true, overlayMounted: true, occluded: false, compositesAboveDom: true },
+    false,
+  ],
+  [
+    'occluded, compositesAboveDom=true (Tauri) → hidden',
+    { isActiveTab: true, surfaceVisible: true, overlayMounted: false, occluded: true, compositesAboveDom: true },
+    false,
+  ],
+  [
+    'inactive tab still hides regardless of compositesAboveDom',
+    { isActiveTab: false, surfaceVisible: true, overlayMounted: false, occluded: false, compositesAboveDom: false },
+    false,
+  ],
+  [
+    'hidden surface still hides regardless of compositesAboveDom',
+    { isActiveTab: true, surfaceVisible: false, overlayMounted: false, occluded: false, compositesAboveDom: false },
+    false,
+  ],
+] as const)('%s', (_label, input, expected) => {
+  expect(computePreviewVisible(input)).toBe(expected);
 });
 
 // --- usePreviewVisibility: handle-swap re-assertion (regression) ---

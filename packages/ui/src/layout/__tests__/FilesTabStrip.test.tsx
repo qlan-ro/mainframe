@@ -22,10 +22,3 @@ describe('FilesTabStrip — add button', () => {
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file-picker' });
   });
 });
-
-describe('FilesTabStrip — strip height', () => {
-  it('has the fixed h-[36px] height class (uniform SurfaceTabStrip height, 15.5)', () => {
-    render(<FilesTabStrip />);
-    expect(screen.getByTestId('files-tab-strip')).toHaveClass('h-[36px]');
-  });
-});

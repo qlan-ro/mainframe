@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * useRowHoverCard — behavior tests (TDD red phase).
  *

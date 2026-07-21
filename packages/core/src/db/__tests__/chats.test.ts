@@ -72,12 +72,16 @@ describe('ChatsRepository', () => {
       const chat2 = chats.create(p2.id, 'claude');
       const chat3 = chats.create(p1.id, 'claude');
 
+      // Distinct timestamps in non-insertion order, so an insertion-order
+      // result can't masquerade as a correct DESC sort.
+      const setUpdatedAt = db.prepare('UPDATE chats SET updated_at = ? WHERE id = ?');
+      setUpdatedAt.run('2026-01-01T00:00:02.000Z', chat1.id);
+      setUpdatedAt.run('2026-01-01T00:00:03.000Z', chat2.id);
+      setUpdatedAt.run('2026-01-01T00:00:01.000Z', chat3.id);
+
       const all = chats.listAll();
       expect(all).toHaveLength(3);
-      // Most recent first
-      expect(all[0]!.id).toBe(chat3.id);
-      expect(all[1]!.id).toBe(chat2.id);
-      expect(all[2]!.id).toBe(chat1.id);
+      expect(all.map((c) => c.id)).toEqual([chat2.id, chat1.id, chat3.id]);
     });
 
     it('includes archived chats', () => {
@@ -90,6 +94,27 @@ describe('ChatsRepository', () => {
       const all = chats.listAll();
       expect(all).toHaveLength(2);
       expect(all.map((c) => c.status)).toContain('archived');
+    });
+  });
+
+  describe('resetWorkingToIdle', () => {
+    it('resets only working chats and returns the affected count', () => {
+      const p = projects.create('/project/reset');
+      const working1 = chats.create(p.id, 'claude');
+      const working2 = chats.create(p.id, 'claude');
+      const idle = chats.create(p.id, 'claude');
+      const unset = chats.create(p.id, 'claude'); // process_state stays NULL
+      chats.update(working1.id, { processState: 'working' });
+      chats.update(working2.id, { processState: 'working' });
+      chats.update(idle.id, { processState: 'idle' });
+
+      const count = chats.resetWorkingToIdle();
+
+      expect(count).toBe(2);
+      expect(chats.get(working1.id)?.processState).toBe('idle');
+      expect(chats.get(working2.id)?.processState).toBe('idle');
+      expect(chats.get(idle.id)?.processState).toBe('idle');
+      expect(chats.get(unset.id)?.processState).toBeNull();
     });
   });
 });

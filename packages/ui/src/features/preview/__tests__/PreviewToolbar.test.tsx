@@ -2,11 +2,15 @@
  * PreviewToolbar — unit tests.
  *
  * Behaviors covered:
- *  - Renders with data-testid="preview-toolbar"
- *  - Renders device toggle (preview-device-toggle, preview-device-desktop, preview-device-mobile)
+ *  - Clicking a device-toggle button forwards the device to onDeviceChange
  *  - Reload button calls handle.navigate when running
- *  - Capture cluster has data-testid="preview-capture-cluster"
+ *  - Clicking a capture-cluster button forwards to onCaptureClick
  *  - Run/Stop primary control reflects status and fires the right callback
+ *
+ * (Bare "toolbar renders" / "device toggle renders" / "capture cluster
+ * renders" presence smokes were dropped or upgraded to interaction tests —
+ * clicking through each cluster's real testid is strictly stronger proof
+ * that PreviewToolbar wires it correctly.)
  */
 import { it, expect, vi, describe, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -15,6 +19,8 @@ import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-type
 const onRun = vi.fn();
 const onStop = vi.fn();
 const onRestart = vi.fn();
+const onDeviceChange = vi.fn();
+const onCaptureClick = vi.fn();
 
 let fakeHandle: PreviewHandle;
 
@@ -29,12 +35,12 @@ async function renderToolbar(status: LaunchProcessStatus | null) {
       daemonPort={31415}
       status={status}
       device="desktop"
-      onDeviceChange={() => {}}
+      onDeviceChange={onDeviceChange}
       onRun={onRun}
       onStop={onStop}
       onRestart={onRestart}
       inspectActive={false}
-      onCaptureClick={() => {}}
+      onCaptureClick={onCaptureClick}
       onRegionClick={() => {}}
       onInspectClick={() => {}}
       handle={fakeHandle}
@@ -61,18 +67,14 @@ describe('PreviewToolbar', () => {
     onRun.mockReset();
     onStop.mockReset();
     onRestart.mockReset();
+    onDeviceChange.mockReset();
+    onCaptureClick.mockReset();
   });
 
-  it('renders with data-testid="preview-toolbar" on the toolbar container', async () => {
+  it('clicking the mobile device-toggle button calls onDeviceChange("mobile")', async () => {
     await renderToolbar('running');
-    expect(screen.getByTestId('preview-toolbar')).toBeInTheDocument();
-  });
-
-  it('renders the device toggle with all testids', async () => {
-    await renderToolbar('running');
-    expect(screen.getByTestId('preview-device-toggle')).toBeInTheDocument();
-    expect(screen.getByTestId('preview-device-desktop')).toBeInTheDocument();
-    expect(screen.getByTestId('preview-device-mobile')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('preview-device-mobile'));
+    expect(onDeviceChange).toHaveBeenCalledWith('mobile');
   });
 
   it('url bar reload calls handle.navigate when running', async () => {
@@ -81,9 +83,10 @@ describe('PreviewToolbar', () => {
     expect(fakeHandle.navigate).toHaveBeenCalledWith('http://localhost:3000');
   });
 
-  it('capture cluster has data-testid="preview-capture-cluster"', async () => {
+  it('clicking the capture-cluster capture button calls onCaptureClick', async () => {
     await renderToolbar('running');
-    expect(screen.getByTestId('preview-capture-cluster')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('preview-toolbar-capture'));
+    expect(onCaptureClick).toHaveBeenCalledTimes(1);
   });
 
   it('shows the green Run control when stopped and fires onRun', async () => {

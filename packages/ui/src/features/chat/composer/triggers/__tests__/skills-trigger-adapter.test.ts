@@ -69,29 +69,6 @@ describe('buildSkillsTriggerAdapter', () => {
     ]);
   });
 
-  it('categoryItems returns all skills mapped to TriggerItems', () => {
-    const items = adapter.categoryItems('skills');
-    expect(items).toHaveLength(3);
-    expect(items[0]).toEqual({
-      id: 'plugin:code-review',
-      type: 'skill',
-      label: 'Code Review',
-      description: 'Reviews code for quality issues',
-    });
-    expect(items[1]).toEqual({
-      id: 'test-writer',
-      type: 'skill',
-      label: 'Test Writer',
-      description: 'Writes unit tests for functions',
-    });
-    expect(items[2]).toEqual({
-      id: 'plugin:foo-debug',
-      type: 'skill',
-      label: 'Foo Debugger',
-      description: 'Debugs foo-related failures',
-    });
-  });
-
   it('categoryItems uses invocationName as id when present, else name', () => {
     const items = adapter.categoryItems('skills');
     expect(items[0]?.id).toBe('plugin:code-review'); // has invocationName

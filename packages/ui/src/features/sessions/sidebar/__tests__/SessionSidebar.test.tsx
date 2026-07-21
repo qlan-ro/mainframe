@@ -338,15 +338,9 @@ describe('SessionSidebar — list scroll area is present on render', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. sessions-new-button is present
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — new-button is present', () => {
-  it('renders data-testid="sessions-new-button"', () => {
-    render(<SessionSidebar />);
-    expect(screen.getByTestId('sessions-new-button')).toBeTruthy();
-  });
+it('renders data-testid="sessions-new-button"', () => {
+  render(<SessionSidebar />);
+  expect(screen.getByTestId('sessions-new-button')).toBeTruthy();
 });
 
 // ---------------------------------------------------------------------------
@@ -390,13 +384,11 @@ describe('SessionSidebar — Sessions group header is collapsible', () => {
 //     exercising the same underlying primitive-composition behavior.
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — new-button triggers the New-thread handler', () => {
-  it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clicked with a project pill active', async () => {
-    __filterProjectId = 'p1';
-    render(<SessionSidebar />);
-    await userEvent.click(screen.getByTestId('sessions-new-button'));
-    expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
-  });
+it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clicked with a project pill active', async () => {
+  __filterProjectId = 'p1';
+  render(<SessionSidebar />);
+  await userEvent.click(screen.getByTestId('sessions-new-button'));
+  expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
 });
 
 // ---------------------------------------------------------------------------
@@ -410,21 +402,19 @@ describe('SessionSidebar — new-button triggers the New-thread handler', () => 
 //     (covered by SessionsNewButton's own tests), not on the trigger click alone.
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — new-button resets a stale reused-slot draft', () => {
-  it('clears the draft-config and ready flag for the current newThreadId on click', async () => {
-    __filterProjectId = 'p1';
-    __newThreadId = '__LOCALID_reuse';
-    setDraftConfig('__LOCALID_reuse', { projectId: 'stale-proj', adapterId: 'claude' });
-    useNewThreadReady.getState().markReady('__LOCALID_reuse');
+it('clears the draft-config and ready flag for the current newThreadId on click', async () => {
+  __filterProjectId = 'p1';
+  __newThreadId = '__LOCALID_reuse';
+  setDraftConfig('__LOCALID_reuse', { projectId: 'stale-proj', adapterId: 'claude' });
+  useNewThreadReady.getState().markReady('__LOCALID_reuse');
 
-    render(<SessionSidebar />);
-    await userEvent.click(screen.getByTestId('sessions-new-button'));
+  render(<SessionSidebar />);
+  await userEvent.click(screen.getByTestId('sessions-new-button'));
 
-    expect(getDraftConfig('__LOCALID_reuse')).toBeUndefined();
-    expect(useNewThreadReady.getState().isReady('__LOCALID_reuse')).toBe(false);
-    // The switch still fires — the reset composes BEFORE it, not instead of it.
-    expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
-  });
+  expect(getDraftConfig('__LOCALID_reuse')).toBeUndefined();
+  expect(useNewThreadReady.getState().isReady('__LOCALID_reuse')).toBe(false);
+  // The switch still fires — the reset composes BEFORE it, not instead of it.
+  expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
 });
 
 // ---------------------------------------------------------------------------
@@ -460,100 +450,64 @@ describe('SessionSidebar — selecting a project pill reconciles the active thre
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Empty state: zero threads + zero projects → "No sessions yet"
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — empty state when no threads and no projects', () => {
-  it('renders sessions-empty-state with text "No sessions yet"', () => {
-    __threads = [];
-    __projects = [];
-    render(<SessionSidebar />);
-    const emptyState = screen.getByTestId('sessions-empty-state');
-    expect(emptyState).toBeTruthy();
-    expect(emptyState.textContent).toContain('No sessions yet');
-  });
+it('renders sessions-empty-state with text "No sessions yet"', () => {
+  __threads = [];
+  __projects = [];
+  render(<SessionSidebar />);
+  const emptyState = screen.getByTestId('sessions-empty-state');
+  expect(emptyState).toBeTruthy();
+  expect(emptyState.textContent).toContain('No sessions yet');
 });
 
-// ---------------------------------------------------------------------------
-// 4. Time group present + empty state absent — recent mode buckets by time, NOT
-//    project. Two threads updated "now" land in the Today group.
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — time group present and empty state absent when threads exist', () => {
-  it('renders sessions-group-Today (NOT a project group) and no empty state for two threads updated now', () => {
-    __projects = [makeProject('p1', 'mainframe')];
-    __threads = [
-      makeThread('c1', { projectId: 'p1', updatedAt: Date.now() }),
-      makeThread('c2', { projectId: 'p1', updatedAt: Date.now() }),
-    ];
-    render(<SessionSidebar />);
-    expect(screen.getByTestId('sessions-group-Today')).toBeTruthy();
-    expect(screen.queryByTestId('sessions-group-p1')).toBeNull();
-    expect(screen.queryByTestId('sessions-empty-state')).toBeNull();
-  });
+// Recent mode buckets by time, NOT project — two threads updated "now" land in Today.
+it('renders sessions-group-Today (NOT a project group) and no empty state for two threads updated now', () => {
+  __projects = [makeProject('p1', 'mainframe')];
+  __threads = [
+    makeThread('c1', { projectId: 'p1', updatedAt: Date.now() }),
+    makeThread('c2', { projectId: 'p1', updatedAt: Date.now() }),
+  ];
+  render(<SessionSidebar />);
+  expect(screen.getByTestId('sessions-group-Today')).toBeTruthy();
+  expect(screen.queryByTestId('sessions-group-p1')).toBeNull();
+  expect(screen.queryByTestId('sessions-empty-state')).toBeNull();
 });
 
-// ---------------------------------------------------------------------------
-// 4b. Pinned section: a pinned thread lands in a Pinned group, ahead of time
-//     buckets, and is excluded from them.
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — pinned thread forms a Pinned group', () => {
-  it('renders sessions-group-Pinned plus sessions-group-Today for a pinned + an unpinned thread', () => {
-    __projects = [makeProject('p1', 'mainframe')];
-    __threads = [
-      makeThread('pin1', { projectId: 'p1', pinned: true, updatedAt: Date.now() }),
-      makeThread('today1', { projectId: 'p1', updatedAt: Date.now() }),
-    ];
-    render(<SessionSidebar />);
-    expect(screen.getByTestId('sessions-group-Pinned')).toBeTruthy();
-    expect(screen.getByTestId('sessions-group-Today')).toBeTruthy();
-  });
+// A pinned thread lands in a Pinned group, ahead of time buckets, excluded from them.
+it('renders sessions-group-Pinned plus sessions-group-Today for a pinned + an unpinned thread', () => {
+  __projects = [makeProject('p1', 'mainframe')];
+  __threads = [
+    makeThread('pin1', { projectId: 'p1', pinned: true, updatedAt: Date.now() }),
+    makeThread('today1', { projectId: 'p1', updatedAt: Date.now() }),
+  ];
+  render(<SessionSidebar />);
+  expect(screen.getByTestId('sessions-group-Pinned')).toBeTruthy();
+  expect(screen.getByTestId('sessions-group-Today')).toBeTruthy();
 });
 
-// ---------------------------------------------------------------------------
-// 5. filterProjectId=null + two threads → exactly 2 sessions-row elements
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — two sessions-row when filterProjectId=null and two threads', () => {
-  it('renders exactly 2 elements with data-testid="sessions-row"', () => {
-    __filterProjectId = null;
-    __projects = [makeProject('p1', 'mainframe')];
-    __threads = [makeThread('c1', { projectId: 'p1' }), makeThread('c2', { projectId: 'p1' })];
-    render(<SessionSidebar />);
-    const rows = screen.getAllByTestId('sessions-row');
-    expect(rows).toHaveLength(2);
-  });
+it('renders exactly 2 elements with data-testid="sessions-row"', () => {
+  __filterProjectId = null;
+  __projects = [makeProject('p1', 'mainframe')];
+  __threads = [makeThread('c1', { projectId: 'p1' }), makeThread('c2', { projectId: 'p1' })];
+  render(<SessionSidebar />);
+  const rows = screen.getAllByTestId('sessions-row');
+  expect(rows).toHaveLength(2);
 });
 
-// ---------------------------------------------------------------------------
-// 6. Tag filter: selectedTags={'bugfix'} + only one thread with that tag → 1 row
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — tag filter: only matching thread renders', () => {
-  it('renders exactly 1 sessions-row when selectedTags={"bugfix"} and only one thread has "bugfix"', () => {
-    __selectedTags = new Set(['bugfix']);
-    __projects = [makeProject('p1', 'mainframe')];
-    __threads = [
-      makeThread('c1', { projectId: 'p1', tags: ['bugfix'] }),
-      makeThread('c2', { projectId: 'p1', tags: [] }),
-    ];
-    render(<SessionSidebar />);
-    const rows = screen.getAllByTestId('sessions-row');
-    expect(rows).toHaveLength(1);
-  });
+it('renders exactly 1 sessions-row when selectedTags={"bugfix"} and only one thread has "bugfix"', () => {
+  __selectedTags = new Set(['bugfix']);
+  __projects = [makeProject('p1', 'mainframe')];
+  __threads = [
+    makeThread('c1', { projectId: 'p1', tags: ['bugfix'] }),
+    makeThread('c2', { projectId: 'p1', tags: [] }),
+  ];
+  render(<SessionSidebar />);
+  const rows = screen.getAllByTestId('sessions-row');
+  expect(rows).toHaveLength(1);
 });
 
-// ---------------------------------------------------------------------------
-// 7. ProjectFilterPillBar is rendered (sessions-filter-pill-all present)
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar — ProjectFilterPillBar is rendered', () => {
-  it('renders data-testid="sessions-filter-pill-all"', () => {
-    render(<SessionSidebar />);
-    expect(screen.getByTestId('sessions-filter-pill-all')).toBeTruthy();
-  });
+it('renders data-testid="sessions-filter-pill-all"', () => {
+  render(<SessionSidebar />);
+  expect(screen.getByTestId('sessions-filter-pill-all')).toBeTruthy();
 });
 
 // ---------------------------------------------------------------------------
@@ -604,18 +558,16 @@ describe('SessionSidebar — per-row project chip follows the filter state', () 
 //     archived entry never renders as a sessions-row.
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — archived sessions are excluded from the list', () => {
-  it('renders exactly 1 sessions-row for one regular + one archived thread', () => {
-    __projects = [makeProject('p1', 'mainframe')];
-    __threads = [
-      makeThread('c1', { projectId: 'p1', updatedAt: Date.now() }),
-      { ...makeThread('c2', { projectId: 'p1', updatedAt: Date.now() }), status: 'archived' },
-    ];
-    render(<SessionSidebar />);
-    const rows = screen.getAllByTestId('sessions-row');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.getAttribute('data-id')).toBe('c1');
-  });
+it('renders exactly 1 sessions-row for one regular + one archived thread', () => {
+  __projects = [makeProject('p1', 'mainframe')];
+  __threads = [
+    makeThread('c1', { projectId: 'p1', updatedAt: Date.now() }),
+    { ...makeThread('c2', { projectId: 'p1', updatedAt: Date.now() }), status: 'archived' },
+  ];
+  render(<SessionSidebar />);
+  const rows = screen.getAllByTestId('sessions-row');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.getAttribute('data-id')).toBe('c1');
 });
 
 // ---------------------------------------------------------------------------

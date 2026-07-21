@@ -7,6 +7,7 @@
  *     "sessions-more-archived".
  *  3. "sessions-more-import" is disabled when useProjects returns no projects.
  *  4. "sessions-more-import" is enabled when at least one project exists.
+ *  5. "sessions-more-archived" is never disabled, project state notwithstanding.
  *
  * Strategy:
  *  - Mock @assistant-ui/react (component never uses it directly, but
@@ -111,22 +112,12 @@ beforeEach(() => {
   __filterProjectId = null;
 });
 
-// ---------------------------------------------------------------------------
-// 1. Trigger button is present
-// ---------------------------------------------------------------------------
-
-describe('SessionsMoreMenu — trigger button is present', () => {
+describe('SessionsMoreMenu — trigger and menu contents', () => {
   it('renders data-testid="sessions-more-button"', () => {
     render(<SessionsMoreMenu />);
     expect(screen.getByTestId('sessions-more-button')).toBeTruthy();
   });
-});
 
-// ---------------------------------------------------------------------------
-// 2. Opening the menu shows both items
-// ---------------------------------------------------------------------------
-
-describe('SessionsMoreMenu — menu shows both items after opening', () => {
   it('renders sessions-more-import and sessions-more-archived after clicking the trigger', async () => {
     __projects = [makeProject('p1', 'mainframe')];
     render(<SessionsMoreMenu />);
@@ -138,51 +129,38 @@ describe('SessionsMoreMenu — menu shows both items after opening', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Import item is disabled when there are no projects
-// ---------------------------------------------------------------------------
-
-describe('SessionsMoreMenu — import item is disabled when no projects', () => {
-  it('sessions-more-import has aria-disabled="true" when projects is empty', async () => {
-    __projects = [];
+describe('SessionsMoreMenu — menu item enable state follows project availability', () => {
+  it.each<{ name: string; projects: Project[]; testId: string; expectDisabled: boolean }>([
+    {
+      name: 'import is disabled when there are no projects',
+      projects: [],
+      testId: 'sessions-more-import',
+      expectDisabled: true,
+    },
+    {
+      name: 'import is enabled when at least one project exists',
+      projects: [makeProject('p1', 'mainframe')],
+      testId: 'sessions-more-import',
+      expectDisabled: false,
+    },
+    {
+      name: 'archived is never disabled, even when projects is empty',
+      projects: [],
+      testId: 'sessions-more-archived',
+      expectDisabled: false,
+    },
+  ])('$name', async ({ projects, testId, expectDisabled }) => {
+    __projects = projects;
     render(<SessionsMoreMenu />);
 
     await userEvent.click(screen.getByTestId('sessions-more-button'));
 
-    const importItem = screen.getByTestId('sessions-more-import');
+    const item = screen.getByTestId(testId);
     // Radix DropdownMenuItem sets aria-disabled="true" when disabled={true}
-    expect(importItem.getAttribute('aria-disabled')).toBe('true');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 4. Import item is enabled when at least one project exists
-// ---------------------------------------------------------------------------
-
-describe('SessionsMoreMenu — import item is enabled when projects exist', () => {
-  it('sessions-more-import does not have aria-disabled="true" when projects is non-empty', async () => {
-    __projects = [makeProject('p1', 'mainframe')];
-    render(<SessionsMoreMenu />);
-
-    await userEvent.click(screen.getByTestId('sessions-more-button'));
-
-    const importItem = screen.getByTestId('sessions-more-import');
-    expect(importItem.getAttribute('aria-disabled')).not.toBe('true');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Archived item is always present (never disabled)
-// ---------------------------------------------------------------------------
-
-describe('SessionsMoreMenu — archived item is never disabled', () => {
-  it('sessions-more-archived does not have aria-disabled="true" even when projects is empty', async () => {
-    __projects = [];
-    render(<SessionsMoreMenu />);
-
-    await userEvent.click(screen.getByTestId('sessions-more-button'));
-
-    const archivedItem = screen.getByTestId('sessions-more-archived');
-    expect(archivedItem.getAttribute('aria-disabled')).not.toBe('true');
+    if (expectDisabled) {
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+    } else {
+      expect(item.getAttribute('aria-disabled')).not.toBe('true');
+    }
   });
 });

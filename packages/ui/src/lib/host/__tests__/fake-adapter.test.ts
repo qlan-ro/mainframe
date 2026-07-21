@@ -1,37 +1,42 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { FakeHostBridge } from '../fake-adapter';
 
 describe('FakeHostBridge — browser-mode stub parity', () => {
-  it('fs.readFile resolves null', async () => {
-    await expect(new FakeHostBridge().fs.readFile('/p')).resolves.toBeNull();
-  });
-
-  it('fs.readFileBase64 resolves null', async () => {
-    await expect(new FakeHostBridge().fs.readFileBase64('/p')).resolves.toBeNull();
-  });
-
-  it('fs.showItemInFolder resolves undefined', async () => {
-    await expect(new FakeHostBridge().fs.showItemInFolder('/p')).resolves.toBeUndefined();
-  });
-
-  it('app.platform resolves "browser"', async () => {
-    await expect(new FakeHostBridge().app.platform()).resolves.toBe('browser');
-  });
-
-  it('app.getAuthToken resolves null', async () => {
-    await expect(new FakeHostBridge().app.getAuthToken()).resolves.toBeNull();
-  });
-
-  it('app.getInfo resolves the dev stub', async () => {
-    await expect(new FakeHostBridge().app.getInfo()).resolves.toEqual({
-      version: 'dev',
-      author: 'mainframe',
-      homedir: '',
-    });
-  });
-
-  it('daemon.status resolves "ready"', async () => {
-    await expect(new FakeHostBridge().daemon.status()).resolves.toBe('ready');
+  it.each([
+    { name: 'fs.readFile resolves null', call: (h: FakeHostBridge) => h.fs.readFile('/p'), expected: null },
+    { name: 'fs.readFileBase64 resolves null', call: (h: FakeHostBridge) => h.fs.readFileBase64('/p'), expected: null },
+    {
+      name: 'fs.showItemInFolder resolves undefined',
+      call: (h: FakeHostBridge) => h.fs.showItemInFolder('/p'),
+      expected: undefined,
+    },
+    { name: 'app.platform resolves "browser"', call: (h: FakeHostBridge) => h.app.platform(), expected: 'browser' },
+    { name: 'app.getAuthToken resolves null', call: (h: FakeHostBridge) => h.app.getAuthToken(), expected: null },
+    {
+      name: 'app.getInfo resolves the dev stub',
+      call: (h: FakeHostBridge) => h.app.getInfo(),
+      expected: { version: 'dev', author: 'mainframe', homedir: '' },
+    },
+    { name: 'daemon.status resolves "ready"', call: (h: FakeHostBridge) => h.daemon.status(), expected: 'ready' },
+    { name: 'notify resolves undefined', call: (h: FakeHostBridge) => h.notify('t', 'b'), expected: undefined },
+    {
+      name: 'updates.check resolves not-available',
+      call: (h: FakeHostBridge) => h.updates.check(),
+      expected: { state: 'not-available' },
+    },
+    {
+      name: 'updates.download resolves undefined',
+      call: (h: FakeHostBridge) => h.updates.download(),
+      expected: undefined,
+    },
+    {
+      name: 'presence.reportActivity resolves undefined',
+      call: (h: FakeHostBridge) => h.presence.reportActivity('idle'),
+      expected: undefined,
+    },
+  ])('$name', async ({ call, expected }) => {
+    await expect(call(new FakeHostBridge())).resolves.toEqual(expected);
   });
 
   it('daemon.onStatus fires "ready" immediately and returns a no-op unsubscribe', async () => {
@@ -41,8 +46,11 @@ describe('FakeHostBridge — browser-mode stub parity', () => {
     expect(() => unsub()).not.toThrow();
   });
 
-  it('notify resolves undefined', async () => {
-    await expect(new FakeHostBridge().notify('t', 'b')).resolves.toBeUndefined();
+  it('updates.onStatus fires not-available and returns a no-op unsubscribe', async () => {
+    const cb = vi.fn();
+    const unsub = await new FakeHostBridge().updates.onStatus(cb);
+    expect(cb).toHaveBeenCalledWith({ state: 'not-available' });
+    expect(() => unsub()).not.toThrow();
   });
 
   it('shell.openExternal calls window.open', async () => {
@@ -52,30 +60,11 @@ describe('FakeHostBridge — browser-mode stub parity', () => {
     open.mockRestore();
   });
 
-  it('log does not throw at any level', () => {
+  it('sync stubs (log, updates.install) do not throw', () => {
     const host = new FakeHostBridge();
     expect(() => host.log('debug', 'mod', 'msg')).not.toThrow();
     expect(() => host.log('error', 'mod', 'msg', { x: 1 })).not.toThrow();
-  });
-});
-
-describe('FakeHostBridge — updates + presence', () => {
-  it('updates.check resolves not-available by default', async () => {
-    await expect(new FakeHostBridge().updates.check()).resolves.toEqual({ state: 'not-available' });
-  });
-  it('updates.download/install do not throw', async () => {
-    const host = new FakeHostBridge();
-    await expect(host.updates.download()).resolves.toBeUndefined();
     expect(() => host.updates.install()).not.toThrow();
-  });
-  it('updates.onStatus fires not-available and returns a no-op unsubscribe', async () => {
-    const cb = vi.fn();
-    const unsub = await new FakeHostBridge().updates.onStatus(cb);
-    expect(cb).toHaveBeenCalledWith({ state: 'not-available' });
-    expect(() => unsub()).not.toThrow();
-  });
-  it('presence.reportActivity resolves undefined', async () => {
-    await expect(new FakeHostBridge().presence.reportActivity('idle')).resolves.toBeUndefined();
   });
 });
 

@@ -1,9 +1,7 @@
 /**
- * PlanGate — behavior tests (TDD red phase).
+ * PlanGate — behavior tests.
  *
  * Strategy:
- *  - No source module exists yet; these tests drive the API contract for
- *    the PlanGate component.
  *  - Component is fully prop-driven: no hooks, no context beyond TooltipProvider.
  *  - All expected values are hardcoded; ControlResponse objects are the contract
  *    and are never recomputed from the component under test.

@@ -1,9 +1,7 @@
 /**
- * select-front — behavior tests (TDD red phase).
+ * select-front — behavior tests for the pure selector function selectPermissionFront.
  *
  * Strategy:
- *  - Source module does not exist yet; these tests define the API contract for
- *    the pure selector function: selectPermissionFront.
  *  - All expected values are hardcoded; no logic is duplicated from the
  *    function under test (no manual min-reduce over askedAt values in the test).
  *

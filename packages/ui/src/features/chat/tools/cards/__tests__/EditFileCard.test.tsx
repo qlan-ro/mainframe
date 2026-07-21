@@ -311,7 +311,7 @@ describe('EditFileCard', () => {
 });
 
 // ---------------------------------------------------------------------------
-// open-diff button — intent routing (TDD red phase)
+// open-diff button — intent routing
 // ---------------------------------------------------------------------------
 
 describe('EditFileCard open-diff button intent routing', () => {

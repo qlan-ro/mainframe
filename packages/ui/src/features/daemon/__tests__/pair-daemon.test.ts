@@ -9,7 +9,9 @@
  *  5. confirmPairing body carries a stable clientDeviceId (same UUID across two calls).
  *  6. getOrCreateClientDeviceId returns a valid UUID and persists it in localStorage.
  *  7. Trailing slash on the URL is trimmed before appending paths.
- *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl }.
+ *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl }
+ *     (table-driven across the 6 equality cases; the throw case stays its
+ *     own it — folding it into the table would need a conditional assert).
  *  9. verifyDaemon with a no-scheme input fetches the correct absolute URL.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -184,35 +186,32 @@ describe('getOrCreateClientDeviceId', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseRemoteUrl', () => {
-  it('prepends https:// when input has no scheme and returns bare host', () => {
-    const result = parseRemoteUrl('tunnel.example.com');
-    expect(result).toEqual({ host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com' });
-  });
-
-  it('preserves an explicit http:// scheme (no forced upgrade to https)', () => {
-    const result = parseRemoteUrl('http://h:31600');
-    expect(result).toEqual({ host: 'h:31600', baseUrl: 'http://h:31600' });
-  });
-
-  it('strips a trailing slash from https://h/', () => {
-    const result = parseRemoteUrl('https://h/');
-    expect(result).toEqual({ host: 'h', baseUrl: 'https://h' });
-  });
-
-  it('strips a path suffix from https://h/path — baseUrl carries only origin', () => {
-    const result = parseRemoteUrl('https://h/path');
-    expect(result).toEqual({ host: 'h', baseUrl: 'https://h' });
-  });
-
-  it('handles a bare host:port with no scheme', () => {
-    const result = parseRemoteUrl('h:8443');
-    expect(result).toEqual({ host: 'h:8443', baseUrl: 'https://h:8443' });
-  });
-
-  it('normalizes a full https URL — the URL API strips the default https port 443', () => {
+  it.each([
+    [
+      'no scheme → prepends https:// and returns bare host',
+      'tunnel.example.com',
+      { host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com' },
+    ],
+    [
+      'preserves an explicit http:// scheme (no forced upgrade to https)',
+      'http://h:31600',
+      { host: 'h:31600', baseUrl: 'http://h:31600' },
+    ],
+    ['strips a trailing slash from https://h/', 'https://h/', { host: 'h', baseUrl: 'https://h' }],
+    [
+      'strips a path suffix from https://h/path — baseUrl carries only origin',
+      'https://h/path',
+      { host: 'h', baseUrl: 'https://h' },
+    ],
+    ['handles a bare host:port with no scheme', 'h:8443', { host: 'h:8443', baseUrl: 'https://h:8443' }],
     // The URL API considers 443 the default for https and omits it from host/origin.
-    const result = parseRemoteUrl('https://studio.example.com:443');
-    expect(result).toEqual({ host: 'studio.example.com', baseUrl: 'https://studio.example.com' });
+    [
+      'normalizes a full https URL, stripping the default https port 443',
+      'https://studio.example.com:443',
+      { host: 'studio.example.com', baseUrl: 'https://studio.example.com' },
+    ],
+  ] as const)('%s', (_label, input, expected) => {
+    expect(parseRemoteUrl(input)).toEqual(expected);
   });
 
   it('throws on an input that cannot be parsed as a URL', () => {

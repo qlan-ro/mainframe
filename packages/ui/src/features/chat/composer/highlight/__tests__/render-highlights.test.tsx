@@ -1,8 +1,6 @@
 /**
  * renderHighlights — unit tests for the pure highlight helper.
  *
- * TDD: these tests were written FIRST (RED) before the implementation.
- *
  * Behaviors:
  *  1. @mention wrapped in accent span, surrounding text plain, textContent preserved char-for-char
  *  2. Leading /command wrapped in accent span, textContent preserved

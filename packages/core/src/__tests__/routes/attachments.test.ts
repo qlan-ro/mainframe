@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { attachmentRoutes } from '../../server/routes/attachments.js';
+import { AttachmentStore } from '../../attachment/index.js';
 import type { RouteContext } from '../../server/routes/types.js';
 
 function createMockContext(withStore = true): RouteContext {
@@ -73,104 +77,69 @@ describe('attachmentRoutes', () => {
       });
     });
 
-    it('rejects empty attachments array', async () => {
+    // Oversized-data case: base64 ratio is ~3/4, so ~8MB of base64 decodes to
+    // just over the 5MB limit even though the caller-supplied sizeBytes is 0 —
+    // proving the route computes actual decoded size rather than trusting it.
+    const oversizedDataAttachment = {
+      name: 'big.bin',
+      mediaType: 'application/octet-stream',
+      data: 'A'.repeat(8 * 1024 * 1024),
+      sizeBytes: 0,
+    };
+
+    // bodyCheck mirrors exactly what each original test asserted about the
+    // response body: 'none' (status only), 'partial' (success:false shape),
+    // or the literal error string the route is contracted to return.
+    it.each([
+      ['empty attachments array', { attachments: [] }, 'partial'],
+      ['non-array attachments', { attachments: 'not-array' }, 'none'],
+      ['missing body', {}, 'none'],
+      [
+        'too many attachments (>10)',
+        {
+          attachments: Array.from({ length: 11 }, (_, i) => ({
+            name: `file${i}.txt`,
+            mediaType: 'text/plain',
+            data: 'aGVsbG8=',
+            sizeBytes: 5,
+          })),
+        },
+        'partial',
+      ],
+      [
+        'oversized attachment (>5MB) via sizeBytes',
+        {
+          attachments: [
+            { name: 'big.bin', mediaType: 'application/octet-stream', data: 'aGVsbG8=', sizeBytes: 6 * 1024 * 1024 },
+          ],
+        },
+        'Attachment exceeds 5MB limit',
+      ],
+      [
+        'oversized attachment via computed data size',
+        { attachments: [oversizedDataAttachment] },
+        'Attachment exceeds 5MB limit',
+      ],
+      [
+        'attachment missing required fields',
+        { attachments: [{ name: 'file.txt', mediaType: 'text/plain' }] }, // missing data
+        'partial',
+      ],
+      ['empty mediaType', { attachments: [{ name: 'a.png', mediaType: '', data: 'aGVsbG8=' }] }, 'partial'],
+      ['missing mediaType', { attachments: [{ name: 'a.png', data: 'aGVsbG8=' }] }, 'partial'],
+    ] as const)('rejects: %s', async (_label, body, bodyCheck) => {
       const router = attachmentRoutes(ctx);
       const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
       const res = mockRes();
 
-      await handler({ params: { id: 'c1' }, query: {}, body: { attachments: [] } }, res, vi.fn());
+      await handler({ params: { id: 'c1' }, query: {}, body }, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
-    });
-
-    it('rejects non-array attachments', async () => {
-      const router = attachmentRoutes(ctx);
-      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
-      const res = mockRes();
-
-      await handler({ params: { id: 'c1' }, query: {}, body: { attachments: 'not-array' } }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-    });
-
-    it('rejects missing body', async () => {
-      const router = attachmentRoutes(ctx);
-      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
-      const res = mockRes();
-
-      await handler({ params: { id: 'c1' }, query: {}, body: {} }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-    });
-
-    it('rejects too many attachments (>10)', async () => {
-      const router = attachmentRoutes(ctx);
-      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
-      const res = mockRes();
-
-      const attachments = Array.from({ length: 11 }, (_, i) => ({
-        name: `file${i}.txt`,
-        mediaType: 'text/plain',
-        data: 'aGVsbG8=',
-        sizeBytes: 5,
-      }));
-
-      await handler({ params: { id: 'c1' }, query: {}, body: { attachments } }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
-    });
-
-    it('rejects oversized attachment (>5MB) via sizeBytes', async () => {
-      const router = attachmentRoutes(ctx);
-      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
-      const res = mockRes();
-
-      const oversize = 6 * 1024 * 1024;
-      const attachments = [
-        { name: 'big.bin', mediaType: 'application/octet-stream', data: 'aGVsbG8=', sizeBytes: oversize },
-      ];
-
-      await handler({ params: { id: 'c1' }, query: {}, body: { attachments } }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Attachment exceeds 5MB limit',
-      });
-    });
-
-    it('rejects oversized attachment via computed data size', async () => {
-      const router = attachmentRoutes(ctx);
-      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
-      const res = mockRes();
-
-      // Create a base64 data string whose decoded size exceeds 5MB.
-      // base64 ratio is ~3/4. To get 6MB decoded, we need ~8MB base64.
-      const largeData = 'A'.repeat(8 * 1024 * 1024);
-      const attachments = [{ name: 'big.bin', mediaType: 'application/octet-stream', data: largeData, sizeBytes: 0 }];
-
-      await handler({ params: { id: 'c1' }, query: {}, body: { attachments } }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Attachment exceeds 5MB limit',
-      });
-    });
-
-    it('rejects attachment missing required fields', async () => {
-      const router = attachmentRoutes(ctx);
-      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
-      const res = mockRes();
-
-      const attachments = [{ name: 'file.txt', mediaType: 'text/plain' }]; // missing data
-
-      await handler({ params: { id: 'c1' }, query: {}, body: { attachments } }, res, vi.fn());
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+      if (bodyCheck === 'partial') {
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+      } else if (bodyCheck !== 'none') {
+        expect(res.json).toHaveBeenCalledWith({ success: false, error: bodyCheck });
+      }
     });
   });
 
@@ -214,6 +183,64 @@ describe('attachmentRoutes', () => {
       await handler({ params: { chatId: 'c1', attachmentId: 'att1' }, query: {} }, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  // Real AttachmentStore: covers the route's kind derivation and the only
+  // save→get round-trip coverage the store has.
+  describe('with a real AttachmentStore', () => {
+    let baseDir: string;
+
+    beforeEach(async () => {
+      baseDir = await mkdtemp(join(tmpdir(), 'mf-attachments-'));
+      ctx = createMockContext();
+      ctx.attachmentStore = new AttachmentStore(baseDir);
+    });
+
+    afterEach(async () => {
+      await rm(baseDir, { recursive: true, force: true });
+    });
+
+    const smallImage = { name: 'a.png', mediaType: 'image/png', data: Buffer.from('hello').toString('base64') };
+
+    async function post(body: unknown) {
+      const router = attachmentRoutes(ctx);
+      const handler = extractHandler(router, 'post', '/api/chats/:id/attachments');
+      const res = mockRes();
+      await handler({ params: { id: 'c1' }, query: {}, body }, res, vi.fn());
+      return res;
+    }
+
+    it('saves a valid attachment, deriving kind image from the mediaType', async () => {
+      const res = await post({ attachments: [smallImage] });
+
+      const { attachments } = res.json.mock.calls[0][0].data;
+      expect(attachments).toHaveLength(1);
+      expect(attachments[0]).toMatchObject({ name: 'a.png', mediaType: 'image/png', kind: 'image' });
+      expect(typeof attachments[0].id).toBe('string');
+    });
+
+    it('defaults kind to file for a non-image mediaType', async () => {
+      const res = await post({ attachments: [{ name: 'doc.txt', mediaType: 'text/plain', data: 'aGVsbG8=' }] });
+
+      expect(res.json.mock.calls[0][0].data.attachments[0].kind).toBe('file');
+    });
+
+    it('serves the stored attachment back via GET (round-trip)', async () => {
+      const upload = await post({ attachments: [smallImage] });
+      const id = upload.json.mock.calls[0][0].data.attachments[0].id as string;
+
+      const router = attachmentRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/chats/:chatId/attachments/:attachmentId');
+      const res = mockRes();
+      await handler({ params: { chatId: 'c1', attachmentId: id }, query: {} }, res, vi.fn());
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({ name: 'a.png', mediaType: 'image/png' }),
+        }),
+      );
     });
   });
 });

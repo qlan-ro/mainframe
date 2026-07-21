@@ -1,8 +1,5 @@
 /**
- * Behavior tests for assembleAnswers (TDD red phase).
- *
- * The source module `../answers` does not exist yet. These tests define the
- * observable contract for assembleAnswers:
+ * Behavior tests for assembleAnswers — the observable contract:
  *
  *  - single-select: stores first selected label as a plain string.
  *  - multi-select: stores all selected labels as a string array.

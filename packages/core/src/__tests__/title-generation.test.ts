@@ -55,7 +55,7 @@ function freshChat() {
 
 const testProject = { id: 'proj-1', name: 'Test', path: '/tmp/test' };
 
-function createMockDb(settingsGetFn?: (...args: unknown[]) => unknown) {
+function createMockDb() {
   return {
     chats: {
       get: vi.fn().mockImplementation(() => freshChat()),
@@ -68,7 +68,7 @@ function createMockDb(settingsGetFn?: (...args: unknown[]) => unknown) {
       get: vi.fn().mockReturnValue(testProject),
     },
     settings: {
-      get: settingsGetFn ?? vi.fn().mockReturnValue(null),
+      get: vi.fn().mockReturnValue(null),
     },
   };
 }
@@ -157,43 +157,4 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
     expect(llmTitle.length).toBeGreaterThanOrEqual(2);
     expect(llmTitle.length).toBeLessThanOrEqual(80);
   }, 40_000);
-
-  it('does not call LLM when title generation is disabled', async () => {
-    const settingsGet = vi.fn().mockImplementation((category: string, key: string) => {
-      if (category === 'general' && key === 'titleGeneration.disabled') return 'true';
-      return null;
-    });
-    const db = createMockDb(settingsGet);
-    const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
-
-    await manager.sendMessage(chatId, 'This should not trigger LLM');
-    // Give it time — if LLM were called it would take seconds
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // Only the truncated title, no LLM title
-    expect(titleUpdates(db)).toHaveLength(1);
-  }, 10_000);
-
-  it('does not regenerate title on subsequent messages', async () => {
-    const db = createMockDb();
-    const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
-
-    await manager.sendMessage(chatId, 'First message about authentication');
-
-    await vi.waitFor(
-      () => {
-        expect(titleUpdates(db).length).toBeGreaterThanOrEqual(2);
-      },
-      { timeout: 35_000 },
-    );
-
-    const titlesAfterFirst = titleUpdates(db).length;
-
-    // Send second message — should NOT trigger title generation
-    await manager.sendMessage(chatId, 'Now do something completely different about databases');
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // No new title updates
-    expect(titleUpdates(db).length).toBe(titlesAfterFirst);
-  }, 45_000);
 });

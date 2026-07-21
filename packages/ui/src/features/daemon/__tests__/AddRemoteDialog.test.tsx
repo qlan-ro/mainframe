@@ -309,7 +309,18 @@ describe('AddRemoteDialog — local storage failure after successful pairing', (
 // ---------------------------------------------------------------------------
 
 describe('AddRemoteDialog — network error', () => {
-  it('shows error UI, does NOT crash, does NOT call add or setToken on PairingError(network)', async () => {
+  // NOT STRENGTHENED — audit flagged this test's old name ("shows error UI")
+  // as a mismatch with its assertions (only mock-call-not-made was checked).
+  // Tracing Step1Body/FooterStep1 in pairing-steps.tsx confirms the mismatch
+  // is a real product gap, not a test gap: `step1Phase` on a PairingError
+  // with kind !== 'invalid' (including 'network') is set to 'unreachable',
+  // but neither Step1Body nor FooterStep1 has any branch for that phase — no
+  // NoticeCard, no button/label change. A user hitting a network error while
+  // pairing sees the button silently return to its idle label with zero
+  // feedback. Renamed to describe what's actually verified; asserting real
+  // error-UI presence would fail against current production code, so per
+  // instructions this is reported as a bug rather than "fixed" in the test.
+  it('does NOT crash, does NOT call add/setToken/onDone on PairingError(network) (no user-visible error UI — see comment/report)', async () => {
     const user = userEvent.setup();
     vi.mocked(confirmPairing).mockRejectedValue(new PairingError('network'));
 

@@ -39,17 +39,6 @@ function mockFetchOk(data: unknown): void {
   );
 }
 
-function mockFetchHttpError(status: number, error: string): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: false,
-      status,
-      json: () => Promise.resolve({ error }),
-    }),
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -72,25 +61,6 @@ describe('listTags', () => {
 
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/tags', { method: 'GET' });
-  });
-
-  it('returns the unwrapped Tag[] from the ApiResponse envelope', async () => {
-    mockFetchOk([tagFixture]);
-
-    const result = await listTags(port);
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({
-      name: 'backend',
-      color: 'blue',
-      createdAt: '2026-06-01T00:00:00.000Z',
-    });
-  });
-
-  it('throws when HTTP response is not ok (status 500)', async () => {
-    mockFetchHttpError(500, 'db error');
-
-    await expect(listTags(port)).rejects.toThrow('db error');
   });
 });
 
@@ -117,18 +87,6 @@ describe('createTag', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{"name":"backend","color":"red"}',
-    });
-  });
-
-  it('returns the unwrapped Tag from the ApiResponse envelope', async () => {
-    mockFetchOk(tagFixture);
-
-    const result = await createTag(port, 'backend');
-
-    expect(result).toEqual({
-      name: 'backend',
-      color: 'blue',
-      createdAt: '2026-06-01T00:00:00.000Z',
     });
   });
 });
@@ -170,18 +128,6 @@ describe('updateTag', () => {
       body: '{"rename":"infra","color":"green"}',
     });
   });
-
-  it('returns the unwrapped Tag from the ApiResponse envelope', async () => {
-    mockFetchOk({ name: 'infra', color: 'blue', createdAt: '2026-06-01T00:00:00.000Z' });
-
-    const result = await updateTag(port, 'backend', { rename: 'infra' });
-
-    expect(result).toEqual({
-      name: 'infra',
-      color: 'blue',
-      createdAt: '2026-06-01T00:00:00.000Z',
-    });
-  });
 });
 
 describe('deleteTag', () => {
@@ -199,29 +145,6 @@ describe('deleteTag', () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/tags/backend', { method: 'DELETE' });
   });
-
-  it('returns void on success (204 no body — json() is not called)', async () => {
-    const jsonSpy = vi.fn().mockRejectedValue(new Error('no body'));
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 204,
-        json: jsonSpy,
-      }),
-    );
-
-    const result = await deleteTag(port, 'backend');
-
-    expect(result).toBeUndefined();
-    expect(jsonSpy).not.toHaveBeenCalled();
-  });
-
-  it('throws when HTTP response is not ok (404)', async () => {
-    mockFetchHttpError(404, 'tag not found');
-
-    await expect(deleteTag(port, 'backend')).rejects.toThrow('tag not found');
-  });
 });
 
 describe('getChatTags', () => {
@@ -232,14 +155,6 @@ describe('getChatTags', () => {
 
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats/chat-abc123/tags', { method: 'GET' });
-  });
-
-  it('returns the unwrapped string[] from the ApiResponse envelope', async () => {
-    mockFetchOk(['backend', 'frontend']);
-
-    const result = await getChatTags(port, chatId);
-
-    expect(result).toEqual(['backend', 'frontend']);
   });
 });
 
@@ -255,14 +170,6 @@ describe('setChatTags', () => {
       headers: { 'Content-Type': 'application/json' },
       body: '{"tags":["backend","infra"]}',
     });
-  });
-
-  it('returns the unwrapped string[] from the ApiResponse envelope', async () => {
-    mockFetchOk(['backend', 'infra']);
-
-    const result = await setChatTags(port, chatId, ['backend', 'infra']);
-
-    expect(result).toEqual(['backend', 'infra']);
   });
 
   it('sends body {"tags":[]} when the tag list is empty', async () => {

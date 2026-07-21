@@ -7,6 +7,11 @@
  * 3. RepairPrompt: 401 badge renders; switchlocal/repair buttons fire correct callbacks
  * 4. DaemonUnreachableBody: title renders; switchlocal button fires onSwitchLocal
  * 5. ConnectionOverlay body slot: children rendered when passed; default when absent
+ *
+ * (Bare root-testid presence smokes for DaemonSmallDialog/RepairPrompt/
+ * DaemonUnreachableBody were dropped — every interaction test above already
+ * queries those same testids to drive a click or read text, so their
+ * presence is exercised implicitly.)
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -105,16 +110,6 @@ describe('RenameRemoveBody — remove', () => {
 // ---------------------------------------------------------------------------
 
 describe('DaemonSmallDialog', () => {
-  it('renders the rename dialog with correct testId when open', () => {
-    render(<DaemonSmallDialog open kind="rename" target={REMOTE} onClose={vi.fn()} onConfirm={vi.fn()} />);
-    expect(screen.getByTestId('daemon-rename-dialog')).toBeInTheDocument();
-  });
-
-  it('renders the remove dialog with correct testId when open', () => {
-    render(<DaemonSmallDialog open kind="remove" target={REMOTE} onClose={vi.fn()} onConfirm={vi.fn()} />);
-    expect(screen.getByTestId('daemon-remove-dialog')).toBeInTheDocument();
-  });
-
   it('renders nothing when open=false', () => {
     render(<DaemonSmallDialog open={false} kind="rename" target={REMOTE} onClose={vi.fn()} onConfirm={vi.fn()} />);
     expect(screen.queryByTestId('daemon-rename-dialog')).not.toBeInTheDocument();
@@ -153,11 +148,6 @@ describe('RepairPrompt', () => {
     await user.click(screen.getByTestId('daemon-repair-confirm'));
     expect(onRepair).toHaveBeenCalledTimes(1);
   });
-
-  it('has root testid daemon-repair-prompt', () => {
-    render(<RepairPrompt target={REMOTE} onRepair={vi.fn()} onSwitchLocal={vi.fn()} onDismiss={vi.fn()} />);
-    expect(screen.getByTestId('daemon-repair-prompt')).toBeInTheDocument();
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -177,11 +167,6 @@ describe('DaemonUnreachableBody', () => {
 
     await user.click(screen.getByTestId('daemon-unreachable-switchlocal'));
     expect(onSwitchLocal).toHaveBeenCalledTimes(1);
-  });
-
-  it('has root testid daemon-unreachable', () => {
-    render(<DaemonUnreachableBody target={REMOTE} onSwitchLocal={vi.fn()} />);
-    expect(screen.getByTestId('daemon-unreachable')).toBeInTheDocument();
   });
 });
 

@@ -151,72 +151,48 @@ beforeEach(() => {
   useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
 });
 
-// ---------------------------------------------------------------------------
-// 1. wires the router exactly once with a deps object
-// ---------------------------------------------------------------------------
+it('calls createSessionListRouter exactly once and captures function-typed deps', () => {
+  renderHook(() => useSessionListRouter());
 
-describe('useSessionListRouter — wires the router once with deps', () => {
-  it('calls createSessionListRouter exactly once and captures function-typed deps', () => {
-    renderHook(() => useSessionListRouter());
+  expect(factoryCallCount).toBe(1);
+  expect(typeof capturedDeps.onReload).toBe('function');
+  expect(typeof capturedDeps.onChatUpdated).toBe('function');
+  expect(typeof capturedDeps.onMarkUnread).toBe('function');
+});
 
-    expect(factoryCallCount).toBe(1);
-    expect(typeof capturedDeps.onReload).toBe('function');
-    expect(typeof capturedDeps.onChatUpdated).toBe('function');
-    expect(typeof capturedDeps.onMarkUnread).toBe('function');
+it('calls reloadSpy exactly once when capturedDeps.onReload() is invoked', () => {
+  renderHook(() => useSessionListRouter());
+
+  act(() => {
+    capturedDeps.onReload();
   });
+
+  expect(reloadSpy).toHaveBeenCalledTimes(1);
+});
+
+it('calls reloadSpy exactly once when capturedDeps.onChatUpdated() is invoked', () => {
+  renderHook(() => useSessionListRouter());
+
+  act(() => {
+    capturedDeps.onChatUpdated({ id: 'c2' } as Chat);
+  });
+
+  expect(reloadSpy).toHaveBeenCalledTimes(1);
+});
+
+it('calls markUnreadSpy with "c3" when capturedDeps.onMarkUnread("c3") is invoked', () => {
+  renderHook(() => useSessionListRouter());
+
+  act(() => {
+    capturedDeps.onMarkUnread('c3');
+  });
+
+  expect(markUnreadSpy).toHaveBeenCalledTimes(1);
+  expect(markUnreadSpy).toHaveBeenCalledWith('c3');
 });
 
 // ---------------------------------------------------------------------------
-// 2. onReload → runtime.threads.reload()
-// ---------------------------------------------------------------------------
-
-describe('useSessionListRouter — onReload triggers runtime reload', () => {
-  it('calls reloadSpy exactly once when capturedDeps.onReload() is invoked', () => {
-    renderHook(() => useSessionListRouter());
-
-    act(() => {
-      capturedDeps.onReload();
-    });
-
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. onChatUpdated → runtime.threads.reload() (corrected contract)
-// ---------------------------------------------------------------------------
-
-describe('useSessionListRouter — onChatUpdated triggers runtime reload', () => {
-  it('calls reloadSpy exactly once when capturedDeps.onChatUpdated() is invoked', () => {
-    renderHook(() => useSessionListRouter());
-
-    act(() => {
-      capturedDeps.onChatUpdated({ id: 'c2' } as Chat);
-    });
-
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 4. onMarkUnread → store.markUnread(chatId)
-// ---------------------------------------------------------------------------
-
-describe('useSessionListRouter — onMarkUnread delegates to unread store', () => {
-  it('calls markUnreadSpy with "c3" when capturedDeps.onMarkUnread("c3") is invoked', () => {
-    renderHook(() => useSessionListRouter());
-
-    act(() => {
-      capturedDeps.onMarkUnread('c3');
-    });
-
-    expect(markUnreadSpy).toHaveBeenCalledTimes(1);
-    expect(markUnreadSpy).toHaveBeenCalledWith('c3');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. active thread change → clearUnread(activeId)
+// active thread change → clearUnread(activeId)
 // ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — active thread change clears unread', () => {
@@ -240,79 +216,55 @@ describe('useSessionListRouter — active thread change clears unread', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. cross-project activate → setFilterProjectId(null)
-// ---------------------------------------------------------------------------
+it('calls setFilterProjectIdSpy(null) when active chat is in a different project', () => {
+  filterProjectIdValue = 'p-OLD';
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
 
-describe('useSessionListRouter — cross-project activate clears project filter', () => {
-  it('calls setFilterProjectIdSpy(null) when active chat is in a different project', () => {
-    filterProjectIdValue = 'p-OLD';
-    mainThreadIdValue = 'chat-A';
-    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
+  expect(setFilterProjectIdSpy).toHaveBeenCalledTimes(1);
+  expect(setFilterProjectIdSpy).toHaveBeenCalledWith(null);
+});
 
-    expect(setFilterProjectIdSpy).toHaveBeenCalledTimes(1);
-    expect(setFilterProjectIdSpy).toHaveBeenCalledWith(null);
-  });
+it('does NOT call setFilterProjectIdSpy when active chat is in the same project', () => {
+  filterProjectIdValue = 'p-NEW';
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
+
+  renderHook(() => useSessionListRouter());
+
+  expect(setFilterProjectIdSpy).not.toHaveBeenCalled();
+});
+
+it('does NOT call setFilterProjectIdSpy when filterProjectId is null', () => {
+  filterProjectIdValue = null;
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
+
+  renderHook(() => useSessionListRouter());
+
+  expect(setFilterProjectIdSpy).not.toHaveBeenCalled();
+});
+
+it('calls switchSpy with the most-recently-updated non-archived thread (not list order)', () => {
+  mainThreadIdValue = 'chat-A';
+  // chat-B comes FIRST in list order but chat-C has the newer updatedAt —
+  // the fallback must match desktop and pick the most recently used session.
+  fakeThreadItems = [
+    { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 3000 } },
+    { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 1000 } },
+    { id: 'chat-C', remoteId: 'chat-C', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+  ];
+
+  renderHook(() => useSessionListRouter());
+
+  expect(switchSpy).toHaveBeenCalledTimes(1);
+  expect(switchSpy).toHaveBeenCalledWith('chat-C');
 });
 
 // ---------------------------------------------------------------------------
-// 7. same-project activate → does NOT call setFilterProjectId
-// ---------------------------------------------------------------------------
-
-describe('useSessionListRouter — same-project activate does not clear filter', () => {
-  it('does NOT call setFilterProjectIdSpy when active chat is in the same project', () => {
-    filterProjectIdValue = 'p-NEW';
-    mainThreadIdValue = 'chat-A';
-    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
-
-    renderHook(() => useSessionListRouter());
-
-    expect(setFilterProjectIdSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. null filter → does NOT call setFilterProjectId
-// ---------------------------------------------------------------------------
-
-describe('useSessionListRouter — null filter never calls setFilterProjectId', () => {
-  it('does NOT call setFilterProjectIdSpy when filterProjectId is null', () => {
-    filterProjectIdValue = null;
-    mainThreadIdValue = 'chat-A';
-    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
-
-    renderHook(() => useSessionListRouter());
-
-    expect(setFilterProjectIdSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9. archived-active → switchToThread(most-recently-updated non-archived)
-// ---------------------------------------------------------------------------
-
-describe('useSessionListRouter — archived active thread triggers fallback', () => {
-  it('calls switchSpy with the most-recently-updated non-archived thread (not list order)', () => {
-    mainThreadIdValue = 'chat-A';
-    // chat-B comes FIRST in list order but chat-C has the newer updatedAt —
-    // the fallback must match desktop and pick the most recently used session.
-    fakeThreadItems = [
-      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 3000 } },
-      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 1000 } },
-      { id: 'chat-C', remoteId: 'chat-C', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
-    ];
-
-    renderHook(() => useSessionListRouter());
-
-    expect(switchSpy).toHaveBeenCalledTimes(1);
-    expect(switchSpy).toHaveBeenCalledWith('chat-C');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9b. archived-active under a project filter → fallback stays in the project
+// archived-active under a project filter → fallback stays in the project
 // ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — archived-active fallback respects the project filter', () => {
@@ -349,23 +301,17 @@ describe('useSessionListRouter — archived-active fallback respects the project
   });
 });
 
-// ---------------------------------------------------------------------------
-// 10. archived-active with no other thread → switchSpy NOT called
-// ---------------------------------------------------------------------------
+it('does NOT call switchSpy when the only thread is the archived active one', () => {
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1' } }];
 
-describe('useSessionListRouter — archived active with no fallback thread', () => {
-  it('does NOT call switchSpy when the only thread is the archived active one', () => {
-    mainThreadIdValue = 'chat-A';
-    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1' } }];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
-
-    expect(switchSpy).not.toHaveBeenCalled();
-  });
+  expect(switchSpy).not.toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------
-// 10a. Archive of the ACTIVE session: aui switchToNewThread()s off it FIRST, so
+// Archive of the ACTIVE session: aui switchToNewThread()s off it FIRST, so
 //   mainThreadId becomes a fresh __LOCALID_* draft while the session it left is
 //   now archived. The router must redirect to a fallback, not strand the user on
 //   the empty new-thread surface.
@@ -416,7 +362,7 @@ describe('useSessionListRouter — archiving the active session redirects off th
 });
 
 // ---------------------------------------------------------------------------
-// 10b. First-send handoff: adopt the created session as the active thread
+// First-send handoff: adopt the created session as the active thread
 // ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — first send adopts the created session (todo #210)', () => {
@@ -478,18 +424,12 @@ describe('useSessionListRouter — first send adopts the created session (todo #
   });
 });
 
-// ---------------------------------------------------------------------------
-// 11. unmount → dispose() called once
-// ---------------------------------------------------------------------------
+it('calls disposeSpy exactly once when the hook unmounts', () => {
+  const { unmount } = renderHook(() => useSessionListRouter());
 
-describe('useSessionListRouter — dispose is called on unmount', () => {
-  it('calls disposeSpy exactly once when the hook unmounts', () => {
-    const { unmount } = renderHook(() => useSessionListRouter());
+  unmount();
 
-    unmount();
-
-    expect(disposeSpy).toHaveBeenCalledTimes(1);
-  });
+  expect(disposeSpy).toHaveBeenCalledTimes(1);
 });
 
 // ---------------------------------------------------------------------------
@@ -510,97 +450,63 @@ function bootItem(
   return { id, remoteId: id, status, custom: { projectId, updatedAt } };
 }
 
-// ---------------------------------------------------------------------------
-// 13. Boot auto-select: __LOCALID_* draft → switchToThread(most-recent non-archived)
-// ---------------------------------------------------------------------------
+it('calls switchSpy once with "chat-newest" (most-recent non-archived) when mainThreadId is a draft', () => {
+  mainThreadIdValue = '__LOCALID_abc123';
+  fakeThreadItems = [bootItem('chat-oldest', 1000), bootItem('chat-newest', 3000), bootItem('chat-middle', 2000)];
 
-describe('useSessionListRouter — boot auto-select when on a __LOCALID_* draft', () => {
-  it('calls switchSpy once with "chat-newest" (most-recent non-archived) when mainThreadId is a draft', () => {
-    mainThreadIdValue = '__LOCALID_abc123';
-    fakeThreadItems = [bootItem('chat-oldest', 1000), bootItem('chat-newest', 3000), bootItem('chat-middle', 2000)];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
-
-    expect(switchSpy).toHaveBeenCalledTimes(1);
-    expect(switchSpy).toHaveBeenCalledWith('chat-newest');
-  });
+  expect(switchSpy).toHaveBeenCalledTimes(1);
+  expect(switchSpy).toHaveBeenCalledWith('chat-newest');
 });
 
-// ---------------------------------------------------------------------------
-// 14. Boot auto-select: mainThreadId null → switchToThread(most-recent non-archived)
-// ---------------------------------------------------------------------------
+it('calls switchSpy once with "chat-b" when mainThreadId is null and sessions load', () => {
+  mainThreadIdValue = null;
+  fakeThreadItems = [bootItem('chat-a', 500), bootItem('chat-b', 1500)];
 
-describe('useSessionListRouter — boot auto-select when mainThreadId is null', () => {
-  it('calls switchSpy once with "chat-b" when mainThreadId is null and sessions load', () => {
-    mainThreadIdValue = null;
-    fakeThreadItems = [bootItem('chat-a', 500), bootItem('chat-b', 1500)];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
-
-    expect(switchSpy).toHaveBeenCalledTimes(1);
-    expect(switchSpy).toHaveBeenCalledWith('chat-b');
-  });
+  expect(switchSpy).toHaveBeenCalledTimes(1);
+  expect(switchSpy).toHaveBeenCalledWith('chat-b');
 });
 
-// ---------------------------------------------------------------------------
-// 15. No boot auto-select: already on a real (non-draft) thread
-// ---------------------------------------------------------------------------
+it('does NOT call switchSpy for the boot effect when mainThreadId is already a real session id', () => {
+  // Use a non-archived active session as the current thread so the
+  // archived-active fallback effect also stays silent, isolating boot behavior.
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [bootItem('chat-A', 1000), bootItem('chat-B', 2000)];
 
-describe('useSessionListRouter — no boot auto-select when already on a real thread', () => {
-  it('does NOT call switchSpy for the boot effect when mainThreadId is already a real session id', () => {
-    // Use a non-archived active session as the current thread so the
-    // archived-active fallback effect also stays silent, isolating boot behavior.
-    mainThreadIdValue = 'chat-A';
-    fakeThreadItems = [bootItem('chat-A', 1000), bootItem('chat-B', 2000)];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
-
-    expect(switchSpy).not.toHaveBeenCalled();
-  });
+  expect(switchSpy).not.toHaveBeenCalled();
 });
 
-// ---------------------------------------------------------------------------
-// 16. One-shot: auto-select fires only on the first non-empty list
-// ---------------------------------------------------------------------------
+it('calls switchSpy only once even after the items change a second time (boot auto-select is one-shot)', () => {
+  mainThreadIdValue = '__LOCALID_xyz';
+  fakeThreadItems = [bootItem('chat-first', 1000)];
 
-describe('useSessionListRouter — boot auto-select is one-shot', () => {
-  it('calls switchSpy only once even after the items change a second time', () => {
-    mainThreadIdValue = '__LOCALID_xyz';
-    fakeThreadItems = [bootItem('chat-first', 1000)];
+  const { rerender } = renderHook(() => useSessionListRouter());
 
-    const { rerender } = renderHook(() => useSessionListRouter());
+  expect(switchSpy).toHaveBeenCalledTimes(1);
+  expect(switchSpy).toHaveBeenCalledWith('chat-first');
 
-    expect(switchSpy).toHaveBeenCalledTimes(1);
-    expect(switchSpy).toHaveBeenCalledWith('chat-first');
+  // Simulate a later items update (e.g. daemon reload adds more sessions)
+  fakeThreadItems = [bootItem('chat-first', 1000), bootItem('chat-second', 9000)];
 
-    // Simulate a later items update (e.g. daemon reload adds more sessions)
-    fakeThreadItems = [bootItem('chat-first', 1000), bootItem('chat-second', 9000)];
+  rerender();
 
-    rerender();
-
-    // The one-shot ref is consumed; switchSpy must NOT be called again
-    expect(switchSpy).toHaveBeenCalledTimes(1);
-  });
+  // The one-shot ref is consumed; switchSpy must NOT be called again
+  expect(switchSpy).toHaveBeenCalledTimes(1);
 });
 
-// ---------------------------------------------------------------------------
-// 17. Boot auto-select: empty list → switchSpy not called
-// ---------------------------------------------------------------------------
+it('does NOT call switchSpy when the items list is empty at boot', () => {
+  mainThreadIdValue = '__LOCALID_empty';
+  fakeThreadItems = [];
 
-describe('useSessionListRouter — boot auto-select does nothing on empty list', () => {
-  it('does NOT call switchSpy when the items list is empty at boot', () => {
-    mainThreadIdValue = '__LOCALID_empty';
-    fakeThreadItems = [];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
-
-    expect(switchSpy).not.toHaveBeenCalled();
-  });
+  expect(switchSpy).not.toHaveBeenCalled();
 });
-
-// ---------------------------------------------------------------------------
-// 18. Boot restore: persisted last session wins over the most-recent one
-// ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — boot restores the last open session', () => {
   it('switches to the persisted session (by remoteId) even when an other session is more recent', () => {
@@ -626,23 +532,17 @@ describe('useSessionListRouter — boot restores the last open session', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 19. Active-thread change persists the open session (by remoteId)
-// ---------------------------------------------------------------------------
+it('calls setLastSessionId with the active session remoteId when the active thread changes', () => {
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1', updatedAt: 1000 } }];
 
-describe('useSessionListRouter — active thread change persists the last session', () => {
-  it('calls setLastSessionId with the active session remoteId', () => {
-    mainThreadIdValue = 'chat-A';
-    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1', updatedAt: 1000 } }];
+  renderHook(() => useSessionListRouter());
 
-    renderHook(() => useSessionListRouter());
-
-    expect(setLastSessionIdSpy).toHaveBeenCalledWith('chat-A');
-  });
+  expect(setLastSessionIdSpy).toHaveBeenCalledWith('chat-A');
 });
 
 // ---------------------------------------------------------------------------
-// 12. onMarkUnread is a no-op for the currently active thread (MED-5)
+// onMarkUnread is a no-op for the currently active thread (MED-5)
 // ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — onMarkUnread for active thread is a no-op', () => {
@@ -691,7 +591,7 @@ describe('useSessionListRouter — onMarkUnread for active thread is a no-op', (
 });
 
 // ---------------------------------------------------------------------------
-// 20. Active thread change wires the per-session workspace layout store
+// Active thread change wires the per-session workspace layout store
 // ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — active thread change wires per-session layout', () => {

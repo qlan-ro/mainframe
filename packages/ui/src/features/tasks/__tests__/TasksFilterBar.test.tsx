@@ -2,16 +2,16 @@
  * TasksFilterBar.test.tsx
  *
  * Behaviors covered:
- *  1.  Renders data-testid="tasks-filter-search" input.
- *  2.  Renders data-testid="tasks-filter-type" button (FilterMenu for Type).
- *  3.  Renders data-testid="tasks-filter-priority" button (FilterMenu for Priority).
- *  4.  Typing in the search input calls onChange with updated search field.
- *  5.  Clear button (tasks-filter-clear) appears when a filter is active.
- *  6.  Clear button is NOT rendered when all filters are empty.
- *  7.  Clicking Clear calls onChange with all-empty filters.
- *  8.  Sort menu (tasks-sort-menu) is rendered.
- *  9.  Clicking a sort option calls onSortChange with the right {key, dir}.
- *  10. Label filter (tasks-filter-label) is only rendered when allLabels is non-empty.
+ *  1. Typing in the search input calls onChange with updated search field.
+ *  2. Clear button (tasks-filter-clear) appears when a filter is active.
+ *  3. Clear button is NOT rendered when all filters are empty.
+ *  4. Clicking Clear calls onChange with all-empty filters.
+ *  5. Sort clicks are forwarded to onSortChange (the key/dir table itself is
+ *     SortMenu.test.tsx's job).
+ *  6. Label filter (tasks-filter-label) is only rendered when allLabels is non-empty.
+ *
+ * (search/type/priority testid presence is exercised implicitly by the
+ * interaction tests below — no bare presence smokes needed.)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -97,33 +97,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1–3. Key testids present
-// ---------------------------------------------------------------------------
-
-describe('TasksFilterBar — key testids rendered', () => {
-  it('renders tasks-filter-search', () => {
-    renderBar();
-    expect(screen.getByTestId('tasks-filter-search')).toBeTruthy();
-  });
-
-  it('renders the search input with placeholder "Search tasks…"', () => {
-    renderBar();
-    expect(screen.getByPlaceholderText('Search tasks…')).toBeTruthy();
-  });
-
-  it('renders tasks-filter-type button', () => {
-    renderBar();
-    expect(screen.getByTestId('tasks-filter-type')).toBeTruthy();
-  });
-
-  it('renders tasks-filter-priority button', () => {
-    renderBar();
-    expect(screen.getByTestId('tasks-filter-priority')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 4. Changing the search input emits onChange with the full updated search value
+//
+// (search/type/priority testid presence is exercised implicitly by the
+// interaction tests below — no bare presence smokes needed.)
 // ---------------------------------------------------------------------------
 
 describe('TasksFilterBar — search input emits onChange', () => {
@@ -179,47 +156,21 @@ describe('TasksFilterBar — clicking Clear emits all-empty filters', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Sort menu is rendered
+// 8. Sort wiring — SortMenu's own key/direction table is covered by
+// SortMenu.test.tsx; this just proves TasksFilterBar forwards SortMenu's
+// onChange straight through as its onSortChange prop.
 // ---------------------------------------------------------------------------
 
-describe('TasksFilterBar — sort menu rendered', () => {
-  it('renders tasks-sort-menu', () => {
-    renderBar();
-    expect(screen.getByTestId('tasks-sort-menu')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 9. Clicking a sort option calls onSortChange with correct {key, dir}
-// ---------------------------------------------------------------------------
-
-describe('TasksFilterBar — sort option click emits onSortChange', () => {
-  it('calls onSortChange({key:"priority",dir:"asc"}) when switching to the priority option (default asc)', async () => {
-    const { onSortChange } = renderBar();
-
-    // Open the sort dropdown (default sort is {key:number, dir:desc})
-    await userEvent.click(screen.getByTestId('tasks-sort-menu'));
-
-    // Click the priority option — switching key defaults to asc
-    const priorityOption = screen.getByTestId('tasks-sort-option-priority');
-    await userEvent.click(priorityOption);
-
-    await waitFor(() => {
-      expect(onSortChange).toHaveBeenCalledOnce();
-    });
-    expect(onSortChange).toHaveBeenCalledWith({ key: 'priority', dir: 'asc' });
-  });
-
-  it('calls onSortChange({key:"number",dir:"asc"}) when number is already active and re-clicked (toggles direction)', async () => {
+describe('TasksFilterBar — forwards SortMenu changes to onSortChange', () => {
+  it('calls onSortChange with whatever SortMenu emits when a sort option is clicked', async () => {
     const { onSortChange } = renderBar({ sort: { key: 'number', dir: 'desc' } });
 
     await userEvent.click(screen.getByTestId('tasks-sort-menu'));
-    await userEvent.click(screen.getByTestId('tasks-sort-option-number'));
+    await userEvent.click(screen.getByTestId('tasks-sort-option-priority'));
 
     await waitFor(() => {
-      expect(onSortChange).toHaveBeenCalledOnce();
+      expect(onSortChange).toHaveBeenCalledExactlyOnceWith({ key: 'priority', dir: 'asc' });
     });
-    expect(onSortChange).toHaveBeenCalledWith({ key: 'number', dir: 'asc' });
   });
 });
 

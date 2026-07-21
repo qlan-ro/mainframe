@@ -8,93 +8,125 @@ import {
   TOKEN_STEP_CURRENT,
   type AutomationDefinition,
   type AutomationCreateInput,
-  type AutomationStep,
-  type AutomationTrigger,
 } from '../automation.js';
+import type { DaemonEvent } from '../events.js';
+import type { AutomationRunSummary, AutomationInteractionSummary } from '../automation.js';
 
-describe('reserved TokenRef stepId constants', () => {
-  it('are the three reserved values the fixtures rely on', () => {
-    expect(TOKEN_STEP_TRIGGER).toBe('trigger');
-    expect(TOKEN_STEP_BUILTIN).toBe('builtin');
-    expect(TOKEN_STEP_CURRENT).toBe('current');
-  });
-});
+// Type-level (compile-time only): a shape drift in these literals fails `tsc`,
+// not this test run. No runtime assertions — that would just restate the
+// literal three lines up.
 
-describe('AutomationDefinition compile-time shape', () => {
-  it('accepts a definition instantiating every step kind and trigger kind, incl. ask_agent.expects', () => {
-    const definition: AutomationDefinition = {
-      triggers: [
-        { id: 'trigger-schedule', kind: 'schedule', schedule: { type: 'daily', at: '21:00' }, onMissed: 'skip' },
-        { id: 'trigger-event', kind: 'event', event: 'automation.finished', automationId: 'other-automation' },
-        { id: 'trigger-webhook', kind: 'webhook', hookId: 'pr-opened' },
+// Exercises every step kind and trigger kind, incl. ask_agent.expects.
+const _definitionShape: AutomationDefinition = {
+  triggers: [
+    { id: 'trigger-schedule', kind: 'schedule', schedule: { type: 'daily', at: '21:00' }, onMissed: 'skip' },
+    { id: 'trigger-event', kind: 'event', event: 'automation.finished', automationId: 'other-automation' },
+    { id: 'trigger-webhook', kind: 'webhook', hookId: 'pr-opened' },
+  ],
+  steps: [
+    {
+      id: 'ask-agent-1',
+      kind: 'ask_agent',
+      prompt: ['Pick a scope: ', { token: { stepId: TOKEN_STEP_TRIGGER, output: 'payload', field: 'title' } }],
+      adapterId: 'claude',
+      model: 'sonnet',
+      permissionMode: 'default',
+      worktree: {
+        baseBranch: 'main',
+        branchName: ['spike-', { token: { stepId: TOKEN_STEP_BUILTIN, output: 'today' } }],
+      },
+      autoApprove: ['edits', 'pnpm'],
+      timeoutMinutes: 60,
+      expects: [{ key: 'scope', type: 'choice', options: ['xs', 's', 'm'] }],
+    },
+    {
+      id: 'ask-me-1',
+      kind: 'ask_me',
+      title: 'Health check-in',
+      fields: [
+        { key: 'mood', type: 'choice', options: ['great', 'okay', 'bad'], required: true },
+        { key: 'symptoms', type: 'multi', options: ['fever', 'other'] },
+        { key: 'symptomsOther', type: 'text', showWhen: { key: 'symptoms', equals: 'other' } },
       ],
+    },
+    {
+      id: 'run-action-1',
+      kind: 'run_action',
+      actionId: 'files.append',
+      params: { path: ['~/log.md'], content: [{ token: { stepId: 'ask-me-1', output: 'mood' } }] },
+      outputAs: 'text',
+    },
+    {
+      id: 'notify-1',
+      kind: 'notify',
+      message: ['Done: ', { token: { stepId: 'ask-agent-1', output: 'result' } }],
+    },
+    {
+      id: 'if-1',
+      kind: 'if',
+      match: 'all',
+      conditions: [{ token: { stepId: 'ask-agent-1', output: 'scope' }, comparator: 'is_one_of', value: ['xs', 's'] }],
+      then: [{ id: 'if-then-notify', kind: 'notify', message: ['in scope'] }],
+      otherwise: [{ id: 'if-otherwise-notify', kind: 'notify', message: ['out of scope'], keepGoing: true }],
+    },
+    {
+      id: 'repeat-1',
+      kind: 'repeat',
+      items: { stepId: 'run-action-1', output: 'items' },
       steps: [
         {
-          id: 'ask-agent-1',
-          kind: 'ask_agent',
-          prompt: ['Pick a scope: ', { token: { stepId: TOKEN_STEP_TRIGGER, output: 'payload', field: 'title' } }],
-          adapterId: 'claude',
-          model: 'sonnet',
-          permissionMode: 'default',
-          worktree: {
-            baseBranch: 'main',
-            branchName: ['spike-', { token: { stepId: TOKEN_STEP_BUILTIN, output: 'today' } }],
-          },
-          autoApprove: ['edits', 'pnpm'],
-          timeoutMinutes: 60,
-          expects: [{ key: 'scope', type: 'choice', options: ['xs', 's', 'm'] }],
-        },
-        {
-          id: 'ask-me-1',
-          kind: 'ask_me',
-          title: 'Health check-in',
-          fields: [
-            { key: 'mood', type: 'choice', options: ['great', 'okay', 'bad'], required: true },
-            { key: 'symptoms', type: 'multi', options: ['fever', 'other'] },
-            { key: 'symptomsOther', type: 'text', showWhen: { key: 'symptoms', equals: 'other' } },
-          ],
-        },
-        {
-          id: 'run-action-1',
-          kind: 'run_action',
-          actionId: 'files.append',
-          params: { path: ['~/log.md'], content: [{ token: { stepId: 'ask-me-1', output: 'mood' } }] },
-          outputAs: 'text',
-        },
-        {
-          id: 'notify-1',
+          id: 'repeat-inner-notify',
           kind: 'notify',
-          message: ['Done: ', { token: { stepId: 'ask-agent-1', output: 'result' } }],
-        },
-        {
-          id: 'if-1',
-          kind: 'if',
-          match: 'all',
-          conditions: [
-            { token: { stepId: 'ask-agent-1', output: 'scope' }, comparator: 'is_one_of', value: ['xs', 's'] },
-          ],
-          then: [{ id: 'if-then-notify', kind: 'notify', message: ['in scope'] }],
-          otherwise: [{ id: 'if-otherwise-notify', kind: 'notify', message: ['out of scope'], keepGoing: true }],
-        },
-        {
-          id: 'repeat-1',
-          kind: 'repeat',
-          items: { stepId: 'run-action-1', output: 'items' },
-          steps: [
-            {
-              id: 'repeat-inner-notify',
-              kind: 'notify',
-              message: [{ token: { stepId: TOKEN_STEP_CURRENT, output: 'item', field: 'url' } }],
-            },
-          ],
+          message: [{ token: { stepId: TOKEN_STEP_CURRENT, output: 'item', field: 'url' } }],
         },
       ],
-    };
+    },
+  ],
+};
+void _definitionShape;
 
-    expect(definition.triggers).toHaveLength(3);
-    expect(definition.steps).toHaveLength(6);
-  });
-});
+// Every field the daemon emits for each of the five automation.* DaemonEvent variants.
+const _run: AutomationRunSummary = {
+  id: 'run-1',
+  automationId: 'automation-1',
+  status: 'succeeded',
+  trigger: { kind: 'manual' },
+  startedAt: 0,
+  finishedAt: 1,
+  error: null,
+};
+const _interaction: AutomationInteractionSummary = {
+  id: 'interaction-1',
+  runId: 'run-1',
+  stepRef: 'ask-health',
+  title: 'Health check-in',
+  fields: [],
+  status: 'pending',
+  createdAt: 0,
+  resolvedAt: null,
+};
+const _events: DaemonEvent[] = [
+  { type: 'automation.run.updated', run: _run },
+  { type: 'automation.interaction.created', interaction: _interaction },
+  { type: 'automation.interaction.resolved', interactionId: 'interaction-1', runId: 'run-1' },
+  {
+    type: 'automation.completed',
+    automationId: 'automation-1',
+    automationName: 'Daily health log',
+    runId: 'run-1',
+    status: 'succeeded',
+    result: 'done',
+  },
+  {
+    type: 'automation.notification',
+    runId: 'run-1',
+    automationId: 'automation-1',
+    title: 'Run finished',
+    body: 'Daily health log finished',
+    links: { runId: 'run-1', chatIds: ['chat-1'] },
+  },
+];
+void _events;
 
 // The zod schema (Task 4) doesn't exist yet, so these fixture checks are a
 // type-annotated cast (`AutomationCreateInput`) plus targeted runtime
@@ -107,23 +139,6 @@ function loadFixture(name: string): AutomationCreateInput {
   return JSON.parse(raw) as AutomationCreateInput;
 }
 
-const KNOWN_STEP_KINDS = new Set(['ask_agent', 'ask_me', 'run_action', 'notify', 'if', 'repeat']);
-const KNOWN_TRIGGER_KINDS = new Set(['schedule', 'event', 'webhook']);
-
-function assertKnownStepKinds(steps: AutomationStep[]): void {
-  for (const step of steps) {
-    expect(KNOWN_STEP_KINDS.has(step.kind)).toBe(true);
-    expect(step.id.length).toBeGreaterThan(0);
-    if (step.kind === 'if') {
-      assertKnownStepKinds(step.then);
-      assertKnownStepKinds(step.otherwise);
-    }
-    if (step.kind === 'repeat') {
-      assertKnownStepKinds(step.steps);
-    }
-  }
-}
-
 const FIXTURE_NAMES = [
   'daily-health-log',
   'daily-standup',
@@ -134,16 +149,16 @@ const FIXTURE_NAMES = [
 ] as const;
 
 describe('canonical automation fixtures (contract §8)', () => {
-  it.each(FIXTURE_NAMES)('%s has a well-formed triggers/steps shape', (name) => {
+  // packages/core/src/__tests__/automations/definition-schema.test.ts parses
+  // these same fixtures through the real AutomationDefinitionSchema (step/trigger
+  // kind validation). This only checks the AutomationCreateInput wrapper fields
+  // (name/scope) that schema does not cover.
+  it.each(FIXTURE_NAMES)('%s has a well-formed name/scope/definition shape', (name) => {
     const fixture = loadFixture(name);
     expect(fixture.name.length).toBeGreaterThan(0);
     expect(['global', 'project']).toContain(fixture.scope);
     expect(Array.isArray(fixture.definition.triggers)).toBe(true);
     expect(fixture.definition.steps.length).toBeGreaterThan(0);
-    for (const trigger of fixture.definition.triggers as AutomationTrigger[]) {
-      expect(KNOWN_TRIGGER_KINDS.has(trigger.kind)).toBe(true);
-    }
-    assertKnownStepKinds(fixture.definition.steps);
   });
 
   it('ship-work is manual-only: empty triggers array, since "manual" is not a trigger kind', () => {

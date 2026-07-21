@@ -2,6 +2,22 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeTodos } from '../todos/normalize.js';
 
+describe('normalizeTodos — invalid/empty input', () => {
+  it.each([
+    ['todoV1', null, []],
+    ['todoV1', 'string', []],
+    ['todoV1', {}, []],
+    ['todoV1', [], []],
+    ['taskV2', null, []],
+    ['taskV2', [], []],
+    ['codexTodoList', null, []],
+    ['codexTodoList', {}, []],
+    ['codexTodoList', [], []],
+  ] as const)('normalizeTodos(%s, %j) → []', (variant, payload, expected) => {
+    expect(normalizeTodos(variant, payload)).toEqual(expected);
+  });
+});
+
 describe('normalizeTodos — todoV1', () => {
   it('returns valid TodoItems as-is', () => {
     const input = [
@@ -23,50 +39,47 @@ describe('normalizeTodos — todoV1', () => {
     expect(result[0]!.content).toBe('Valid');
     expect(result[1]!.content).toBe('Also valid');
   });
-
-  it('returns empty array for non-array payload', () => {
-    expect(normalizeTodos('todoV1', null)).toEqual([]);
-    expect(normalizeTodos('todoV1', 'string')).toEqual([]);
-    expect(normalizeTodos('todoV1', {})).toEqual([]);
-  });
-
-  it('returns empty array for empty input', () => {
-    expect(normalizeTodos('todoV1', [])).toEqual([]);
-  });
 });
 
 describe('normalizeTodos — taskV2', () => {
-  it('maps TaskCreate events to pending todos', () => {
-    const events = [
-      {
-        toolName: 'TaskCreate' as const,
-        args: { subject: 'Write tests', activeForm: 'Writing tests' },
-        result: 'Task #1 created',
-      },
-    ];
+  it.each([
+    [
+      [
+        {
+          toolName: 'TaskCreate' as const,
+          args: { subject: 'Write tests', activeForm: 'Writing tests' },
+          result: 'Task #1 created',
+        },
+      ],
+      ['Write tests'],
+    ],
+    [
+      [
+        { toolName: 'TaskCreate' as const, args: { subject: 'Alpha' }, result: 'Task #1 created' },
+        { toolName: 'TaskCreate' as const, args: { subject: 'Beta' }, result: 'Task #2 created' },
+        { toolName: 'TaskCreate' as const, args: { subject: 'Gamma' }, result: 'Task #3 created' },
+      ],
+      ['Alpha', 'Beta', 'Gamma'],
+    ],
+  ] as const)('TaskCreate events map to pending todos in order', (events, expectedContents) => {
     const result = normalizeTodos('taskV2', events);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ content: 'Write tests', status: 'pending', activeForm: 'Writing tests' });
+    expect(result).toHaveLength(expectedContents.length);
+    expect(result.map((t) => t.content)).toEqual(expectedContents);
+    expect(result.every((t) => t.status === 'pending')).toBe(true);
   });
 
-  it('TaskUpdate changes status of existing task', () => {
-    const events = [
-      { toolName: 'TaskCreate' as const, args: { subject: 'Task A' }, result: 'Task #1 created' },
-      { toolName: 'TaskUpdate' as const, args: { taskId: '1', status: 'in_progress' } },
-    ];
-    const result = normalizeTodos('taskV2', events);
-    expect(result).toHaveLength(1);
-    expect(result[0]!.status).toBe('in_progress');
-  });
-
-  it('TaskUpdate marks task as completed', () => {
-    const events = [
-      { toolName: 'TaskCreate' as const, args: { subject: 'Task A' }, result: 'Task #1 created' },
-      { toolName: 'TaskUpdate' as const, args: { taskId: '1', status: 'completed' } },
-    ];
-    const result = normalizeTodos('taskV2', events);
-    expect(result[0]!.status).toBe('completed');
-  });
+  it.each([['in_progress'], ['completed']] as const)(
+    'TaskUpdate changes status of an existing task to %s',
+    (status) => {
+      const events = [
+        { toolName: 'TaskCreate' as const, args: { subject: 'Task A' }, result: 'Task #1 created' },
+        { toolName: 'TaskUpdate' as const, args: { taskId: '1', status } },
+      ];
+      const result = normalizeTodos('taskV2', events);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.status).toBe(status);
+    },
+  );
 
   it('TaskStop removes task from list', () => {
     const events = [
@@ -77,25 +90,6 @@ describe('normalizeTodos — taskV2', () => {
     const result = normalizeTodos('taskV2', events);
     expect(result).toHaveLength(1);
     expect(result[0]!.content).toBe('Task B');
-  });
-
-  it('handles multiple TaskCreate events', () => {
-    const events = [
-      { toolName: 'TaskCreate' as const, args: { subject: 'Alpha' }, result: 'Task #1 created' },
-      { toolName: 'TaskCreate' as const, args: { subject: 'Beta' }, result: 'Task #2 created' },
-      { toolName: 'TaskCreate' as const, args: { subject: 'Gamma' }, result: 'Task #3 created' },
-    ];
-    const result = normalizeTodos('taskV2', events);
-    expect(result).toHaveLength(3);
-    expect(result.map((t) => t.content)).toEqual(['Alpha', 'Beta', 'Gamma']);
-  });
-
-  it('returns empty array for empty event list', () => {
-    expect(normalizeTodos('taskV2', [])).toEqual([]);
-  });
-
-  it('returns empty array for non-array payload', () => {
-    expect(normalizeTodos('taskV2', null)).toEqual([]);
   });
 
   it('mid-task update preserves other tasks', () => {
@@ -122,25 +116,20 @@ describe('normalizeTodos — taskV2', () => {
 });
 
 describe('normalizeTodos — codexTodoList', () => {
-  it('maps items correctly to pending/completed', () => {
-    const items = [
-      { text: 'Write tests', completed: false },
-      { text: 'Fix bug', completed: true },
-    ];
-    const result = normalizeTodos('codexTodoList', items);
-    expect(result).toEqual([
-      { content: 'Write tests', status: 'pending', activeForm: 'Write tests' },
-      { content: 'Fix bug', status: 'completed', activeForm: 'Fix bug' },
-    ]);
-  });
-
-  it('returns empty array for empty items', () => {
-    expect(normalizeTodos('codexTodoList', [])).toEqual([]);
-  });
-
-  it('returns empty array for non-array payload', () => {
-    expect(normalizeTodos('codexTodoList', null)).toEqual([]);
-    expect(normalizeTodos('codexTodoList', {})).toEqual([]);
+  it.each([
+    [
+      [
+        { text: 'Write tests', completed: false },
+        { text: 'Fix bug', completed: true },
+      ],
+      [
+        { content: 'Write tests', status: 'pending', activeForm: 'Write tests' },
+        { content: 'Fix bug', status: 'completed', activeForm: 'Fix bug' },
+      ],
+    ],
+    [[{ text: 'My task', completed: false }], [{ content: 'My task', status: 'pending', activeForm: 'My task' }]],
+  ] as const)('maps items to content/status/activeForm', (items, expected) => {
+    expect(normalizeTodos('codexTodoList', items)).toEqual(expected);
   });
 
   it('filters out items without text field', () => {
@@ -160,11 +149,5 @@ describe('normalizeTodos — codexTodoList', () => {
     ];
     const result = normalizeTodos('codexTodoList', items);
     expect(result.every((t) => t.status === 'completed')).toBe(true);
-  });
-
-  it('activeForm matches content', () => {
-    const items = [{ text: 'My task', completed: false }];
-    const result = normalizeTodos('codexTodoList', items);
-    expect(result[0]!.activeForm).toBe('My task');
   });
 });
