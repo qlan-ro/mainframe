@@ -79,14 +79,17 @@ async fn file_subscribe_absolute_acks_and_receives_file_changed() {
             .is_some_and(|p| p.ends_with("hello.ts"))
     );
 
-    // Re-write the file on a short cadence until the event arrives. Under the CPU
-    // contention of the full parallel workspace run the notify (FSEvents) watcher
-    // can register after the first write lands, dropping that single event; a
+    // Re-write the file on a cadence until the event arrives. Under the CPU
+    // contention of the full parallel workspace run the notify watcher can
+    // register after the first write lands, dropping that single event; a
     // periodic re-write guarantees a change occurs once the backend is live.
+    // The cadence must exceed the watcher's 200ms trailing debounce (each new
+    // event resets it): a 200ms cadence phase-locks with the debounce on Linux
+    // CI and the emit can lose the reset race every cycle, timing this test out.
     let writer_file = file.clone();
     let writer = tokio::spawn(async move {
         for i in 0.. {
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            tokio::time::sleep(Duration::from_millis(500)).await;
             let _ = std::fs::write(&writer_file, format!("// changed {i}"));
         }
     });
