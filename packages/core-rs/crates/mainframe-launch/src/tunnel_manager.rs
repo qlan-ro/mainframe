@@ -370,6 +370,11 @@ impl TunnelManager {
             }
         }
 
+        // Keep reading the child's output for its whole life: dropping the pipe
+        // readers closes the pipes, and cloudflared (Go) dies on SIGPIPE at its
+        // next log write. The TS never hits this — its 'data' handlers persist.
+        spawn_output_drain(out_lines, err_lines);
+
         // Phase 2: connected. Register the tunnel, then wait for DNS while still
         // watching for an early exit (which rejects, per the TS `!done` branch).
         let url = pending_url.unwrap_or_default();
@@ -639,6 +644,21 @@ fn extract_hostname(url: &str) -> String {
         .or_else(|| url.strip_prefix("http://"))
         .unwrap_or(url);
     after.split(['/', ':']).next().unwrap_or(after).to_string()
+}
+
+/// Discard the child's remaining output until both streams hit EOF.
+fn spawn_output_drain(
+    mut out_lines: Option<Lines<BufReader<ChildStdout>>>,
+    mut err_lines: Option<Lines<BufReader<ChildStderr>>>,
+) {
+    tokio::spawn(async move {
+        while out_lines.is_some() || err_lines.is_some() {
+            tokio::select! {
+                _ = next_line_stdout(&mut out_lines) => {}
+                _ = next_line_stderr(&mut err_lines) => {}
+            }
+        }
+    });
 }
 
 async fn next_line_stdout(lines: &mut Option<Lines<BufReader<ChildStdout>>>) -> Option<String> {
@@ -963,6 +983,47 @@ mod tests {
         script.to_string_lossy().into_owned()
     }
 
+    /// `cloudflared` stand-in that keeps logging after registration, like the
+    /// real binary (which dies on SIGPIPE if the daemon stops reading its pipes).
+    fn write_chatty_cloudflared(dir: &std::path::Path) -> String {
+        let script = dir.join("chatty-cloudflared.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\necho 'https://abc-def.trycloudflare.com'\necho 'Registered tunnel connection'\nwhile true; do echo 'INF heartbeat'; sleep 0.05; done\n",
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script.to_string_lossy().into_owned()
+    }
+
+    #[tokio::test]
+    async fn tunnel_survives_continued_child_logging_after_start_resolves() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_chatty_cloudflared(dir.path());
+        let (broadcast, events) = recorder();
+        let config = TunnelConfig {
+            cloudflared_bin: bin,
+            dns_poll: Duration::from_millis(20),
+            dns_timeout: Duration::from_millis(100),
+            ..TunnelConfig::default()
+        };
+        let manager = TunnelManager::with_config(Some(broadcast), config);
+
+        let url = manager.start(3000, "daemon", None).await.unwrap();
+        assert_eq!(url, "https://abc-def.trycloudflare.com");
+
+        // Long enough for several post-ready log writes: with the pipes closed
+        // the child dies on SIGPIPE and the exit watcher removes the tunnel.
+        sleep(Duration::from_millis(400)).await;
+        assert_eq!(
+            manager.get_url("daemon").as_deref(),
+            Some("https://abc-def.trycloudflare.com")
+        );
+        assert_eq!(stopped_broadcasts(&events), 0);
+        manager.stop("daemon");
+    }
+
     #[tokio::test]
     async fn start_resolves_with_url_when_dns_outlasts_the_start_timeout() {
         let dir = tempfile::tempdir().unwrap();
@@ -1172,7 +1233,10 @@ mod tests {
 // uses tokio::net::lookup_host (system resolver) — the TS pins 1.1.1.1 via
 // node:dns Resolver; the specific-resolver behavior is lost (see blockers).
 // Tunnel/verify tests use real spawned processes / a canned local HTTP server,
-// not code mocks.
+// not code mocks. Post-connection, spawn_output_drain keeps reading stdout/stderr
+// for the child's life — dropping the readers closes the pipes and cloudflared
+// dies on SIGPIPE at its next log write (the TS 'data' handlers persist, so the
+// port needs the explicit drain).
 // #431/#442 child-reaping: TunnelManagerOptions{registry,cloudflaredPath} added;
 // recordSpawn/forgetSpawn fire-and-forget against an Arc<dyn ChildRegistryPort>
 // (absolute paths only, via tunnel_record_entry); a `pending` HashSet<pid> tracks

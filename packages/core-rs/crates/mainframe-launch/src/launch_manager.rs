@@ -727,8 +727,12 @@ async fn kill_process(pid: Option<u32>, flag: &'static str) {
     let Some(pid) = pid else {
         return;
     };
+    // `--` is required before the negative pid: without it, Linux `kill` parses
+    // `-<pid>` as a signal spec and exits 0 WITHOUT delivering, so the
+    // single-pid fallback below never runs and stopped children linger.
     let group_ok = Command::new("kill")
         .arg(flag)
+        .arg("--")
         .arg(format!("-{pid}"))
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -970,6 +974,27 @@ mod tests {
             manager.get_all_statuses().get("fail-fast").copied(),
             Some(LaunchProcessStatus::Failed)
         );
+    }
+
+    // Guards the `--` in the group-kill shell-out: Linux `kill` parses a bare
+    // `-<pid>` as a signal spec and exits 0 without delivering, which skipped
+    // the single-pid fallback and left every stopped child running to natural
+    // exit (each sleep-100 test above then took the full 100s on CI).
+    #[tokio::test]
+    async fn kill_process_terminates_a_group_leader_child() {
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "sleep 30"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        command.process_group(0);
+        let mut child = command.spawn().unwrap();
+
+        kill_process(child.id(), "-TERM").await;
+
+        let exited = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+        assert!(exited.is_ok(), "child survived the group SIGTERM");
     }
 
     #[tokio::test]
