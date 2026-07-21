@@ -1,4 +1,17 @@
+// @vitest-environment jsdom
+/**
+ * store/adapters.test.ts — the shared adapter catalog store.
+ *
+ * Includes a regression suite for `useAdapters()` referential stability
+ * (React error #185 root cause): `Object.values(byId)` allocates a NEW array
+ * on every call once the catalog is non-empty, so any consumer that puts the
+ * return value in a `useEffect`/`useMemo` dependency array sees a "changed"
+ * dependency on every render, even when nothing in the catalog actually
+ * changed. Verified with `renderHook` by asserting reference identity
+ * (`toBe`/`not.toBe`) across re-renders, not by recomputing the contents.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
 
 const handlers = new Set<(e: any) => void>();
 vi.mock('@/lib/daemon/ws-client', () => ({
@@ -12,6 +25,7 @@ vi.mock('@/lib/daemon/ws-client', () => ({
 
 import {
   useAdaptersStore,
+  useAdapters,
   seedAdapters,
   resetAdapters,
   resetRevisionBaseline,
@@ -71,5 +85,65 @@ describe('ui adapters store', () => {
     seedAdapters([info('claude', 1, [])]);
     resetAdapters();
     expect(Object.keys(useAdaptersStore.getState().byId)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useAdapters() referential stability (React error #185 regression).
+//
+// A consumer that lists useAdapters()'s return value in a useEffect/useMemo
+// dependency array relies on it being the SAME array reference across
+// re-renders when the catalog hasn't changed. If it isn't, the dependency
+// looks "changed" on every render, and any effect using it as a dep tears
+// down and reruns unconditionally.
+// ---------------------------------------------------------------------------
+
+describe('useAdapters — referential stability', () => {
+  beforeEach(() => {
+    resetAdapters();
+  });
+
+  it('returns a referentially stable array across re-renders when the catalog is unchanged', () => {
+    seedAdapters([info('claude', 1, [])]);
+
+    const { result, rerender } = renderHook(() => useAdapters());
+    const first = result.current;
+    rerender();
+
+    expect(result.current).toBe(first);
+    expect(result.current.map((a) => a.id)).toEqual(['claude']);
+  });
+
+  it('returns a new array reference after seedAdapters adds an adapter', () => {
+    seedAdapters([info('claude', 1, [])]);
+
+    const { result, rerender } = renderHook(() => useAdapters());
+    const first = result.current;
+    seedAdapters([info('codex', 1, [])]);
+    rerender();
+
+    expect(result.current).not.toBe(first);
+    expect(result.current.map((a) => a.id).sort()).toEqual(['claude', 'codex']);
+  });
+
+  it('returns a new array reference after applyAdapterModels updates the catalog', () => {
+    seedAdapters([info('claude', 1, [{ id: 'a', label: 'A' }])]);
+
+    const { result, rerender } = renderHook(() => useAdapters());
+    const first = result.current;
+    applyAdapterModels('claude', [{ id: 'b', label: 'B' }], 2);
+    rerender();
+
+    expect(result.current).not.toBe(first);
+    expect(result.current.map((a) => a.id)).toEqual(['claude']);
+  });
+
+  it('returns the same EMPTY-catalog reference across re-renders when there are no adapters', () => {
+    const { result, rerender } = renderHook(() => useAdapters());
+    const first = result.current;
+    rerender();
+
+    expect(result.current).toBe(first);
+    expect(result.current).toEqual([]);
   });
 });

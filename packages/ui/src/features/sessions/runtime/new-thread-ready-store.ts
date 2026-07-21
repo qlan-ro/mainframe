@@ -26,7 +26,9 @@ export interface DraftInitialization {
   attempt?: number;
 }
 
-const IDLE_INITIALIZATION: DraftInitialization = { status: 'idle' };
+/** Exported so subscribers select this shared identity as their no-thread
+ *  fallback — a fresh literal there re-renders forever. */
+export const IDLE_INITIALIZATION: DraftInitialization = { status: 'idle' };
 let nextInitializationAttempt = 0;
 
 interface NewThreadReadyState {
