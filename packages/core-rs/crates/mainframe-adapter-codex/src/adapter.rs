@@ -361,6 +361,30 @@ mod tests {
         assert_eq!(model.supports_fast, Some(true));
         assert_eq!(model.supports_personality, Some(true));
     }
+
+    #[test]
+    fn deserializes_model_list_with_ultra_reasoning_effort() {
+        let payload = serde_json::json!({
+            "data": [{
+                "id": "gpt-6-codex",
+                "displayName": "GPT-6 Codex",
+                "defaultReasoningEffort": "ultra",
+                "supportedReasoningEfforts": [
+                    { "reasoningEffort": "high", "description": "" },
+                    { "reasoningEffort": "ultra", "description": "" }
+                ]
+            }]
+        });
+        let result: ModelListResult =
+            serde_json::from_value(payload).expect("ultra reasoning effort must deserialize");
+        let model = map_codex_model(&result.data[0]);
+        assert_eq!(model.id, "gpt-6-codex");
+        assert_eq!(model.default_effort, Some(EffortLevel::Ultra));
+        assert_eq!(
+            model.supported_efforts,
+            Some(vec![EffortLevel::High, EffortLevel::Ultra])
+        );
+    }
 }
 
 // PORT STATUS: src/plugins/builtin/codex/adapter.ts (160 lines)
