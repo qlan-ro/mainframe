@@ -13,7 +13,7 @@
  * duplicate inline shortcut is redundant.
  */
 import type { MouseEvent } from 'react';
-import { PinIcon, PinOffIcon, TagIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 
 export function RowHoverActions({
@@ -64,7 +64,7 @@ export function RowHoverActions({
       </Hint>
       <Hint label="Archive">
         <button data-testid="sessions-row-action-archive" type="button" className={btn} onClick={stop(onArchive)}>
-          <XIcon className="size-3.5" />
+          <ArchiveIcon className="size-3.5" />
         </button>
       </Hint>
     </div>

@@ -1,11 +1,11 @@
 /**
- * ArchiveWorktreeDialog — mounted confirm dialog that fulfills the archive bridge (D10/S5).
+ * ArchiveWorktreeDialog — mounted confirm dialog that fulfills the archive bridge (D10).
  *
- * Native ThreadListItemPrimitive.Archive → adapter.archive(remoteId) → the adapter
- * calls useArchivePrompt.getState().request(remoteId, { hasWorktree }). That sets
- * `pending` here; the user's button choice calls resolve(choice), settling the
- * adapter's awaited promise. A 'cancel' choice makes the adapter throw so aui
- * rolls back the optimistic archive (the row already left on the optimistic switch).
+ * Raised only for worktree-backed sessions, and only BEFORE the archive runs: the
+ * row awaits `requestWorktreeArchiveChoice`, which sets `pending` here; the user's
+ * button choice calls resolve(choice), settling that promise. Cancelling leaves
+ * the session — and the user's selection — exactly as they were. A session with no
+ * worktree has nothing to decide and is archived without a prompt.
  */
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,36 +24,26 @@ export function ArchiveWorktreeDialog() {
           <DialogTitle>Archive session</DialogTitle>
         </DialogHeader>
         <p className="text-body text-muted-foreground">
-          {pending.hasWorktree
-            ? 'This session has an associated worktree. Delete it too, or keep it on disk?'
-            : 'Archive this session?'}
+          This session has an associated worktree. Delete it too, or keep it on disk?
         </p>
         <DialogFooter className="gap-2">
           <Button data-testid="sessions-archive-cancel" variant="ghost" onClick={() => resolve('cancel')}>
             Cancel
           </Button>
-          {pending.hasWorktree ? (
-            <>
-              <Button
-                data-testid="sessions-archive-keep-worktree"
-                variant="outline"
-                onClick={() => resolve({ deleteWorktree: false })}
-              >
-                Keep worktree
-              </Button>
-              <Button
-                data-testid="sessions-archive-delete-worktree"
-                variant="destructive"
-                onClick={() => resolve({ deleteWorktree: true })}
-              >
-                Delete worktree
-              </Button>
-            </>
-          ) : (
-            <Button data-testid="sessions-archive-confirm" onClick={() => resolve({ deleteWorktree: false })}>
-              Archive
-            </Button>
-          )}
+          <Button
+            data-testid="sessions-archive-keep-worktree"
+            variant="outline"
+            onClick={() => resolve({ deleteWorktree: false })}
+          >
+            Keep worktree
+          </Button>
+          <Button
+            data-testid="sessions-archive-delete-worktree"
+            variant="destructive"
+            onClick={() => resolve({ deleteWorktree: true })}
+          >
+            Delete worktree
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -3,10 +3,11 @@
  *
  * - list/fetch project each daemon Chat → RemoteThreadMetadata via the pure
  *   chat-to-thread-custom mapper (all list signals ride in `custom`).
- * - archive AND delete both map to POST /archive (no hard-delete route, D5);
- *   both read hasWorktree from the chat, await the worktree-delete confirm
- *   bridge (D10), and a 'cancel' THROWS so aui rolls back its optimistic
- *   archive (S5).
+ * - archive AND delete both map to POST /archive (no hard-delete route, D5),
+ *   carrying the deleteWorktree flag the row staged on the confirm bridge (D10)
+ *   before it invoked archive. Nothing is asked here: aui switches the active
+ *   thread away the moment archive() is called, so a prompt at this depth ran
+ *   after the user's selection had already moved.
  * - generateTitle is a no-op empty stream — the daemon auto-titles; enqueuing
  *   would race it (invariant 4).
  * - initialize creates the daemon chat for a __LOCALID_* thread via the
@@ -26,7 +27,7 @@ import type { AssistantStreamChunk } from 'assistant-stream';
 import type { RemoteThreadListAdapter } from '@assistant-ui/react';
 import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../lib/api/chats';
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
-import { requestWorktreeArchiveChoice } from './archive-confirm-bridge';
+import { takeArchiveChoice } from './archive-confirm-bridge';
 import { createForLocal } from './new-thread-coordinator';
 import { chatControllerRegistry } from './chat-controller-registry';
 
@@ -47,16 +48,11 @@ function toMetadata(chat: Parameters<typeof chatToThreadCustom>[0]): RemoteThrea
   return { ...result, custom };
 }
 
-async function archiveWithConfirm(port: number, remoteId: string): Promise<void> {
-  const chat = await getChat(port, remoteId);
-  const choice = await requestWorktreeArchiveChoice(remoteId, {
-    hasWorktree: !!chat.worktreePath,
-  });
-  if (choice === 'cancel') {
-    // Throw so aui rolls back its optimistic `archived` update (S5).
-    throw new Error('archive cancelled');
-  }
-  await archiveChat(port, remoteId, choice.deleteWorktree);
+async function archiveWithStagedChoice(port: number, remoteId: string): Promise<void> {
+  // Absent for an archive raised outside the sidebar row (which never has a
+  // worktree question to stage): keep the worktree, the safe default.
+  const choice = takeArchiveChoice(remoteId);
+  await archiveChat(port, remoteId, choice?.deleteWorktree ?? false);
 }
 
 export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
@@ -73,10 +69,10 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
       await renameChat(port, remoteId, newTitle);
     },
     async archive(remoteId: string): Promise<void> {
-      await archiveWithConfirm(port, remoteId);
+      await archiveWithStagedChoice(port, remoteId);
     },
     async delete(remoteId: string): Promise<void> {
-      await archiveWithConfirm(port, remoteId);
+      await archiveWithStagedChoice(port, remoteId);
     },
     async unarchive(remoteId: string): Promise<void> {
       await unarchiveChat(port, remoteId);
