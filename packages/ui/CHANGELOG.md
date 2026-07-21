@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-ui
 
+## 2.0.0-rc.12
+
+### Patch Changes
+
+- [#485](https://github.com/qlan-ro/mainframe/pull/485) [`32ad349`](https://github.com/qlan-ro/mainframe/commit/32ad349cb61088b807f3da5ad46d4b603832c009) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Ambient quota row now headlines the trusted session window instead of whichever window has the highest used percent, so a fresh session no longer gets buried behind a tighter weekly window.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.11
+
 ## 2.0.0-rc.11
 
 ### Minor Changes
