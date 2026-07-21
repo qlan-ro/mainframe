@@ -118,7 +118,7 @@ export function ChatSurface({ port: _port }: { port: number }) {
             <button
               type="button"
               data-testid="new-session-initialization-retry"
-              className="rounded-md border px-3 py-1.5 text-sm"
+              className="rounded-md border px-3 py-1.5 text-body"
               onClick={() => void initialization.retry?.().catch(() => undefined)}
             >
               Retry
