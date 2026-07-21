@@ -350,6 +350,17 @@ impl ChatManagerDeps for DaemonChatDeps {
         }
     }
 
+    fn write_workspace_trust<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        Box::pin(async move {
+            mainframe_adapter_claude::trust_store::write_workspace_trust(project_path, None)
+                .await
+                .map_err(|err| err.to_string())
+        })
+    }
+
     fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
         let (ns, key) = (ns.to_string(), key.to_string());
         self.db

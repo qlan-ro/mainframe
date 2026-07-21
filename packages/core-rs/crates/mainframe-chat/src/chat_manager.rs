@@ -159,6 +159,13 @@ pub trait ChatManagerDeps: Send + Sync {
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
     fn projects_remove(&self, project_id: &str);
+    /// `writeWorkspaceTrust(projectPath)` — persists workspace trust to the
+    /// Claude CLI's `~/.claude.json` (injected so this crate does not depend on
+    /// `mainframe-adapter-claude`). Backs `trust_workspace`.
+    fn write_workspace_trust<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool;
     fn add_skill_file(&self, chat_id: &str, entry: &SkillFileEntry) -> bool;
@@ -1165,6 +1172,24 @@ impl ChatManager {
         self.lifecycle.resume_chat(chat_id).await;
     }
 
+    /// Trust the chat's workspace in `~/.claude.json` (path derived server-side
+    /// from the chat). Backs `POST /api/chats/:id/trust-workspace`.
+    pub async fn trust_workspace(&self, chat_id: &str) -> Result<(), TrustWorkspaceError> {
+        let chat = self
+            .deps
+            .chats_get(chat_id)
+            .ok_or_else(|| TrustWorkspaceError::ChatNotFound(chat_id.to_string()))?;
+        let project_path = self
+            .deps
+            .projects_get_path(&chat.project_id)
+            .ok_or_else(|| TrustWorkspaceError::ProjectNotFound(chat.project_id.clone()))?;
+        let effective_path = chat.worktree_path.unwrap_or(project_path);
+        self.deps
+            .write_workspace_trust(&effective_path)
+            .await
+            .map_err(TrustWorkspaceError::Write)
+    }
+
     pub async fn load_chat(&self, chat_id: &str) {
         self.lifecycle.load_chat(chat_id).await;
     }
@@ -2018,6 +2043,18 @@ impl From<AdapterError> for SendError {
     }
 }
 
+/// Error surfaced by `trust_workspace` (message crosses the wire as a 500 body,
+/// mirroring the TS `catch (err) { fail(res, 500, err.message) }`).
+#[derive(Debug, thiserror::Error)]
+pub enum TrustWorkspaceError {
+    #[error("Chat {0} not found")]
+    ChatNotFound(String),
+    #[error("Project {0} not found")]
+    ProjectNotFound(String),
+    #[error("{0}")]
+    Write(String),
+}
+
 /// Present-only partial for `sync_chat_fields` (mirrors the `Partial<Chat>` the
 /// tuning/pinned PATCH routes write). Tri-state fields (`Some(None)` = explicit
 /// null) match the DB tuning columns; `pinned` is a plain bool.
@@ -2110,16 +2147,20 @@ mod tests;
 // notes: get_messages now shares build_history_session, so getPendingPermission's JSONL
 // notes: restore is real. applyTuning skips the TS `if (!session.applyTuning)` capability
 // notes: guard (Rust default apply_tuning is Ok no-op) → an extra resolve for adapters
-// notes: without live tuning; behaviourally faithful. STILL DEFERRED (genuine blockers,
-// notes: not on this task's crate surface): trustWorkspace (writeWorkspaceTrust unported
-// notes: in mainframe-plugins), plan-mode delegation (PhDeps createPlanModeHandler seam).
-// notes: getExternalSessionService(): `ExternalSessionService<D>` is generic over the
-// notes: concrete deps type, but `new()` only ever receives the already-erased
+// notes: without live tuning; behaviourally faithful. trustWorkspace is now ported:
+// notes: chats_get + projects_get_path (both pre-existing deps) resolve
+// notes: `chat.worktreePath ?? project.path`, then the new injected
+// notes: `write_workspace_trust` deps hook (mainframe-adapter-claude::trust_store,
+// notes: wired in chat_deps.rs) persists it — 404/500 semantics match the TS route's
+// notes: try/catch. getExternalSessionService(): `ExternalSessionService<D>` is generic
+// notes: over the concrete deps type, but `new()` only ever receives the already-erased
 // notes: `Arc<dyn ChatManagerDeps>` — so the object-safe `ExternalSessionFacade` trait
 // notes: (BoxFuture-based) is blanket-impl'd for `ExternalSessionService<D>` and injected
 // notes: post-construction via `with_external_sessions` from `build_chat_manager`, where
 // notes: the concrete `DaemonChatDeps` Arc still exists. `None` (no service) is a legal
-// notes: state for harnesses that only need the rest of the facade.
+// notes: state for harnesses that only need the rest of the facade. STILL DEFERRED
+// notes: (genuine blocker, not on this task's crate surface): plan-mode delegation
+// notes: (PhDeps createPlanModeHandler seam).
 // notes: setStopLaunchProcesses/setPushService are construction-time injection in Rust
 // notes: (LaunchStopper + send_push deps), so the TS late-bind setters are unnecessary.
 // notes: Ported tests: cli-queue (5), recover-working (5), turn-timing (1), command-
@@ -2136,4 +2177,4 @@ mod tests;
 // notes: adapter_snapshot_models; generate_title gained an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat) +
 // notes: chat-manager-degraded (3).
-// todos: 3
+// todos: 2

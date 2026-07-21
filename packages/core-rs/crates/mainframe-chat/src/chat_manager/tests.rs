@@ -24,6 +24,11 @@ struct StoreDeps {
     transcript_present: Mutex<Option<bool>>,
     /// When `Some`, `create_session` yields a session whose `load_history` returns it.
     history: Mutex<Option<Vec<ChatMessage>>>,
+    /// Records every path `trust_workspace` persisted, for assertion.
+    trusted_paths: Mutex<Vec<String>>,
+    /// When `Some`, `write_workspace_trust` fails with this message instead of
+    /// recording the call.
+    fail_trust_write: Mutex<Option<String>>,
 }
 
 impl StoreDeps {
@@ -129,6 +134,18 @@ impl ChatManagerDeps for StoreDeps {
             .lock()
             .unwrap()
             .push(project_id.to_string());
+    }
+    fn write_workspace_trust<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        Box::pin(async move {
+            if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
+                return Err(msg);
+            }
+            self.trusted_paths.lock().unwrap().push(project_path.to_string());
+            Ok(())
+        })
     }
     fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
         None
@@ -1287,4 +1304,50 @@ async fn with_external_sessions_wires_import_session_through_the_facade() {
         ext.created.lock().unwrap().as_slice(),
         [("p1".to_string(), "claude".to_string())]
     );
+}
+
+// ── trust_workspace ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn trust_workspace_persists_the_project_root_when_the_chat_has_no_worktree() {
+    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.trust_workspace("c1").await.unwrap();
+
+    assert_eq!(*deps.trusted_paths.lock().unwrap(), vec!["/tmp/test"]);
+}
+
+#[tokio::test]
+async fn trust_workspace_prefers_the_chat_worktree_path_over_the_project_root() {
+    let mut chat = test_chat("c1");
+    chat.worktree_path = Some("/home/me/proj-wt".to_string());
+    let deps = StoreDeps::with_chats(vec![chat]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.trust_workspace("c1").await.unwrap();
+
+    assert_eq!(*deps.trusted_paths.lock().unwrap(), vec!["/home/me/proj-wt"]);
+}
+
+#[tokio::test]
+async fn trust_workspace_errors_when_the_chat_is_missing() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+
+    let err = mgr.trust_workspace("missing").await.unwrap_err();
+
+    assert!(matches!(err, TrustWorkspaceError::ChatNotFound(id) if id == "missing"));
+    assert!(deps.trusted_paths.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypassed() {
+    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    *deps.fail_trust_write.lock().unwrap() = Some("disk full".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let err = mgr.trust_workspace("c1").await.unwrap_err();
+
+    assert!(matches!(err, TrustWorkspaceError::Write(msg) if msg == "disk full"));
 }
