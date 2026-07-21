@@ -8,6 +8,15 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import { XIcon } from 'lucide-react';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { Hint } from '@/components/ui/hint';
+import { sidebarIndentPx, SIDEBAR_ROW_GUTTER_PX } from '@/layout/sidebar-indent';
+
+/** Level 2 — matches SessionRow's content inset (see sidebar-indent.ts).
+ *  Applied as this row's own paddingLeft, not a margin: this single element
+ *  owns both the content AND the hover/active highlight background, and
+ *  macOS sidebars keep that highlight full-width even for indented rows.
+ *  Subtract the row's own mx-2 gutter (SIDEBAR_ROW_GUTTER_PX) so it isn't
+ *  double-counted on top of the level inset. */
+const DRAFT_ROW_CONTENT_INSET_PX = sidebarIndentPx(2) - SIDEBAR_ROW_GUTTER_PX;
 
 interface DraftSessionRowProps {
   projectId: string;
@@ -49,7 +58,8 @@ export function DraftSessionRow({
       data-active={selected ? 'true' : 'false'}
       onClick={onSelect}
       onKeyDown={onKeyDown}
-      className="group relative flex w-full items-center gap-[9px] rounded-md pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
+      style={{ paddingLeft: DRAFT_ROW_CONTENT_INSET_PX }}
+      className="group relative mx-2 flex items-center gap-[9px] rounded-md pb-[9px] pr-[12px] pt-[8px] text-left transition-colors hover:bg-accent data-[active=true]:bg-mf-chip"
     >
       <span
         aria-hidden

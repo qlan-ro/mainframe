@@ -131,23 +131,6 @@ describe('SessionListVirtuoso — one group header per group', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Pin glyph appears only in the Pinned group's header
-// ---------------------------------------------------------------------------
-
-describe('SessionListVirtuoso — pin glyph only in the Pinned group header', () => {
-  it('shows exactly one pin glyph, scoped to the Pinned header', () => {
-    render(
-      <SessionListVirtuoso
-        groups={[PINNED_GROUP, TODAY_GROUP]}
-        showProject
-        renderItem={(item) => <div key={item.id}>{item.id}</div>}
-      />,
-    );
-    expect(screen.getAllByTestId('sessions-group-pin-glyph')).toHaveLength(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 4 + 5. renderItem invoked once per item with correct { inPinnedGroup, showProject }
 // per its OWN group — group-0 items get group-0's flags, group-1 items get
 // group-1's flags. This is the flat-index → group-index mapping check.

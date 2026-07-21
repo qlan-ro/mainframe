@@ -272,8 +272,9 @@ async function main(): Promise<void> {
 }
 
 const subcommand = process.argv[2];
+const KNOWN_SUBCOMMANDS = ['pair', 'status', 'update', 'help'];
 
-// `--version`/`version` is handled earlier by ./cli/early-flags.js.
+// `--version`/`version` and `--help`/`-h`/`help` are handled earlier by ./cli/early-flags.js.
 if (subcommand === 'pair') {
   import('./cli/pair.js').then(({ runPair }) => runPair());
 } else if (subcommand === 'status') {
@@ -285,6 +286,14 @@ if (subcommand === 'pair') {
       process.exit(1);
     }),
   );
+} else if (subcommand !== undefined && !KNOWN_SUBCOMMANDS.includes(subcommand)) {
+  // A stray/typo'd subcommand (e.g. `mainframe udpate`) must not silently fall through
+  // to booting the daemon — that produced a confusing EADDRINUSE crash instead of an error.
+  console.error(`  Unknown command: ${subcommand}`);
+  console.error(`  Available commands: ${KNOWN_SUBCOMMANDS.join(', ')}`);
+  // Give the async pino transport (imported above, initialized on module load) a beat to
+  // settle before exit — an immediate process.exit() here can race sonic-boom's ready state.
+  setTimeout(() => process.exit(1), 200);
 } else {
   main().catch((error) => {
     logger.fatal({ err: error }, 'Fatal error');

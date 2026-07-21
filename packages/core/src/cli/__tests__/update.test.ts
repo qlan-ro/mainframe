@@ -8,6 +8,8 @@ import {
   assetUrl,
   parseUpdateArgs,
   resolveInstallRoot,
+  compareSemver,
+  assertNotDowngrade,
   type GhRelease,
 } from '../update.js';
 
@@ -36,11 +38,7 @@ describe('standaloneArtifactName', () => {
 });
 
 describe('pickRelease', () => {
-  const list = [
-    release('v2.1.0-rc.1', true),
-    release('v2.0.0', false),
-    release('v1.9.0', false),
-  ];
+  const list = [release('v2.1.0-rc.1', true), release('v2.0.0', false), release('v1.9.0', false)];
 
   it('defaults to the newest stable release, skipping pre-releases', () => {
     expect(pickRelease(list, {}).tag_name).toBe('v2.0.0');
@@ -88,11 +86,59 @@ describe('parseUpdateArgs', () => {
     expect(parseUpdateArgs(['--pre'])).toEqual({ includePrerelease: true });
     expect(parseUpdateArgs(['--version', 'v2.0.0-rc.1'])).toEqual({ version: 'v2.0.0-rc.1' });
     expect(parseUpdateArgs(['--dir', '/opt/mf'])).toEqual({ dir: '/opt/mf' });
+    expect(parseUpdateArgs(['--force'])).toEqual({ force: true });
     expect(parseUpdateArgs(['--help'])).toEqual({ help: true });
   });
 
   it('rejects unknown arguments', () => {
     expect(() => parseUpdateArgs(['--nope'])).toThrow(/Unknown argument/);
+  });
+});
+
+describe('compareSemver', () => {
+  it('compares major, minor, and patch numerically', () => {
+    expect(compareSemver('2.0.0', '1.9.9')).toBeGreaterThan(0);
+    expect(compareSemver('1.2.0', '1.10.0')).toBeLessThan(0);
+    expect(compareSemver('1.2.3', '1.2.3')).toBe(0);
+  });
+
+  it('ranks a release above a prerelease of the same core version', () => {
+    expect(compareSemver('2.0.0', '2.0.0-rc.8')).toBeGreaterThan(0);
+    expect(compareSemver('2.0.0-rc.8', '2.0.0')).toBeLessThan(0);
+  });
+
+  it('ranks a prerelease of a higher core version above an older stable release', () => {
+    expect(compareSemver('v2.0.0-rc.8', 'v1.0.0')).toBeGreaterThan(0);
+  });
+
+  it('compares prerelease identifiers numerically when both sides are numeric', () => {
+    expect(compareSemver('2.0.0-rc.9', '2.0.0-rc.10')).toBeLessThan(0);
+  });
+
+  it('tolerates a leading v on either side', () => {
+    expect(compareSemver('v1.0.0', '1.0.0')).toBe(0);
+  });
+});
+
+describe('assertNotDowngrade', () => {
+  it('allows installing a strictly newer release', () => {
+    expect(() => assertNotDowngrade(release('v2.0.0-rc.8', true), '1.0.0', false)).not.toThrow();
+  });
+
+  it('refuses to install a release that is not newer than the running version', () => {
+    expect(() => assertNotDowngrade(release('v1.0.0', false), '2.0.0-rc.6', false)).toThrow(
+      /not newer than the running version/,
+    );
+  });
+
+  it('refuses to install the same release again', () => {
+    expect(() => assertNotDowngrade(release('v1.0.0', false), '1.0.0', false)).toThrow(
+      /not newer than the running version/,
+    );
+  });
+
+  it('allows a downgrade when force is set', () => {
+    expect(() => assertNotDowngrade(release('v1.0.0', false), '2.0.0-rc.6', true)).not.toThrow();
   });
 });
 

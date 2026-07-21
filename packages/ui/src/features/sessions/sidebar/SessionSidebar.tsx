@@ -5,8 +5,9 @@
  *   header → ProjectFilterPillBar (the project switcher — "All projects" is
  *   its own top row, so no separate "Projects" section title is needed) →
  *   "Sessions" group header (chevron + count + new/sort/more) → scrollable
- *   TIME-grouped list (flex-1) → TagFilterBar pinned at the BOTTOM (border-t,
- *   flex-shrink-0)
+ *   TIME-grouped list (flex-1) → TasksSidebarSection (a second navigable
+ *   collection, right after Sessions) → TagFilterBar pinned at the BOTTOM
+ *   (border-t, flex-shrink-0)
  *
  * Grouping is by TIME, not project (Pinned / Today / Yesterday / Earlier), with a
  * Sort By menu (Recent / Name / Status) — per the artboard `arrangeSessions`.
@@ -45,10 +46,14 @@ import { useDraftRow } from './use-draft-row';
 import { useSessionCounts } from './use-session-counts';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
+import { TasksSidebarSection } from '@/features/tasks/TasksSidebarSection';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
 import { resolveProjectSession } from './resolve-project-session';
+import { sidebarIndentPx, SIDEBAR_INDENT_STEP_PX } from '@/layout/sidebar-indent';
+import { useUiPrefs, isSidebarSectionCollapsed } from '@/store/ui-prefs';
+import { SidebarSectionChevron } from '@/layout/SidebarSectionChevron';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
@@ -63,13 +68,28 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
  * icon-button cluster. New-session entry is its own full-width row underneath
  * (SessionsNewButton), not a header icon; the sort button opens
  * SessionSortMenu; the more (⋯) button opens SessionsMoreMenu (Archived
- * sessions · Import external sessions).
+ * sessions · Import external sessions). The chevron/label are a separate
+ * button from the sort/more cluster (siblings, not nested) — collapsing the
+ * section still leaves those header-level actions reachable, matching how a
+ * collapsed Finder/Mail section keeps its header controls live.
  */
-function SessionsGroupHeader() {
+function SessionsGroupHeader({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { sortMode, setSortMode } = useSessionFilters();
   return (
-    <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
-      <span className="text-caption font-medium text-muted-foreground">Sessions</span>
+    <div
+      style={{ paddingLeft: sidebarIndentPx(0), paddingRight: sidebarIndentPx(0) }}
+      className="flex items-center gap-[4px] pb-1 pt-[8px]"
+    >
+      <button
+        type="button"
+        data-testid="sessions-section-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex items-center gap-[4px]"
+      >
+        <SidebarSectionChevron open={open} />
+        <span className="text-caption font-medium text-muted-foreground">Sessions</span>
+      </button>
       <div className="flex-1" />
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />
@@ -136,6 +156,9 @@ function SessionSidebarImpl() {
   const sessionCounts = useSessionCounts(allItems);
   const draftRow = useDraftRow(allItems, filterProjectId);
   const filterProjectName = filterProjectId != null ? projectNameOf(filterProjectId) : null;
+  const collapsedSections = useUiPrefs((s) => s.collapsedSidebarSections);
+  const toggleSidebarSection = useUiPrefs((s) => s.toggleSidebarSection);
+  const sessionsOpen = !isSidebarSectionCollapsed(collapsedSections, 'sessions');
 
   // Selecting a project pill sets the filter AND activates that project's
   // most-recent (or remembered) session. When the project has no sessions,
@@ -197,51 +220,69 @@ function SessionSidebarImpl() {
         onAddProject={() => void handleAddProject()}
       />
 
-      <SessionsGroupHeader />
+      <SessionsGroupHeader open={sessionsOpen} onToggle={() => toggleSidebarSection('sessions')} />
 
-      <div className="px-2">
-        <SessionsNewButton
-          filterProjectId={filterProjectId}
-          filterProjectName={filterProjectName}
-          projects={sortedProjects}
-          sessionCounts={sessionCounts}
-          onAddProject={() => void handleAddProject()}
-        />
-      </div>
+      {sessionsOpen && (
+        <>
+          <div className="pr-2" style={{ paddingLeft: SIDEBAR_INDENT_STEP_PX }}>
+            <SessionsNewButton
+              filterProjectId={filterProjectId}
+              filterProjectName={filterProjectName}
+              projects={sortedProjects}
+              sessionCounts={sessionCounts}
+              onAddProject={() => void handleAddProject()}
+            />
+          </div>
 
-      {draftRow.visible && draftRow.model != null && (
-        <DraftSessionRow
-          projectId={draftRow.model.projectId}
-          projectName={projectNameOf(draftRow.model.projectId)}
-          selected={draftRow.selected}
-          showProject={showProject}
-          onSelect={draftRow.onSelect}
-          onDiscard={draftRow.onDiscard}
-        />
-      )}
-
-      {filteredItems.length === 0 ? (
-        <div
-          className="overscroll-contain min-h-0 flex-1 overflow-y-auto bg-transparent py-0.5"
-          data-testid="sessions-list-scroll"
-        >
-          <EmptyState hasFilters={hasFilters} />
-        </div>
-      ) : (
-        <SessionListVirtuoso
-          groups={groups}
-          showProject={showProject}
-          renderItem={(item, flags) => (
-            <SessionRow
-              key={item.id}
-              item={item}
-              colorOf={registry.colorOf}
-              inPinnedGroup={flags.inPinnedGroup}
-              projectName={flags.showProject ? projectNameOf(item.custom.projectId) : undefined}
+          {draftRow.visible && draftRow.model != null && (
+            <DraftSessionRow
+              projectId={draftRow.model.projectId}
+              projectName={projectNameOf(draftRow.model.projectId)}
+              selected={draftRow.selected}
+              showProject={showProject}
+              onSelect={draftRow.onSelect}
+              onDiscard={draftRow.onDiscard}
             />
           )}
-        />
+
+          {filteredItems.length === 0 ? (
+            <div
+              className="overscroll-contain min-h-0 flex-1 overflow-y-auto bg-transparent py-0.5"
+              data-testid="sessions-list-scroll"
+            >
+              <EmptyState hasFilters={hasFilters} />
+            </div>
+          ) : (
+            <SessionListVirtuoso
+              groups={groups}
+              showProject={showProject}
+              renderItem={(item, flags) => (
+                <SessionRow
+                  key={item.id}
+                  item={item}
+                  colorOf={registry.colorOf}
+                  inPinnedGroup={flags.inPinnedGroup}
+                  projectName={flags.showProject ? projectNameOf(item.custom.projectId) : undefined}
+                />
+              )}
+            />
+          )}
+        </>
       )}
+
+      {/* Tasks — a navigable collection like Sessions, per HIG; sits right after the
+          session list, before the tag filter footer. */}
+      <TasksSidebarSection />
+
+      {/* Flexible gap (not a fixed margin): absorbs whatever vertical space
+          Projects/Sessions/Tasks don't use, so Tags + the daemon selector
+          (SidebarFooter, rendered by SidebarShell right after this component)
+          stay glued together as one bottom-anchored cluster instead of the
+          footer floating up flush against Tags on a short list. A fixed
+          margin here can't do that — it neither grows to absorb slack nor
+          shrinks below itself, so it always leaves a footer-sized dead zone
+          either above or below the cluster depending on content length. */}
+      <div className="min-h-3 flex-1" aria-hidden="true" />
 
       <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
     </>

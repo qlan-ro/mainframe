@@ -192,10 +192,30 @@ export interface TurnCompletedParams {
   };
 }
 
-export interface TokenUsageUpdatedParams {
+export interface LegacyTokenUsageUpdatedParams {
   threadId: string;
   usage: Usage;
 }
+
+export interface TokenUsageBreakdown {
+  totalTokens: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+}
+
+export interface CurrentTokenUsageUpdatedParams {
+  threadId: string;
+  turnId: string;
+  tokenUsage: {
+    total: TokenUsageBreakdown;
+    last: TokenUsageBreakdown;
+    modelContextWindow: number | null;
+  };
+}
+
+export type TokenUsageUpdatedParams = LegacyTokenUsageUpdatedParams | CurrentTokenUsageUpdatedParams;
 
 // --- Config ---
 
