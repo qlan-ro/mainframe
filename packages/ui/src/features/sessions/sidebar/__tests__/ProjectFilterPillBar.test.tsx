@@ -366,6 +366,51 @@ describe('ProjectFilterPillBar — right-click project management', () => {
   });
 });
 
+describe('ProjectFilterPillBar — hover-revealed remove button on the project row', () => {
+  it('calls onRemoveProject with the project when the hover remove button is clicked', async () => {
+    const handleRemove = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={handleRemove}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('sessions-project-remove-action-p2'));
+    expect(handleRemove).toHaveBeenCalledTimes(1);
+    expect(handleRemove).toHaveBeenCalledWith(PROJECTS[1]);
+  });
+
+  it('does not call onSelect when the hover remove button is clicked (stopPropagation)', async () => {
+    const handleSelect = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={handleSelect}
+        onRemoveProject={() => undefined}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('sessions-project-remove-action-p1'));
+    expect(handleSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not render the hover remove button when onRemoveProject is omitted', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.queryByTestId('sessions-project-remove-action-p1')).toBeNull();
+  });
+});
+
 describe('ProjectFilterPillBar — collapsible', () => {
   it('renders a chevron next to the "Projects" label', () => {
     render(

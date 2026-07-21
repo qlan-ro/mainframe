@@ -1,16 +1,19 @@
 /**
- * ArchiveWorktreeDialog — behavior tests (TDD red phase).
+ * ArchiveWorktreeDialog — behavior tests.
+ *
+ * The dialog is now only ever raised for worktree-backed sessions (the
+ * `!hasWorktree` "Archive this session?" branch is gone) — `pending` carries
+ * just `{ remoteId }`, and the dialog always renders the keep/delete-worktree
+ * choice. There is no more `sessions-archive-confirm` button.
  *
  * Behaviors covered:
  *  - pending=null → dialog root is absent from the DOM.
- *  - pending={ remoteId:'chat-1', hasWorktree:true } → dialog root present,
- *    heading text is "Archive session".
- *  - hasWorktree=true → keep/delete worktree buttons present; confirm absent.
- *  - hasWorktree=false → confirm button present; keep/delete buttons absent.
+ *  - pending={ remoteId:'chat-1' } → dialog root present, heading "Archive session".
+ *  - keep/delete worktree buttons are always present; the old single-confirm
+ *    button never renders.
  *  - Clicking sessions-archive-cancel calls resolve('cancel').
  *  - Clicking sessions-archive-keep-worktree calls resolve({ deleteWorktree:false }).
  *  - Clicking sessions-archive-delete-worktree calls resolve({ deleteWorktree:true }).
- *  - Clicking sessions-archive-confirm (hasWorktree=false) calls resolve({ deleteWorktree:false }).
  *
  * The archive-confirm-bridge module is mocked so tests control `pending` state
  * directly via useArchivePrompt.setState and spy on the `resolve` function.
@@ -27,7 +30,7 @@ import type { ArchiveChoice, PendingArchiveRequest } from '../../runtime/archive
 
 interface MockArchivePromptState {
   pending: PendingArchiveRequest | null;
-  request: (remoteId: string, opts: { hasWorktree: boolean }) => Promise<ArchiveChoice>;
+  request: (remoteId: string) => Promise<ArchiveChoice>;
   resolve: (choice: ArchiveChoice) => void;
 }
 
@@ -35,7 +38,7 @@ const mockResolve = vi.fn();
 
 const mockUseArchivePrompt = create<MockArchivePromptState>(() => ({
   pending: null,
-  request: (_remoteId, _opts) => Promise.resolve('cancel' as ArchiveChoice),
+  request: () => Promise.resolve('cancel' as ArchiveChoice),
   resolve: mockResolve,
 }));
 
@@ -82,7 +85,7 @@ describe('ArchiveWorktreeDialog — pending=null renders nothing', () => {
 
 describe('ArchiveWorktreeDialog — dialog root and heading when pending is set', () => {
   it('renders sessions-archive-confirm-dialog with heading "Archive session"', () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: true });
+    setPending({ remoteId: 'chat-1' });
     render(<ArchiveWorktreeDialog />);
 
     expect(screen.queryByTestId('sessions-archive-confirm-dialog')).not.toBeNull();
@@ -91,12 +94,13 @@ describe('ArchiveWorktreeDialog — dialog root and heading when pending is set'
 });
 
 // ---------------------------------------------------------------------------
-// 3. hasWorktree=true — keep/delete buttons present, confirm absent
+// 3. Worktree action buttons are always present; the old single-confirm
+// button (which required a hasWorktree=false branch) no longer exists.
 // ---------------------------------------------------------------------------
 
-describe('ArchiveWorktreeDialog — hasWorktree=true shows worktree action buttons', () => {
-  it('renders keep and delete worktree buttons but not the confirm button', () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: true });
+describe('ArchiveWorktreeDialog — always shows the worktree keep/delete choice', () => {
+  it('renders keep and delete worktree buttons and never the old confirm button', () => {
+    setPending({ remoteId: 'chat-1' });
     render(<ArchiveWorktreeDialog />);
 
     expect(screen.queryByTestId('sessions-archive-keep-worktree')).not.toBeNull();
@@ -106,27 +110,12 @@ describe('ArchiveWorktreeDialog — hasWorktree=true shows worktree action butto
 });
 
 // ---------------------------------------------------------------------------
-// 4. hasWorktree=false — confirm button present, keep/delete absent
-// ---------------------------------------------------------------------------
-
-describe('ArchiveWorktreeDialog — hasWorktree=false shows only confirm button', () => {
-  it('renders sessions-archive-confirm but not the keep/delete worktree buttons', () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: false });
-    render(<ArchiveWorktreeDialog />);
-
-    expect(screen.queryByTestId('sessions-archive-confirm')).not.toBeNull();
-    expect(screen.queryByTestId('sessions-archive-keep-worktree')).toBeNull();
-    expect(screen.queryByTestId('sessions-archive-delete-worktree')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Clicking cancel calls resolve('cancel')
+// 4. Clicking cancel calls resolve('cancel')
 // ---------------------------------------------------------------------------
 
 describe('ArchiveWorktreeDialog — cancel button calls resolve with "cancel"', () => {
   it('calls resolve exactly once with "cancel" when sessions-archive-cancel is clicked', async () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: true });
+    setPending({ remoteId: 'chat-1' });
     render(<ArchiveWorktreeDialog />);
 
     await userEvent.click(screen.getByTestId('sessions-archive-cancel'));
@@ -137,12 +126,12 @@ describe('ArchiveWorktreeDialog — cancel button calls resolve with "cancel"', 
 });
 
 // ---------------------------------------------------------------------------
-// 6. Clicking keep-worktree calls resolve({ deleteWorktree: false })
+// 5. Clicking keep-worktree calls resolve({ deleteWorktree: false })
 // ---------------------------------------------------------------------------
 
 describe('ArchiveWorktreeDialog — keep-worktree button calls resolve with deleteWorktree:false', () => {
   it('calls resolve with { deleteWorktree: false } when sessions-archive-keep-worktree is clicked', async () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: true });
+    setPending({ remoteId: 'chat-1' });
     render(<ArchiveWorktreeDialog />);
 
     await userEvent.click(screen.getByTestId('sessions-archive-keep-worktree'));
@@ -153,33 +142,17 @@ describe('ArchiveWorktreeDialog — keep-worktree button calls resolve with dele
 });
 
 // ---------------------------------------------------------------------------
-// 7. Clicking delete-worktree calls resolve({ deleteWorktree: true })
+// 6. Clicking delete-worktree calls resolve({ deleteWorktree: true })
 // ---------------------------------------------------------------------------
 
 describe('ArchiveWorktreeDialog — delete-worktree button calls resolve with deleteWorktree:true', () => {
   it('calls resolve with { deleteWorktree: true } when sessions-archive-delete-worktree is clicked', async () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: true });
+    setPending({ remoteId: 'chat-1' });
     render(<ArchiveWorktreeDialog />);
 
     await userEvent.click(screen.getByTestId('sessions-archive-delete-worktree'));
 
     expect(mockResolve).toHaveBeenCalledTimes(1);
     expect(mockResolve).toHaveBeenCalledWith({ deleteWorktree: true });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. Clicking confirm (hasWorktree=false) calls resolve({ deleteWorktree: false })
-// ---------------------------------------------------------------------------
-
-describe('ArchiveWorktreeDialog — confirm button calls resolve with deleteWorktree:false', () => {
-  it('calls resolve with { deleteWorktree: false } when sessions-archive-confirm is clicked', async () => {
-    setPending({ remoteId: 'chat-1', hasWorktree: false });
-    render(<ArchiveWorktreeDialog />);
-
-    await userEvent.click(screen.getByTestId('sessions-archive-confirm'));
-
-    expect(mockResolve).toHaveBeenCalledTimes(1);
-    expect(mockResolve).toHaveBeenCalledWith({ deleteWorktree: false });
   });
 });

@@ -3,8 +3,10 @@
  * right-click Rename (disabled)/Remove menu. Restyled from a pill to a
  * full-width row (2026-07 rebuild) — a colored initial avatar replaces the
  * bare label, and the row fills the switcher list's width instead of
- * shrink-wrapping. `onRemoveProject` is optional: when omitted (no remove
- * handler wired up) the row renders bare, with no context-menu wrapper.
+ * shrink-wrapping. Remove is offered twice — a hover-revealed button on the row
+ * (the primary, discoverable entry point) and the right-click menu — both routed
+ * through the same handler. `onRemoveProject` is optional: when omitted (no
+ * remove handler wired up) the row renders bare, with neither affordance.
  */
 import type { Project } from '@qlan-ro/mainframe-types';
 import { forwardRef, type HTMLAttributes } from 'react';
@@ -33,6 +35,7 @@ interface ProjectRowBodyProps extends HTMLAttributes<HTMLDivElement> {
   badgeTestId?: string;
   avatarColor: string;
   onSelect: () => void;
+  onRemove?: () => void;
 }
 
 const REMOVE_LABEL = 'Remove Project';
@@ -40,7 +43,7 @@ const RENAME_LABEL = 'Rename Project';
 const HINT_LABEL = 'Right-click for options';
 
 const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function ProjectRowBody(
-  { project, active, badgeCount, badgeTestId, avatarColor, onSelect, className, ...props },
+  { project, active, badgeCount, badgeTestId, avatarColor, onSelect, onRemove, className, ...props },
   ref,
 ) {
   // Mirrors SessionRow's title convention: full-strength foreground is the
@@ -49,7 +52,7 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
   // foreground; active wins over both.
   const hasUnread = badgeCount > 0;
   const containerClass = [
-    'flex h-[28px] w-full items-center rounded-md transition-colors',
+    'group flex h-[28px] w-full items-center rounded-md transition-colors',
     active ? 'bg-mf-selection' : 'hover:bg-accent',
     className,
   ]
@@ -79,6 +82,23 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
           <CountBadge count={badgeCount} variant="unread" onAccent={active} data-testid={badgeTestId} />
         )}
       </button>
+      {onRemove != null && (
+        <button
+          data-testid={`sessions-project-remove-action-${project.id}`}
+          type="button"
+          aria-label={REMOVE_LABEL}
+          onClick={(e) => {
+            // The row's select button is a sibling, but the whole row is also the
+            // context-menu trigger — stop both from reacting to this click.
+            e.stopPropagation();
+            e.preventDefault();
+            onRemove();
+          }}
+          className="mr-[6px] hidden size-[22px] flex-shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors group-hover:flex hover:bg-accent hover:text-destructive"
+        >
+          <Trash2Icon className="size-3.5" />
+        </button>
+      )}
     </div>
   );
 });
@@ -94,6 +114,7 @@ export function ProjectPillContextMenu({
 }: ProjectPillContextMenuProps) {
   const hintDismissed = useUiPrefs((s) => s.rightClickHintDismissed);
   const dismissHint = useUiPrefs((s) => s.dismissRightClickHint);
+  const removeProject = onRemoveProject == null ? undefined : () => onRemoveProject(project);
 
   const body = (
     <ProjectRowBody
@@ -103,11 +124,11 @@ export function ProjectPillContextMenu({
       badgeTestId={badgeTestId}
       avatarColor={avatarColor}
       onSelect={onSelect}
+      onRemove={removeProject}
     />
   );
 
-  if (onRemoveProject == null) return body;
-  const removeProject = () => onRemoveProject(project);
+  if (removeProject == null) return body;
 
   return (
     <ContextMenu>
