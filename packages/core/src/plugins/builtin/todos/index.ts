@@ -1,110 +1,11 @@
 import type { PluginContext } from '@qlan-ro/mainframe-types';
-import type { Logger } from 'pino';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-
-interface TodoRow {
-  id: string;
-  number: number;
-  project_id: string;
-  title: string;
-  body: string;
-  status: string;
-  type: string;
-  priority: string;
-  labels: string;
-  assignees: string;
-  milestone: string | null;
-  order_index: number;
-  created_at: string;
-  updated_at: string;
-  dependencies: string; // JSON array of todo numbers
-}
-
-interface Todo extends Omit<TodoRow, 'labels' | 'assignees' | 'dependencies'> {
-  labels: string[];
-  assignees: string[];
-  dependencies: number[];
-}
-
-const MIGRATION = `
-CREATE TABLE IF NOT EXISTS todos (
-  id TEXT PRIMARY KEY,
-  number INTEGER NOT NULL DEFAULT 0,
-  project_id TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL,
-  body TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'open',
-  type TEXT NOT NULL DEFAULT 'feature',
-  priority TEXT NOT NULL DEFAULT 'medium',
-  labels TEXT NOT NULL DEFAULT '[]',
-  assignees TEXT NOT NULL DEFAULT '[]',
-  milestone TEXT,
-  dependencies TEXT NOT NULL DEFAULT '[]',
-  order_index REAL NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);`;
-
-/**
- * Parse a JSON array column defensively. Historical writes left some rows with
- * double-encoded values (e.g. `[\"a\"]`) that crash `JSON.parse`. A single bad
- * row must not take down the entire board, so fall back to `[]` and log.
- */
-function safeJsonArray<T>(raw: string, column: string, todoId: string, logger?: Logger): T[] {
-  try {
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? (parsed as T[]) : [];
-  } catch (err) {
-    logger?.warn({ err: String(err), todoId, column, raw }, 'todos: malformed JSON column, defaulting to []');
-    return [];
-  }
-}
-
-const parseTodo = (r: TodoRow, logger?: Logger): Todo => ({
-  ...r,
-  labels: safeJsonArray<string>(r.labels, 'labels', r.id, logger),
-  assignees: safeJsonArray<string>(r.assignees, 'assignees', r.id, logger),
-  dependencies: safeJsonArray<number>(r.dependencies, 'dependencies', r.id, logger),
-});
-
-const TodoSchema = z.object({
-  projectId: z.string().min(1),
-  title: z.string().min(1),
-  body: z.string().default(''),
-  status: z.enum(['open', 'in_progress', 'done']).default('open'),
-  type: z
-    .enum(['bug', 'feature', 'enhancement', 'documentation', 'question', 'wont_fix', 'duplicate', 'invalid'])
-    .default('feature'),
-  priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
-  labels: z.array(z.string()).default([]),
-  assignees: z.array(z.string()).default([]),
-  milestone: z.string().optional(),
-  dependencies: z.array(z.number()).default([]),
-});
-
-const TodoUpdateSchema = z.object({
-  title: z.string().min(1).optional(),
-  body: z.string().optional(),
-  status: z.enum(['open', 'in_progress', 'done']).optional(),
-  type: z
-    .enum(['bug', 'feature', 'enhancement', 'documentation', 'question', 'wont_fix', 'duplicate', 'invalid'])
-    .optional(),
-  priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
-  labels: z.array(z.string()).optional(),
-  assignees: z.array(z.string()).optional(),
-  milestone: z.string().optional(),
-  dependencies: z.array(z.number()).optional(),
-});
-
-const AttachmentUploadSchema = z.object({
-  filename: z.string().min(1),
-  // Allow empty base64: a zero-byte file is valid and has data ''. sizeBytes
-  // carries the real length; rejecting '' would 400 a legitimate empty file.
-  data: z.string(),
-  mimeType: z.string().optional(),
-  sizeBytes: z.number().nonnegative().optional(),
-});
+import { runMigrations } from './migrations.js';
+import type { TodoRow, Todo } from './types.js';
+import { parseTodo } from './types.js';
+import { TodoSchema, TodoUpdateSchema, AttachmentUploadSchema } from './schemas.js';
+import { applyUpdateFieldSets, applyStatusTransitionFields } from './update-fields.js';
 
 const STATUS_LABELS: Record<string, string> = { open: 'Open', in_progress: 'In Progress', done: 'Done' };
 
@@ -149,10 +50,10 @@ function registerTodoRoutes(ctx: PluginContext): void {
     const id = nanoid();
     ctx.db
       .prepare(
-        `INSERT INTO todos (id,number,project_id,title,body,status,type,priority,labels,assignees,milestone,dependencies,order_index,created_at,updated_at)
+        `INSERT INTO todos (id,number,project_id,title,body,status,type,priority,labels,assignees,milestone,dependencies,order_index,created_at,updated_at,closed_at,state_reason,author,remote_repo,remote_number,remote_url,synced_at)
          VALUES (?,
            (SELECT COALESCE(MAX(number), 0) + 1 FROM todos WHERE project_id = ?),
-           ?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         id,
@@ -170,6 +71,13 @@ function registerTodoRoutes(ctx: PluginContext): void {
         0,
         now,
         now,
+        d.closed_at ?? null,
+        d.state_reason ?? null,
+        d.author ?? '',
+        d.remote_repo ?? null,
+        d.remote_number ?? null,
+        d.remote_url ?? null,
+        d.synced_at ?? null,
       );
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
     const todo = parseTodo(row, ctx.logger);
@@ -192,41 +100,9 @@ function registerTodoRoutes(ctx: PluginContext): void {
     const now = new Date().toISOString();
     const sets: string[] = ['updated_at = ?'];
     const vals: unknown[] = [now];
-    if (d.title !== undefined) {
-      sets.push('title = ?');
-      vals.push(d.title);
-    }
-    if (d.body !== undefined) {
-      sets.push('body = ?');
-      vals.push(d.body);
-    }
+    applyUpdateFieldSets(sets, vals, d);
     if (d.status !== undefined) {
-      sets.push('status = ?');
-      vals.push(d.status);
-    }
-    if (d.type !== undefined) {
-      sets.push('type = ?');
-      vals.push(d.type);
-    }
-    if (d.priority !== undefined) {
-      sets.push('priority = ?');
-      vals.push(d.priority);
-    }
-    if (d.labels !== undefined) {
-      sets.push('labels = ?');
-      vals.push(JSON.stringify(d.labels));
-    }
-    if (d.assignees !== undefined) {
-      sets.push('assignees = ?');
-      vals.push(JSON.stringify(d.assignees));
-    }
-    if (d.milestone !== undefined) {
-      sets.push('milestone = ?');
-      vals.push(d.milestone);
-    }
-    if (d.dependencies !== undefined) {
-      sets.push('dependencies = ?');
-      vals.push(JSON.stringify(d.dependencies));
+      applyStatusTransitionFields(sets, vals, d.status, existingRow.status, now);
     }
     vals.push(id);
     ctx.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
@@ -250,14 +126,18 @@ function registerTodoRoutes(ctx: PluginContext): void {
       return;
     }
     const { status } = parsed.data;
-    ctx.db
-      .prepare('UPDATE todos SET status = ?, updated_at = ? WHERE id = ?')
-      .run(status, new Date().toISOString(), id);
-    const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id);
-    if (!row) {
+    const existingRow = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id);
+    if (!existingRow) {
       res.status(404).json({ error: 'Not found' });
       return;
     }
+    const now = new Date().toISOString();
+    const sets: string[] = ['status = ?', 'updated_at = ?'];
+    const vals: unknown[] = [status, now];
+    applyStatusTransitionFields(sets, vals, status, existingRow.status, now);
+    vals.push(id);
+    ctx.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+    const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
     const todo = parseTodo(row, ctx.logger);
     if (status === 'done' && todo.dependencies.length > 0) {
       const openDeps = todo.dependencies
@@ -357,25 +237,6 @@ function registerAttachmentRoutes(ctx: PluginContext): void {
     await ctx.attachments.delete(req.params.id, req.params.attachmentId);
     res.status(204).send();
   });
-}
-
-function runMigrations(ctx: PluginContext): void {
-  ctx.db.runMigration(MIGRATION);
-  const cols = ctx.db.prepare<{ name: string }>('PRAGMA table_info(todos)').all();
-  const colNames = new Set(cols.map((c) => c.name));
-  if (!colNames.has('number')) {
-    ctx.db.runMigration('ALTER TABLE todos ADD COLUMN number INTEGER NOT NULL DEFAULT 0');
-    const rows = ctx.db.prepare<{ id: string }>('SELECT id FROM todos ORDER BY created_at').all();
-    rows.forEach((row, i) => {
-      ctx.db.prepare('UPDATE todos SET number = ? WHERE id = ?').run(i + 1, row.id);
-    });
-  }
-  if (!colNames.has('project_id')) {
-    ctx.db.runMigration("ALTER TABLE todos ADD COLUMN project_id TEXT NOT NULL DEFAULT ''");
-  }
-  if (!colNames.has('dependencies')) {
-    ctx.db.runMigration("ALTER TABLE todos ADD COLUMN dependencies TEXT NOT NULL DEFAULT '[]'");
-  }
 }
 
 export function activate(ctx: PluginContext): void {

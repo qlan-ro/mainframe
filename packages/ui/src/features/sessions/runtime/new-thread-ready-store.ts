@@ -15,18 +15,88 @@
  * (`useNewThreadReady.getState()`) from the non-React coordinator.
  */
 import { create } from 'zustand';
+import type { DraftCfg } from './draft-config';
+
+export type DraftInitializationStatus = 'idle' | 'initializing' | 'ready' | 'error';
+
+export interface DraftInitialization {
+  status: DraftInitializationStatus;
+  retry?: () => Promise<DraftCfg>;
+  error?: unknown;
+  attempt?: number;
+}
+
+const IDLE_INITIALIZATION: DraftInitialization = { status: 'idle' };
+let nextInitializationAttempt = 0;
 
 interface NewThreadReadyState {
   /** Local thread ids whose draft config is complete (project+adapter chosen). */
   readonly readyIds: ReadonlySet<string>;
+  readonly initializations: ReadonlyMap<string, DraftInitialization>;
   isReady: (localId: string) => boolean;
+  getInitialization: (localId: string) => DraftInitialization;
+  beginInitialization: (localId: string, retry: () => Promise<DraftCfg>) => number;
+  beginReadyReplacement: (localId: string) => number;
+  completeInitialization: (localId: string, attempt: number) => boolean;
+  failInitialization: (localId: string, attempt: number, error: unknown) => void;
+  cancelInitialization: (localId: string, attempt: number) => void;
   markReady: (localId: string) => void;
   clearReady: (localId: string) => void;
 }
 
 export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
   readyIds: new Set<string>(),
+  initializations: new Map<string, DraftInitialization>(),
   isReady: (localId) => get().readyIds.has(localId),
+  getInitialization: (localId) => get().initializations.get(localId) ?? IDLE_INITIALIZATION,
+  beginInitialization: (localId, retry) => {
+    const attempt = ++nextInitializationAttempt;
+    set((state) => {
+      const initializations = new Map(state.initializations);
+      initializations.set(localId, { status: 'initializing', retry, attempt });
+      const readyIds = new Set(state.readyIds);
+      readyIds.delete(localId);
+      return { initializations, readyIds };
+    });
+    return attempt;
+  },
+  beginReadyReplacement: (localId) => {
+    const attempt = ++nextInitializationAttempt;
+    set((state) => {
+      const initializations = new Map(state.initializations);
+      initializations.set(localId, { status: 'ready', attempt });
+      const readyIds = new Set(state.readyIds);
+      readyIds.add(localId);
+      return { initializations, readyIds };
+    });
+    return attempt;
+  },
+  completeInitialization: (localId, attempt) => {
+    if (get().initializations.get(localId)?.attempt !== attempt) return false;
+    set((state) => {
+      const initializations = new Map(state.initializations);
+      const current = initializations.get(localId);
+      initializations.set(localId, { status: 'ready', retry: current?.retry, attempt });
+      return { initializations };
+    });
+    return true;
+  },
+  failInitialization: (localId, attempt, error) =>
+    set((state) => {
+      const current = state.initializations.get(localId);
+      if (current?.attempt !== attempt) return state;
+      const initializations = new Map(state.initializations);
+      initializations.set(localId, { status: 'error', retry: current.retry, error, attempt });
+      return { initializations };
+    }),
+  cancelInitialization: (localId, attempt) =>
+    set((state) => {
+      const current = state.initializations.get(localId);
+      if (current?.status !== 'initializing' || current.attempt !== attempt) return state;
+      const initializations = new Map(state.initializations);
+      initializations.delete(localId);
+      return { initializations };
+    }),
   markReady: (localId) =>
     set((state) => {
       if (state.readyIds.has(localId)) return state; // stable ref — no churn
@@ -36,9 +106,11 @@ export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
     }),
   clearReady: (localId) =>
     set((state) => {
-      if (!state.readyIds.has(localId)) return state; // stable ref — no churn
       const next = new Set(state.readyIds);
       next.delete(localId);
-      return { readyIds: next };
+      const initializations = new Map(state.initializations);
+      initializations.delete(localId);
+      if (next.size === state.readyIds.size && initializations.size === state.initializations.size) return state;
+      return { readyIds: next, initializations };
     }),
 }));

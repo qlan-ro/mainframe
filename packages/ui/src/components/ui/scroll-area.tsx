@@ -15,8 +15,12 @@ function ScrollArea({
         on flex rows — they grow past the viewport and trailing controls get clipped by
         the root's `overflow-hidden`. Forcing that wrapper to `block` gives it a definite
         viewport-bounded width so truncation works. All our ScrollAreas are vertical.
+
+        `block!`, not `!block`: Tailwind v4 moved the important modifier to a suffix, so
+        the v3 prefix form compiles to nothing — this rule silently did nothing until
+        2026-07-16.
       */}
-      <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] [&>div]:!block">
+      <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] [&>div]:block!">
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />

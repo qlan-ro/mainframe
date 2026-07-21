@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 
 // The shell composes chrome around the sessions list; mock the heavy children so
 // this test asserts only composition + DOM order (list → footer). SessionSidebar
-// itself now composes TasksSidebarSection + TagFilterBar right after its list —
-// covered by SessionSidebar's own tests, not the shell's.
+// itself now composes TasksSidebarSection + TagFilterBar as a bottom cluster
+// below its list — covered by SessionSidebar's own tests, not the shell's.
 vi.mock('@/features/sessions/sidebar/SessionSidebar', () => ({
   SessionSidebar: () => <div data-testid="session-list-stub" />,
 }));

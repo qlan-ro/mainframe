@@ -28,6 +28,9 @@ let __draftMap = new Map<string, { projectId: string; adapterId: string }>([
   ['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }],
 ]);
 let __filterProjectId: string | null = null;
+let __initialization: { status: 'idle' | 'initializing' | 'ready' | 'error'; retry?: () => Promise<unknown> } = {
+  status: 'ready',
+};
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
@@ -40,6 +43,13 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: __projects, loading: __loading }) }));
 vi.mock('../../runtime/draft-config', () => ({
   useDraftConfigStore: (sel: (s: unknown) => unknown) => sel({ drafts: __draftMap }),
+}));
+vi.mock('../../runtime/new-thread-ready-store', () => ({
+  useNewThreadReady: (sel: (s: unknown) => unknown) =>
+    sel({
+      getInitialization: () => __initialization,
+      readyIds: __initialization.status === 'ready' ? new Set(['__LOCALID_1']) : new Set(),
+    }),
 }));
 vi.mock('@/store/session-filters', () => ({
   useSessionFilters: (sel: (s: { filterProjectId: string | null }) => unknown) =>
@@ -66,6 +76,7 @@ describe('ChatSurface', () => {
     __loading = false;
     __filterProjectId = null;
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
+    __initialization = { status: 'ready' };
     useNewSessionPickerTarget.setState({ open: false });
   });
 
@@ -98,6 +109,34 @@ describe('ChatSurface', () => {
     render(<ChatSurface port={31415} />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
+  });
+
+  it('hides ChatThread and its composer while initialization is pending', () => {
+    __initialization = { status: 'initializing' };
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.getByText('Initializing session…')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('hides ChatThread during the initial idle render for a project-filtered draft', () => {
+    __draftMap = new Map();
+    __filterProjectId = 'proj-a';
+    __initialization = { status: 'idle' };
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.getByText('Initializing session…')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('hides ChatThread on error and retries the same initialization', async () => {
+    const retry = vi.fn(async () => undefined);
+    __initialization = { status: 'error', retry };
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.queryByTestId('chat-thread')).toBeNull();
+    await act(async () => screen.getByTestId('new-session-initialization-retry').click());
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });
 

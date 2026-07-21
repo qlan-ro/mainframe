@@ -22,10 +22,12 @@
  */
 import { clearDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { abandonCreateForLocal } from '../runtime/new-thread-coordinator';
 import { clearDraftDiscarded } from './discarded-drafts';
 
 export function resetNewThreadDraft(newThreadId: string | null | undefined): void {
   if (!newThreadId) return;
+  abandonCreateForLocal(newThreadId);
   clearDraftConfig(newThreadId);
   useNewThreadReady.getState().clearReady(newThreadId);
   clearDraftDiscarded(newThreadId);

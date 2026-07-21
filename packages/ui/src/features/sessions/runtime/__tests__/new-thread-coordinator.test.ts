@@ -1,6 +1,12 @@
 import { describe, it, expect, afterEach, vi, type MockedFunction } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { setDraftConfig, clearDraftConfig } from '../draft-config';
+import {
+  setDraftConfig as setStoredDraftConfig,
+  getDraftConfig,
+  clearDraftConfig,
+  type DraftCfg,
+} from '../draft-config';
+import { useNewThreadReady } from '../new-thread-ready-store';
 
 // ---------------------------------------------------------------------------
 // Mock createChat, setChatTuning, setChatConfig — no HTTP calls
@@ -10,14 +16,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   createChat: vi.fn(),
   setChatTuning: vi.fn().mockResolvedValue(undefined),
   setChatConfig: vi.fn().mockResolvedValue(undefined),
-}));
-
-// Mock the ready-store so we can assert the first-send cleanup without a real store.
-const clearReadySpy = vi.fn();
-vi.mock('../new-thread-ready-store', () => ({
-  useNewThreadReady: {
-    getState: () => ({ clearReady: (...args: unknown[]) => clearReadySpy(...args) }),
-  },
+  archiveChat: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock enableWorktree (pendingWorktree carry) and the toast raised on its failure.
@@ -30,23 +29,43 @@ vi.mock('../../../../lib/toast', () => ({
 }));
 
 // Import AFTER the mock is registered so the module under test picks up the mock.
-import { createForLocal } from '../new-thread-coordinator';
-import { createChat, setChatTuning, setChatConfig } from '../../../../lib/api/chats';
+import { abandonCreateForLocal, createForLocal } from '../new-thread-coordinator';
+import { resetNewThreadDraft } from '../../new-thread/reset-new-thread-draft';
+import { createChat, setChatTuning, setChatConfig, archiveChat } from '../../../../lib/api/chats';
 import { enableWorktree } from '../../../../lib/api/git';
 
 const mockCreateChat = createChat as MockedFunction<typeof createChat>;
 const mockSetChatTuning = setChatTuning as MockedFunction<typeof setChatTuning>;
 const mockSetChatConfig = setChatConfig as MockedFunction<typeof setChatConfig>;
+const mockArchiveChat = archiveChat as MockedFunction<typeof archiveChat>;
 const mockEnableWorktree = enableWorktree as MockedFunction<typeof enableWorktree>;
+
+function setDraftConfig(localId: string, cfg: DraftCfg): void {
+  setStoredDraftConfig(localId, {
+    model: 'snapshot-model',
+    permissionMode: 'default',
+    planMode: false,
+    effort: null,
+    fast: false,
+    ultracode: false,
+    adaptiveThinking: false,
+    ...cfg,
+  });
+  useNewThreadReady.getState().markReady(localId);
+}
 
 // ---------------------------------------------------------------------------
 // Reset draft-config singleton state + mock call counts between cases
 // ---------------------------------------------------------------------------
 
 afterEach(() => {
+  abandonCreateForLocal('__LOCALID_a');
+  abandonCreateForLocal('__LOCALID_b');
+  abandonCreateForLocal('__LOCALID_c');
   clearDraftConfig('__LOCALID_a');
   clearDraftConfig('__LOCALID_b');
   clearDraftConfig('__LOCALID_c');
+  useNewThreadReady.setState({ readyIds: new Set(), initializations: new Map() });
   vi.clearAllMocks();
 });
 
@@ -69,6 +88,7 @@ describe('new-thread-coordinator — happy path calls createChat with required f
     expect(mockCreateChat).toHaveBeenCalledWith(31415, {
       projectId: 'p1',
       adapterId: 'claude',
+      model: 'snapshot-model',
       permissionMode: 'default',
     });
   });
@@ -163,7 +183,7 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
 
     await createForLocal('__LOCALID_a', 31415);
 
-    expect(clearReadySpy).toHaveBeenCalledWith('__LOCALID_a');
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(false);
   });
 
   it('does NOT clear the ready flag when the create fails (so retry still shows the composer)', async () => {
@@ -176,7 +196,7 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
 
     await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('create failed');
 
-    expect(clearReadySpy).not.toHaveBeenCalled();
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(true);
   });
 });
 
@@ -185,6 +205,38 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
 // ---------------------------------------------------------------------------
 
 describe('new-thread-coordinator — draft with tuning calls setChatTuning and setChatConfig', () => {
+  it('creates and tunes the first chat from the complete stored snapshot', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      model: 'snapshotted-model',
+      permissionMode: 'acceptEdits',
+      planMode: true,
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockCreateChat).toHaveBeenCalledWith(
+      31415,
+      expect.objectContaining({
+        model: 'snapshotted-model',
+        permissionMode: 'acceptEdits',
+      }),
+    );
+    expect(mockSetChatConfig).toHaveBeenCalledWith(31415, 'chat-1', { planMode: true });
+    expect(mockSetChatTuning).toHaveBeenCalledWith(31415, 'chat-1', {
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
+  });
+
   it('calls setChatTuning with effort and setChatConfig with planMode', async () => {
     setDraftConfig('__LOCALID_a', {
       projectId: 'p1',
@@ -203,29 +255,24 @@ describe('new-thread-coordinator — draft with tuning calls setChatTuning and s
     expect(mockSetChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', {
       effort: 'high',
       fast: true,
+      ultracode: false,
+      adaptiveThinking: false,
     });
     expect(mockSetChatConfig).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', { planMode: true });
   });
 });
 
-describe('new-thread-coordinator — draft with no tuning fields calls neither setChatTuning nor setChatConfig', () => {
-  it('does NOT call setChatTuning or setChatConfig when the draft has only base fields', async () => {
-    setDraftConfig('__LOCALID_a', {
-      projectId: 'p1',
-      adapterId: 'claude',
-      permissionMode: 'default',
-    });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-43' } as Chat);
+describe('new-thread-coordinator — incomplete drafts are rejected before creation', () => {
+  it('does not create a chat from legacy state that lacks initialized fields', async () => {
+    setStoredDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
 
-    await createForLocal('__LOCALID_a', 31415);
-
-    expect(mockSetChatTuning).not.toHaveBeenCalled();
-    expect(mockSetChatConfig).not.toHaveBeenCalled();
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow(/incomplete draft config/);
+    expect(mockCreateChat).not.toHaveBeenCalled();
   });
 });
 
-describe('new-thread-coordinator — setChatTuning rejection does NOT reject createForLocal', () => {
-  it('still resolves to {remoteId} even when setChatTuning rejects', async () => {
+describe('new-thread-coordinator — required snapshot stages resume after failure', () => {
+  it('retains and reuses the created chat when tuning fails', async () => {
     setDraftConfig('__LOCALID_a', {
       projectId: 'p1',
       adapterId: 'claude',
@@ -235,10 +282,142 @@ describe('new-thread-coordinator — setChatTuning rejection does NOT reject cre
     mockCreateChat.mockResolvedValueOnce({ id: 'chat-44' } as Chat);
     mockSetChatTuning.mockRejectedValueOnce(new Error('tuning failed'));
 
-    // The tuning hiccup is swallowed; createForLocal still resolves.
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('tuning failed');
+
+    expect(getDraftConfig('__LOCALID_a')).toBeDefined();
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(true);
+    expect(mockSetChatConfig).toHaveBeenCalledTimes(1);
+
     const result = await createForLocal('__LOCALID_a', 31415);
 
     expect(result).toEqual({ remoteId: 'chat-44' });
+    expect(mockCreateChat).toHaveBeenCalledTimes(1);
+    expect(mockSetChatTuning).toHaveBeenCalledTimes(2);
+    expect(mockSetChatConfig).toHaveBeenCalledTimes(2);
+    expect(getDraftConfig('__LOCALID_a')).toBeUndefined();
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(false);
+  });
+
+  it('retains and reuses the created chat when plan config fails', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude', planMode: true });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-45' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+    expect(getDraftConfig('__LOCALID_a')).toBeDefined();
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(true);
+    expect(mockSetChatTuning).toHaveBeenCalledTimes(1);
+
+    await expect(createForLocal('__LOCALID_a', 31415)).resolves.toEqual({ remoteId: 'chat-45' });
+    expect(mockCreateChat).toHaveBeenCalledTimes(1);
+    expect(mockSetChatTuning).toHaveBeenCalledTimes(2);
+    expect(mockSetChatConfig).toHaveBeenCalledTimes(2);
+    expect(getDraftConfig('__LOCALID_a')).toBeUndefined();
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(false);
+  });
+
+  it('shares one staged workflow between concurrent callers', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    let resolveChat!: (chat: Chat) => void;
+    mockCreateChat.mockReturnValueOnce(
+      new Promise<Chat>((resolve) => {
+        resolveChat = resolve;
+      }),
+    );
+
+    const first = createForLocal('__LOCALID_a', 31415);
+    const second = createForLocal('__LOCALID_a', 31415);
+    expect(second).toBe(first);
+    resolveChat({ id: 'chat-concurrent' } as Chat);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { remoteId: 'chat-concurrent' },
+      { remoteId: 'chat-concurrent' },
+    ]);
+    expect(mockCreateChat).toHaveBeenCalledTimes(1);
+    expect(mockSetChatTuning).toHaveBeenCalledTimes(1);
+    expect(mockSetChatConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('freezes the original snapshot for retries against a retained chat', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      model: 'original-model',
+      permissionMode: 'acceptEdits',
+      planMode: true,
+      effort: 'high',
+      fast: true,
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-frozen' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p2',
+      adapterId: 'codex',
+      model: 'edited-model',
+      permissionMode: 'yolo',
+      planMode: false,
+      effort: 'low',
+      fast: false,
+    });
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockCreateChat).toHaveBeenCalledTimes(1);
+    expect(mockSetChatTuning).toHaveBeenLastCalledWith(31415, 'chat-frozen', {
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: false,
+    });
+    expect(mockSetChatConfig).toHaveBeenLastCalledWith(31415, 'chat-frozen', { planMode: true });
+  });
+});
+
+describe('new-thread-coordinator — abandoned workflows cannot leak into reused local ids', () => {
+  it('archives the retained chat and creates a fresh chat for the reused id', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'old', adapterId: 'claude' });
+    mockCreateChat
+      .mockResolvedValueOnce({ id: 'chat-old' } as Chat)
+      .mockResolvedValueOnce({ id: 'chat-fresh' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+
+    resetNewThreadDraft('__LOCALID_a');
+    setDraftConfig('__LOCALID_a', { projectId: 'fresh', adapterId: 'codex', model: 'fresh-model' });
+    await expect(createForLocal('__LOCALID_a', 31415)).resolves.toEqual({ remoteId: 'chat-fresh' });
+
+    expect(mockArchiveChat).toHaveBeenCalledWith(31415, 'chat-old', true);
+    expect(mockCreateChat).toHaveBeenCalledTimes(2);
+    expect(mockCreateChat).toHaveBeenLastCalledWith(
+      31415,
+      expect.objectContaining({
+        projectId: 'fresh',
+        adapterId: 'codex',
+        model: 'fresh-model',
+      }),
+    );
+  });
+
+  it('does not let an abandoned in-flight workflow clear a newer draft', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'old', adapterId: 'claude' });
+    let resolveOld!: (chat: Chat) => void;
+    mockCreateChat.mockReturnValueOnce(
+      new Promise<Chat>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const oldResult = createForLocal('__LOCALID_a', 31415);
+
+    resetNewThreadDraft('__LOCALID_a');
+    setDraftConfig('__LOCALID_a', { projectId: 'fresh', adapterId: 'codex', model: 'fresh-model' });
+    resolveOld({ id: 'chat-old-inflight' } as Chat);
+    await expect(oldResult).rejects.toThrow(/abandoned/);
+
+    expect(getDraftConfig('__LOCALID_a')).toMatchObject({ projectId: 'fresh', adapterId: 'codex' });
+    expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(true);
+    expect(mockArchiveChat).toHaveBeenCalledWith(31415, 'chat-old-inflight', true);
   });
 });
 
@@ -246,16 +425,21 @@ describe('new-thread-coordinator — setChatTuning rejection does NOT reject cre
 // permissionMode omission fix — the key behaviour this covers
 // ---------------------------------------------------------------------------
 
-describe('new-thread-coordinator — permissionMode omission fix', () => {
-  it('omits permissionMode from the createChat body when the draft has none', async () => {
-    setDraftConfig('__LOCALID_b', { projectId: 'p1', adapterId: 'claude' });
-    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+describe('new-thread-coordinator — explicit snapshot permissionMode', () => {
+  it('rejects a snapshot with no explicit permissionMode', async () => {
+    setStoredDraftConfig('__LOCALID_b', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      model: 'snapshot-model',
+      planMode: false,
+      effort: null,
+      fast: false,
+      ultracode: false,
+      adaptiveThinking: false,
+    });
 
-    await createForLocal('__LOCALID_b', 31415);
-
-    const body = mockCreateChat.mock.calls[0]![1];
-    expect('permissionMode' in body).toBe(false);
-    expect(body).toMatchObject({ projectId: 'p1', adapterId: 'claude' });
+    await expect(createForLocal('__LOCALID_b', 31415)).rejects.toThrow(/permissionMode/);
+    expect(mockCreateChat).not.toHaveBeenCalled();
   });
 
   it('includes permissionMode in the createChat body when the draft set one', async () => {

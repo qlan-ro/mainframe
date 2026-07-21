@@ -13,21 +13,20 @@ import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { useSettingsStore } from '@/store/settings';
 import { useAdapters } from '@/store/adapters';
-import { getDraftConfig, setDraftConfig } from '../runtime/draft-config';
+import { getDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { isDraftDiscarded } from './discarded-drafts';
-
-/** Last-resort adapter when no default is configured and nothing is installed yet. */
-const FALLBACK_ADAPTER_ID = 'claude';
+import { initializeDraft } from './initialize-draft';
+import { useDaemonPort } from '../runtime/daemon-port-context';
 
 export function useNewThreadAutoConfig(): void {
   const localId = useAuiState((s) => s.threadListItem?.id ?? null);
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
-  const isReady = useNewThreadReady((s) => (localId ? s.readyIds.has(localId) : false));
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
+  const port = useDaemonPort();
 
   useEffect(() => {
     if (localId == null || filterProjectId == null) return;
@@ -36,11 +35,13 @@ export function useNewThreadAutoConfig(): void {
     // ready flag were just cleared, and switchToThread(target) away from it
     // hasn't landed yet. Without this guard we'd instantly re-seed the exact
     // draft the user just closed (see discarded-drafts.ts).
-    if (!isNewLocal || isReady || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
-    const adapterId = defaultAdapterId ?? adapters.find((a) => a.installed)?.id ?? FALLBACK_ADAPTER_ID;
-    // No permissionMode: chat creation omits it so the daemon applies the user's
-    // provider defaultMode (matching desktop). A deliberate pick sets it later.
-    setDraftConfig(localId, { projectId: filterProjectId, adapterId });
-    useNewThreadReady.getState().markReady(localId);
-  }, [localId, itemStatus, messageCount, filterProjectId, isReady, defaultAdapterId, adapters]);
+    const readyStore = useNewThreadReady.getState();
+    if (!isNewLocal || readyStore.isReady(localId) || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
+    const promise = initializeDraft({ localId, projectId: filterProjectId, port, defaultAdapterId, adapters });
+    const attempt = useNewThreadReady.getState().getInitialization(localId).attempt;
+    void promise.catch((error: unknown) => console.warn('[new-thread-auto-config] initialization failed', error));
+    return () => {
+      if (attempt != null) useNewThreadReady.getState().cancelInitialization(localId, attempt);
+    };
+  }, [localId, itemStatus, messageCount, filterProjectId, port, defaultAdapterId, adapters]);
 }

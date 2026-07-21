@@ -52,6 +52,14 @@ describe('synthesizeDraftChat — maps base fields', () => {
 
     expect(chat.permissionMode).toBe('yolo');
   });
+
+  it('preserves an unset permissionMode so the toolbar can show the provider default', () => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude' };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.permissionMode).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -140,6 +148,30 @@ describe('synthesizeDraftChat — tuning fields forwarded', () => {
     expect(chat.fast).toBe(false);
     expect(chat.ultracode).toBe(true);
     expect(chat.adaptiveThinking).toBeNull();
+  });
+
+  it('forwards the complete initialized snapshot without provider fallback', () => {
+    const chat = synthesizeDraftChat('__LOCALID_x', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      model: 'snapshotted-model',
+      permissionMode: 'acceptEdits',
+      planMode: true,
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
+
+    expect(chat).toMatchObject({
+      model: 'snapshotted-model',
+      permissionMode: 'acceptEdits',
+      planMode: true,
+      effort: 'high',
+      fast: true,
+      ultracode: false,
+      adaptiveThinking: true,
+    });
   });
 });
 

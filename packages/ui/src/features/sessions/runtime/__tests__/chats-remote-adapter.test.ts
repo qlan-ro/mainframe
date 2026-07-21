@@ -20,7 +20,7 @@ vi.mock('../../../../lib/api/chats', () => ({
 }));
 
 vi.mock('../archive-confirm-bridge', () => ({
-  requestWorktreeArchiveChoice: vi.fn(),
+  takeArchiveChoice: vi.fn(),
 }));
 
 vi.mock('../new-thread-coordinator', () => ({
@@ -68,7 +68,7 @@ vi.mock('../chat-controller-registry', () => ({
 // Import AFTER mocks so the module under test picks them up.
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
 import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../../lib/api/chats';
-import { requestWorktreeArchiveChoice } from '../archive-confirm-bridge';
+import { takeArchiveChoice } from '../archive-confirm-bridge';
 import { createForLocal } from '../new-thread-coordinator';
 
 // ---------------------------------------------------------------------------
@@ -80,9 +80,7 @@ const mockGetChat = getChat as MockedFunction<typeof getChat>;
 const mockRenameChat = renameChat as MockedFunction<typeof renameChat>;
 const mockArchiveChat = archiveChat as MockedFunction<typeof archiveChat>;
 const mockUnarchiveChat = unarchiveChat as MockedFunction<typeof unarchiveChat>;
-const mockRequestWorktreeArchiveChoice = requestWorktreeArchiveChoice as MockedFunction<
-  typeof requestWorktreeArchiveChoice
->;
+const mockTakeArchiveChoice = takeArchiveChoice as MockedFunction<typeof takeArchiveChoice>;
 const mockCreateForLocal = createForLocal as MockedFunction<typeof createForLocal>;
 
 // ---------------------------------------------------------------------------
@@ -216,64 +214,76 @@ describe('chats-remote-adapter — unarchive calls unarchiveChat once', () => {
 });
 
 // ---------------------------------------------------------------------------
-// chats-remote-adapter — archive awaits bridge then archives
+// chats-remote-adapter — archive consumes the staged choice, no prompt, no getChat
+//
+// The confirm dialog is asked (and can be cancelled) entirely upstream in the
+// sidebar row's handler — by the time archive() reaches the adapter, aui has
+// already started its optimistic switch, so the adapter never prompts and
+// never throws. It only reads whatever the row staged via stageArchiveChoice.
 // ---------------------------------------------------------------------------
 
-describe('chats-remote-adapter — archive awaits bridge then calls archiveChat', () => {
-  it('calls requestWorktreeArchiveChoice with hasWorktree:true when worktreePath is present', async () => {
-    mockGetChat.mockResolvedValueOnce(FIXTURE);
-    mockRequestWorktreeArchiveChoice.mockResolvedValueOnce({ deleteWorktree: false });
-    mockArchiveChat.mockResolvedValueOnce(undefined);
-    const adapter = makeChatsRemoteAdapter(31415);
-    await adapter.archive('chat-1');
-    expect(mockRequestWorktreeArchiveChoice).toHaveBeenCalledWith('chat-1', { hasWorktree: true });
-  });
-
-  it('calls archiveChat(31415, chat-1, false) when deleteWorktree is false', async () => {
-    mockGetChat.mockResolvedValueOnce(FIXTURE);
-    mockRequestWorktreeArchiveChoice.mockResolvedValueOnce({ deleteWorktree: false });
+describe('chats-remote-adapter — archive consumes the staged choice via takeArchiveChoice', () => {
+  it('calls archiveChat(31415, chat-1, false) when the staged choice is deleteWorktree:false', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce({ deleteWorktree: false });
     mockArchiveChat.mockResolvedValueOnce(undefined);
     const adapter = makeChatsRemoteAdapter(31415);
     await adapter.archive('chat-1');
     expect(mockArchiveChat).toHaveBeenCalledTimes(1);
     expect(mockArchiveChat).toHaveBeenCalledWith(31415, 'chat-1', false);
   });
+
+  it('calls archiveChat(31415, chat-1, true) when the staged choice is deleteWorktree:true', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce({ deleteWorktree: true });
+    mockArchiveChat.mockResolvedValueOnce(undefined);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.archive('chat-1');
+    expect(mockArchiveChat).toHaveBeenCalledTimes(1);
+    expect(mockArchiveChat).toHaveBeenCalledWith(31415, 'chat-1', true);
+  });
+
+  it('calls archiveChat(31415, chat-1, false) when nothing was staged (the no-worktree path)', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce(undefined);
+    mockArchiveChat.mockResolvedValueOnce(undefined);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.archive('chat-1');
+    expect(mockArchiveChat).toHaveBeenCalledWith(31415, 'chat-1', false);
+  });
+
+  it('calls takeArchiveChoice(chat-1) exactly once', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce({ deleteWorktree: false });
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.archive('chat-1');
+    expect(mockTakeArchiveChoice).toHaveBeenCalledTimes(1);
+    expect(mockTakeArchiveChoice).toHaveBeenCalledWith('chat-1');
+  });
+
+  it('does not call getChat', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce(undefined);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.archive('chat-1');
+    expect(mockGetChat).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
-// chats-remote-adapter — archive cancel throws and does NOT call archiveChat
+// chats-remote-adapter — delete maps to archiveChat with the staged choice
 // ---------------------------------------------------------------------------
 
-describe('chats-remote-adapter — archive cancel throws and does not archive', () => {
-  it('rejects when requestWorktreeArchiveChoice resolves cancel', async () => {
-    mockGetChat.mockResolvedValueOnce(FIXTURE);
-    mockRequestWorktreeArchiveChoice.mockResolvedValueOnce('cancel');
-    const adapter = makeChatsRemoteAdapter(31415);
-    await expect(adapter.archive('chat-1')).rejects.toThrow();
-  });
-
-  it('does not call archiveChat when cancel is chosen', async () => {
-    mockGetChat.mockResolvedValueOnce(FIXTURE);
-    mockRequestWorktreeArchiveChoice.mockResolvedValueOnce('cancel');
-    const adapter = makeChatsRemoteAdapter(31415);
-    await expect(adapter.archive('chat-1')).rejects.toThrow();
-    expect(mockArchiveChat).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// chats-remote-adapter — delete maps to archive (calls archiveChat with deleteWorktree:true)
-// ---------------------------------------------------------------------------
-
-describe('chats-remote-adapter — delete maps to archiveChat with deleteWorktree:true', () => {
-  it('calls archiveChat(31415, chat-1, true) when deleteWorktree is true', async () => {
-    mockGetChat.mockResolvedValueOnce(FIXTURE);
-    mockRequestWorktreeArchiveChoice.mockResolvedValueOnce({ deleteWorktree: true });
+describe('chats-remote-adapter — delete consumes the staged choice via takeArchiveChoice', () => {
+  it('calls archiveChat(31415, chat-1, true) when the staged choice is deleteWorktree:true', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce({ deleteWorktree: true });
     mockArchiveChat.mockResolvedValueOnce(undefined);
     const adapter = makeChatsRemoteAdapter(31415);
     await adapter.delete('chat-1');
     expect(mockArchiveChat).toHaveBeenCalledTimes(1);
     expect(mockArchiveChat).toHaveBeenCalledWith(31415, 'chat-1', true);
+  });
+
+  it('does not call getChat', async () => {
+    mockTakeArchiveChoice.mockReturnValueOnce({ deleteWorktree: true });
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.delete('chat-1');
+    expect(mockGetChat).not.toHaveBeenCalled();
   });
 });
 
