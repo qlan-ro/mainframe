@@ -24,6 +24,11 @@ struct StoreDeps {
     transcript_present: Mutex<Option<bool>>,
     /// When `Some`, `create_session` yields a session whose `load_history` returns it.
     history: Mutex<Option<Vec<ChatMessage>>>,
+    /// Records every path `trust_workspace` persisted, for assertion.
+    trusted_paths: Mutex<Vec<String>>,
+    /// When `Some`, `write_workspace_trust` fails with this message instead of
+    /// recording the call.
+    fail_trust_write: Mutex<Option<String>>,
 }
 
 impl StoreDeps {
@@ -129,6 +134,21 @@ impl ChatManagerDeps for StoreDeps {
             .lock()
             .unwrap()
             .push(project_id.to_string());
+    }
+    fn write_workspace_trust<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        Box::pin(async move {
+            if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
+                return Err(msg);
+            }
+            self.trusted_paths
+                .lock()
+                .unwrap()
+                .push(project_path.to_string());
+            Ok(())
+        })
     }
     fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
         None
@@ -1150,4 +1170,190 @@ async fn send_message_with_the_flag_clears_the_dead_session_identity() {
     assert_eq!(row.claude_session_id, None);
     assert_eq!(row.session_file_path, None);
     assert_eq!(row.transcript_missing, Some(false));
+}
+
+// ── external_session_service() facade wiring ────────────────────────────────
+
+#[derive(Default)]
+struct FakeExternalDeps {
+    project: Mutex<Option<Project>>,
+    sessions: Mutex<Vec<mainframe_types::adapter::ExternalSession>>,
+    created: Mutex<Vec<(String, String)>>,
+}
+
+impl crate::external_session_service::ExternalSessionDeps for FakeExternalDeps {
+    fn projects_get(&self, _project_id: &str) -> Option<Project> {
+        self.project.lock().unwrap().clone()
+    }
+    fn get_imported_session_ids(&self, _project_id: &str) -> Vec<String> {
+        Vec::new()
+    }
+    fn find_by_external_session_id(&self, _session_id: &str, _project_id: &str) -> Option<Chat> {
+        None
+    }
+    fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat {
+        self.created
+            .lock()
+            .unwrap()
+            .push((project_id.to_string(), adapter_id.to_string()));
+        let mut c = test_chat("imported");
+        c.project_id = project_id.to_string();
+        c.adapter_id = adapter_id.to_string();
+        c
+    }
+    fn chats_update(
+        &self,
+        _chat_id: &str,
+        _updates: &crate::external_session_service::ExternalChatUpdate,
+    ) {
+    }
+    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
+        Vec::new()
+    }
+    fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
+        None
+    }
+    fn emit_event(&self, _event: DaemonEvent) {}
+    fn generate_title<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        _content: &'a str,
+        _binary: &'a str,
+    ) -> BoxFuture<'a, Option<String>> {
+        Box::pin(async { None })
+    }
+    fn external_session_adapter_ids(&self) -> Vec<String> {
+        vec!["claude".to_string()]
+    }
+    fn list_external_sessions<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        _project_path: &'a str,
+        _exclude_ids: &'a [String],
+        _offset: i64,
+        _limit: i64,
+    ) -> BoxFuture<'a, Result<ExternalSessionPage, AdapterError>> {
+        let sessions = self.sessions.lock().unwrap().clone();
+        let total = sessions.len() as i64;
+        Box::pin(async move {
+            Ok(ExternalSessionPage {
+                sessions,
+                total,
+                next_offset: None,
+            })
+        })
+    }
+}
+
+fn external_session(id: &str) -> mainframe_types::adapter::ExternalSession {
+    mainframe_types::adapter::ExternalSession {
+        session_id: id.to_string(),
+        adapter_id: "claude".to_string(),
+        project_path: "/tmp/p".to_string(),
+        cwd: None,
+        first_prompt: None,
+        title: None,
+        summary: None,
+        message_count: None,
+        created_at: "now".to_string(),
+        modified_at: "now".to_string(),
+        git_branch: None,
+        model: None,
+    }
+}
+
+#[tokio::test]
+async fn external_session_service_is_none_until_injected() {
+    let mgr = ChatManager::new(StoreDeps::arc());
+    assert!(mgr.external_session_service().is_none());
+}
+
+#[tokio::test]
+async fn with_external_sessions_wires_scan_page_through_the_facade() {
+    let ext = Arc::new(FakeExternalDeps::default());
+    *ext.project.lock().unwrap() = Some(Project {
+        id: "p1".into(),
+        name: "p".into(),
+        path: "/tmp/p".into(),
+        created_at: "now".into(),
+        last_opened_at: "now".into(),
+        parent_project_id: None,
+    });
+    ext.sessions.lock().unwrap().push(external_session("s1"));
+    let service = Arc::new(ExternalSessionService::new(ext));
+    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+
+    let facade = mgr.external_session_service().expect("service injected");
+    let page = facade.scan_page("p1", 0, 50).await;
+
+    assert_eq!(page.total, 1);
+    assert_eq!(page.sessions[0].session_id, "s1");
+}
+
+#[tokio::test]
+async fn with_external_sessions_wires_import_session_through_the_facade() {
+    let ext = Arc::new(FakeExternalDeps::default());
+    let service = Arc::new(ExternalSessionService::new(ext.clone()));
+    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+
+    let facade = mgr.external_session_service().expect("service injected");
+    let chat = facade
+        .import_session("p1", "s1", "claude", None, None, None)
+        .await;
+
+    assert_eq!(chat.project_id, "p1");
+    assert_eq!(chat.adapter_id, "claude");
+    assert_eq!(
+        ext.created.lock().unwrap().as_slice(),
+        [("p1".to_string(), "claude".to_string())]
+    );
+}
+
+// ── trust_workspace ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn trust_workspace_persists_the_project_root_when_the_chat_has_no_worktree() {
+    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.trust_workspace("c1").await.unwrap();
+
+    assert_eq!(*deps.trusted_paths.lock().unwrap(), vec!["/tmp/test"]);
+}
+
+#[tokio::test]
+async fn trust_workspace_prefers_the_chat_worktree_path_over_the_project_root() {
+    let mut chat = test_chat("c1");
+    chat.worktree_path = Some("/home/me/proj-wt".to_string());
+    let deps = StoreDeps::with_chats(vec![chat]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.trust_workspace("c1").await.unwrap();
+
+    assert_eq!(
+        *deps.trusted_paths.lock().unwrap(),
+        vec!["/home/me/proj-wt"]
+    );
+}
+
+#[tokio::test]
+async fn trust_workspace_errors_when_the_chat_is_missing() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+
+    let err = mgr.trust_workspace("missing").await.unwrap_err();
+
+    assert!(matches!(err, TrustWorkspaceError::ChatNotFound(id) if id == "missing"));
+    assert!(deps.trusted_paths.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypassed() {
+    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    *deps.fail_trust_write.lock().unwrap() = Some("disk full".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let err = mgr.trust_workspace("c1").await.unwrap_err();
+
+    assert!(matches!(err, TrustWorkspaceError::Write(msg) if msg == "disk full"));
 }

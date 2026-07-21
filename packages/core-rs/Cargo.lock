@@ -1362,6 +1362,7 @@ dependencies = [
  "hmac",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
+ "mainframe-adapter-codex",
  "mainframe-automations",
  "mainframe-background-tasks",
  "mainframe-chat",

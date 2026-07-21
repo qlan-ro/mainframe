@@ -310,8 +310,9 @@ pub struct AdapterInfo {
     pub capabilities: AdapterCapabilities,
 }
 
-/// Full union across both CLIs. Codex ReasoningEffort = none..xhigh; Claude adds
-/// `max`. The per-model `supportedEfforts` array is the runtime gate.
+/// Full union across both CLIs. Codex ReasoningEffort = none..xhigh, plus
+/// `ultra` on some models; Claude adds `max`. The per-model `supportedEfforts`
+/// array is the runtime gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EffortLevel {
@@ -322,6 +323,7 @@ pub enum EffortLevel {
     High,
     Xhigh,
     Max,
+    Ultra,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -393,6 +395,7 @@ fn effort_rank(effort: EffortLevel) -> u8 {
         EffortLevel::High => 4,
         EffortLevel::Xhigh => 5,
         EffortLevel::Max => 6,
+        EffortLevel::Ultra => 7,
     }
 }
 
@@ -549,6 +552,16 @@ mod tests {
         );
         let e: EffortLevel = serde_json::from_str("\"xhigh\"").unwrap();
         assert_eq!(e, EffortLevel::Xhigh);
+    }
+
+    #[test]
+    fn effort_level_ultra_round_trips() {
+        assert_eq!(
+            serde_json::to_string(&EffortLevel::Ultra).unwrap(),
+            "\"ultra\""
+        );
+        let e: EffortLevel = serde_json::from_str("\"ultra\"").unwrap();
+        assert_eq!(e, EffortLevel::Ultra);
     }
 
     #[test]

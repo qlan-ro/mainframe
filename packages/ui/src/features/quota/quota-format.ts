@@ -4,7 +4,13 @@
  * components, so the render layer is pure wiring.
  */
 import type { ProviderQuota, QuotaWindow } from '@qlan-ro/mainframe-types';
-import { collectQuotaWindows, deriveProviderStatus, isProviderStale, selectTightestWindow } from './quota-lifecycle';
+import {
+  collectQuotaWindows,
+  deriveProviderStatus,
+  isProviderStale,
+  isWindowTrusted,
+  selectTightestWindow,
+} from './quota-lifecycle';
 
 /** Near-wall thresholds (tunable). At/above amber the ring warns; at/above red it alarms. */
 export const QUOTA_AMBER_THRESHOLD = 75;
@@ -29,7 +35,12 @@ export const QUOTA_PROVIDERS: readonly { id: string; label: string }[] = [
   { id: 'codex', label: 'Codex' },
 ];
 
-/** Collapsed-row view: the tightest window (or a designed unknown), plus staleness. */
+/**
+ * Collapsed-row view: the session window when it's trusted (that's the one that
+ * actually blocks the user next), falling back to the tightest trusted window when
+ * there's no live session (e.g. Codex, which only reports weekly) — or a designed
+ * unknown — plus staleness.
+ */
 export type QuotaRowVm =
   | { state: 'unknown' }
   | {
@@ -42,13 +53,16 @@ export type QuotaRowVm =
 
 export function deriveQuotaRow(quota: ProviderQuota | undefined, now: number): QuotaRowVm {
   if (!quota || deriveProviderStatus(quota, now) === 'unknown') return { state: 'unknown' };
-  const tightest = selectTightestWindow(quota, now);
-  if (!tightest) return { state: 'unknown' };
+  const headline =
+    quota.session && isWindowTrusted(quota.session, quota.observedAt, now)
+      ? quota.session
+      : selectTightestWindow(quota, now);
+  if (!headline) return { state: 'unknown' };
   return {
     state: 'ok',
-    usedPercent: tightest.usedPercent,
-    severity: severityOf(tightest.usedPercent),
-    resetsAt: tightest.resetsAt,
+    usedPercent: headline.usedPercent,
+    severity: severityOf(headline.usedPercent),
+    resetsAt: headline.resetsAt,
     stale: isProviderStale(quota, now),
   };
 }

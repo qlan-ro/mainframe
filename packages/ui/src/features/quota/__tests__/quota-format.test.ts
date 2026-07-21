@@ -28,24 +28,56 @@ describe('severityOf', () => {
   });
 });
 
-describe('deriveQuotaRow — tightest-window selection & designed states', () => {
+describe('deriveQuotaRow — session-first headline, tightest-window fallback, & designed states', () => {
   it('is unknown when there is no blob', () => {
     expect(deriveQuotaRow(undefined, NOW)).toEqual({ state: 'unknown' });
   });
 
-  it('surfaces the tightest (highest-percent) trusted window on the collapsed row', () => {
+  it('headlines the session window even when weekly/model windows run higher — session is what actually blocks the user', () => {
     const quota: ProviderQuota = {
       status: 'ok',
       observedAt: NOW - 40_000,
-      modelWindows: [{ kind: 'weekly-model', usedPercent: 88, resetsAt: NOW + 6 * DAY, label: 'Fable' }],
-      session: { kind: 'session', usedPercent: 36, resetsAt: NOW + 2 * HOUR },
-      weekly: { kind: 'weekly', usedPercent: 21, resetsAt: NOW + 6 * DAY },
+      session: { kind: 'session', usedPercent: 1, resetsAt: NOW + 2 * HOUR },
+      weekly: { kind: 'weekly', usedPercent: 53, resetsAt: NOW + 6 * DAY },
+      modelWindows: [{ kind: 'weekly-model', usedPercent: 59, resetsAt: NOW + 6 * DAY, label: 'Fable' }],
     };
-    const row = deriveQuotaRow(quota, NOW);
-    expect(row).toEqual({
+    expect(deriveQuotaRow(quota, NOW)).toEqual({
       state: 'ok',
-      usedPercent: 88,
-      severity: 'amber',
+      usedPercent: 1,
+      severity: 'normal',
+      resetsAt: NOW + 2 * HOUR,
+      stale: false,
+    });
+  });
+
+  it('falls back to the tightest trusted window when there is no session window (Codex weekly-only)', () => {
+    const quota: ProviderQuota = {
+      status: 'ok',
+      observedAt: NOW,
+      weekly: { kind: 'weekly', usedPercent: 53, resetsAt: NOW + 6 * DAY },
+      modelWindows: [{ kind: 'weekly-model', usedPercent: 21, resetsAt: NOW + 6 * DAY, label: 'o1' }],
+    };
+    expect(deriveQuotaRow(quota, NOW)).toEqual({
+      state: 'ok',
+      usedPercent: 53,
+      severity: 'normal',
+      resetsAt: NOW + 6 * DAY,
+      stale: false,
+    });
+  });
+
+  it('falls back to the tightest trusted window once the session window itself has expired', () => {
+    const quota: ProviderQuota = {
+      status: 'ok',
+      observedAt: NOW,
+      session: { kind: 'session', usedPercent: 1, resetsAt: NOW - HOUR },
+      weekly: { kind: 'weekly', usedPercent: 53, resetsAt: NOW + 6 * DAY },
+      modelWindows: [],
+    };
+    expect(deriveQuotaRow(quota, NOW)).toEqual({
+      state: 'ok',
+      usedPercent: 53,
+      severity: 'normal',
       resetsAt: NOW + 6 * DAY,
       stale: false,
     });

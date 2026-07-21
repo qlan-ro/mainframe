@@ -59,15 +59,15 @@ describe('QuotaCard — always both providers', () => {
   });
 });
 
-describe('QuotaCard — collapsed row surfaces the tightest window', () => {
-  it('shows the highest-percent window (88), not the session (36)', () => {
+describe('QuotaCard — collapsed row headlines the session window', () => {
+  it('shows the session (36), not the highest-percent weekly-model window (88)', () => {
     applyProviderQuota('claude', claudeThreeWindows(88));
     render(<QuotaCard now={NOW} />);
     const row = screen.getByTestId('provider-quota-row-claude');
-    expect(within(row).getByText('88%')).toBeInTheDocument();
-    expect(within(row).queryByText('36%')).not.toBeInTheDocument();
+    expect(within(row).getByText('36%')).toBeInTheDocument();
+    expect(within(row).queryByText('88%')).not.toBeInTheDocument();
     expect(row).toHaveAttribute('data-state-kind', 'ok');
-    expect(row).toHaveAttribute('aria-label', expect.stringContaining('88% used'));
+    expect(row).toHaveAttribute('aria-label', expect.stringContaining('36% used'));
   });
 });
 

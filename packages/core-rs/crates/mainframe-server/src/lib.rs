@@ -18,6 +18,7 @@ pub mod path_utils;
 pub mod respond;
 pub mod ripgrep;
 pub mod routes;
+pub mod suggestions;
 pub mod websocket;
 pub mod ws_file_watch;
 pub mod ws_schemas;

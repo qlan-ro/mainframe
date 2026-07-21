@@ -2,11 +2,9 @@
 //! + interrupt/resume/trust-workspace commands + queue edit/cancel.
 //!
 //! create (createChatWithDefaults), config PATCH (updateChatConfig),
-//! interrupt/resume and queue edit/cancel all port over the `ChatManager` facade
-//! (present) and are gated on the manager being wired. trust-workspace remains a
-//! seam — `writeWorkspaceTrust` is unported (the claude trust store lives in the
-//! adapter-claude crate, whose skeleton is not yet filled). Existence is checked
-//! against `ctx.db.chats` so 404s are honoured before the seam.
+//! interrupt/resume/trust-workspace and queue edit/cancel all port over the
+//! `ChatManager` facade and are gated on the manager being wired. Existence is
+//! checked against `ctx.db.chats` so 404s are honoured before the facade call.
 
 use std::sync::Arc;
 
@@ -178,11 +176,20 @@ async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>)
         Ok(true) => {}
         Err(resp) => return resp,
     }
-    tracing::warn!(chat_id = %id, "trustWorkspace is a Phase-4 seam (ChatManager.trustWorkspace unavailable)");
-    fail(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "trustWorkspace unavailable",
-    )
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(chat_id = %id, "trustWorkspace is a Phase-4 seam (ChatManager unavailable)");
+        return fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "trustWorkspace unavailable",
+        );
+    };
+    match cm.trust_workspace(&id).await {
+        Ok(()) => ok_empty(),
+        Err(err) => {
+            tracing::error!(chat_id = %id, %err, "trust-workspace failed");
+            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -323,15 +330,16 @@ mod tests {
 
 // PORT STATUS: src/server/routes/chat-commands.ts (7 endpoints, 96 lines)
 // confidence: high
-// todos: 1
+// todos: 0
 // notes: create (createChatWithDefaults) + config PATCH (updateChatConfig) +
-// interrupt/resume/queue-edit/queue-cancel port over the ChatManager facade —
-// all self-gate on ctx.chat_manager, wired at boot (Task 4.6c), so they are live.
-// updateChatConfig parses UpdateChatConfigBody (permissionMode is
-// z.enum(EXECUTION_MODES) → ExecutionMode, no `plan`), delegates to
-// ChatManager.update_chat_config (chat_manager.rs), then returns ok(get_chat(id)),
-// matching TS. trust-workspace stays a seam: writeWorkspaceTrust is unported (the
-// claude trust store is a skeleton in mainframe-adapter-claude, a DONE crate
-// outside this task's ownership) — the db existence 404 is honoured first. Zod
-// enum/refine 400 messages are approximated; the both-or-neither worktree refine
-// string matches TS.
+// interrupt/resume/trust-workspace/queue-edit/queue-cancel port over the
+// ChatManager facade — all self-gate on ctx.chat_manager, wired at boot (Task
+// 4.6c), so they are live. updateChatConfig parses UpdateChatConfigBody
+// (permissionMode is z.enum(EXECUTION_MODES) → ExecutionMode, no `plan`),
+// delegates to ChatManager.update_chat_config (chat_manager.rs), then returns
+// ok(get_chat(id)), matching TS. trust-workspace now delegates to
+// ChatManager::trust_workspace (writeWorkspaceTrust is ported in
+// mainframe-adapter-claude::trust_store) — the db existence 404 is honoured
+// first, then any chat/project-not-found or write error 500s with the error
+// message, matching the TS route's try/catch. Zod enum/refine 400 messages are
+// approximated; the both-or-neither worktree refine string matches TS.
