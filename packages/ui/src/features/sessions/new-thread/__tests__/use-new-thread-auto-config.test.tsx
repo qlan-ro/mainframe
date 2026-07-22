@@ -27,6 +27,10 @@
  * 10. defaultAdapterId is unset but an installed adapter exists → uses the first
  *     installed adapter's id.
  * 11. defaultAdapterId is unset and nothing is installed → falls back to 'claude'.
+ *
+ * The render-loop regression (React error #185 — an unstable useAdapters()
+ * identity churning this hook's effect) is covered separately, against the
+ * REAL @/store/adapters store, in use-new-thread-auto-config.render-loop.test.tsx.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';

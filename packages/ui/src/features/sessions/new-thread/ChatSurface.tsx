@@ -35,7 +35,7 @@ import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
 import { useNewSessionPickerTarget } from '../sidebar/use-new-session-picker-target';
-import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { IDLE_INITIALIZATION, useNewThreadReady } from '../runtime/new-thread-ready-store';
 
 /** How long to wait, once we look like the zero-session boot dead-end, before
  *  forcing the project picker open. Long enough for useSessionListRouter's
@@ -82,7 +82,7 @@ export function ChatSurface({ port: _port }: { port: number }) {
   const { projects, loading } = useProjects();
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const initialization = useNewThreadReady((s) =>
-    mainThreadId ? s.getInitialization(mainThreadId) : { status: 'idle' as const },
+    mainThreadId ? s.getInitialization(mainThreadId) : IDLE_INITIALIZATION,
   );
   const isReady = useNewThreadReady((s) => (mainThreadId ? s.readyIds.has(mainThreadId) : false));
 

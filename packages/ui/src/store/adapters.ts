@@ -3,6 +3,7 @@
  * fresh by `adapter.models.updated`, applied only-if-newer by `modelsRevision`. Reset on
  * daemon switch/reconnect (module-level store survives the AppShell remount).
  */
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import type { AdapterInfo, AdapterModel } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '@/lib/daemon/ws-client';
@@ -14,9 +15,11 @@ interface AdaptersState {
 export const useAdaptersStore = create<AdaptersState>(() => ({ byId: {} }));
 
 const EMPTY: readonly AdapterInfo[] = [];
+/** Memoized: callers pass this array as a `useEffect` dep, and a fresh
+ *  `Object.values()` each render re-armed those effects until React threw #185. */
 export function useAdapters(): AdapterInfo[] {
   const byId = useAdaptersStore((s) => s.byId);
-  return Object.keys(byId).length ? Object.values(byId) : (EMPTY as AdapterInfo[]);
+  return useMemo(() => (Object.keys(byId).length ? Object.values(byId) : (EMPTY as AdapterInfo[])), [byId]);
 }
 
 function isNewer(current: number | undefined, incoming: number | undefined): boolean {

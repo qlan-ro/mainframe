@@ -11,9 +11,13 @@
  *  3. clearReady(id) makes isReady(id) false again.
  *  4. markReady is idempotent — the readyIds reference is stable on a re-mark
  *     (so React subscribers don't churn).
+ *  5. getInitialization on an unknown id returns the exported IDLE_INITIALIZATION
+ *     reference, and the SAME reference on repeated calls (React error #185
+ *     regression: ChatSurface's no-active-thread fallback used to be a fresh
+ *     `{ status: 'idle' }` literal, which is never referentially stable).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useNewThreadReady } from '../new-thread-ready-store';
+import { useNewThreadReady, IDLE_INITIALIZATION } from '../new-thread-ready-store';
 
 beforeEach(() => {
   // Reset the shared store between tests.
@@ -46,6 +50,17 @@ describe('new-thread-ready-store', () => {
 
     useNewThreadReady.getState().markReady('__LOCALID_a');
     const second = useNewThreadReady.getState().readyIds;
+
+    expect(second).toBe(first);
+  });
+
+  it('getInitialization on an unknown id returns the shared IDLE_INITIALIZATION reference', () => {
+    expect(useNewThreadReady.getState().getInitialization('unknown-id')).toBe(IDLE_INITIALIZATION);
+  });
+
+  it('getInitialization on an unknown id returns the same reference across repeated calls', () => {
+    const first = useNewThreadReady.getState().getInitialization('unknown-id');
+    const second = useNewThreadReady.getState().getInitialization('unknown-id');
 
     expect(second).toBe(first);
   });
