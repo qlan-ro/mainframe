@@ -1,10 +1,14 @@
-# Runs the full Playwright/Electron e2e suite in MOCK mode (E2E_MODE=mock): AI-coupled specs
+# Runs the app-tauri Playwright e2e suite in MOCK mode (E2E_MODE=mock): AI-coupled specs
 # replay recorded NDJSON fixtures via the mock-cli plugin, un-mockable specs auto-skip, and
 # non-AI specs run for real. Mock mode makes NO Claude/Codex API calls, so this needs no secrets.
+#
+# The suite drives the built @qlan-ro/mainframe-ui bundle in headless Chromium against the
+# Node daemon (browser-mode harness, fixtures/app-tauri.ts) — no Electron, no xvfb. The legacy
+# Electron project (tests/) is not run here; that shell is being retired.
 name: e2e-mock
 
-# TEMPORARILY DISABLED from automatic runs (2026-07-06): the app-tauri e2e suite is too slow to
-# gate PRs right now (~28 min serial; workers:1 because the app is stateful on one daemon port).
+# TEMPORARILY DISABLED from automatic runs (2026-07-06): the suite is too slow to gate PRs
+# right now (~30 min serial; workers:1 because the app is stateful on one daemon port).
 # Re-enable by uncommenting the pull_request / push triggers once the suite is parallelized
 # (multi-worker + per-worker daemon ports). Still runnable on demand via workflow_dispatch.
 on:
@@ -14,7 +18,7 @@ on:
   #   branches: [main]
   workflow_dispatch: # manual trigger only, for now
 
-# One run per ref; cancel superseded runs so PR pushes don't pile up Electron jobs.
+# One run per ref; cancel superseded runs so PR pushes don't pile up jobs.
 concurrency:
   group: e2e-mock-${{ github.ref }}
   cancel-in-progress: true
@@ -41,15 +45,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # build:app builds the full dependency chain (types → core → desktop) in topological order
-      # and bakes the renderer for the e2e daemon port (31416, NOT prod 31415 —
-      # assertRendererBuiltForTestPort aborts otherwise). build:mock bundles the mock-cli plugin.
-      - run: pnpm --filter @qlan-ro/mainframe-e2e build:app
+      # build:app:tauri builds types → core (the daemon the harness spawns) and bakes the UI
+      # bundle for the e2e daemon port (31416, NOT prod 31415 — assertBundleTargetsTestPort
+      # aborts otherwise). build:mock bundles the mock-cli plugin.
+      - run: pnpm --filter @qlan-ro/mainframe-e2e build:app:tauri
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
       - run: pnpm --filter @qlan-ro/mainframe-e2e build:mock
 
-      # Pull the OS libraries Electron needs on Linux (libnss3, libgbm, libgtk, xvfb deps, …).
       - run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
 
       # The harness and daemon run git operations (worktrees, status); the runner has no identity.
@@ -59,9 +62,10 @@ jobs:
           git config --global user.name "Mainframe E2E"
           git config --global init.defaultBranch main
 
-      # Electron needs a display on a headless runner → xvfb. CI=true (set by Actions) makes the
-      # harness add --no-sandbox to electron.launch. No API secrets: mock mode replays fixtures.
-      - run: xvfb-run -a env E2E_MODE=mock pnpm --filter @qlan-ro/mainframe-e2e test
+      # MF_E2E_SKIP_BUILD: the bundle was built (and port-verified) above — each describe block
+      # would otherwise rebuild it in beforeAll. MF_E2E_GLOBAL_TIMEOUT: the whole suite shares
+      # one process budget (default 40 min starves the tail when every spec runs back-to-back).
+      - run: E2E_MODE=mock MF_E2E_SKIP_BUILD=1 MF_E2E_GLOBAL_TIMEOUT=5400000 pnpm --filter @qlan-ro/mainframe-e2e exec playwright test --project=tauri
 
       - name: Upload Playwright report on failure
         if: failure()

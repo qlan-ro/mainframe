@@ -138,13 +138,12 @@ test.describe('§45 Sessions panel', () => {
     // Use the first real (non-draft) sessions-row.
     const firstRow = page.getByTestId('sessions-row').first();
     await firstRow.waitFor({ timeout: 10_000 });
-    await firstRow.hover();
 
-    // Click the rename action via evaluate to avoid hover-timing flake.
-    await page
-      .getByTestId('sessions-row-action-rename')
-      .first()
-      .evaluate((el) => (el as HTMLElement).click());
+    // The inline rename hover action was removed (SessionRowHoverActions.tsx —
+    // hover keeps pin/tags/archive only); Rename lives in the right-click
+    // context menu (SessionContextMenu, D11).
+    await firstRow.click({ button: 'right' });
+    await page.getByTestId('sessions-ctx-rename').click();
 
     const input = page.getByTestId('sessions-rename-input').first();
     await input.waitFor({ timeout: 5_000 });

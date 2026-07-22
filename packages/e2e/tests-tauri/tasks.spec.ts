@@ -1,6 +1,6 @@
 /**
  * §tasks — Tasks feature specs: quick-create, board (list/board views), the
- * Inspector-pane drawer, full edit modal, filters/sort, and start-session.
+ * left-sidebar Tasks section, full edit modal, filters/sort, and start-session.
  *
  * Scope: docs/plans/2026-07-03-tauri-e2e-test-plan.md spec #29 (Cluster D).
  * UI-only — no agent-turn recording needed (Tasks live entirely in daemon REST
@@ -9,9 +9,9 @@
  * Entry points (verified against packages/ui/src/features/tasks/*):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
  *   sidebar-tasks-button → dispatches `mf:open-tasks` (SidebarHeader.tsx) → tasks-board-modal
- *   main-toolbar-inspector (MainToolbar.tsx, toggles InspectorPane) → reveals the
- *     bottom Tasks drawer (TasksDrawer.tsx), which InspectorPane mounts only when
- *     a project is active (`{projectId && <TasksDrawer .../>}`, InspectorPane.tsx:95).
+ *   TasksSidebarSection (left sidebar) — replaced the old Inspector-pane
+ *     TasksDrawer; always mounted while a project is active (renders null
+ *     without one), so no toggle is needed to reach it.
  *
  * Testid reference (verified against source):
  *   tasks-quick-dialog / tasks-quick-feature / tasks-quick-bug / tasks-quick-title /
@@ -31,9 +31,10 @@
  *   tasks-label-pill-<label> / tasks-label-remove-<label> / tasks-label-input
  *   tasks-dep-pill-<n> / tasks-dep-remove-<n> / tasks-dep-input / tasks-dep-opt-<n>
  *   tasks-attach-add / tasks-attach-<id> (root) / tasks-attach-delete-<id>
- *   tasks-drawer / tasks-drawer-resize-handle / tasks-drawer-count / tasks-drawer-new /
- *     tasks-drawer-expand / tasks-drawer-empty / tasks-drawer-row-<n>
- *   main-toolbar-inspector — layout/MainToolbar.tsx
+ *   tasks-sidebar-section / tasks-sidebar-section-toggle / tasks-sidebar-expand /
+ *     tasks-sidebar-new / tasks-sidebar-empty / tasks-sidebar-row-<n> /
+ *     tasks-sidebar-view-all (TasksSidebarSection.tsx + TasksSidebarList.tsx;
+ *     the list caps at VISIBLE_TASKS = 5 rows — no count chip, no resize handle)
  *
  * shadcn <Select> (TaskSelectFields type/priority/status): SelectItem forwards no
  * data-testid, so options are selected via Radix's own `role="option"` (verified
@@ -111,7 +112,7 @@ test.describe('§tasks', () => {
     await closeTauriApp(app);
   });
 
-  test('board and drawer show empty state before any tasks exist', async () => {
+  test('board and sidebar section show empty state before any tasks exist', async () => {
     const { page } = app;
 
     await openBoard(page);
@@ -120,14 +121,10 @@ test.describe('§tasks', () => {
     await expect(empty).toContainText('No tasks yet');
     await closeBoard(page);
 
-    // Toggle the Inspector on to reveal the bottom Tasks drawer, then off again
-    // so later tests start from the same (hidden) baseline.
-    await page.getByTestId('main-toolbar-inspector').click();
-    const drawerEmpty = page.getByTestId('tasks-drawer-empty');
-    await expect(drawerEmpty).toBeVisible({ timeout: 10_000 });
-    await expect(drawerEmpty).toContainText('No active tasks.');
-    await page.getByTestId('main-toolbar-inspector').click();
-    await expect(page.getByTestId('tasks-drawer')).toHaveCount(0, { timeout: 5_000 });
+    // The left-sidebar Tasks section is always mounted while a project is active.
+    const sectionEmpty = page.getByTestId('tasks-sidebar-empty');
+    await expect(sectionEmpty).toBeVisible({ timeout: 10_000 });
+    await expect(sectionEmpty).toContainText('No active tasks.');
   });
 
   // ─── Quick-create (⌘⇧T) ─────────────────────────────────────────────────
@@ -464,71 +461,65 @@ test.describe('§tasks', () => {
     await closeBoard(page);
   });
 
-  // ─── Drawer ──────────────────────────────────────────────────────────────
+  // ─── Sidebar section ─────────────────────────────────────────────────────
 
-  test('drawer: rows, active count, New button, and expand-to-modal', async () => {
+  test('sidebar section: rows, New button, row opens edit, and expand-to-modal', async () => {
     const { page } = app;
 
-    await page.getByTestId('main-toolbar-inspector').click();
-    const drawer = page.getByTestId('tasks-drawer');
-    await expect(drawer).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('tasks-sidebar-section')).toBeVisible({ timeout: 10_000 });
 
-    // All 5 tasks are still open/in_progress (none done) at this point.
-    await expect(page.getByTestId('tasks-drawer-count')).toHaveText('5', { timeout: 10_000 });
+    // All 5 tasks are still open/in_progress (none done) at this point —
+    // exactly VISIBLE_TASKS, so every row shows and there is no overflow link.
     for (const n of [1, 2, 3, 4, 5]) {
-      await expect(page.getByTestId(`tasks-drawer-row-${n}`)).toBeVisible();
+      await expect(page.getByTestId(`tasks-sidebar-row-${n}`)).toBeVisible({ timeout: 10_000 });
     }
+    await expect(page.getByTestId('tasks-sidebar-view-all')).toHaveCount(0);
 
-    // New button opens a drawer-local create modal (independent of the board).
-    await page.getByTestId('tasks-drawer-new').click();
+    // New button opens a section-local create modal (independent of the board).
+    await page.getByTestId('tasks-sidebar-new').click();
     await expect(page.getByTestId('tasks-edit-title')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tasks-edit-save')).toHaveText('Create task');
     await page.getByTestId('tasks-edit-cancel').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
 
     // Clicking a row opens the edit modal for that task.
-    await page.getByTestId('tasks-drawer-row-3').click();
+    await page.getByTestId('tasks-sidebar-row-3').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveValue('Alpha bug report', { timeout: 5_000 });
     await page.getByTestId('tasks-edit-cancel').click();
 
     // Expand button opens the full board modal.
-    await page.getByTestId('tasks-drawer-expand').click();
+    await page.getByTestId('tasks-sidebar-expand').click();
     await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 5_000 });
     await closeBoard(page);
-
-    await page.getByTestId('main-toolbar-inspector').click();
-    await expect(page.getByTestId('tasks-drawer')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('drawer: resize handle grows the drawer and clamps at the minimum height', async () => {
+  test('sidebar section: a 6th active task overflows into a View-all row', async () => {
     const { page } = app;
-    await page.getByTestId('main-toolbar-inspector').click();
-    const drawer = page.getByTestId('tasks-drawer');
-    await expect(drawer).toBeVisible({ timeout: 10_000 });
 
-    async function dragHandle(deltaY: number): Promise<void> {
-      const handle = page.getByTestId('tasks-drawer-resize-handle');
-      const box = await handle.boundingBox();
-      if (!box) throw new Error('tasks.spec: tasks-drawer-resize-handle not found');
-      const x = box.x + box.width / 2;
-      const y = box.y + box.height / 2;
-      await page.mouse.move(x, y);
-      await page.mouse.down();
-      await page.mouse.move(x, y + deltaY, { steps: 10 });
-      await page.mouse.up();
-    }
+    // The section caps at VISIBLE_TASKS = 5 rows — a 6th active task overflows
+    // into a "View all N tasks" link instead of scrolling.
+    await openQuickDialog(page);
+    await page.getByTestId('tasks-quick-title').fill('Overflow fixture task');
+    await page.getByTestId('tasks-quick-create').click();
+    await expect(page.getByTestId('tasks-quick-dialog')).toHaveCount(0, { timeout: 5_000 });
 
-    const before = (await drawer.boundingBox())!.height;
-    await dragHandle(-60); // dragging the handle UP grows the drawer (TasksDrawer.tsx handleMouseMove)
-    const grown = (await drawer.boundingBox())!.height;
-    expect(grown).toBeGreaterThan(before);
+    const viewAll = page.getByTestId('tasks-sidebar-view-all');
+    await expect(viewAll).toHaveText('View all 6 tasks', { timeout: 10_000 });
+    // Daemon list order is status, order_index, created_at — #6 (the newest
+    // 'open' task) is the row past the cap.
+    await expect(page.getByTestId('tasks-sidebar-row-6')).toHaveCount(0);
 
-    await dragHandle(2000); // drag far past the bottom — clamps at MIN_HEIGHT (80)
-    const clamped = (await drawer.boundingBox())!.height;
-    expect(Math.round(clamped)).toBe(80);
+    // The View-all link opens the full board modal.
+    await viewAll.click();
+    await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 5_000 });
 
-    await page.getByTestId('main-toolbar-inspector').click();
-    await expect(page.getByTestId('tasks-drawer')).toHaveCount(0, { timeout: 5_000 });
+    // Delete the fixture so the later delete tests keep their active counts.
+    await page.getByTestId('tasks-list-row-6').hover();
+    await page.getByTestId('tasks-list-row-delete-6').click();
+    await expect(page.getByTestId('tasks-list-row-6')).toHaveCount(0, { timeout: 5_000 });
+    await closeBoard(page);
+
+    await expect(viewAll).toHaveCount(0, { timeout: 5_000 });
   });
 
   // ─── Delete ──────────────────────────────────────────────────────────────

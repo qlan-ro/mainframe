@@ -19,22 +19,29 @@
  *                                `{sidebarRendered && <SidebarShell/>}`)
  *   show-sidebar-button        — layout/MainToolbar.tsx (rendered only when `!sidebarRendered`)
  *   daemon-footer-trigger      — features/daemon/DaemonFooterStatus.tsx popover trigger
- *   sidebar-footer-count-<idle|working|waiting> — layout/SidebarFooter.tsx (only rendered when count > 0)
+ *   main-toolbar-inspector     — layout/MainToolbar.tsx (toggles ui-prefs.inspectorVisible; the
+ *                                Context/Skills/Agents bottom panel lives in the right InspectorPane
+ *                                now, hidden by default — not in the left sidebar anymore)
  *   sidebar-bottom-resize      — features/context-panel/PanelResizeHandle.tsx (role=separator, pointer-drag)
- *   sidebar-bottom-tab-track   — features/context-panel/BottomPanel.tsx (used below only as a DOM anchor to
- *                                read the panel's own height style — the panel's root <div style={{height}}>
- *                                itself carries no testid; flagged in the report)
+ *   sidebar-bottom-panel       — features/context-panel/BottomPanel.tsx root <div style={{height}}>
  */
 
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 
-/** BottomPanel's root <div style={{height}}> has no testid; walk up from the tab-track
- *  testid anchor (its grandparent) to read the panel's live height via bounding box. */
+/** Idempotent: the inspector starts hidden (ui-prefs default) and the toggle flips —
+ *  only click when the pane isn't already mounted (retries re-enter with it open). */
+async function openInspector(page: Page): Promise<void> {
+  const pane = page.getByTestId('inspector-pane');
+  if (!(await pane.isVisible().catch(() => false))) {
+    await page.getByTestId('main-toolbar-inspector').click();
+    await expect(pane).toBeVisible({ timeout: 5_000 });
+  }
+}
+
 async function getBottomPanelHeight(page: Page): Promise<number> {
-  const box = await page.getByTestId('sidebar-bottom-tab-track').locator('xpath=ancestor::div[2]').boundingBox();
+  const box = await page.getByTestId('sidebar-bottom-panel').boundingBox();
   if (!box) throw new Error('sidebar-chrome: bottom panel container not found');
   return box.height;
 }
@@ -58,7 +65,8 @@ test.describe('§sidebar-chrome', () => {
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
-    // One never-run chat — the fixture the footer idle-count assertion needs.
+    // One chat so an active session exists — TasksModalHost renders null (and the
+    // tasks button no-ops) when useActiveIdentity() has no projectId.
     await createTauriChat(app.page, project.projectId, 'default');
   });
 
@@ -107,16 +115,10 @@ test.describe('§sidebar-chrome', () => {
     });
   });
 
-  test('footer idle count chip appears for a seeded, never-run chat', async () => {
-    const { page } = app;
-    const idleChip = page.getByTestId('sidebar-footer-count-idle');
-    await expect(idleChip).toBeVisible({ timeout: 10_000 });
-    await expect(idleChip).toHaveText('1');
-    // COUNT_META filters zero-count entries (layout/SidebarFooter.tsx) — with one idle chat
-    // and no run ever started, working/waiting must not render at all.
-    await expect(page.getByTestId('sidebar-footer-count-working')).toHaveCount(0);
-    await expect(page.getByTestId('sidebar-footer-count-waiting')).toHaveCount(0);
-  });
+  // TODO(flag): per-status footer count chips are hidden behind SHOW_SESSION_COUNTS = false
+  // (layout/SidebarFooter.tsx, "hidden for now per product request" — counts stay computed,
+  // ready to re-enable). Unskip when the flag flips back on.
+  test.skip('footer idle count chip appears for a seeded, never-run chat', async () => {});
 
   // TODO(recording): the 'working' footer-count chip needs a live agent turn caught mid-stream.
   // mock-cli caps each replayed event's delay at 120ms (ReplaySession.MAX_DELAY_MS,
@@ -132,6 +134,7 @@ test.describe('§sidebar-chrome', () => {
 
   test('dragging the resize handle up grows the bottom panel', async () => {
     const { page } = app;
+    await openInspector(page);
     const before = await getBottomPanelHeight(page);
     await dragResizeHandle(page, -60);
     const after = await getBottomPanelHeight(page);
@@ -140,6 +143,7 @@ test.describe('§sidebar-chrome', () => {
 
   test('dragging the resize handle down clamps at the minimum height', async () => {
     const { page } = app;
+    await openInspector(page);
     // BOTTOM_PANEL_MIN_HEIGHT = 120 (store/ui-prefs.ts clampBottomPanelHeight) — drag far past it.
     await dragResizeHandle(page, 1000);
     const after = await getBottomPanelHeight(page);
@@ -166,36 +170,8 @@ test.describe('§sidebar-chrome', () => {
 // ─── §sidebar-chrome — waiting count (a held permission gate is a stable state) ─
 
 test.describe('§sidebar-chrome — footer waiting count', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'permissions-interactive' });
-    project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'default');
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('the waiting count chip appears while a permission gate is pending and matches the pending count', async () => {
-    const { page } = app;
-    await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
-
-    // A pending permission gate holds the chat's displayStatus at 'waiting'
-    // (chat-manager.ts: `hasPending ? 'waiting' : …` takes precedence over 'working') until
-    // answered — unlike 'working', this is a stable, race-free window to assert against.
-    await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-
-    const waitingChip = page.getByTestId('sidebar-footer-count-waiting');
-    await expect(waitingChip).toBeVisible({ timeout: 10_000 });
-    await expect(waitingChip).toHaveText('1');
-    await expect(page.getByTestId('sidebar-footer-count-working')).toHaveCount(0);
-
-    await page.getByTestId('chat-permission-deny').click();
-    await waitForIdle(page, 60_000);
-    await expect(waitingChip).toHaveCount(0, { timeout: 10_000 });
-  });
+  // TODO(flag): the waiting chip is behind the same SHOW_SESSION_COUNTS = false flag
+  // (layout/SidebarFooter.tsx) as the idle chip above. The permission-gate flow this
+  // rode on is covered by gates.spec.ts; unskip when the flag flips back on.
+  test.skip('the waiting count chip appears while a permission gate is pending and matches the pending count', async () => {});
 });

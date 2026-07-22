@@ -59,4 +59,5 @@ docs/CODE-ANALYSIS*
 
 /packages/e2e/playwright-report/
 packages/e2e/plugins/mock-cli/index.js
+packages/e2e/logs/
 .playwright-cli/
