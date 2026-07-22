@@ -30,7 +30,7 @@ export default defineConfig(() => ({
   build: {
     target: 'es2020',
     // Don't minify for debug builds
-    minify: !process.env.TAURI_ENV_DEBUG ? ('esbuild' as const) : false,
+    minify: !process.env.TAURI_ENV_DEBUG ? ('oxc' as const) : false,
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
