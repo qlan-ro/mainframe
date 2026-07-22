@@ -10,6 +10,17 @@ updates:
         patterns:
           - '*'
     open-pull-requests-limit: 10
+    ignore:
+      # Held majors from the 2026-07 refresh (PR #496). Delete an entry when
+      # its unblock condition is met.
+      # typescript-eslint supports TS <6.1 only; TS 7 ships no public API
+      # until 7.1 (typescript-eslint#12518) — let 7.1 through.
+      - dependency-name: 'typescript'
+        versions: ['>=7.0.0 <7.1.0']
+      # monaco-languageclient stable (10.x) pins monaco 0.55.1; unblocks when
+      # its v11 goes stable. Scoped to 0.56.x so a future 0.57 resurfaces.
+      - dependency-name: 'monaco-editor'
+        versions: ['0.56.x']
 
   - package-ecosystem: 'github-actions'
     directory: '/'
