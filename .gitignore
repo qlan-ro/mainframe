@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+# pnpm-only repo: stray npm/yarn lockfiles mislead Dependabot
+package-lock.json
+yarn.lock
 
 # Build outputs
 dist/
