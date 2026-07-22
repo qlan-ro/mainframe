@@ -65,7 +65,7 @@ await build({
   entryPoints: [coreEntry],
   bundle: true,
   platform: 'node',
-  target: 'node20', // syntax floor; the sidecar runtime is Node 24 (a superset)
+  target: 'node22', // syntax floor; the sidecar runtime is Node 24 (a superset)
   format: 'cjs',
   external: EXTERNAL,
   outfile,

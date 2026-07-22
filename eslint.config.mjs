@@ -1,7 +1,8 @@
+import { defineConfig } from 'eslint/config';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default defineConfig(
   tseslint.configs.recommended,
   {
     rules: {
@@ -10,6 +11,6 @@ export default tseslint.config(
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
-  { ignores: ['**/dist/**', '**/out/**', '**/node_modules/**'] },
+  { ignores: ['**/dist/**', '**/out/**', '**/node_modules/**', '**/resources/daemon.cjs'] },
   eslintConfigPrettier,
 );

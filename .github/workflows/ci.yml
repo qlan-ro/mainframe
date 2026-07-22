@@ -1,18 +1,24 @@
 # .github/workflows/ci.yml
 name: CI
 
+# PR-only: merges re-landing on main were already tested on the PR, and main
+# only moves via PRs (plus the release-prep bot commit, which touches only
+# changelogs/docs). Re-running the suite post-merge doubled every run.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+
+# A new push to the same PR supersedes the in-flight run — cancel it.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   typecheck:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -50,7 +56,7 @@ jobs:
               pnpm --filter @qlan-ro/mainframe-app-electron exec vitest run --maxWorkers=4
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-workspace
         with:
@@ -63,10 +69,10 @@ jobs:
         run: ${{ matrix.command }}
 
   changeset-check:
-    if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'release/')
+    if: github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -76,9 +82,9 @@ jobs:
         with:
           version: 10
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       # This job only runs `changeset status`, which reads .changeset/ and git
