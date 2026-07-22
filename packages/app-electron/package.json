@@ -45,7 +45,7 @@
     "lucide-react": "^1.25.0",
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.7.0",
-    "nanoid": "^5.1.16",
+    "nanoid": "^6.0.0",
     "node-pty": "^1.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -60,7 +60,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
     "@playwright/experimental-ct-react": "^1.61.1",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.9.5",
