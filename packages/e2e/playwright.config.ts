@@ -14,15 +14,9 @@ export default defineConfig({
   retries: 1,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
-    // Electron/Chromium are launched per-suite in beforeAll, not via browser config
+    // Chromium is launched per-suite in beforeAll, not via browser config
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  // Two suites: the legacy Electron desktop harness (tests/) and the new app-tauri
-  // browser-mode harness (tests-tauri/). They share the daemon plumbing but launch
-  // different UIs, so they live in separate projects with isolated testDirs.
-  projects: [
-    { name: 'electron', testDir: './tests' },
-    { name: 'tauri', testDir: './tests-tauri' },
-  ],
+  projects: [{ name: 'tauri', testDir: './tests-tauri' }],
 });

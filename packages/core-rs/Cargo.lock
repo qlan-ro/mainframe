@@ -1155,6 +1155,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-adapter-mock"
+version = "0.0.0"
+dependencies = [
+ "mainframe-adapter-api",
+ "mainframe-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mainframe-automations"
 version = "0.0.0"
 dependencies = [
@@ -1226,6 +1239,7 @@ dependencies = [
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
  "mainframe-adapter-codex",
+ "mainframe-adapter-mock",
  "mainframe-background-tasks",
  "mainframe-db",
  "mainframe-launch",
@@ -1363,6 +1377,7 @@ dependencies = [
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
  "mainframe-adapter-codex",
+ "mainframe-adapter-mock",
  "mainframe-automations",
  "mainframe-background-tasks",
  "mainframe-chat",

@@ -122,7 +122,7 @@ test.describe('§sidebar-chrome', () => {
 
   // TODO(recording): the 'working' footer-count chip needs a live agent turn caught mid-stream.
   // mock-cli caps each replayed event's delay at 120ms (ReplaySession.MAX_DELAY_MS,
-  // plugins/mock-cli/src/session.ts), so any recording's 'working' displayStatus window collapses
+  // mainframe-adapter-mock/src/session.rs), so any recording's 'working' displayStatus window collapses
   // to well under a second end-to-end — not a window we can assert against race-free. Unlike
   // 'waiting' (see the describe below — a pending permission gate is a STABLE displayStatus that
   // persists until answered, chat-manager.ts:777's `hasPending ? 'waiting' : …` takes precedence

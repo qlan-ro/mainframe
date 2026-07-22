@@ -2,8 +2,7 @@
  * §sessions — Sessions sidebar + external-import specs for app-tauri browser mode.
  *
  * Ported from:
- *   packages/e2e/tests/45-sessions.spec.ts  (SP1, SP6, SP8, SP9)
- *   packages/e2e/tests/35-external-sessions.spec.ts (5 tests)
+ *   Session CRUD, filtering, and external-session import coverage.
  *
  * All tests run in E2E_MODE=mock (no AI). Tests use REST-seeded chats and seed
  * external JSONL files for the import suite.

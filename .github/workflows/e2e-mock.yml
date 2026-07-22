@@ -1,10 +1,9 @@
 # Runs the app-tauri Playwright e2e suite in MOCK mode (E2E_MODE=mock): AI-coupled specs
-# replay recorded NDJSON fixtures via the mock-cli plugin, un-mockable specs auto-skip, and
+# replay recorded NDJSON fixtures via the native Rust mock adapter, un-mockable specs auto-skip, and
 # non-AI specs run for real. Mock mode makes NO Claude/Codex API calls, so this needs no secrets.
 #
 # The suite drives the built @qlan-ro/mainframe-ui bundle in headless Chromium against the
-# Node daemon (browser-mode harness, fixtures/app-tauri.ts) — no Electron, no xvfb. The legacy
-# Electron project (tests/) is not run here; that shell is being retired.
+# Rust daemon (browser-mode harness, fixtures/app-tauri.ts) — no Electron or xvfb.
 name: e2e-mock
 
 # TEMPORARILY DISABLED from automatic runs (2026-07-06): the suite is too slow to gate PRs
@@ -38,21 +37,30 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
-      # node-pty has no Linux prebuild and compiles via node-gyp (mirrors ci.yml).
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/core-rs
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
+
+      # node-pty belongs to app-electron and still installs with the workspace. Remove this with app-electron.
       - run: npm install -g node-gyp
 
       - run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # build:app:tauri builds types → core (the daemon the harness spawns) and bakes the UI
+      # build:app:tauri builds types + the Rust daemon and bakes the UI
       # bundle for the e2e daemon port (31416, NOT prod 31415 — assertBundleTargetsTestPort
-      # aborts otherwise). build:mock bundles the mock-cli plugin.
+      # aborts otherwise).
       - run: pnpm --filter @qlan-ro/mainframe-e2e build:app:tauri
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
-      - run: pnpm --filter @qlan-ro/mainframe-e2e build:mock
-
       - run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
 
       # The harness and daemon run git operations (worktrees, status); the runner has no identity.

@@ -60,13 +60,17 @@ async fn list(
     Path(adapter_id): Path<String>,
     Query(q): Query<ProjectPathQuery>,
 ) -> Response {
-    if !claude_supported(&ctx, &adapter_id) {
+    let Some(adapter) = ctx.adapter_registry.get(&adapter_id) else {
         return fail(StatusCode::NOT_FOUND, NOT_SUPPORTED);
-    }
+    };
     let Some(project_path) = q.project_path.filter(|p| !p.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "projectPath is required");
     };
-    ok(skills::list_agents(&project_path).await)
+    match adapter.id() {
+        "claude" => ok(skills::list_agents(&project_path).await),
+        "mock-cli" => ok(mainframe_adapter_mock::skills::list_agents(&project_path).await),
+        _ => fail(StatusCode::NOT_FOUND, NOT_SUPPORTED),
+    }
 }
 
 #[derive(Deserialize)]
@@ -228,6 +232,32 @@ mod tests {
         )
         .await;
         assert_eq!(read(resp).await.0, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn list_mock_adapter_scans_project_agents() {
+        let temp = tempfile::tempdir().unwrap();
+        let agent_dir = temp.path().join(".claude/agents");
+        tokio::fs::create_dir_all(&agent_dir).await.unwrap();
+        tokio::fs::write(agent_dir.join("planner.md"), "# Plans changes\nBody\n")
+            .await
+            .unwrap();
+        let ctx = AppCtx::test_ctx();
+        ctx.adapter_registry
+            .register(Arc::new(mainframe_adapter_mock::MockCliAdapter::default()));
+
+        let response = list(
+            State(ctx),
+            Path("mock-cli".into()),
+            Query(ProjectPathQuery {
+                project_path: Some(temp.path().to_string_lossy().to_string()),
+            }),
+        )
+        .await;
+        let (status, body) = read(response).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"][0]["id"], "mock-cli:project:agent:planner");
     }
 }
 

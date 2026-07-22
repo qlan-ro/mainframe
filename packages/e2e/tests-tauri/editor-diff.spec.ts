@@ -325,7 +325,7 @@ test.describe('§editor-diff — Open in diff editor from EditFileCard', () => {
   test('"Open in diff editor" on the Edit tool card opens a diff tab with the tool\'s original/modified sides', async () => {
     const { page } = app;
     // Mock-cli replay is positional/content-agnostic (see gates.spec.ts and
-    // plugins/mock-cli/DESIGN.md) — the recorded reply sequence fires
+    // mainframe-adapter-mock/README.md) — the recorded reply sequence fires
     // regardless of what this text says.
     await sendMessage(page, 'Edit index.ts and add a comment "// changed by AI" on line 1');
     await waitForIdle(page, 60_000);

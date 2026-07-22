@@ -55,6 +55,16 @@ export function SessionsNewButton({
   const adapters = useAdapters();
   const port = useDaemonPort();
 
+  const initialize = async (localId: string, projectId: string) => {
+    try {
+      await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters });
+    } catch (error) {
+      mfToast.error('Couldn’t initialize session', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   /** Snapshot the currently-active session so a discard can return to it. */
   const rememberReturn = () => {
     useDraftReturnTarget.getState().setReturnTarget(runtime.threads.getState().mainThreadId ?? null);
@@ -67,7 +77,9 @@ export function SessionsNewButton({
         asChild
         onClick={() => {
           rememberReturn();
-          resetNewThreadDraft(runtime.threads.getState().newThreadId);
+          const localId = runtime.threads.getState().newThreadId;
+          resetNewThreadDraft(localId);
+          if (localId != null && adapters.length > 0) void initialize(localId, filterProjectId);
         }}
       >
         <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={ROW_BTN}>
@@ -90,13 +102,7 @@ export function SessionsNewButton({
       await runtime.threads.switchToNewThread();
       const nid = runtime.threads.getState().newThreadId;
       if (nid == null) return;
-      try {
-        await initializeDraft({ localId: nid, projectId, port, defaultAdapterId, adapters });
-      } catch (error) {
-        mfToast.error('Couldn’t initialize session', {
-          description: error instanceof Error ? error.message : String(error),
-        });
-      }
+      await initialize(nid, projectId);
     })();
   };
 

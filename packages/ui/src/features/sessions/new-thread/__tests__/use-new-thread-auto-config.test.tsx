@@ -132,7 +132,7 @@ beforeEach(() => {
   initializationGate = null;
   fakeFilterProjectId = null;
   fakeDefaultAdapterId = null;
-  fakeAdapters = [];
+  fakeAdapters = [{ id: 'claude', installed: true }];
   fakeAuiState = {
     threadListItem: null,
     thread: { messages: [] },
@@ -158,6 +158,19 @@ function setLocalThreadWithProject(localId = '__LOCALID_x', projectId = 'proj-42
 // ---------------------------------------------------------------------------
 
 describe('useNewThreadAutoConfig — project filter active on new local thread', () => {
+  it('waits for the adapter catalog before initializing', async () => {
+    setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+    fakeAdapters = [];
+    const { rerender } = renderHook(() => useNewThreadAutoConfig());
+
+    expect(setDraftConfigSpy).not.toHaveBeenCalled();
+
+    fakeAdapters = [{ id: 'mock-cli', installed: true }];
+    await act(async () => rerender());
+
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_x', completeSnapshot('proj-42', 'mock-cli'));
+  });
+
   it('calls setDraftConfig with {projectId, adapterId:"claude"} and no permissionMode (daemon applies defaultMode)', async () => {
     setLocalThreadWithProject('__LOCALID_x', 'proj-42');
 

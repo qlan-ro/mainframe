@@ -2,7 +2,7 @@
 
 _Product: Mainframe. Source flows: [`../FLOW-MAP.md`](../FLOW-MAP.md) C1–C11. Generated via the
 `test-scenarios` skill. Each scenario is QA-ready and maps to a Playwright spec under
-`packages/e2e/tests/`. Locators: `.locator('[data-testid="..."]')`._
+`packages/e2e/tests-tauri/`. Locators: `.locator('[data-testid="..."]')`._
 
 **Shared starting conditions (all scenarios):** app launched in Electron, daemon connected, a
 project open, a chat created with a Claude adapter. The composer is visible until a card replaces

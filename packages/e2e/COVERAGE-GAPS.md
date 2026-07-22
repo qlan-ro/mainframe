@@ -39,12 +39,11 @@ Not to be automated in this suite. **10 ids.**
 
 ## 2. Blocked — AI-coupled (needs a live agent turn)
 
-> **Unblock mechanism (working):** the mock-cli record/replay plugin (`plugins/mock-cli/`, see its
-> `DESIGN.md`/`PLAN.md`) lets these specs run in CI with no API call. Enroll a spec by giving its
-> `beforeAll` a `launchApp({ recordingKey })`, recording once with `E2E_MODE=record`, and committing
-> the fixture; CI then runs it with `E2E_MODE=mock`. **Proven on `06-permissions` (Interactive):**
-> recorded against real Claude, replays 3/3 green in mock mode with zero API calls. Remaining
-> AI-coupled specs can be enrolled the same way (record their fixtures incrementally).
+> **Unblock mechanism (working):** the native Rust replay adapter
+> (`packages/core-rs/crates/mainframe-adapter-mock`) runs committed NDJSON fixtures in CI with no
+> API call. Enroll a spec by passing a stable `recordingKey` to `launchTauriApp`, then add the
+> matching fixture under `fixtures/recordings`. Record mode was removed with the Node daemon;
+> future capture tooling should tee the Rust `SessionSink`.
 
 These render only after Claude produces a plan, a question, tool calls, or a PR — or the control
 itself dispatches a message to the agent. Coverable, but each adds a real API turn (cost +

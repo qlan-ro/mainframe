@@ -44,8 +44,16 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 type SettingsTab = 'general' | 'providers' | 'notifications' | 'remote-access' | 'about';
+const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+
+async function providerSetting(adapterId: string, key: string): Promise<unknown> {
+  const response = await fetch(`${DAEMON_BASE}/api/settings/providers`);
+  const body = (await response.json()) as { data?: Record<string, Record<string, unknown>> };
+  return body.data?.[adapterId]?.[key];
+}
 
 /** Open the dialog via the deterministic sidebar-button path (⌘, covered separately). */
 async function openSettings(page: Page): Promise<void> {
@@ -435,12 +443,16 @@ test.describe('§settings tuning inheritance', () => {
     // Switch the provider default model to the opus-tier one (declares xhigh+max efforts).
     await page.getByTestId('settings-mock-cli-model-dropdown-trigger').click();
     await page.getByTestId('settings-mock-cli-model-option-claude-opus-4-5-20251001').click();
+    await expect.poll(() => providerSetting('mock-cli', 'defaultModel')).toBe('claude-opus-4-5-20251001');
+    await closeSettings(page);
+    await openProviderPane(page, 'mock-cli');
 
     // Set the provider default effort to 'high'.
     const providerEffort = page.getByTestId('settings-mock-cli-default-effort');
     await expect(providerEffort).toBeVisible({ timeout: 5_000 });
     await providerEffort.click();
     await page.getByTestId('settings-mock-cli-default-effort-option-high').click();
+    await expect.poll(() => providerSetting('mock-cli', 'defaultEffort')).toBe('high');
     await expect(providerEffort).toContainText(/high/i);
 
     await closeSettings(page);

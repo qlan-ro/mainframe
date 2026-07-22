@@ -51,6 +51,7 @@ mainframe-display = { path = "crates/mainframe-display" }
 mainframe-adapter-api = { path = "crates/mainframe-adapter-api" }
 mainframe-adapter-claude = { path = "crates/mainframe-adapter-claude" }
 mainframe-adapter-codex = { path = "crates/mainframe-adapter-codex" }
+mainframe-adapter-mock = { path = "crates/mainframe-adapter-mock" }
 mainframe-plugins = { path = "crates/mainframe-plugins" }
 mainframe-chat = { path = "crates/mainframe-chat" }
 mainframe-background-tasks = { path = "crates/mainframe-background-tasks" }

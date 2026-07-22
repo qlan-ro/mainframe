@@ -17,12 +17,7 @@
  *   chat-composer-edit(-input/-cancel/-save) — queued-message edit mode (swaps the composer)
  *   chat-queued-message/-edit/-cancel        — queued user turn + its hover actions
  *
- * `/` skills: the mock-cli adapter has no `listSkills` (plugins/mock-cli/src/adapter.ts —
- * verified, not implemented), so `/api/adapters/mock-cli/skills` 404s and the skills list is
- * always empty under the default mock chat. The builtin `claude` adapter's `listSkills` is a
- * pure filesystem scan (packages/core/src/plugins/builtin/claude/skills.ts) with no CLI spawn,
- * so the skill-trigger describe below creates its chat with `adapterId: 'claude'` and never
- * calls `sendMessage` on it — no real API call happens, only the skills REST scan.
+ * `/` skills: the native mock-cli adapter scans only the temporary project's `.claude/skills`.
  *
  * Orphaned finding (see report): `QuoteBlock` (components/ui/assistant-ui/quote.tsx) is
  * exported but never mounted in UserMessage.tsx — a sent message does NOT render a quote block
@@ -211,7 +206,7 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
 
     // TODO(bug) fix: the `messaging` recording replay is positional, not content-matched (see
-    // plugins/mock-cli/src/session.ts's `advance()` — it only checks the `in` marker's METHOD,
+    // mainframe-adapter-mock's `advance()` — it only checks the `in` marker's method,
     // never its args), and `messaging.0.ndjson` encodes TWO turns in order: first "What is 2 + 2?"
     // (a throwaway one-word "4" reply), then "List the files...". Skipping straight to the
     // second prompt (as the first test in this describe previously did) actually consumes and

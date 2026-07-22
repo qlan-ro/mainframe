@@ -9,6 +9,5 @@
     "outDir": "dist"
   },
   "include": ["**/*.ts"],
-  "comment": "plugins/mock-cli is a standalone esbuild bundle with its own tsconfig (bundler resolution); excluded here so the Playwright NodeNext program doesn't choke on its extensionless imports.",
-  "exclude": ["dist", "node_modules", "plugins/mock-cli"]
+  "exclude": ["dist", "node_modules"]
 }

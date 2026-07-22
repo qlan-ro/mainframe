@@ -8,7 +8,7 @@
  * ScopedListRow,use-session-context,use-sidebar-skills,derive-session-items}.tsx,
  * packages/ui/src/store/session-todos.ts, packages/core/src/chat/context-tracker.ts,
  * packages/core/src/server/routes/{context,attachments,skills,agents}.ts,
- * packages/e2e/plugins/mock-cli/src/{adapter,session}.ts.
+ * packages/core-rs/crates/mainframe-adapter-mock.
  *
  * ── Ground-truth data-source decision (read before editing) ──────────────────
  * The mock-cli adapter used by every E2E_MODE=mock chat CANNOT populate most of
@@ -22,7 +22,7 @@
  *     tool calls a recording replays.
  * `MockCliAdapter` NOW implements `listSkills`/`listAgents` (project-scope only,
  * `.claude/skills/<name>/SKILL.md` + `.claude/agents/<name>.md` — see
- * plugins/mock-cli/src/skills.ts), so seeding those directories in the temp
+ * mainframe-adapter-mock/src/skills.rs), so seeding those directories in the temp
  * project IS reflected in the Skills/Agents tabs — see the dedicated describe
  * below. `useSidebarSkills` keys the fetch off `useActiveIdentity()`'s
  * `projectPath`/`adapterId`, so a chat must be active first.
@@ -104,6 +104,14 @@ function countChip(button: ReturnType<Page['getByTestId']>) {
   return button.locator('span').last();
 }
 
+async function openInspector(page: Page): Promise<void> {
+  const pane = page.getByTestId('inspector-pane');
+  if (!(await pane.isVisible().catch(() => false))) {
+    await page.getByTestId('main-toolbar-inspector').click();
+    await expect(pane).toBeVisible({ timeout: 5_000 });
+  }
+}
+
 // ─── §context-panel — no active chat ──────────────────────────────────────────
 
 test.describe('§context-panel — no active chat', () => {
@@ -111,17 +119,18 @@ test.describe('§context-panel — no active chat', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
+    await openInspector(app.page);
   });
 
   test.afterAll(async () => {
     await closeTauriApp(app);
   });
 
-  test('bottom tabs render with zero counts before any chat is active', async () => {
+  test('bottom tabs omit count badges before any chat is active', async () => {
     const { page } = app;
-    await expect(countChip(page.getByTestId('sidebar-bottom-tab-context'))).toHaveText('0');
-    await expect(countChip(page.getByTestId('sidebar-bottom-tab-skills'))).toHaveText('0');
-    await expect(countChip(page.getByTestId('sidebar-bottom-tab-agents'))).toHaveText('0');
+    await expect(page.getByTestId('sidebar-bottom-tab-context')).toHaveText('Context');
+    await expect(page.getByTestId('sidebar-bottom-tab-skills')).toHaveText('Skills');
+    await expect(page.getByTestId('sidebar-bottom-tab-agents')).toHaveText('Agents');
   });
 
   test('the Context tab shows the no-active-chat empty state', async () => {
@@ -138,6 +147,7 @@ test.describe('§context-panel — tab switching', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
+    await openInspector(app.page);
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'default');
   });
@@ -195,10 +205,11 @@ test.describe('§context-panel — skills and agents rows', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
+    await openInspector(app.page);
     project = await createTauriProject(app.page);
 
     // MockCliAdapter.listSkills/listAgents scan ONLY `<projectPath>/.claude/{skills,agents}`
-    // (plugins/mock-cli/src/skills.ts) — seed both before selecting the chat that triggers
+    // (mainframe-adapter-mock/src/skills.rs) — seed both before selecting the chat that triggers
     // useSidebarSkills's fetch.
     const skillDir = path.join(project.projectPath, '.claude', 'skills', 'write-tests');
     mkdirSync(skillDir, { recursive: true });
@@ -256,6 +267,7 @@ test.describe('§context-panel — tasks section', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'todo-write' });
+    await openInspector(app.page);
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
@@ -305,6 +317,7 @@ test.describe('§context-panel — sections, file-open, and attachments', () => 
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
+    await openInspector(app.page);
     project = await createTauriProject(app.page);
     chatId = await createTauriChat(app.page, project.projectId, 'default');
 

@@ -327,7 +327,7 @@ test.describe('§composer plan-mode toggle', () => {
 
   // PlanModeToggle.tsx returns null unless `adapter.capabilities.planMode` is true. Every
   // adapter registered in this suite (builtin claude/codex, plus mock-cli under E2E_MODE=mock —
-  // verified in plugins/mock-cli/src/adapter.ts: `capabilities = { planMode: true }`) declares
+  // verified in mainframe-adapter-mock/src/adapter.rs: `plan_mode: true`) declares
   // the capability, so there's no non-capable adapter here to assert the hidden branch against;
   // this exercises the visible/on path only.
   test('is visible for the plan-capable adapter and aria-pressed flips with active styling', async () => {

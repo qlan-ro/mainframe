@@ -8,7 +8,7 @@
  * project filter) it does nothing, so the picker shows for the user to choose a
  * project. The daemon chat is still created only on first send (D3).
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { useSettingsStore } from '@/store/settings';
@@ -26,10 +26,13 @@ export function useNewThreadAutoConfig(): void {
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
+  const adaptersRef = useRef(adapters);
+  adaptersRef.current = adapters;
+  const adaptersReady = adapters.length > 0;
   const port = useDaemonPort();
 
   useEffect(() => {
-    if (localId == null || filterProjectId == null) return;
+    if (localId == null || filterProjectId == null || !adaptersReady) return;
     const isNewLocal = localId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
     // A just-discarded draft (✕) still looks fresh here — its draft-config and
     // ready flag were just cleared, and switchToThread(target) away from it
@@ -37,11 +40,17 @@ export function useNewThreadAutoConfig(): void {
     // draft the user just closed (see discarded-drafts.ts).
     const readyStore = useNewThreadReady.getState();
     if (!isNewLocal || readyStore.isReady(localId) || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
-    const promise = initializeDraft({ localId, projectId: filterProjectId, port, defaultAdapterId, adapters });
+    const promise = initializeDraft({
+      localId,
+      projectId: filterProjectId,
+      port,
+      defaultAdapterId,
+      adapters: adaptersRef.current,
+    });
     const attempt = useNewThreadReady.getState().getInitialization(localId).attempt;
     void promise.catch((error: unknown) => console.warn('[new-thread-auto-config] initialization failed', error));
     return () => {
       if (attempt != null) useNewThreadReady.getState().cancelInitialization(localId, attempt);
     };
-  }, [localId, itemStatus, messageCount, filterProjectId, port, defaultAdapterId, adapters]);
+  }, [localId, itemStatus, messageCount, filterProjectId, port, defaultAdapterId, adaptersReady]);
 }

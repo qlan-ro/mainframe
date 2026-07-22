@@ -138,6 +138,14 @@ async function closePicker(page: Page): Promise<void> {
   await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
 }
 
+async function recoverToLocal(page: Page): Promise<void> {
+  await expect(page.getByTestId('daemon-unreachable')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('daemon-unreachable-switchlocal').click();
+  await expect(page.getByTestId('daemon-unreachable')).toHaveCount(0, { timeout: 5_000 });
+  await waitConnected(page, 30_000);
+  await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+}
+
 test.describe('§daemon-picker', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
@@ -272,10 +280,11 @@ test.describe('§daemon-picker', () => {
     await expect(page.getByTestId('daemon-add-url')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('daemon-pair-code')).toHaveCount(0, { timeout: 5_000 });
 
+    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
+    await recoverToLocal(page);
+
     // The row is added — label is derived from the host
-    // ("127.0.0.1:58202".split('.')[0] === "127"). Pairing also auto-switches
-    // the active daemon now (fixed — see the auto-switch test below), so this
-    // describe no longer ends on local until that test resets it.
+    // ("127.0.0.1:58202".split('.')[0] === "127").
     await openPicker(page);
     await expect(remoteRow(page)).toBeVisible({ timeout: 10_000 });
     await expect(remoteRow(page)).toContainText('127');
@@ -294,9 +303,8 @@ test.describe('§daemon-picker', () => {
   test('pairing auto-switches the active daemon and shows a "Paired" confirmation', async () => {
     const { page } = app;
 
-    // With the fix, "completing pairing adds a remote daemon row" above now ALSO
-    // auto-switches — establish a known starting state (local) so this test's own
-    // auto-switch assertion below is meaningful, not just inherited ambient state.
+    // Establish a known starting state so this test's auto-switch assertion is
+    // meaningful, not inherited ambient state.
     await openPicker(page);
     await page.getByTestId('daemon-row-local').click();
     await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac', { timeout: 10_000 });
@@ -344,17 +352,10 @@ test.describe('§daemon-picker', () => {
     await expect(page.getByTestId('daemon-footer-trigger')).not.toContainText('This Mac', { timeout: 10_000 });
     await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
 
-    // Clean up this test's own second remote (switch back to local, then
-    // remove it) so the "exactly one remote" invariant the rest of this suite
-    // relies on (remoteRow/manageButton's suffix-only locators) holds after.
-    await openPicker(page);
-    await page.getByTestId('daemon-row-local').click();
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac', { timeout: 10_000 });
+    await recoverToLocal(page);
 
-    // Row selection doesn't necessarily dismiss the picker — force a known
-    // (closed) state before reopening it for the removal below.
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
+    // Clean up this test's own second remote so the "exactly one remote"
+    // invariant the rest of this suite relies on holds after.
     await openPicker(page);
     const newRow = daemonRowByHost(page, '58203');
     await newRow.locator('[data-testid$="-manage"]').click();
