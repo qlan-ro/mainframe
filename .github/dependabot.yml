@@ -5,6 +5,9 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    # PRs are handled manually; don't auto-rebase them every time main moves
+    # (comment `@dependabot rebase` on a PR when needed).
+    rebase-strategy: 'disabled'
     groups:
       dependencies:
         patterns:
@@ -26,3 +29,4 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    rebase-strategy: 'disabled'
