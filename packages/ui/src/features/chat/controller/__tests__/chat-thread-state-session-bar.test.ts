@@ -218,3 +218,31 @@ describe('reduceChatThreadState — compact.done', () => {
     expect(after.interactions).toBe(compacting.interactions);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Run ends mid-compaction — the pill must not strand
+// ---------------------------------------------------------------------------
+
+describe('reduceChatThreadState — run end clears compacting', () => {
+  it('clears compacting when run.stopped arrives without compact.done', () => {
+    const base = createChatThreadState(CHAT_ID);
+    const compacting = reduceChatThreadState(base, { type: 'compact.started' });
+    expect(compacting.compacting).toBe(true);
+
+    const after = reduceChatThreadState(compacting, { type: 'run.stopped' });
+
+    expect(after.compacting).toBe(false);
+    expect(after.runState).toEqual({ type: 'idle' });
+  });
+
+  it('clears compacting when run.failed arrives without compact.done', () => {
+    const base = createChatThreadState(CHAT_ID);
+    const compacting = reduceChatThreadState(base, { type: 'compact.started' });
+    expect(compacting.compacting).toBe(true);
+
+    const after = reduceChatThreadState(compacting, { type: 'run.failed', error: new Error('boom') });
+
+    expect(after.compacting).toBe(false);
+    expect(after.runState).toEqual({ type: 'error', error: new Error('boom') });
+  });
+});

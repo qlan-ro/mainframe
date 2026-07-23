@@ -331,6 +331,123 @@ fn clears_current_turn_plan_on_turn_completed() {
     assert_eq!(state.current_turn_plan, None);
 }
 
+// --- contextCompaction live mapping + thread/compacted dedupe ---
+//
+// Codex 0.144.3 emits the canonical v2 item `{"type":"contextCompaction","id":…}`
+// through item/started → item/completed on every compaction path (verified in
+// core/src/compact{,_remote,_remote_v2}.rs at rust-v0.144.3); the deprecated
+// thread/compacted notification is kept only as a legacy fallback and must never
+// double-emit the end pill.
+
+fn compaction_item() -> Value {
+    json!({ "id": "comp_1", "type": "contextCompaction" })
+}
+
+fn dispatch(rec: &Recorder, state: &mut CodexSessionState, method: &str, params: Value) {
+    handle_notification(method, &params, &rec.sink(), state);
+}
+
+#[test]
+fn context_compaction_item_started_then_completed_fires_start_and_end_exactly_once() {
+    let rec = Recorder::new();
+    let mut state = state();
+    dispatch(
+        &rec,
+        &mut state,
+        "item/started",
+        json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": compaction_item() }),
+    );
+    assert_eq!(rec.compact_starts(), 1);
+    assert_eq!(rec.compacts(), 0);
+
+    dispatch(
+        &rec,
+        &mut state,
+        "item/completed",
+        json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": compaction_item() }),
+    );
+    assert_eq!(rec.compact_starts(), 1);
+    assert_eq!(rec.compacts(), 1);
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
+
+#[test]
+fn legacy_thread_compacted_after_item_completed_does_not_double_emit() {
+    let rec = Recorder::new();
+    let mut state = state();
+    dispatch(
+        &rec,
+        &mut state,
+        "item/completed",
+        json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": compaction_item() }),
+    );
+    dispatch(
+        &rec,
+        &mut state,
+        "thread/compacted",
+        json!({ "threadId": "parent_thread" }),
+    );
+    assert_eq!(rec.compacts(), 1);
+}
+
+#[test]
+fn item_completed_after_legacy_thread_compacted_does_not_double_emit() {
+    let rec = Recorder::new();
+    let mut state = state();
+    dispatch(
+        &rec,
+        &mut state,
+        "thread/compacted",
+        json!({ "threadId": "parent_thread" }),
+    );
+    dispatch(
+        &rec,
+        &mut state,
+        "item/completed",
+        json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": compaction_item() }),
+    );
+    assert_eq!(rec.compacts(), 1);
+}
+
+#[test]
+fn legacy_thread_compacted_alone_still_fires_exactly_one_compact() {
+    let rec = Recorder::new();
+    let mut state = state();
+    dispatch(
+        &rec,
+        &mut state,
+        "thread/compacted",
+        json!({ "threadId": "parent_thread" }),
+    );
+    assert_eq!(rec.compacts(), 1);
+}
+
+#[test]
+fn turn_started_resets_the_dedupe_so_a_later_compaction_emits_again() {
+    let rec = Recorder::new();
+    let mut state = state();
+    dispatch(
+        &rec,
+        &mut state,
+        "item/completed",
+        json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": compaction_item() }),
+    );
+    dispatch(
+        &rec,
+        &mut state,
+        "turn/started",
+        json!({ "threadId": "parent_thread", "turn": { "id": "turn_2" } }),
+    );
+    dispatch(
+        &rec,
+        &mut state,
+        "item/completed",
+        json!({ "threadId": "parent_thread", "turnId": "turn_2", "item": compaction_item() }),
+    );
+    assert_eq!(rec.compacts(), 2);
+}
+
 // Codex omits contextTokens in TS, so the sink falls back to the turn's usage
 // input tokens (event-handler.ts:366). Rust's Option<i64> can't carry the
 // undefined/null distinction, so the mapper resolves that fallback here by

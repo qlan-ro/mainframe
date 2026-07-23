@@ -20,6 +20,7 @@ pub struct Recorded {
     pub todos: Vec<Vec<TodoItem>>,
     pub inits: Vec<String>,
     pub compacts: usize,
+    pub compact_starts: usize,
     pub provider_quotas: Vec<(String, ProviderQuota)>,
 }
 
@@ -51,6 +52,12 @@ impl Recorder {
     pub fn provider_quotas(&self) -> Vec<(String, ProviderQuota)> {
         self.0.lock().unwrap().provider_quotas.clone()
     }
+    pub fn compacts(&self) -> usize {
+        self.0.lock().unwrap().compacts
+    }
+    pub fn compact_starts(&self) -> usize {
+        self.0.lock().unwrap().compact_starts
+    }
 }
 
 struct RecordingSink(Arc<Mutex<Recorded>>);
@@ -76,7 +83,9 @@ impl SessionSink for RecordingSink {
     fn on_compact(&self) {
         self.0.lock().unwrap().compacts += 1;
     }
-    fn on_compact_start(&self) {}
+    fn on_compact_start(&self) {
+        self.0.lock().unwrap().compact_starts += 1;
+    }
     fn on_context_usage(&self, _usage: ContextUsage) {}
     fn on_plan_file(&self, _file_path: &str) {}
     fn on_skill_file(&self, _entry: SkillFileEntry) {}

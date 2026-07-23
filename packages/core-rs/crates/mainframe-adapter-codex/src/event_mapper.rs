@@ -57,6 +57,8 @@ pub struct CodexSessionState {
     pub collab_child_threads: HashMap<String, String>,
     /// child thread id → spawn prompt (captured from `spawnAgent` items).
     pub spawn_prompts: HashMap<String, String>,
+    /// Per-turn dedupe: compact-done already emitted (item or legacy `thread/compacted` path).
+    pub compaction_emitted: bool,
 }
 
 pub fn handle_notification(
@@ -98,7 +100,7 @@ pub fn handle_notification(
                 handle_token_usage(p, state);
             }
         }
-        "thread/compacted" => sink.on_compact(),
+        "thread/compacted" => crate::compaction::handle_compaction_completed(sink, state),
         "item/started" => {
             if let Ok(p) = serde_json::from_value::<ItemStartedParams>(params.clone()) {
                 handle_item_started(p, sink, state);
@@ -166,6 +168,7 @@ fn handle_account_rate_limits_updated(
 fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
     state.current_turn_plan = None;
     state.current_turn_id = Some(params.turn.id);
+    state.compaction_emitted = false;
 }
 
 fn handle_plan_delta(params: PlanDeltaParams, state: &mut CodexSessionState) {
@@ -182,18 +185,22 @@ fn handle_item_started(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
-    let Ok(ThreadItem::CollabAgentToolCall(item)) =
-        serde_json::from_value::<ThreadItem>(params.item)
-    else {
-        return;
-    };
-    // `spawnAgent` is dispatch metadata only — stash its prompt for the later `wait` card.
-    if item.tool == "spawnAgent" {
-        stash_spawn_prompts(&item, state);
-        return;
+    match serde_json::from_value::<ThreadItem>(params.item) {
+        Ok(ThreadItem::ContextCompaction(_)) => {
+            crate::compaction::handle_compaction_started(sink);
+        }
+        Ok(ThreadItem::CollabAgentToolCall(item)) => {
+            // `spawnAgent` is dispatch metadata only — stash its prompt for the later `wait` card.
+            if item.tool == "spawnAgent" {
+                stash_spawn_prompts(&item, state);
+                return;
+            }
+            // Only `wait` items render a card.
+            emit_collab_task_group_start(&item, sink, state);
+        }
+        // Every other item type renders from its terminal `item/completed` event.
+        Ok(_) | Err(_) => {}
     }
-    // Only `wait` items render a card.
-    emit_collab_task_group_start(&item, sink, state);
 }
 
 fn handle_item_completed(
@@ -305,6 +312,9 @@ fn handle_item_completed(
             if !todos.is_empty() {
                 sink.on_todo_update(todos);
             }
+        }
+        ThreadItem::ContextCompaction(_) => {
+            crate::compaction::handle_compaction_completed(sink, state);
         }
         _ => {
             tracing::debug!(module = "codex:events", "codex: unhandled item type");

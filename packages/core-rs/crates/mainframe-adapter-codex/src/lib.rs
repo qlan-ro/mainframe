@@ -14,6 +14,7 @@
 
 pub mod adapter;
 pub mod approval_handler;
+pub(crate) mod compaction;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;

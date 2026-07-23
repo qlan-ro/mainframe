@@ -45,10 +45,7 @@ export interface ChatPermissionEntry {
 export type LoadState = { type: 'idle' } | { type: 'loading' } | { type: 'ready' } | { type: 'error'; error: unknown };
 
 export type RunState =
-  | { type: 'idle' }
-  | { type: 'running' }
-  | { type: 'cancelling' }
-  | { type: 'error'; error: unknown };
+  { type: 'idle' } | { type: 'running' } | { type: 'cancelling' } | { type: 'error'; error: unknown };
 
 export interface ChatThreadState {
   /**
@@ -82,7 +79,8 @@ export interface ChatThreadState {
    * chatConfig when null.
    */
   readonly contextUsage: { percentage: number; totalTokens: number; maxTokens: number } | null;
-  /** True between `chat.compacting` and `chat.compactDone` — session-bar status. */
+  /** True between `chat.compacting` and `chat.compactDone` (also cleared on
+   *  run end) — drives the transcript "Compacting…" pill. */
   readonly compacting: boolean;
   /**
    * Live background work (agents / bg bash / workflows) keyed by task id — fed
@@ -252,11 +250,13 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'run.cancelling':
       return { ...state, runState: { type: 'cancelling' } };
 
+    // Run-end also clears `compacting`: a run that dies mid-compaction never
+    // sends compact.done, and the pill must not strand.
     case 'run.stopped':
-      return { ...state, runState: { type: 'idle' } };
+      return { ...state, runState: { type: 'idle' }, compacting: false };
 
     case 'run.failed':
-      return { ...state, runState: { type: 'error', error: event.error } };
+      return { ...state, runState: { type: 'error', error: event.error }, compacting: false };
 
     case 'chat.id.adopted':
       return state.chatId === event.chatId ? state : { ...state, chatId: event.chatId };
