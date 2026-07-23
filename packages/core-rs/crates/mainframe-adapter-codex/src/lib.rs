@@ -19,6 +19,7 @@ pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
 pub mod history;
+pub(crate) mod image_generation_render;
 pub mod item_types;
 pub mod jsonrpc;
 pub mod plan_mode_handler;

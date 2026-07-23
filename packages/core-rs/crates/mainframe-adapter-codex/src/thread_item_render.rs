@@ -2,19 +2,21 @@
 //! `event_mapper.rs`'s `handle_item_completed` (was ~117 lines, over the
 //! 50-line ceiling) — the notification-dispatch shell stays in event_mapper.rs.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
-use mainframe_types::chat::{MessageContent, TodoItem, TodoStatus};
+use mainframe_types::chat::{TodoItem, TodoStatus};
 
 use crate::event_mapper::CodexSessionState;
 use crate::history::{
-    bash_input, collab_agent_tool_use, file_change_input, image_block, is_exec_error,
-    mcp_result_content, parse_unified_diff, reasoning_text, text_block, thinking_block,
-    tool_result_block, tool_use_block,
+    bash_input, collab_agent_tool_use, file_change_input, is_exec_error, mcp_result_content,
+    parse_unified_diff, reasoning_text, text_block, thinking_block, tool_result_block,
+    tool_use_block,
 };
+use crate::image_generation_render::handle_image_generation;
 use crate::item_types::{
-    CollabAgentToolCallItem, CommandExecutionItem, FileChangeItem, ImageGenerationItem,
+    CollabAgentToolCallItem, CommandExecutionItem, DynamicToolCallItem, FileChangeItem,
     McpToolCallItem, ReasoningItem, ThreadItem, TodoListItem,
 };
 use crate::thread_registry::{agent_title, describe_agent, lookup_agent_metadata};
@@ -39,10 +41,48 @@ pub(crate) fn render_completed_item(
         ThreadItem::ContextCompaction(_) => {
             crate::compaction::handle_compaction_completed(sink, state);
         }
-        _ => {
+        ThreadItem::DynamicToolCall(d) => render_dynamic_tool_call(&d, sink),
+        ThreadItem::EnteredReviewMode(_) => skip_item("enteredReviewMode"),
+        ThreadItem::ExitedReviewMode(_) => skip_item("exitedReviewMode"),
+        ThreadItem::ImageView(_) => skip_item("imageView"),
+        ThreadItem::Sleep(_) => skip_item("sleep"),
+        ThreadItem::HookPrompt(_) => skip_item("hookPrompt"),
+        // TaskCard rendering for sub-agent activity pings is B3 territory; this
+        // placeholder only exists to keep the match exhaustive.
+        ThreadItem::SubAgentActivity(_) => {}
+        ThreadItem::WebSearch(_) | ThreadItem::UserMessage(_) => {
             tracing::debug!(module = "codex:events", "codex: unhandled item type");
         }
     }
+}
+
+fn skip_item(name: &str) {
+    tracing::debug!(
+        module = "codex:events",
+        item = name,
+        "skipping unrendered thread item"
+    );
+}
+
+fn dynamic_tool_call_name(d: &DynamicToolCallItem) -> String {
+    match d.namespace.as_deref().filter(|ns| !ns.is_empty()) {
+        Some(ns) => format!("{ns}__{}", d.tool),
+        None => d.tool.clone(),
+    }
+}
+
+fn dynamic_tool_call_input(arguments: &serde_json::Value) -> HashMap<String, serde_json::Value> {
+    match arguments.as_object() {
+        Some(map) => map.clone().into_iter().collect(),
+        None if arguments.is_null() => HashMap::new(),
+        None => HashMap::from([("arguments".to_string(), arguments.clone())]),
+    }
+}
+
+fn render_dynamic_tool_call(d: &DynamicToolCallItem, sink: &Arc<dyn SessionSink>) {
+    let name = dynamic_tool_call_name(d);
+    let input = dynamic_tool_call_input(&d.arguments);
+    sink.on_message(vec![tool_use_block(&d.id, &name, input)], None);
 }
 
 fn render_reasoning(r: &ReasoningItem, sink: &Arc<dyn SessionSink>) {
@@ -118,81 +158,6 @@ fn normalize_todo_list_items(item: &TodoListItem) -> Vec<TodoItem> {
             active_form: t.text.clone(),
         })
         .collect()
-}
-
-fn handle_image_generation(img: ImageGenerationItem, sink: &Arc<dyn SessionSink>) {
-    let prompt = img.revised_prompt.filter(|p| !p.is_empty());
-    if let Some(inline) = img.result {
-        let media = media_type_from_extension(img.saved_path.as_deref().unwrap_or(".png"));
-        emit_image(sink, prompt.as_deref(), &media, &inline);
-        return;
-    }
-    let Some(path) = img.saved_path else {
-        tracing::warn!(module = "codex:events", id = %img.id, "codex: imageGeneration missing both result and savedPath");
-        return;
-    };
-    // Read the saved image off disk asynchronously, then emit.
-    let sink = sink.clone();
-    tokio::spawn(async move {
-        match tokio::fs::read(&path).await {
-            Ok(bytes) => {
-                let media = media_type_from_extension(&path);
-                emit_image(&sink, prompt.as_deref(), &media, &base64_encode(&bytes));
-            }
-            Err(err) => {
-                tracing::warn!(module = "codex:events", err = %err, path, "codex: failed to read generated image");
-            }
-        }
-    });
-}
-
-fn emit_image(sink: &Arc<dyn SessionSink>, prompt: Option<&str>, media_type: &str, data: &str) {
-    let mut content: Vec<MessageContent> = vec![image_block(media_type, data)];
-    if let Some(p) = prompt {
-        content.insert(0, text_block(p));
-    }
-    sink.on_message(content, None);
-}
-
-fn media_type_from_extension(path: &str) -> String {
-    let ext = std::path::Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        _ => "application/octet-stream",
-    }
-    .to_string()
-}
-
-/// Minimal standard base64 encoder (no base64 crate in the allowlist), used only
-/// for the `imageGeneration` savedPath disk-read fallback.
-fn base64_encode(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let b0 = chunk[0] as usize;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
-        out.push(TABLE[b0 >> 2] as char);
-        out.push(TABLE[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
-        out.push(if chunk.len() > 1 {
-            TABLE[((b1 & 0x0f) << 2) | (b2 >> 6)] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TABLE[b2 & 0x3f] as char
-        } else {
-            '='
-        });
-    }
-    out
 }
 
 fn handle_collab_completed(
