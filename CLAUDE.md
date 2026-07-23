@@ -2,6 +2,20 @@
 
 AI-native development environment for orchestrating agents.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainframe/plugins/todos/data.db`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet — created lazily by `/domain-modeling`). See `docs/agents/domain.md`.
+
 # Workflow
 
 - Before any new bug/feature work, pull latest main and start a new branch on it

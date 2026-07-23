@@ -63,3 +63,4 @@ docs/CODE-ANALYSIS*
 /packages/e2e/playwright-report/
 packages/e2e/logs/
 .playwright-cli/
+dist-local/
