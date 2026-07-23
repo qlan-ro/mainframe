@@ -30,6 +30,13 @@ pub enum ThreadItem {
     UserMessage(UserMessageItem),
     CollabAgentToolCall(CollabAgentToolCallItem),
     ContextCompaction(ContextCompactionItem),
+    SubAgentActivity(SubAgentActivityItem),
+    DynamicToolCall(DynamicToolCallItem),
+    EnteredReviewMode(EnteredReviewModeItem),
+    ExitedReviewMode(ExitedReviewModeItem),
+    ImageView(ImageViewItem),
+    Sleep(SleepItem),
+    HookPrompt(HookPromptItem),
 }
 
 // PORT STATUS: src/plugins/builtin/codex/item-types.ts (119 lines)
@@ -42,3 +49,6 @@ pub enum ThreadItem {
 // notes: keeps `move_path` snake_case (Codex emits it snake) by NOT applying
 // notes: rename_all_fields. Internal to the crate (deserialize from Codex JSON-RPC),
 // notes: not daemon wire types.
+// notes: B1 (2026-07-24) added 7 variants Codex 0.144.3 introduced: subAgentActivity,
+// notes: dynamicToolCall, enteredReviewMode, exitedReviewMode, imageView, sleep,
+// notes: hookPrompt. event_mapper rendering for them is B2/B3, not this file.

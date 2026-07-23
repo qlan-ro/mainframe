@@ -197,3 +197,84 @@ pub struct CollabAgentToolCallItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agents_states: Option<HashMap<String, AgentStateEntry>>,
 }
+
+/// A live ping about a spawned sub-agent's activity, keyed by `agent_thread_id`
+/// into the parent `CollabAgentToolCall`. Rendering (TaskCard updates) is B3
+/// territory; this struct only lets the item round-trip through the union.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubAgentActivityItem {
+    pub id: String,
+    pub kind: String,
+    pub agent_thread_id: String,
+    pub agent_path: String,
+}
+
+/// One block of a `dynamicToolCall`'s `contentItems`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum DynamicToolCallContentItem {
+    InputText { text: String },
+    InputImage { image_url: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicToolCallItem {
+    pub id: String,
+    #[serde(default)]
+    pub namespace: Option<String>,
+    pub tool: String,
+    #[serde(default)]
+    pub arguments: serde_json::Value,
+    pub status: String,
+    #[serde(default)]
+    pub content_items: Option<Vec<DynamicToolCallContentItem>>,
+    #[serde(default)]
+    pub success: Option<bool>,
+    #[serde(default)]
+    pub duration_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnteredReviewModeItem {
+    pub id: String,
+    pub review: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExitedReviewModeItem {
+    pub id: String,
+    pub review: String,
+}
+
+/// `path` is Codex's `LegacyAppPathString`, which serializes as a plain string.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageViewItem {
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SleepItem {
+    pub id: String,
+    pub duration_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HookPromptFragment {
+    pub text: String,
+    pub hook_run_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HookPromptItem {
+    pub id: String,
+    pub fragments: Vec<HookPromptFragment>,
+}
