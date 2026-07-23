@@ -27,6 +27,7 @@ pub mod quota_pull;
 pub mod quota_rate_limit;
 pub mod rollout_reader;
 pub mod session;
+pub(crate) mod thread_item_render;
 pub(crate) mod thread_item_variants;
 pub mod thread_registry;
 pub mod transcript;
