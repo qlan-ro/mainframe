@@ -15,6 +15,7 @@ import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
+import { CompactingPill } from '../messages/SystemMessage';
 import { DegradedChatCard } from './DegradedChatCard';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
@@ -64,6 +65,15 @@ function GeneratingIndicator() {
   );
 }
 
+/** Transient chrome, not a persisted message — lives outside
+ *  ThreadPrimitive.Messages; the "Context compacted" system message replaces
+ *  it once compact-done lands in the transcript. */
+function CompactingIndicator() {
+  const extras = useChatExtras();
+  if (!extras?.state.compacting) return null;
+  return <CompactingPill />;
+}
+
 export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   useFindHotkey();
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
@@ -91,6 +101,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
               {/* Inline "thinking/working" indicator — sits after the last message,
                   not pinned above the composer (#214). */}
               <GeneratingIndicator />
+              <CompactingIndicator />
               <ChatGateMount />
             </div>
 

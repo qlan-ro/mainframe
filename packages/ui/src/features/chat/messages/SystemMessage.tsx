@@ -32,6 +32,25 @@ export function CompactionPill() {
   );
 }
 
+/** Transient "Compacting…" pill — shown at the transcript tail while a
+ *  compaction runs, replaced by CompactionPill when it completes. */
+export function CompactingPill() {
+  return (
+    <div className="my-2 flex justify-center">
+      <div
+        data-testid="chat-compacting-pill"
+        className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-mf-content2 px-3 py-1 font-mono text-caption text-muted-foreground"
+      >
+        <span
+          className="inline-block h-[7px] w-[7px] shrink-0 animate-spin rounded-full border-[1.5px] border-muted-foreground"
+          style={{ borderTopColor: 'transparent' }}
+        />
+        <span>Compacting…</span>
+      </div>
+    </div>
+  );
+}
+
 const CLI_ERROR_RE = /^Unknown (?:command|skill):/i;
 
 function SystemTextPill({ text }: { text: string }) {

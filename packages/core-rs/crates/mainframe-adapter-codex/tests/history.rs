@@ -56,13 +56,13 @@ fn also_accepts_the_rollout_jsonl_shape_input_text() {
 
 // --- thread/read reload tolerates item types added after this port ---
 
-// Regression: Codex 0.144.3 emits `contextCompaction` (post-compaction) and
-// `subAgentActivity` (multi-agent) items that `ThreadItem` doesn't know. Because
-// `ThreadReadTurn.items` is a hard `Vec<ThreadItem>`, one unknown variant used to
-// abort deserialization of the whole `thread/read` payload, so history failed to
-// load and the transcript rendered empty (see codex:session "failed to load
-// history: unknown variant `contextCompaction`"). Unknown items must be skipped,
-// leaving the known ones intact.
+// Regression: Codex 0.144.3 emits items that `ThreadItem` doesn't know (e.g.
+// `subAgentActivity`). Because `ThreadReadTurn.items` is a hard
+// `Vec<ThreadItem>`, one unknown variant used to abort deserialization of the
+// whole `thread/read` payload, so history failed to load and the transcript
+// rendered empty (see codex:session "failed to load history: unknown variant
+// `contextCompaction`"). Unknown items must be skipped, leaving the known ones
+// intact. `contextCompaction` is a known variant now and survives the parse.
 #[test]
 fn thread_read_skips_unknown_item_types_instead_of_failing_the_whole_turn() {
     use mainframe_adapter_codex::types::ThreadReadResult;
@@ -83,8 +83,8 @@ fn thread_read_skips_unknown_item_types_instead_of_failing_the_whole_turn() {
         }
     });
 
-    let read: ThreadReadResult =
-        serde_json::from_value(payload).expect("thread/read must deserialize despite unknown items");
+    let read: ThreadReadResult = serde_json::from_value(payload)
+        .expect("thread/read must deserialize despite unknown items");
     let all: Vec<ThreadItem> = read
         .thread
         .turns
@@ -93,10 +93,24 @@ fn thread_read_skips_unknown_item_types_instead_of_failing_the_whole_turn() {
         .flat_map(|t| t.items)
         .collect();
 
-    // Both unknown items dropped; both agentMessages survive in order.
-    assert_eq!(all.len(), 2);
+    // The unknown subAgentActivity drops; the known items survive in order.
+    assert_eq!(all.len(), 3);
     assert!(matches!(&all[0], ThreadItem::AgentMessage(m) if m.text == "before compaction"));
-    assert!(matches!(&all[1], ThreadItem::AgentMessage(m) if m.text == "after compaction"));
+    assert!(matches!(&all[1], ThreadItem::ContextCompaction(c) if c.id == "c1"));
+    assert!(matches!(&all[2], ThreadItem::AgentMessage(m) if m.text == "after compaction"));
+}
+
+// --- convertThreadItems — contextCompaction → "Context compacted" pill ---
+
+#[test]
+fn context_compaction_item_becomes_a_system_compaction_message() {
+    let out = convert(json!([
+        { "id": "comp_1", "type": "contextCompaction" },
+    ]));
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].r#type, ChatMessageType::System);
+    assert_eq!(content_json(&out[0]), json!([{ "type": "compaction" }]));
+    assert_eq!(out[0].chat_id, "chat1");
 }
 
 #[test]

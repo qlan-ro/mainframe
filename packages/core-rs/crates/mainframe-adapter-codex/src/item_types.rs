@@ -30,6 +30,14 @@ pub enum ThreadItem {
     TodoList(TodoListItem),
     UserMessage(UserMessageItem),
     CollabAgentToolCall(CollabAgentToolCallItem),
+    ContextCompaction(ContextCompactionItem),
+}
+
+/// Bare compaction marker (Codex 0.144.3 v2): `{ "type": "contextCompaction", "id" }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextCompactionItem {
+    pub id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -7,7 +7,9 @@
 
 use std::collections::HashMap;
 
-use mainframe_types::chat::{ChatMessage, ChatMessageType, DiffHunk, MessageContent};
+use mainframe_types::chat::{
+    ChatMessage, ChatMessageType, DiffHunk, MessageContent, MessageContentNode,
+};
 use mainframe_types::content::LeafContent;
 use serde_json::{Value, json};
 
@@ -139,6 +141,17 @@ pub fn convert_thread_items(
                     child_items_by_thread,
                     agent_meta_by_thread,
                 );
+            }
+            ThreadItem::ContextCompaction(c) => {
+                // Same "Context compacted" pill Claude's compact_boundary produces.
+                messages.push(make_message(
+                    &c.id,
+                    chat_id,
+                    ChatMessageType::System,
+                    vec![MessageContent::Node(MessageContentNode::Compaction {
+                        parent_tool_use_id: None,
+                    })],
+                ));
             }
             // webSearch, todoList, imageGeneration — skip for now
             _ => {}
