@@ -13,9 +13,9 @@ runs:
       with:
         version: 10
 
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@v7
       with:
-        node-version: 20
+        node-version: 22
         cache: 'pnpm'
 
     # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`.
@@ -24,9 +24,10 @@ runs:
     - run: npm install -g node-gyp
       shell: bash
 
-    # Keep compiled native modules (node-pty, better-sqlite3) in the pnpm
-    # store, which setup-node's pnpm cache persists across runs — warm runs
-    # skip the node-gyp rebuild. CI-only: appended to the checkout's .npmrc.
+    # Keep compiled native modules (node-pty; better-sqlite3 13+ ships
+    # prebuilds) in the pnpm store, which setup-node's pnpm cache persists
+    # across runs — warm runs skip the node-gyp rebuild. CI-only: appended
+    # to the checkout's .npmrc.
     - run: echo "side-effects-cache=true" >> .npmrc
       shell: bash
 

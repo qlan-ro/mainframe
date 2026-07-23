@@ -12,9 +12,9 @@
     "test:mock": "E2E_MODE=mock playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@types/node": "^25.5.0",
-    "dotenv": "^17.3.1",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^25.9.5",
+    "dotenv": "^17.4.2",
     "typescript": "^6.0.3"
   }
 }
