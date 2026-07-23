@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
+  // Builds the UI bundle once and starts the shared vite preview (a stateless static server) for
+  // the whole run; returns a teardown that kills it. See fixtures/global-setup.ts.
+  globalSetup: './fixtures/global-setup.ts',
   timeout: 120_000, // 2 min per test — AI calls are slow
   // 40 min total by default — the full AI suite (serial) exceeds 10 min end-to-end. Override via
   // MF_E2E_GLOBAL_TIMEOUT (ms) for targeted multi-file invocations where 40 min would starve later
