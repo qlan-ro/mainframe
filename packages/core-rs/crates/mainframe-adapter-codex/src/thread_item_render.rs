@@ -17,7 +17,7 @@ use crate::history::{
 use crate::image_generation_render::handle_image_generation;
 use crate::item_types::{
     CollabAgentToolCallItem, CommandExecutionItem, DynamicToolCallItem, FileChangeItem,
-    McpToolCallItem, ReasoningItem, ThreadItem, TodoListItem,
+    McpToolCallItem, ReasoningItem, SubAgentActivityItem, ThreadItem, TodoListItem,
 };
 use crate::thread_registry::{agent_title, describe_agent, lookup_agent_metadata};
 
@@ -47,9 +47,7 @@ pub(crate) fn render_completed_item(
         ThreadItem::ImageView(_) => skip_item("imageView"),
         ThreadItem::Sleep(_) => skip_item("sleep"),
         ThreadItem::HookPrompt(_) => skip_item("hookPrompt"),
-        // TaskCard rendering for sub-agent activity pings is B3 territory; this
-        // placeholder only exists to keep the match exhaustive.
-        ThreadItem::SubAgentActivity(_) => {}
+        ThreadItem::SubAgentActivity(a) => handle_sub_agent_activity(&a, sink, state),
         ThreadItem::WebSearch(_) | ThreadItem::UserMessage(_) => {
             tracing::debug!(module = "codex:events", "codex: unhandled item type");
         }
@@ -170,20 +168,24 @@ fn handle_collab_completed(
         stash_spawn_prompts(&item, state);
         return;
     }
-    // `wait` is the renderable card — open it (if started didn't) and close with the result.
-    if !state.open_collab_cards.contains(&item.id) {
-        emit_collab_task_group_start(&item, sink, state);
+    // An `interrupted` subAgentActivity ping may have already closed this card with
+    // an error result; don't re-open the start block or double-emit the result.
+    let already_errored = state.errored_collab_cards.remove(&item.id);
+    if !already_errored {
+        if !state.open_collab_cards.contains(&item.id) {
+            emit_collab_task_group_start(&item, sink, state);
+        }
+        let child_id = item
+            .receiver_thread_ids
+            .as_ref()
+            .and_then(|ids| ids.first());
+        let sub_agent_message = child_id
+            .and_then(|c| item.agents_states.as_ref().and_then(|s| s.get(c)))
+            .and_then(|s| s.message.clone());
+        let is_error = item.status == "failed" || item.status == "interrupted";
+        let content = sub_agent_message.unwrap_or_else(|| "Sub-agent completed".to_string());
+        sink.on_tool_result(vec![tool_result_block(&item.id, &content, is_error, None)]);
     }
-    let child_id = item
-        .receiver_thread_ids
-        .as_ref()
-        .and_then(|ids| ids.first());
-    let sub_agent_message = child_id
-        .and_then(|c| item.agents_states.as_ref().and_then(|s| s.get(c)))
-        .and_then(|s| s.message.clone());
-    let is_error = item.status == "failed" || item.status == "interrupted";
-    let content = sub_agent_message.unwrap_or_else(|| "Sub-agent completed".to_string());
-    sink.on_tool_result(vec![tool_result_block(&item.id, &content, is_error, None)]);
     state.open_collab_cards.remove(&item.id);
     // Stop routing further items from this spawn's child thread(s) and drop the prompt.
     if let Some(children) = &item.receiver_thread_ids {
@@ -192,6 +194,39 @@ fn handle_collab_completed(
             state.spawn_prompts.remove(cid);
         }
     }
+}
+
+/// `started`/`interacted` pings have nothing to update (the TaskCard carries no
+/// status field beyond `isError`/`isRunning`); `interrupted` resolves the parent
+/// CollabAgent card to an errored state early, ahead of its own `wait` completion.
+fn handle_sub_agent_activity(
+    item: &SubAgentActivityItem,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
+    if item.kind != "interrupted" {
+        tracing::debug!(
+            module = "codex:events",
+            kind = %item.kind,
+            "codex: subAgentActivity ping has no TaskCard effect"
+        );
+        return;
+    }
+    let Some(parent_id) = state.collab_child_threads.get(&item.agent_thread_id).cloned() else {
+        tracing::debug!(
+            module = "codex:events",
+            agent_thread_id = %item.agent_thread_id,
+            "codex: interrupted subAgentActivity for an unregistered agent thread"
+        );
+        return;
+    };
+    sink.on_tool_result(vec![tool_result_block(
+        &parent_id,
+        "Sub-agent interrupted",
+        true,
+        None,
+    )]);
+    state.errored_collab_cards.insert(parent_id);
 }
 
 pub(crate) fn stash_spawn_prompts(item: &CollabAgentToolCallItem, state: &mut CodexSessionState) {

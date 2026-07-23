@@ -57,6 +57,9 @@ pub struct CodexSessionState {
     pub spawn_prompts: HashMap<String, String>,
     /// Per-turn dedupe: compact-done already emitted (item or legacy `thread/compacted` path).
     pub compaction_emitted: bool,
+    /// CollabAgent tool_use ids already resolved to an errored state by an
+    /// `interrupted` `subAgentActivity` ping, ahead of the card's own completion.
+    pub errored_collab_cards: HashSet<String>,
 }
 
 pub fn handle_notification(
