@@ -2,8 +2,7 @@
  * §sessions — Sessions sidebar + external-import specs for app-tauri browser mode.
  *
  * Ported from:
- *   packages/e2e/tests/45-sessions.spec.ts  (SP1, SP6, SP8, SP9)
- *   packages/e2e/tests/35-external-sessions.spec.ts (5 tests)
+ *   Session CRUD, filtering, and external-session import coverage.
  *
  * All tests run in E2E_MODE=mock (no AI). Tests use REST-seeded chats and seed
  * external JSONL files for the import suite.
@@ -138,13 +137,12 @@ test.describe('§45 Sessions panel', () => {
     // Use the first real (non-draft) sessions-row.
     const firstRow = page.getByTestId('sessions-row').first();
     await firstRow.waitFor({ timeout: 10_000 });
-    await firstRow.hover();
 
-    // Click the rename action via evaluate to avoid hover-timing flake.
-    await page
-      .getByTestId('sessions-row-action-rename')
-      .first()
-      .evaluate((el) => (el as HTMLElement).click());
+    // The inline rename hover action was removed (SessionRowHoverActions.tsx —
+    // hover keeps pin/tags/archive only); Rename lives in the right-click
+    // context menu (SessionContextMenu, D11).
+    await firstRow.click({ button: 'right' });
+    await page.getByTestId('sessions-ctx-rename').click();
 
     const input = page.getByTestId('sessions-rename-input').first();
     await input.waitFor({ timeout: 5_000 });

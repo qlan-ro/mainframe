@@ -220,7 +220,7 @@ test.describe('§preview — running lifecycle', () => {
 
   test('Inspect button toggles its own active indicator (local state, no native pick)', async () => {
     const { page } = app;
-    // PreviewBodyState computes the "CLICK AN ELEMENT" badge purely from the local
+    // PreviewBodyState computes the "Click an element" badge purely from the local
     // `inspectActive` boolean (packages/ui/src/features/preview/PreviewBodyState.tsx) —
     // toggling it is toolbar chrome, not a native inspect result. Actually receiving
     // a picked element (`InspectResult`) requires the native webview — see the
@@ -231,7 +231,7 @@ test.describe('§preview — running lifecycle', () => {
     await inspectBtn.click();
     await expect(inspectBtn).toHaveClass(/bg-mf-chip/);
     await expect(page.getByTestId('preview-inspect-active-indicator')).toBeVisible();
-    await expect(page.getByTestId('preview-inspect-active-indicator')).toContainText('CLICK AN ELEMENT');
+    await expect(page.getByTestId('preview-inspect-active-indicator')).toContainText('Click an element');
 
     await inspectBtn.click();
     await expect(inspectBtn).not.toHaveClass(/bg-mf-chip/);

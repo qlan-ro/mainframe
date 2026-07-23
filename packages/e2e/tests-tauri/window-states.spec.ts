@@ -156,29 +156,18 @@ test.describe('§window-states First-run tour', () => {
   let project: TauriProject;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp();
+    // Opt out of the fixture's tour suppression (see fixtures/app-tauri.ts) — these
+    // tests need the first-run tour to actually arm, and its addInitScript re-fires
+    // on every reload, so a plain removeItem+reload here could never win.
+    app = await launchTauriApp({ suppressTour: false });
     // One project (zero chats) so ChatSurface renders ChatThread's live Composer
     // (data-tut="composer"/"model" anchors) instead of the composer-less
     // FirstRunState hero — useFirstRunTour only counts REAL sessions (chats), so
-    // this project does not disarm the tour.
+    // this project seeds an empty-sessions workspace that arms the tour on reload.
     project = await createTauriProject(app.page);
-
-    // Undo the fixture's tour suppression (see fixtures/app-tauri.ts
-    // launchTauriApp — it seeds `mf:tutorial` completed:true post-boot to keep
-    // other describes' sidebars click-through) and reload on this now
-    // project-seeded-but-session-empty workspace so useFirstRunTour re-arms.
-    await app.page.evaluate(() => localStorage.removeItem('mf:tutorial'));
-    await app.page.reload();
-    await waitConnected(app.page);
   });
 
   test.afterAll(async () => {
-    // Restore suppression before teardown (hygiene — mirrors the fixture's own
-    // default state) even though this describe's app/daemon/page are torn down
-    // immediately after.
-    await app.page.evaluate(() =>
-      localStorage.setItem('mf:tutorial', JSON.stringify({ state: { completed: true, step: 4 }, version: 0 })),
-    );
     cleanupTauriProject(project);
     await closeTauriApp(app);
   });

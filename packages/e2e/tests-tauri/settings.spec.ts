@@ -44,8 +44,16 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 type SettingsTab = 'general' | 'providers' | 'notifications' | 'remote-access' | 'about';
+const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+
+async function providerSetting(adapterId: string, key: string): Promise<unknown> {
+  const response = await fetch(`${DAEMON_BASE}/api/settings/providers`);
+  const body = (await response.json()) as { data?: Record<string, Record<string, unknown>> };
+  return body.data?.[adapterId]?.[key];
+}
 
 /** Open the dialog via the deterministic sidebar-button path (⌘, covered separately). */
 async function openSettings(page: Page): Promise<void> {
@@ -278,22 +286,27 @@ test.describe('§settings', () => {
     const { page } = app;
     await openProviderPane(page, 'claude');
 
-    await page.getByTestId('settings-claude-model-dropdown-trigger').click();
+    const trigger0 = page.getByTestId('settings-claude-model-dropdown-trigger');
+    const currentLabel = (await trigger0.textContent())?.trim() ?? '';
+    await trigger0.click();
     // The daemon probes the REAL `claude` CLI on PATH at startup
     // (packages/core/.../claude/probe-models.ts) and, when it responds within
     // the probe timeout, REPLACES the static CLAUDE_MODELS fallback with the
-    // live-installed catalog — confirmed live in this environment (Claude Code
-    // 2.1.198 returns default/opus[1m]/claude-fable-5[1m]/sonnet/haiku, not the
-    // hardcoded claude-opus-4-6/claude-sonnet-4-6/… ids the plan assumed). The
-    // label text differs between sources too ("Opus 4.6 (1M context)" statically
-    // vs whatever the installed CLI reports), but `id: 'opus[1m]'` is present in
-    // BOTH catalogs (packages/core/src/plugins/builtin/claude/adapter.ts
-    // CLAUDE_MODELS), so pick it by id and assert whatever label actually
-    // renders persists, rather than hardcoding a label tied to one source.
-    const option = page.getByTestId('settings-claude-model-option-opus[1m]');
-    await expect(option).toBeVisible({ timeout: 5_000 });
-    const label = (await option.textContent())?.trim();
-    expect(label).toBeTruthy();
+    // live-installed catalog — so the option ids here depend on whichever CLI
+    // version the host machine has (an earlier hardcoded `opus[1m]` pick broke
+    // when a CLI update dropped that id). Skip BOTH `default`-id options (the
+    // synthetic "Default (CLI picks)" AND the probed catalog's own default
+    // alias — picking either is the clear-sentinel no-op) and skip whatever is
+    // currently selected (picking the current value would assert nothing).
+    const options = page.locator(
+      '[data-testid^="settings-claude-model-option-"]:not([data-testid="settings-claude-model-option-default"])',
+    );
+    await expect(options.first()).toBeVisible({ timeout: 5_000 });
+    const labels = await options.allTextContents();
+    const pickIndex = labels.findIndex((l) => l.trim() !== '' && l.trim() !== currentLabel);
+    expect(pickIndex).toBeGreaterThanOrEqual(0);
+    const option = options.nth(pickIndex);
+    const label = labels[pickIndex]!.trim();
     await option.click();
 
     const trigger = page.getByTestId('settings-claude-model-dropdown-trigger');
@@ -430,12 +443,16 @@ test.describe('§settings tuning inheritance', () => {
     // Switch the provider default model to the opus-tier one (declares xhigh+max efforts).
     await page.getByTestId('settings-mock-cli-model-dropdown-trigger').click();
     await page.getByTestId('settings-mock-cli-model-option-claude-opus-4-5-20251001').click();
+    await expect.poll(() => providerSetting('mock-cli', 'defaultModel')).toBe('claude-opus-4-5-20251001');
+    await closeSettings(page);
+    await openProviderPane(page, 'mock-cli');
 
     // Set the provider default effort to 'high'.
     const providerEffort = page.getByTestId('settings-mock-cli-default-effort');
     await expect(providerEffort).toBeVisible({ timeout: 5_000 });
     await providerEffort.click();
     await page.getByTestId('settings-mock-cli-default-effort-option-high').click();
+    await expect.poll(() => providerSetting('mock-cli', 'defaultEffort')).toBe('high');
     await expect(providerEffort).toContainText(/high/i);
 
     await closeSettings(page);

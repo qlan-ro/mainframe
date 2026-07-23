@@ -29,6 +29,7 @@ mainframe-chat = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-adapter-claude = { workspace = true }
 mainframe-adapter-codex = { workspace = true }
+mainframe-adapter-mock = { workspace = true }
 mainframe-background-tasks = { workspace = true }
 mainframe-launch = { workspace = true }
 mainframe-plugins = { workspace = true }

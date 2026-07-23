@@ -4,13 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:app": "pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build && VITE_DAEMON_HTTP_PORT=${MF_E2E_DAEMON_PORT:-31416} VITE_DAEMON_WS_PORT=${MF_E2E_DAEMON_PORT:-31416} pnpm --filter @qlan-ro/mainframe-app-electron build",
+    "build:app:tauri": "pnpm --filter @qlan-ro/mainframe-types build && cargo build --release -p mainframe-daemon --manifest-path ../core-rs/Cargo.toml && VITE_DAEMON_PORT=${MF_E2E_DAEMON_PORT:-31416} pnpm --filter @qlan-ro/mainframe-ui build",
     "test": "playwright test",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
     "test:file": "playwright test",
-    "build:mock": "esbuild plugins/mock-cli/src/index.ts --bundle --platform=node --format=cjs --outfile=plugins/mock-cli/index.js",
-    "test:record": "E2E_MODE=record playwright test",
     "test:mock": "E2E_MODE=mock playwright test"
   },
   "devDependencies": {

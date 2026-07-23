@@ -542,7 +542,7 @@ mod tests {
             .await
             .unwrap();
         let skills = list_skills(tmp.path().to_str().unwrap()).await;
-        assert!(!skills.iter().any(|s| s.name == "review"));
+        assert!(!skills.iter().any(|s| s.id == "claude:project:review"));
     }
 
     #[tokio::test]

@@ -21,23 +21,21 @@
  *   sessions-row-status-dot          — StatusDot; aria-label = badge.base
  *                                       ('idle'|'working'|'waiting'|'worktree-missing'|'transcript-missing')
  *   sessions-row-relative-time       — time label, hidden on row hover
- *   sessions-row-action-tags/-rename/-archive — hover-action buttons (hidden until row hover)
+ *   sessions-row-action-pin/-tags/-archive — hover-action buttons (hidden until row hover;
+ *                                       Rename is context-menu-only since the 2026-07 rebuild)
  *   sessions-ctx-pin/-rename/-tags/-archive/-copy-id — context-menu items
- *   sessions-group-header-Pinned     — the Pinned group header
- *   sessions-group-pin-glyph         — pin glyph on the Pinned group header (see NOTE below)
+ *   sessions-group-header-Pinned     — the Pinned group header (plain text, no pin glyph)
  *   sessions-row-meta-icon-worktree  — compact worktree glyph on the row (text-destructive when missing)
  *   sessions-row-meta-icon-tag-dot-<name> — compact tag-dot glyph on the row (capped at 3)
  *   sessions-meta-card-project       — project row inside the hover card (All view only)
  *   sessions-meta-card-warning       — branch-safety warning inside the hover card
  *
- * NOTE on the pin glyph: SessionRow.tsx also renders a PER-ROW
- * `sessions-row-pin-glyph` guarded by `custom.pinned && !inPinnedGroup`. Per
- * group-sessions.ts (`arrangeRecent`/`arrangeFlat`), pinned items are ALWAYS
- * routed into the 'Pinned' group across every sort mode, and SessionListVirtuoso
- * sets `inPinnedGroup: group.label === 'Pinned'` — so `inPinnedGroup` is always
- * true for a pinned row and the per-row glyph is unreachable through the sidebar
- * as currently wired. This spec asserts the reachable `sessions-group-pin-glyph`
- * (on the group header) instead. Flagged in the report for the owner.
+ * NOTE on the pin glyph: SessionRow.tsx renders a PER-ROW
+ * `sessions-row-pin-glyph` only when `custom.pinned && !inPinnedGroup`, and the
+ * sidebar always routes pinned rows into the 'Pinned' group — so no pin glyph
+ * is reachable through the sidebar (the group header is deliberately plain
+ * text, see SessionGroupHeader.tsx). Pinned-ness is asserted via the group
+ * header's presence.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -113,18 +111,23 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     const rowX = sessionsSidebar(page).row(chatIdX);
     const dot = rowX.getByTestId('sessions-row-status-dot');
 
+    // 2026-07 sidebar rebuild: the dot is now a ProviderLogo glyph tinted by
+    // state (SessionRowStatus.tsx statusLogoClass) — muted text-mf-text-3 when
+    // idle+read, text-primary when unread/working/waiting.
     await expect(dot).toHaveAttribute('aria-label', 'idle');
-    await expect(dot).toHaveClass(/bg-mf-text-4/);
-    await expect(dot).toHaveClass(/opacity-50/);
-    await expect(dot).not.toHaveClass(/bg-primary/);
+    await expect(dot).toHaveClass(/text-mf-text-3/);
+    await expect(dot).not.toHaveClass(/text-primary/);
   });
 
-  test('hovering a row swaps the relative-time label for the tag/rename/archive action buttons', async () => {
+  test('hovering a row swaps the relative-time label for the pin/tag/archive action buttons', async () => {
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
     const relTime = rowX.getByTestId('sessions-row-relative-time');
     const tagsBtn = rowX.getByTestId('sessions-row-action-tags');
-    const renameBtn = rowX.getByTestId('sessions-row-action-rename');
+    // 2026-07 sidebar rebuild: the inline Rename hover button was dropped by
+    // design (the context menu owns Rename — SessionRowHoverActions.tsx) and a
+    // Pin/Unpin button added as the primary pin entry point.
+    const pinBtn = rowX.getByTestId('sessions-row-action-pin');
     const archiveBtn = rowX.getByTestId('sessions-row-action-archive');
 
     // Establish a clean non-hovered baseline first — the previous test's
@@ -138,7 +141,7 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await rowX.hover();
     await expect(relTime).toBeHidden();
     await expect(tagsBtn).toBeVisible();
-    await expect(renameBtn).toBeVisible();
+    await expect(pinBtn).toBeVisible();
     await expect(archiveBtn).toBeVisible();
 
     // Reset hover so it doesn't bleed into later tests.
@@ -164,7 +167,7 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await expect(pinItem).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('pinning via the context menu moves the row into a Pinned group with a pin glyph; unpinning reverts it', async () => {
+  test('pinning via the context menu moves the row into a Pinned group; unpinning reverts it', async () => {
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
     const pinnedHeader = page.getByTestId('sessions-group-header-Pinned');
@@ -172,8 +175,10 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await rowX.click({ button: 'right' });
     await page.getByTestId('sessions-ctx-pin').click();
 
+    // 2026-07 sidebar rebuild: the group header carries NO pin glyph by design
+    // (plain-text section headers, macOS pattern — SessionGroupHeader.tsx); the
+    // Pinned group label itself is the pinned indicator.
     await expect(pinnedHeader).toBeVisible({ timeout: 10_000 });
-    await expect(pinnedHeader.getByTestId('sessions-group-pin-glyph')).toBeVisible();
     await expect(rowX).toBeVisible();
 
     await rowX.click({ button: 'right' });
@@ -375,15 +380,15 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     await expect(rowB).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
     // A's response lands in the background: chat.notification reaches the
-    // client and session-list-router's onMarkUnread(chatIdA) flips the dot to
-    // the solid, non-pulsing "unread" style (dotClass's idle+unread branch).
-    await expect(dotA).toHaveClass(/bg-primary/, { timeout: 45_000 });
+    // client and session-list-router's onMarkUnread(chatIdA) flips the logo
+    // glyph to the vivid unread tint (statusLogoClass's unread branch).
+    await expect(dotA).toHaveClass(/text-primary/, { timeout: 45_000 });
     await expect(dotA).toHaveAttribute('aria-label', 'idle');
 
     // Reselecting A clears the unread flag.
     await rowA.click();
     await expect(rowA).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
-    await expect(dotA).not.toHaveClass(/bg-primary/, { timeout: 10_000 });
+    await expect(dotA).not.toHaveClass(/text-primary/, { timeout: 10_000 });
   });
 
   test('copy-session-id appears once the chat has a claudeSessionId, and copies it to the clipboard', async () => {

@@ -90,11 +90,9 @@ The daemon is spawned **once at boot**, so any flip (env or persisted) takes eff
 - **Per user, persistent:** the renderer calls the `daemon_impl_set("rust")` Tauri command
   (persists `daemonImpl` to `app-settings.json`, preserving other keys); `daemon_impl_get`
   reads the effective value. Restart the app to apply.
-- **CI:** export `MAINFRAME_DAEMON_IMPL=rust` (plus `MAINFRAME_RUST_DAEMON_PATH` if the
-  binary is not on the monorepo default path) in the job env. Note: the `packages/e2e`
-  Tauri harness does **not** yet thread these vars into `fixtures/daemon.ts` — it hard-spawns
-  `node …/core/dist/index.js`. Running the existing E2E suite against the Rust daemon needs a
-  harness change first (see §3 / §6).
+- **CI:** `packages/e2e/fixtures/daemon.ts` launches the Rust `mainframe-daemon` directly. Set
+  `MF_E2E_RUST_DAEMON_PATH` to override the binary; otherwise the harness uses the release or
+  debug Cargo target and builds release automatically when needed.
 - **External daemon (dev):** `MAINFRAME_EXTERNAL_DAEMON=1` skips spawning entirely; the
   renderer connects to whatever daemon is already listening on `daemon_port()`.
 
@@ -132,16 +130,19 @@ user/workflow should stay on Node until closed.
 | Gap | Impact on Rust impl | Tracking pointer |
 |---|---|---|
 | **Workflows engine (deferred)** | `/api/workflows`, `/api/workflow-connectors`, `/api/workflow-credentials` return **404** (routes unmounted). Any workflow feature is unavailable on the Rust daemon. | Deliberate scope decision 2026-07-10: the TS workflows implementation is unstable; porting an unstable surface would bake in churn. Node retains it. `DIFF-REPORT-phase5.md` EXPECTED(gap). |
-| **External-sessions routes** | The Adapter-trait external-session scan method is unported; external `/resume` session discovery is absent on Rust. | Accepted Phase-5 gap. Adapter-trait method, follow-up port. |
 | **Trust-workspace** | `trust_store` is a **skeleton** only; workspace-trust gating is not enforced by the Rust daemon. | Accepted Phase-5 gap. |
-| **`GET /api/projects/:id/suggestions`** | Route **unmounted** on Rust (Node serves churn + TODO-scan suggestions). The suggestions panel is empty on the Rust impl. | Genuine non-workflows functional gap, `routes/mod.rs`; distinct from the workflow gap. `DIFF-REPORT-phase5.md` "Skipped". |
 | **User-plugin `loadAll` (on-disk discovery)** | **Builtin-only** in v1 (`claude`, `codex`, `todos`). User-authored on-disk plugins are not discovered/loaded. | Accepted Phase-5 gap; see release note §4. |
-| **Message attachments dropped** | `message.send` with `attachmentIds` reaches the mounted attachments route, but `process_attachments` (`chat_manager.rs`) only warns and returns default — the text is delivered, the attachments are silently dropped. | `attachment-processor.ts` unported (`chat_deps.rs` seam + `attachment_processor.rs` skeleton). Attachment users stay on Node. |
 | **Resumed chats not re-scanned** | On chat load/resume (`lifecycle_manager.rs`) `scan_loaded_history` is a **no-op**, so PR-URL detection, @-mention extraction, and plan/skill-file extraction are absent on the Rust arm. | `pr-detection.ts` re-scan unported — the seam receives only the `chatId`, not the live session handle (`chat_deps.rs`). Follow-up port. |
 | **Codex fallback catalog (#226)** | Codex stays `catalogSource: fallback / 0 models` even when `codex` is installed — `CodexAdapter::list_models` (temp app-server + `model/list`) yields no live catalog in the tested env, so codex is never `probed` and is excluded from connect-replay. Codex model list is empty on Rust. | Pre-existing codex-adapter probe matter, tracked as **#226**. Independent of the connect-replay wiring (which faithfully replays exactly the probed adapters). |
 | **Bundled LSP spawn (packaged only)** | `MAINFRAME_BUNDLED_NODE` / `MAINFRAME_BUNDLED_LSP_ROOT` wiring is in place (`sidecar.rs` injects them on the Rust arm in **release** builds), but the bundled TS/Python LSP spawn is only exercisable from a **packaged** build and was **not** verified in the dev canary (both env vars are `None` from source → only external servers like `jdtls` spawn). | OPEN GAP 2 (Phase-5), flagged for the packaging pass. `CANARY-REPORT.md` §4. |
 
 No canary failures: the DEV canary and isolated-PATH daemon both ran 10/10.
+
+Closed since the original register: the suggestions route is mounted, external-session discovery
+dispatches to the native Claude/Codex scanners, and message attachments are processed. The Tauri
+Playwright harness now runs permanently against Rust. `E2E_MODE=mock` registers the compiled
+`mainframe-adapter-mock`; Node plugin loading and record mode are gone. Future fixture capture
+should tee events at the Rust `SessionSink` boundary.
 
 ---
 
@@ -157,9 +158,6 @@ User-facing behavior changes when a build ships the Rust daemon as default:
   build until the engine is ported.
 - **Codex model catalog may be empty** until #226 lands (codex adapter still spawns/runs;
   only its advertised model list is affected).
-- **Message attachments are dropped on the Rust daemon.** The attachment processor is
-  unported; sending a message with attachments delivers the text but discards the
-  attachments. Attachment users must stay on the Node build.
 - **Resumed chats skip re-scanning on the Rust daemon.** Reopening a chat does not re-run
   PR-URL detection, @-mention extraction, or plan/skill-file extraction (the post-load scan
   is unported). PR links and mentions surfaced only on resume are absent; new activity in a

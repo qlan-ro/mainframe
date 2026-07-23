@@ -1,133 +1,72 @@
-import { chromium, type Browser, type Page, request } from '@playwright/test';
-import { spawn, execFileSync, type ChildProcess } from 'child_process';
-import { readdirSync, readFileSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { startDaemon, stopDaemon, DAEMON_PORT, type DaemonHandle } from './daemon.js';
+import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { startDaemon, stopDaemon, type DaemonHandle } from './daemon.js';
+import { PREVIEW_BASE } from './global-setup.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// The vite app is `packages/ui` (`@qlan-ro/mainframe-ui`). `packages/app-tauri` is the Rust/Tauri
-// shell (no vite build script) — it depends on packages/ui's build output, it isn't the app itself.
-const UI_DIR = path.resolve(__dirname, '../../../packages/ui');
-const DIST_ASSETS = path.join(UI_DIR, 'dist', 'assets');
-const PREVIEW_PORT = Number(process.env['MF_E2E_PREVIEW_PORT'] ?? 4317);
-const PREVIEW_BASE = `http://127.0.0.1:${PREVIEW_PORT}`;
-const PNPM = 'pnpm';
 
 export interface TauriAppFixture {
   browser: Browser;
+  context: BrowserContext;
   page: Page;
-  preview: ChildProcess;
   daemonHandle: DaemonHandle;
 }
 
-/** Fail fast if the built JS bundle doesn't bake the e2e daemon port.
- *  VITE_DAEMON_PORT is inlined into dist/assets/*.js, NOT index.html. */
-function assertBundleTargetsTestPort(): void {
-  let files: string[];
-  try {
-    files = readdirSync(DIST_ASSETS).filter((f) => f.endsWith('.js'));
-  } catch {
-    throw new Error(`Built @qlan-ro/mainframe-ui assets not found at ${DIST_ASSETS}. Build first.`);
-  }
-  const baked = files.some((f) => readFileSync(path.join(DIST_ASSETS, f), 'utf8').includes(DAEMON_PORT));
-  if (!baked) {
-    throw new Error(
-      `Built @qlan-ro/mainframe-ui bundle does not bake the e2e daemon port ${DAEMON_PORT}. ` +
-        `Rebuild: VITE_DAEMON_PORT=${DAEMON_PORT} pnpm --filter @qlan-ro/mainframe-ui build`,
-    );
-  }
-}
+// The Chromium instance is a whole OS process where a fresh BrowserContext gives the same storage
+// isolation for a fraction of the cost, so it's launched once and shared across every describe in
+// the worker (each describe gets its own context + page). Playwright kills browsers it launched on
+// process exit; the signal handlers below just close it eagerly on Ctrl-C so a killed run doesn't
+// leave a headless Chromium reparented to init.
+let sharedBrowser: Browser | undefined;
+let signalHooksInstalled = false;
 
-/**
- * Skip via `MF_E2E_SKIP_BUILD=1` when running many describe blocks serially against an
- * already-built, already-verified bundle (each block calls launchTauriApp() in its own
- * beforeAll, and a full rebuild is identical work repeated per block). Safe to skip because
- * assertBundleTargetsTestPort() still runs unconditionally right after this and fails fast if
- * dist/ is missing or was built for a different port.
- */
-function buildUi(): void {
-  if (process.env['MF_E2E_SKIP_BUILD'] === '1') return;
-  execFileSync(PNPM, ['--filter', '@qlan-ro/mainframe-ui', 'build'], {
-    cwd: UI_DIR,
-    env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },
-    stdio: 'inherit',
+async function getBrowser(): Promise<Browser> {
+  if (sharedBrowser?.isConnected()) return sharedBrowser;
+  // MF_E2E_HEADED=1 shows the browser (optionally MF_E2E_SLOWMO=<ms> to slow actions down for a
+  // human watching). The fixture launches Chromium itself, so Playwright's --headed flag never
+  // reaches this call.
+  sharedBrowser = await chromium.launch({
+    headless: process.env['MF_E2E_HEADED'] !== '1',
+    slowMo: Number(process.env['MF_E2E_SLOWMO']) || 0,
   });
-}
-
-async function startPreview(): Promise<ChildProcess> {
-  const preview = spawn(
-    PNPM,
-    [
-      '--filter',
-      '@qlan-ro/mainframe-ui',
-      'exec',
-      'vite',
-      'preview',
-      '--strictPort',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(PREVIEW_PORT),
-    ],
-    { cwd: UI_DIR, env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT }, stdio: 'ignore' },
-  );
-  const deadline = Date.now() + 15_000;
-  const ctx = await request.newContext();
-  while (Date.now() < deadline) {
-    try {
-      const res = await ctx.get(PREVIEW_BASE);
-      if (res.ok()) {
-        await ctx.dispose();
-        return preview;
-      }
-    } catch {
-      /* not up yet */
-    }
-    await new Promise((r) => setTimeout(r, 200));
+  if (!signalHooksInstalled) {
+    signalHooksInstalled = true;
+    const kill = (): void => void sharedBrowser?.close().catch(() => {});
+    process.once('SIGINT', kill);
+    process.once('SIGTERM', kill);
   }
-  await ctx.dispose();
-  preview.kill('SIGKILL');
-  throw new Error(`vite preview did not become ready on ${PREVIEW_BASE}`);
+  return sharedBrowser;
 }
 
-export async function launchTauriApp(opts?: { recordingKey?: string }): Promise<TauriAppFixture> {
-  buildUi();
-  assertBundleTargetsTestPort();
+// Suppress the first-run tour before first paint. `useFirstRunTour` auto-arms it ~1.5s after boot
+// on any workspace with zero real sessions (features/tour/use-first-run-tour.ts); a describe whose
+// beforeAll seeds a project but no chat (e.g. external-session-import) would otherwise race the
+// coachmark overlay (`tour-overlay`, z-11500) onto the screen mid-test, intercepting clicks meant
+// for the sidebar underneath. Seeding it via addInitScript (vs the old goto→set→reload) means the
+// overlay never arms in the first place — one boot instead of two.
+//
+// addInitScript re-runs on every navigation, so it also re-seeds on reload — which means a describe
+// that needs the tour to actually arm (window-states' First-run tour) can't just removeItem+reload;
+// it must opt out via `suppressTour: false` so no init script is registered on its context.
+const TOUR_SUPPRESS = JSON.stringify({ state: { completed: true, step: 4 }, version: 0 });
 
+export async function launchTauriApp(opts?: {
+  recordingKey?: string;
+  suppressTour?: boolean;
+}): Promise<TauriAppFixture> {
   const daemonHandle = await startDaemon({ recordingKey: opts?.recordingKey });
-  let preview: ChildProcess | undefined;
-  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
   try {
-    preview = await startPreview();
-    // MF_E2E_HEADED=1 shows the browser (optionally MF_E2E_SLOWMO=<ms> to slow actions down
-    // for human watching). The fixture launches Chromium itself, so Playwright's --headed
-    // flag never reaches this call.
-    browser = await chromium.launch({
-      headless: process.env['MF_E2E_HEADED'] !== '1',
-      slowMo: Number(process.env['MF_E2E_SLOWMO']) || 0,
-    });
-    const page = await browser.newPage();
+    const browser = await getBrowser();
+    context = await browser.newContext();
+    if (opts?.suppressTour !== false) {
+      await context.addInitScript((value: string) => localStorage.setItem('mf:tutorial', value), TOUR_SUPPRESS);
+    }
+    const page = await context.newPage();
     await page.goto(PREVIEW_BASE, { waitUntil: 'domcontentloaded' });
-
     await waitConnected(page);
 
-    // Suppress the first-run tour. `useFirstRunTour` auto-arms it ~1.5s after boot on any
-    // workspace with zero real sessions (features/tour/use-first-run-tour.ts) — a describe
-    // block whose beforeAll seeds a project but no chat (e.g. the external-session-import
-    // suite) would otherwise race the tour's coachmark overlay (`tour-overlay`, z-11500)
-    // onto the screen mid-test, intercepting clicks meant for the sidebar underneath.
-    await page.evaluate(() =>
-      localStorage.setItem('mf:tutorial', JSON.stringify({ state: { completed: true, step: 4 }, version: 0 })),
-    );
-    await page.reload();
-    await waitConnected(page);
-
-    return { browser, page, preview, daemonHandle };
+    return { browser, context, page, daemonHandle };
   } catch (err) {
-    await browser?.close().catch(() => {});
-    preview?.kill('SIGKILL');
+    await context?.close().catch(() => {});
     await stopDaemon(daemonHandle);
     throw err;
   }
@@ -136,10 +75,9 @@ export async function launchTauriApp(opts?: { recordingKey?: string }): Promise<
 export async function closeTauriApp(fixture: TauriAppFixture | undefined): Promise<void> {
   if (!fixture) return;
   try {
-    await fixture.browser.close();
+    await fixture.context.close();
   } catch (err) {
-    console.warn('[e2e-tauri] browser.close failed; continuing teardown:', err);
+    console.warn('[e2e-tauri] context.close failed; continuing teardown:', err);
   }
-  fixture.preview.kill();
   await stopDaemon(fixture.daemonHandle);
 }

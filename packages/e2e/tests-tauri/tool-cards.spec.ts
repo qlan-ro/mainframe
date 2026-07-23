@@ -6,7 +6,7 @@
  * appears after a Bash tool call — this spec goes deeper (expand/collapse,
  * command/description/output text) and covers every OTHER card family that a
  * committed recording can reach. Recordings are content-agnostic replay
- * (packages/e2e/plugins/mock-cli/src/session.ts — `sendMessage`/
+ * (packages/core-rs/crates/mainframe-adapter-mock/src/session.rs — `send_message`/
  * `respondToPermission` just advance a cursor; the text sent and the button
  * clicked don't have to match what was recorded, only the call ORDER does),
  * so the daemon reuses these fixtures as pure canned tool-call payloads.
@@ -66,7 +66,7 @@ test.describe('§tool-cards — Bash (messaging)', () => {
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
 
-    // mock-cli replay is purely positional (plugins/mock-cli/src/session.ts's `advance()` only
+    // mock-cli replay is purely positional (mainframe-adapter-mock's `advance()` only
     // checks the `in` marker's METHOD, never its args) — `messaging.0.ndjson` encodes two turns
     // in order, "What is 2+2?" (→ "4") THEN the Bash "List the files..." turn. Skipping straight
     // to the second prompt would actually consume and replay the first. Send both, in order, same

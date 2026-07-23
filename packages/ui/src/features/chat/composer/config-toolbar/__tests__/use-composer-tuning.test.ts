@@ -19,6 +19,10 @@
  *    fake extras whose `state.chatConfig` carries the chat fixture.
  * 3. `@/lib/api/chats` → vi.fn() stubs for `setChatTuning` and `setChatConfig`.
  * 4. `@/lib/api/adapters` → stub `getAdapters` (silenced; not under test here).
+ *
+ * `useProviderDefaults` reads the real (unmocked) `@/store/settings` zustand
+ * store — it's module-global, so `providers` is reset to `{}` in `beforeEach`
+ * to re-arm its seed-guard and keep tests isolated from each other.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -75,6 +79,7 @@ import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 import { waitFor } from '@testing-library/react';
 import { displayEffort, effectiveFeature } from '@/lib/model-tuning';
 import { getProviderSettings } from '@/lib/api/settings';
+import { useSettingsStore } from '@/store/settings';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -134,6 +139,10 @@ beforeEach(() => {
   patchDraftConfigSpy.mockReset();
   initializeDraftSpy.mockReset();
   draftConfigStub = undefined;
+  // useSettingsStore is module-global and persists across tests. Reset `providers`
+  // to `{}` so useProviderDefaults' seed-guard (`Object.keys(providers).length > 0`)
+  // re-arms and every test observes its own fetch, not a prior test's leftover state.
+  useSettingsStore.getState().loadProviders({});
   vi.mocked(useAuiState).mockReturnValue(false);
   vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
   vi.mocked(setChatTuning).mockResolvedValue(undefined as unknown as Chat);
@@ -674,7 +683,9 @@ describe('useComposerTuning — real chat: setters hit REST helpers, not patchDr
 });
 
 // ---------------------------------------------------------------------------
-// 14. composer provider-default inheritance — useProviderDefaults hook
+// 14. composer provider-default inheritance — useProviderDefaults hook reads
+//     the shared settings store live (the same store the Settings pane writes),
+//     seeding it with one fetch only when nothing has loaded it yet.
 // ---------------------------------------------------------------------------
 
 // A minimal tuning model fixture with effort + ultracode support.
@@ -704,12 +715,12 @@ describe('composer provider-default inheritance', () => {
     expect(effectiveFeature({ ultracode: null }, { defaultUltracode: 'true' }, 'ultracode')).toBe(true);
   });
 
-  it('useProviderDefaults fetches into plain state and returns the adapter config', async () => {
+  it('seeds the store from one fetch when empty, and returns the adapter config', async () => {
     const { result } = renderHook(() => useProviderDefaults('claude'));
     // Before the async fetch resolves the hook returns undefined.
     expect(result.current).toBeUndefined();
     await waitFor(() => expect(result.current).toEqual({ defaultEffort: 'high', defaultUltracode: 'true' }));
-    expect(vi.mocked(getProviderSettings)).toHaveBeenCalledWith(PORT);
+    expect(vi.mocked(getProviderSettings)).toHaveBeenCalledExactlyOnceWith(PORT);
     // ProviderConfig is structurally a TuningDefaults (D-D) — passes through resolution.
     // defaultUltracode:'true' + supportsUltracode:true overrides effort to xhigh (locked).
     expect(displayEffort({ effort: null }, tuningModel, result.current).value).toBe('xhigh');
@@ -719,6 +730,30 @@ describe('composer provider-default inheritance', () => {
     const { result } = renderHook(() => useProviderDefaults('nonexistent'));
     await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
     expect(result.current).toBeUndefined();
+  });
+
+  it('does not fetch again when the store is already populated', async () => {
+    useSettingsStore.getState().loadProviders({ claude: { defaultEffort: 'high', defaultUltracode: 'true' } });
+
+    const { result } = renderHook(() => useProviderDefaults('claude'));
+
+    // Store is already populated — the hook returns synchronously, no seed fetch fires.
+    expect(result.current).toEqual({ defaultEffort: 'high', defaultUltracode: 'true' });
+    expect(vi.mocked(getProviderSettings)).not.toHaveBeenCalled();
+  });
+
+  it('reflects a Settings-pane store update immediately, with no new fetch', async () => {
+    useSettingsStore.getState().loadProviders({ claude: { defaultEffort: 'high' } });
+
+    const { result } = renderHook(() => useProviderDefaults('claude'));
+    expect(result.current).toEqual({ defaultEffort: 'high' });
+
+    act(() => {
+      useSettingsStore.getState().setProviderConfig('claude', { defaultEffort: 'low' });
+    });
+
+    expect(result.current).toEqual({ defaultEffort: 'low' });
+    expect(vi.mocked(getProviderSettings)).not.toHaveBeenCalled();
   });
 });
 

@@ -61,5 +61,5 @@ docs/CODE-ANALYSIS*
 .claude/codex-review/
 
 /packages/e2e/playwright-report/
-packages/e2e/plugins/mock-cli/index.js
+packages/e2e/logs/
 .playwright-cli/

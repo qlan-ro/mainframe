@@ -6,22 +6,24 @@
  * Three independent concerns:
  *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
  *                         catalog store, seeded/kept fresh at the app root (adapters-seed).
- *   useProviderDefaults — fetches provider settings once on mount; returns the
- *                         requested adapter's ProviderConfig (a structural TuningDefaults,
- *                         D-D) for effort/feature inheritance. Plain React state, no zustand.
+ *   useProviderDefaults — reads the requested adapter's ProviderConfig (a structural
+ *                         TuningDefaults, D-D) live from the shared settings store —
+ *                         the same store the Settings pane edits optimistically — so a
+ *                         provider-default change reflects in the composer immediately.
+ *                         Seeds the store via one fetch when it hasn't been loaded yet.
  *   useComposerTuning   — fetches the current chat, resolves the model, and
  *                         exposes setEffort/setFeature with optimistic updates.
  *
- * useProviderDefaults/useComposerTuning hold plain React state (not aui external-store
- * selectors) to avoid the getSnapshot-loop trap. useAdapters is a zustand store selector,
- * which is safe here — it selects a stable reference, not a fresh snapshot per render.
+ * useComposerTuning holds plain React state (not aui external-store selectors) to avoid
+ * the getSnapshot-loop trap. useAdapters/useProviderDefaults are zustand store selectors,
+ * which is safe here — they select a stable reference, not a fresh snapshot per render.
  *
  * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
  * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
  * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type {
   AdapterInfo,
@@ -34,6 +36,7 @@ import type {
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
 import { getProviderSettings } from '@/lib/api/settings';
+import { useSettingsStore } from '@/store/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
@@ -53,37 +56,26 @@ export { useAdapters } from '@/store/adapters';
 // ---------------------------------------------------------------------------
 
 /**
- * Fetches the provider-settings map once on mount and returns this adapter's
- * ProviderConfig (a structural TuningDefaults, D-D), or undefined while loading,
- * on error, or when the adapter has no saved config. Mirrors `useAdapters` —
- * plain React state, NOT a zustand selector (this module is deliberately
- * zustand-free to avoid the getSnapshot-loop trap under useExternalStoreRuntime).
+ * Returns this adapter's ProviderConfig (a structural TuningDefaults, D-D) live from
+ * the shared settings store, or undefined while loading, on error, or when the adapter
+ * has no saved config. The Settings pane writes the same store optimistically on every
+ * edit, so provider-default changes reflect here without a reload. Seeds the store with
+ * one fetch when nothing has loaded it yet (composer mounted, dialog never opened).
  */
 export function useProviderDefaults(adapterId: string | null): ProviderConfig | undefined {
   const extras = useChatExtras();
   const port = extras?.port;
-  const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
+  const config = useSettingsStore((s) => (adapterId != null ? s.providers[adapterId] : undefined));
 
   useEffect(() => {
     if (port == null) return;
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await getProviderSettings(port!);
-        if (!cancelled) setProviders(data);
-      } catch (err) {
-        console.warn('[composer/useProviderDefaults] failed to load provider settings', err);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
+    if (Object.keys(useSettingsStore.getState().providers).length > 0) return;
+    getProviderSettings(port)
+      .then((data) => useSettingsStore.getState().loadProviders(data))
+      .catch((err: unknown) => console.warn('[composer/useProviderDefaults] failed to load provider settings', err));
   }, [port]);
 
-  return adapterId != null ? providers[adapterId] : undefined;
+  return config;
 }
 
 // ---------------------------------------------------------------------------

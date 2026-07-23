@@ -399,12 +399,21 @@ jobs:
           name: app-tauri-canary-macos-arm64
           path: packages/app-tauri/src-tauri/target/release/bundle/dmg/Mainframe-tauri-canary-*.dmg
 
+  # The mock-mode Playwright suite, run in parallel with the builds (it compiles its own Rust
+  # daemon + UI bundle, so it needs none of the release artifacts). It never gates the DRAFT — the
+  # draft is always assembled by the `release` job below — it only decides whether `publish-release`
+  # flips that draft to published. A failed/flaky/cancelled e2e run leaves the draft for a manual
+  # publish, exactly as before this suite was wired in.
+  e2e:
+    uses: ./.github/workflows/e2e-mock.yml
+
   release:
     needs: [build-desktop, build-daemon, build-app-tauri, build-app-tauri-canary]
-    # Publish as long as the daemon built — the daemon tarballs back `mainframe update`
-    # and must never be blocked by a desktop/Tauri build failure. `always()` overrides
-    # the default "skip if any need failed"; download-artifact then attaches whatever
-    # desktop/tauri artifacts did succeed.
+    # Assemble the release as a DRAFT as long as the daemon built — the daemon tarballs back
+    # `mainframe update` and must never be blocked by a desktop/Tauri build failure. `always()`
+    # overrides the default "skip if any need failed"; download-artifact then attaches whatever
+    # desktop/tauri artifacts did succeed. It stays a draft here regardless of e2e; `publish-release`
+    # promotes it to published only when the e2e gate is green.
     if: ${{ always() && needs.build-daemon.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -434,3 +443,34 @@ jobs:
           body: |
             ---
             **Full Changelog**: [`CHANGELOG.md`](https://github.com/qlan-ro/mainframe/blob/${{ github.ref_name }}/CHANGELOG.md)
+
+  # Auto-publish gate: promote the draft to a published release once the e2e suite is green.
+  # Runs only when BOTH the draft was assembled (`release`) and the mock e2e suite passed (`e2e`).
+  # We PATCH only `draft=false` — the `prerelease` flag set by the `release`/tauri jobs (pre-release
+  # suffix → GitHub pre-release) is left untouched, so an `-rc`/`-nightly` tag publishes as a
+  # pre-release, not "latest". If e2e failed/was cancelled this job is skipped and the draft waits
+  # for a manual publish.
+  publish-release:
+    needs: [release, e2e]
+    if: ${{ always() && needs.release.result == 'success' && needs.e2e.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft release (e2e is green)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # GET /releases/tags/{tag} 404s on drafts; list and match by tag instead (same as the
+          # "Normalize Tauri dmg asset name" step above).
+          release_id=$(gh api "repos/$REPO/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$TAG\")][0].id // empty")
+          if [ -z "$release_id" ]; then
+            echo "No release found for $TAG — nothing to publish." >&2
+            exit 1
+          fi
+          gh api -X PATCH "repos/$REPO/releases/$release_id" -F draft=false >/dev/null
+          echo "Published release $TAG (draft -> published)."

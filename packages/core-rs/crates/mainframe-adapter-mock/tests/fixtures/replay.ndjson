@@ -1,0 +1,5 @@
+{"dir":"in","method":"sendMessage","args":["hello",[],"u1"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["recorded-session"],"delayMs":10}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"hello back"}],{"model":"claude-haiku-4-5-20251001"}],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"tool-1","name":"Write","input":{"file_path":"/tmp/mf-e2e-recorded/src/main.ts","content":"ok"}}],null],"delayMs":25}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"tool-1","content":"ok","isError":false}]],"delayMs":30}

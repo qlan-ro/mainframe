@@ -1,7 +1,7 @@
 /**
  * §chat — Messaging + interactive gate (permission / plan / ask-question) specs.
  *
- * Ported from packages/e2e/tests/{05,06,07,08}-*.spec.ts to the app-tauri browser harness.
+ * Covers messaging, permissions, plan approval, and ask-user-question in the browser harness.
  * All tests run in E2E_MODE=mock against the recordings in fixtures/recordings/.
  *
  * Testid reference:
@@ -126,13 +126,13 @@ test.describe('§permissions interactive', () => {
 // TODO(app-tauri): live-only describes (auto-edits / yolo without recording) — skip in mock mode
 test.describe('§permissions auto-edits (live only)', () => {
   test('file edits proceed without a gate (live only)', async () => {
-    test.skip(true, 'TODO(app-tauri): live-only test, no recording; run with E2E_MODE=record');
+    test.skip(true, 'TODO(app-tauri): live-only test; add a hand-written or generated NDJSON fixture');
   });
 });
 
 test.describe('§permissions yolo (live only)', () => {
   test('all tool permissions auto-approved in Yolo mode (live only)', async () => {
-    test.skip(true, 'TODO(app-tauri): live-only test, no recording; run with E2E_MODE=record');
+    test.skip(true, 'TODO(app-tauri): live-only test; add a hand-written or generated NDJSON fixture');
   });
 });
 

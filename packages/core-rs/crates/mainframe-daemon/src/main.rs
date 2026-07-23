@@ -39,6 +39,7 @@ use mainframe_adapter_claude::trust_store::{
 use mainframe_adapter_codex::CodexAdapter;
 use mainframe_adapter_codex::quota_pull::pull_codex_quota_via_temp_app_server;
 use mainframe_adapter_codex::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
+use mainframe_adapter_mock::MockCliAdapter;
 use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
@@ -194,6 +195,10 @@ async fn run_daemon() {
         resolved_path.clone(),
     )));
     adapters.register(Arc::new(CodexAdapter::new(resolved_path.clone())));
+    if std::env::var("E2E_MODE").as_deref() == Ok("mock") {
+        tracing::warn!("E2E mock mode enabled; registering the native replay adapter");
+        adapters.register(Arc::new(MockCliAdapter::default()));
+    }
     adapters.seed_static_snapshots();
 
     // Forward tracker emissions through the broadcast (index.ts wires

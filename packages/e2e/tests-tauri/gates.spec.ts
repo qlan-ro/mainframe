@@ -8,7 +8,7 @@
  * segmented control + clear-context checkbox reflected in the post-approve running footer.
  *
  * All tests run in E2E_MODE=mock against the recordings in fixtures/recordings/. Replay is
- * positional/content-agnostic (see plugins/mock-cli/DESIGN.md) — the mock does not branch on
+ * positional/content-agnostic (see mainframe-adapter-mock/README.md) — the mock does not branch on
  * what a response contains, only on call order — so selecting "Other…"/a different exec mode
  * than what was recorded is safe; the recording only dictates which events fire next.
  *

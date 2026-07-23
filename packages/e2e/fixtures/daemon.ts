@@ -1,42 +1,43 @@
 import { spawn, execFileSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, cpSync } from 'fs';
+import { mkdtempSync, rmSync, openSync, closeSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const PROD_DAEMON_PORT = '31415';
-export { PROD_DAEMON_PORT };
-
-// Core daemon entry — run with plain Node.js to avoid native module ABI mismatch
-// (better-sqlite3 is compiled for system Node.js, not Electron's bundled runtime).
-export const DAEMON_ENTRY = path.resolve(__dirname, '../../../packages/core/dist/index.js');
+const CORE_RS_DIR = path.resolve(__dirname, '../../../packages/core-rs');
 
 // Dedicated e2e port (NOT the dev default 31415) so the harness never collides with — and
 // silently runs against — a developer's running Mainframe. The renderer is built to talk to
-// this port (VITE_DAEMON_HTTP_PORT/WS_PORT); see `pnpm build:app` in this package.
+// this port (VITE_DAEMON_PORT); see `pnpm build:app:tauri` in this package.
 export const DAEMON_PORT = process.env['MF_E2E_DAEMON_PORT'] ?? '31416';
 export const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 export const E2E_MODE = process.env['E2E_MODE'];
 export const RECORDINGS_DIR = path.resolve(__dirname, '../fixtures/recordings');
-export const MOCK_PLUGIN_DIR = path.resolve(__dirname, '../plugins/mock-cli');
-export const ESBUILD_BIN = path.resolve(__dirname, '../../../node_modules/.bin/esbuild');
 
-export function buildMockPlugin(): void {
-  execFileSync(
-    ESBUILD_BIN,
-    [
-      'plugins/mock-cli/src/index.ts',
-      '--bundle',
-      '--platform=node',
-      '--format=cjs',
-      '--outfile=plugins/mock-cli/index.js',
-    ],
-    { cwd: path.resolve(__dirname, '..'), stdio: 'inherit' },
-  );
+export function resolveRustDaemon(): string {
+  const configured = process.env['MF_E2E_RUST_DAEMON_PATH'];
+  if (configured) return path.resolve(configured);
+
+  const release = path.join(CORE_RS_DIR, 'target/release/mainframe-daemon');
+  const debug = path.join(CORE_RS_DIR, 'target/debug/mainframe-daemon');
+  if (existsSync(release)) return release;
+  if (existsSync(debug)) return debug;
+  if (process.env['MF_E2E_SKIP_BUILD'] === '1') {
+    throw new Error(
+      `Rust daemon not found. Build it first: cd ${CORE_RS_DIR} && cargo build --release -p mainframe-daemon`,
+    );
+  }
+
+  execFileSync('cargo', ['build', '--release', '-p', 'mainframe-daemon'], {
+    cwd: CORE_RS_DIR,
+    stdio: 'inherit',
+  });
+  if (!existsSync(release)) throw new Error(`Rust daemon build completed without producing ${release}`);
+  return release;
 }
 
 async function isDaemonReachable(): Promise<boolean> {
@@ -56,7 +57,7 @@ async function isDaemonReachable(): Promise<boolean> {
  * describe's `assertPortFree()` fails instantly, cascading through the whole remaining run.
  *
  * Deliberately conservative: only ever kills a process whose full command line is unmistakably
- * OUR daemon entrypoint (`node .../core/dist/index.js`). Anything else on the port — a
+ * OUR daemon entrypoint (`mainframe-daemon`). Anything else on the port — a
  * developer's real Mainframe instance, an unrelated process — is left alone and still fails loud
  * via the `assertPortFree` error below. Returns true if it killed something worth re-checking for.
  */
@@ -79,7 +80,7 @@ function reapStaleE2eDaemon(): boolean {
     } catch {
       continue; // process exited between lsof and ps — nothing left to kill
     }
-    if (!cmdline.includes('node') || !cmdline.includes(path.join('core', 'dist', 'index.js'))) {
+    if (!cmdline.includes('mainframe-daemon')) {
       continue; // not our daemon entrypoint — never kill an unrecognized process
     }
     try {
@@ -132,6 +133,19 @@ export async function waitForDaemon(maxMs = 30_000): Promise<void> {
   throw new Error(`Daemon did not become ready within ${maxMs}ms`);
 }
 
+async function waitForMockAdapter(maxMs = 10_000): Promise<void> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    const res = await fetch(`${DAEMON_BASE}/api/adapters`);
+    if (res.ok) {
+      const body = (await res.json()) as { data?: { id?: string; installed?: boolean }[] };
+      if (body.data?.some((adapter) => adapter.id === 'mock-cli' && adapter.installed)) return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Mock adapter did not become ready within ${maxMs}ms`);
+}
+
 export interface DaemonHandle {
   daemon: ChildProcess;
   testDataDir: string;
@@ -141,31 +155,15 @@ export async function startDaemon(opts?: { recordingKey?: string }): Promise<Dae
   await assertPortFree();
   const testDataDir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
-  // E2E record/replay wiring. In mock mode, build + copy the external plugin into the isolated
-  // data dir's plugins/ (the daemon scans getDataDir()/plugins). In record mode, the real claude
-  // adapter is wrapped in-daemon. Both modes get the recordings dir + optional stable key.
   const e2eEnv: Record<string, string> = {};
   if (E2E_MODE) {
     e2eEnv['E2E_MODE'] = E2E_MODE;
     e2eEnv['E2E_RECORDINGS_DIR'] = RECORDINGS_DIR;
     if (opts?.recordingKey) e2eEnv['E2E_RECORDING_KEY'] = opts.recordingKey;
   }
-  if (E2E_MODE === 'mock') {
-    buildMockPlugin();
-    const pluginsDir = path.join(testDataDir, 'plugins');
-    mkdirSync(pluginsDir, { recursive: true });
-    // Copy (not symlink) the built plugin into the data dir: the daemon's plugin loader skips
-    // symlinked entries (readdirSync withFileTypes reports a symlinked dir as isDirectory()===false),
-    // so a symlink would never be discovered. A real directory copy is loaded.
-    cpSync(MOCK_PLUGIN_DIR, path.join(pluginsDir, 'mock-cli'), { recursive: true });
-  }
-
-  // Start daemon as a plain Node.js process.
-  // Redirect daemon output to a file — keeps test output readable.
-  // Inspect testDataDir/daemon.log if a test fails and you need daemon logs.
+  const daemonPath = resolveRustDaemon();
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
-  const daemon = spawn('node', [DAEMON_ENTRY], {
-    // The daemon reads DAEMON_PORT (see core/src/config.ts), NOT PORT.
+  const daemon = spawn(daemonPath, [], {
     env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
@@ -175,9 +173,8 @@ export async function startDaemon(opts?: { recordingKey?: string }): Promise<Dae
   // leaks a process holding the port (which would cascade-fail every later spec via assertPortFree).
   try {
     await waitForDaemon();
+    if (E2E_MODE === 'mock') await waitForMockAdapter();
 
-    // Set Haiku as the default model — tests run fast and cheap.
-    // Tests that exercise model-switching override this per-chat via chat.updateConfig.
     await fetch(`${DAEMON_BASE}/api/settings/providers/claude`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

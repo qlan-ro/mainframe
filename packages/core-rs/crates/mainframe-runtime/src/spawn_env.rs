@@ -29,8 +29,17 @@ impl ResolvedPath {
     /// The blocking `SHELL -lic 'echo "$PATH"'` probe is the sanctioned boot-time
     /// exception to the daemon's async-only I/O rule (it runs once, before the
     /// tokio runtime spawns any work).
+    ///
+    /// Under `E2E_MODE` the probe is skipped: the e2e harness spawns the daemon
+    /// with a full inherited `PATH` and re-spawns it once per describe (100+ a
+    /// run), where a ~1.5s interactive-shell probe would dominate every boot. The
+    /// [`fallback`](Self::fallback) already prepends the toolchain bin dirs to that
+    /// inherited `PATH`, so child spawns still resolve.
     #[must_use]
     pub fn resolve() -> Self {
+        if std::env::var_os("E2E_MODE").is_some() {
+            return Self::fallback();
+        }
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         match std::process::Command::new(&shell)
             .args(["-lic", "echo \"$PATH\""])

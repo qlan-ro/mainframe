@@ -260,6 +260,15 @@ impl AdapterRegistry {
     }
 
     async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {
+        // In E2E the only adapter whose live state matters is the mock replay CLI.
+        // Probing claude/codex here costs a `--version` spawn plus a model-catalog
+        // spawn each (~1s a piece when those CLIs are actually installed on the dev
+        // machine), and `/api/adapters` blocks on this refresh — a cost the harness
+        // pays on every describe's daemon boot (100+ a run). Skip the real adapters
+        // and leave them on their seeded fallback snapshot.
+        if adapter_id != "mock-cli" && std::env::var_os("E2E_MODE").is_some() {
+            return Ok(());
+        }
         let Some(adapter) = self.adapters.get(adapter_id).map(|e| e.value().clone()) else {
             return Ok(());
         };
