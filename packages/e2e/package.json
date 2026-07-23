@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-e2e",
-  "version": "0.1.0",
+  "version": "0.1.1-rc.0",
   "private": true,
   "type": "module",
   "scripts": {

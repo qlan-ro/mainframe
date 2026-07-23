@@ -1,6 +1,6 @@
-# @qlan-ro/mainframe-app-tauri
+# @qlan-ro/mainframe-app-electron
 
-## 2.0.0-rc.14
+## 2.0.0-rc.12
 
 ### Patch Changes
 
@@ -10,12 +10,6 @@
 
   Held back deliberately: TypeScript 7 (typescript-eslint does not support it yet) and monaco-editor 0.56 (monaco-languageclient 10.x pins 0.55.1).
 
-- Updated dependencies [[`fe027bc`](https://github.com/qlan-ro/mainframe/commit/fe027bc6648f60cdc9871ce06df421e938d8be86), [`305c5f7`](https://github.com/qlan-ro/mainframe/commit/305c5f79273a74d379b09493db990427b533db2b), [`fe027bc`](https://github.com/qlan-ro/mainframe/commit/fe027bc6648f60cdc9871ce06df421e938d8be86), [`e5480df`](https://github.com/qlan-ro/mainframe/commit/e5480dfa900b945ab32ddf4a0bc8cadf0b4b49a5)]:
-  - @qlan-ro/mainframe-ui@2.0.0-rc.14
-
-## 2.0.0-rc.13
-
-### Patch Changes
-
-- Updated dependencies [[`f2b0314`](https://github.com/qlan-ro/mainframe/commit/f2b0314f0586174d098b058c242be60a1e19f61b)]:
-  - @qlan-ro/mainframe-ui@2.0.0-rc.13
+- Updated dependencies [[`305c5f7`](https://github.com/qlan-ro/mainframe/commit/305c5f79273a74d379b09493db990427b533db2b)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.12
+  - @qlan-ro/mainframe-core@2.0.0-rc.12
