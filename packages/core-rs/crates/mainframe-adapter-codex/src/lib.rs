@@ -14,11 +14,15 @@
 
 pub mod adapter;
 pub mod approval_handler;
+// `pub`, not `pub(crate)`: `tests/child_tail.rs` exercises `spawn_child_tail`
+// directly as an integration test (no existing public entry point wraps it yet).
+pub mod child_tail;
 pub(crate) mod compaction;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
 pub mod history;
+pub(crate) mod image_generation_render;
 pub mod item_types;
 pub mod jsonrpc;
 pub mod plan_mode_handler;
@@ -26,7 +30,10 @@ pub mod quota_identity;
 pub mod quota_pull;
 pub mod quota_rate_limit;
 pub mod rollout_reader;
+pub(crate) mod rollout_reconstruct;
 pub mod session;
+pub(crate) mod thread_item_render;
+pub(crate) mod thread_item_variants;
 pub mod thread_registry;
 pub mod transcript;
 pub mod turn_config;

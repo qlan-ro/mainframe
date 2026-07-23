@@ -827,7 +827,7 @@ async fn load_history_inner(
             .get(child_id)
             .and_then(|m| m.rollout_path.clone());
         if let Some(rollout_path) = rollout_path {
-            let items = read_rollout_items(&rollout_path, Some(child_id)).await;
+            let items = read_rollout_items(&rollout_path, Some(child_id), None).await;
             if !items.is_empty() {
                 child_items_by_thread.insert(child_id.clone(), items);
                 continue;

@@ -488,3 +488,225 @@ fn turn_completed_without_usage_reports_no_context_tokens() {
     assert_eq!(results[0].context_tokens, None);
     assert_eq!(results[0].usage, None);
 }
+
+// --- B2: dynamicToolCall render + explicit skip arms for the B1 union additions ---
+
+fn item_completed(rec: &Recorder, state: &mut CodexSessionState, item: Value) {
+    handle_notification(
+        "item/completed",
+        &json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": item }),
+        &rec.sink(),
+        state,
+    );
+}
+
+#[test]
+fn dynamic_tool_call_renders_a_tool_use_block_namespaced_by_the_tool_source() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "dyn_1",
+            "type": "dynamicToolCall",
+            "namespace": "web",
+            "tool": "search",
+            "arguments": { "query": "rust serde" },
+            "status": "completed",
+        }),
+    );
+    let messages = rec.messages();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        to_values(&messages[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "dyn_1",
+            "name": "web__search",
+            "input": { "query": "rust serde" },
+        }])
+    );
+    assert!(rec.tool_results().is_empty());
+}
+
+#[test]
+fn dynamic_tool_call_without_a_namespace_uses_the_bare_tool_name() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "dyn_2",
+            "type": "dynamicToolCall",
+            "tool": "lookup",
+            "arguments": {},
+            "status": "completed",
+        }),
+    );
+    assert_eq!(
+        to_values(&rec.messages()[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "dyn_2",
+            "name": "lookup",
+            "input": {},
+        }])
+    );
+}
+
+#[test]
+fn entered_review_mode_is_skipped_without_any_sink_call() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({ "id": "rev_1", "type": "enteredReviewMode", "review": "focus on security" }),
+    );
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
+
+#[test]
+fn exited_review_mode_is_skipped_without_any_sink_call() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({ "id": "rev_2", "type": "exitedReviewMode", "review": "focus on security" }),
+    );
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
+
+#[test]
+fn image_view_is_skipped_without_any_sink_call() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({ "id": "img_1", "type": "imageView", "path": "/tmp/shot.png" }),
+    );
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
+
+#[test]
+fn sleep_is_skipped_without_any_sink_call() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({ "id": "sleep_1", "type": "sleep", "durationMs": 500 }),
+    );
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
+
+// --- B3: subAgentActivity folds into the TaskCard lifecycle ---
+
+fn activity_ping(kind: &str) -> Value {
+    json!({
+        "id": "activity_1",
+        "type": "subAgentActivity",
+        "kind": kind,
+        "agentThreadId": "child_thread_1",
+        "agentPath": "/some/path",
+    })
+}
+
+/// Spawns the card and opens it (spawnAgent + wait `item/started`), leaving
+/// `wait_item_1` open in `state.open_collab_cards` with no messages recorded yet.
+fn open_wait_card(rec: &Recorder, state: &mut CodexSessionState) {
+    dispatch_spawn(rec, state);
+    handle_notification(
+        "item/started",
+        &json!({ "threadId": "parent_thread", "turnId": "turn_1", "item": wait_inprogress() }),
+        &rec.sink(),
+        state,
+    );
+    rec.clear_messages();
+}
+
+#[test]
+fn sub_agent_activity_started_and_interacted_are_noops() {
+    for kind in ["started", "interacted"] {
+        let rec = Recorder::new();
+        let mut state = state();
+        open_wait_card(&rec, &mut state);
+
+        item_completed(&rec, &mut state, activity_ping(kind));
+
+        assert!(rec.messages().is_empty());
+        assert!(rec.tool_results().is_empty());
+        assert!(state.open_collab_cards.contains("wait_item_1"));
+    }
+}
+
+#[test]
+fn sub_agent_activity_interrupted_emits_error_result_and_keeps_card_open() {
+    let rec = Recorder::new();
+    let mut state = state();
+    open_wait_card(&rec, &mut state);
+
+    item_completed(&rec, &mut state, activity_ping("interrupted"));
+
+    let results = rec.tool_results();
+    assert_eq!(results.len(), 1);
+    let block = to_values(&results[0]);
+    assert_eq!(block[0]["toolUseId"], json!("wait_item_1"));
+    assert_eq!(block[0]["isError"], json!(true));
+    assert!(rec.messages().is_empty());
+    assert!(state.open_collab_cards.contains("wait_item_1"));
+    assert!(state.errored_collab_cards.contains("wait_item_1"));
+}
+
+#[test]
+fn sub_agent_activity_interrupted_then_wait_completed_does_not_double_close() {
+    let rec = Recorder::new();
+    let mut state = state();
+    open_wait_card(&rec, &mut state);
+
+    item_completed(&rec, &mut state, activity_ping("interrupted"));
+    assert_eq!(rec.tool_results().len(), 1);
+
+    item_completed(&rec, &mut state, wait_completed("interrupted"));
+
+    assert!(rec.messages().is_empty());
+    assert_eq!(rec.tool_results().len(), 1);
+    assert!(!state.open_collab_cards.contains("wait_item_1"));
+    assert!(!state.collab_child_threads.contains_key("child_thread_1"));
+    assert!(!state.spawn_prompts.contains_key("child_thread_1"));
+    assert!(!state.errored_collab_cards.contains("wait_item_1"));
+}
+
+#[test]
+fn sub_agent_activity_unknown_thread_is_noop() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(&rec, &mut state, activity_ping("interrupted"));
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
+
+#[test]
+fn hook_prompt_is_skipped_without_any_sink_call() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "hook_1",
+            "type": "hookPrompt",
+            "fragments": [{ "text": "run lint", "hookRunId": "run_1" }],
+        }),
+    );
+    assert!(rec.messages().is_empty());
+    assert!(rec.tool_results().is_empty());
+}
