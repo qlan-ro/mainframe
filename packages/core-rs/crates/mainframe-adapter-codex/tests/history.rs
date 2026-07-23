@@ -54,6 +54,51 @@ fn also_accepts_the_rollout_jsonl_shape_input_text() {
     );
 }
 
+// --- thread/read reload tolerates item types added after this port ---
+
+// Regression: Codex 0.144.3 emits `contextCompaction` (post-compaction) and
+// `subAgentActivity` (multi-agent) items that `ThreadItem` doesn't know. Because
+// `ThreadReadTurn.items` is a hard `Vec<ThreadItem>`, one unknown variant used to
+// abort deserialization of the whole `thread/read` payload, so history failed to
+// load and the transcript rendered empty (see codex:session "failed to load
+// history: unknown variant `contextCompaction`"). Unknown items must be skipped,
+// leaving the known ones intact.
+#[test]
+fn thread_read_skips_unknown_item_types_instead_of_failing_the_whole_turn() {
+    use mainframe_adapter_codex::types::ThreadReadResult;
+
+    let payload = json!({
+        "thread": {
+            "id": "t1",
+            "turns": [{
+                "id": "turn1",
+                "status": "completed",
+                "items": [
+                    { "id": "a1", "type": "agentMessage", "text": "before compaction", "phase": null },
+                    { "id": "c1", "type": "contextCompaction", "summary": "…", "anythingElse": 42 },
+                    { "id": "s1", "type": "subAgentActivity", "whatever": true },
+                    { "id": "a2", "type": "agentMessage", "text": "after compaction", "phase": null }
+                ]
+            }]
+        }
+    });
+
+    let read: ThreadReadResult =
+        serde_json::from_value(payload).expect("thread/read must deserialize despite unknown items");
+    let all: Vec<ThreadItem> = read
+        .thread
+        .turns
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|t| t.items)
+        .collect();
+
+    // Both unknown items dropped; both agentMessages survive in order.
+    assert_eq!(all.len(), 2);
+    assert!(matches!(&all[0], ThreadItem::AgentMessage(m) if m.text == "before compaction"));
+    assert!(matches!(&all[1], ThreadItem::AgentMessage(m) if m.text == "after compaction"));
+}
+
 #[test]
 fn falls_back_to_the_legacy_top_level_item_text() {
     let out = convert(json!([{ "id": "m1", "type": "userMessage", "text": "legacy" }]));
