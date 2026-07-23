@@ -30,6 +30,7 @@ pub mod quota_identity;
 pub mod quota_pull;
 pub mod quota_rate_limit;
 pub mod rollout_reader;
+pub(crate) mod rollout_reconstruct;
 pub mod session;
 pub(crate) mod thread_item_render;
 pub(crate) mod thread_item_variants;

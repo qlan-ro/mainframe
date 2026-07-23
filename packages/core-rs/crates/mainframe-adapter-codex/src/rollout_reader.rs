@@ -6,14 +6,23 @@
 //! ResponseItem the agent processed (function_call, function_call_output, message,
 //! reasoning), unlike `thread/read` which filters child-thread `commandExecution`s
 //! out. We only use it for SUB-AGENT child threads on history reload.
+//!
+//! B5 extends this beyond `exec_command`: sub-agent file edits arrive as a
+//! `custom_tool_call`/`custom_tool_call_output` pair (`name: "apply_patch"`), and
+//! MCP calls arrive as `function_call`/`function_call_output` tagged with a
+//! `namespace` starting `mcp__`. The parsing/building logic for both (plus the
+//! pre-existing exec-output parsing) lives in `rollout_reconstruct` to keep this
+//! file under the 300-line ceiling.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use crate::item_types::{
-    AgentMessageItem, CommandExecutionItem, ReasoningItem, ThreadItem, UserMessageItem,
+use crate::item_types::{AgentMessageItem, ReasoningItem, ThreadItem, UserMessageItem};
+use crate::rollout_reconstruct::{
+    PendingMcp, handle_custom_tool_call, handle_custom_tool_call_output, handle_function_call,
+    handle_function_call_output,
 };
 
 /// Only paths inside `~/.codex/sessions` are allowed — `rollout_path` comes from an
@@ -38,7 +47,7 @@ struct RolloutContent {
 }
 
 #[derive(Debug, Deserialize)]
-struct RolloutPayload {
+pub(crate) struct RolloutPayload {
     #[serde(rename = "type", default)]
     kind: Option<String>,
     #[serde(default)]
@@ -46,15 +55,22 @@ struct RolloutPayload {
     #[serde(default)]
     content: Option<Vec<RolloutContent>>,
     #[serde(default)]
-    name: Option<String>,
+    pub(crate) name: Option<String>,
     #[serde(default)]
-    arguments: Option<String>,
+    pub(crate) arguments: Option<String>,
     #[serde(default)]
-    call_id: Option<String>,
+    pub(crate) call_id: Option<String>,
     #[serde(default)]
-    output: Option<String>,
+    pub(crate) output: Option<String>,
     #[serde(default)]
     summary: Option<Vec<RolloutContent>>,
+    /// Present on MCP `function_call` records (e.g. `"mcp__testserver"`); absent
+    /// (not just empty) on `exec_command` and other builtin tool calls.
+    #[serde(default)]
+    pub(crate) namespace: Option<String>,
+    /// The apply_patch envelope on a `custom_tool_call` record.
+    #[serde(default)]
+    pub(crate) input: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,27 +82,44 @@ struct RolloutLine {
 }
 
 /// Read a rollout JSONL and return `ThreadItem`s in the same shape as
-/// `thread/read`, but with `commandExecution` items reconstructed from the raw
-/// `function_call` / `function_call_output` records.
+/// `thread/read`, but with `commandExecution`/`fileChange`/`mcpToolCall` items
+/// reconstructed from the raw request/response record pairs.
 pub async fn read_rollout_items(
     rollout_path: &str,
     expected_thread_id: Option<&str>,
     deps: Option<&RolloutReaderDeps>,
 ) -> Vec<ThreadItem> {
-    // Resolve symlinks and ensure the file lives inside ~/.codex/sessions/.
+    let Some(resolved) = resolve_rollout_path(rollout_path, expected_thread_id, deps).await else {
+        return Vec::new();
+    };
+    let raw = match tokio::fs::read_to_string(&resolved).await {
+        Ok(s) => s,
+        Err(err) => {
+            tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: failed to read rollout file");
+            return Vec::new();
+        }
+    };
+    parse_rollout_lines(&raw)
+}
+
+/// Resolves symlinks, then enforces two invariants before we trust `rollout_path`
+/// (untrusted input from an externally-owned SQLite DB): it must live inside
+/// `~/.codex/sessions/`, and its filename must embed `expected_thread_id`.
+async fn resolve_rollout_path(
+    rollout_path: &str,
+    expected_thread_id: Option<&str>,
+    deps: Option<&RolloutReaderDeps>,
+) -> Option<PathBuf> {
     let resolved = match tokio::fs::canonicalize(rollout_path).await {
         Ok(p) => p,
         Err(err) => {
             tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: rollout file not found");
-            return Vec::new();
+            return None;
         }
     };
-    let Some(root) = deps
+    let root = deps
         .and_then(|d| d.sessions_root.clone())
-        .or_else(default_sessions_root)
-    else {
-        return Vec::new();
-    };
+        .or_else(default_sessions_root)?;
     // `canonicalize` the root too — on macOS a tempdir (or `~`) path routes through a
     // `/var` -> `/private/var` symlink, so comparing it as-is against the already
     // resolved file path would spuriously fail containment. Fall back to the raw
@@ -99,9 +132,8 @@ pub async fn read_rollout_items(
             resolved = %resolved.display(),
             "codex: rollout path outside ~/.codex/sessions, refusing to read"
         );
-        return Vec::new();
+        return None;
     }
-    // Sanity: the rollout filename should embed the thread id.
     if let Some(expected) = expected_thread_id
         && !resolved.to_string_lossy().contains(expected)
     {
@@ -111,20 +143,21 @@ pub async fn read_rollout_items(
             expected_thread_id = expected,
             "codex: rollout filename does not match thread id, refusing to read"
         );
-        return Vec::new();
+        return None;
     }
+    Some(resolved)
+}
 
-    let raw = match tokio::fs::read_to_string(&resolved).await {
-        Ok(s) => s,
-        Err(err) => {
-            tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: failed to read rollout file");
-            return Vec::new();
-        }
-    };
-
+/// Walks the JSONL, dispatching each `response_item` payload to its handler.
+/// Each record kind gets its own pending map — call_id spaces from
+/// exec_command, MCP function_calls, and apply_patch custom_tool_calls are not
+/// guaranteed disjoint, and a bug in one pairing lifecycle must not be able to
+/// steal or corrupt another kind's pending entry.
+fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
     let mut items: Vec<ThreadItem> = Vec::new();
-    // Track function_call records by call_id so we can pair them with outputs.
     let mut pending_exec: HashMap<String, String> = HashMap::new();
+    let mut pending_mcp: HashMap<String, PendingMcp> = HashMap::new();
+    let mut pending_patch: HashMap<String, String> = HashMap::new();
     let mut counter = 0usize;
 
     for line in raw.split('\n') {
@@ -138,97 +171,84 @@ pub async fn read_rollout_items(
             continue;
         }
         let Some(p) = rec.payload else { continue };
-        let ptype = p.kind.as_deref();
-
-        // ─── Messages ──────────────────────────────────────────────────────────
-        if ptype == Some("message")
-            && let Some(content) = &p.content
-        {
-            let text: String = content
-                .iter()
-                .filter(|c| matches!(c.kind.as_deref(), Some("output_text") | Some("input_text")))
-                .map(|c| c.text.clone().unwrap_or_default())
-                .collect();
-            if text.is_empty() {
-                continue;
-            }
-            match p.role.as_deref() {
-                Some("assistant") => {
-                    let id = next_id(&mut counter);
-                    items.push(ThreadItem::AgentMessage(AgentMessageItem {
-                        id,
-                        text,
-                        phase: None,
-                    }));
-                }
-                Some("user") => {
-                    let id = next_id(&mut counter);
-                    items.push(ThreadItem::UserMessage(UserMessageItem {
-                        id,
-                        content: None,
-                        text: Some(text),
-                    }));
-                }
-                _ => {}
-            }
-            continue;
-        }
-
-        // ─── Reasoning ─────────────────────────────────────────────────────────
-        if ptype == Some("reasoning")
-            && let Some(summary_blocks) = &p.summary
-        {
-            let summary: Vec<String> = summary_blocks
-                .iter()
-                .map(|s| s.text.clone().unwrap_or_default())
-                .filter(|t| !t.is_empty())
-                .collect();
-            if summary.is_empty() {
-                continue;
-            }
-            let id = next_id(&mut counter);
-            items.push(ThreadItem::Reasoning(ReasoningItem {
-                id,
-                summary,
-                content: Vec::new(),
-            }));
-            continue;
-        }
-
-        // ─── Bash exec (function_call → exec_command) ──────────────────────────
-        if ptype == Some("function_call") && p.name.as_deref() == Some("exec_command") {
-            if let (Some(call_id), Some(arguments)) = (&p.call_id, &p.arguments)
-                && let Ok(args) = serde_json::from_str::<serde_json::Value>(arguments)
-                && let Some(cmd) = args.get("cmd").and_then(|v| v.as_str())
-            {
-                pending_exec.insert(call_id.clone(), cmd.to_string());
-            }
-            continue;
-        }
-
-        if ptype == Some("function_call_output")
-            && let Some(call_id) = &p.call_id
-        {
-            let Some(command) = pending_exec.remove(call_id) else {
-                continue;
-            };
-            let (exit_code, output) = parse_rollout_output(p.output.as_deref().unwrap_or(""));
-            items.push(ThreadItem::CommandExecution(CommandExecutionItem {
-                id: call_id.clone(),
-                command,
-                aggregated_output: output,
-                exit_code: Some(exit_code),
-                status: if exit_code == 0 {
-                    "completed".to_string()
-                } else {
-                    "failed".to_string()
-                },
-            }));
-            continue;
-        }
+        apply_rollout_payload(
+            &p,
+            &mut counter,
+            &mut pending_exec,
+            &mut pending_mcp,
+            &mut pending_patch,
+            &mut items,
+        );
     }
 
     items
+}
+
+fn apply_rollout_payload(
+    p: &RolloutPayload,
+    counter: &mut usize,
+    pending_exec: &mut HashMap<String, String>,
+    pending_mcp: &mut HashMap<String, PendingMcp>,
+    pending_patch: &mut HashMap<String, String>,
+    items: &mut Vec<ThreadItem>,
+) {
+    match p.kind.as_deref() {
+        Some("message") => handle_message(p, counter, items),
+        Some("reasoning") => handle_reasoning(p, counter, items),
+        Some("function_call") => handle_function_call(p, pending_exec, pending_mcp),
+        Some("function_call_output") => {
+            handle_function_call_output(p, pending_exec, pending_mcp, items);
+        }
+        Some("custom_tool_call") => handle_custom_tool_call(p, pending_patch),
+        Some("custom_tool_call_output") => {
+            handle_custom_tool_call_output(p, pending_patch, items);
+        }
+        _ => {}
+    }
+}
+
+fn handle_message(p: &RolloutPayload, counter: &mut usize, items: &mut Vec<ThreadItem>) {
+    let Some(content) = &p.content else { return };
+    let text: String = content
+        .iter()
+        .filter(|c| matches!(c.kind.as_deref(), Some("output_text") | Some("input_text")))
+        .map(|c| c.text.clone().unwrap_or_default())
+        .collect();
+    if text.is_empty() {
+        return;
+    }
+    match p.role.as_deref() {
+        Some("assistant") => items.push(ThreadItem::AgentMessage(AgentMessageItem {
+            id: next_id(counter),
+            text,
+            phase: None,
+        })),
+        Some("user") => items.push(ThreadItem::UserMessage(UserMessageItem {
+            id: next_id(counter),
+            content: None,
+            text: Some(text),
+        })),
+        _ => {}
+    }
+}
+
+fn handle_reasoning(p: &RolloutPayload, counter: &mut usize, items: &mut Vec<ThreadItem>) {
+    let Some(summary_blocks) = &p.summary else {
+        return;
+    };
+    let summary: Vec<String> = summary_blocks
+        .iter()
+        .map(|s| s.text.clone().unwrap_or_default())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if summary.is_empty() {
+        return;
+    }
+    items.push(ThreadItem::Reasoning(ReasoningItem {
+        id: next_id(counter),
+        summary,
+        content: Vec::new(),
+    }));
 }
 
 fn next_id(counter: &mut usize) -> String {
@@ -237,63 +257,13 @@ fn next_id(counter: &mut usize) -> String {
     id
 }
 
-/// Parse Codex's function_call_output payload. The string starts with a header
-/// (`Chunk ID`, `Wall time`, `Process exited with code N`, ...`Output:\n<output>`).
-/// Extract the exit code and strip the header.
-fn parse_rollout_output(raw: &str) -> (i64, String) {
-    let exit_code = raw
-        .lines()
-        .find_map(|l| l.strip_prefix("Process exited with code "))
-        .and_then(|rest| {
-            let digits: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_digit() || *c == '-')
-                .collect();
-            digits.parse::<i64>().ok()
-        })
-        .unwrap_or(0);
-    let marker = "\nOutput:\n";
-    let output = match raw.find(marker) {
-        Some(idx) => raw[idx + marker.len()..].to_string(),
-        None => raw.to_string(),
-    };
-    (exit_code, output)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_rollout_output_extracts_exit_and_strips_header() {
-        let raw = "Chunk ID: f71ecd\nWall time: 0.0 seconds\nProcess exited with code 0\nOutput:\nhello world";
-        let (code, out) = parse_rollout_output(raw);
-        assert_eq!(code, 0);
-        assert_eq!(out, "hello world");
-    }
-
-    #[test]
-    fn parse_rollout_output_nonzero_exit() {
-        let raw = "Process exited with code 127\nOutput:\nnot found";
-        let (code, out) = parse_rollout_output(raw);
-        assert_eq!(code, 127);
-        assert_eq!(out, "not found");
-    }
-
-    #[test]
-    fn parse_rollout_output_no_marker_returns_raw() {
-        let raw = "bare output";
-        let (code, out) = parse_rollout_output(raw);
-        assert_eq!(code, 0);
-        assert_eq!(out, "bare output");
-    }
-}
-
 // PORT STATUS: src/plugins/builtin/codex/rollout-reader.ts (167 lines)
 // confidence: high
 // todos: 0
 // notes: async tokio fs (canonicalize/read_to_string) mirrors the TS realpath +
-// notes: readFile. The `^Process exited with code (-?\d+)` regex is hand-rolled
-// notes: (no regex crate) as a line-prefix scan. SESSIONS_ROOT containment check
-// notes: uses PathBuf::starts_with on the canonicalized path. Added 3 unit tests
-// notes: for parse_rollout_output (no TS test file exists for this module).
+// notes: readFile. SESSIONS_ROOT containment check uses PathBuf::starts_with on
+// notes: the canonicalized path. B5 (2026-07-24) added apply_patch
+// notes: (custom_tool_call/custom_tool_call_output) and MCP (function_call with
+// notes: an mcp__* namespace) reconstruction; parse_rollout_output and its 3
+// notes: unit tests moved to rollout_reconstruct.rs alongside the new pure
+// notes: parsing helpers to keep this file under the 300-line ceiling.
