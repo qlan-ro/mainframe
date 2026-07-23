@@ -6,16 +6,21 @@
 # Rust daemon (browser-mode harness, fixtures/app-tauri.ts) — no Electron or xvfb.
 name: e2e-mock
 
-# TEMPORARILY DISABLED from automatic runs (2026-07-06): the suite is too slow to gate PRs
-# right now (~30 min serial; workers:1 because the app is stateful on one daemon port).
+# TEMPORARILY DISABLED from automatic PR/push runs (2026-07-06): the suite is too slow to gate
+# PRs right now (~30 min serial; workers:1 because the app is stateful on one daemon port).
 # Re-enable by uncommenting the pull_request / push triggers once the suite is parallelized
-# (multi-worker + per-worker daemon ports). Still runnable on demand via workflow_dispatch.
+# (multi-worker + per-worker daemon ports).
+#
+# It IS wired into the Release pipeline: release.yml calls this workflow (workflow_call) on every
+# tag push and auto-publishes the draft release when this suite finishes green. Still runnable on
+# demand via workflow_dispatch.
 on:
   # pull_request:
   #   branches: [main]
   # push:
   #   branches: [main]
-  workflow_dispatch: # manual trigger only, for now
+  workflow_dispatch: # manual trigger
+  workflow_call: # invoked by release.yml as the auto-publish gate
 
 # One run per ref; cancel superseded runs so PR pushes don't pile up jobs.
 concurrency:
