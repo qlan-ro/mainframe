@@ -9,6 +9,7 @@
  *  - permission.requested (notify: true)  → onMarkUnread called with chatId; onReload not called
  *  - permission.requested (notify: false) → onMarkUnread called with chatId
  *  - permission.resolved  → neither mock called
+ *  - background_task.started|updated|ended → onReload called; onMarkUnread not called
  *  - dispose() unsubscribes; subsequent dispatched events are ignored
  *  - Unrelated event type (display.message.added) → no-op
  *
@@ -17,7 +18,7 @@
  * mocks so assertions are trivial.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { BackgroundTask, Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 import { SessionListRouter } from '../session-list-router';
 
@@ -236,6 +237,37 @@ describe('session-list-router — permission.resolved calls neither mock', () =>
     dispatch({ type: 'permission.resolved', chatId: 'c5', requestId: 'r1' });
 
     expect(onReload).not.toHaveBeenCalled();
+    expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// background_task.started|updated|ended → reload (D1: sidebar working indicator)
+// ---------------------------------------------------------------------------
+
+const BACKGROUND_TASK: BackgroundTask = {
+  id: 'bg1',
+  kind: 'agent',
+  toolName: 'Bash',
+  toolUseId: 't1',
+  command: 'run tests',
+  description: 'Running tests',
+  outputPath: null,
+  startedAt: 0,
+  endedAt: null,
+  status: 'running',
+  lastOutputLine: null,
+  summary: null,
+  usage: null,
+};
+
+describe('session-list-router — background_task lifecycle triggers reload', () => {
+  it('calls onReload for started, updated, and ended without marking unread', () => {
+    dispatch({ type: 'background_task.started', chatId: 'c6', task: BACKGROUND_TASK });
+    dispatch({ type: 'background_task.updated', chatId: 'c6', task: BACKGROUND_TASK });
+    dispatch({ type: 'background_task.ended', chatId: 'c6', task: { ...BACKGROUND_TASK, status: 'completed' } });
+
+    expect(onReload).toHaveBeenCalledTimes(3);
     expect(onMarkUnread).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,10 @@
  *   displayStatus and clears the "waiting" badge (Spike 0.3 / S4). If 0.3 shows
  *   the daemon does NOT re-emit chat.updated, add `case 'permission.resolved':
  *   this.deps.onReload(); return;`.
+ * background_task.started / .updated / .ended → reload. A background-only
+ *   window (only a subagent running, no foreground turn) never emits
+ *   chat.updated, so without this the sidebar badge freezes at idle even
+ *   though the daemon's displayStatus is already "working" (D1).
  *
  * The class is dependency-injected (onReload / onChatUpdated / onMarkUnread) so
  * it is testable with no React or zustand. useSessionListRouter (a sibling hook)
@@ -73,6 +77,12 @@ export class SessionListRouter {
 
       case 'permission.requested':
         this.deps.onMarkUnread(event.chatId);
+        return;
+
+      case 'background_task.started':
+      case 'background_task.updated':
+      case 'background_task.ended':
+        this.deps.onReload();
         return;
 
       default:
