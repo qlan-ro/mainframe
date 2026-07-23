@@ -60,6 +60,9 @@ pub struct CodexSessionState {
     /// CollabAgent tool_use ids already resolved to an errored state by an
     /// `interrupted` `subAgentActivity` ping, ahead of the card's own completion.
     pub errored_collab_cards: HashSet<String>,
+    /// child thread id → the live rollout-tail task streaming that child's work
+    /// into the TaskCard, plus its cancellation handle (stopped on wait completion).
+    pub child_tails: HashMap<String, (tokio::task::JoinHandle<()>, tokio_util::sync::CancellationToken)>,
 }
 
 pub fn handle_notification(
@@ -217,10 +220,7 @@ fn handle_item_completed(
         .and_then(|tid| state.collab_child_threads.get(tid).cloned());
     let wrapped: Arc<dyn SessionSink>;
     let sink: &Arc<dyn SessionSink> = if let Some(pid) = parent_tool_use_id {
-        wrapped = Arc::new(ParentIdSink {
-            inner: sink.clone(),
-            parent: pid,
-        });
+        wrapped = Arc::new(ParentIdSink::new(sink.clone(), pid));
         &wrapped
     } else {
         sink
@@ -310,10 +310,17 @@ fn handle_token_usage(params: TokenUsageUpdatedParams, state: &mut CodexSessionS
 
 /// Wraps a sink to tag every emitted block with `parentToolUseId` (mirrors the TS
 /// `wrapSinkWithParentId`). Only `on_message`/`on_tool_result` are transformed;
-/// every other callback delegates unchanged.
-struct ParentIdSink {
+/// every other callback delegates unchanged. `pub(crate)` so `child_tail.rs` can
+/// wrap a raw sink before streaming reconstructed child items into it.
+pub(crate) struct ParentIdSink {
     inner: Arc<dyn SessionSink>,
     parent: String,
+}
+
+impl ParentIdSink {
+    pub(crate) fn new(inner: Arc<dyn SessionSink>, parent: String) -> Self {
+        Self { inner, parent }
+    }
 }
 
 impl SessionSink for ParentIdSink {

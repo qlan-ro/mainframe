@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_types::chat::{TodoItem, TodoStatus};
+use tokio_util::sync::CancellationToken;
 
+use crate::child_tail::spawn_child_tail;
 use crate::event_mapper::CodexSessionState;
 use crate::history::{
     bash_input, collab_agent_tool_use, file_change_input, is_exec_error, mcp_result_content,
@@ -19,7 +21,7 @@ use crate::item_types::{
     CollabAgentToolCallItem, CommandExecutionItem, DynamicToolCallItem, FileChangeItem,
     McpToolCallItem, ReasoningItem, SubAgentActivityItem, ThreadItem, TodoListItem,
 };
-use crate::thread_registry::{agent_title, describe_agent, lookup_agent_metadata};
+use crate::thread_registry::{AgentMetadata, agent_title, describe_agent, lookup_agent_metadata};
 
 /// Dispatches one parsed `ThreadItem` from `item/completed` to the sink. `sink` is
 /// already wrapped with `ParentIdSink` by the caller when the item belongs to a
@@ -192,6 +194,12 @@ fn handle_collab_completed(
         for cid in children {
             state.collab_child_threads.remove(cid);
             state.spawn_prompts.remove(cid);
+            // Signal-only: the tail observes this on its own next tick and exits, so a
+            // completed wait never races a late batch onto an already-closed card. The
+            // handle is dropped, not aborted — the task still gets to return cleanly.
+            if let Some((_, cancel)) = state.child_tails.remove(cid) {
+                cancel.cancel();
+            }
         }
     }
 }
@@ -243,29 +251,29 @@ pub(crate) fn emit_collab_task_group_start(
     state: &mut CodexSessionState,
 ) {
     state.open_collab_cards.insert(item.id.clone());
+    let children = item.receiver_thread_ids.clone().unwrap_or_default();
     // Register the spawned thread(s) so subsequent child items get tagged.
-    if let Some(children) = &item.receiver_thread_ids {
-        for child_id in children {
-            state
-                .collab_child_threads
-                .insert(child_id.clone(), item.id.clone());
-        }
+    for child_id in &children {
+        state
+            .collab_child_threads
+            .insert(child_id.clone(), item.id.clone());
     }
-    let child_id = item
-        .receiver_thread_ids
-        .as_ref()
-        .and_then(|ids| ids.first());
+    // One lookup covers both the title/description derivation below and each
+    // child's rollout_path for the live tail — the brief calls out not to
+    // look this up twice.
+    let meta_by_thread = lookup_agent_metadata(&children);
+    let child_id = children.first();
     // Same identity mapping as history.rs — subagent_type is the nickname,
     // description is the spawn prompt (more informative than the bare role).
-    let meta = child_id.and_then(|c| lookup_agent_metadata(std::slice::from_ref(c)).remove(c));
-    let subagent_type = agent_title(meta.as_ref())
-        .or_else(|| describe_agent(meta.as_ref()))
+    let meta = child_id.and_then(|c| meta_by_thread.get(c));
+    let subagent_type = agent_title(meta)
+        .or_else(|| describe_agent(meta))
         .unwrap_or_else(|| "Sub-agent".to_string());
     let prompt = child_id
         .and_then(|c| state.spawn_prompts.get(c).cloned())
         .or_else(|| item.prompt.clone())
         .unwrap_or_default();
-    let description = describe_agent(meta.as_ref()).unwrap_or_else(|| {
+    let description = describe_agent(meta).unwrap_or_else(|| {
         if prompt.is_empty() {
             subagent_type.clone()
         } else {
@@ -281,4 +289,43 @@ pub(crate) fn emit_collab_task_group_start(
         )],
         None,
     );
+    spawn_child_tails(&children, &item.id, &meta_by_thread, sink, state);
+}
+
+/// Starts a live rollout tail for each child thread with a known `rollout_path`,
+/// skipping any child already being tailed (double-tail guard on re-entrant
+/// `wait` items) and any child whose metadata has no rollout_path yet.
+fn spawn_child_tails(
+    children: &[String],
+    parent_tool_use_id: &str,
+    meta_by_thread: &HashMap<String, AgentMetadata>,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
+    for child_id in children {
+        if state.child_tails.contains_key(child_id) {
+            continue;
+        }
+        let Some(rollout_path) = meta_by_thread
+            .get(child_id)
+            .and_then(|m| m.rollout_path.clone())
+        else {
+            tracing::debug!(
+                module = "codex:events",
+                child_id,
+                "codex: no rollout_path for sub-agent, skipping live tail"
+            );
+            continue;
+        };
+        let cancel = CancellationToken::new();
+        let handle = spawn_child_tail(
+            child_id.clone(),
+            rollout_path,
+            sink.clone(),
+            parent_tool_use_id.to_string(),
+            cancel.clone(),
+            None,
+        );
+        state.child_tails.insert(child_id.clone(), (handle, cancel));
+    }
 }

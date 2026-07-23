@@ -18,8 +18,15 @@ use crate::item_types::{
 
 /// Only paths inside `~/.codex/sessions` are allowed — `rollout_path` comes from an
 /// externally-owned SQLite DB so we treat it as untrusted input.
-fn sessions_root() -> Option<PathBuf> {
+fn default_sessions_root() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".codex").join("sessions"))
+}
+
+/// Injectable containment root — mirrors `transcript::CodexTranscriptDeps`, letting
+/// tests point at a temp dir instead of the real `~/.codex/sessions`.
+#[derive(Debug, Clone, Default)]
+pub struct RolloutReaderDeps {
+    pub sessions_root: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,6 +71,7 @@ struct RolloutLine {
 pub async fn read_rollout_items(
     rollout_path: &str,
     expected_thread_id: Option<&str>,
+    deps: Option<&RolloutReaderDeps>,
 ) -> Vec<ThreadItem> {
     // Resolve symlinks and ensure the file lives inside ~/.codex/sessions/.
     let resolved = match tokio::fs::canonicalize(rollout_path).await {
@@ -73,9 +81,17 @@ pub async fn read_rollout_items(
             return Vec::new();
         }
     };
-    let Some(root) = sessions_root() else {
+    let Some(root) = deps
+        .and_then(|d| d.sessions_root.clone())
+        .or_else(default_sessions_root)
+    else {
         return Vec::new();
     };
+    // `canonicalize` the root too — on macOS a tempdir (or `~`) path routes through a
+    // `/var` -> `/private/var` symlink, so comparing it as-is against the already
+    // resolved file path would spuriously fail containment. Fall back to the raw
+    // root if it doesn't exist yet (e.g. tests asserting containment on `nope/`).
+    let root = tokio::fs::canonicalize(&root).await.unwrap_or(root);
     if !resolved.starts_with(&root) {
         tracing::warn!(
             module = "codex:rollout",

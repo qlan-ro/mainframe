@@ -14,6 +14,9 @@
 
 pub mod adapter;
 pub mod approval_handler;
+// `pub`, not `pub(crate)`: `tests/child_tail.rs` exercises `spawn_child_tail`
+// directly as an integration test (no existing public entry point wraps it yet).
+pub mod child_tail;
 pub(crate) mod compaction;
 pub mod event_mapper;
 pub mod external_session_parse;
