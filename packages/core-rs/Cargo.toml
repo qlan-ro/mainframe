@@ -43,6 +43,13 @@ tempfile = "3"
 chrono-tz = "0.10"
 # Test-only: HTTP mocking for automations action tests (use as a dev-dependency).
 wiremock = "0.6"
+# Pure-Rust search (PR 1): pinned to the exact versions ripgrep 14.1.1 itself
+# vendors, so regex syntax and gitignore semantics match the search parity
+# oracle (search_with_ripgrep tests) that used to run against the real `rg`.
+ignore = "=0.4.23"
+grep-searcher = "=0.1.14"
+grep-regex = "=0.1.13"
+grep-matcher = "=0.1.7"
 
 mainframe-types = { path = "crates/mainframe-types" }
 mainframe-runtime = { path = "crates/mainframe-runtime" }

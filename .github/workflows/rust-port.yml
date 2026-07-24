@@ -24,11 +24,6 @@ jobs:
         with:
           workspaces: packages/core-rs
 
-      # The suggestions-route tests exercise the real TODO/FIXME scan, which
-      # silently returns no matches when rg is absent.
-      - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
-
       - name: Format check
         run: cargo fmt --check
 
