@@ -46,7 +46,7 @@
   --destructive-foreground: #ffffff;
   --border: rgba(0,0,0,0.08);       /* hairlines, dividers                         */
   --input: rgba(0,0,0,0.08);        /* field borders                               */
-  --ring: #0a84ff;                  /* focus ring color                            */
+  --ring: var(--primary);           /* focus ring — tracks each scheme's own primary via the cascade */
 
   --mf-window: #e9e7e2;
   --mf-glass: rgba(240,237,231,0.84);
@@ -210,8 +210,8 @@
 }
 
 /* ────────────────────────────────────────────────────────────────────────
-   CLASSIC · DARK — playful Dracula-ish slate, periwinkle accent
-   (Redesigned 2026-06-12: was warm charcoal + shared blue.)
+   CLASSIC · DARK — playful Dracula-ish slate, macOS system-blue accent
+   (Slate redesigned 2026-06-12; accent unified with light's #0a84ff 2026-07-25.)
    ──────────────────────────────────────────────────────────────────────── */
 .dark {
   /* Without this WebKit paints native scrollbar chrome (the white track) light
@@ -224,7 +224,7 @@
   --card-foreground: #f2f2f8;
   --popover: #2c2e3d;
   --popover-foreground: #f2f2f8;
-  --primary: #8a70f5;              /* periwinkle accent, dark-classic */
+  --primary: #0a84ff;              /* macOS system blue, shared with light */
   --primary-foreground: #ffffff;
   --secondary: #313447;
   --secondary-foreground: #f2f2f8;
@@ -236,7 +236,6 @@
   --destructive-foreground: #1b1c25;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #8a70f5;
 
   --mf-window: #1b1c25;
   --mf-glass: rgba(34,36,47,0.85);
@@ -247,7 +246,7 @@
   --mf-text-3: #8b8ea4;
   --mf-text-4: #555870;
   --mf-chip: rgba(255,255,255,0.07);
-  --mf-selection: rgba(138,112,245,0.30);
+  --mf-selection: rgba(10,132,255,0.30);
   --mf-warning: #f5a960;
   --mf-success: #50d97c;
 
@@ -279,7 +278,7 @@
 
   --mf-shadow-pop: 0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10);
   --mf-shadow-modal: 0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10);
-  --mf-focus-ring: 0 0 0 3px rgba(138,112,245,0.50);
+  --mf-focus-ring: 0 0 0 3px rgba(10,132,255,0.50);
   --mf-scrim: rgba(0, 0, 0, 0.55); /* heavier scrim for all dark schemes (inherited by ocean/velvet dark) */
 
   /* ── App-only tokens — DARK ── */
@@ -291,7 +290,7 @@
   --mf-surface-run: #50d97c;
   --mf-directive-skill: #b48cff;
   --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
-  --mf-directive-command-tint: rgba(138, 112, 245, 0.14);
+  --mf-directive-command-tint: rgba(10, 132, 255, 0.14);
   --mf-tool-read: #8fb2ff;
   --mf-tool-read-tint: rgba(143, 178, 255, 0.14);
   --mf-tool-search: #c18ee8;
@@ -348,8 +347,8 @@
   --mf-diff-del-text: #ff6272;
 
   --mf-cm-active-line: rgba(255,255,255,0.04);
-  --mf-cm-selection: rgba(59,130,246,0.3);
-  --mf-cm-selection-focused: rgba(59,130,246,0.4);
+  --mf-cm-selection: rgba(10,132,255,0.3);
+  --mf-cm-selection-focused: rgba(10,132,255,0.4);
   --mf-cm-match: rgba(251,191,36,0.2);
   --mf-cm-match-border: rgba(251,191,36,0.4);
   --mf-cm-match-selected: rgba(251,191,36,0.4);
@@ -374,7 +373,6 @@
   --destructive: #d23b4e;
   --border: rgba(10,40,45,0.10);
   --input: rgba(10,40,45,0.10);
-  --ring: #0e9888;
 
   --mf-window: #e2e8ea;
   --mf-glass: rgba(230,238,240,0.84);
@@ -468,7 +466,6 @@
   --destructive-foreground: #141923;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #2fc6b7;
 
   --mf-window: #141923;
   --mf-glass: rgba(26,33,44,0.85);
@@ -592,7 +589,6 @@
   --destructive: #d23b54;
   --border: rgba(60,20,55,0.10);
   --input: rgba(60,20,55,0.10);
-  --ring: #d6488f;
 
   --mf-window: #ebe4eb;
   --mf-glass: rgba(242,235,242,0.84);
@@ -684,7 +680,6 @@
   --destructive-foreground: #1e1726;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #f06bb3;
 
   --mf-window: #1e1726;
   --mf-glass: rgba(36,28,46,0.85);

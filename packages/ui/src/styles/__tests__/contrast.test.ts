@@ -18,6 +18,10 @@ import { readFileSync } from 'node:fs';
 
 const WCAG_MIN = 4.49;
 
+/* #0a84ff on white is 3.65:1 — macOS system blue cannot reach AA-normal-text
+   with a white foreground; SC 1.4.11 (non-text/UI) and large-text bar is 3:1. */
+const UI_COMPONENT_MIN = 3.0;
+
 const css = readFileSync(new URL('../globals.css', import.meta.url), 'utf8');
 
 type Decls = Record<string, string>;
@@ -103,6 +107,13 @@ function parseColor(value: string): RGBA {
   throw new Error(`unsupported color value: "${value}"`);
 }
 
+/** Pull the rgba(...) call out of a shorthand value like a box-shadow. */
+function extractRgba(shorthand: string): string {
+  const m = shorthand.match(/rgba?\([^)]+\)/i);
+  if (!m) throw new Error(`no rgba()/rgb() found in "${shorthand}"`);
+  return m[0];
+}
+
 /** Composite a (possibly translucent) foreground color over an opaque backdrop. */
 function composite(fg: RGBA, bg: RGBA): RGBA {
   return {
@@ -176,5 +187,68 @@ describe('globals.css contrast guardrail', () => {
     // Guards the cascade model itself: these blocks do NOT redeclare --background.
     expect(resolve('ocean-light')['--background']).toBe('#ffffff');
     expect(resolve('velvet-light')['--background']).toBe('#ffffff');
+  });
+
+  it.each(ALL)('primary-foreground clears 3:1 as ink on --primary fill — %s', (theme) => {
+    const t = resolve(theme);
+    const fg = parseColor(req(t, '--primary-foreground'));
+    const bg = parseColor(req(t, '--primary'));
+    expect(contrast(fg, bg), `primary-foreground on primary (${theme})`).toBeGreaterThanOrEqual(UI_COMPONENT_MIN);
+  });
+
+  it('classic-dark accent stays legible as ink on its three backdrops', () => {
+    const t = resolve('classic-dark');
+    const ink = parseColor(req(t, '--primary'));
+    for (const [name, bg] of Object.entries(backdrops(t))) {
+      expect(contrast(ink, bg), `primary as ink on ${name} (classic-dark)`).toBeGreaterThanOrEqual(UI_COMPONENT_MIN);
+    }
+  });
+});
+
+describe('globals.css accent derivation', () => {
+  // Todo #277's literal acceptance criterion: classic-light and classic-dark
+  // share one accent. Pinning both halves also guards "light is unchanged".
+  const MACOS_SYSTEM_BLUE = '#0a84ff';
+
+  it('classic-light and classic-dark --primary are macOS system blue', () => {
+    expect(resolve('classic-light')['--primary']).toBe(MACOS_SYSTEM_BLUE);
+    expect(resolve('classic-dark')['--primary']).toBe(MACOS_SYSTEM_BLUE);
+  });
+
+  it.each(ALL)('--mf-selection carries --primary RGB (alpha differs per theme by design) — %s', (theme) => {
+    const t = resolve(theme);
+    const primary = parseColor(req(t, '--primary'));
+    const selection = parseColor(req(t, '--mf-selection'));
+    expect([selection.r, selection.g, selection.b]).toEqual([primary.r, primary.g, primary.b]);
+  });
+
+  it.each(ALL)('--mf-focus-ring carries --primary RGB (alpha differs per theme by design) — %s', (theme) => {
+    const t = resolve(theme);
+    const primary = parseColor(req(t, '--primary'));
+    const ring = parseColor(extractRgba(req(t, '--mf-focus-ring')));
+    expect([ring.r, ring.g, ring.b]).toEqual([primary.r, primary.g, primary.b]);
+  });
+
+  it('classic-dark --mf-cm-selection/-focused carry --primary RGB (matches ocean/velvet dark pattern)', () => {
+    const t = resolve('classic-dark');
+    const primary = parseColor(req(t, '--primary'));
+    for (const token of ['--mf-cm-selection', '--mf-cm-selection-focused']) {
+      const c = parseColor(req(t, token));
+      expect([c.r, c.g, c.b], token).toEqual([primary.r, primary.g, primary.b]);
+    }
+  });
+
+  const DIRECTIVE_TINT_THEMES = ['classic-light', 'classic-dark', 'ocean-dark', 'velvet-dark'];
+  it.each(DIRECTIVE_TINT_THEMES)('--mf-directive-command-tint carries --primary RGB — %s', (theme) => {
+    const t = resolve(theme);
+    const primary = parseColor(req(t, '--primary'));
+    const tint = parseColor(req(t, '--mf-directive-command-tint'));
+    expect([tint.r, tint.g, tint.b]).toEqual([primary.r, primary.g, primary.b]);
+  });
+
+  it('ocean-light and velvet-light inherit --mf-directive-command-tint from :root (classic blue, not their own accent)', () => {
+    const classicTint = resolve('classic-light')['--mf-directive-command-tint'];
+    expect(resolve('ocean-light')['--mf-directive-command-tint']).toBe(classicTint);
+    expect(resolve('velvet-light')['--mf-directive-command-tint']).toBe(classicTint);
   });
 });
