@@ -6,82 +6,12 @@ on:
       - 'v*'
 
 jobs:
-  build-desktop:
-    permissions:
-      contents: write
-    strategy:
-      # Don't cancel the other platforms when one fails — we still want their artifacts.
-      fail-fast: false
-      matrix:
-        # TEMPORARILY macOS-only (2026-07-06): Windows (pnpm-on-PATH in beforeBuildCommand)
-        # and Linux (updater signing-key secret) release legs are disabled while the macOS
-        # signing/notarization path is stabilized. Restore the windows-2022 (x64) and
-        # ubuntu-latest (x64) entries once those are fixed.
-        #
-        # target_os/target_arch drive artifact naming; macos-latest is Apple Silicon
-        # (arm64) as of the 2024 runner migration.
-        include:
-          - os: macos-latest
-            target_os: macos
-            target_arch: arm64
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`;
-      # node-gyp is not on the install-script PATH on the runner.
-      - name: Install node-gyp
-        run: npm install -g node-gyp
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build
-        run: pnpm build
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Package
-        run: pnpm --filter @qlan-ro/mainframe-app-electron run package:ci
-        env:
-          CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
-
-      - name: Upload desktop artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: desktop-electron-${{ matrix.target_os }}-${{ matrix.target_arch }}
-          path: |
-            packages/app-electron/dist/*.dmg
-            packages/app-electron/dist/*.exe
-            packages/app-electron/dist/*.AppImage
-            packages/app-electron/dist/*.deb
-            packages/app-electron/dist/*.rpm
-            packages/app-electron/dist/*.zip
-            packages/app-electron/dist/*.yml
-            packages/app-electron/dist/*.yaml
-
   build-daemon:
     strategy:
       fail-fast: false
       matrix:
-        # The daemon standalone build stays cross-platform (macOS + Linux) even while
-        # the desktop/Tauri release legs are macOS-only — it has no signing dependency.
+        # Cross-platform (macOS + Linux) even while the Tauri release leg is
+        # macOS-only — the standalone daemon has no signing dependency.
         include:
           - os: macos-14
             target_os: darwin
@@ -106,13 +36,30 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`;
-      # node-gyp is not on the install-script PATH on the runner.
-      - run: npm install -g node-gyp
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/core-rs
 
       - run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # `[workspace.package] version` stays pinned at "0.0.0" in the repo (see
+      # packages/core-rs/Cargo.toml) — it feeds `mainframe --version`, /health's
+      # version field, and `assert_not_downgrade` in cli/update.rs, all of which
+      # would otherwise report "0.0.0" in every shipped build. Stamp the real tag
+      # version in before the build reads it, mirroring the app-tauri stamp step
+      # below. CI-local edit only, never committed. `cargo build` (no --locked)
+      # freely rewrites Cargo.lock's matching workspace-member versions itself —
+      # no separate lockfile edit needed.
+      - name: Stamp release version into core-rs Cargo.toml
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" packages/core-rs/Cargo.toml
+          rm packages/core-rs/Cargo.toml.bak
 
       - run: bash scripts/build-standalone.sh ${{ matrix.target_os }} ${{ matrix.target_arch }}
 
@@ -121,9 +68,9 @@ jobs:
           name: daemon-${{ matrix.target_os }}-${{ matrix.target_arch }}
           path: dist-standalone/*.tar.gz
 
-  # Tauri desktop build (the WebKit/Chromium-neutral renderer under the Tauri shell).
-  # tauri-action runs the app-tauri beforeBuildCommand (ui build + provision-node +
-  # bundle-daemon), then `cargo tauri build`, signs the updater artifacts, and
+  # Tauri desktop build (the WebKit/Chromium-neutral renderer under the Tauri shell,
+  # Rust daemon inside). tauri-action runs the app-tauri beforeBuildCommand (ui build +
+  # provision-rust-daemon), then `cargo tauri build`, signs the updater artifacts, and
   # uploads the installers + a merged multi-platform latest.json to this tag's draft
   # release (find-or-create — coexists with the `release` job's softprops upload).
   build-app-tauri:
@@ -132,9 +79,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TEMPORARILY macOS-only (2026-07-06) — see build-desktop note. Windows
-        # (pnpm-on-PATH in the tauri beforeBuildCommand) and Linux (updater signing-key
-        # secret) are disabled until fixed; restore the ubuntu/windows entries then.
+        # TEMPORARILY macOS-only (2026-07-06): Windows (pnpm-on-PATH in the tauri
+        # beforeBuildCommand) and Linux (updater signing-key secret) are disabled
+        # until fixed; restore the ubuntu/windows entries then.
         #
         # macos-13 (Intel) removed 2026-07-07: GitHub-hosted macOS Intel runners are
         # no longer being provisioned for this repo — the leg sat `queued` with no
@@ -159,10 +106,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          # Two Cargo workspaces: the Tauri shell and (for the opt-in
-          # `bundle:canary` / `tauri:build:canary` path) the ported Rust daemon.
-          # core-rs only compiles when the canary build runs — caching it keeps
-          # that build fast without affecting the default Node-only bundle.
           workspaces: |
             packages/app-tauri/src-tauri
             packages/core-rs
@@ -188,6 +131,19 @@ jobs:
           sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" Cargo.toml
           rm Cargo.toml.bak
 
+      # The Tauri-bundled daemon binary comes from the same core-rs workspace
+      # (tauri-action's beforeBuildCommand runs provision-rust-daemon.mjs, which
+      # `cargo build`s packages/core-rs), so it needs the same stamp — otherwise
+      # the bundled `mainframe-daemon --version` / /health still report "0.0.0"
+      # even though the .app itself is correctly versioned. See the build-daemon
+      # job's matching step for the full rationale.
+      - name: Stamp release version into core-rs Cargo.toml
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" packages/core-rs/Cargo.toml
+          rm packages/core-rs/Cargo.toml.bak
+
       # Tauri's Linux build needs the system WebKitGTK / GTK stack.
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -195,32 +151,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      # node-pty has no Linux prebuild; bundle-daemon ships its built .node, so the
-      # install must compile it (node-gyp is not on the install-script PATH).
-      - name: Install node-gyp
-        run: npm install -g node-gyp
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Build the workspace TS the Tauri bundle depends on (types → core → ui).
-      # tauri-action's beforeBuildCommand re-runs the ui build, provisions the Node
-      # sidecar, and bundles the daemon before `cargo tauri build`.
+      # tauri-action's beforeBuildCommand re-runs the ui build and provisions the
+      # Rust daemon binary before `cargo tauri build`.
       - name: Build workspace dependencies
         run: pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
       # Import the Developer ID cert into a keychain BEFORE tauri-action runs.
-      # tauri-action's beforeBuildCommand (`pnpm ... bundle`) codesigns the nested
-      # daemon Mach-O binaries (better-sqlite3/fsevents/node-pty/rg/node) — but Tauri
-      # only imports the cert during its OWN later .app-signing phase, so without this
-      # the bundle-daemon codesign fails with "item could not be found in the keychain".
-      # With the cert already in a keychain here, both our nested signing and Tauri's
-      # .app signing find the identity. We therefore DON'T pass APPLE_CERTIFICATE to
-      # tauri-action below (it would spin up a second keychain → ambiguous identity).
+      # Import the cert into a keychain ahead of time rather than passing
+      # APPLE_CERTIFICATE to tauri-action below — that input spins up its own
+      # keychain, and importing here keeps a single, predictable identity for
+      # Tauri's .app-signing phase to find.
       - name: Import Apple Developer ID certificate
         if: runner.os == 'macOS'
         uses: apple-actions/import-codesign-certs@v7
@@ -255,12 +203,11 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
 
       # tauri-action uploads the installer as `Mainframe_<ver>_<arch>.dmg` (arch =
-      # aarch64|x64) — a name that says neither "tauri" nor a consistent arch, and
-      # collides in spirit with the Electron dmg. Rename it in place to the shared
-      # `Mainframe-tauri-<tag>-macos-<arch>.dmg` scheme (arch normalized to arm64|x64),
-      # matching the Electron dmg naming and the canary dmg naming below. Use $TAG
-      # rather than re-deriving from the (now tag-stamped, see above) source filename
-      # so this rename stays correct even if that stamping step ever changes.
+      # aarch64|x64) — a name that says neither "tauri" nor a consistent arch. Rename
+      # it in place to `Mainframe-tauri-<tag>-macos-<arch>.dmg` (arch normalized to
+      # arm64|x64). Use $TAG rather than re-deriving from the (now tag-stamped, see
+      # above) source filename so this rename stays correct even if that stamping
+      # step ever changes.
       #
       # We rename ONLY the .dmg: it's the user-facing installer and is NOT referenced by
       # latest.json (the macOS updater downloads the `.app.tar.gz`), so renaming is safe
@@ -295,110 +242,6 @@ jobs:
               gh api -X PATCH "repos/$REPO/releases/assets/$id" -f name="$new" >/dev/null
             done
 
-  # Rust-daemon canary variant (docs/rust-port/CUTOVER.md): bundles the ported
-  # Rust daemon (packages/core-rs) alongside the Node sidecar so testers can
-  # flip MAINFRAME_DAEMON_IMPL=rust at runtime. Same identifier/productName as
-  # the default build — it's the same app with an extra opt-in binary, not a
-  # fork — so it is DELIBERATELY NOT part of the auto-update channel: only the
-  # .dmg installer is uploaded, never the .app.tar.gz/.sig, so it can never be
-  # picked up by latest.json. Non-blocking (own job, not in build-app-tauri's
-  # matrix): a canary failure must never stop the Node release from publishing.
-  build-app-tauri-canary:
-    runs-on: macos-14 # Apple Silicon (arm64) — matches build-app-tauri
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            packages/app-tauri/src-tauri
-            packages/core-rs
-
-      # node-pty has no prebuild on this runner and compiles via `node-gyp rebuild`.
-      - name: Install node-gyp
-        run: npm install -g node-gyp
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # The suggestions-route tests shell out to ripgrep for the real
-      # TODO/FIXME scan, which silently returns no matches when rg is absent
-      # (mirrors the rust-port.yml check job).
-      - name: Install ripgrep
-        run: command -v rg >/dev/null 2>&1 || brew install ripgrep
-
-      # Re-gate the Rust workspace at release time (rust-port.yml already gates
-      # every PR touching packages/core-rs, but this is cheap insurance right
-      # before we spend signing/notarization time on it — CUTOVER.md §6 step 2).
-      - name: Rust workspace fmt/clippy/test gate
-        working-directory: packages/core-rs
-        run: |
-          cargo fmt --check
-          cargo clippy --all-targets -- -D warnings
-          cargo test --workspace
-          tools/verify-gate.sh
-
-      - name: Build workspace dependencies
-        run: pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Import Apple Developer ID certificate
-        uses: apple-actions/import-codesign-certs@v7
-        with:
-          p12-file-base64: ${{ secrets.CSC_LINK }}
-          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
-
-      # Plain `tauri build` (the @tauri-apps/cli devDependency, not tauri-action)
-      # so this leg only builds+signs — it does NOT also create/upload to the
-      # tag's GitHub release. A second tauri-action run against the same tag
-      # would collide with build-app-tauri's asset names (identical productName
-      # + version). The `--config` overlay's `beforeBuildCommand` runs
-      # `bundle:canary`, which stages the Rust daemon binary via
-      # provision-rust-daemon.mjs before Tauri packages it.
-      - name: Build canary bundle (Node + Rust daemon)
-        working-directory: packages/app-tauri
-        run: pnpm exec tauri build --config src-tauri/tauri.rust-canary.conf.json
-        env:
-          # createUpdaterArtifacts is on globally, so the build needs a signing
-          # key even though we never publish the updater artifacts it produces.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      # Rename in place so it can never collide with build-app-tauri's
-      # `Mainframe_<ver>_aarch64.dmg` once both land in the `release` job's
-      # merged `artifacts/` dir.
-      - name: Rename canary dmg
-        working-directory: packages/app-tauri/src-tauri/target/release/bundle/dmg
-        run: |
-          set -euo pipefail
-          src=$(ls Mainframe_*_aarch64.dmg)
-          mv "$src" "Mainframe-tauri-canary-${GITHUB_REF_NAME#v}-macos-arm64.dmg"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: app-tauri-canary-macos-arm64
-          path: packages/app-tauri/src-tauri/target/release/bundle/dmg/Mainframe-tauri-canary-*.dmg
-
   # The mock-mode Playwright suite, run in parallel with the builds (it compiles its own Rust
   # daemon + UI bundle, so it needs none of the release artifacts). It never gates the DRAFT — the
   # draft is always assembled by the `release` job below — it only decides whether `publish-release`
@@ -408,11 +251,12 @@ jobs:
     uses: ./.github/workflows/e2e-mock.yml
 
   release:
-    needs: [build-desktop, build-daemon, build-app-tauri, build-app-tauri-canary]
+    needs: [build-daemon, build-app-tauri]
     # Assemble the release as a DRAFT as long as the daemon built — the daemon tarballs back
-    # `mainframe update` and must never be blocked by a desktop/Tauri build failure. `always()`
-    # overrides the default "skip if any need failed"; download-artifact then attaches whatever
-    # desktop/tauri artifacts did succeed. It stays a draft here regardless of e2e; `publish-release`
+    # `mainframe update` and must never be blocked by a Tauri build failure. `always()` overrides
+    # the default "skip if any need failed". build-app-tauri uploads its own dmg/updater assets
+    # straight to this tag's draft release via tauri-action, so download-artifact below only ever
+    # picks up the daemon tarballs. It stays a draft here regardless of e2e; `publish-release`
     # promotes it to published only when the e2e gate is green.
     if: ${{ always() && needs.build-daemon.result == 'success' }}
     runs-on: ubuntu-latest
@@ -426,16 +270,10 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
-          # Curated so build metadata (builder-debug.yml) never lands on the release.
-          # electron-builder emits Mainframe-electron-<ver>-<os>-<arch> installers +
-          # latest*.yml updater manifests; the daemon job emits daemon-<os>-<arch> tarballs.
+          # The daemon job is the only upload-artifact producer left feeding
+          # this download — build-app-tauri publishes straight to the release.
           files: |
-            artifacts/*.dmg
-            artifacts/*.exe
-            artifacts/*.AppImage
-            artifacts/*.zip
             artifacts/*.tar.gz
-            artifacts/latest*.yml
           draft: true
           # Mirror the tauri-action job: pre-release suffix → GitHub pre-release.
           prerelease: ${{ contains(github.ref_name, '-') }}

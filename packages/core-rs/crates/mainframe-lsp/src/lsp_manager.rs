@@ -40,6 +40,7 @@ pub trait CommandResolver: Send + Sync {
     fn resolve_command<'a>(
         &'a self,
         language: &'a str,
+        project_path: &'a str,
     ) -> Pin<Box<dyn Future<Output = Option<ResolvedCommand>> + Send + 'a>>;
 }
 
@@ -47,8 +48,9 @@ impl CommandResolver for LspRegistry {
     fn resolve_command<'a>(
         &'a self,
         language: &'a str,
+        project_path: &'a str,
     ) -> Pin<Box<dyn Future<Output = Option<ResolvedCommand>> + Send + 'a>> {
-        Box::pin(async move { LspRegistry::resolve_command(self, language).await })
+        Box::pin(async move { LspRegistry::resolve_command(self, language, project_path).await })
     }
 }
 
@@ -257,7 +259,7 @@ impl ManagerState {
     ) -> Result<Arc<LspServerHandle>, LspError> {
         let resolved = self
             .resolver
-            .resolve_command(language)
+            .resolve_command(language, project_path)
             .await
             .ok_or_else(|| LspError::NotInstalled(language.to_string()))?;
 
@@ -267,7 +269,6 @@ impl ManagerState {
         command
             .args(&resolved.args)
             .current_dir(project_path)
-            .env("ELECTRON_RUN_AS_NODE", "1")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())

@@ -40,9 +40,6 @@ test-results/
 *.db-wal
 *.db-shm
 
-# Electron
-release/
-
 # Conductor
 .context/
 /logs/

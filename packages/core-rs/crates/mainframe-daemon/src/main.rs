@@ -10,6 +10,7 @@
 //! child (clusters B/F); a panic hook reaps adapter + tunnel children, and a
 //! 200ms flush precedes any fatal exit. Workflows stay unported (SCOPE DECISION).
 #![forbid(unsafe_code)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod builtin_plugins;
 mod cli;
@@ -91,9 +92,12 @@ async fn main() {
         Some("pair") => return cli::pair::run_pair().await,
         Some("status") => return cli::status::run_status().await,
         Some("update") => {
-            // update.ts (self-update) is a packaging concern, not part of Task 5.5.
-            eprintln!("  `mainframe update` is not available in this build.");
-            std::process::exit(1);
+            let argv: Vec<String> = std::env::args().skip(2).collect();
+            if let Err(err) = cli::update::run_update(argv).await {
+                eprintln!("  {err}");
+                std::process::exit(1);
+            }
+            return;
         }
         _ => {}
     }
@@ -301,32 +305,13 @@ async fn run_daemon() {
         tracing::error!(%err, "failed to start the automations engine");
     }
 
-    // LSP: registry (bundled server configs) + the per-(project,language) manager.
+    // LSP: registry (server configs) + the per-(project,language) manager.
     // Constructed in `createServerManager` in the TS; the Rust daemon owns it.
-    // The TS twin resolved bundled servers (typescript-language-server, pyright)
-    // via `require.resolve` + `process.execPath`; the Rust daemon has no Node
-    // module resolver, so the packaging layer injects the bundled `node` binary +
-    // `node_modules` root through env. When unset (dev / run-from-source) bundled
-    // TS/Python resolve to None and only external servers (jdtls) spawn — matching
-    // the old behaviour. TODO(port): confirm these names against the finalized
-    // Tauri sidecar layout and verify on a packaged macOS/Windows build.
-    let lsp_registry = {
-        let registry = LspRegistry::new().with_resolved_path(resolved_path.as_str());
-        match (
-            std::env::var("MAINFRAME_BUNDLED_NODE")
-                .ok()
-                .filter(|s| !s.is_empty()),
-            std::env::var("MAINFRAME_BUNDLED_LSP_ROOT")
-                .ok()
-                .filter(|s| !s.is_empty()),
-        ) {
-            (Some(node), Some(root)) => {
-                info!(node, root, "LSP: bundled node servers configured");
-                registry.with_bundled(node, root)
-            }
-            _ => registry,
-        }
-    };
+    // Every server (including the formerly "bundled" typescript-language-server
+    // and pyright) resolves bring-your-own: a project-local `node_modules/.bin`,
+    // then a Python venv, then a `command -v` probe against the boot-resolved
+    // login-shell `PATH` — no packaged Node/servers to inject.
+    let lsp_registry = LspRegistry::new().with_resolved_path(resolved_path.as_str());
     let lsp_manager = Arc::new(LspManager::new(Arc::new(lsp_registry)));
 
     // PluginManager (index.ts: new PluginManager + loadBuiltin claude/codex/todos).
@@ -883,10 +868,10 @@ async fn shutdown_signal() {
 // pluginManager.loadAll() (on-disk user-plugin discovery under data_dir/plugins) is
 // a DELIBERATE v1 omission per §2.9/§5 — the PluginManager is builtin-only and has
 // no load_all; user-installed plugins are not loaded (disclosed at the boot step).
-// LspRegistry::with_bundled is wired from MAINFRAME_BUNDLED_NODE +
-// MAINFRAME_BUNDLED_LSP_ROOT (the packaging layer's node sidecar + node_modules
-// root; TS used require.resolve + process.execPath). Unset in dev → bundled
-// TS/Python resolve to None, only external jdtls spawns. Daemon tunnel
+// LspRegistry resolves every server bring-your-own (project-local
+// node_modules/.bin, then a Python venv, then command -v on resolved_path); the
+// TS twin's require.resolve + process.execPath bundled-server path has no Rust
+// analogue and is intentionally not ported. Daemon tunnel
 // auto-start (opt-in) sets the /health URL. CLI: --version/version answered before
 // logging init; pair/status are loopback HTTP clients (cli module); update is not
 // ported. Shutdown order matches index.ts: chats.dispose → plugins.unload_all →

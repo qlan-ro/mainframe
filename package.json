@@ -13,32 +13,24 @@
     "url": "https://github.com/qlan-ro/mainframe/issues"
   },
   "scripts": {
-    "dev": "pnpm --filter @qlan-ro/mainframe-core run dev & sleep 2 && pnpm --filter @qlan-ro/mainframe-app-electron run dev",
     "dev:core": "pnpm --filter @qlan-ro/mainframe-core run dev",
-    "dev:desktop": "concurrently -k -n core,vite,electron -c blue,green,magenta \"pnpm --filter @qlan-ro/mainframe-core run dev\" \"pnpm --filter @qlan-ro/mainframe-ui run dev\" \"sleep 3 && pnpm --filter @qlan-ro/mainframe-app-electron run dev\"",
-    "dev:electron": "concurrently -k -n vite,electron -c green,magenta \"pnpm --filter @qlan-ro/mainframe-ui run dev\" \"sleep 3 && pnpm --filter @qlan-ro/mainframe-app-electron run dev\"",
     "build": "pnpm -r run build",
     "build:types": "pnpm --filter @qlan-ro/mainframe-types run build",
     "build:core": "pnpm --filter @qlan-ro/mainframe-core run build",
-    "build:desktop": "pnpm --filter @qlan-ro/mainframe-app-electron run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r --filter=!@qlan-ro/mainframe-e2e run test",
     "test:e2e": "pnpm --filter @qlan-ro/mainframe-e2e test",
     "clean": "pnpm -r run clean",
-    "package": "pnpm build && pnpm --filter @qlan-ro/mainframe-app-electron run package",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish",
-    "postinstall": "node scripts/install-electron.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.1",
-    "concurrently": "^10.0.3",
-    "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
@@ -51,9 +43,7 @@
     "onlyBuiltDependencies": [
       "@vscode/ripgrep",
       "better-sqlite3",
-      "electron",
-      "esbuild",
-      "node-pty"
+      "esbuild"
     ],
     "overrides": {
       "tar": ">=7.5.7",

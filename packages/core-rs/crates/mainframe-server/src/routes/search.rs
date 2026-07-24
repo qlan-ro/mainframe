@@ -1,9 +1,9 @@
 //! Ported from `src/server/routes/search.ts`.
 //!
-//! One endpoint: project content search. Ripgrep-first for directories (with a
-//! JS walk fallback that re-validates every enumerated file for symlink
-//! containment), a direct read for a single-file scope. Every path is realpath'd
-//! and confirmed inside the (realpath'd) project base before it is read.
+//! One endpoint: project content search — ripgrep (in-process) for
+//! directories, a direct read for a single-file scope. Every path is
+//! realpath'd and confirmed inside the (realpath'd) project base before it is
+//! read.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -17,14 +17,13 @@ use axum::routing::get;
 use mainframe_types::search::SearchContentResult;
 
 use crate::ctx::AppCtx;
-use crate::fs_utils::{has_binary_extension, list_project_files, relative};
+use crate::fs_utils::{has_binary_extension, relative};
 use crate::path_utils::is_within_base;
 use crate::respond::{fail, ok};
-use crate::ripgrep::{RipgrepOptions, is_ripgrep_available, search_with_ripgrep};
+use crate::ripgrep::{RipgrepOptions, search_with_ripgrep};
 use crate::routes::files::resolve_base;
 
 const MAX_RESULTS: usize = 200;
-const MAX_FILES_SCANNED: usize = 5000;
 const MAX_FILE_SIZE: u64 = 1024 * 1024; // 1MB
 const MAX_LINE_LENGTH: usize = 500;
 
@@ -202,66 +201,16 @@ async fn search_directory(
     )
     .await;
 
-    if !rg_results.is_empty() || is_ripgrep_available() {
-        for r in rg_results {
-            let abs_file = Path::new(resolved_scope).join(&r.file);
-            let rel_file = relative(Path::new(base), &abs_file);
-            if has_binary_extension(&rel_file) {
-                continue;
-            }
-            results.push(SearchContentResult {
-                file: rel_file,
-                ..r
-            });
-        }
-    } else {
-        search_directory_fallback(base, resolved_scope, query, include_ignored, results).await;
-    }
-}
-
-/// JS fallback: enumerate project files, filter to the scope subtree, and search
-/// each after re-validating symlink containment (an in-repo symlink that escapes
-/// the project must never be read).
-async fn search_directory_fallback(
-    base: &str,
-    resolved_scope: &str,
-    query: &str,
-    include_ignored: bool,
-    results: &mut Vec<SearchContentResult>,
-) {
-    let all_files = list_project_files(base, include_ignored).await;
-    let scope_rel = relative(Path::new(base), Path::new(resolved_scope));
-    let scope_prefix = if scope_rel.is_empty() {
-        String::new()
-    } else {
-        format!("{scope_rel}{}", std::path::MAIN_SEPARATOR)
-    };
-
-    let mut scanned = 0;
-    for rel_file in all_files {
-        if results.len() >= MAX_RESULTS || scanned >= MAX_FILES_SCANNED {
-            break;
-        }
-        if !scope_rel.is_empty() && !rel_file.starts_with(&scope_prefix) && rel_file != scope_rel {
-            continue;
-        }
+    for r in rg_results {
+        let abs_file = Path::new(resolved_scope).join(&r.file);
+        let rel_file = relative(Path::new(base), &abs_file);
         if has_binary_extension(&rel_file) {
             continue;
         }
-        let Some(abs_file) = resolve_within_base(base, &rel_file).await else {
-            scanned += 1;
-            continue;
-        };
-        let file_meta = match tokio::fs::metadata(&abs_file).await {
-            Ok(m) => m,
-            Err(_) => continue, // vanished between listing and stat
-        };
-        if file_meta.len() > MAX_FILE_SIZE {
-            scanned += 1;
-            continue;
-        }
-        search_file(&abs_file, &rel_file, query, results, MAX_RESULTS).await;
-        scanned += 1;
+        results.push(SearchContentResult {
+            file: rel_file,
+            ..r
+        });
     }
 }
 
@@ -324,12 +273,12 @@ mod tests {
 // confidence: high
 // todos: 0
 // notes: getEffectivePath → files::resolve_base (raw base), then a separate
-// realpath (404 "Project not found" on failure), matching the TS two-step. The
-// ripgrep-first / JS-fallback branch is preserved verbatim, including the
-// per-file `resolveWithinBase` containment recheck that stops an in-repo symlink
-// from leaking out-of-project content (search-symlink-fallback.test.ts). Zod
-// custom messages ("Query must be at least 2 characters", "path is required")
-// reproduced exactly; a missing param yields "Required". `listProjectFiles`
-// cannot throw in Rust (returns Vec), so the TS 500 "Failed to list project
-// files" branch is unreachable here — noted, not wired. Line/column indices are
-// char-based (TS was UTF-16 code units); unobservable for ASCII sources.
+// realpath (404 "Project not found" on failure), matching the TS two-step. As
+// of the pure-Rust search rewrite (PR 1 of the Rust-daemon cutover),
+// `search_with_ripgrep` always runs (it's in-process, not a shelled-out
+// binary), so the old "ripgrep unavailable, fall back to a JS walk" branch and
+// its per-file `resolveWithinBase` containment recheck are gone — deleted
+// along with `search-symlink-fallback.test.ts`'s Rust counterpart. Zod custom
+// messages ("Query must be at least 2 characters", "path is required")
+// reproduced exactly; a missing param yields "Required". Line/column indices
+// are char-based (TS was UTF-16 code units); unobservable for ASCII sources.

@@ -30,7 +30,6 @@ pnpm --filter @qlan-ro/mainframe-core test
 
 # Dev mode
 pnpm --filter @qlan-ro/mainframe-core dev
-pnpm --filter @qlan-ro/mainframe-app-electron dev
 ```
 
 ### Monorepo Structure
@@ -39,7 +38,6 @@ pnpm --filter @qlan-ro/mainframe-app-electron dev
 |---------|----------------------------------------------------------------|
 | `@qlan-ro/mainframe-types` | Shared TypeScript contracts (interfaces, event types)          |
 | `@qlan-ro/mainframe-core` | Daemon process — chat orchestration, CLI adapters, persistence |
-| `@qlan-ro/mainframe-app-electron` | Electron + React frontend                                      |
 | `@qlan-ro/mainframe-mobile` | [Private Repo] React Native companion app                      |
 | `@qlan-ro/mainframe-e2e` | Playwright end-to-end tests                                    |
 

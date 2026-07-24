@@ -194,26 +194,19 @@ async fn search_files(
     let mut substrings: Vec<FileHit> = Vec::new();
     let mut fuzzies: Vec<FileHit> = Vec::new();
 
-    match list_files_with_ripgrep(
+    let files = list_files_with_ripgrep(
         &base,
         &ListFilesOptions {
             use_builtin_ignore_only: true,
             ..Default::default()
         },
     )
-    .await
-    {
-        Some(files) => {
-            for rel in files {
-                if substrings.len() + fuzzies.len() >= scan_limit {
-                    break;
-                }
-                add_file_hit(&mut substrings, &mut fuzzies, &rel, false, &query);
-            }
+    .await;
+    for rel in files {
+        if substrings.len() + fuzzies.len() >= scan_limit {
+            break;
         }
-        None => {
-            search_walk(&base, &query, scan_limit, &mut substrings, &mut fuzzies).await;
-        }
+        add_file_hit(&mut substrings, &mut fuzzies, &rel, false, &query);
     }
 
     let combined: Vec<FileHit> = substrings.into_iter().chain(fuzzies).take(limit).collect();
@@ -261,51 +254,6 @@ fn fuzzy_match(query: &str, target: &str) -> bool {
         }
     }
     qi == q.len()
-}
-
-/// Recursive-walk fallback (ripgrep unavailable): each entry is containment-
-/// validated before it counts toward the scan budget.
-async fn search_walk(
-    base: &str,
-    query: &str,
-    scan_limit: usize,
-    substrings: &mut Vec<FileHit>,
-    fuzzies: &mut Vec<FileHit>,
-) {
-    let mut stack = vec![base.to_string()];
-    while let Some(dir) = stack.pop() {
-        if substrings.len() + fuzzies.len() >= scan_limit {
-            return;
-        }
-        let Ok(mut read_dir) = tokio::fs::read_dir(&dir).await else {
-            tracing::warn!(dir, "Failed to read directory during file search");
-            continue;
-        };
-        while let Ok(Some(entry)) = read_dir.next_entry().await {
-            if substrings.len() + fuzzies.len() >= scan_limit {
-                return;
-            }
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if is_ignored_dir(&name) {
-                continue;
-            }
-            let joined = Path::new(&dir).join(&name);
-            let joined_str = joined.to_string_lossy().into_owned();
-            if resolve_and_validate_path(base, &joined_str).await.is_none() {
-                continue;
-            }
-            let rel = relative(Path::new(base), &joined);
-            let is_dir = entry
-                .file_type()
-                .await
-                .map(|ft| ft.is_dir())
-                .unwrap_or(false);
-            add_file_hit(substrings, fuzzies, &rel, is_dir, query);
-            if is_dir {
-                stack.push(joined_str);
-            }
-        }
-    }
 }
 
 // ── GET /api/projects/:id/files-list ─────────────────────────────────────────

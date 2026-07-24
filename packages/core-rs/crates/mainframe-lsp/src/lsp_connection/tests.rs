@@ -133,6 +133,7 @@ impl CommandResolver for FakeResolver {
     fn resolve_command<'a>(
         &'a self,
         _language: &'a str,
+        _project_path: &'a str,
     ) -> Pin<Box<dyn Future<Output = Option<ResolvedCommand>> + Send + 'a>> {
         Box::pin(async {
             Some(ResolvedCommand {

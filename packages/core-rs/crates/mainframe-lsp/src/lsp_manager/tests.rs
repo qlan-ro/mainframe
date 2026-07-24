@@ -18,6 +18,7 @@ impl CommandResolver for FakeResolver {
     fn resolve_command<'a>(
         &'a self,
         _language: &'a str,
+        _project_path: &'a str,
     ) -> Pin<Box<dyn Future<Output = Option<ResolvedCommand>> + Send + 'a>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async {

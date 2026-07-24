@@ -3,11 +3,11 @@ import { createRequire } from 'node:module';
 /**
  * The daemon's own version.
  *
- * Bundled builds inline it: the esbuild `define` in the bundle-daemon scripts
- * replaces `__DAEMON_VERSION__` with the package version at build time (the
- * standalone tarball ships no package.json to read at runtime). In dev (tsx) and
- * unbundled `node dist/index.js` runs the token is absent, so we fall back to
- * reading the package.json next to this module.
+ * The Rust daemon replaced this package's bundled build in the shipped
+ * release path, so nothing defines `__DAEMON_VERSION__` anymore — this
+ * package now only runs from source (dev via tsx, or the test harness'
+ * `node dist/index.js`), and always falls back to reading the package.json
+ * next to this module.
  */
 declare const __DAEMON_VERSION__: string | undefined;
 

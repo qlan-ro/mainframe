@@ -1,13 +1,19 @@
 # Rust Daemon — Cutover Checklist & Operational Runbook
 
-Go/no-go gate and runbook for flipping the **Tauri** desktop shell from the bundled
-Node daemon to the ported Rust `mainframe-daemon`. Electron is out of scope: the
-Electron shell keeps the Node daemon untouched and is not part of this cutover.
+**Status: SHIPPED (2026-07-24, `feat/rust-daemon-cutover`).** The Tauri desktop shell
+now ships the Rust `mainframe-daemon` (packages/core-rs) as its only daemon. The
+Node sidecar, the `MAINFRAME_DAEMON_IMPL` flag, and the Tauri Rust-canary build
+variant are all removed — there is no runtime escape hatch back to Node. The
+Electron shell (`packages/app-electron`), which section 6 originally scoped out
+as "not part of this cutover," has since been retired outright: Electron never
+got its own Rust daemon port, it was deleted alongside the Node-sidecar
+machinery it depended on. The remainder of this document is the runbook as
+executed — kept as a historical record of how the flip happened, not a live
+checklist.
 
-- **Branch:** `feat/daemon-rust-port`
+- **Branch:** `feat/daemon-rust-port` (landed on `main`); flip executed on `feat/rust-daemon-cutover`.
 - **Scope:** Tauri shell only (`packages/app-tauri`), Rust daemon (`packages/core-rs`).
-- **Default is unchanged:** the Node sidecar remains the default until an explicit flip.
-- **Last verified:** 2026-07-11, macOS `aarch64-apple-darwin`.
+- **Last verified:** 2026-07-24, macOS `aarch64-apple-darwin` (baseline refresh below; original 2026-07-11).
 
 ---
 
@@ -15,10 +21,20 @@ Electron shell keeps the Node daemon untouched and is not part of this cutover.
 
 | Metric | Value | Source |
 |---|---|---|
-| Rust workspace tests | **1,303 passed / 0 failed** (64 test binaries) | `cargo test --workspace`, verified 2026-07-11 on this branch |
-| HTTP route diff parity | **84 routes** compared: 76 IDENTICAL, 5 DEVIATION (understood), 3 EXPECTED(gap), **0 unexplained (DIVERGENT)** | `DIFF-REPORT-phase5.md` |
-| Live soak (real claude CLI) | 3 scenarios; **no new Rust-side structural divergence**; residual deltas explained | `SOAK-REPORT-phase4.md` |
+| Rust workspace tests | **2,084 passed / 0 failed** (78 test binaries) | `cargo test --workspace`, verified 2026-07-24 |
+| HTTP route diff parity | **84 routes** compared: 77 IDENTICAL, 4 DEVIATION (understood), 3 EXPECTED(gap), **0 unexplained (DIVERGENT)** | `DIFF-REPORT-phase5.md` |
+| Live soak (real claude CLI) | 3 scenarios; **no Rust-side structural divergence**; residual deltas are live-environment nondeterminism (quota broadcasts #480/#486, live-CLI interrupt race) | `SOAK-REPORT-phase4.md` |
 | Tauri canary | Shell boots the Rust daemon; **10/10** daemon checks (shell-spawned) + **10/10** (isolated PATH-enrichment daemon) | `CANARY-REPORT.md` |
+
+**Baseline refresh (2026-07-24):** the quota features #480/#486 landed on both arms after
+the original baseline, so both daemons now live-probe provider quota at boot — quota
+`settings` rows and `provider.quota.updated` events are inherently nondeterministic
+(wall-clock + real account state) and are masked/explained, not defects. The previously
+documented codex connect-replay `−1` delta (Rust replaying one `adapter.models.updated`,
+Node two) has **closed**: codex now probes successfully on the Rust arm. Interrupt-scenario
+event counts vary run-to-run with whether the live CLI answers a mid-turn interrupt by
+graceful result vs process exit — both arms deliver interrupts identically
+(soft interrupt + 10 s SIGINT fallback; `session.ts:317` ↔ `session.rs:712`).
 
 ### Diff parity (Phase-5, 84 routes)
 
@@ -247,26 +263,22 @@ native `node_modules`).
 
 **Rollback at any point:** flip back to `node` (§2). No data changes to undo (§2 caveat).
 
-### Post-cutover cleanup (pointers only — do after Node is fully retired for Tauri)
+### Post-cutover cleanup — DONE
 
-Once the Rust daemon is the permanent default and Node is removed from the Tauri shell, delete
-the Node-sidecar bundling machinery (Electron is unaffected — it keeps its own Node daemon):
+Everything below this line was the planned pointer list; all of it has been executed as of
+`feat/rust-daemon-cutover`:
 
-- **Node bundling scripts:** `packages/app-tauri/scripts/bundle-daemon.mjs` (the esbuild
-  `daemon.cjs` single-file build + Mach-O codesign), `packages/app-tauri/scripts/provision-node.mjs`,
-  `packages/app-tauri/scripts/codesign-daemon.mjs`, and the shared dep-collector
-  `scripts/collect-daemon-deps.mjs` (repo root).
-- **package.json:** drop the `bundle:daemon` / `provision:node` scripts (and the `node`
-  legs of the `bundle` chain), and the `esbuild` devDependency
-  (`packages/app-tauri/package.json`).
-- **tauri.conf.json:** remove `"binaries/node"` from `externalBin` and the
-  `"resources/daemon": "daemon"` resource mapping (the bundled `daemon.cjs` + `node_modules`).
-- **Rust shell:** remove the Node arm — `boot_node_daemon` and the
-  `DaemonProgram::Node` variant (`lib.rs`, `sidecar.rs`), `find_bundled_node` /
-  `find_node`, and the `daemon.cjs` bundled-resource resolution (`lib.rs` ~L445–460).
-  Then `MAINFRAME_DAEMON_IMPL` / `daemon_impl.rs` can collapse to a single impl.
-
-Do **not** touch `packages/app-electron`, `packages/core` TS source, `pnpm-lock.yaml`, or
-`packages/mobile` as part of this cleanup.
+- **Node bundling scripts** (`bundle-daemon.mjs`, `provision-node.mjs`, `codesign-daemon.mjs`,
+  the repo-root `collect-daemon-deps.mjs`) — deleted, replaced by `provision-rust-daemon.mjs`.
+- **package.json / tauri.conf.json** — `bundle:daemon`/`provision:node` and the Node leg of
+  `externalBin`/`resources` are gone; the bundle ships only the Rust `mainframe-daemon` binary.
+- **Rust shell** — the Node arm (`boot_node_daemon`, `DaemonProgram::Node`, `find_bundled_node`/
+  `find_node`, `daemon.cjs` resource resolution) and `MAINFRAME_DAEMON_IMPL`/`daemon_impl.rs` are
+  removed; the shell always spawns the Rust binary.
+- **Electron shell** — `packages/app-electron` is deleted outright (not left as a Node-daemon
+  holdout), along with its CI legs, `node-gyp`/Electron-cache steps, and root `package.json`
+  scripts. `packages/core` (TS) survives as an orphan workspace member — nothing outside this
+  doc imports it anymore, but `prepare-release.yml` still reads its `package.json` for version
+  tagging. `packages/mobile` was untouched, as originally scoped.
 </content>
 </invoke>

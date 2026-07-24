@@ -1,5 +1,4 @@
 mod commands;
-mod daemon_impl;
 mod log_sink;
 mod memory_logger;
 mod menu;
@@ -131,9 +130,6 @@ pub fn run() {
             daemons_remove,
             daemon_token_get,
             daemon_token_set,
-            // daemon-impl canary (MAINFRAME_DAEMON_IMPL) read/flip (Task 6.1)
-            daemon_impl::daemon_impl_get,
-            daemon_impl::daemon_impl_set,
         ])
         .setup(move |app| {
             // Build the main window ourselves (config has `"create": false`) so we can
@@ -190,9 +186,7 @@ pub fn run() {
             // Register the preview child-webview manager.
             app.manage(PreviewManager::new());
 
-            // Boot the daemon from inside setup so we have an AppHandle available
-            // for the bundled-resource resolver (packaged-build branch).
-            let daemon_result = boot_daemon(app.handle(), &shell_env);
+            let daemon_result = boot_daemon(&shell_env);
 
             // Propagate any daemon-boot error to the renderer via the window title
             // (best-effort — the renderer polls get_daemon_status).
@@ -302,13 +296,11 @@ pub fn run() {
 }
 
 fn boot_daemon(
-    app: &tauri::AppHandle,
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
     // External daemon: the user (or a separate process) runs the daemon themselves
     // (MAINFRAME_EXTERNAL_DAEMON) — don't spawn; the renderer connects to it on
-    // daemon_port(). Mirrors the Electron `MAINFRAME_EXTERNAL_DAEMON` flag. Applies
-    // to both impls: the shell never spawns anything in EXTERNAL mode.
+    // daemon_port(). Mirrors the Electron `MAINFRAME_EXTERNAL_DAEMON` flag.
     if external_daemon() {
         tracing::info!(
             port = daemon_port(),
@@ -317,105 +309,30 @@ fn boot_daemon(
         return Ok(sidecar::DaemonHandle::external());
     }
 
-    // Canary: default Node (always-working path), opt into Rust via
-    // MAINFRAME_DAEMON_IMPL=rust or the persisted app setting.
-    let impl_ = daemon_impl::resolve_daemon_impl();
-    tracing::info!(daemon_impl = impl_.as_str(), "selected daemon implementation");
-    match impl_ {
-        daemon_impl::DaemonImpl::Node => boot_node_daemon(app, shell_env),
-        daemon_impl::DaemonImpl::Rust => boot_rust_daemon(app, shell_env),
-    }
-}
-
-/// Boot the legacy Node sidecar (`node <daemon_entry>`).
-fn boot_node_daemon(
-    app: &tauri::AppHandle,
-    shell_env: &std::collections::HashMap<String, String>,
-) -> Result<sidecar::DaemonHandle, String> {
-    let shell_path = shell_env.get("PATH").map(|s| s.as_str());
-    // Release: prefer the bundled, ABI-matched Node sidecar. Debug/dev: ALWAYS use
-    // the system Node so live `packages/core` edits take effect — even if leftover
-    // bundle artifacts (`target/debug/node`) sit next to the dev binary from a prior
-    // `bundle-daemon`/`provision-node` run. (`if cfg!` keeps `find_bundled_node`
-    // referenced in both profiles — no dead-code warning.)
-    let bundled_node = if cfg!(debug_assertions) {
-        None
-    } else {
-        sidecar::find_bundled_node()
-    };
-    let node_bin = match bundled_node {
-        Some(bundled) => bundled,
-        None => sidecar::find_node(shell_path)?,
-    };
-
-    let daemon_entry = resolve_daemon_entry(app)?;
-
-    tracing::info!(
-        node = %node_bin.display(),
-        daemon = %daemon_entry.display(),
-        port = daemon_port(),
-        "booting node daemon sidecar"
-    );
-
-    sidecar::spawn_daemon(sidecar::SidecarConfig {
-        program: sidecar::DaemonProgram::Node {
-            node_bin,
-            daemon_entry,
-        },
-        shell_env: shell_env.clone(),
-        daemon_port: daemon_port(),
-        data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
-    })
+    boot_rust_daemon(shell_env)
 }
 
 /// Boot the Rust `mainframe-daemon` binary directly.
 ///
 /// The daemon reads DAEMON_PORT + MAINFRAME_DATA_DIR from its own env; the
 /// login-shell env (incl. PATH) is passed through as the daemon's own env so it
-/// AND its adapter children inherit the resolved PATH. The bundled Node runtime
-/// and node_modules root are injected (release only) so the Rust daemon can
-/// launch the bundled TS/Python LSP servers — the Node runtime stays in the
-/// bundle while the canary exists, serving the LSP servers only under IMPL=rust.
+/// AND its adapter children inherit the resolved PATH.
 fn boot_rust_daemon(
-    app: &tauri::AppHandle,
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
     let daemon_bin = resolve_rust_daemon_bin()?;
 
-    // Release: point the daemon at the bundled Node + node_modules for the LSP
-    // servers. Dev/run-from-source: unset → only external LSP servers (jdtls)
-    // spawn (matches the daemon's documented dev behaviour). Skipped in debug so
-    // leftover bundle artifacts next to a dev binary never leak into dev runs.
-    let (bundled_node, bundled_lsp_root) = if cfg!(debug_assertions) {
-        (None, None)
-    } else {
-        let node = sidecar::find_bundled_node();
-        let lsp_root = app
-            .path()
-            .resource_dir()
-            .ok()
-            .map(|d| d.join("daemon").join("node_modules"))
-            .filter(|p| p.exists());
-        (node, lsp_root)
-    };
-
     tracing::info!(
         daemon = %daemon_bin.display(),
         port = daemon_port(),
-        bundled_node = ?bundled_node,
-        bundled_lsp_root = ?bundled_lsp_root,
         "booting rust daemon sidecar"
     );
 
     sidecar::spawn_daemon(sidecar::SidecarConfig {
-        program: sidecar::DaemonProgram::Rust {
-            daemon_bin,
-            bundled_node,
-            bundled_lsp_root,
-        },
+        program: sidecar::DaemonProgram { daemon_bin },
         shell_env: shell_env.clone(),
         daemon_port: daemon_port(),
-        data_dir: None,
+        data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
     })
 }
 
@@ -476,82 +393,6 @@ fn resolve_rust_daemon_bin() -> Result<PathBuf, String> {
         .to_string())
 }
 
-/// Pure path-precedence selector (unit-testable, no AppHandle).
-/// Precedence: bundled resource (packaged build) > env override > caller falls
-/// back to the monorepo-root walk. Returns the first candidate that exists on disk.
-fn pick_daemon_entry(bundled: Option<PathBuf>, env_override: Option<PathBuf>) -> Option<PathBuf> {
-    if let Some(p) = bundled {
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    if let Some(p) = env_override {
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    None
-}
-
-/// Locate the compiled daemon entry point.
-///
-/// Precedence:
-///   1. Bundled resource (`<resource_dir>/daemon/daemon.cjs`) — **release only**.
-///   2. `MAINFRAME_DAEMON_PATH` env override — CI / manual test (both profiles).
-///   3. Monorepo-root walk (`packages/core/dist/index.js`) — dev mode.
-///
-/// In debug/dev the bundled resource is skipped entirely, so `tauri dev` always
-/// runs live `packages/core` even if a `target/debug/daemon/daemon.cjs` was left
-/// behind by a prior bundle run. The explicit env override is still honored.
-fn resolve_daemon_entry(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let bundled = if cfg!(debug_assertions) {
-        None
-    } else {
-        app.path()
-            .resource_dir()
-            .ok()
-            .map(|d| d.join("daemon").join("daemon.cjs"))
-    };
-    let env_override = std::env::var("MAINFRAME_DAEMON_PATH").ok().map(PathBuf::from);
-
-    if let Some(found) = pick_daemon_entry(bundled, env_override.clone()) {
-        tracing::info!(path = %found.display(), "daemon entry resolved (bundled/env)");
-        return Ok(found);
-    }
-    // If the caller explicitly set MAINFRAME_DAEMON_PATH but the file is absent,
-    // return an actionable error rather than silently falling through to dev mode.
-    if let Some(p) = env_override {
-        return Err(format!(
-            "MAINFRAME_DAEMON_PATH={} does not exist",
-            p.display()
-        ));
-    }
-
-    // Dev fallback: walk up to the monorepo root (unchanged from the spike).
-    let exe = std::env::current_exe()
-        .map_err(|e| format!("cannot determine exe path: {e}"))?;
-    let mut dir = exe.as_path();
-    loop {
-        if dir.join("pnpm-workspace.yaml").exists() {
-            let candidate = dir.join("packages/core/dist/index.js");
-            if candidate.exists() {
-                tracing::info!(path = %candidate.display(), "daemon entry found via monorepo root");
-                return Ok(candidate);
-            }
-            return Err(format!(
-                "monorepo root found at {} but packages/core/dist/index.js missing — run pnpm --filter @qlan-ro/mainframe-core build",
-                dir.display()
-            ));
-        }
-        match dir.parent() {
-            Some(parent) => dir = parent,
-            None => break,
-        }
-    }
-
-    Err("could not locate monorepo root (pnpm-workspace.yaml) — set MAINFRAME_DAEMON_PATH".to_string())
-}
-
 // ── Resolver unit tests ───────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -586,52 +427,6 @@ mod daemon_port_tests {
             Some(PathBuf::from(dir))
         );
         assert_eq!(daemon_data_dir_override(None), None);
-    }
-}
-
-#[cfg(test)]
-mod resolver_tests {
-    use super::pick_daemon_entry;
-
-    /// Returns a temp-dir path unique to this process + a per-call counter so
-    /// parallel test threads never collide on the same filename.
-    fn unique_tmp(tag: &str) -> std::path::PathBuf {
-        use std::sync::atomic::{AtomicU32, Ordering};
-        static COUNTER: AtomicU32 = AtomicU32::new(0);
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "daemon-test-{}-{}-{}.cjs",
-            std::process::id(),
-            n,
-            tag
-        ))
-    }
-
-    #[test]
-    fn prefers_bundled_resource_when_present() {
-        let bundled = unique_tmp("bundled");
-        std::fs::write(&bundled, b"// daemon").unwrap();
-        let got = pick_daemon_entry(Some(bundled.clone()), None);
-        std::fs::remove_file(&bundled).ok();
-        assert_eq!(got, Some(bundled));
-    }
-
-    #[test]
-    fn falls_back_to_env_override_when_no_bundle() {
-        let env_path = unique_tmp("env");
-        std::fs::write(&env_path, b"// daemon").unwrap();
-        let got = pick_daemon_entry(None, Some(env_path.clone()));
-        std::fs::remove_file(&env_path).ok();
-        assert_eq!(got, Some(env_path));
-    }
-
-    #[test]
-    fn returns_none_when_neither_exists() {
-        let got = pick_daemon_entry(
-            Some(unique_tmp("nope-bundle")),
-            Some(unique_tmp("nope-env")),
-        );
-        assert_eq!(got, None);
     }
 }
 

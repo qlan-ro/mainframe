@@ -8,12 +8,6 @@
       "port": 31415
     },
     {
-      "name": "Desktop App",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-app-electron", "run", "dev:web"],
-      "port": 5173
-    },
-    {
       "name": "Types Watch",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@qlan-ro/mainframe-types", "run", "dev"],

@@ -6,8 +6,7 @@
  * `src-tauri/binaries/mainframe-daemon-<triple>` (e.g.
  * `mainframe-daemon-aarch64-apple-darwin`). At `tauri build` it copies the
  * matching-triple binary next to the app executable; the Rust shell's
- * `sidecar::find_bundled_rust_daemon` finds it there and runs it when the
- * `MAINFRAME_DAEMON_IMPL=rust` canary is set.
+ * `sidecar::find_bundled_rust_daemon` finds it there and runs it directly.
  *
  * Modes:
  *   (default)          `cargo build --release -p mainframe-daemon` in
@@ -18,7 +17,7 @@
  *                      (fast local re-provision, or a CI step that built earlier).
  *
  * The Tauri target triple is identical to the Rust target triple, so no mapping
- * is needed (unlike provision-node.mjs which maps node's platform/arch).
+ * is needed.
  *
  * Real binaries are gitignored; only this script + the .gitignore/README are
  * committed. `cargo check` does not need this file; `cargo tauri build` does.

@@ -1,5 +1,5 @@
 name: Setup workspace
-description: pnpm, Node, native-build caching, and dependency install shared by CI jobs.
+description: pnpm, Node, and dependency install shared by CI jobs.
 
 inputs:
   github-token:
@@ -17,26 +17,6 @@ runs:
       with:
         node-version: 22
         cache: 'pnpm'
-
-    # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`.
-    # node-gyp is not on the install-script PATH on the runner, so install
-    # it globally before native deps are built.
-    - run: npm install -g node-gyp
-      shell: bash
-
-    # Keep compiled native modules (node-pty; better-sqlite3 13+ ships
-    # prebuilds) in the pnpm store, which setup-node's pnpm cache persists
-    # across runs — warm runs skip the node-gyp rebuild. CI-only: appended
-    # to the checkout's .npmrc.
-    - run: echo "side-effects-cache=true" >> .npmrc
-      shell: bash
-
-    # The root postinstall downloads Electron; its zip cache lives in
-    # ~/.cache/electron and is keyed by the locked Electron version.
-    - uses: actions/cache@v4
-      with:
-        path: ~/.cache/electron
-        key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
     - run: pnpm install --frozen-lockfile
       shell: bash

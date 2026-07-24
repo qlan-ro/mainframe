@@ -16,12 +16,10 @@ usage() {
   cat <<'EOF'
 Usage: scripts/build-release-local.sh [targets] [options]
 
-Targets (default: --tauri --canary)
-  --tauri         Tauri dmg, Node daemon sidecar        (release.yml: build-app-tauri)
-  --canary        Tauri dmg + Rust daemon sidecar       (release.yml: build-app-tauri-canary)
-  --electron      legacy Electron dmg                   (release.yml: build-desktop)
-  --daemon        standalone daemon tarball             (release.yml: build-daemon)
-  --all           all four
+Targets (default: --tauri)
+  --tauri         Tauri dmg, Rust daemon inside          (release.yml: build-app-tauri)
+  --daemon        standalone daemon tarball              (release.yml: build-daemon)
+  --all           both
 
 Options
   --version <v>   bundle version           (default: root package.json version)
@@ -34,8 +32,8 @@ Options
   -h, --help      this message
 
 Examples
-  scripts/build-release-local.sh                     # both Tauri dmgs, unsigned
-  scripts/build-release-local.sh --canary            # just the Rust-daemon canary
+  scripts/build-release-local.sh                     # Tauri dmg, unsigned
+  scripts/build-release-local.sh --daemon            # just the standalone daemon tarball
   scripts/build-release-local.sh --all --sign        # everything, Developer ID signed
 EOF
 }
@@ -43,17 +41,15 @@ EOF
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-WANT_TAURI=0 WANT_CANARY=0 WANT_ELECTRON=0 WANT_DAEMON=0 EXPLICIT_TARGETS=0
+WANT_TAURI=0 WANT_DAEMON=0 EXPLICIT_TARGETS=0
 SIGN=0 NOTARIZE=0 UPDATER=0 SKIP_DEPS=0
 VERSION="" OUT_DIR="$ROOT/dist-local"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --tauri) WANT_TAURI=1 EXPLICIT_TARGETS=1 ;;
-    --canary) WANT_CANARY=1 EXPLICIT_TARGETS=1 ;;
-    --electron) WANT_ELECTRON=1 EXPLICIT_TARGETS=1 ;;
     --daemon) WANT_DAEMON=1 EXPLICIT_TARGETS=1 ;;
-    --all) WANT_TAURI=1 WANT_CANARY=1 WANT_ELECTRON=1 WANT_DAEMON=1 EXPLICIT_TARGETS=1 ;;
+    --all) WANT_TAURI=1 WANT_DAEMON=1 EXPLICIT_TARGETS=1 ;;
     --sign) SIGN=1 ;;
     --notarize) NOTARIZE=1 SIGN=1 ;;
     --updater) UPDATER=1 ;;
@@ -66,7 +62,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ "$EXPLICIT_TARGETS" -eq 0 ]; then WANT_TAURI=1 WANT_CANARY=1; fi
+if [ "$EXPLICIT_TARGETS" -eq 0 ]; then WANT_TAURI=1; fi
 
 VERSION="${VERSION:-$(node -p "require('$ROOT/package.json').version")}"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo nogit)"
@@ -77,13 +73,13 @@ esac
 STAMP="${VERSION}-g${SHA}-macos-${ARCH}"
 DMG_DIR="$ROOT/packages/app-tauri/src-tauri/target/release/bundle"
 
-if [ "$(uname -s)" != "Darwin" ] && [ $((WANT_TAURI + WANT_CANARY + WANT_ELECTRON)) -gt 0 ]; then
-  echo "error: the dmg targets are macOS-only (this is $(uname -s))." >&2
+if [ "$(uname -s)" != "Darwin" ] && [ "$WANT_TAURI" -eq 1 ]; then
+  echo "error: the dmg target is macOS-only (this is $(uname -s))." >&2
   exit 1
 fi
 
-# Signing is entirely env-driven downstream (mach-o-sign.mjs gates on
-# APPLE_SIGNING_IDENTITY; Tauri notarizes only when APPLE_ID et al are present),
+# Signing is entirely env-driven downstream (Tauri gates on
+# APPLE_SIGNING_IDENTITY; it notarizes only when APPLE_ID et al are present),
 # so an unsigned build means clearing those rather than passing a flag.
 if [ "$SIGN" -eq 1 ]; then
   if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
@@ -117,9 +113,6 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
   echo "==> building workspace dependencies (types → core → ui)"
   NODE_OPTIONS=--max-old-space-size=4096 \
     pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
-  if [ "$WANT_ELECTRON" -eq 1 ]; then
-    pnpm --filter @qlan-ro/mainframe-app-electron build
-  fi
 fi
 
 # `version` here is what gets baked into the bundle and its Info.plist —
@@ -142,8 +135,6 @@ build_tauri() {
   [ -f "$src" ] || { echo "error: expected dmg not found at $src" >&2; exit 1; }
   mv "$src" "$OUT_DIR/Mainframe-tauri-${infix}${STAMP}.dmg"
 
-  # Collected per-build, not at the end: both flavors bundle to the same target
-  # dir, so the canary run would otherwise overwrite the default run's output.
   if [ "$UPDATER" -eq 1 ]; then
     for f in "$DMG_DIR"/macos/*.app.tar.gz "$DMG_DIR"/macos/*.app.tar.gz.sig; do
       [ -e "$f" ] || continue
@@ -156,21 +147,7 @@ build_tauri() {
 }
 
 if [ "$WANT_TAURI" -eq 1 ]; then
-  build_tauri "Tauri dmg (Node daemon)" ""
-fi
-
-if [ "$WANT_CANARY" -eq 1 ]; then
-  build_tauri "Tauri canary dmg (Node + Rust daemon)" "canary-" \
-    --config src-tauri/tauri.rust-canary.conf.json
-fi
-
-if [ "$WANT_ELECTRON" -eq 1 ]; then
-  echo "==> building Electron dmg"
-  pnpm --filter @qlan-ro/mainframe-app-electron run package:ci
-  for f in "$ROOT"/packages/app-electron/dist/*.dmg; do
-    [ -e "$f" ] || continue
-    cp "$f" "$OUT_DIR/"
-  done
+  build_tauri "Tauri dmg (Rust daemon)" ""
 fi
 
 if [ "$WANT_DAEMON" -eq 1 ]; then

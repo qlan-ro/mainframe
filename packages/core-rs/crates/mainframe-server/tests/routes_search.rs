@@ -1,8 +1,8 @@
 //! Integration tests for `routes/search.rs`, translated from
 //! `server/routes/__tests__/search.test.ts` and `search-symlink-fallback.test.ts`.
 //! Real spawned app + in-memory DB + tempdir project. The symlink-containment
-//! specs exercise the JS fallback (ripgrep is absent in the test env; when it is
-//! present, rg likewise does not follow the symlink, so the assertions hold).
+//! specs exercise the in-process searcher's default (`ignore::WalkBuilder`
+//! never follows symlinks), so the leaked file is never read.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -129,7 +129,7 @@ async fn does_not_read_a_file_via_an_in_repo_symlink_that_escapes_the_project() 
 }
 
 #[tokio::test]
-async fn still_searches_legitimate_in_project_files_in_the_fallback() {
+async fn still_searches_legitimate_in_project_files() {
     let (server, id, _project, _outside) = symlink_repo().await;
     let (status, body) = get(
         &server,

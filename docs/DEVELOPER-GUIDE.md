@@ -2,6 +2,14 @@
 
 > Getting started, development workflow, and contribution guidelines
 
+> **Stale below the Build Commands table.** This guide predates the Tauri/Rust
+> rewrite: the Electron shell it describes (`packages/desktop` here, actually
+> `packages/app-electron`) was retired in the Rust daemon cutover
+> (`docs/rust-port/CUTOVER.md`). The Monorepo Structure, Package Details,
+> Electron DevTools, and native-dependency-bundling sections below describe
+> that retired pipeline and have not been rewritten for `packages/app-tauri` /
+> `packages/core-rs`. Treat them as historical only.
+
 ## Prerequisites
 
 | Tool | Version | Purpose |
@@ -23,21 +31,15 @@ pnpm install
 
 # Build all packages (types must build first)
 pnpm build
-
-# Start development (daemon + desktop)
-pnpm dev
 ```
 
-The `pnpm dev` command starts the daemon first, waits 2 seconds, then launches the Electron desktop app.
+For the desktop app, see `packages/app-tauri`'s own dev instructions
+(`pnpm tauri:dev`, run from that package).
 
-### Running Individually
+### Running the daemon standalone
 
 ```bash
-# Terminal 1: Start daemon only
 pnpm dev:core
-
-# Terminal 2: Start desktop only (assumes daemon is running)
-pnpm dev:desktop
 ```
 
 ## Monorepo Structure
@@ -173,17 +175,15 @@ Tests live in `packages/e2e/tests/` and cover the full desktop app (daemon + Ele
 | `pnpm build` | Build all packages |
 | `pnpm build:types` | Build types only |
 | `pnpm build:core` | Build core only |
-| `pnpm build:desktop` | Build desktop only |
-| `pnpm dev` | Start daemon + desktop in dev mode |
-| `pnpm dev:core` | Start daemon in watch mode |
-| `pnpm dev:desktop` | Start desktop in dev mode |
+| `pnpm dev:core` | Start the (orphaned) TS daemon in watch mode |
 | `pnpm test` | Run all tests |
 | `pnpm test:e2e` | Run Playwright E2E tests |
 | `pnpm lint` | Lint all packages |
 | `pnpm format` | Format code with Prettier |
 | `pnpm format:check` | Check formatting |
 | `pnpm clean` | Clean build artifacts |
-| `pnpm package` | Build + package Electron app |
+
+Desktop-app dev/build/package commands now live in `packages/app-tauri` (Tauri CLI), not the root `package.json`.
 
 ## Releasing
 
