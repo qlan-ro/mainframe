@@ -89,6 +89,16 @@ Each rule exists because a violation required cleanup.
 - **Hygiene** — no `@ts-ignore` (use `@ts-expect-error` + reason); comments say *why*, not *what*; remove dead code; extract shared helpers at 3+ duplications.
 - **No leftovers** — never close a feature with small deferred cleanups (dead code, stale comments); fix them in the same pass. "Deferred" is only for genuinely separate work.
 
+## Disk Hygiene
+
+Cargo never garbage-collects `target/`. Left alone, the two Rust target dirs reached 54 GB — every dependency, feature, or toolchain change strands the previous generation of artifacts permanently.
+
+- **Keep the dev debuginfo caps.** Both Rust manifests pin `[profile.dev] debug = "line-tables-only"` and `[profile.dev.package."*"] debug = false`. Backtraces still carry file:line; dependencies carry nothing. The default `debug = 2` costs 4–6× the disk per build generation.
+- **Sweep; don't wait for the disk to fill.** `cargo install cargo-sweep`, then `cargo sweep --installed && cargo sweep --time 14` in each target dir, drops stale fingerprints and leaves the current build warm. `cargo clean --profile dev` reclaims tens of GB at once and spares `release/`, so packaging doesn't rebuild cold.
+- **Do not set `CARGO_TARGET_DIR`.** Five consumers hardcode `packages/core-rs/target/{release,debug}`: daemon discovery in `app-tauri/src-tauri/src/lib.rs`, `e2e/fixtures/daemon.ts`, `provision-rust-daemon.mjs`, `build-standalone.sh`, and `build-release-local.sh`. Redirecting the target dir breaks `tauri:dev`, the E2E suite, and packaging. Teaching those five to honor the variable is the prerequisite for sharing a target dir at all — including across worktrees, so until then every `.worktrees/*` checkout that runs `cargo` grows its own multi-GB `target/`.
+- **`packages/core-rs` and `packages/app-tauri/src-tauri` are separate workspaces.** They share 142 dependencies by version but only 109 by resolved feature set, and those 109 are ~29% of shared source volume — the expensive crates (`tracing`, `tokio`, `libc`, `rustix`) differ. Do not merge the workspaces to dedupe them: profiles apply only at a workspace root, so src-tauri's `lto` and `panic = "abort"` would reach the daemon, and feature unification would hand it `tokio/test-util` and `libc/extra_traits` in production builds.
+- **Measure before blaming the worktrees.** `du -sh packages/*/target` accounts for most of the repo's size; a worktree stays ~23 MB until someone builds in it.
+
 ## Environment Variables
 
 | Variable | Description | Default |
