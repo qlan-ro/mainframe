@@ -67,6 +67,9 @@
     ],
     "*.{json,yml,yaml}": [
       "prettier --write"
+    ],
+    "packages/core-rs/**/*.rs": [
+      "rustfmt --edition 2024"
     ]
   },
   "engines": {

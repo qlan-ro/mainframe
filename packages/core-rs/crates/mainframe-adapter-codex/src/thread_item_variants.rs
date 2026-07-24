@@ -212,7 +212,11 @@ pub struct SubAgentActivityItem {
 
 /// One block of a `dynamicToolCall`'s `contentItems`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum DynamicToolCallContentItem {
     InputText { text: String },
     InputImage { image_url: String },

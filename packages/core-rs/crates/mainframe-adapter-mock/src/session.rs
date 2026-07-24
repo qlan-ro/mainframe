@@ -210,10 +210,7 @@ impl ReplaySession {
             let started_at = tokio::time::Instant::now();
             for event in outputs {
                 let target = Duration::from_millis(
-                    event
-                        .delay_ms
-                        .saturating_sub(base)
-                        .clamp(0, delay_ceiling) as u64,
+                    event.delay_ms.saturating_sub(base).clamp(0, delay_ceiling) as u64,
                 );
                 if let Some(remaining) = target.checked_sub(started_at.elapsed()) {
                     tokio::time::sleep(remaining).await;

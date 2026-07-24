@@ -37,7 +37,11 @@ pub(crate) fn mcp_arguments_map(raw: &str) -> HashMap<String, serde_json::Value>
 
 /// The rollout only gives a raw output string, not the structured
 /// `McpToolResult` a live MCP response carries — stash it as-is in `content`.
-pub(crate) fn build_mcp_tool_call_item(call_id: &str, pending: PendingMcp, output: &str) -> ThreadItem {
+pub(crate) fn build_mcp_tool_call_item(
+    call_id: &str,
+    pending: PendingMcp,
+    output: &str,
+) -> ThreadItem {
     let result = McpToolResult {
         content: serde_json::Value::String(output.to_string()),
         structured_content: serde_json::Value::Null,
@@ -159,7 +163,9 @@ pub(crate) fn handle_function_call(
     if let (Some(call_id), Some(name), Some(server)) = (
         &p.call_id,
         &p.name,
-        p.namespace.as_deref().and_then(|ns| ns.strip_prefix("mcp__")),
+        p.namespace
+            .as_deref()
+            .and_then(|ns| ns.strip_prefix("mcp__")),
     ) {
         let arguments = mcp_arguments_map(p.arguments.as_deref().unwrap_or(""));
         pending_mcp.insert(

@@ -62,7 +62,13 @@ pub struct CodexSessionState {
     pub errored_collab_cards: HashSet<String>,
     /// child thread id → the live rollout-tail task streaming that child's work
     /// into the TaskCard, plus its cancellation handle (stopped on wait completion).
-    pub child_tails: HashMap<String, (tokio::task::JoinHandle<()>, tokio_util::sync::CancellationToken)>,
+    pub child_tails: HashMap<
+        String,
+        (
+            tokio::task::JoinHandle<()>,
+            tokio_util::sync::CancellationToken,
+        ),
+    >,
 }
 
 pub fn handle_notification(
@@ -236,7 +242,11 @@ fn handle_item_completed(
         Err(_) => {
             tracing::debug!(
                 module = "codex:events",
-                r#type = params.item.get("type").and_then(|v| v.as_str()).unwrap_or(""),
+                r#type = params
+                    .item
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(""),
                 "codex: unhandled item type"
             );
         }

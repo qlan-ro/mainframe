@@ -222,7 +222,11 @@ fn handle_sub_agent_activity(
         );
         return;
     }
-    let Some(parent_id) = state.collab_child_threads.get(&item.agent_thread_id).cloned() else {
+    let Some(parent_id) = state
+        .collab_child_threads
+        .get(&item.agent_thread_id)
+        .cloned()
+    else {
         tracing::debug!(
             module = "codex:events",
             agent_thread_id = %item.agent_thread_id,

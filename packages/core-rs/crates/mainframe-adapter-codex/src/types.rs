@@ -93,7 +93,11 @@ where
     Ok(raw
         .into_iter()
         .filter_map(|v| {
-            let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            let kind = v
+                .get("type")
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
             match serde_json::from_value::<ThreadItem>(v) {
                 Ok(item) => Some(item),
                 Err(err) => {
