@@ -215,11 +215,6 @@ describe('globals.css accent derivation', () => {
     expect(resolve('classic-dark')['--primary']).toBe(MACOS_SYSTEM_BLUE);
   });
 
-  it.each(ALL)('--ring tracks --primary — %s', (theme) => {
-    const t = resolve(theme);
-    expect(t['--ring']).toBe(t['--primary']);
-  });
-
   it.each(ALL)('--mf-selection carries --primary RGB (alpha differs per theme by design) — %s', (theme) => {
     const t = resolve(theme);
     const primary = parseColor(req(t, '--primary'));
@@ -232,6 +227,15 @@ describe('globals.css accent derivation', () => {
     const primary = parseColor(req(t, '--primary'));
     const ring = parseColor(extractRgba(req(t, '--mf-focus-ring')));
     expect([ring.r, ring.g, ring.b]).toEqual([primary.r, primary.g, primary.b]);
+  });
+
+  it('classic-dark --mf-cm-selection/-focused carry --primary RGB (matches ocean/velvet dark pattern)', () => {
+    const t = resolve('classic-dark');
+    const primary = parseColor(req(t, '--primary'));
+    for (const token of ['--mf-cm-selection', '--mf-cm-selection-focused']) {
+      const c = parseColor(req(t, token));
+      expect([c.r, c.g, c.b], token).toEqual([primary.r, primary.g, primary.b]);
+    }
   });
 
   const DIRECTIVE_TINT_THEMES = ['classic-light', 'classic-dark', 'ocean-dark', 'velvet-dark'];

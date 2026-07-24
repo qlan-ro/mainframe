@@ -46,7 +46,7 @@
   --destructive-foreground: #ffffff;
   --border: rgba(0,0,0,0.08);       /* hairlines, dividers                         */
   --input: rgba(0,0,0,0.08);        /* field borders                               */
-  --ring: #0a84ff;                  /* focus ring color                            */
+  --ring: var(--primary);           /* focus ring — tracks each scheme's own primary via the cascade */
 
   --mf-window: #e9e7e2;
   --mf-glass: rgba(240,237,231,0.84);
@@ -236,7 +236,6 @@
   --destructive-foreground: #1b1c25;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #0a84ff;
 
   --mf-window: #1b1c25;
   --mf-glass: rgba(34,36,47,0.85);
@@ -348,8 +347,8 @@
   --mf-diff-del-text: #ff6272;
 
   --mf-cm-active-line: rgba(255,255,255,0.04);
-  --mf-cm-selection: rgba(59,130,246,0.3);
-  --mf-cm-selection-focused: rgba(59,130,246,0.4);
+  --mf-cm-selection: rgba(10,132,255,0.3);
+  --mf-cm-selection-focused: rgba(10,132,255,0.4);
   --mf-cm-match: rgba(251,191,36,0.2);
   --mf-cm-match-border: rgba(251,191,36,0.4);
   --mf-cm-match-selected: rgba(251,191,36,0.4);
@@ -374,7 +373,6 @@
   --destructive: #d23b4e;
   --border: rgba(10,40,45,0.10);
   --input: rgba(10,40,45,0.10);
-  --ring: #0e9888;
 
   --mf-window: #e2e8ea;
   --mf-glass: rgba(230,238,240,0.84);
@@ -468,7 +466,6 @@
   --destructive-foreground: #141923;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #2fc6b7;
 
   --mf-window: #141923;
   --mf-glass: rgba(26,33,44,0.85);
@@ -592,7 +589,6 @@
   --destructive: #d23b54;
   --border: rgba(60,20,55,0.10);
   --input: rgba(60,20,55,0.10);
-  --ring: #d6488f;
 
   --mf-window: #ebe4eb;
   --mf-glass: rgba(242,235,242,0.84);
@@ -684,7 +680,6 @@
   --destructive-foreground: #1e1726;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #f06bb3;
 
   --mf-window: #1e1726;
   --mf-glass: rgba(36,28,46,0.85);
