@@ -26,12 +26,13 @@ cp "${ROOT}/packages/core-rs/target/release/mainframe-daemon" "${DIST_DIR}/bin/m
 chmod +x "${DIST_DIR}/bin/mainframe-daemon"
 
 # 2. Download cloudflared for target platform.
+CF_ARCH="$ARCH"
+if [ "$ARCH" = "x64" ]; then CF_ARCH="amd64"; fi
+
 if [ "$OS" = "darwin" ]; then
-  CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-${OS}-${ARCH}.tgz"
+  CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-${OS}-${CF_ARCH}.tgz"
   curl -fsSL "$CF_URL" | tar -xz -C "${DIST_DIR}/bin/"
 else
-  CF_ARCH="$ARCH"
-  if [ "$ARCH" = "x64" ]; then CF_ARCH="amd64"; fi
   CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}"
   curl -fsSL "$CF_URL" -o "${DIST_DIR}/bin/cloudflared"
 fi

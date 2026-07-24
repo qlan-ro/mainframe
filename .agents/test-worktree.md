@@ -7,9 +7,9 @@ dispatches the `prepare-worktree` subagent for environment setup). See
 
 ## App Type
 
-Dual-shell monorepo: one shared React renderer (`packages/ui`), two desktop
-shells. Two testable **Targets** — pick one per run (user's ask → diff paths →
-default).
+Single-shell monorepo: one shared React renderer (`packages/ui`), one desktop
+shell (Tauri — the Electron shell was retired). Two testable **Targets** —
+pick one per run (user's ask → diff paths → default).
 
 ### Target: tauri (default)
 
@@ -39,13 +39,6 @@ default).
   a target project sitting on a different git branch is NOT a wrong-build
   signal; the shell/daemon code is built from this worktree regardless.
 
-### Target: electron
-
-- Type: `electron-desktop` — Electron shell hosting the Vite-built renderer,
-  backed by the local Node daemon. Everything below (Environment, Cleanup,
-  Launch script, Wait-for-Ready, Engines) belongs to this target.
-- Diff paths: `packages/app-electron/`, `packages/ui/`.
-
 ### Target: browser (cheapest — use when NO scenario is native-required)
 
 - Type: `web-spa` — the shared `packages/ui` renderer in a plain browser +
@@ -67,18 +60,17 @@ default).
 
 Limits for multi-branch runs (consumed by the skill's Fleet Mode):
 
-- **Per-target caps: `electron` max 1, `tauri` max 1, `browser` max 4.**
-  Electron's CDP port is pinned to `9222` (not isolated by setup-ports.sh);
-  the tauri-mcp bridge reliably tracks one dev app at a time (and dies while
-  a preview child webview is mounted — see Gotchas). Browser runs have no
-  singleton (fresh browser per run, isolated ports) and are light
-  (daemon + Vite only) — they run genuinely in parallel.
-- **Max parallel runs: 4 total**, but at most one tauri + one electron at a
-  time (their full builds thrash the machine; browser runs are cheap).
+- **Per-target caps: `tauri` max 1, `browser` max 4.** The tauri-mcp bridge
+  reliably tracks one dev app at a time (and dies while a preview child
+  webview is mounted — see Gotchas). Browser runs have no singleton (fresh
+  browser per run, isolated ports) and are light (daemon + Vite only) — they
+  run genuinely in parallel.
+- **Max parallel runs: 4 total**, but at most one tauri run at a time (its
+  full native build thrashes the machine; browser runs are cheap).
 - **Prefer the browser target.** Native builds are slow and heavy; the
   browser target (vite + daemon, no cargo) is the default path for
-  renderer/daemon-only scenario sets — reserve tauri/electron for genuinely
-  native surfaces.
+  renderer/daemon-only scenario sets — reserve tauri for genuinely native
+  surfaces.
 - Daemon/Vite ports and `MAINFRAME_DATA_DIR=~/.mainframe_dev` are isolated
   per run by `scripts/setup-ports.sh`, so parallel runs don't collide there —
   but they DO share `~/.mainframe_dev`; scenarios that assert on global DB
@@ -101,18 +93,19 @@ Verify any candidate PID does not hold `31415` before sending SIGKILL.
 ## Environment
 
 `.env` is **generated** by `scripts/setup-ports.sh` (invoked from
-`launch-test.sh`), not hand-written. It always holds isolated free ports — the
-`31415`/`5173` defaults below are the *production* values and are deliberately
-never used for a test worktree.
+`launch-test-browser.sh`), not hand-written. It always holds isolated free
+ports — the `31415`/`5173` defaults below are the *production* values and are
+deliberately never used for a test worktree. The tauri target doesn't
+generate `.env`; it sets its own isolated ports directly (see Target: tauri).
 
 | Variable | Used by | Source | Isolated range / value |
 |---|---|---|---|
 | `DAEMON_PORT` | Core daemon | generated `.env` | free port in `31416–32416` |
 | `VITE_PORT` | Vite dev server | generated `.env` | free port in `5174–6174` |
-| `MAINFRAME_DATA_DIR` | Core + Desktop | generated `.env` | `~/.mainframe_dev` |
-| `VITE_DAEMON_HTTP_PORT` | Desktop renderer HTTP | generated `.env` | `=$DAEMON_PORT` |
-| `VITE_DAEMON_WS_PORT` | Desktop renderer WS | generated `.env` | `=$DAEMON_PORT` |
-| `LOG_LEVEL` | Core daemon | set by `launch-test.sh` | `debug` |
+| `MAINFRAME_DATA_DIR` | Core + renderer | generated `.env` | `~/.mainframe_dev` |
+| `VITE_DAEMON_HTTP_PORT` | Renderer HTTP | generated `.env` | `=$DAEMON_PORT` |
+| `VITE_DAEMON_WS_PORT` | Renderer WS | generated `.env` | `=$DAEMON_PORT` |
+| `LOG_LEVEL` | Core daemon | set by `launch-test-browser.sh` | `debug` |
 
 Production defaults (never used here): `DAEMON_PORT=31415`, `VITE_PORT=5173`,
 `LOG_LEVEL=info`.
@@ -130,23 +123,10 @@ exits nonzero if processes survive. Fleet runs execute it exactly once
 
 **Never use `pkill -f "mainframe"` unfiltered** — it can hit the production app. The commands above specifically target `run dev` processes and skip anything on port 31415.
 
-## Launch
-
-```
-script: .agents/launch-test.sh
-```
-
-Run the script EXACTLY ONCE. It owns the full electron bring-up: isolated
-ports via `scripts/setup-ports.sh` (never the protected prod `31415`),
-`pnpm install` + full build, daemon (`LOG_LEVEL=debug`), desktop (Vite +
-Electron, CDP on `9222`), the shared `packages/ui` renderer dev server, and
-the readiness wait. It **blocks until ready** and prints `READY` + facts
-(ports, CDP_URL, log paths), or exits 1 with the failing component's log
-tail — do not re-launch on failure, read the printed tail.
-
-Because the script already does a full install + build, the dispatching
-`prepare-worktree` subagent does **not** need a separate build step for this
-project — the script is authoritative.
+Each target's own **Launch** bullet above is authoritative (`launch-test-tauri.sh`
+or `launch-test-browser.sh`, run EXACTLY ONCE) — because it already does a full
+install + build, the dispatching `prepare-worktree` subagent does **not** need
+a separate build step for this project.
 
 ## Wait for Ready
 
@@ -154,20 +134,16 @@ The launch scripts own the readiness wait — a caller never re-implements it.
 Declarative facts the engines need after `READY`:
 
 - Daemon HTTP: `http://127.0.0.1:$DAEMON_PORT/api/projects` responds.
-- Electron CDP: `http://localhost:9222/json/version` returns JSON with
-  `webSocketDebuggerUrl`.
 - Tauri: Vite at `http://localhost:$VITE_PORT` (`localhost`, not
   `127.0.0.1`), app present in the bridge's `list_devices`.
 
 ## Test Engines
 
-CDP endpoint: `http://localhost:9222`
-
 | Engine | Best for |
 |---|---|
-| `playwright-cli` (default) | Interactive step-by-step verification |
-| `playwright-test` | Repeatable test suites |
-| `electron-mcp` | Quick one-off checks via MCP |
+| `playwright-cli` (default, browser target) | Interactive step-by-step verification |
+| `playwright-test` (browser target) | Repeatable test suites |
+| `tauri-mcp` (tauri target) | See Target: tauri above |
 
 ### playwright-test config
 
@@ -235,16 +211,18 @@ script: .agents/stop-test.sh [port ...]
 ```
 
 Port-scoped, parallel-safe teardown of one run — defaults to this checkout's
-`.env` ports + CDP 9222; pass explicit ports to override. Refuses the
-protected port 31415; exits nonzero if a port stays held. Never kill just
-Electron — the script kills the full port set for exactly this run.
+`.env` ports (plus port `9222`, a harmless no-op check now that nothing binds
+it); pass explicit ports to override. Refuses the protected port 31415;
+exits nonzero if a port stays held. Always kills the full port set for
+exactly this run — never kill a single port and expect the rest of the run
+to keep working.
 
 **Tauri caveat:** killing `$DAEMON_PORT` also takes the parent `app-tauri`
 process (shared socket). At teardown that is intended; never use this
 mid-run hoping for a daemon-only restart — relaunch the app properly
 instead.
 
-Then re-run the **Launch** section.
+Then re-run the target's own **Launch** step (see its Target section above).
 
 ## Project-Specific Gotchas
 
@@ -270,17 +248,3 @@ const filesTab = page.locator('button[data-active="true"]', { hasText: /Files/ }
 ### Single-tab zones don't render tab bars
 
 If a zone has only one tab, the tab bar isn't rendered at all. Don't assert tab presence to prove a tab is active — use a screenshot.
-
-### Electron MCP WebSocket caching
-
-After killing and relaunching the app, the `electron-mcp-server` caches the old CDP websocket URL. `take_screenshot` and other tools time out with:
-
-```
-browserType.connectOverCDP: Timeout 30000ms exceeded
-```
-
-Verify the new app is up via `curl http://localhost:9222/json/version`. The MCP server usually picks up the new URL on the next tool call; if not, restart it.
-
-### `querySelectorAll` in Electron MCP `eval`
-
-`eval` silently returns `false` for `querySelectorAll`. Use `getElementsByClassName` or `get_page_structure` instead. See `~/.agents/skills/test-worktree/engine-electron-mcp.md` for the full eval-gotchas list.

@@ -46,6 +46,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # `[workspace.package] version` stays pinned at "0.0.0" in the repo (see
+      # packages/core-rs/Cargo.toml) — it feeds `mainframe --version`, /health's
+      # version field, and `assert_not_downgrade` in cli/update.rs, all of which
+      # would otherwise report "0.0.0" in every shipped build. Stamp the real tag
+      # version in before the build reads it, mirroring the app-tauri stamp step
+      # below. CI-local edit only, never committed. `cargo build` (no --locked)
+      # freely rewrites Cargo.lock's matching workspace-member versions itself —
+      # no separate lockfile edit needed.
+      - name: Stamp release version into core-rs Cargo.toml
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" packages/core-rs/Cargo.toml
+          rm packages/core-rs/Cargo.toml.bak
+
       - run: bash scripts/build-standalone.sh ${{ matrix.target_os }} ${{ matrix.target_arch }}
 
       - uses: actions/upload-artifact@v7
@@ -115,6 +130,19 @@ jobs:
           # so an unranged substitution is unambiguous.
           sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" Cargo.toml
           rm Cargo.toml.bak
+
+      # The Tauri-bundled daemon binary comes from the same core-rs workspace
+      # (tauri-action's beforeBuildCommand runs provision-rust-daemon.mjs, which
+      # `cargo build`s packages/core-rs), so it needs the same stamp — otherwise
+      # the bundled `mainframe-daemon --version` / /health still report "0.0.0"
+      # even though the .app itself is correctly versioned. See the build-daemon
+      # job's matching step for the full rationale.
+      - name: Stamp release version into core-rs Cargo.toml
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" packages/core-rs/Cargo.toml
+          rm packages/core-rs/Cargo.toml.bak
 
       # Tauri's Linux build needs the system WebKitGTK / GTK stack.
       - name: Install Linux system dependencies
