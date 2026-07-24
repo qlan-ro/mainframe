@@ -377,11 +377,13 @@ pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> 
     }
 
     let mut slots: Vec<Slot> = Vec::new();
+    let mut bare_tasks: HashMap<String, PartEntry> = HashMap::new();
     for part in parts {
         if let Some(tc) = part.as_tool_call()
             && truthy(tc.parent_tool_use_id).is_none()
             && groups.contains_key(tc.tool_call_id)
         {
+            bare_tasks.insert(tc.tool_call_id.to_string(), part.clone());
             slots.push(Slot::Group(tc.tool_call_id.to_string()));
             continue;
         }
@@ -395,13 +397,16 @@ pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> 
         slots.push(Slot::Part(Box::new(part.clone())));
     }
 
-    // A Task always renders as a `_task_group`, even with zero gathered
-    // children — the TaskCard handles an empty `children` list.
+    // A Task that gathered no children renders as its original bare tool_call.
     slots
         .into_iter()
         .map(|slot| match slot {
             Slot::Part(p) => *p,
             Slot::Group(id) => match groups.get(&id) {
+                Some(group) if group.children.is_empty() => bare_tasks
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| PartEntry::TaskGroup(group.clone())),
                 Some(group) => PartEntry::TaskGroup(group.clone()),
                 // Unreachable: Group(id) is only pushed when `groups` has `id`.
                 None => PartEntry::Text {
@@ -1127,33 +1132,19 @@ mod tests {
     }
 
     #[test]
-    fn a_task_with_no_children_still_emits_an_empty_task_group() {
-        let parts = vec![tc("Task", Some("t1"), None, None), text("after")];
+    fn a_task_with_no_children_stays_a_bare_tool_call() {
+        let task = tc("Task", Some("t1"), None, None);
+        let parts = vec![task.clone(), text("after")];
         let result = group_task_children(&parts, &claude_cats());
-        assert_eq!(result.len(), 2);
-        match &result[0] {
-            PartEntry::TaskGroup(e) => {
-                assert_eq!(e.tool_call_id, "t1");
-                assert!(e.children.is_empty());
-            }
-            other => panic!("expected _task_group, got {other:?}"),
-        }
-        assert_eq!(result[1], text("after"));
+        assert_eq!(result, vec![task, text("after")]);
     }
 
     #[test]
-    fn a_trailing_task_with_no_children_still_emits_an_empty_task_group() {
-        let parts = vec![text("before"), tc("Task", Some("t1"), None, None)];
+    fn a_trailing_task_with_no_children_stays_a_bare_tool_call() {
+        let task = tc("Task", Some("t1"), None, None);
+        let parts = vec![text("before"), task.clone()];
         let result = group_task_children(&parts, &claude_cats());
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0], text("before"));
-        match &result[1] {
-            PartEntry::TaskGroup(e) => {
-                assert_eq!(e.tool_call_id, "t1");
-                assert!(e.children.is_empty());
-            }
-            other => panic!("expected _task_group, got {other:?}"),
-        }
+        assert_eq!(result, vec![text("before"), task]);
     }
 
     #[test]
