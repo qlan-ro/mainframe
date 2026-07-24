@@ -10,6 +10,8 @@ use qrcode::QrCode;
 use qrcode::render::unicode;
 use serde_json::{Value, json};
 
+use super::connect_failure_message;
+
 /// `runPair()`.
 pub async fn run_pair() {
     let port = match mainframe_runtime::config::get_config() {
@@ -26,7 +28,7 @@ pub async fn run_pair() {
     let health: Value = match client.get(format!("{base_url}/health")).send().await {
         Ok(res) => res.json().await.unwrap_or(Value::Null),
         Err(_) => {
-            eprintln!("Cannot reach daemon at {base_url}. Is it running?");
+            eprintln!("{}", connect_failure_message(&base_url));
             std::process::exit(1);
         }
     };
@@ -68,13 +70,11 @@ pub async fn run_pair() {
         .and_then(Value::as_str)
         .map(str::to_string);
 
-    println!("\n  Pairing code: {pairing_code}");
-    println!("  Expires in 5 minutes\n");
+    println!("{}", format_pairing_header(&pairing_code));
 
     if let Some(tunnel_url) = &tunnel_url {
-        let qr_payload = json!({ "url": tunnel_url, "code": pairing_code }).to_string();
         println!("  Enter this code in the Mainframe mobile app, or scan the QR code:\n");
-        println!("{}", render_qr(&qr_payload));
+        println!("{}", render_qr(&qr_payload_json(tunnel_url, &pairing_code)));
         println!("\n  Tunnel URL: {tunnel_url}");
     } else {
         println!("  Enter this code in the Mainframe mobile app.");
@@ -113,10 +113,26 @@ pub async fn run_pair() {
                 .and_then(|d| d.get("deviceId"))
                 .and_then(Value::as_str)
                 .unwrap_or("?");
-            println!("\n  Device paired: {name} ({id})\n");
+            println!("{}", format_device_paired(name, id));
             std::process::exit(0);
         }
     }
+}
+
+/// The pairing-code banner printed as soon as the daemon issues a code.
+fn format_pairing_header(code: &str) -> String {
+    format!("\n  Pairing code: {code}\n  Expires in 5 minutes\n")
+}
+
+/// The JSON payload encoded into the pairing QR code, matching the mobile
+/// app's expected `{ url, code }` shape.
+fn qr_payload_json(tunnel_url: &str, code: &str) -> String {
+    json!({ "url": tunnel_url, "code": code }).to_string()
+}
+
+/// The success message printed once `/api/auth/pair-status` reports `paired`.
+fn format_device_paired(name: &str, id: &str) -> String {
+    format!("\n  Device paired: {name} ({id})\n")
 }
 
 /// Render `payload` as a compact terminal QR code (qrcode-terminal `small` mode).
@@ -148,3 +164,6 @@ fn urlencode(value: &str) -> String {
 // qrcode crate's Dense1x2 unicode renderer (cosmetic parity, not byte-exact). The
 // setInterval(2s)/setTimeout(5min) poll becomes a sleep loop against a deadline;
 // process::exit mirrors the TS exits. encodeURIComponent hand-rolled (no url crate).
+
+#[cfg(test)]
+mod tests;

@@ -17,9 +17,11 @@ axum = { workspace = true }
 tracing = { workspace = true }
 dashmap = { workspace = true }
 dirs = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 qrcode = { workspace = true }
+nanoid = { workspace = true }
 mainframe-server = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }

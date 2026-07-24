@@ -10,6 +10,7 @@
 //! child (clusters B/F); a panic hook reaps adapter + tunnel children, and a
 //! 200ms flush precedes any fatal exit. Workflows stay unported (SCOPE DECISION).
 #![forbid(unsafe_code)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod builtin_plugins;
 mod cli;
@@ -91,9 +92,12 @@ async fn main() {
         Some("pair") => return cli::pair::run_pair().await,
         Some("status") => return cli::status::run_status().await,
         Some("update") => {
-            // update.ts (self-update) is a packaging concern, not part of Task 5.5.
-            eprintln!("  `mainframe update` is not available in this build.");
-            std::process::exit(1);
+            let argv: Vec<String> = std::env::args().skip(2).collect();
+            if let Err(err) = cli::update::run_update(argv).await {
+                eprintln!("  {err}");
+                std::process::exit(1);
+            }
+            return;
         }
         _ => {}
     }

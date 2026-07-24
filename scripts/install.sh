@@ -41,7 +41,7 @@ echo "Installing to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR"
 tar -xzf "${TMP_DIR}/${ARTIFACT}" -C "$INSTALL_DIR" --strip-components=1
 
-chmod +x "${INSTALL_DIR}/bin/mainframe"
+chmod +x "${INSTALL_DIR}/bin/mainframe" "${INSTALL_DIR}/bin/mainframe-daemon" "${INSTALL_DIR}/bin/cloudflared"
 
 # PATH check
 if ! echo "$PATH" | tr ':' '\n' | grep -q "${INSTALL_DIR}/bin"; then
