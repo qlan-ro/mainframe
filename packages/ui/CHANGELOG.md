@@ -1,5 +1,22 @@
 # @qlan-ro/mainframe-ui
 
+## 2.0.0-rc.15
+
+### Patch Changes
+
+- [#507](https://github.com/qlan-ro/mainframe/pull/507) [`f83a776`](https://github.com/qlan-ro/mainframe/commit/f83a776c67e3235286e6f1caf2ad746bcd5a9b87) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Close four Codex routing gaps that dropped or mis-rendered content in the chat view.
+
+  Diff-unavailable edits now fall back to a plain message instead of an empty `EditFileCard`. A `Task` item with no recorded subagent children still renders as a `TaskCard` rather than vanishing. `imageGeneration` items with an inline result now survive a chat reload instead of being dropped by history conversion. `webSearch` items are now routed to the existing `WebSearch` tool card (registered in `register-cards.ts`) in both the live stream and history reload, emitted as an already-complete tool-use/tool-result pair since Codex never sends a separate result event for it.
+
+- [#505](https://github.com/qlan-ro/mainframe/pull/505) [`750844f`](https://github.com/qlan-ro/mainframe/commit/750844f3e39905c122f05fe298ecca92dc8ebf3c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Show a live "Compacting…" pill in the transcript that resolves into "Context compacted", for Claude and Codex.
+
+- [#504](https://github.com/qlan-ro/mainframe/pull/504) [`8425ab4`](https://github.com/qlan-ro/mainframe/commit/8425ab4c8c52d4d7abdfc8a3d826c3fa0f8ecc6a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Sidebar now shows a session as Working while only background subagents are active.
+
+  The sidebar's WS event router dropped `background_task.started|updated|ended` in its default case, so a session whose only live activity was a background subagent never triggered a reload — the badge stayed on Idle even though the daemon's `displayStatus` was already Working. The router now reloads the session list on all three background-task lifecycle events.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.13
+
 ## 2.0.0-rc.14
 
 ### Patch Changes
