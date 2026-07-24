@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.0-rc.13
+
+
+### Patch Changes
+
+- Updated dependencies [[`f2b0314`](https://github.com/qlan-ro/mainframe/commit/f2b0314f0586174d098b058c242be60a1e19f61b)]:
+  - @qlan-ro/mainframe-ui@2.0.0-rc.13
+
+
+### Patch Changes
+
+- [#502](https://github.com/qlan-ro/mainframe/pull/502) [`f202afd`](https://github.com/qlan-ro/mainframe/commit/f202afd5f72c5da542eb81cc8b40792f9d82c4eb) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix Codex sessions whose transcript failed to load in the Rust daemon. When a session's `thread/read` history contained an item type this port didn't know — `contextCompaction` (emitted after a context compaction) or `subAgentActivity` (multi-agent) — the whole payload failed to deserialize and the transcript rendered empty. Unrecognized items are now skipped on reload, matching the Node daemon, so the rest of the history still loads.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.13
+
+
+### Patch Changes
+
+- [#492](https://github.com/qlan-ro/mainframe/pull/492) [`f2b0314`](https://github.com/qlan-ro/mainframe/commit/f2b0314f0586174d098b058c242be60a1e19f61b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Capture full diagnostics when a render error is caught. The error boundary now
+  logs the error stack and React component stack durably through the host (so
+  packaged builds record crashes without devtools), and "Copy details" copies the
+  full stack bundle instead of just the one-line message.
+
+
 ## 2.0.0-rc.12
 
 
