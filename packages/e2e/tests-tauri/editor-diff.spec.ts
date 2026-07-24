@@ -259,7 +259,7 @@ test.describe('§editor-diff — Changes panel', () => {
     const bPane = editorDiff.locator('.cm-editor').nth(1);
     await bPane.click();
     await page.keyboard.type('// should never persist\n');
-    await page.keyboard.press('Meta+s');
+    await page.keyboard.press('ControlOrMeta+s');
 
     await expect(page.getByTestId('editor-save-status')).toHaveCount(0);
     await expect(page.getByTestId('editor-tab-save-error')).toHaveCount(0);

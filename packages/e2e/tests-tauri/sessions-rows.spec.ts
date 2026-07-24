@@ -298,7 +298,12 @@ test.describe('§sessions-rows Working + waiting status dot during a gate-held r
   let chatId: string;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'permissions-interactive' });
+    // Widen the mock replay clamp for this describe: the transient 'working' dot is
+    // broadcast at send (t≈0) but observed only via a debounced full-list refetch, and
+    // the default ~120ms burst collapses the whole turn (incl. the permission that flips
+    // the daemon to 'waiting') into a window the refetch races. An ~800ms ceiling delays
+    // the burst so the leading refetch reliably lands while the daemon is still working.
+    app = await launchTauriApp({ recordingKey: 'permissions-interactive', mockMaxDelayMs: 800 });
     project = await createTauriProject(app.page);
     chatId = await createTauriChat(app.page, project.projectId, 'default');
   });

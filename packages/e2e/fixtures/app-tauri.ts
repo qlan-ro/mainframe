@@ -51,8 +51,12 @@ const TOUR_SUPPRESS = JSON.stringify({ state: { completed: true, step: 4 }, vers
 export async function launchTauriApp(opts?: {
   recordingKey?: string;
   suppressTour?: boolean;
+  mockMaxDelayMs?: number;
 }): Promise<TauriAppFixture> {
-  const daemonHandle = await startDaemon({ recordingKey: opts?.recordingKey });
+  const daemonHandle = await startDaemon({
+    recordingKey: opts?.recordingKey,
+    mockMaxDelayMs: opts?.mockMaxDelayMs,
+  });
   let context: BrowserContext | undefined;
   try {
     const browser = await getBrowser();

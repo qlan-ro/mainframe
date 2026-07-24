@@ -151,7 +151,7 @@ export interface DaemonHandle {
   testDataDir: string;
 }
 
-export async function startDaemon(opts?: { recordingKey?: string }): Promise<DaemonHandle> {
+export async function startDaemon(opts?: { recordingKey?: string; mockMaxDelayMs?: number }): Promise<DaemonHandle> {
   await assertPortFree();
   const testDataDir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
@@ -160,6 +160,9 @@ export async function startDaemon(opts?: { recordingKey?: string }): Promise<Dae
     e2eEnv['E2E_MODE'] = E2E_MODE;
     e2eEnv['E2E_RECORDINGS_DIR'] = RECORDINGS_DIR;
     if (opts?.recordingKey) e2eEnv['E2E_RECORDING_KEY'] = opts.recordingKey;
+    // Widen the mock replay clamp for specs that must observe a transient state
+    // (e.g. the sidebar 'working' dot) whose window the default ~120ms burst collapses.
+    if (opts?.mockMaxDelayMs != null) e2eEnv['E2E_MOCK_MAX_DELAY_MS'] = String(opts.mockMaxDelayMs);
   }
   const daemonPath = resolveRustDaemon();
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
