@@ -5,7 +5,8 @@
  *
  * Default-open. Header: amber family tile + "Edit" verb + ClickableFilePath
  * + +N/−N stat pills + open-in-diff icon button + StatusDot.
- * Body: structured diff patch when available, fallback hunks otherwise.
+ * Body: structured diff patch when available, fallback hunks otherwise,
+ * raw result text when neither parses, or a "diff unavailable" notice.
  *
  * Native assistant-ui contract: `ToolCallMessagePartComponent`.
  */
@@ -132,6 +133,32 @@ function EditCardBody({
 }
 
 // ---------------------------------------------------------------------------
+// DiffUnavailableBody — fallback when no structured/fallback diff and no error
+// ---------------------------------------------------------------------------
+
+function RawResultTextBody({ text }: { text: string }) {
+  return (
+    <pre
+      data-testid="edit-card-diff-raw"
+      className="border-t border-border px-3 py-1.5 text-label font-mono overflow-x-auto whitespace-pre-wrap text-muted-foreground"
+    >
+      {text}
+    </pre>
+  );
+}
+
+function DiffUnavailableBody() {
+  return (
+    <div
+      data-testid="edit-card-diff-unavailable"
+      className="border-t border-border px-3 py-1.5 text-label italic text-muted-foreground"
+    >
+      Diff unavailable
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // useEditCardState
 // ---------------------------------------------------------------------------
 
@@ -239,7 +266,11 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
         toolCallId={toolCallId}
         fullBytes={state.fullBytes}
       />
-    ) : null;
+    ) : state.resultText.trim() ? (
+      <RawResultTextBody text={state.resultText} />
+    ) : (
+      <DiffUnavailableBody />
+    );
 
   return (
     <CollapsibleCardShell

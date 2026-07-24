@@ -557,6 +557,37 @@ fn dynamic_tool_call_without_a_namespace_uses_the_bare_tool_name() {
 }
 
 #[test]
+fn web_search_renders_a_tool_use_and_tool_result_pair_named_web_search() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({ "id": "ws_1", "type": "webSearch", "query": "rust serde" }),
+    );
+    assert_eq!(
+        to_values(&rec.messages()[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "ws_1",
+            "name": "WebSearch",
+            "input": { "query": "rust serde" },
+        }])
+    );
+    let results = rec.tool_results();
+    assert_eq!(results.len(), 1);
+    assert_eq!(
+        serde_json::to_value(&results[0]).unwrap(),
+        json!([{
+            "type": "tool_result",
+            "toolUseId": "ws_1",
+            "content": "",
+            "isError": false,
+        }])
+    );
+}
+
+#[test]
 fn entered_review_mode_is_skipped_without_any_sink_call() {
     let rec = Recorder::new();
     let mut state = state();

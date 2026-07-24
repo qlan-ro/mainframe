@@ -261,6 +261,33 @@ describe('EditFileCard', () => {
     expect(screen.queryByTestId('chat-edit-error-text')).not.toBeInTheDocument();
   });
 
+  // --- Unparseable diff fallback (no hunks, no old/new string, no error) ---
+
+  it('shows a "diff unavailable" fallback when there is no structuredPatch, no old/new string, no error, and no result text', () => {
+    renderCard(
+      makePart({
+        args: { file_path: 'src/app.ts', old_string: '', new_string: '' },
+        result: undefined,
+        isError: false,
+      }),
+    );
+
+    expect(screen.getByTestId('edit-card-diff-unavailable')).toBeInTheDocument();
+  });
+
+  it('shows the raw result text instead of "diff unavailable" when result text is present but unstructured', () => {
+    renderCard(
+      makePart({
+        args: { file_path: 'src/app.ts', old_string: '', new_string: '' },
+        result: '--- a/src/app.ts\n+++ b/src/app.ts\n',
+        isError: false,
+      }),
+    );
+
+    expect(screen.queryByTestId('edit-card-diff-unavailable')).not.toBeInTheDocument();
+    expect(screen.getByText(/--- a\/src\/app\.ts/)).toBeInTheDocument();
+  });
+
   // --- Collapsible toggle ---
 
   it('collapses and hides the body when the header trigger is clicked', async () => {

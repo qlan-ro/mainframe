@@ -22,6 +22,7 @@ pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
 pub mod history;
+pub(crate) mod image_generation_history;
 pub(crate) mod image_generation_render;
 pub mod item_types;
 pub mod jsonrpc;
@@ -38,6 +39,8 @@ pub mod thread_registry;
 pub mod transcript;
 pub mod turn_config;
 pub mod types;
+pub(crate) mod web_search_history;
+pub(crate) mod web_search_render;
 
 pub use adapter::{CodexAdapter, map_codex_model};
 pub use external_sessions::{clear_codex_external_session_cache, list_external_sessions};

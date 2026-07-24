@@ -256,6 +256,108 @@ fn converts_mcp_tool_call_to_mcp_server_tool_tool_use_plus_tool_result() {
     assert_eq!(content_json(&out[0])[0]["name"], json!("mcp__mcp__search"));
 }
 
+// --- convertThreadItems — imageGeneration ---
+
+#[test]
+fn converts_image_generation_with_inline_result_to_assistant_text_plus_image() {
+    let out = convert(json!([
+        {
+            "id": "img1",
+            "type": "imageGeneration",
+            "result": "aGVsbG8=",
+            "savedPath": "/tmp/out.png",
+            "revisedPrompt": "a cat",
+            "status": "completed"
+        }
+    ]));
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].r#type, ChatMessageType::Assistant);
+    assert_eq!(
+        content_json(&out[0]),
+        json!([
+            { "type": "text", "text": "a cat" },
+            { "type": "image", "mediaType": "image/png", "data": "aGVsbG8=" }
+        ])
+    );
+}
+
+// `.png` (the no-savedPath sentinel) has a leading dot and no second dot, so Rust's
+// `Path::extension()` treats it as a dotfile with no extension — same quirk the
+// live path (`image_generation_render.rs`) already has; not this task's to fix.
+#[test]
+fn converts_image_generation_without_a_prompt_to_a_bare_image_block() {
+    let out = convert(json!([
+        {
+            "id": "img2",
+            "type": "imageGeneration",
+            "result": "aGVsbG8=",
+            "savedPath": null,
+            "revisedPrompt": null,
+            "status": "completed"
+        }
+    ]));
+    assert_eq!(
+        content_json(&out[0]),
+        json!([{ "type": "image", "mediaType": "application/octet-stream", "data": "aGVsbG8=" }])
+    );
+}
+
+#[test]
+fn derives_the_image_media_type_from_the_saved_path_extension() {
+    let out = convert(json!([
+        {
+            "id": "img3",
+            "type": "imageGeneration",
+            "result": "aGVsbG8=",
+            "savedPath": "/tmp/out.bin",
+            "revisedPrompt": "",
+            "status": "completed"
+        }
+    ]));
+    assert_eq!(
+        content_json(&out[0]),
+        json!([{ "type": "image", "mediaType": "application/octet-stream", "data": "aGVsbG8=" }])
+    );
+}
+
+// A savedPath-only item (no inline result) needs a disk read to recover the image
+// bytes; convert_thread_items returns a plain Vec synchronously with no sink to
+// deliver a late-arriving message, so this reload case is dropped, not rendered.
+#[test]
+fn skips_image_generation_reload_when_only_a_saved_path_is_present() {
+    let out = convert(json!([
+        {
+            "id": "img4",
+            "type": "imageGeneration",
+            "result": null,
+            "savedPath": "/tmp/out.png",
+            "revisedPrompt": null,
+            "status": "completed"
+        }
+    ]));
+    assert_eq!(out.len(), 0);
+}
+
+// --- convertThreadItems — webSearch ---
+
+#[test]
+fn converts_web_search_to_a_tool_use_plus_tool_result_pair_named_web_search() {
+    let out = convert(json!([
+        { "id": "ws1", "type": "webSearch", "query": "rust serde" }
+    ]));
+    assert_eq!(out.len(), 2);
+    assert_eq!(out[0].r#type, ChatMessageType::Assistant);
+    assert_eq!(
+        content_json(&out[0]),
+        json!([{ "type": "tool_use", "id": "ws1", "name": "WebSearch", "input": { "query": "rust serde" } }])
+    );
+    assert_eq!(out[1].r#type, ChatMessageType::ToolResult);
+    assert_eq!(
+        content_json(&out[1]),
+        json!([{ "type": "tool_result", "toolUseId": "ws1", "content": "", "isError": false }])
+    );
+}
+
 #[test]
 fn sets_chat_id_on_all_messages() {
     let out = convert_with(
