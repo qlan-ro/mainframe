@@ -1,12 +1,13 @@
 //! Daemon-implementation canary flag (`MAINFRAME_DAEMON_IMPL`).
 //!
-//! Selects between the legacy Node sidecar (`node`, the DEFAULT) and the ported
-//! Rust `mainframe-daemon` binary (`rust`). Resolution precedence:
+//! Selects between the ported Rust `mainframe-daemon` binary (`rust`, the
+//! DEFAULT) and the legacy Node sidecar (`node`, kept as a rollback path).
+//! Resolution precedence:
 //!   1. `MAINFRAME_DAEMON_IMPL` env (`rust` | `node`, case-insensitive).
 //!   2. Persisted `<data_dir>/app-settings.json` key `daemonImpl` (so the UI can
 //!      flip the canary across restarts, mirroring the `remote-daemons.json`
 //!      file store in `commands/daemons.rs`).
-//!   3. Default: Node.
+//!   3. Default: Rust.
 
 use std::path::{Path, PathBuf};
 
@@ -45,18 +46,18 @@ pub fn resolve_daemon_impl() -> DaemonImpl {
 }
 
 /// Pure resolver (unit-testable): env value takes precedence, then the persisted
-/// settings file, then the Node default.
+/// settings file, then the Rust default.
 fn resolve_from(env_value: Option<&str>, settings: &Path) -> DaemonImpl {
     if let Some(raw) = env_value {
         match DaemonImpl::parse(raw) {
             Some(v) => return v,
             None => tracing::warn!(
                 value = %raw,
-                "invalid MAINFRAME_DAEMON_IMPL — falling back to persisted setting / node default"
+                "invalid MAINFRAME_DAEMON_IMPL — falling back to persisted setting / rust default"
             ),
         }
     }
-    read_persisted_impl(settings).unwrap_or(DaemonImpl::Node)
+    read_persisted_impl(settings).unwrap_or(DaemonImpl::Rust)
 }
 
 /// `<data_dir>/app-settings.json`, resolving the data dir the same way as the
@@ -175,10 +176,10 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_node_when_unset() {
+    fn defaults_to_rust_when_unset() {
         let path = tmp("missing");
         std::fs::remove_file(&path).ok();
-        assert_eq!(resolve_from(None, &path), DaemonImpl::Node);
+        assert_eq!(resolve_from(None, &path), DaemonImpl::Rust);
     }
 
     #[test]
@@ -186,6 +187,14 @@ mod tests {
         let path = tmp("persisted-rust");
         write_persisted_impl(&path, DaemonImpl::Rust).unwrap();
         assert_eq!(resolve_from(None, &path), DaemonImpl::Rust);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn persisted_node_overrides_rust_default() {
+        let path = tmp("persisted-node");
+        write_persisted_impl(&path, DaemonImpl::Node).unwrap();
+        assert_eq!(resolve_from(None, &path), DaemonImpl::Node);
         std::fs::remove_file(&path).ok();
     }
 

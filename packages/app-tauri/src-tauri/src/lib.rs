@@ -317,8 +317,8 @@ fn boot_daemon(
         return Ok(sidecar::DaemonHandle::external());
     }
 
-    // Canary: default Node (always-working path), opt into Rust via
-    // MAINFRAME_DAEMON_IMPL=rust or the persisted app setting.
+    // Canary: default Rust; MAINFRAME_DAEMON_IMPL=node (or the persisted app
+    // setting) is the rollback path until the Node arm is retired.
     let impl_ = daemon_impl::resolve_daemon_impl();
     tracing::info!(daemon_impl = impl_.as_str(), "selected daemon implementation");
     match impl_ {
@@ -415,7 +415,7 @@ fn boot_rust_daemon(
         },
         shell_env: shell_env.clone(),
         daemon_port: daemon_port(),
-        data_dir: None,
+        data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
     })
 }
 
