@@ -49,7 +49,11 @@ async fn get_languages(State(ctx): State<Arc<AppCtx>>, Query(raw): Query<RawQuer
 
     let mut languages: Vec<LspLanguageStatus> = Vec::with_capacity(all_ids.len());
     for id in all_ids {
-        let resolved = manager.registry().resolve_command(&id).await;
+        // No project directory is in scope here (only the project id) — an empty
+        // path preserves the prior PATH-global "installed" check rather than
+        // probing a project's node_modules/venv (project_local_bin/venv_bin both
+        // no-op on "").
+        let resolved = manager.registry().resolve_command(&id, "").await;
         let active = active_languages.contains(&id);
         languages.push(LspLanguageStatus {
             installed: resolved.is_some(),

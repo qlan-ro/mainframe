@@ -1,11 +1,17 @@
 //! Ported from `packages/core/src/lsp/lsp-registry.ts`.
 //!
 //! Language-server registry: the static `id -> LspServerConfig` table, the
-//! extension -> language map, and command resolution (bundled bin path vs.
-//! `command -v` PATH probe for external servers).
+//! extension -> language map, and bring-your-own command resolution. The TS
+//! twin resolved `typescript-language-server`/`pyright` from `node_modules`
+//! bundled alongside the Node daemon (`require.resolve` + `process.execPath`);
+//! the Rust daemon ships no bundled servers, so every language (including
+//! `jdtls`, which was already PATH-only) resolves the same way: a project-local
+//! `node_modules/.bin`, then a Python venv, then a `command -v` probe on the
+//! resolved login-shell `PATH`. Fails soft — an unresolved server is `None`,
+//! never an error.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 
 use mainframe_types::lsp::LspServerConfig;
 
@@ -47,27 +53,6 @@ fn default_configs() -> Vec<LspServerConfig> {
     ]
 }
 
-/// Maps bundled language IDs to their npm package name and bin path within that package.
-fn bundled_bin_entry(language_id: &str) -> Option<(&'static str, &'static str)> {
-    match language_id {
-        "typescript" => Some(("typescript-language-server", "lib/cli.mjs")),
-        "python" => Some(("pyright", "dist/pyright-langserver.js")),
-        _ => None,
-    }
-}
-
-/// Errors resolving a bundled server's on-disk bin path.
-#[derive(Debug, thiserror::Error)]
-pub enum RegistryError {
-    #[error("No bundled bin map entry for '{0}'")]
-    NoBundledEntry(String),
-    /// The daemon has not been told where the bundled `node` binary and
-    /// `node_modules` live. The TS twin used `require.resolve` + `process.execPath`;
-    /// the Rust daemon must inject these at boot from the packaging layout.
-    #[error("Bundled LSP packaging not configured (node exec / bundled root unset)")]
-    PackagingUnconfigured,
-}
-
 /// The static language-server registry. Immutable after construction
 /// (CONCURRENCY.tsv: `configs`/`extensionMap` are `SINGLE_TASK`, read-only).
 pub struct LspRegistry {
@@ -76,10 +61,6 @@ pub struct LspRegistry {
     /// TS insertion-ordered `Map`).
     order: Vec<String>,
     extension_map: HashMap<String, String>,
-    /// Path to the `node` binary that runs bundled JS servers (was `process.execPath`).
-    node_exec: Option<String>,
-    /// Directory containing the bundled `node_modules` (was `require.resolve` root).
-    bundled_root: Option<PathBuf>,
     /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
     /// external-server spawn so packaged builds find CLIs outside the bare launchd
     /// `PATH` (mirrors the TS `enrichPath` env mutation). `None` = inherit.
@@ -102,8 +83,6 @@ impl LspRegistry {
             configs,
             order,
             extension_map,
-            node_exec: None,
-            bundled_root: None,
             resolved_path: None,
         }
     }
@@ -123,21 +102,6 @@ impl LspRegistry {
         self.resolved_path.as_deref()
     }
 
-    /// Inject the packaging locations for bundled node servers. The TS twin got
-    /// these implicitly from `process.execPath` + `require.resolve`; the Rust
-    /// daemon supplies them from its packaging layout at boot.
-    // TODO(port): wire this from the daemon/Tauri packaging (bundled node sidecar
-    // + bundled node_modules dir) once the sidecar layout is finalized.
-    pub fn with_bundled(
-        mut self,
-        node_exec: impl Into<String>,
-        bundled_root: impl Into<PathBuf>,
-    ) -> Self {
-        self.node_exec = Some(node_exec.into());
-        self.bundled_root = Some(bundled_root.into());
-        self
-    }
-
     pub fn get_config(&self, language_id: &str) -> Option<&LspServerConfig> {
         self.configs.get(language_id)
     }
@@ -150,62 +114,112 @@ impl LspRegistry {
         self.order.clone()
     }
 
-    fn resolve_bundled_bin_path(&self, language_id: &str) -> Result<PathBuf, RegistryError> {
-        let (pkg, bin) = bundled_bin_entry(language_id)
-            .ok_or_else(|| RegistryError::NoBundledEntry(language_id.to_string()))?;
-        let root = self
-            .bundled_root
-            .as_ref()
-            .ok_or(RegistryError::PackagingUnconfigured)?;
-        Ok(root.join(pkg).join(bin))
-    }
-
-    pub async fn resolve_command(&self, language_id: &str) -> Option<ResolvedCommand> {
+    /// Resolves a language's command by trying, in order: a project-local
+    /// `node_modules/.bin/<cmd>`, a Python venv (project `.venv/bin` then
+    /// `$VIRTUAL_ENV/bin`), then a `command -v` probe against the boot-resolved
+    /// login-shell `PATH`. Fails soft — `None` when nothing resolves, never an
+    /// error, so an unavailable server never blocks the caller.
+    pub async fn resolve_command(
+        &self,
+        language_id: &str,
+        project_path: &str,
+    ) -> Option<ResolvedCommand> {
         let config = self.configs.get(language_id)?;
+        let cmd = config.command.as_str();
 
-        if config.bundled {
-            let node_exec = match &self.node_exec {
-                Some(exec) => exec.clone(),
-                None => {
-                    tracing::warn!(language_id, "Bundled LSP server package not found");
-                    return None;
-                }
-            };
-            match self.resolve_bundled_bin_path(language_id) {
-                Ok(bin_path) => {
-                    let mut args = vec![bin_path.to_string_lossy().to_string()];
-                    args.extend(config.args.iter().cloned());
-                    return Some(ResolvedCommand {
-                        command: node_exec,
-                        args,
-                    });
-                }
-                Err(err) => {
-                    tracing::warn!(language_id, %err, "Bundled LSP server package not found");
-                    return None;
-                }
-            }
+        if let Some(path) = project_local_bin(project_path, cmd).await {
+            return Some(ResolvedCommand {
+                command: path,
+                args: config.args.clone(),
+            });
         }
 
-        // Shell is needed for the `command -v` builtin, but the command must be a
-        // positional arg ($1) — never interpolated into the script — so it can't be
-        // parsed as shell syntax.
-        let mut probe = tokio::process::Command::new("/bin/sh");
-        probe.args(["-c", "command -v \"$1\"", "sh", &config.command]);
-        if let Some(path) = &self.resolved_path {
-            probe.env("PATH", path);
+        let virtual_env = std::env::var("VIRTUAL_ENV").ok();
+        if let Some(path) = venv_bin(project_path, virtual_env.as_deref(), cmd).await {
+            return Some(ResolvedCommand {
+                command: path,
+                args: config.args.clone(),
+            });
         }
-        match probe.output().await {
-            Ok(out) if out.status.success() => Some(ResolvedCommand {
+
+        if command_on_path(cmd, self.resolved_path.as_deref()).await {
+            return Some(ResolvedCommand {
                 command: config.command.clone(),
                 args: config.args.clone(),
-            }),
-            Ok(_) | Err(_) => {
-                tracing::debug!(language_id, cmd = %config.command, "External LSP server not found on PATH");
-                None
+            });
+        }
+
+        tracing::debug!(
+            language_id,
+            cmd,
+            "LSP server not found (project-local, venv, or PATH)"
+        );
+        None
+    }
+}
+
+/// True if `path` exists, is a regular file, and (on unix) has an exec bit set.
+async fn is_executable_file(path: &Path) -> bool {
+    match tokio::fs::metadata(path).await {
+        Ok(meta) => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                meta.is_file() && meta.permissions().mode() & 0o111 != 0
+            }
+            #[cfg(not(unix))]
+            {
+                meta.is_file()
             }
         }
+        Err(_) => false,
     }
+}
+
+/// `{project_path}/node_modules/.bin/<cmd>`, if present and executable. An empty
+/// `project_path` (no project context, e.g. the languages-status route) always
+/// misses rather than resolving against the daemon's own working directory.
+async fn project_local_bin(project_path: &str, cmd: &str) -> Option<String> {
+    if project_path.is_empty() {
+        return None;
+    }
+    let candidate = Path::new(project_path)
+        .join("node_modules")
+        .join(".bin")
+        .join(cmd);
+    is_executable_file(&candidate)
+        .await
+        .then(|| candidate.to_string_lossy().into_owned())
+}
+
+/// `{project_path}/.venv/bin/<cmd>`, then `{virtual_env}/bin/<cmd>`. `virtual_env`
+/// is passed in rather than read from the environment here so this helper is
+/// directly unit-testable without mutating process env (see module docs).
+async fn venv_bin(project_path: &str, virtual_env: Option<&str>, cmd: &str) -> Option<String> {
+    if !project_path.is_empty() {
+        let project_venv = Path::new(project_path).join(".venv").join("bin").join(cmd);
+        if is_executable_file(&project_venv).await {
+            return Some(project_venv.to_string_lossy().into_owned());
+        }
+    }
+    let virtual_env = virtual_env?;
+    let candidate = Path::new(virtual_env).join("bin").join(cmd);
+    is_executable_file(&candidate)
+        .await
+        .then(|| candidate.to_string_lossy().into_owned())
+}
+
+/// `command -v <cmd>` against `resolved_path` (falls back to the inherited
+/// process `PATH` when unset). Shell is needed for the `command -v` builtin, but
+/// `cmd` is passed as a positional arg ($1) — never interpolated into the
+/// script — so it can't be parsed as shell syntax.
+async fn command_on_path(cmd: &str, resolved_path: Option<&str>) -> bool {
+    let mut probe = tokio::process::Command::new("/bin/sh");
+    probe.args(["-c", "command -v \"$1\"", "sh", cmd]);
+    if let Some(path) = resolved_path {
+        probe.env("PATH", path);
+    }
+    matches!(probe.output().await, Ok(out) if out.status.success())
 }
 
 impl Default for LspRegistry {
@@ -218,10 +232,12 @@ impl Default for LspRegistry {
 mod tests;
 
 // PORT STATUS: packages/core/src/lsp/lsp-registry.ts (99 lines)
-// confidence: high (config table, extension map, external `command -v` probe)
-// todos: 1 (with_bundled packaging injection — see TODO(port) above)
-// notes: `resolveBundledBinPath`/`process.execPath` have no Node analogue in Rust;
-//   the bundled node binary + node_modules root are injected via `with_bundled`
-//   instead of `require.resolve`. Unknown-language and external-probe branches are
-//   faithful. Log strings preserved ("Bundled LSP server package not found",
-//   "External LSP server not found on PATH").
+// confidence: high (config table, extension map) / new (BYO resolution order)
+// todos: 0
+// notes: the TS twin resolved bundled servers via `require.resolve` against the
+//   Node daemon's own node_modules, which has no Rust analogue and no live
+//   deployment behavior worth preserving byte-for-byte (Rust ships no bundled
+//   servers). `resolve_command` instead does bring-your-own discovery for every
+//   language, config-driven rather than a `bundled: bool` branch: project-local
+//   `node_modules/.bin`, then a Python venv, then the `command -v` PATH probe
+//   `jdtls` already used. Unknown-language and PATH-probe branches are faithful.
