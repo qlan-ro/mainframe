@@ -143,7 +143,7 @@ test.describe('§editor', () => {
     await page.keyboard.type('// dirty-edit\n');
     await expect(page.getByTestId('editor-save-status')).toHaveText('● unsaved', { timeout: 5_000 });
 
-    await page.keyboard.press('Meta+s');
+    await page.keyboard.press('ControlOrMeta+s');
     await expect(page.getByTestId('editor-save-status')).toHaveText('● saved', { timeout: 10_000 });
 
     const saved = readFileSync(path.join(project.projectPath, 'utils.ts'), 'utf8');
@@ -161,7 +161,7 @@ test.describe('§editor', () => {
     try {
       await page.getByTestId('editor-code').click();
       await page.keyboard.type('// attempted edit\n');
-      await page.keyboard.press('Meta+s');
+      await page.keyboard.press('ControlOrMeta+s');
 
       const banner = page.getByTestId('editor-tab-save-error');
       await expect(banner).toBeVisible({ timeout: 10_000 });
@@ -246,7 +246,7 @@ test.describe('§editor', () => {
 
     await expect(page.locator('.cm-search')).toHaveCount(0);
     await page.getByTestId('editor-code').click();
-    await page.keyboard.press('Meta+f');
+    await page.keyboard.press('ControlOrMeta+f');
     await expect(page.locator('.cm-search')).toBeVisible({ timeout: 5_000 });
 
     const searchInput = page.locator('.cm-search input[name="search"]');
@@ -262,12 +262,16 @@ test.describe('§editor', () => {
 
   test('footer status shows Ln/Col that follows the cursor', async () => {
     const { page } = app;
-    // search.ts is still the active tab from the previous test.
-    await expect(tabByTitle(page, 'search.ts')).toHaveAttribute('aria-selected', 'true');
+    // Open search.ts explicitly rather than relying on the previous test leaving
+    // it active — Playwright restarts the worker after any failure, so an earlier
+    // failure would otherwise leave this tab closed. Clicking the tree row is
+    // idempotent: it activates the tab whether or not it is already open.
+    await page.getByTestId('file-tree-row-search.ts').click();
+    await expect(tabByTitle(page, 'search.ts')).toHaveAttribute('aria-selected', 'true', { timeout: 10_000 });
 
     const status = page.getByTestId('viewer-shell-status');
     await page.getByTestId('editor-code').click();
-    await page.keyboard.press('Meta+Home'); // cursorDocStart — deterministic anchor
+    await page.keyboard.press('ControlOrMeta+Home'); // cursorDocStart — deterministic anchor
     await expect(status).toHaveText('Ln 1, Col 1', { timeout: 5_000 });
 
     await page.keyboard.press('ArrowDown');
@@ -301,7 +305,7 @@ test.describe('§editor', () => {
     await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('aria-pressed', 'true');
 
     await page.getByTestId('editor-code').click();
-    await page.keyboard.press('Meta+End'); // cursorDocEnd — deterministic anchor
+    await page.keyboard.press('ControlOrMeta+End'); // cursorDocEnd — deterministic anchor
     await page.keyboard.type('\n\nAppended paragraph.');
 
     await page.getByTestId('markdown-mode-preview').click();

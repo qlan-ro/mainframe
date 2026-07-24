@@ -13,6 +13,18 @@ use crate::history::recorded_session_id;
 
 const MAX_DELAY_MS: u64 = 120;
 
+/// Per-event replay delay ceiling. Defaults to `MAX_DELAY_MS` so the suite stays
+/// fast, but `E2E_MOCK_MAX_DELAY_MS` widens it for the rare test that must observe
+/// a transient state (e.g. the sidebar 'working' dot) whose window would otherwise
+/// collapse into the ~120ms burst and race a debounced client refetch.
+fn max_delay_ms() -> i64 {
+    std::env::var("E2E_MOCK_MAX_DELAY_MS")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .filter(|v| *v >= 0)
+        .unwrap_or(MAX_DELAY_MS as i64)
+}
+
 pub(crate) struct SessionState {
     pub replay: ReplayState,
     pub last_delay: i64,
@@ -193,6 +205,7 @@ impl ReplaySession {
         let Some(sink) = self.sink() else {
             return;
         };
+        let delay_ceiling = max_delay_ms();
         tokio::spawn(async move {
             let started_at = tokio::time::Instant::now();
             for event in outputs {
@@ -200,7 +213,7 @@ impl ReplaySession {
                     event
                         .delay_ms
                         .saturating_sub(base)
-                        .clamp(0, MAX_DELAY_MS as i64) as u64,
+                        .clamp(0, delay_ceiling) as u64,
                 );
                 if let Some(remaining) = target.checked_sub(started_at.elapsed()) {
                     tokio::time::sleep(remaining).await;
