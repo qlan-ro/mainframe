@@ -70,7 +70,12 @@ fn custom_tool_call_output_line(call_id: &str, output: &str) -> String {
     .to_string()
 }
 
-fn function_call_line(call_id: &str, name: &str, namespace: Option<&str>, arguments: &str) -> String {
+fn function_call_line(
+    call_id: &str,
+    name: &str,
+    namespace: Option<&str>,
+    arguments: &str,
+) -> String {
     let mut payload = json!({
         "type": "function_call",
         "id": format!("fc_{call_id}"),
@@ -99,8 +104,7 @@ fn function_call_output_line(call_id: &str, output: &str) -> String {
 #[tokio::test]
 async fn apply_patch_update_reconstructs_file_change() {
     let root = tempfile::tempdir().unwrap();
-    let patch =
-        "*** Begin Patch\n*** Update File: src/synthetic_widget.rs\n@@\n-old line\n+new line\n*** End Patch\n";
+    let patch = "*** Begin Patch\n*** Update File: src/synthetic_widget.rs\n@@\n-old line\n+new line\n*** End Patch\n";
     let lines = vec![
         custom_tool_call_line("call_patch_1", patch),
         custom_tool_call_output_line(

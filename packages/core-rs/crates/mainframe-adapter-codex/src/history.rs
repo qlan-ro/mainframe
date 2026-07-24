@@ -154,7 +154,9 @@ pub fn convert_thread_items(
                 ));
             }
             ThreadItem::ImageGeneration(img) => {
-                if let Some(m) = crate::image_generation_history::image_generation_message(img, chat_id) {
+                if let Some(m) =
+                    crate::image_generation_history::image_generation_message(img, chat_id)
+                {
                     messages.push(m);
                 }
             }

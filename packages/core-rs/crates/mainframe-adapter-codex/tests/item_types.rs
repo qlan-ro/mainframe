@@ -134,8 +134,9 @@ fn exited_review_mode_round_trips() {
 
 #[test]
 fn exited_review_mode_tolerates_an_unknown_extra_field() {
-    let item =
-        parse(json!({ "id": "xrm1", "type": "exitedReviewMode", "review": "security", "extra": 1 }));
+    let item = parse(
+        json!({ "id": "xrm1", "type": "exitedReviewMode", "review": "security", "extra": 1 }),
+    );
     assert!(matches!(item, ThreadItem::ExitedReviewMode(_)));
 }
 

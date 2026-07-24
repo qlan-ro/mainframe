@@ -13,7 +13,10 @@ use crate::item_types::ImageGenerationItem;
 /// disk-read fallback needs an async read plus a sink to deliver the late-arriving
 /// message; `convert_thread_items` returns a plain `Vec` synchronously with no sink,
 /// so that case is dropped here (logged, not silent) rather than reproduced.
-pub(crate) fn image_generation_message(img: &ImageGenerationItem, chat_id: &str) -> Option<ChatMessage> {
+pub(crate) fn image_generation_message(
+    img: &ImageGenerationItem,
+    chat_id: &str,
+) -> Option<ChatMessage> {
     let Some(inline) = &img.result else {
         tracing::debug!(
             module = "codex:history",
@@ -28,5 +31,10 @@ pub(crate) fn image_generation_message(img: &ImageGenerationItem, chat_id: &str)
     if let Some(p) = prompt {
         content.insert(0, text_block(p));
     }
-    Some(make_message(&img.id, chat_id, ChatMessageType::Assistant, content))
+    Some(make_message(
+        &img.id,
+        chat_id,
+        ChatMessageType::Assistant,
+        content,
+    ))
 }
