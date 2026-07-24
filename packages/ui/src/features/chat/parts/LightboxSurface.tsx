@@ -1,12 +1,10 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { useRef, type MouseEvent, type ReactNode } from 'react';
 import { DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface LightboxSurfaceProps {
-  /** testid for the dialog content box. */
   testId: string;
-  /** testid for the full-size image. */
   imageTestId: string;
   src: string;
   alt?: string;
@@ -20,7 +18,7 @@ export function LightboxSurface({ testId, imageTestId, src, alt = '', onDismiss,
 
   // Nav chrome and the close button live inside this box, so dismiss only for
   // clicks that land on the box itself or the image — never on a control.
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget || event.target === imageRef.current) onDismiss();
   };
 
