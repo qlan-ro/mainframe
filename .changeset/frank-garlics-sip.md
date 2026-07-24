@@ -1,4 +1,4 @@
 ---
 ---
 
-fix(core-rs): a childless `Task` subagent now renders as its original bare tool_call instead of an empty `task_group`, matching the Node/TS daemon (`groupTaskChildren`). The Rust port had dropped the "no children → bare call" collapse. Also runs `cargo fmt` across the Rust port and adds a pre-commit `rustfmt` hook so unformatted Rust can't be committed — turning the (non-required) rust-port CI check green.
+chore(core-rs): run `cargo fmt` across the Rust port and add a pre-commit `rustfmt` hook so unformatted Rust can't be committed. Also update the one `apply_tool_grouping` characterization test that #507 missed, so it expects the intended empty `task_group` for a childless Task (matching the rest of #507). Turns the (non-required) rust-port CI check green. Test/tooling-only — no product behavior change.

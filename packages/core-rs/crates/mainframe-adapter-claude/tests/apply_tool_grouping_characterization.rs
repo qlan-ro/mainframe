@@ -313,14 +313,17 @@ fn task_group_children_thinking_before_explore_pair_stays_at_index_0() {
 }
 
 #[test]
-fn subagent_without_children_stays_bare_tool_call() {
+fn subagent_without_children_emits_an_empty_task_group() {
+    // INTENTIONAL DIVERGENCE from the TS source (#507): the TS `groupTaskChildren`
+    // collapses a childless Task back to a bare tool_call, but the Rust daemon keeps
+    // the empty `_task_group` so the live TaskCard renders before children stream in.
     let out = run(json!([
         { "type": "tool_call", "id": "agent1", "name": "Task", "input": { "description": "solo agent" }, "category": "subagent" },
     ]));
     assert_eq!(out.len(), 1);
-    assert_eq!(out[0]["type"], "tool_call");
-    assert_eq!(out[0]["id"], "agent1");
-    assert_eq!(out[0]["name"], "Task");
+    assert_eq!(out[0]["type"], "task_group");
+    assert_eq!(out[0]["agentId"], "agent1");
+    assert!(out[0]["calls"].as_array().unwrap().is_empty());
 }
 
 #[test]
