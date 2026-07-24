@@ -354,9 +354,31 @@ impl LaunchManager {
         let inner = self.inner.clone();
         let name = config.name.clone();
 
-        if inner.processes.contains_key(&name) {
-            tracing::warn!(target: "launch", name = %name, "process already running, skipping start");
-            return Ok(());
+        if let Some((status, mut exit_rx)) = inner
+            .processes
+            .get(&name)
+            .map(|managed| (*lock(&managed.status), managed.exit_rx.clone()))
+        {
+            match status {
+                // A stop() in flight has already published `stopped` (the UI is
+                // showing the run CTA) but the child is still dying and its map
+                // entry survives until reaped — wait for the teardown instead of
+                // silently dropping the restart.
+                LaunchProcessStatus::Stopped | LaunchProcessStatus::Failed => {
+                    let teardown = inner.timings.stop_grace + Duration::from_secs(5);
+                    if tokio::time::timeout(teardown, wait_until_exited(&mut exit_rx))
+                        .await
+                        .is_err()
+                    {
+                        tracing::warn!(target: "launch", name = %name, "previous process did not exit after SIGKILL, skipping start");
+                        return Ok(());
+                    }
+                }
+                _ => {
+                    tracing::warn!(target: "launch", name = %name, "process already running, skipping start");
+                    return Ok(());
+                }
+            }
         }
 
         inner.state.reset(&name);
@@ -948,6 +970,58 @@ mod tests {
                 .iter()
                 .any(|(_, s)| *s == LaunchProcessStatus::Stopped)
         );
+    }
+
+    #[tokio::test]
+    async fn restart_during_stop_teardown_respawns_after_exit() {
+        let (broadcast, events) = recorder();
+        let manager = Arc::new(LaunchManager::with_timings(
+            "proj-1",
+            "/tmp",
+            broadcast,
+            None,
+            None,
+            None,
+            default_read_command(),
+            LaunchTimings {
+                stop_grace: Duration::from_millis(300),
+                ..LaunchTimings::default()
+            },
+        ));
+
+        // Loops so a group SIGTERM (which kills the `sleep` child, default
+        // disposition) doesn't end the `sh` script itself — it must survive to
+        // SIGKILL. The 50ms settle below lets the trap actually install before
+        // stop() fires; without it, SIGTERM can race the shell's startup and
+        // kill it via default disposition before the trap takes effect.
+        let config = cfg("server", "trap '' TERM; while :; do sleep 0.2; done", None);
+        manager.start(&config).await.unwrap();
+        assert_eq!(manager.get_status("server"), LaunchProcessStatus::Running);
+        sleep(Duration::from_millis(50)).await;
+
+        let stop_manager = manager.clone();
+        let stop_task = tokio::spawn(async move { stop_manager.stop("server").await });
+
+        sleep(Duration::from_millis(100)).await;
+        manager.start(&config).await.unwrap();
+
+        stop_task.await.unwrap();
+
+        assert_eq!(manager.get_status("server"), LaunchProcessStatus::Running);
+
+        let statuses = status_events(&events);
+        let stopped_idx = statuses
+            .iter()
+            .position(|(name, status)| name == "server" && *status == LaunchProcessStatus::Stopped)
+            .expect("expected a Stopped status event");
+        assert!(
+            statuses[stopped_idx + 1..]
+                .iter()
+                .any(|(name, status)| name == "server" && *status == LaunchProcessStatus::Starting),
+            "expected a Starting event after the Stopped event"
+        );
+
+        manager.stop("server").await;
     }
 
     #[tokio::test]
