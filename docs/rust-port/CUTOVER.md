@@ -4,10 +4,10 @@ Go/no-go gate and runbook for flipping the **Tauri** desktop shell from the bund
 Node daemon to the ported Rust `mainframe-daemon`. Electron is out of scope: the
 Electron shell keeps the Node daemon untouched and is not part of this cutover.
 
-- **Branch:** `feat/daemon-rust-port`
+- **Branch:** `feat/daemon-rust-port` (landed on `main`); flip executes on `feat/rust-daemon-cutover`.
 - **Scope:** Tauri shell only (`packages/app-tauri`), Rust daemon (`packages/core-rs`).
 - **Default is unchanged:** the Node sidecar remains the default until an explicit flip.
-- **Last verified:** 2026-07-11, macOS `aarch64-apple-darwin`.
+- **Last verified:** 2026-07-24, macOS `aarch64-apple-darwin` (baseline refresh below; original 2026-07-11).
 
 ---
 
@@ -15,10 +15,20 @@ Electron shell keeps the Node daemon untouched and is not part of this cutover.
 
 | Metric | Value | Source |
 |---|---|---|
-| Rust workspace tests | **1,303 passed / 0 failed** (64 test binaries) | `cargo test --workspace`, verified 2026-07-11 on this branch |
-| HTTP route diff parity | **84 routes** compared: 76 IDENTICAL, 5 DEVIATION (understood), 3 EXPECTED(gap), **0 unexplained (DIVERGENT)** | `DIFF-REPORT-phase5.md` |
-| Live soak (real claude CLI) | 3 scenarios; **no new Rust-side structural divergence**; residual deltas explained | `SOAK-REPORT-phase4.md` |
+| Rust workspace tests | **2,084 passed / 0 failed** (78 test binaries) | `cargo test --workspace`, verified 2026-07-24 |
+| HTTP route diff parity | **84 routes** compared: 77 IDENTICAL, 4 DEVIATION (understood), 3 EXPECTED(gap), **0 unexplained (DIVERGENT)** | `DIFF-REPORT-phase5.md` |
+| Live soak (real claude CLI) | 3 scenarios; **no Rust-side structural divergence**; residual deltas are live-environment nondeterminism (quota broadcasts #480/#486, live-CLI interrupt race) | `SOAK-REPORT-phase4.md` |
 | Tauri canary | Shell boots the Rust daemon; **10/10** daemon checks (shell-spawned) + **10/10** (isolated PATH-enrichment daemon) | `CANARY-REPORT.md` |
+
+**Baseline refresh (2026-07-24):** the quota features #480/#486 landed on both arms after
+the original baseline, so both daemons now live-probe provider quota at boot — quota
+`settings` rows and `provider.quota.updated` events are inherently nondeterministic
+(wall-clock + real account state) and are masked/explained, not defects. The previously
+documented codex connect-replay `−1` delta (Rust replaying one `adapter.models.updated`,
+Node two) has **closed**: codex now probes successfully on the Rust arm. Interrupt-scenario
+event counts vary run-to-run with whether the live CLI answers a mid-turn interrupt by
+graceful result vs process exit — both arms deliver interrupts identically
+(soft interrupt + 10 s SIGINT fallback; `session.ts:317` ↔ `session.rs:712`).
 
 ### Diff parity (Phase-5, 84 routes)
 

@@ -64,6 +64,9 @@ function classifyDb(table, key, kind) {
   if (table === 'settings' && /^provider\.[^.]+\.executablePath$/.test(key) && kind === 'only-node') {
     return 'DEVIATION: Node persists resolved adapter executable paths (resolveAdapterExecutableCached side-effect); the Rust adapter registry computes `resolvedExecutable` for the response but deliberately does not persist it (get_providers PORT STATUS note — no write-back), so the row exists only on the Node side. Host-dependent: the specific adapter/key and row count vary with the installed toolchain.';
   }
+  if (table === 'settings' && /^quota\./.test(key)) {
+    return 'DEVIATION: live-probed quota row — both daemons pull provider quota from the real account at boot (#486), so observedAt/resetsAt reflect each probe’s wall-clock and the server’s per-request reset time; usedPercent formatting differs (serde_json f64 `96.0` vs JS number `96`) but re-parses identically. Inherently nondeterministic; not ported-logic drift.';
+  }
   return null;
 }
 
@@ -231,7 +234,7 @@ const ROW_KEY = {
 };
 
 function keyRows(table, list, reps) {
-  const keyOf = ROW_KEY[table] ?? ((r, i) => String(i));
+  const keyOf = ROW_KEY[table] ?? ((_r, i) => String(i));
   const map = {};
   list.forEach((r, i) => (map[keyOf(r, i)] = normalize(r, reps)));
   return map;

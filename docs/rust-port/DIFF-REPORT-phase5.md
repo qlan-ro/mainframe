@@ -6,10 +6,6 @@ Covers the Phase-3 route matrix plus the Phase-5 surfaces: launch (configs/statu
 
 Verdicts: **IDENTICAL** (byte-equal after normalizing timestamps / ids / durations / paths / SHAs), **EXPECTED(gap)** (deliberate, documented gap — workflow engine not ported), **DEVIATION** (understood, resolve uniformly), **DIVERGENT** (unexplained — needs a fix).
 
-## Blockers
-
-- Node daemon build (`pnpm --filter @qlan-ro/mainframe-core build`) fails on pre-existing read-only source: src/db/migrations.ts:237 `TS2532 Object is possibly undefined` under tsconfig.base.json (noUncheckedIndexedAccess). Fell back to the prebuilt packages/core/dist/index.js (fresh, boots cleanly). Not a Rust-port defect; TS fix is out of scope.
-
 ## Routes
 
 | Route | Method | Status (node/rust) | Verdict | First divergence |
@@ -55,7 +51,7 @@ Verdicts: **IDENTICAL** (byte-equal after normalizing timestamps / ids / duratio
 | chat-messages-happy | GET | 200/200 | IDENTICAL | — |
 | chat-pending-permission | GET | 200/200 | IDENTICAL | — |
 | chat-session-files | GET | 200/200 | IDENTICAL | — |
-| chat-context-happy | GET | 200/200 | DEVIATION | .data.attachments[0].materializedPath: "\"<ROOT>/seed/attachments/oaU1t--K2qy4JM3E_dhe1/files/<ID>-note.txt\"" → "(absent)" — DEVIATION: Node leaks `materializedPath` (a host-local absolute FS path) on each attachment — `getSessionContext` returns `attachmentStore.list()` (`StoredAttachmentMeta`, which carries materializedPath) but the canonical `SessionAttachment` type declares only {id,name,mediaType,sizeBytes,kind,originalPath?}. The Rust port emits the declared `SessionAttachment` shape; the leaked path is intentionally not reproduced. |
+| chat-context-happy | GET | 200/200 | DEVIATION | .data.attachments[0].materializedPath: "\"<ROOT>/seed/attachments/LafnfY-FkjNYJWbaLX1oC/files/<ID>-note.txt\"" → "(absent)" — DEVIATION: Node leaks `materializedPath` (a host-local absolute FS path) on each attachment — `getSessionContext` returns `attachmentStore.list()` (`StoredAttachmentMeta`, which carries materializedPath) but the canonical `SessionAttachment` type declares only {id,name,mediaType,sizeBytes,kind,originalPath?}. The Rust port emits the declared `SessionAttachment` shape; the leaked path is intentionally not reproduced. |
 | worktree-list-happy | GET | 200/200 | IDENTICAL | — |
 | launch-configs-happy | GET | 200/200 | IDENTICAL | — |
 | launch-configs-404 | GET | 404/404 | IDENTICAL | — |
@@ -63,11 +59,11 @@ Verdicts: **IDENTICAL** (byte-equal after normalizing timestamps / ids / duratio
 | tunnel-status | GET | 200/200 | IDENTICAL | — |
 | tunnel-config | GET | 200/200 | IDENTICAL | — |
 | plugins-list | GET | 200/200 | IDENTICAL | — |
-| lsp-languages-happy | GET | 200/200 | DEVIATION | .data.languages[0].installed: "true" → "false" — DEVIATION: `installed` for the BUNDLED servers (typescript, python) is true in Node — `resolveCommand` finds the npm package via `require.resolve` in the dev `node_modules` — but false in Rust: the registry's `bundled_root` is an explicit `TODO(port)` (unwired until the Tauri sidecar node_modules layout is finalized), so bundled servers never resolve. External servers (java/`command -v`) match. Host-dependent: on a machine without the bundled packages in node_modules, Node also reports false → IDENTICAL. |
+| lsp-languages-happy | GET | 200/200 | DEVIATION | .data.languages[1].installed: "true" → "false" — DEVIATION: `installed` for the BUNDLED servers (typescript, python) is true in Node — `resolveCommand` finds the npm package via `require.resolve` in the dev `node_modules` — but false in Rust: the registry's `bundled_root` is an explicit `TODO(port)` (unwired until the Tauri sidecar node_modules layout is finalized), so bundled servers never resolve. External servers (java/`command -v`) match. Host-dependent: on a machine without the bundled packages in node_modules, Node also reports false → IDENTICAL. |
 | lsp-languages-400 | GET | 400/400 | IDENTICAL | — |
-| workflows-list | GET | 200/404 | EXPECTED(gap) | Node 200 vs Rust 404 — deliberate: workflow engine not ported; route unmounted in Rust. |
-| workflow-connectors | GET | 200/404 | EXPECTED(gap) | Node 200 vs Rust 404 — deliberate: workflow engine not ported; route unmounted in Rust. |
-| workflow-credentials | GET | 200/404 | EXPECTED(gap) | Node 200 vs Rust 404 — deliberate: workflow engine not ported; route unmounted in Rust. |
+| workflows-list | GET | 404/404 | EXPECTED(gap) | Node 404 vs Rust 404 — deliberate: workflow engine not ported; route unmounted in Rust. |
+| workflow-connectors | GET | 404/404 | EXPECTED(gap) | Node 404 vs Rust 404 — deliberate: workflow engine not ported; route unmounted in Rust. |
+| workflow-credentials | GET | 404/404 | EXPECTED(gap) | Node 404 vs Rust 404 — deliberate: workflow engine not ported; route unmounted in Rust. |
 | device-activity | POST | 200/200 | IDENTICAL | — |
 | tag-create | POST | 201/201 | IDENTICAL | — |
 | tag-patch | PATCH | 200/200 | IDENTICAL | — |
@@ -109,7 +105,7 @@ Verdicts: **IDENTICAL** (byte-equal after normalizing timestamps / ids / duratio
 | chats | 3/3 | IDENTICAL | — |
 | devices | 0/0 | IDENTICAL | — |
 | projects | 2/2 | IDENTICAL | — |
-| settings | 6/6 | IDENTICAL | — |
+| settings | 7/6 | DEVIATION | [quota.codex:doru.chiulan@gmail.com].value: "\"{\\\"status\\\":\\\"ok\\\",\\\"weekly\\\":{\\\"kind\\\":\\\"weekly\\\",\\\"usedPercent\\\":96,\\\"resetsAt\\\":1785318485000,\\\"observedAt\\\":1784..." → "\"{\\\"status\\\":\\\"ok\\\",\\\"weekly\\\":{\\\"kind\\\":\\\"weekly\\\",\\\"usedPercent\\\":96.0,\\\"resetsAt\\\":1785318485000,\\\"observedAt\\\":17..." — DEVIATION: live-probed quota row — both daemons pull provider quota from the real account at boot (#486), so observedAt/resetsAt reflect each probe’s wall-clock and the server’s per-request reset time; usedPercent formatting differs (serde_json f64 `96.0` vs JS number `96`) but re-parses identically. Inherently nondeterministic; not ported-logic drift. |
 | tags | 2/2 | IDENTICAL | — |
 
 ## Skipped
