@@ -1,10 +1,12 @@
-# Sidecar binaries for Tauri's externalBin, provisioned per target triple:
-#   node-<triple>            — Node runtime (scripts/provision-node.mjs)
+# Sidecar binary for Tauri's externalBin, provisioned per target triple:
 #   mainframe-daemon-<triple> — Rust daemon (scripts/provision-rust-daemon.mjs)
-# Real binaries are MB-scale and platform-specific — never committed. cargo check
-# does not need them; `tauri build` does, so provision first. Only this
+# Real binary is MB-scale and platform-specific — never committed. cargo check
+# does not need it; `tauri build` does, so provision first. Only this
 # .gitignore + README.md are tracked.
-node-*
+#
+# node-* also ignored: a stale local artifact from the retired Node sidecar
+# (packages/app-tauri no longer provisions one); harmless leftover on disk.
 mainframe-daemon-*
+node-*
 !.gitignore
 !README.md

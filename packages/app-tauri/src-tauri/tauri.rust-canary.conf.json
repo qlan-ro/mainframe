@@ -1,9 +1,0 @@
-{
-  "$schema": "https://schema.tauri.app/config/2",
-  "build": {
-    "beforeBuildCommand": "pnpm --filter @qlan-ro/mainframe-ui build && pnpm --filter @qlan-ro/mainframe-app-tauri bundle:canary"
-  },
-  "bundle": {
-    "externalBin": ["binaries/node", "binaries/mainframe-daemon"]
-  }
-}

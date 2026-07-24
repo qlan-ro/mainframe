@@ -21,8 +21,6 @@ fi
 # Fresh-worktree provisioning (idempotent).
 [ -d node_modules ] || pnpm install
 cd packages/app-tauri
-ls src-tauri/binaries/node-* >/dev/null 2>&1 || pnpm run provision:node
-[ -d src-tauri/resources/daemon ] || pnpm run bundle:daemon
 
 # `pnpm tauri:dev` is the whole stack: it compiles+runs the Rust shell, starts
 # Vite (its beforeDevCommand, on VITE_PORT), and the shell spawns the daemon.

@@ -1,7 +1,0 @@
-# Daemon bundle — build artifacts produced by scripts/bundle-daemon.mjs.
-# `daemon/daemon.cjs` (esbuild bundle of packages/core) + `daemon/node_modules`
-# (de-symlinked prod deps: better-sqlite3, node-pty, @vscode/ripgrep, the LSP
-# servers, + transitive). Large + platform-specific — never committed; each build
-# (and each CI runner) regenerates them. Only this .gitignore is tracked.
-*
-!.gitignore
