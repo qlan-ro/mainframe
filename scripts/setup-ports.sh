@@ -58,17 +58,13 @@ echo "Building @qlan-ro/mainframe-types…"
 # (daemon runs from source via tsx; Vite serves the renderer from source).
 if [ "${1:-}" = "--minimal" ]; then
   echo ""
-  echo "Minimal setup complete (skipped core/electron builds)."
+  echo "Minimal setup complete (skipped core build)."
   exit 0
 fi
 
 echo ""
 echo "Building @qlan-ro/mainframe-core…"
 (cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-core build)
-
-echo ""
-echo "Building @qlan-ro/mainframe-app-electron…"
-(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-app-electron build)
 
 echo ""
 echo "Worktree setup complete."

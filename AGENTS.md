@@ -14,10 +14,10 @@ AI-native development environment for orchestrating agents.
 ## Tech Stack
 
 - Language: TypeScript (strict mode, NodeNext modules) + Rust (Tauri shell, `packages/app-tauri/src-tauri`)
-- Runtime: Node.js 20+ (daemon); Tauri 2 + Electron desktop shells
-- Package Manager: pnpm workspaces (+ Cargo for the Rust shell)
-- Database: SQLite (better-sqlite3)
-- UI: React + Tailwind v4 in `packages/ui`, shared by the Tauri and Electron shells
+- Runtime: Rust `mainframe-daemon` (packages/core-rs); Tauri 2 desktop shell
+- Package Manager: pnpm workspaces (+ Cargo for the Rust daemon and shell)
+- Database: SQLite (`rusqlite`)
+- UI: React + Tailwind v4 in `packages/ui`, consumed by the Tauri shell
 
 ## Commands
 
@@ -27,7 +27,6 @@ AI-native development environment for orchestrating agents.
 - `pnpm --filter @qlan-ro/mainframe-ui test` — Test a specific package
 - `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` — Single test file (preferred; large multi-suite runs hit cross-file `React.act` failures)
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck` — Typecheck the UI. Core/types have no `typecheck` script; use `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`
-- `pnpm dev:desktop` — Dev stack: core daemon + Vite + Electron
 - `pnpm tauri:dev` (from `packages/app-tauri`) — Tauri dev app; run in background with output to a log file
 - `cargo check` (from `packages/app-tauri/src-tauri`) — Fast Rust validation
 - `pnpm test:e2e` — Playwright E2E suite
@@ -37,12 +36,11 @@ AI-native development environment for orchestrating agents.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
-- **Monorepo Structure**: pnpm workspaces with seven packages:
+- **Monorepo Structure**: pnpm workspaces with six packages:
     - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
-    - `@qlan-ro/mainframe-core`: The background Daemon (Node.js). Process management, session lifecycle, metadata storage.
-    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by both desktop shells.
-    - `@qlan-ro/mainframe-app-tauri`: Tauri 2 desktop shell (Rust in `src-tauri/`). Ships the daemon as a bundled Node sidecar.
-    - `@qlan-ro/mainframe-app-electron`: Electron desktop shell (legacy, being replaced by app-tauri).
+    - `@qlan-ro/mainframe-core`: Orphaned TS daemon implementation (superseded by the Rust daemon; kept only for its `package.json` version, read by the release pipeline).
+    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by the Tauri shell.
+    - `@qlan-ro/mainframe-app-tauri`: Tauri 2 desktop shell (Rust in `src-tauri/`). Ships the Rust daemon (`packages/core-rs`) as a bundled sidecar.
     - `@qlan-ro/mainframe-e2e`: Playwright end-to-end suite.
     - `@qlan-ro/mainframe-mobile`: Git submodule (separate repo — cross-cutting changes need their own PR there; don't bump the pointer in feature PRs).
 - **Metadata Storage**: SQLite (`better-sqlite3`) for project tracking and chat metadata. Message history is NOT duplicated; CLI agents replay it via `--resume`.

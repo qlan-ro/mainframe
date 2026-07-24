@@ -33,7 +33,6 @@ jobs:
         run: |
           pnpm --filter @qlan-ro/mainframe-ui typecheck
           pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
-          pnpm --filter @qlan-ro/mainframe-app-electron exec tsc -b
 
       - name: Security audit
         run: pnpm audit --audit-level=high
@@ -50,10 +49,8 @@ jobs:
             command: pnpm --filter @qlan-ro/mainframe-core exec vitest run --maxWorkers=4
           - name: ui
             command: pnpm --filter @qlan-ro/mainframe-ui exec vitest run --maxWorkers=4
-          - name: types-and-electron
-            command: >-
-              pnpm --filter @qlan-ro/mainframe-types exec vitest run --maxWorkers=4 &&
-              pnpm --filter @qlan-ro/mainframe-app-electron exec vitest run --maxWorkers=4
+          - name: types
+            command: pnpm --filter @qlan-ro/mainframe-types exec vitest run --maxWorkers=4
 
     steps:
       - uses: actions/checkout@v7

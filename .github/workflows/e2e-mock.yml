@@ -50,9 +50,6 @@ jobs:
         with:
           workspaces: packages/core-rs
 
-      # node-pty belongs to app-electron and still installs with the workspace. Remove this with app-electron.
-      - run: npm install -g node-gyp
-
       - run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

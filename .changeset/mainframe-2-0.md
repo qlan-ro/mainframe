@@ -1,7 +1,6 @@
 ---
 "@qlan-ro/mainframe-types": major
 "@qlan-ro/mainframe-core": major
-"@qlan-ro/mainframe-app-electron": major
 "@qlan-ro/mainframe-ui": major
 "@qlan-ro/mainframe-app-tauri": major
 ---
