@@ -153,7 +153,15 @@ pub fn convert_thread_items(
                     })],
                 ));
             }
-            // webSearch, todoList, imageGeneration — skip for now
+            ThreadItem::ImageGeneration(img) => {
+                if let Some(m) = crate::image_generation_history::image_generation_message(img, chat_id) {
+                    messages.push(m);
+                }
+            }
+            ThreadItem::WebSearch(w) => {
+                messages.extend(crate::web_search_history::web_search_messages(w, chat_id));
+            }
+            // todoList — skip for now
             _ => {}
         }
     }
@@ -258,7 +266,7 @@ fn emit_collab_agent(
 /// Build a `ChatMessage` with a CALLER-SUPPLIED deterministic id (derived from the
 /// Codex thread item's stable `id`), so reconstructing the same items yields the
 /// same ids every turn (lets the display delta emitter detect appends/updates).
-fn make_message(
+pub(crate) fn make_message(
     id: &str,
     chat_id: &str,
     r#type: ChatMessageType,

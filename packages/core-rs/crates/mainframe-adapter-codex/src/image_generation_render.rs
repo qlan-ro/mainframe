@@ -44,7 +44,7 @@ fn emit_image(sink: &Arc<dyn SessionSink>, prompt: Option<&str>, media_type: &st
     sink.on_message(content, None);
 }
 
-fn media_type_from_extension(path: &str) -> String {
+pub(crate) fn media_type_from_extension(path: &str) -> String {
     let ext = std::path::Path::new(path)
         .extension()
         .and_then(|e| e.to_str())

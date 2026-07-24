@@ -22,6 +22,7 @@ use crate::item_types::{
     McpToolCallItem, ReasoningItem, SubAgentActivityItem, ThreadItem, TodoListItem,
 };
 use crate::thread_registry::{AgentMetadata, agent_title, describe_agent, lookup_agent_metadata};
+use crate::web_search_render::render_web_search;
 
 /// Dispatches one parsed `ThreadItem` from `item/completed` to the sink. `sink` is
 /// already wrapped with `ParentIdSink` by the caller when the item belongs to a
@@ -50,7 +51,8 @@ pub(crate) fn render_completed_item(
         ThreadItem::Sleep(_) => skip_item("sleep"),
         ThreadItem::HookPrompt(_) => skip_item("hookPrompt"),
         ThreadItem::SubAgentActivity(a) => handle_sub_agent_activity(&a, sink, state),
-        ThreadItem::WebSearch(_) | ThreadItem::UserMessage(_) => {
+        ThreadItem::WebSearch(w) => render_web_search(&w, sink),
+        ThreadItem::UserMessage(_) => {
             tracing::debug!(module = "codex:events", "codex: unhandled item type");
         }
     }
