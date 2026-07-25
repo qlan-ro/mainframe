@@ -11,7 +11,7 @@
  * (Decomposed out of ChatThread; mounted inside `ThreadPrimitive.ViewportFooter`
  * so its height registers as scroll inset — the last message never hides behind it.)
  */
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { ComposerPrimitive, useAui, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -63,6 +63,7 @@ export function Composer() {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const hasQuote = useAuiState((s) => s.composer.quote != null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Mid-run Enter-to-queue. The native ComposerPrimitive.Input gates Enter off
   // while running unless `thread.capabilities.queue` is set — and that is false
@@ -87,7 +88,7 @@ export function Composer() {
   if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
 
   return (
-    <ComposerTriggers>
+    <ComposerTriggers textareaRef={textareaRef}>
       <ComposerPrimitive.Root
         data-testid="chat-composer"
         data-tut="composer"
@@ -114,6 +115,7 @@ export function Composer() {
           <div className="relative max-h-48 overflow-y-auto">
             <ComposerHighlight />
             <ComposerPrimitive.Input
+              ref={textareaRef}
               data-testid="chat-composer-input"
               data-mf-composer-input
               data-noring
