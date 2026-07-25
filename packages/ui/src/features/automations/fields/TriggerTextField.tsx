@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * TriggerTextField — the `ChipField` replacement. A plain autosizing
+ * TriggerTextField — every text input in an automation. A plain autosizing
  * textarea driving the shared trigger engine directly (no assistant-ui
  * composer coupling): `$` (variables, from `scope`) is always wired; `/`
  * (skills) and `@` (files) are on by default (`triggers='all'`), sourced from

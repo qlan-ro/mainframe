@@ -7,7 +7,7 @@
  * write a single literal part.
  *
  * The `'columns'` control renders `columnsByOption[<sibling value>]` as one
- * ChipField row per column, writing flat into `params[columnName]` (matches
+ * text-field row per column, writing flat into `params[columnName]` (matches
  * the canonical fixtures — `daily-health-log.json`'s `notion.add_row` step
  * has `Date`/`Mood`/`Sleep`/`Symptoms` as direct param keys, not nested
  * under a `columns` object). Its own key (conventionally `__columns`) is

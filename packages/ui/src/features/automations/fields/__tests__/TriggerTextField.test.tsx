@@ -1,5 +1,5 @@
 /**
- * TriggerTextField — the ChipField replacement: a plain autosizing textarea
+ * TriggerTextField — every text input in an automation: a plain autosizing textarea
  * driving the shared trigger engine. `$` (variables, from `scope`) is always
  * on; `/` (skills) and `@` (files) are added only in `triggers='all'` mode,
  * via `useAutomationTriggerSources`. TDD: test written first, implemented
