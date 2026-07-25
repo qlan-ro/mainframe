@@ -458,15 +458,28 @@ Keep `recommend_with` under 50 lines — the group/sort/cap step is its own help
 **Files:** `setup_advisor/rules/mcp.rs`, `setup_advisor/rules/skills.rs`,
 `setup_advisor/rules/mod.rs`
 
+**Provenance source of truth:** `docs/research/2026-07-25-todo-191-command-provenance.md` (T2).
+Every `command`, source, and skill id comes from that file. Do not re-query skills.sh or re-derive
+a command from vendor docs — if a row is missing there, the rule does not ship.
+
+**Scope inversion vs. the spec's Risk #1.** The spec expected skills to be the thin, mostly-
+fallback category. Measured: skills is the *large* category (17 first-party registry sources
+across 37 signals) and **MCP is the thin one** — one rule dropped (docker, no vendor-documented
+command), one moved to plugins (convex), one composed rather than transcribed (aws).
+
 **Do:** transcribe the spec's category mappings. Each file opens with a header comment citing
 the upstream plugin (`claude-code-setup v1.0.0`) and the reference file its mappings came from,
 and each rule carries a one-line comment recording where its `command` was verified (T2's table).
 - **mcp** (`adapters: ["*"]`, priority-ranked): any framework → context7; react/vue/nextjs →
-  Playwright; supabase → Supabase; convex → Convex; postgres → Postgres; `gitHost == Github` →
-  GitHub; aws → AWS; sentry → Sentry; docker → Docker.
-- **skills** (`adapters: ["*"]`): only the sources T2 verified. Signals with no registry entry use
-  the custom-scaffold fallback — `command` is the SKILL.md frontmatter snippet, `target_path` is
-  `.claude/skills/<name>/SKILL.md`.
+  Playwright; supabase → Supabase; postgres → Postgres; `gitHost == Github` → GitHub; aws → AWS;
+  sentry → Sentry. **No docker rule** — dropped, no verifiable command. **No convex rule** — moved
+  to plugins.
+- **skills** (`adapters: ["*"]`): the 17 first-party sources in T2's table, each as the
+  deterministic long form `npx skills add <owner/repo> --skill <skill-id> -a claude-code -g -y`.
+  The bare `npx skills add <source>` is interactive on multi-skill repos and must never ship. The
+  20 unmatched signals use the custom-scaffold fallback — `command` is the SKILL.md frontmatter
+  snippet, `target_path` is `.claude/skills/<name>/SKILL.md`. There are **8** scaffolds, not 7:
+  the reference file adds `setup-dev`.
 
 Each category file exposes `pub static RULES: &[Rule] = &[ … ];`. `rules/mod.rs` exposes
 `pub fn all() -> Vec<&'static Rule>` = `mcp::RULES.iter().chain(skills::RULES.iter())…collect()`,
@@ -484,6 +497,15 @@ slices cannot be concatenated into one `'static` slice without a `LazyLock` or a
 **Files:** `setup_advisor/rules/hooks.rs`, `setup_advisor/rules/subagents.rs`,
 `setup_advisor/rules/plugins.rs`
 
+**Provenance source of truth:** `docs/research/2026-07-25-todo-191-command-provenance.md` (T2) —
+the hooks event/matcher table, the 15 verified plugin names, and the per-category footer copy all
+come from there.
+
+**Footer copy is per category, not global.** `/plugin install` is a slash command typed inside
+Claude Code, so the spec's single mandated footer ("Read-only — commands run in your terminal.")
+is false for every plugins rule. Plugins get "Read-only — run this inside Claude Code."; mcp,
+skills, hooks, and subagents keep the terminal wording.
+
 **Do:** same header/provenance discipline.
 - **hooks** (`adapters: ["claude"]`, `target_path: ".claude/settings.json"`): prettier →
   format-on-edit; eslint or ruff → lint-on-edit; tsconfig → typecheck-on-edit; `dirs` contains
@@ -498,7 +520,9 @@ slices cannot be concatenated into one `'static` slice without a `LazyLock` or a
   non-empty → performance-analyzer; a frontend framework → ui-reviewer.
 - **plugins** (`adapters: ["claude"]`): frontend framework → frontend-design; `gitHost` non-null
   → pr-review-toolkit / commit-commands; `tooling` contains prettier/eslint/ruff/tsconfig →
-  hookify; a detected language → `<lang>-lsp`.
+  hookify; a detected language → `<lang>-lsp`; `databases` contains convex → convex (moved here
+  from MCP — Convex documents a plugin, not an MCP server). 15 rules; all names verified against
+  the official marketplace manifest in T2's table.
 
 **Verify:** `cargo test -p mainframe-server` green; `cargo fmt --check`; line limits.
 
