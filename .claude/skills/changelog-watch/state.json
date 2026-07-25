@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "tools": {
+    "claude": {
+      "repo": "anthropics/claude-code",
+      "mode": "changelog",
+      "changelogPath": "CHANGELOG.md",
+      "tagPrefix": "v",
+      "lastReviewedVersion": "2.1.206",
+      "lastReviewedAt": "2026-07-25",
+      "checklist": "docs/adapters/claude/CONSUMED-SURFACE.md"
+    },
+    "codex": {
+      "repo": "openai/codex",
+      "mode": "releases",
+      "includePrerelease": false,
+      "tagPrefix": "rust-v",
+      "lastReviewedVersion": "rust-v0.144.3",
+      "lastReviewedAt": "2026-07-25",
+      "checklist": "docs/adapters/codex/CONSUMED-SURFACE.md"
+    }
+  }
+}

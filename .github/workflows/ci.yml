@@ -24,6 +24,12 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # `node --test <dir>` treats a directory argument as a module path and
+      # doesn't recurse (Node 22/24, verified) — a glob is required to discover
+      # the file.
+      - name: Skill helper tests
+        run: node --test '.claude/skills/changelog-watch/scripts/*.test.mjs'
+
       # types/dist and core/dist are import targets for the other packages;
       # both are plain tsc emits — no Vite/electron-vite bundling.
       - name: Build workspace dependencies

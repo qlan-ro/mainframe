@@ -56,6 +56,9 @@ docs/CODE-ANALYSIS*
 # Codex-review local session state (per-branch, not shared)
 .claude/codex-review/
 
+# changelog-watch run artifacts (fetched deltas + reports are triage input, not history)
+.claude/skills/changelog-watch/reports/
+
 /packages/e2e/playwright-report/
 packages/e2e/logs/
 .playwright-cli/

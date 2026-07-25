@@ -1,0 +1,38 @@
+[
+  {
+    "tag_name": "rust-v0.64.0",
+    "prerelease": false,
+    "published_at": "2026-07-20T10:00:00Z",
+    "body": "## Highlights\n\n- [core] tune the sandbox default profile\n\n## All changes\n\n- [app-server] add thread/tokenUsage/updated v2 event by @celia-oai in #7268\n- [cli] fix a panic on empty stdin by @example-oai in #7300"
+  },
+  {
+    "tag_name": "rust-v0.65.0",
+    "prerelease": false,
+    "published_at": "2026-07-24T10:00:00Z",
+    "body": "## Highlights\n\n- [app-server] add turn/interrupt reason codes\n\n## All changes\n\n- [app-server] add turn/interrupt reason codes by @example-oai in #7401"
+  },
+  {
+    "tag_name": "rust-v0.63.0",
+    "prerelease": false,
+    "published_at": "2026-07-10T10:00:00Z",
+    "body": "## All changes\n\n- [cli] initial 0.63.0 stabilization pass by @example-oai in #7100"
+  },
+  {
+    "tag_name": "rust-v0.64.1-alpha.5",
+    "prerelease": true,
+    "published_at": "2026-07-23T20:02:00Z",
+    "body": "internal test build only."
+  },
+  {
+    "tag_name": "rust-v0.64.1-alpha.3.1",
+    "prerelease": true,
+    "published_at": "2026-07-23T23:26:00Z",
+    "body": "internal test build only.."
+  },
+  {
+    "tag_name": "rust-v0.64.1-alpha.1",
+    "prerelease": true,
+    "published_at": "2026-07-15T09:00:00Z",
+    "body": "early alpha build, not for general use"
+  }
+]
