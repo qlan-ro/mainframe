@@ -1,79 +1,100 @@
 # Validation replay (AC-3)
 
-Replays the skill over the historical Codex range containing the
-`thread/tokenUsage/updated` change — the drift that motivated this todo —
-without touching `state.json`. Rerun this after any edit to
-`classification.md` or to `docs/adapters/codex/CONSUMED-SURFACE.md`; it is
-the only regression gate over the model-driven classification step.
+The scripts have unit tests; the classification step has only this. Two
+historical ranges are replayed against the current `classification.md` and
+checklists, without touching `state.json`. **Both must pass** — rerun after
+any edit to `classification.md` or to either `CONSUMED-SURFACE.md`.
 
-## Command
+## Protocol
+
+The classification must be produced without this file in context. Everything
+below the fetch commands is grading material: target 1's pass condition names
+the answer, and reading it first turns the replay into recall.
+
+Run each target as a subagent given only the fetch command, `SKILL.md` steps
+3–5, `classification.md`, and the tool's checklist. Grade its report here.
+
+## Fetch — target 1 (Codex)
 
 ```bash
 node .claude/skills/changelog-watch/scripts/fetch-delta.mjs --tool codex \
   --since rust-v0.63.0 --max 1 --out /tmp/replay-codex.md
 ```
 
-Expected fetch: exactly one release, `rust-v0.64.0` (2025-12-02, the oldest
-stable release after the anchor — pinned by test 8 of
-`scripts/changelog-delta.test.mjs`), truncated with
-`nextAnchor: rust-v0.64.0`, body containing the literal line
-`- [app-server] add thread/tokenUsage/updated v2 event by @celia-oai in #7268`.
+Exactly one entry, `rust-v0.64.0` (2025-12-02, the oldest stable release after
+the anchor — pinned by `scripts/changelog-delta.test.mjs`), `truncated: true`,
+`nextAnchor: rust-v0.64.0`, body containing `#7268`. The walk is deep (~9
+pages, ~40s); a transient `gh` 5xx is a retry, not a failure.
 
-## Pass condition
+## Fetch — target 2 (Claude)
 
-The classification of `/tmp/replay-codex.md` per `classification.md` against
-`docs/adapters/codex/CONSUMED-SURFACE.md` must flag the #7268 entry as a
-**compatibility risk** that:
+```bash
+node .claude/skills/changelog-watch/scripts/fetch-delta.mjs --tool claude \
+  --since 2.1.176 --max 1 --out /tmp/replay-claude.md
+```
 
-- maps to checklist row **CODEX-EVT-04** (`thread/tokenUsage/updated`),
-- names `packages/core-rs/crates/mainframe-adapter-codex/src/types.rs::TokenUsageUpdatedParams`
-  as the affected consumer, and
-- recommends a regression test extending
-  `packages/core-rs/crates/mainframe-adapter-codex/tests/event_mapper.rs`.
+Exactly one entry, `## 2.1.178` (2.1.177 is absent from upstream's changelog),
+24 bullets, `truncated: true`, `nextAnchor: 2.1.178`.
 
-If the replay fails, fix `classification.md` (relevance filter or routing)
-or the CODEX-EVT-04 row — never the report — and rerun.
+## Pass condition — target 1
 
-## Replay of 2026-07-25
+The report must flag the `thread/tokenUsage/updated` v2 event (#7268) as a
+**compatibility risk** that
 
-Fetch behaved as expected (1 entry, `rust-v0.63.0 -> rust-v0.145.0` head,
-truncated at `rust-v0.64.0`, `#7268` present; `state.json` checksum
-unchanged). Classification of the 79-PR release body:
+- maps to checklist row **CODEX-EVT-04**,
+- names `src/types.rs::TokenUsageUpdatedParams` as the affected consumer, and
+- recommends a regression test extending `tests/event_mapper.rs`.
 
-**Target entry** — `[app-server] add thread/tokenUsage/updated v2 event
-(#7268)`: routed via `token usage` → CODEX-EVT-04. **Compatibility risk,
-high** — the v2 event carries `tokenUsage: {total, last, modelContextWindow}`
-while the consumer `src/types.rs::TokenUsageUpdatedParams`
-(`packages/core-rs/crates/mainframe-adapter-codex/src/types.rs`) requires a
-top-level snake_case `usage` object; deserialization fails inside
-`if let Ok(p)` in `src/event_mapper.rs::handle_token_usage`, so
-`state.last_usage` silently never updates and Codex sessions lose their
-context percentage. Recommended regression test: extend
-`packages/core-rs/crates/mainframe-adapter-codex/tests/event_mapper.rs` with
-the v2 payload, asserting the deserialized token totals (not merely `Ok`).
-Verify live via `.claude/skills/codex-protocol-debugger/` before any fix.
+The mechanism, for grading only: the v2 event carries
+`{"tokenUsage": {"total": {"totalTokens": …}}}` (fixture at
+`src/jsonrpc.rs`), while `TokenUsageUpdatedParams` requires a top-level
+snake_case `usage` object. `handle_token_usage` discards the failed parse
+inside `if let Ok(p) = …`, so `state.last_usage` never updates and Codex
+sessions lose their context percentage — silent, hence **high**. A complete
+answer also reaches the companion gap: `src/adapter.rs::map_codex_model`
+returns `context_window: None`, so the gauge has no denominator either.
 
-**Other risks (low)** — #7124/#7408 (`thread_id`/`turn_id` added to all item
-and error notifications) touch shapes CODEX-EVT-01/CODEX-ITEM-01
-deserialize; additive-only, and lenient deserialization tolerates extra
-fields (`tests/item_types.rs::sub_agent_activity_tolerates_an_unknown_extra_field`),
-so no action beyond noting.
+## Pass condition — target 2
 
-**Adoption opportunities** — `turn/diff/updated` (#7279), `turn/plan/updated`
-(#7329), `item/fileChange/outputDelta` (#7399): all land in the
-CODEX-EVT-02 known-but-ignored set. App-server config management (#7241):
-new RPC surface, no row. `thread/compacted` (#7289) and the `ImageView` item
-(#7468) are the historical introductions of surfaces Mainframe has since
-adopted (CODEX-EVT-01, CODEX-ITEM-01) — flagged by the run, already rows;
-a fresh run today would treat their like as opportunities.
+Deliberately unkeyed: 2.1.178's classification is written nowhere in this
+repo, so this target measures the procedure rather than recall. Grade it by
+running these four checks against the report — do not write down what the
+right answer turned out to be.
 
-**Dropped: 68 entries** — TUI, Windows/WSL, sandbox policy internals, MCP
-shell-tool, CI/deps/docs/CLA, flaky-test and session-recycling chores. None
-names a surface a checklist row cites.
+1. **Citations resolve.** Every `file::symbol` the report cites exists: grep
+   each symbol in its cited file. A risk resting on a symbol that is not
+   there is a fabrication, and fails the target on its own.
+2. **The code reads as claimed.** For each risk, open the cited Rust and
+   confirm it consumes the surface the entry changes, in the way the report
+   says. A risk that does not survive the read is a fail.
+3. **Nothing relevant was missed.** After grading, walk the checklist rows
+   for the tool and search the release body for each row's surface tokens.
+   Every row a mechanical scan turns up must already appear in the report as
+   a risk, an opportunity, or relevant-no-action. A row found only by the
+   scan is a fail — a missed surface is the failure this skill exists to
+   prevent.
+4. **Every entry is accounted for.** The counts in the report header sum to
+   24, and no entry is left unclassified.
 
-**Verdict: PASS** — the target entry was flagged as a compatibility risk,
-mapped to CODEX-EVT-04, attributed to `TokenUsageUpdatedParams`, with the
-regression test pointed at `tests/event_mapper.rs`. The mapping came from
-the routing table and the checklist row, not from a worked example:
-`classification.md` deliberately excludes this entry (see its Worked
-examples section), so the gate tests generalization.
+## Records
+
+Verdicts only. Writing a classification here would key the target for the
+next run.
+
+- **2026-07-25 — target 1: PASS.** Fetch as expected; `state.json`
+  unchanged. The risk was flagged with the row, the consumer, and the
+  `tests/event_mapper.rs` regression test, derived from the routing table and
+  the checklist row rather than a worked example. Also produced: 2 low risks
+  (additive `thread_id`/`turn_id` on CODEX-EVT-01/CODEX-ITEM-01, tolerated by
+  lenient deserialization), 5 adoption opportunities, 68 dropped.
+- **Target 2: not yet run** — added after the first live replay, to gate the
+  classification step on a range no file in this repo answers.
+
+## Maintenance
+
+- Never add a target's entries to `classification.md`'s worked examples, and
+  never restate a target's answer in a checklist row. Either turns the gate
+  into recall; the CODEX-EVT-04 row carried exactly that leak until it was
+  moved into the target 1 pass condition above.
+- If upstream drops a replayed release, pick a new range that touches a
+  consumed surface, reset that target's record, and keep target 2 unkeyed.

@@ -2,6 +2,10 @@
  * Pure slicing logic for changelog-watch. No I/O, no console output — callers
  * (fetch-delta.mjs) own printing and network access so this module stays
  * trivially unit-testable and reusable from either fetch mode.
+ *
+ * Both fetch modes normalize to the same entry shape, `{id, body}`: the mode
+ * decides how an id is read off the upstream payload, so nothing downstream
+ * ever branches on which tool it is looking at.
  */
 
 const HEADING_RE = /^## (.+)$/;
@@ -12,70 +16,67 @@ export function parseChangelogSections(markdown) {
   for (const line of markdown.split('\n')) {
     const match = HEADING_RE.exec(line);
     if (match) {
-      current = { version: match[1].trim(), lines: [] };
+      current = { id: match[1].trim(), lines: [] };
       sections.push(current);
       continue;
     }
     if (current) current.lines.push(line);
   }
-  return sections.map(({ version, lines }) => ({ version, body: lines.join('\n').trim() }));
+  return sections.map(({ id, lines }) => ({ id, body: lines.join('\n').trim() }));
 }
 
 // Anchoring is positional: the changelog's own order (newest first) decides
 // what counts as "newer than the anchor", never a semver comparison.
 export function sectionsSince(sections, anchor, opts = {}) {
-  const idx = sections.findIndex((s) => s.version === anchor);
-  if (idx === -1) {
-    return { entries: [], reachedAnchor: false, truncated: false, nextAnchor: undefined };
-  }
-  return sliceForwardWalk(sections.slice(0, idx), opts.max, (entry) => entry.version);
+  return walkFromAnchor(sections, anchor, opts.max);
 }
 
 export function selectReleasesSince(releases, opts = {}) {
   const { lastTag, includePrerelease = false, max } = opts;
-  const filtered = includePrerelease ? releases : releases.filter((r) => !r.prerelease);
+  const candidates = includePrerelease ? releases : releases.filter((r) => !r.prerelease);
   // The GitHub releases list is not published_at-ordered; sort before slicing.
-  const sorted = [...filtered].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
-  const idx = sorted.findIndex((r) => r.tag_name === lastTag);
-  if (idx === -1) {
-    return { entries: [], reachedAnchor: false, truncated: false, nextAnchor: undefined };
-  }
-  return sliceForwardWalk(sorted.slice(0, idx), max, (entry) => entry.tag_name);
+  const sorted = [...candidates].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+  return walkFromAnchor(
+    sorted.map((r) => ({ id: r.tag_name, body: r.body ?? '' })),
+    lastTag,
+    max,
+  );
 }
 
-// Shared by both anchor walks: with no cap, return everything newer than the
-// anchor (newest first). With a cap, return the oldest unreviewed batch so
-// repeated calls walk forward toward head instead of jumping straight there.
-function sliceForwardWalk(unreviewed, max, idOf) {
+// With no cap, return everything newer than the anchor (newest first). With a
+// cap, return the oldest unreviewed batch so repeated calls walk forward toward
+// head instead of jumping straight there. `head` is reported even when the
+// anchor is missing — callers need it to explain how far the fetch reached.
+function walkFromAnchor(entries, anchor, max) {
+  const head = entries[0]?.id;
+  const idx = entries.findIndex((entry) => entry.id === anchor);
+  if (idx === -1) {
+    return { entries: [], head, reachedAnchor: false, truncated: false, nextAnchor: undefined };
+  }
+  const unreviewed = entries.slice(0, idx);
   if (max == null || unreviewed.length <= max) {
-    return { entries: unreviewed, reachedAnchor: true, truncated: false, nextAnchor: undefined };
+    return { entries: unreviewed, head, reachedAnchor: true, truncated: false, nextAnchor: undefined };
   }
   const batch = unreviewed.slice(unreviewed.length - max);
-  return { entries: batch, reachedAnchor: true, truncated: true, nextAnchor: idOf(batch[0]) };
+  return { entries: batch, head, reachedAnchor: true, truncated: true, nextAnchor: batch[0].id };
 }
 
-export function renderDelta(tool, entries) {
-  const idOf = tool === 'codex' ? (entry) => entry.tag_name : (entry) => entry.version;
-  return entries.map((entry) => `## ${idOf(entry)}\n\n${entry.body}`).join('\n\n');
+export function renderDelta(entries) {
+  return entries.map((entry) => `## ${entry.id}\n\n${entry.body}`).join('\n\n');
 }
 
-export function nextStateFor(state, tool, { version, at }) {
+export function nextStateFor(state, tool, { ref, at }) {
   return {
     ...state,
     tools: {
       ...state.tools,
-      [tool]: { ...state.tools[tool], lastReviewedVersion: version, lastReviewedAt: at },
+      [tool]: { ...state.tools[tool], lastReviewedRef: ref, lastReviewedAt: at },
     },
   };
 }
 
-export function tagForVersion(version, tagPrefix) {
-  return `${tagPrefix}${version}`;
-}
-
-export function versionForTag(tag, tagPrefix) {
-  if (!tag.startsWith(tagPrefix)) {
-    throw new Error(`tag "${tag}" does not start with prefix "${tagPrefix}"`);
-  }
-  return tag.slice(tagPrefix.length);
+// The anchor may only advance over entries this run actually fetched; naming
+// the anchor itself is the no-op that records "checked today, nothing new".
+export function canAdvanceTo(ref, { anchor, entries }) {
+  return ref === anchor || entries.some((entry) => entry.id === ref);
 }

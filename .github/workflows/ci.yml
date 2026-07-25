@@ -25,10 +25,18 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # `node --test <dir>` treats a directory argument as a module path and
-      # doesn't recurse (Node 22/24, verified) — a glob is required to discover
-      # the file.
-      - name: Skill helper tests
-        run: node --test '.claude/skills/changelog-watch/scripts/*.test.mjs'
+      # doesn't recurse (Node 22/24, verified), and a glob that matches nothing
+      # exits 0 — so the files are expanded and counted before running, or a
+      # moved test file would silently disable this gate.
+      - name: Skill helper tests and consumed-surface citations
+        run: |
+          tests=(.claude/skills/changelog-watch/scripts/*.test.mjs)
+          if [ ! -e "${tests[0]}" ]; then
+            echo "no changelog-watch helper tests found — the gate would pass vacuously" >&2
+            exit 1
+          fi
+          node --test "${tests[@]}"
+          node .claude/skills/changelog-watch/scripts/check-surface.mjs
 
       # types/dist and core/dist are import targets for the other packages;
       # both are plain tsc emits — no Vite/electron-vite bundling.

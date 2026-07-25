@@ -12,8 +12,10 @@ root. Analysis only — never fix drift in the same run; findings become todos.
 ## Steps
 
 1. **Read `.claude/skills/changelog-watch/state.json`.** Pick the tool(s) to
-   run — `claude`, `codex`, or both. `lastReviewedVersion` is the anchor:
-   entries up to and including it are already triaged.
+   run — `claude`, `codex`, or both. `lastReviewedRef` is the anchor: entries
+   up to and including it are already triaged. It is whatever the upstream
+   list calls that entry — a bare version in changelog mode, a release tag in
+   releases mode — and is never parsed, only matched.
 
 2. **Fetch the delta.** Per tool:
 
@@ -22,13 +24,14 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    node .claude/skills/changelog-watch/scripts/fetch-delta.mjs --tool codex
    ```
 
-   Done when a delta file exists under
-   `.claude/skills/changelog-watch/reports/`, **or** the CLI printed
-   `no changes: <tool> is current at <version>` — in which case stop here and
-   report exactly that. Add `--json` to read the current upstream head and
-   the truncation fields (`head`, `truncated`, `nextAnchor`) without parsing
-   the human output — useful for answering "what is upstream at right now"
-   without writing a delta.
+   Done when the CLI names the delta file it wrote under
+   `.claude/skills/changelog-watch/reports/`, **or** it printed
+   `no changes: <tool> is current at <ref>` — in which case stop here and
+   report exactly that. `--json` swaps the human summary for the same result
+   as fields (`head`, `count`, `truncated`, `nextAnchor`, `out`); it does not
+   suppress the delta file, which is written whenever the delta is non-empty.
+   The fetcher refuses to overwrite an existing delta file — pass a different
+   `--out`, or `--force` to replace it.
 
 3. **Load the tool's checklist** — `docs/adapters/claude/CONSUMED-SURFACE.md`
    or `docs/adapters/codex/CONSUMED-SURFACE.md` (schema in
@@ -42,14 +45,25 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    unclassified entry means this step is not finished.
 
 5. **Write the report** to
-   `.claude/skills/changelog-watch/reports/<ISO-date>-<tool>-report.md`
-   using the template in `classification.md`, and print the summary: risks
-   (each naming its checklist ID, Rust consumer, and recommended regression
-   test), opportunities, dropped count.
+   `.claude/skills/changelog-watch/reports/<ISO-date>-<tool>-since-<anchor>-report.md`
+   using the template in `classification.md` — the anchor in the name keeps a
+   second pass on the same day from overwriting the first. Print the summary:
+   risks (each naming its checklist ID, Rust consumer, and recommended
+   regression test), opportunities, relevant-no-action entries, dropped count.
 
-6. **Advance state — only after the report exists.** Rerun the fetch with
-   `--commit-state <newest-version-reviewed>`, then commit `state.json`.
-   Never advance state for entries that were fetched but not classified.
+6. **Advance state — only after the report exists.** Rerun the same fetch,
+   adding `--commit-state <newest entry reviewed>` and the `--out` path the
+   pass wrote, then commit `state.json`:
+
+   ```bash
+   node .claude/skills/changelog-watch/scripts/fetch-delta.mjs --tool claude \
+     --since 2.1.176 --max 5 --out <pass delta> --commit-state 2.1.181
+   ```
+
+   The ref must be one the refetched delta contains, and that delta file must
+   still be on disk, or the CLI refuses: state may only walk over entries a
+   run actually fetched and reported. Committing the current anchor is the
+   allowed no-op — it records "checked, nothing new".
 
 7. **Offer the todo drafts** (template in `classification.md`) for filing
    per `docs/agents/issue-tracker.md`. Filing is a separate, explicit
@@ -65,9 +79,13 @@ node .claude/skills/changelog-watch/scripts/fetch-delta.mjs --tool claude --max 
 ```
 
 `--max` returns the **oldest** unreviewed versions first and prints
-`nextAnchor` plus the exact command to continue. Classify the pass, report,
-`--commit-state` the pass's newest version, repeat. Each pass leaves state
-consistent, so an interrupted walk never skips entries.
+`nextAnchor` plus the exact command to continue, `--out` included. Classify
+the pass, report, `--commit-state` the pass's newest version, repeat. Each
+pass leaves state consistent, so an interrupted walk never skips entries.
+
+Give every pass its own `--out`: the default path carries the pass's anchor
+for that reason, and `reports/` is gitignored, so a delta overwritten by the
+next pass is gone.
 
 ## Verifying a suspected change
 
@@ -78,16 +96,22 @@ Before acting on a `high` risk, confirm it against the live CLI with
 
 ## Adding a tool
 
-A new `tools` entry in `state.json` (repo, `mode: changelog|releases`,
-`tagPrefix`, seed anchor) plus a `docs/adapters/<tool>/CONSUMED-SURFACE.md`
-checklist. No code change, provided the repo publishes either a changelog
-file or GitHub releases.
+A new `tools` entry in `state.json` (`repo`, `mode: changelog|releases`,
+`changelogPath` or `includePrerelease`, seed `lastReviewedRef`) plus a
+`docs/adapters/<tool>/CONSUMED-SURFACE.md` checklist. No code change,
+provided the repo publishes either a changelog file or GitHub releases.
 
 ## Failure modes
 
-- `unknown anchor: <version>` — the anchor is not in the fetched
-  changelog/releases (upstream rewrote history, or a typo in `--since`).
+- `unknown anchor: <ref> — absent from the complete upstream list` — the ref
+  is genuinely gone (upstream rewrote history) or is a typo in `--since`.
   Investigate; never work around it by picking "everything".
-- `gh` missing — the fetcher falls back to anonymous HTTPS; if both fail it
-  exits non-zero. An empty delta is only trusted when the CLI says
-  `no changes`, never when a fetch failed.
+- `unknown anchor: <ref> — absent from the N newest releases fetched` — the
+  walk stopped before reaching it. The releases fetch pages until it sees the
+  anchor, so this means the anchor is older than the page cap; raise the cap
+  in `fetch-delta.mjs` rather than reseeding state, which would skip
+  everything in between.
+- `gh` missing — the fetcher falls back to anonymous HTTPS per page; if both
+  fail it exits non-zero. An empty delta is only trusted when the CLI says
+  `no changes`, never when a fetch failed. Transient `gh` 5xx and stream
+  errors surface verbatim; rerun.

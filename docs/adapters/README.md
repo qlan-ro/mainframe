@@ -23,8 +23,10 @@ ID | Surface | Upstream artifact | Mainframe consumer (file::symbol) | Coverage 
   never renumbered. A surface Mainframe stops consuming is marked `retired`
   in place, so IDs cited by old reports and todos stay resolvable.
 - **Mainframe consumer** cites `path::symbol`, never line numbers — line
-  numbers rot within weeks and the validator greps for the symbol. Two
-  citation forms only, because the validator resolves exactly these: bare
+  numbers rot within weeks and the validator
+  (`.claude/skills/changelog-watch/scripts/check-surface.mjs`, run in CI)
+  greps for the symbol. Two citation forms only, because the validator
+  resolves exactly these: bare
   `src/…` or `tests/…` for files in the crate the checklist documents
   (`mainframe-adapter-claude` or `mainframe-adapter-codex`), and a **full**
   worktree-relative `packages/…` path for anything else — another crate, the
@@ -48,6 +50,16 @@ the skill has nothing to map an adoption opportunity onto.
 ## Update protocol
 
 Changing what Mainframe consumes from a CLI updates the row in the same PR.
+Renaming or moving a cited symbol breaks CI, which runs
+
+```bash
+node .claude/skills/changelog-watch/scripts/check-surface.mjs
+```
+
+over both files: every row must cite a consumer, and every cited file and
+symbol must exist. `::{a, b}` checks each name. Fix the row, never the
+validator — a row whose citation no longer resolves is a row nothing
+consumes.
 
 ## Budget
 

@@ -50,6 +50,7 @@ test-results/
 
 # Superpowers brainstorm artifacts
 .superpowers/
+docs/plans/
 docs/superpowers/
 docs/CODE-ANALYSIS*
 

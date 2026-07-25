@@ -36,6 +36,17 @@ a false drop costs a silent break.
   (CODEX-EVT-02/03) or the Claude "Not consumed" list. Name where it would
   land and a rough size (small: one handler; medium: new UI affordance;
   large: new subsystem).
+- **Relevant, no action** — the entry names a row's surface but nothing
+  Mainframe consumes changes: an upstream *fix* to behaviour a row already
+  depends on, a field added alongside the ones a row reads (lenient
+  deserialization tolerates it), or a change confined to a code path Mainframe
+  never enters. Three fields, one line each: the entry, the checklist ID, and
+  the single clause that makes it harmless. This is the most common outcome on
+  a busy release — the first live run put 12 of its 18 relevant entries here.
+
+Do not fold no-action entries into the dropped count. Dropped means "names no
+row's surface at all"; merging the two erases the record that a row was
+touched and reviewed, which is exactly what the next run needs to see.
 
 An entry can be both (a new event that *replaces* one Mainframe reads is a
 risk on the old row and an opportunity on the new shape). List it under risk
@@ -44,7 +55,9 @@ and note the opportunity inline.
 ## Severity
 
 - **high** — silent data loss or a parse that fails closed: the change lands,
-  nothing errors, a feature quietly stops (the `tokenUsage` precedent).
+  nothing errors, a feature quietly stops. A silent break is what motivated
+  this skill; treat a wire-shape change as high unless something makes the
+  failure visible.
 - **medium** — degraded rendering or a feature that visibly misbehaves but
   the session keeps working.
 - **low** — cosmetic; wrong label, formatting, ordering.
@@ -66,11 +79,10 @@ A starting point, not a substitute for reading the checklist rows.
 
 ## Worked examples
 
-Two real changes, classified end to end, to set the bar. **Do not add the
-Codex `thread/tokenUsage/updated` change as a worked example.** It is the
-entry the validation replay (`VALIDATION.md`) tests against; a classifier
-that only recalls its own reference doc would pass the sole regression gate
-while proving nothing. Anyone editing this file must preserve that.
+Two real changes, classified end to end, to set the bar. Before adding a
+third, read `VALIDATION.md`: its replay targets must never appear here. A
+classifier that recalls a worked example passes the regression gate while
+proving nothing about entries it has not seen.
 
 **Claude CLI 2.1.118 — subagent link moved.** Entry: "Task tool results now
 carry the agent id in `toolUseResult.agentId`" (previously `parentToolUseID`).
@@ -100,19 +112,20 @@ it goes in, plus the payload to pin (the Codex crate has no fixture
 directory; tests build payloads inline). Playwright specs and
 `packages/e2e/fixtures/recordings/` are **not** acceptable: they replay
 Mainframe's own adapter API, so they keep passing after an upstream
-wire-shape break — exactly the failure the `tokenUsage` precedent
-demonstrates. Prefer a test that asserts the deserialized *value*, not just
-that parsing returned `Ok`; the `tokenUsage` regression hid inside an
-`if let Ok(..)`.
+wire-shape break — the one failure this skill exists to catch. Prefer a test
+that asserts the deserialized *value*, not just that parsing returned `Ok`:
+a guard that discards a parse error hides the break from any test that only
+checks for success.
 
 ## Report template
 
-Write to `reports/<ISO-date>-<tool>-report.md` (gitignored):
+Write to `reports/<ISO-date>-<tool>-since-<anchor>-report.md` (gitignored;
+the anchor keeps two passes on the same day from colliding):
 
 ```markdown
 # changelog-watch: <tool> <from> → <to> (<date>)
 
-Entries seen: N · classified relevant: N · dropped as irrelevant: N
+Entries seen: N · risks: N · opportunities: N · relevant, no action: N · dropped as irrelevant: N
 
 ## Compatibility risks
 
@@ -127,12 +140,16 @@ Entries seen: N · classified relevant: N · dropped as irrelevant: N
 
 - <capability> — would land in <where>; size: <small|medium|large>
 
+## Relevant, no action
+
+- <entry text, verbatim> — <ID>: <why it costs nothing to ignore>
+
 ## No relevant changes
 
 <Only when the delta survives the filter empty: say so and stop.>
 ```
 
-Every delta entry must end up either mapped to a checklist ID above or
+Every delta entry must end up under one of the three mapped headings above or
 counted in the dropped total — an unclassified entry means the run is not
 finished.
 
