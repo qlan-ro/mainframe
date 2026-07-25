@@ -1,4 +1,4 @@
-//! Six-fixture conformance suite (plan T10.2) + durability/cancel matrix
+//! Seven-fixture conformance suite (plan T10.2) + durability/cancel matrix
 //! (T10.3). Each `§12` reference automation is driven end-to-end through the
 //! real `AutomationsEngine` facade with recording fakes; assertions target the
 //! behaviors the plan names per fixture. One integration target keeps the
@@ -31,6 +31,9 @@ mod ship_work;
 
 #[path = "conformance/feature_spike.rs"]
 mod feature_spike;
+
+#[path = "conformance/release_digest.rs"]
+mod release_digest;
 
 #[path = "conformance/restart.rs"]
 mod restart;

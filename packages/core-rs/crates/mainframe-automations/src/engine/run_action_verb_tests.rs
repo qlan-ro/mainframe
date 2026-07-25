@@ -12,6 +12,7 @@ use crate::engine::run_action_verb::{RunActionVerb, build_action_input};
 use crate::engine::test_support::{FakeClock, harness, text, token};
 use crate::engine::{BoxFuture, StepOutcome, VerbContext};
 use crate::ports::ProjectRegistry;
+use crate::tokens::NameMap;
 use crate::tokens::{Scope, TokenValue};
 
 struct FixedProjects(String);
@@ -52,7 +53,7 @@ fn params_render_to_one_joined_string() {
             ("content", vec![text("a "), token("s1", "out", None)]),
         ],
     );
-    let input = build_action_input(&step, &scope);
+    let input = build_action_input(&step, &scope, &NameMap::new());
     assert_eq!(input, json!({ "path": "/tmp/f", "content": "a X" }));
 }
 
@@ -67,7 +68,7 @@ fn run_command_script_keeps_chip_boundaries() {
         ],
     );
     cmd.output_as = Some(OutputAs::Lines);
-    let input = build_action_input(&cmd, &scope);
+    let input = build_action_input(&cmd, &scope, &NameMap::new());
     assert_eq!(
         input,
         json!({
@@ -85,7 +86,7 @@ fn unset_script_chip_renders_empty() {
         "run_command",
         vec![("script", vec![token("ghost", "out", None)])],
     );
-    let input = build_action_input(&cmd, &scope);
+    let input = build_action_input(&cmd, &scope, &NameMap::new());
     assert_eq!(input["script"], json!([ { "chip": "" } ]));
 }
 
@@ -94,7 +95,7 @@ fn output_as_is_not_injected_into_other_actions() {
     let scope = Scope::root(Arc::new(FakeClock));
     let mut row = step("notion.add_row", vec![("Name", vec![text("v")])]);
     row.output_as = Some(OutputAs::Text);
-    let input = build_action_input(&row, &scope);
+    let input = build_action_input(&row, &scope, &NameMap::new());
     assert_eq!(input, json!({ "Name": "v" }));
 }
 
@@ -124,6 +125,7 @@ async fn missing_credential_fails_with_an_actionable_error() {
                 run_id: "r1",
                 step_ref: "act",
                 scope: &scope,
+                names: &NameMap::new(),
             },
         )
         .await;

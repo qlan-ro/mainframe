@@ -12,6 +12,20 @@ pub const TOKEN_STEP_BUILTIN: &str = "builtin";
 /// block's own `steps`.
 pub const TOKEN_STEP_CURRENT: &str = "current";
 
+/// Which producer family a value came from. Not on the wire: it exists so
+/// `$name` derivation can prefix implicit outputs (`agent_result`) and read a
+/// set-variable's user-typed name (tokens::variables).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TokenSourceKind {
+    Builtin,
+    Trigger,
+    Agent,
+    AskMe,
+    Action,
+    Item,
+    Variable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TokenRef {

@@ -10,6 +10,8 @@ export * from './tokens.js';
 export * from './token-scope.js';
 export * from './comparators.js';
 export * from './chip-parts.js';
+export * from './variables.js';
+export * from './chip-text-convert.js';
 export * from './resolve.js';
 export * from './validate.js';
 export * from './command-preview.js';

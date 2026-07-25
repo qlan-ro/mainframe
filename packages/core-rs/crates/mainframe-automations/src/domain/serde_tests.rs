@@ -185,6 +185,29 @@ fn notify_if_and_repeat_round_trip_with_wire_names() {
 }
 
 #[test]
+fn set_variable_round_trips_and_answers_the_three_exhaustive_methods() {
+    let step: Step = roundtrip(json!({
+        "id": "set-headline",
+        "kind": "set_variable",
+        "name": "headline",
+        "value": ["Release ", {"token": {"stepId": "collect", "output": "version"}}]
+    }));
+    assert_eq!(step.id(), "set-headline");
+    assert_eq!(step.kind_name(), "set_variable");
+    assert!(!step.keep_going());
+    let Step::SetVariable(set) = step else {
+        panic!("expected set_variable")
+    };
+    assert_eq!(set.name, "headline");
+    assert_eq!(set.value.len(), 2);
+
+    let keeps_going: Step = roundtrip(json!({
+        "id": "s", "kind": "set_variable", "name": "n", "value": [], "keepGoing": true
+    }));
+    assert!(keeps_going.keep_going());
+}
+
+#[test]
 fn steps_reject_unknown_fields_but_accept_the_kind_tag() {
     assert!(
         serde_json::from_value::<Step>(json!({

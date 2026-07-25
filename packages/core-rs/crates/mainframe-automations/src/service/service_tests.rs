@@ -65,7 +65,7 @@ impl ProjectRegistry for FixedProjects {
     }
 }
 
-async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
+pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let sink = Arc::new(CollectingSink::default());
     let engine = AutomationsEngine::new(

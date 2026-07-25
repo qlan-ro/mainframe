@@ -14,7 +14,9 @@ use crate::credentials::CredentialStore;
 use crate::domain::{Trigger, WebhookTrigger};
 use crate::engine::Interpreter;
 use crate::error::StoreError;
-use crate::store::{AutomationRecord, AutomationStore, RunTriggerContext, RunTriggerKind};
+use crate::store::{
+    AutomationRecord, AutomationStore, RunTriggerContext, RunTriggerKind, WebhookStateStore,
+};
 
 use super::webhook::{
     delivery_id, delivery_timestamp_ms, is_stale_delivery, match_preset, preset_predicate,
@@ -61,6 +63,7 @@ pub struct WebhookProcessor {
     automations: AutomationStore,
     credentials: Arc<dyn CredentialStore>,
     interpreter: Arc<Interpreter>,
+    state: WebhookStateStore,
     /// Latest matching payload per (automationId, triggerId) — in-memory
     /// (R3); feeds the editor's "use a sample" affordance once routed.
     samples: Mutex<HashMap<(String, String), Value>>,
@@ -71,11 +74,13 @@ impl WebhookProcessor {
         automations: AutomationStore,
         credentials: Arc<dyn CredentialStore>,
         interpreter: Arc<Interpreter>,
+        state: WebhookStateStore,
     ) -> Self {
         Self {
             automations,
             credentials,
             interpreter,
+            state,
             samples: Mutex::new(HashMap::new()),
         }
     }
@@ -119,6 +124,8 @@ impl WebhookProcessor {
         if let Some(event) = &headers.github_event {
             body.insert("event".to_string(), Value::String(event.clone()));
         }
+
+        self.stamp_delivery(hook_id, now_ms).await;
 
         if let Some(preset) = trigger.preset
             && !match_preset(&preset_predicate(preset), &payload)
@@ -180,6 +187,21 @@ impl WebhookProcessor {
             Err(err) => WebhookDecision::StartFailed {
                 error: err.to_string(),
             },
+        }
+    }
+
+    /// Records that a signed, well-formed delivery reached this hook. It runs
+    /// before the preset predicate on purpose: the registration panel asks
+    /// "is the sender reaching me", and a delivery the preset rejects answers
+    /// that just as well as one that fires a run. Bookkeeping never fails a
+    /// delivery.
+    async fn stamp_delivery(&self, hook_id: &str, now_ms: i64) {
+        let Some(at) = chrono::DateTime::from_timestamp_millis(now_ms) else {
+            tracing::warn!(hook_id, now_ms, "webhook delivery: unrepresentable clock");
+            return;
+        };
+        if let Err(err) = self.state.record_delivery(hook_id, &at.to_rfc3339()).await {
+            tracing::warn!(hook_id, error = %err, "webhook delivery: recording the delivery time failed");
         }
     }
 

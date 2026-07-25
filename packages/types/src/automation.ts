@@ -117,13 +117,29 @@ export interface RepeatBlock extends AutomationStepBase {
   steps: AutomationStep[];
 }
 
-export type AutomationStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | IfBlock | RepeatBlock;
+/** Defines a named value downstream steps address as `$name` (automation-domain/variables.ts). */
+export interface SetVariableStep extends AutomationStepBase {
+  kind: 'set_variable';
+  name: string;
+  value: ChipText;
+}
+
+export type AutomationStep =
+  | AskAgentStep
+  | AskMeStep
+  | RunActionStep
+  | NotifyStep
+  | SetVariableStep
+  | IfBlock
+  | RepeatBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }
   | { type: 'weekdays'; at: string }
   | { type: 'weekly'; days: number[]; at: string }
-  | { type: 'every_n_hours'; n: number };
+  | { type: 'every_n_hours'; n: number }
+  /** `at` is naive-local `YYYY-MM-DDTHH:MM` — the `datetime-local` input format, NOT the daemon's seconds-bearing `scheduled_for_string`. */
+  | { type: 'once'; at: string };
 
 export interface ScheduleTrigger {
   id: string;
@@ -156,6 +172,8 @@ export interface WebhookTrigger {
   kind: 'webhook';
   hookId: string;
   preset?: WebhookPreset;
+  /** Server-computed on read; the daemon ignores it on write. `url` is the local ingest endpoint — reachable only from this machine. */
+  registration?: { hookId: string; url: string; lastDeliveryAt: string | null };
 }
 
 export type AutomationTrigger = ScheduleTrigger | EventTrigger | WebhookTrigger;

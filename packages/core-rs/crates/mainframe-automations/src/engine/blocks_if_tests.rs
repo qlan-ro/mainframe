@@ -20,7 +20,7 @@ fn recording_ports(seen: Arc<Mutex<Vec<String>>>, rendered: Arc<Mutex<Vec<String
             rendered
                 .lock()
                 .unwrap()
-                .push(tokens::render(&step.message, ctx.scope));
+                .push(tokens::render(&step.message, ctx.scope, ctx.names));
             completed(
                 [("tag".to_string(), json!(format!("took-{}", step.id)))]
                     .into_iter()

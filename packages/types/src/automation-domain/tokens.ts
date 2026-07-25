@@ -21,7 +21,7 @@ import type { ActionCatalogEntry, AutomationStep, AutomationTrigger, TokenRef } 
 import { TOKEN_STEP_BUILTIN, TOKEN_STEP_TRIGGER } from '../automation.js';
 
 export type TokenValueType = 'text' | 'number' | 'list' | 'choice' | 'date' | 'object';
-export type TokenSourceKind = 'builtin' | 'trigger' | 'agent' | 'askme' | 'action' | 'item';
+export type TokenSourceKind = 'builtin' | 'trigger' | 'agent' | 'askme' | 'action' | 'item' | 'variable';
 
 export interface TokenDescriptor {
   ref: TokenRef;
@@ -166,6 +166,8 @@ export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): 
     }
     case 'notify':
       return 'Notify me';
+    case 'set_variable':
+      return step.name ? `Set ${step.name}` : 'Set a value';
     case 'if':
       return 'If … otherwise';
     case 'repeat':
@@ -248,6 +250,16 @@ export function stepProduces(step: AutomationStep, catalog: ActionCatalogEntry[]
     }
     case 'notify':
       return [];
+    case 'set_variable':
+      return [
+        {
+          ref: { stepId: step.id, output: 'value' },
+          label: step.name,
+          type: 'text',
+          sourceKind: 'variable',
+          source,
+        },
+      ];
     case 'if': {
       const out: TokenDescriptor[] = [];
       for (const s of step.then) out.push(...stepProduces(s, catalog));

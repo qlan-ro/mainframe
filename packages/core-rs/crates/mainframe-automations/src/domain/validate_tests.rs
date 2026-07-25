@@ -250,7 +250,7 @@ fn run_action_needs_an_action_id() {
 }
 
 #[test]
-fn all_six_fixtures_validate_clean() {
+fn all_canonical_fixtures_validate_clean() {
     for name in super::fixture_tests::FIXTURES {
         let (_, parsed) = super::fixture_tests::load_fixture(name);
         let errors = validate(&parsed.definition);

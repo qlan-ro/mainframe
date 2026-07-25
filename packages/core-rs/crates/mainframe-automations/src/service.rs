@@ -18,21 +18,22 @@ use crate::domain::{AutomationCreateInput, ValidationError, validate};
 use crate::engine::{AgentVerb, Interpreter};
 use crate::error::StoreError;
 use crate::interactions::{InteractionError, InteractionService};
-use crate::ports::{
-    AgentPort, Clock, EventSink, EventSource, Notifier, ProjectRegistry, RunSummary, to_run_summary,
-};
+use crate::ports::{AgentPort, Clock, EventSink, EventSource, Notifier, ProjectRegistry};
 use crate::store::{
-    AutomationStore, InteractionRecord, InteractionStore, RunRecord, RunStore, RunTriggerContext,
+    AutomationStore, InteractionRecord, InteractionStore, RunStore, WebhookStateStore,
 };
 use crate::triggers::{
     ScheduleSweeper, TriggerRouter, WebhookDecision, WebhookHeaders, WebhookProcessor,
 };
 
 mod build;
+mod registration;
+mod runs;
 mod start;
 mod summary;
 mod verb_ports;
 
+pub use registration::WebhookState;
 pub use start::StartError;
 pub use summary::AutomationSummary;
 
@@ -43,6 +44,8 @@ pub enum EngineError {
     Validation { errors: Vec<ValidationError> },
     #[error(transparent)]
     Store(#[from] StoreError),
+    #[error(transparent)]
+    Credential(#[from] CredentialError),
 }
 
 pub struct AutomationsConfig {
@@ -76,6 +79,8 @@ pub struct AutomationsEngine {
     registry: Arc<ActionRegistry>,
     credentials: Arc<FileCredentialStore>,
     webhooks: WebhookProcessor,
+    /// T7 — the durable half of webhook state (the sample index is memory).
+    webhook_deliveries: WebhookStateStore,
     /// Armed by `start()` — the 30 s derived-state schedule driver.
     sweeper: Arc<ScheduleSweeper>,
     /// Subscribed by `start()` when an `event_source` is present.
@@ -126,8 +131,9 @@ impl AutomationsEngine {
 
     pub async fn create(
         &self,
-        input: AutomationCreateInput,
+        mut input: AutomationCreateInput,
     ) -> Result<AutomationSummary, EngineError> {
+        registration::strip(&mut input.definition);
         validated(&input)?;
         let record = self.automations.create(input).await?;
         Ok(summary::to_summary(&record))
@@ -136,8 +142,9 @@ impl AutomationsEngine {
     pub async fn update(
         &self,
         id: &str,
-        input: AutomationCreateInput,
+        mut input: AutomationCreateInput,
     ) -> Result<AutomationSummary, EngineError> {
+        registration::strip(&mut input.definition);
         validated(&input)?;
         let record = self.automations.update(id, input).await?;
         Ok(summary::to_summary(&record))
@@ -163,55 +170,13 @@ impl AutomationsEngine {
                 id: id.to_string(),
             }));
         }
-        for run in self.runs.list_runs(id, RUNS_PAGE).await? {
+        for run in self.runs.list_runs(id, runs::RUNS_PAGE).await? {
             if !run.status.is_terminal() {
                 self.interpreter.cancel_run(&run.id).await?;
             }
         }
         self.automations.delete(id).await?;
         Ok(())
-    }
-
-    // ── runs ─────────────────────────────────────────────────────────────────
-
-    pub async fn run_manually(&self, id: &str) -> Result<RunRecord, EngineError> {
-        let record = self.automations.get(id).await?.ok_or_else(|| {
-            EngineError::Store(StoreError::NotFound {
-                kind: "automation",
-                id: id.to_string(),
-            })
-        })?;
-        let run = self
-            .interpreter
-            .start_run(id, record.definition, RunTriggerContext::manual(), None)
-            .await?;
-        let interpreter = self.interpreter.clone();
-        let run_id = run.id.clone();
-        tokio::spawn(async move {
-            if let Err(err) = interpreter.advance(&run_id).await {
-                tracing::error!(run_id, error = %err, "manual run: advance failed");
-            }
-        });
-        Ok(run)
-    }
-
-    pub async fn list_runs(&self, automation_id: &str) -> Result<Vec<RunSummary>, EngineError> {
-        let runs = self.runs.list_runs(automation_id, RUNS_PAGE).await?;
-        Ok(runs.iter().map(to_run_summary).collect())
-    }
-
-    pub async fn get_run(&self, run_id: &str) -> Result<Option<RunRecord>, EngineError> {
-        Ok(self.runs.get_run(run_id).await?)
-    }
-
-    pub async fn cancel_run(&self, run_id: &str) -> Result<(), EngineError> {
-        if self.runs.get_run(run_id).await?.is_none() {
-            return Err(EngineError::Store(StoreError::NotFound {
-                kind: "automation run",
-                id: run_id.to_string(),
-            }));
-        }
-        Ok(self.interpreter.cancel_run(run_id).await?)
     }
 
     // ── interactions / actions / credentials / webhooks ─────────────────────
@@ -274,13 +239,27 @@ impl AutomationsEngine {
             .await
     }
 
+    /// T7 — provisions the hook's signing secret and reports its delivery
+    /// state. `None` when the automation or the webhook trigger is gone.
+    pub async fn arm_webhook(
+        &self,
+        automation_id: &str,
+        trigger_id: &str,
+    ) -> Result<Option<WebhookState>, EngineError> {
+        registration::arm(self, automation_id, trigger_id).await
+    }
+
+    /// T7 — the registration state of an already-armed hook, for embedding on
+    /// read. `None` for a hook nobody has registered.
+    pub async fn webhook_state(&self, hook_id: &str) -> Result<Option<WebhookState>, EngineError> {
+        registration::read(self, hook_id).await
+    }
+
     /// R3 — the latest matching webhook payload (in-memory sample).
     pub fn latest_webhook_sample(&self, automation_id: &str, trigger_id: &str) -> Option<Value> {
         self.webhooks.latest_sample(automation_id, trigger_id)
     }
 }
-
-const RUNS_PAGE: u32 = 50;
 
 fn validated(input: &AutomationCreateInput) -> Result<(), EngineError> {
     let errors = validate(&input.definition);
@@ -291,6 +270,8 @@ fn validated(input: &AutomationCreateInput) -> Result<(), EngineError> {
     }
 }
 
+#[cfg(test)]
+mod registration_tests;
 #[cfg(test)]
 mod service_tests;
 

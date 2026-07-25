@@ -22,6 +22,9 @@ mod router_tests;
 mod sweep_tests;
 
 #[cfg(test)]
+mod webhook_ingest_test_support;
+
+#[cfg(test)]
 mod webhook_ingest_tests;
 
 #[cfg(test)]

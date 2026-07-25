@@ -18,7 +18,7 @@ pub mod triggers;
 
 pub use service::{
     AutomationSummary, AutomationsConfig, AutomationsEngine, AutomationsPorts, EngineError,
-    StartError,
+    StartError, WebhookState,
 };
 
 #[cfg(test)]

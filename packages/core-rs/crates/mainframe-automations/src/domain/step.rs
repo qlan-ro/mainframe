@@ -1,5 +1,5 @@
-//! Do-steps (contract §1): the four verbs (`ask_agent`, `ask_me`,
-//! `run_action`, `notify`) and the two blocks (`if`, `repeat`).
+//! Do-steps (contract §1): the verbs (`ask_agent`, `ask_me`, `run_action`,
+//! `notify`, `set_variable`) and the two blocks (`if`, `repeat`).
 
 use std::collections::BTreeMap;
 
@@ -18,6 +18,7 @@ pub enum Step {
     AskMe(AskMeStep),
     RunAction(RunActionStep),
     Notify(NotifyStep),
+    SetVariable(SetVariableStep),
     If(IfBlock),
     Repeat(RepeatBlock),
 }
@@ -29,6 +30,7 @@ impl Step {
             Step::AskMe(s) => &s.id,
             Step::RunAction(s) => &s.id,
             Step::Notify(s) => &s.id,
+            Step::SetVariable(s) => &s.id,
             Step::If(s) => &s.id,
             Step::Repeat(s) => &s.id,
         }
@@ -40,6 +42,7 @@ impl Step {
             Step::AskMe(_) => "ask_me",
             Step::RunAction(_) => "run_action",
             Step::Notify(_) => "notify",
+            Step::SetVariable(_) => "set_variable",
             Step::If(_) => "if",
             Step::Repeat(_) => "repeat",
         }
@@ -51,6 +54,7 @@ impl Step {
             Step::AskMe(s) => s.keep_going,
             Step::RunAction(s) => s.keep_going,
             Step::Notify(s) => s.keep_going,
+            Step::SetVariable(s) => s.keep_going,
             Step::If(s) => s.keep_going,
             Step::Repeat(s) => s.keep_going,
         }
@@ -153,6 +157,17 @@ pub struct NotifyStep {
     #[serde(default, skip_serializing_if = "is_false")]
     pub keep_going: bool,
     pub message: ChipText,
+}
+
+/// Names a composed value so later steps can reach it as `$name`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetVariableStep {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub keep_going: bool,
+    pub name: String,
+    pub value: ChipText,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

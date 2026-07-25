@@ -6,7 +6,7 @@
 
 use std::str::FromStr;
 
-use chrono::{DateTime, TimeZone};
+use chrono::{DateTime, NaiveDateTime, TimeDelta, TimeZone};
 use croner::Cron;
 use croner::errors::CronError;
 
@@ -22,6 +22,13 @@ pub enum ScheduleError {
 
     #[error("schedule time '{0}' is not a valid HH:MM")]
     InvalidTime(String),
+
+    #[error("schedule timestamp '{0}' is not a valid local YYYY-MM-DDTHH:MM")]
+    InvalidTimestamp(String),
+
+    /// `once` fires at one instant, which no repeating cron string expresses.
+    #[error("a 'once' schedule has no cron form")]
+    OnceHasNoCronForm,
 
     #[error("schedule cron error: {0}")]
     Cron(#[from] CronError),
@@ -47,8 +54,30 @@ pub fn compile_schedule(pattern: &SchedulePattern) -> Result<String, ScheduleErr
             }
             Ok(format!("0 */{} * * *", every.n))
         }
+        SchedulePattern::Once(_) => Err(ScheduleError::OnceHasNoCronForm),
     }
 }
+
+/// A `once` timestamp resolved in `tz`. Ambiguous fall-back times take the
+/// earlier of the pair and spring-forward gaps snap to the first valid minute
+/// after them, which is croner's policy for the repeating patterns.
+fn once_instant<Tz: TimeZone>(at: &str, tz: &Tz) -> Result<DateTime<Tz>, ScheduleError> {
+    let invalid = || ScheduleError::InvalidTimestamp(at.to_string());
+    // The editor types minutes, but a `datetime-local` input may carry
+    // seconds; refusing them would silently never fire the automation.
+    let naive = NaiveDateTime::parse_from_str(at, "%Y-%m-%dT%H:%M:%S")
+        .or_else(|_| NaiveDateTime::parse_from_str(at, "%Y-%m-%dT%H:%M"))
+        .map_err(|_| invalid())?;
+    (0..DST_GAP_SCAN_MINUTES)
+        .find_map(|minute| {
+            tz.from_local_datetime(&(naive + TimeDelta::minutes(minute)))
+                .earliest()
+        })
+        .ok_or_else(invalid)
+}
+
+/// Long enough to cross any real DST gap (the widest is one hour).
+const DST_GAP_SCAN_MINUTES: i64 = 180;
 
 fn daily_cron(at: &str, weekday: &str) -> Result<String, ScheduleError> {
     let (hour, minute) = parse_at(at)?;
@@ -66,16 +95,20 @@ fn parse_at(at: &str) -> Result<(u32, u32), ScheduleError> {
     Ok((hour, minute))
 }
 
-/// Strictly-next occurrence after `after`, in `after`'s timezone. Croner
-/// resolves DST edges: a fixed time falling in a spring-forward gap snaps
-/// to the first valid instant after it; a fall-back ambiguity fires at the
-/// earliest of the pair.
+/// Strictly-next occurrence after `after`, in `after`'s timezone; `None`
+/// once a `once` schedule has passed. Croner resolves DST edges: a fixed
+/// time falling in a spring-forward gap snaps to the first valid instant
+/// after it; a fall-back ambiguity fires at the earliest of the pair.
 pub fn next_occurrence<Tz: TimeZone>(
     pattern: &SchedulePattern,
     after: &DateTime<Tz>,
-) -> Result<DateTime<Tz>, ScheduleError> {
+) -> Result<Option<DateTime<Tz>>, ScheduleError> {
+    if let SchedulePattern::Once(once) = pattern {
+        let at = once_instant(&once.at, &after.timezone())?;
+        return Ok((at > *after).then_some(at));
+    }
     let cron = parse_cron(pattern)?;
-    Ok(cron.find_next_occurrence(after, false)?)
+    Ok(Some(cron.find_next_occurrence(after, false)?))
 }
 
 /// The latest occurrence at or before `now` — the sweep's derived-state
@@ -86,6 +119,10 @@ pub fn latest_occurrence_at_or_before<Tz: TimeZone>(
     pattern: &SchedulePattern,
     now: &DateTime<Tz>,
 ) -> Result<Option<DateTime<Tz>>, ScheduleError> {
+    if let SchedulePattern::Once(once) = pattern {
+        let at = once_instant(&once.at, &now.timezone())?;
+        return Ok((at <= *now).then_some(at));
+    }
     let cron = parse_cron(pattern)?;
     match cron.find_previous_occurrence(now, true) {
         Ok(occurrence) => Ok(Some(occurrence)),

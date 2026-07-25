@@ -67,7 +67,7 @@ describe('TokenChip', () => {
 
 describe('sourceKindStyle', () => {
   it('maps every TokenSourceKind to a distinct icon component', () => {
-    const kinds: TokenSourceKind[] = ['builtin', 'trigger', 'agent', 'askme', 'action', 'item'];
+    const kinds: TokenSourceKind[] = ['builtin', 'trigger', 'agent', 'askme', 'action', 'item', 'variable'];
     const icons = kinds.map((k) => sourceKindStyle(k).icon);
     expect(new Set(icons).size).toBe(kinds.length);
   });

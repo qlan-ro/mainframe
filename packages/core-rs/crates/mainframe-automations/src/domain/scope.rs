@@ -4,10 +4,9 @@
 //! packages/types/src/automation-domain/{tokens,comparators}.ts).
 
 use super::catalog::{action_outputs, capitalize, output_label};
-use super::condition::Comparator;
 use super::form::FormFieldType;
 use super::step::{ExpectedOutputType, Step};
-use super::token::{TOKEN_STEP_TRIGGER, TokenRef};
+use super::token::{TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef, TokenSourceKind};
 use super::trigger::Trigger;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +40,9 @@ pub(crate) struct TokenInfo {
     pub token_type: TokenType,
     pub label: String,
     pub source: String,
+    /// Stamped by whoever produced the info; `info` defaults to `Builtin`
+    /// because builtins are the only family with no stamping step.
+    pub source_kind: TokenSourceKind,
 }
 
 fn info(
@@ -56,6 +58,29 @@ fn info(
         token_type,
         label: label.to_string(),
         source: source.to_string(),
+        source_kind: TokenSourceKind::Builtin,
+    }
+}
+
+fn stamp(kind: TokenSourceKind, mut infos: Vec<TokenInfo>) -> Vec<TokenInfo> {
+    for info in &mut infos {
+        info.source_kind = kind;
+    }
+    infos
+}
+
+/// The Repeat block's `Current item`, synthesized by every scope walk and
+/// never produced by a step (contract §5).
+pub(crate) fn current_item_info() -> TokenInfo {
+    TokenInfo {
+        source_kind: TokenSourceKind::Item,
+        ..info(
+            TOKEN_STEP_CURRENT,
+            "item",
+            TokenType::Text,
+            "Current item",
+            "Repeat",
+        )
     }
 }
 
@@ -100,7 +125,7 @@ pub(crate) fn trigger_tokens(triggers: &[Trigger]) -> Vec<TokenInfo> {
             Trigger::Schedule(_) => {}
         }
     }
-    out
+    stamp(TokenSourceKind::Trigger, out)
 }
 
 fn expected_output_type(t: ExpectedOutputType) -> TokenType {
@@ -126,6 +151,25 @@ fn form_field_type(t: FormFieldType) -> TokenType {
 /// produces nothing — its `Current item` is synthesized by the walk and
 /// never leaks.
 pub(crate) fn step_produces(step: &Step) -> Vec<TokenInfo> {
+    let produced = produced_by(step);
+    match own_source_kind(step) {
+        Some(kind) => stamp(kind, produced),
+        // `If` re-emits its branches' infos, already stamped by their steps.
+        None => produced,
+    }
+}
+
+fn own_source_kind(step: &Step) -> Option<TokenSourceKind> {
+    match step {
+        Step::AskAgent(_) => Some(TokenSourceKind::Agent),
+        Step::AskMe(_) => Some(TokenSourceKind::AskMe),
+        Step::RunAction(_) => Some(TokenSourceKind::Action),
+        Step::SetVariable(_) => Some(TokenSourceKind::Variable),
+        Step::Notify(_) | Step::Repeat(_) | Step::If(_) => None,
+    }
+}
+
+fn produced_by(step: &Step) -> Vec<TokenInfo> {
     match step {
         Step::AskAgent(s) => {
             let mut out = vec![
@@ -165,6 +209,14 @@ pub(crate) fn step_produces(step: &Step) -> Vec<TokenInfo> {
             })
             .collect(),
         Step::Notify(_) => Vec::new(),
+        Step::SetVariable(s) => {
+            let source = if s.name.is_empty() {
+                "Set a value".to_string()
+            } else {
+                format!("Set {}", s.name)
+            };
+            vec![info(&s.id, "value", TokenType::Text, &s.name, &source)]
+        }
         Step::If(s) => {
             let mut out = Vec::new();
             for inner in s.then.iter().chain(s.otherwise.iter()) {
@@ -192,56 +244,9 @@ pub(crate) fn step_refs(step: &Step) -> Vec<&TokenRef> {
         Step::AskMe(_) => Vec::new(),
         Step::RunAction(s) => s.params.values().flat_map(|p| chip_tokens(p)).collect(),
         Step::Notify(s) => chip_tokens(&s.message),
+        Step::SetVariable(s) => chip_tokens(&s.value),
         Step::If(s) => s.conditions.iter().map(|c| &c.token).collect(),
         Step::Repeat(s) => vec![&s.items],
-    }
-}
-
-/// Comparators that fit each token type (Node's BY_TYPE table; `contains`
-/// is polymorphic — text substring, list membership).
-pub(crate) fn comparators_for(token_type: TokenType) -> &'static [Comparator] {
-    match token_type {
-        TokenType::Text => &[
-            Comparator::Is,
-            Comparator::IsNot,
-            Comparator::Contains,
-            Comparator::StartsWith,
-            Comparator::IsOneOf,
-        ],
-        TokenType::Choice => &[Comparator::Is, Comparator::IsNot, Comparator::IsOneOf],
-        TokenType::Number => &[
-            Comparator::Eq,
-            Comparator::IsNot,
-            Comparator::Lt,
-            Comparator::Gt,
-        ],
-        TokenType::List => &[
-            Comparator::IsEmpty,
-            Comparator::NotEmpty,
-            Comparator::Contains,
-        ],
-        TokenType::Date => &[
-            Comparator::Is,
-            Comparator::IsNot,
-            Comparator::Lt,
-            Comparator::Gt,
-        ],
-        TokenType::Object => &[Comparator::IsEmpty, Comparator::NotEmpty],
-    }
-}
-
-pub(crate) fn comparator_wire_name(comparator: Comparator) -> &'static str {
-    match comparator {
-        Comparator::Is => "is",
-        Comparator::IsNot => "is_not",
-        Comparator::Contains => "contains",
-        Comparator::StartsWith => "starts_with",
-        Comparator::Eq => "eq",
-        Comparator::Lt => "lt",
-        Comparator::Gt => "gt",
-        Comparator::IsEmpty => "is_empty",
-        Comparator::NotEmpty => "not_empty",
-        Comparator::IsOneOf => "is_one_of",
     }
 }
 

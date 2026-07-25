@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionCatalogEntry, AutomationStep } from '../../automation.js';
-import { builtinTokens, findStepById, RESULT_TOKEN_DESCRIPTION, stepProduces, triggerTokens } from '../tokens.js';
+import {
+  builtinTokens,
+  findStepById,
+  RESULT_TOKEN_DESCRIPTION,
+  stepLabel,
+  stepProduces,
+  triggerTokens,
+} from '../tokens.js';
 
 const RUN_COMMAND_CATALOG: ActionCatalogEntry[] = [
   {
@@ -201,6 +208,30 @@ describe('stepProduces — named camelCase outputs', () => {
     };
     const tokens = stepProduces(step, []);
     expect(tokens.map((t) => t.ref.stepId)).toEqual(['a', 'a', 'b', 'b']);
+  });
+});
+
+describe('stepProduces — set_variable', () => {
+  const setVariable: AutomationStep = { id: 'v1', kind: 'set_variable', name: 'release_notes', value: ['text'] };
+
+  it('produces one `value` output labelled with the name the user chose', () => {
+    expect(stepProduces(setVariable, [])).toEqual([
+      {
+        ref: { stepId: 'v1', output: 'value' },
+        label: 'release_notes',
+        type: 'text',
+        sourceKind: 'variable',
+        source: 'Set release_notes',
+      },
+    ]);
+  });
+
+  it('labels the step with the name it defines', () => {
+    expect(stepLabel(setVariable, [])).toBe('Set release_notes');
+  });
+
+  it('falls back to a bare label before the user has named it', () => {
+    expect(stepLabel({ id: 'v1', kind: 'set_variable', name: '', value: [] }, [])).toBe('Set a value');
   });
 });
 

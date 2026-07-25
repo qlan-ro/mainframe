@@ -11,8 +11,13 @@ use crate::domain::{ChipPart, TokenRef};
 use crate::ports::Clock;
 
 use super::scope::Scope;
-use super::substitute::render;
 use super::value::TokenValue;
+use super::variables::NameMap;
+
+/// These cases predate `$name`; an empty namespace keeps them token-only.
+fn render(parts: &[ChipPart], scope: &Scope<'_>) -> String {
+    super::substitute::render(parts, scope, &NameMap::new())
+}
 
 struct FakeClock(DateTime<FixedOffset>);
 

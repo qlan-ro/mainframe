@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionCatalogEntry, AutomationDefinition, AutomationStep } from '../../contract';
-import { FEATURE_SPIKE_FIXTURE } from '../../fixtures/fixtures';
+import { FEATURE_SPIKE_FIXTURE, RELEASE_DIGEST_FIXTURE } from '../../fixtures/fixtures';
 import { validate } from '../validate';
 
 function askAgent(id: string): AutomationStep {
@@ -9,9 +9,13 @@ function askAgent(id: string): AutomationStep {
 
 const NO_CATALOG: ActionCatalogEntry[] = [];
 
-describe('validate — fixture 6 sanity (the reference happy path)', () => {
+describe('validate — fixture sanity (the reference happy paths)', () => {
   it('daily-feature-spike has no issues', () => {
     expect(validate(FEATURE_SPIKE_FIXTURE.name, FEATURE_SPIKE_FIXTURE.definition, NO_CATALOG)).toEqual([]);
+  });
+
+  it('release-digest has no issues — its $name refs all resolve through the editor library too', () => {
+    expect(validate(RELEASE_DIGEST_FIXTURE.name, RELEASE_DIGEST_FIXTURE.definition, NO_CATALOG)).toEqual([]);
   });
 });
 
@@ -162,5 +166,114 @@ describe('validate — missing producer', () => {
       level: 'error',
       msg: 'This step uses a value that no longer exists — pick a new one.',
     });
+  });
+});
+
+describe('validate — $name references', () => {
+  it('flags a name no earlier step defines, pinned to the offending step', () => {
+    const step: AutomationStep = { id: 'n1', kind: 'notify', message: ['Ship $nope today'] };
+    const issues = validate('Name', { triggers: [], steps: [step] }, NO_CATALOG);
+    expect(issues).toContainEqual({
+      stepId: 'n1',
+      level: 'error',
+      msg: 'This step uses $nope, but no earlier step defines it.',
+    });
+  });
+
+  it('accepts a dotted path on an in-scope name — only the base name is knowable statically', () => {
+    const definition: AutomationDefinition = {
+      triggers: [{ id: 't1', kind: 'webhook', hookId: 'h1' }],
+      steps: [{ id: 'n1', kind: 'notify', message: ['See $trigger_payload.pr.title'] }],
+    };
+    expect(validate('Name', definition, NO_CATALOG).some((i) => i.stepId === 'n1')).toBe(false);
+  });
+
+  it('flags a name defined only by a LATER step, matching token scope', () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        { id: 'n1', kind: 'notify', message: ['Ship $notes'] },
+        { id: 'v1', kind: 'set_variable', name: 'notes', value: ['text'] },
+      ],
+    };
+    expect(validate('Name', definition, NO_CATALOG)).toContainEqual({
+      stepId: 'n1',
+      level: 'error',
+      msg: 'This step uses $notes, but no earlier step defines it.',
+    });
+  });
+
+  it('accepts a name a set-variable step defines upstream', () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        { id: 'v1', kind: 'set_variable', name: 'notes', value: ['text'] },
+        { id: 'n1', kind: 'notify', message: ['Ship $notes'] },
+      ],
+    };
+    expect(validate('Name', definition, NO_CATALOG).some((i) => i.stepId === 'n1')).toBe(false);
+  });
+});
+
+describe('validate — set-variable names', () => {
+  it('flags an empty name', () => {
+    const step: AutomationStep = { id: 'v1', kind: 'set_variable', name: '  ', value: [] };
+    expect(validate('Name', { triggers: [], steps: [step] }, NO_CATALOG)).toContainEqual({
+      stepId: 'v1',
+      level: 'error',
+      msg: 'Give this value a name.',
+    });
+  });
+
+  it('flags a name that is not a lowercase identifier', () => {
+    const step: AutomationStep = { id: 'v1', kind: 'set_variable', name: 'Release Notes', value: [] };
+    expect(validate('Name', { triggers: [], steps: [step] }, NO_CATALOG)).toContainEqual({
+      stepId: 'v1',
+      level: 'error',
+      msg: 'Use lowercase letters, numbers and underscores for a value name, starting with a letter.',
+    });
+  });
+
+  it('flags the second of two steps claiming the same name, leaving the first alone', () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        { id: 'v1', kind: 'set_variable', name: 'notes', value: [] },
+        { id: 'v2', kind: 'set_variable', name: 'notes', value: [] },
+      ],
+    };
+    const issues = validate('Name', definition, NO_CATALOG);
+    expect(issues).toContainEqual({
+      stepId: 'v2',
+      level: 'error',
+      msg: 'Another value in scope is already called $notes — rename one of them.',
+    });
+    expect(issues.some((i) => i.stepId === 'v1')).toBe(false);
+  });
+
+  it('flags a set-variable name shadowed by a derived name already in scope', () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        { id: 'a1', kind: 'ask_agent', prompt: [] },
+        { id: 'v1', kind: 'set_variable', name: 'agent_result', value: [] },
+      ],
+    };
+    expect(validate('Name', definition, NO_CATALOG)).toContainEqual({
+      stepId: 'v1',
+      level: 'error',
+      msg: 'Another value in scope is already called $agent_result — rename one of them.',
+    });
+  });
+
+  it('allows the same name in two isolated repeat bodies', () => {
+    const body = (stepId: string): AutomationStep => ({
+      id: stepId,
+      kind: 'repeat',
+      items: { stepId: 'nothing', output: 'items' },
+      steps: [{ id: `${stepId}-v`, kind: 'set_variable', name: 'notes', value: [] }],
+    });
+    const definition: AutomationDefinition = { triggers: [], steps: [body('r1'), body('r2')] };
+    expect(validate('Name', definition, NO_CATALOG).some((i) => i.msg.includes('already called'))).toBe(false);
   });
 });
