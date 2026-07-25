@@ -60,6 +60,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::agents::router())
         .merge(routes::skills::router())
         .merge(routes::suggestions::router())
+        .merge(routes::setup_advisor::router())
         .merge(routes::quota::router())
         // Task 5.5 route modules: launch (per-project process control), tunnel
         // (cloudflared), and the LSP language-status endpoint.

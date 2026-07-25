@@ -5,8 +5,7 @@
 //! not an expectation to adjust to match the code.
 
 use mainframe_types::setup_advisor::{
-    AutomationRecommendation, GitHost, ProjectFingerprint, RecommendationCategory,
-    RecommendationProvenance,
+    AutomationRecommendation, ProjectFingerprint, RecommendationCategory, RecommendationProvenance,
 };
 
 use super::super::all;
