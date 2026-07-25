@@ -1,7 +1,7 @@
 /**
  * useOpenNewThreadDraft — binds openNewThreadDraft's dependencies to the real
- * runtime/stores. Both the sidebar "New" picker and the Phase C ChatThread
- * toolbar action call the returned function.
+ * runtime/stores. Both the sidebar "New" button and the selection toolbar's
+ * "New session" action call the returned function.
  */
 import { useAssistantRuntime, useAui } from '@assistant-ui/react';
 import { openNewThreadDraft, type OpenNewThreadDraftArgs } from './open-new-thread-draft';
@@ -30,7 +30,8 @@ export function useOpenNewThreadDraft(): (args: OpenNewThreadDraftArgs) => Promi
       runtimeThreads: runtime.threads,
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,
-      initializeDraft: ({ localId, projectId }) => initializeDraft({ localId, projectId, port, defaultAdapterId, adapters }),
+      initializeDraft: ({ localId, projectId }) =>
+        initializeDraft({ localId, projectId, port, defaultAdapterId, adapters }),
       setText: (text) => aui.composer().setText(text),
       mfToastError: (title, options) => mfToast.error(title, options),
     });

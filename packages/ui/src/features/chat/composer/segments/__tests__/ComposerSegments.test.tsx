@@ -8,12 +8,14 @@
  * wires from those transitions.
  *
  * Harness choice (the focus-on-append case needs an element the component
- * does not itself render): a plain wrapper renders `<ComposerSegments />` and
- * a stub `<textarea data-testid="chat-composer-input">` as siblings under one
- * parent — the same DOM shape T23 mounts in `Composer.tsx` (segments block
- * above the input wrapper, both children of `ComposerPrimitive.AttachmentDropzone`).
- * We do not render the real `Composer` here: it pulls in the full aui/runtime
- * mock surface for behavior this file does not exercise.
+ * does not itself render): a stub `chat-composer` root holds the component and
+ * a stub `chat-composer-input` textarea, each behind its OWN wrapper div. The
+ * nesting is deliberate — the component resolves the input from the composer
+ * root, not from its immediate parent, so `Composer.tsx` can grow wrappers
+ * between the two without breaking focus-on-append (and this harness would
+ * catch a regression back to a sibling-only lookup). We do not render the real
+ * `Composer` here: it pulls in the full aui/runtime mock surface for behavior
+ * this file does not exercise.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, within, act } from '@testing-library/react';
@@ -24,9 +26,13 @@ const THREAD_ID = 'thread-1';
 
 function Harness() {
   return (
-    <div data-testid="composer-root">
-      <ComposerSegments threadId={THREAD_ID} />
-      <textarea data-testid="chat-composer-input" defaultValue="typed draft" />
+    <div data-testid="chat-composer">
+      <div data-testid="composer-dropzone">
+        <ComposerSegments threadId={THREAD_ID} />
+      </div>
+      <div data-testid="composer-scroll-wrapper">
+        <textarea data-testid="chat-composer-input" defaultValue="typed draft" />
+      </div>
     </div>
   );
 }
@@ -35,6 +41,10 @@ function findSegment(id: string): HTMLElement {
   const segment = screen.getAllByTestId('composer-segment').find((el) => el.dataset.segmentId === id);
   expect(segment).toBeDefined();
   return segment!;
+}
+
+function segmentInput(id: string): HTMLTextAreaElement {
+  return within(findSegment(id)).getByTestId('composer-segment-input') as HTMLTextAreaElement;
 }
 
 beforeEach(() => {
@@ -57,13 +67,13 @@ describe('ComposerSegments', () => {
     const segment = findSegment('s1');
     const preview = within(segment).getByTestId('composer-quote-preview');
     const dismiss = within(segment).getByTestId('composer-quote-dismiss');
-    const textarea = segment.querySelector('textarea');
+    const textarea = segmentInput('s1');
 
     expect(preview.dataset.segmentId).toBe('s1');
     expect(dismiss.dataset.segmentId).toBe('s1');
-    expect(textarea).not.toBeNull();
-    expect(textarea!.dataset.segmentId).toBe('s1');
-    expect(textarea!.value).toBe('keep me');
+    expect(textarea.tagName).toBe('TEXTAREA');
+    expect(textarea.dataset.segmentId).toBe('s1');
+    expect(textarea.value).toBe('keep me');
   });
 
   it('renders the live quote as a pill above the native input, not a second textarea', () => {
@@ -91,9 +101,8 @@ describe('ComposerSegments', () => {
       within(findSegment('s1')).getByTestId('composer-quote-dismiss').click();
     });
 
-    const segment = findSegment('s1');
-    expect(within(segment).queryByTestId('composer-quote-preview')).toBeNull();
-    expect(segment.querySelector('textarea')!.value).toBe('keep me');
+    expect(within(findSegment('s1')).queryByTestId('composer-quote-preview')).toBeNull();
+    expect(segmentInput('s1').value).toBe('keep me');
   });
 
   it('dismissing an empty committed segment removes the whole composer-segment element', () => {
@@ -149,7 +158,7 @@ describe('ComposerSegments', () => {
     });
     render(<Harness />);
 
-    expect(findSegment('s1').querySelector('textarea')!.placeholder).toBe('Add a message…');
-    expect(findSegment('s2').querySelector('textarea')!.placeholder).toBe('Reply to Mainframe…');
+    expect(segmentInput('s1').placeholder).toBe('Add a message…');
+    expect(segmentInput('s2').placeholder).toBe('Reply to Mainframe…');
   });
 });

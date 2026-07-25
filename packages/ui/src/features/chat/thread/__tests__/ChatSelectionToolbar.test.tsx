@@ -34,12 +34,6 @@ vi.mock('@assistant-ui/react', () => ({
     sel({ threadListItem: __threadId ? { id: __threadId } : undefined }),
   SelectionToolbarPrimitive: {
     Root: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
-    Quote: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
-  },
-  ComposerPrimitive: {
-    Quote: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    QuoteText: () => null,
-    QuoteDismiss: ({ children }: { children?: ReactNode }) => <>{children}</>,
   },
 }));
 

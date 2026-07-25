@@ -1,8 +1,8 @@
 /**
  * openNewThreadDraft — the order-sensitive new-thread sequence (spec §2.4).
  *
- * Pure and dependency-injected so both call sites (the sidebar "New" picker
- * and, in Phase C, the ChatThread toolbar action) share one implementation.
+ * Pure and dependency-injected so both call sites (the sidebar "New" button
+ * and the selection toolbar's "New session" action) share one implementation.
  * Every dependency is read fresh via `runtimeThreads.getState()` rather than
  * captured once, because a call site can unmount mid-await.
  */
@@ -27,7 +27,16 @@ export interface OpenNewThreadDraftArgs {
 
 export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: OpenNewThreadDraftDeps): Promise<void> {
   const { projectId, prefill } = args;
-  const { filterProjectId, setFilterProjectId, runtimeThreads, setReturnTarget, resetNewThreadDraft, initializeDraft, setText, mfToastError } = deps;
+  const {
+    filterProjectId,
+    setFilterProjectId,
+    runtimeThreads,
+    setReturnTarget,
+    resetNewThreadDraft,
+    initializeDraft,
+    setText,
+    mfToastError,
+  } = deps;
 
   if (filterProjectId != null && filterProjectId !== projectId) {
     setFilterProjectId(null);
@@ -43,7 +52,9 @@ export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: Ope
   try {
     await initializeDraft({ localId: newThreadId, projectId });
   } catch (error) {
-    mfToastError('Couldn’t initialize session', { description: error instanceof Error ? error.message : String(error) });
+    mfToastError('Couldn’t initialize session', {
+      description: error instanceof Error ? error.message : String(error),
+    });
     return;
   }
 

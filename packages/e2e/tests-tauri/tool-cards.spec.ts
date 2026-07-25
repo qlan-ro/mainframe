@@ -220,6 +220,11 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
     await app.page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    // Both tests below read the same Read card. Sent here, not in the first test,
+    // so a worker restart after a failure re-seeds it for whichever test runs next.
+    await sendMessage(app.page, 'Read index.ts and add a comment above the greeting export.');
+    await app.page.getByTestId('read-card-root').first().waitFor({ timeout: 60_000 });
   });
 
   test.afterAll(async () => {
@@ -229,8 +234,6 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
 
   test('right-clicking the file-path pill opens the two copy items, which copy the absolute/relative path (274-A1, A2, A3, A10)', async () => {
     const { page } = app;
-    await sendMessage(page, 'Read index.ts and add a comment above the greeting export.');
-
     const readCard = page.getByTestId('read-card-root').first();
     const pill = readCard.getByTestId('tool-card-file-path');
     await pill.waitFor({ timeout: 60_000 });
@@ -241,7 +244,6 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     const relativeItem = page.getByTestId('tool-card-path-copy-relative');
     await expect(absoluteItem).toBeVisible({ timeout: 5_000 });
     await expect(relativeItem).toBeVisible();
-    await expect(page.getByTestId('chat-menu-empty')).toHaveCount(0);
 
     await absoluteItem.click();
     await expect(absoluteItem).toContainText('Copied');
@@ -258,19 +260,28 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     await page.keyboard.press('Escape');
   });
 
-  test('right-clicking assistant content outside any file-path pill shows only the disabled empty item (274-A5)', async () => {
+  test('right-clicking assistant content outside any file-path pill opens no menu at all (274-A5)', async () => {
     const { page } = app;
     const readCard = page.getByTestId('read-card-root').first();
     // The verb label, not the "· N lines" meta: that count is derived from the
     // fixture's result text, so pinning it couples this test to fixture content.
     const outsideAnyPath = readCard.getByText('Read', { exact: true });
 
-    await outsideAnyPath.click({ button: 'right' });
-    const empty = page.getByTestId('chat-menu-empty');
-    await expect(empty).toBeVisible({ timeout: 5_000 });
-    await expect(empty).toBeDisabled();
-    await expect(page.getByTestId('tool-card-path-copy-absolute')).toHaveCount(0);
+    // A menu left open by a FAILING previous test blocks pointer events for the
+    // full 120s timeout; dismissing first keeps that failure reported once.
     await page.keyboard.press('Escape');
+    await outsideAnyPath.click({ button: 'right' });
+    // Settles the open animation a menu would have started; every assertion below
+    // is a negative one, and those pass vacuously on the first poll.
+    await page.waitForTimeout(500);
+
+    // With nothing to copy the trigger must stay closed, so the webview's own
+    // Copy / Look Up / Search menu survives. Opening a disabled "no actions"
+    // item instead replaced it with a dead menu.
+    const trigger = page.getByTestId('chat-message-menu-trigger').filter({ has: page.getByTestId('read-card-root') });
+    await expect(trigger).toHaveAttribute('data-state', 'closed');
+    await expect(page.getByTestId('tool-card-path-copy-absolute')).toHaveCount(0);
+    await expect(page.getByTestId('tool-card-path-copy-relative')).toHaveCount(0);
   });
 });
 

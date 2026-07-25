@@ -27,12 +27,13 @@ import {
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Pluggable } from 'unified';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
+import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
@@ -77,23 +78,24 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
 
 // ── Link with URL tooltip ─────────────────────────────────────────────────────
 
-/** Writes `href` to clipboard and briefly shows "Copied" feedback. */
+/**
+ * Writes `href` to clipboard and briefly shows "Copied" feedback.
+ * Resolves with whether the write actually landed, so menu callers can say
+ * "Copy failed" instead of confirming a copy that never happened.
+ */
 function useCopyHref(href: string | undefined) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(
-    (e?: React.MouseEvent) => {
+    async (e?: React.MouseEvent): Promise<boolean> => {
       e?.preventDefault();
       e?.stopPropagation();
-      if (!href) return;
-      navigator.clipboard.writeText(href).then(
-        () => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        },
-        () => {
-          console.warn('[markdown-text] clipboard write failed');
-        },
-      );
+      if (!href) return false;
+      const ok = await writeToClipboard(href);
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+      return ok;
     },
     [href],
   );
@@ -107,8 +109,8 @@ function LinkWithPreview({
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
   const host = useHost();
   const { copied, copy } = useCopyHref(href);
-  const { copiedId, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
-  const menuCopied = copiedId === 'copy-link';
+  const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
+  const menuStatus = statusFor('copy-link');
 
   const handleOpen = useCallback(
     (e?: React.MouseEvent) => {
@@ -149,8 +151,10 @@ function LinkWithPreview({
         </TooltipTrigger>
         <ContextMenuContent>
           <ContextMenuItem data-testid="chat-link-copy" onSelect={handleMenuCopy}>
-            {menuCopied ? <Check className="mr-2 size-3.5 text-mf-success" /> : <Copy className="mr-2 size-3.5" />}
-            {menuCopied ? 'Copied' : 'Copy link'}
+            {menuStatus === 'copied' && <Check className="mr-2 size-3.5 text-mf-success" />}
+            {menuStatus === 'failed' && <AlertTriangle className="mr-2 size-3.5 text-destructive" />}
+            {menuStatus === 'idle' && <Copy className="mr-2 size-3.5" />}
+            {menuStatus === 'copied' ? 'Copied' : menuStatus === 'failed' ? 'Copy failed' : 'Copy link'}
           </ContextMenuItem>
           <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
             Open link
@@ -162,7 +166,7 @@ function LinkWithPreview({
         <button
           data-testid="chat-link-copy-url"
           type="button"
-          onClick={copy}
+          onClick={(e) => void copy(e)}
           className={cn(
             'shrink-0 px-1.5 py-0.5 rounded-sm',
             'bg-accent hover:bg-muted text-muted-foreground hover:text-foreground',

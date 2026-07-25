@@ -6,7 +6,7 @@
  * resetDaemonScopedStores (separate test file).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useComposerSegments, selectComposerSegment } from '../segment-store';
+import { useComposerSegments } from '../segment-store';
 
 const EMPTY = { committed: [], liveQuote: null };
 
@@ -35,22 +35,21 @@ describe('useComposerSegments — clear', () => {
   });
 });
 
-describe('useComposerSegments — read-switch-read cycle', () => {
-  it('a composition survives switching away and back to the same thread', () => {
+describe('useComposerSegments — switch-away-and-back cycle', () => {
+  it("a composition survives another thread's whole append/dismiss/clear cycle", () => {
     useComposerSegments.getState().append('thread-a', { quote: 'Q1', liveText: 'intro' });
-    const afterAppend = selectComposerSegment('thread-a');
+    const afterAppend = useComposerSegments.getState().byThread['thread-a'];
 
-    // Read a different thread in between — must not mutate thread-a.
-    selectComposerSegment('thread-b');
+    useComposerSegments.getState().append('thread-b', { quote: 'Q2', liveText: '' });
+    const liveB = useComposerSegments.getState().byThread['thread-b']!.liveQuote!.id;
+    useComposerSegments.getState().dismiss('thread-b', liveB);
+    useComposerSegments.getState().clear('thread-b');
 
-    expect(selectComposerSegment('thread-a')).toEqual(afterAppend);
-  });
-});
-
-describe('useComposerSegments — unknown thread', () => {
-  it('returns the empty composition without writing', () => {
-    expect(selectComposerSegment('never-seen')).toEqual(EMPTY);
-    expect(useComposerSegments.getState().byThread['never-seen']).toBeUndefined();
+    expect(useComposerSegments.getState().byThread['thread-a']).toBe(afterAppend);
+    expect(useComposerSegments.getState().byThread['thread-a']).toEqual({
+      committed: [{ id: expect.any(String), quote: null, text: 'intro' }],
+      liveQuote: { id: expect.any(String), text: 'Q1' },
+    });
   });
 });
 

@@ -140,7 +140,6 @@ describe('already-relative path joined against a base for `absolute`', () => {
     const ref = toFileRef(rawPath, { worktreePath: '/w', projectPath: '/p' });
     // Pins that Copy Relative Path and the open-file intent can never diverge.
     expect(ref.relative).toBe('src/a.ts');
-    expect(ref.relative).toBe(toFileRef(rawPath, { worktreePath: '/w', projectPath: '/p' }).relative);
   });
 });
 

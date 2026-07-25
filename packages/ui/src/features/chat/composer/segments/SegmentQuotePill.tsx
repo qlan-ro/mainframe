@@ -1,10 +1,9 @@
 /**
  * SegmentQuotePill — the quote pill on a committed segment or the pending
- * live segment (spec §2.2). Plain-prop driven, not a reuse of
- * `ComposerQuotePreview`: that compound is wired to the native single-quote
- * composer state (`ComposerPrimitive.Quote/QuoteText/QuoteDismiss`), which
- * the multi-quote segment model replaces (T27 deletes it once nothing else
- * writes `composer.quote`). Reuses its `composer-quote-preview` /
+ * live segment (spec §2.2). Plain-prop driven: the native quote compound
+ * (`ComposerPrimitive.Quote/QuoteText/QuoteDismiss`) renders the single
+ * `composer.quote` cell, and nothing writes that cell anymore — the
+ * multi-quote segment model replaced it. Keeps the `composer-quote-preview` /
  * `composer-quote-dismiss` testids since it fills the same visual role.
  */
 import { QuoteIcon, XIcon } from 'lucide-react';

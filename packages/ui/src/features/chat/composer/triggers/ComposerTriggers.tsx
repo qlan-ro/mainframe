@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ComposerPrimitive, useAui } from '@assistant-ui/react';
 import type { Unstable_TriggerItem } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { readLiveComposerState } from '../read-live-composer-state';
 import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
 import { useDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { resolveDraftChatContext } from './resolve-draft-chat-context';
@@ -164,16 +165,10 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
   const keepDirectoryTokenOpen = (item: Unstable_TriggerItem) => {
     if (item.type !== 'directory') return;
     const composer = aui.composer();
-    // `composer.getState()` is a tap-memoized snapshot that only refreshes on
-    // the NEXT render; reading it here — synchronously, in the same tick as the
-    // native insertion's own `setText` call — returns the PRE-insertion text
-    // (a stale read), so the trailing-space strip below silently no-ops and
-    // the space leaks through. `__internal_getRuntime()` reaches the raw
-    // ComposerRuntimeCore, whose `getState()` is always live; it's `?`-typed by
-    // assistant-ui itself (unstable escape hatch) but always present for a
-    // thread composer, so fall back to the (stale-safe) client read if absent.
-    const runtime = composer.__internal_getRuntime?.();
-    const text = runtime ? runtime.getState().text : composer.getState().text;
+    // Live read, not `composer.getState()`: this runs synchronously in the same
+    // tick as the native insertion's own `setText`, so the memoized snapshot
+    // would still hold the PRE-insertion text and the strip below would no-op.
+    const text = readLiveComposerState(composer).text;
     const next = dropDirectoryClosingSpace(text, item.id);
     if (next !== text) composer.setText(next);
   };

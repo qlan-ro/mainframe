@@ -6,9 +6,9 @@
  *
  * Focus-on-append: `ComposerPrimitive.Input` does not forward a ref on the
  * installed assistant-ui version, so the effect below scopes a
- * `querySelector` off this component's own container's parent —
- * `ComposerSegments` and the input wrapper are mounted as siblings under the
- * same `ComposerPrimitive.AttachmentDropzone` parent in `Composer.tsx`.
+ * `querySelector` to the enclosing `chat-composer` root — the whole composer,
+ * so inserting a wrapper between the segments block and the input can't break
+ * it, and never a second composer (edit mode renders its own input testid).
  */
 import { useEffect, useRef } from 'react';
 import { useComposerSegments } from './segment-store';
@@ -16,6 +16,12 @@ import { SegmentQuotePill } from './SegmentQuotePill';
 
 const EMPTY_COMPOSITION = { committed: [], liveQuote: null } as const;
 
+/**
+ * A committed segment's prose box. Plain textarea semantics on purpose (spec
+ * §2.2 Decision 9): no `ComposerHighlight` overlay and no `@`/`/` triggers —
+ * those are wired to the single native `ComposerPrimitive.Input` — and Enter
+ * inserts a newline here where the identical-looking box below sends.
+ */
 function ComposerSegmentTextarea({
   segmentId,
   value,
@@ -39,6 +45,7 @@ function ComposerSegmentTextarea({
   return (
     <textarea
       ref={ref}
+      data-testid="composer-segment-input"
       data-segment-id={segmentId}
       value={value}
       placeholder={placeholder}
@@ -58,7 +65,8 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (!liveQuoteId) return;
-    containerRef.current?.parentElement
+    containerRef.current
+      ?.closest('[data-testid="chat-composer"]')
       ?.querySelector<HTMLTextAreaElement>('[data-testid="chat-composer-input"]')
       ?.focus();
   }, [liveQuoteId]);
@@ -70,7 +78,11 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
       {composition.committed.map((segment) => (
         <div key={segment.id} data-testid="composer-segment" data-segment-id={segment.id}>
           {segment.quote != null && (
-            <SegmentQuotePill segmentId={segment.id} quote={segment.quote} onDismiss={() => dismiss(threadId, segment.id)} />
+            <SegmentQuotePill
+              segmentId={segment.id}
+              quote={segment.quote}
+              onDismiss={() => dismiss(threadId, segment.id)}
+            />
           )}
           <ComposerSegmentTextarea
             segmentId={segment.id}

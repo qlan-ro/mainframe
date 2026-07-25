@@ -21,6 +21,11 @@
  *    `composer.getState().canSend`, which this suite pins by setting canSend
  *    to a value that would give the wrong answer if it were consulted.
  *
+ * `useSubmitComposition` returns the submit function itself and subscribes to
+ * nothing: the same predicate is exposed separately as `useCanSubmit`, which
+ * DOES subscribe to the live draft and is consumed only inside the send button
+ * (hoisting it re-renders the whole composer on every keystroke).
+ *
  * Mocking strategy
  * ----------------
  * `@assistant-ui/react` is stubbed with a fake `useAui`/`useAuiState` pair,
@@ -77,10 +82,14 @@ vi.mock('@assistant-ui/react', () => ({
       },
     }),
   }),
-  useAuiState: (sel: (s: { threadListItem?: { id: string } }) => unknown) => sel({ threadListItem: { id: THREAD_ID } }),
+  useAuiState: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({
+      threadListItem: { id: THREAD_ID },
+      composer: { text: liveText, attachments: liveAttachments },
+    }),
 }));
 
-import { useSubmitComposition } from '../use-submit-composition';
+import { useSubmitComposition, useCanSubmit } from '../use-submit-composition';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -108,7 +117,7 @@ describe('useSubmitComposition — append shape', () => {
     ];
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(appendSpy).toHaveBeenCalledExactlyOnceWith({
       role: 'user',
@@ -134,7 +143,7 @@ describe('useSubmitComposition — runConfig/attachments are read before reset()
     const preResetRunConfig = liveRunConfig;
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     const [callArg] = appendSpy.mock.calls[0] as [{ runConfig: unknown }];
     expect(callArg.runConfig).toBe(preResetRunConfig);
@@ -155,7 +164,7 @@ describe('useSubmitComposition — runConfig/attachments are read before reset()
     ];
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     const [callArg] = appendSpy.mock.calls[0] as [{ attachments: unknown }];
     expect(callArg.attachments).toEqual([
@@ -176,7 +185,7 @@ describe('useSubmitComposition — reset() and clear() run synchronously right a
     liveText = 'draft text';
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(callOrder).toEqual(['append', 'reset']);
     expect(resetSpy).toHaveBeenCalledOnce();
@@ -187,7 +196,7 @@ describe('useSubmitComposition — reset() and clear() run synchronously right a
     liveText = 'draft text';
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(useComposerSegments.getState().byThread[THREAD_ID]).toEqual({ committed: [], liveQuote: null });
   });
@@ -196,7 +205,7 @@ describe('useSubmitComposition — reset() and clear() run synchronously right a
 describe('useSubmitComposition — empty serialization, no attachments: complete no-op', () => {
   it('does not append, reset, or clear', () => {
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(appendSpy).not.toHaveBeenCalled();
     expect(resetSpy).not.toHaveBeenCalled();
@@ -218,7 +227,7 @@ describe('useSubmitComposition — empty serialization with attachments: append 
     ];
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(appendSpy).toHaveBeenCalledExactlyOnceWith({
       role: 'user',
@@ -238,13 +247,44 @@ describe('useSubmitComposition — empty serialization with attachments: append 
   });
 });
 
+describe('useCanSubmit — the send button gate, split out of useSubmitComposition', () => {
+  it('is false with an empty composer and no segments', () => {
+    const { result } = renderHook(() => useCanSubmit());
+    expect(result.current).toBe(false);
+  });
+
+  it('is true on live text alone', () => {
+    liveText = 'typed';
+    const { result } = renderHook(() => useCanSubmit());
+    expect(result.current).toBe(true);
+  });
+
+  it('is true on a committed segment alone, with the live input empty', () => {
+    useComposerSegments.getState().append(THREAD_ID, { quote: 'Q1', liveText: 'prose' });
+    const { result } = renderHook(() => useCanSubmit());
+    expect(result.current).toBe(true);
+  });
+
+  it('is true on attachments alone', () => {
+    liveAttachments = [{ id: 'att-only', type: 'image', name: 'shot.png', contentType: 'image/png', content: [] }];
+    const { result } = renderHook(() => useCanSubmit());
+    expect(result.current).toBe(true);
+  });
+
+  it('ignores canSend', () => {
+    liveCanSend = true;
+    const { result } = renderHook(() => useCanSubmit());
+    expect(result.current).toBe(false);
+  });
+});
+
 describe('useSubmitComposition — predicate never reads canSend', () => {
   it('submits on non-empty serialization even though canSend is false', () => {
     liveText = 'typed without canSend';
     liveCanSend = false;
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(appendSpy).toHaveBeenCalledOnce();
   });
@@ -253,7 +293,7 @@ describe('useSubmitComposition — predicate never reads canSend', () => {
     liveCanSend = true;
 
     const { result } = renderHook(() => useSubmitComposition());
-    act(() => result.current.submit());
+    act(() => result.current());
 
     expect(appendSpy).not.toHaveBeenCalled();
   });

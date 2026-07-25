@@ -4,7 +4,12 @@
  * In-memory only, keyed by the aui thread item id (the same key the
  * controller uses; stays `__LOCALID_*` for a draft's life). No `persist`, no
  * `daemonScopedKey` — segments do not survive an app restart, and a stale
- * entry for an archived thread is unreachable memory, not a leak to guard.
+ * entry for an ARCHIVED thread is unreachable memory, not a leak to guard.
+ *
+ * The `__LOCALID_*` draft key is the exception: assistant-ui reuses one slot
+ * for every New until the first send, so an abandoned draft's segments ARE
+ * reachable — they return as pills on the next New, in whatever project that
+ * one targets. `resetNewThreadDraft` clears this store for that reason.
  */
 import { create } from 'zustand';
 import { appendQuote, dismissQuote, updateSegmentText, type Composition } from './segment-model';
@@ -39,8 +44,3 @@ export const useComposerSegments = create<ComposerSegmentsState>((set) => ({
     }),
   clear: (threadId) => set((s) => ({ byThread: { ...s.byThread, [threadId]: EMPTY_COMPOSITION } })),
 }));
-
-/** The given thread's composition (the stable empty composition when unknown). */
-export function selectComposerSegment(threadId: string): Composition {
-  return useComposerSegments.getState().byThread[threadId] ?? EMPTY_COMPOSITION;
-}

@@ -24,15 +24,24 @@ import {
   ComposerAddMention,
 } from '@/components/ui/assistant-ui/attachment';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
 import { ComposerSegments } from './segments/ComposerSegments';
 import { useComposerSegments } from './segments/segment-store';
-import { useSubmitComposition } from './segments/use-submit-composition';
+import { useSubmitComposition, useCanSubmit } from './segments/use-submit-composition';
 
-/** Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) — swapped on thread.isRunning. */
-function SendOrCancelButton({ disabled }: { disabled?: boolean }) {
+/**
+ * Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) —
+ * swapped on thread.isRunning.
+ *
+ * `useCanSubmit` is subscribed HERE, not in `Composer`: it reads the live
+ * draft text, so hoisting it would re-render the whole composer (segments,
+ * triggers, toolbar, highlight overlay) on every keystroke.
+ */
+function SendOrCancelButton({ worktreeMissing }: { worktreeMissing: boolean }) {
   const isRunning = useAuiState((s) => s.thread.isRunning);
+  const canSubmit = useCanSubmit();
   const base = 'flex size-[26px] shrink-0 items-center justify-center rounded-md transition-opacity';
 
   if (isRunning) {
@@ -51,7 +60,7 @@ function SendOrCancelButton({ disabled }: { disabled?: boolean }) {
       type="submit"
       data-testid="chat-composer-send"
       aria-label="Send"
-      disabled={disabled}
+      disabled={worktreeMissing || !canSubmit}
       className={cn(base, 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40')}
     >
       <ArrowUpIcon className="size-3.5" />
@@ -64,9 +73,11 @@ export function Composer() {
   const chat = useChatExtras()?.state.chatConfig ?? null;
   const worktreeMissing = chat?.worktreeMissing ?? false;
   const isRunning = useAuiState((s) => s.thread.isRunning);
-  const threadId = useAuiState((s: { threadListItem?: { id: string } }) => s.threadListItem?.id);
-  const hasLiveQuote = useComposerSegments((s) => (threadId ? (s.byThread[threadId]?.liveQuote ?? null) !== null : false));
-  const { submit, canSubmit } = useSubmitComposition();
+  const threadId = useActiveThreadId();
+  const hasLiveQuote = useComposerSegments((s) =>
+    threadId ? (s.byThread[threadId]?.liveQuote ?? null) !== null : false,
+  );
+  const submit = useSubmitComposition();
 
   // Mid-run Enter-to-queue. The native ComposerPrimitive.Input gates Enter off
   // while running unless `thread.capabilities.queue` is set — and that is false
@@ -96,6 +107,9 @@ export function Composer() {
         data-testid="chat-composer"
         data-tut="composer"
         onSubmit={(e) => {
+          // Load-bearing, not boilerplate: aui composes its own onSubmit
+          // (which calls composer.send()) with ours via checkForDefaultPrevented,
+          // so dropping this preventDefault double-sends every Enter.
           e.preventDefault();
           submit();
         }}
@@ -145,7 +159,7 @@ export function Composer() {
               <div className="mx-1 h-3 w-px shrink-0 bg-border" aria-hidden />
               <ComposerToolbar />
             </div>
-            <SendOrCancelButton disabled={worktreeMissing || !canSubmit} />
+            <SendOrCancelButton worktreeMissing={worktreeMissing} />
           </div>
         </ComposerPrimitive.AttachmentDropzone>
       </ComposerPrimitive.Root>

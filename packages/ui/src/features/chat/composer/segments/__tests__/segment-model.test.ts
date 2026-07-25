@@ -22,9 +22,6 @@ describe('appendQuote', () => {
     const next = appendQuote(EMPTY, { quote: 'Q1', liveText: 'intro' });
     expect(next.committed).toEqual([{ id: expect.any(String), quote: null, text: 'intro' }]);
     expect(next.liveQuote!.text).toBe('Q1');
-    // The live text is moved, not copied — appendQuote's signature takes no
-    // separate "clear the input" argument; the caller owns that side effect.
-    expect(Object.keys({ quote: 'Q1', liveText: 'intro' })).toEqual(['quote', 'liveText']);
   });
 
   it('a second append commits the previous liveQuote + its typed prose as one segment, in order', () => {
