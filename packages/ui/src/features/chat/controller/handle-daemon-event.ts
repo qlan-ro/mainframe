@@ -118,6 +118,18 @@ export function handleDaemonEvent(
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };
 
+    case 'worktree.offer.raised':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'worktree.offer.added', offer: event.offer } };
+
+    case 'worktree.offer.resolved':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'worktree.offer.removed', worktreePath: event.worktreePath } };
+
+    case 'worktree.offer.snapshot':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'worktree.offer.snapshot', offers: event.offers } };
+
     case 'chat.compacting':
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'compact.started' } };

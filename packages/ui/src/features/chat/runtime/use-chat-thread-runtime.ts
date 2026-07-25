@@ -30,7 +30,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import type { ChatThreadController } from '../controller/chat-thread-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
-import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import type { QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
 import { projectChatThreadRepository } from '../controller/project-messages';
 import { selectPermissionFront } from '../gates/select-front';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
@@ -55,6 +55,9 @@ export interface ChatRuntimeExtras {
   readonly retryMessage: (clientId: string) => Promise<void>;
   /** Re-run the history load — used to retry after `state.loadState.type === 'error'`. */
   readonly retry: () => Promise<void>;
+  readonly acceptWorktreeOffer: (worktreePath: string) => Promise<void>;
+  readonly dismissWorktreeOffer: (worktreePath: string) => Promise<void>;
+  readonly clearWorktreeSwitch: () => void;
 }
 
 function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
@@ -128,6 +131,9 @@ export function useChatThreadRuntime(
       editQueued: (messageId, content) => controller.editQueued(messageId, content),
       retryMessage: (clientId) => controller.retryMessage(clientId),
       retry: () => controller.refresh(),
+      acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
+      dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
+      clearWorktreeSwitch: () => controller.clearWorktreeSwitch(),
     }),
     [controller, port, state],
   );
@@ -177,6 +183,40 @@ export function useChatQueuedMessages(): QueuedMessageRef[] {
     () => (extras ? Object.values(extras.queued).filter((q): q is QueuedMessageRef => q != null) : []),
     [extras],
   );
+}
+
+/**
+ * Worktree-switch offers for this chat, oldest first, plus the in-flight switch,
+ * the chat's live binding, and the three actions. Stable ref via useMemo([extras]).
+ */
+export function useWorktreeOffer(): {
+  offers: WorktreeSwitchOffer[];
+  switching: ChatThreadState['switching'];
+  current: { worktreePath: string | null; branchName: string | null };
+  accept: (worktreePath: string) => Promise<void>;
+  dismiss: (worktreePath: string) => Promise<void>;
+  clear: () => void;
+} {
+  const extras = useChatExtras();
+  return useMemo(() => {
+    const offers = Object.values(extras?.state.worktreeOffers ?? {}).sort((a, b) => a.detectedAt - b.detectedAt);
+    const chat = extras?.state.chatConfig ?? null;
+    return {
+      offers,
+      switching: extras?.state.switching ?? null,
+      current: {
+        worktreePath: chat?.worktreePath ?? null,
+        branchName: chat?.branchName ?? null,
+      },
+      accept: extras?.acceptWorktreeOffer ?? notReady,
+      dismiss: extras?.dismissWorktreeOffer ?? notReady,
+      clear: extras?.clearWorktreeSwitch ?? (() => undefined),
+    };
+  }, [extras]);
+}
+
+async function notReady(): Promise<never> {
+  throw new Error('Chat runtime not ready');
 }
 
 /** Queue-front gate: pending sorted by askedAt asc, take [0]. Stable ref via useMemo([extras]). */

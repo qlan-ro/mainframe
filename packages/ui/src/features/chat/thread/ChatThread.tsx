@@ -12,6 +12,7 @@ import { ArrowDownIcon } from 'lucide-react';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
 import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
+import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
@@ -119,6 +120,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
 
               <div className="mx-auto w-full max-w-3xl px-5 pb-4">
                 <BackgroundActivityBar />
+                <WorktreeSwitchBanner />
                 <Composer />
               </div>
             </ThreadPrimitive.ViewportFooter>

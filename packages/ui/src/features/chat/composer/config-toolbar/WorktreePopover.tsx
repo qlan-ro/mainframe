@@ -8,14 +8,15 @@
  * This control modifies the *current* session.
  *
  * Three states:
- *  1. Active-info — chat.worktreePath is set (already isolated)
+ *  1. Active-info — chat.worktreePath is set (already isolated), plus the other
+ *     worktrees this session can move to
  *  2. Loading — fetching branches/worktrees on first open
  *  3. Setup — New tab (create) / Existing tab (attach)
  *
  * Built on shadcn Popover + Menu* primitives. Real mf-* tokens only.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, FolderGit2, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -86,20 +87,25 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Fetch branches + worktrees on popover open (not mount) when not isolated
+  // Fetch on popover open (not mount). An isolated chat only lists worktrees to
+  // move between, so it skips the branch fetch the New form would need.
   useEffect(() => {
-    if (!open || chat.worktreePath) return;
+    if (!open) return;
     let cancelled = false;
 
     setLoading(true);
     setApiError(null);
 
-    Promise.all([getGitBranches(port, chat.projectId), getProjectWorktrees(port, chat.projectId)])
+    Promise.all([
+      chat.worktreePath ? Promise.resolve(null) : getGitBranches(port, chat.projectId),
+      getProjectWorktrees(port, chat.projectId),
+    ])
       .then(([branchRes, wtRes]) => {
         if (cancelled) return;
-        const names = branchRes.local.map((b) => b.name);
-        setBranches(names);
-        setCurrentBranch(branchRes.current);
+        if (branchRes !== null) {
+          setBranches(branchRes.local.map((b) => b.name));
+          setCurrentBranch(branchRes.current);
+        }
         setWorktrees(wtRes);
       })
       .catch((err: unknown) => {
@@ -164,6 +170,11 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
   }, [chat.id]);
 
   const isIsolated = Boolean(chat.worktreePath);
+  // The chat's own worktree is already the destination — never offer it as one.
+  const otherWorktrees = useMemo(
+    () => worktrees.filter((wt) => wt.path !== chat.worktreePath),
+    [worktrees, chat.worktreePath],
+  );
   const isPendingDraft = isLocalDraft && pendingWorktree != null;
   const showIsolated = isIsolated || isPendingDraft;
   const branchLabel = isIsolated ? (chat.branchName ?? 'Worktree') : isPendingDraft ? pendingWorktree.branchName : null;
@@ -208,7 +219,24 @@ export function WorktreePopover({ chat, hasMessages }: WorktreePopoverProps) {
         {isLocalDraft && draft != null && showIsolated ? (
           <WorktreeDraftPanel draft={draft} onCancel={handleDraftCancel} />
         ) : isIsolated ? (
-          <ActiveInfo chat={chat} />
+          <>
+            <ActiveInfo chat={chat} />
+            <div className="mt-[6px]">
+              <MenuLabel>Move to another worktree</MenuLabel>
+              {loading ? (
+                <div className="flex items-center justify-center py-[20px]">
+                  <Loader2 size={14} className="animate-spin text-mf-text-3" />
+                </div>
+              ) : (
+                <WorktreeExistingTab
+                  worktrees={otherWorktrees}
+                  submitting={submitting}
+                  onAttach={handleAttach}
+                  error={apiError}
+                />
+              )}
+            </div>
+          </>
         ) : loading ? (
           <div className="flex items-center justify-center py-[20px]">
             <Loader2 size={14} className="animate-spin text-mf-text-3" />

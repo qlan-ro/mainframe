@@ -130,6 +130,39 @@ describe('WorktreePopover — active-info state', () => {
     expect(await screen.findByTestId('composer-worktree-active-info')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-worktree-branch-name')).not.toBeInTheDocument();
   });
+
+  it('lists the other worktrees the isolated session can move to, excluding its own', async () => {
+    getProjectWorktreesMock.mockResolvedValueOnce([
+      { path: '/wt/c1', branch: 'refs/heads/feat/c1' },
+      { path: '/wt/feat-a', branch: 'refs/heads/feat-a' },
+    ]);
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat);
+
+    openPopover();
+
+    expect(await screen.findByTestId('composer-worktree-attach-/wt/feat-a')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-attach-/wt/c1')).not.toBeInTheDocument();
+    // The New tab stays hidden for an already-isolated session.
+    expect(screen.queryByTestId('composer-worktree-tab-new')).not.toBeInTheDocument();
+  });
+
+  it('attaches the isolated session to the worktree row that was clicked', async () => {
+    getProjectWorktreesMock.mockResolvedValueOnce([
+      { path: '/wt/c1', branch: 'refs/heads/feat/c1' },
+      { path: '/wt/feat-a', branch: 'refs/heads/feat-a' },
+    ]);
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat);
+
+    openPopover();
+
+    fireEvent.click(await screen.findByTestId('composer-worktree-attach-/wt/feat-a'));
+
+    await waitFor(() => {
+      expect(attachWorktreeMock).toHaveBeenCalledWith(31415, 'c1', '/wt/feat-a', 'feat-a');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

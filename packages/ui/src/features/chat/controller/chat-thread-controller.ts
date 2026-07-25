@@ -19,6 +19,11 @@ import { cancelQueuedMessage, editQueuedMessage } from '../../../lib/api/chats';
 import { getChat, getChatMessages, interruptChat } from '../../../lib/api/chats';
 import { uploadAttachments } from '../../../lib/api/attachments';
 import {
+  acceptWorktreeOffer as postAcceptWorktreeOffer,
+  dismissWorktreeOffer as postDismissWorktreeOffer,
+} from '../../../lib/api/git';
+import { mfToast } from '@/lib/toast';
+import {
   createChatThreadState,
   reduceChatThreadState,
   type ChatThreadState,
@@ -316,6 +321,40 @@ export class ChatThreadController {
 
   public async editQueued(messageId: string, content: string): Promise<void> {
     await editQueuedMessage(this.port, this.daemonId, messageId, content);
+  }
+
+  /**
+   * Accept a worktree-switch offer. The offer is left pending: only the daemon's
+   * `worktree.offer.resolved` removes it, so a rebind that fails server-side
+   * still leaves the user something to retry.
+   */
+  public async acceptWorktreeOffer(worktreePath: string): Promise<void> {
+    this.dispatch({ type: 'worktree.switch.started', worktreePath });
+    try {
+      await postAcceptWorktreeOffer(this.port, this.daemonId, worktreePath);
+    } catch (error) {
+      this.dispatch({ type: 'worktree.switch.failed' });
+      mfToast.error('Could not switch worktree', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  public async dismissWorktreeOffer(worktreePath: string): Promise<void> {
+    try {
+      await postDismissWorktreeOffer(this.port, this.daemonId, worktreePath);
+    } catch (error) {
+      mfToast.error('Could not dismiss worktree offer', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /** Drops the settled confirmation once the banner has shown it. */
+  public clearWorktreeSwitch(): void {
+    this.dispatch({ type: 'worktree.switch.cleared' });
   }
 
   private refreshInBackground(): void {
