@@ -15,6 +15,7 @@ export * from './task-progress.js';
 export * from './lsp.js';
 export * from './git.js';
 export * from './suggestion.js';
+export * from './setup-advisor.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
 export * from './automation.js';
