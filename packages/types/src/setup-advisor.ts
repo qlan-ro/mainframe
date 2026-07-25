@@ -65,7 +65,7 @@ export interface ProjectFingerprint {
   testing: string[];
   tooling: string[];
   gitHost: 'github' | 'gitlab' | 'other' | null;
-  /** `.claude/` or `CLAUDE.md` present. No MVP rule consumes it; detected for todo #192. */
+  /** `.claude/` or `CLAUDE.md` present. Its absence recommends `claude-code-setup`. */
   hasClaudeConfig: boolean;
   hasEnvFiles: boolean;
   hasLockFiles: boolean;

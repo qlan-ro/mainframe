@@ -1,11 +1,14 @@
 /**
- * One recommendation row: title, signal chip + why, a command row (first
- * line only — a multi-line `command` is a config snippet, copy still writes
- * every line), and the row's own copy/copy-failure transient state. A
- * `third-party` rule renders its source repo + install count in a visually
- * distinct (warning-toned) chip — the design gate's condition for shipping
- * aggregator sources; first-party/vendor-official get a plain attribution
- * line instead so third-party never blends in.
+ * One recommendation row: title, signal chip + why, a payload strip, and the
+ * row's own copy/copy-failure transient state. The strip must never let the
+ * clipboard surprise the user, so it says what the copy hands them: a file
+ * payload (`targetPath` set) names its destination rather than showing the
+ * first line of a JSON or Markdown body, and a command that spans lines says
+ * how many are hidden behind the truncated preview. A `third-party` rule
+ * renders its source repo + install count in a visually distinct
+ * (warning-toned) chip — the design gate's condition for shipping aggregator
+ * sources; first-party/vendor-official get a plain attribution line instead so
+ * third-party never blends in.
  */
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
@@ -35,9 +38,31 @@ function SourceAttribution({ rec }: { rec: AutomationRecommendation }) {
   return <p className="mt-1 text-caption text-muted-foreground">{label}</p>;
 }
 
+function PayloadPreview({ rec }: { rec: AutomationRecommendation }) {
+  if (rec.targetPath) {
+    return (
+      <span className="truncate text-caption text-muted-foreground">
+        Paste into <span className="select-text font-mono text-foreground">{rec.targetPath}</span>
+      </span>
+    );
+  }
+
+  const lines = rec.command.split('\n');
+  const hidden = lines.length - 1;
+  return (
+    <>
+      <span className="select-text truncate font-mono text-caption">{lines[0] ?? rec.command}</span>
+      {hidden > 0 && (
+        <span className="flex-shrink-0 text-caption text-muted-foreground">
+          +{hidden} more {hidden === 1 ? 'line' : 'lines'}
+        </span>
+      )}
+    </>
+  );
+}
+
 export function RecommendationRow({ rec, copied, onCopied }: RecommendationRowProps) {
   const [failed, setFailed] = useState(false);
-  const firstLine = rec.command.split('\n')[0];
 
   async function handleCopy() {
     try {
@@ -59,7 +84,7 @@ export function RecommendationRow({ rec, copied, onCopied }: RecommendationRowPr
       </p>
       <SourceAttribution rec={rec} />
       <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
-        <span className="select-text truncate font-mono text-caption">{firstLine}</span>
+        <PayloadPreview rec={rec} />
         <button
           type="button"
           data-testid={`automation-recommender-copy-${rec.id}`}

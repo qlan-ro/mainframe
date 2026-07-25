@@ -53,7 +53,8 @@ function baseProps() {
     loading: false,
     error: null as string | null,
     projectName: 'mainframe',
-    copiedIds: new Set<string>(),
+    copiedIds: new Set<string>() as ReadonlySet<string>,
+    copiedCount: 0,
     onCopy: vi.fn(),
     onRetry: vi.fn(),
   };
@@ -71,27 +72,30 @@ beforeEach(() => {
 });
 
 describe('SetupAdvisorSheet — copy', () => {
-  it('writes the full multi-line command to the clipboard, flips to Copied, and bumps the footer counter', async () => {
+  // The sheet holds no copy state of its own: it writes the clipboard, reports
+  // the id, and renders whatever the container feeds back. The rerender below
+  // stands in for SetupAdvisorHost's markCopied → store → props round trip.
+  it('writes the full multi-line command to the clipboard, reports the id, and renders the fed-back copy state', async () => {
     const onCopy = vi.fn();
-    render(<SetupAdvisorSheet {...baseProps()} onCopy={onCopy} />);
+    const { rerender } = render(<SetupAdvisorSheet {...baseProps()} onCopy={onCopy} />);
 
     expect(screen.getByText('0 of 1 copied')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('automation-recommender-copy-mcp-supabase'));
 
     expect(writeTextMock).toHaveBeenCalledWith('claude mcp add supabase npx @supabase/mcp-server\nclaude mcp list');
+    await waitFor(() => expect(onCopy).toHaveBeenCalledWith('mcp-supabase'));
 
-    await waitFor(() => {
-      expect(screen.getByTestId('automation-recommender-copy-mcp-supabase').textContent).toContain('Copied');
-    });
-    await waitFor(() => {
-      expect(screen.getByText('1 of 1 copied')).toBeTruthy();
-    });
-    expect(onCopy).toHaveBeenCalledWith('mcp-supabase');
+    rerender(
+      <SetupAdvisorSheet {...baseProps()} onCopy={onCopy} copiedIds={new Set(['mcp-supabase'])} copiedCount={1} />,
+    );
+
+    expect(screen.getByTestId('automation-recommender-copy-mcp-supabase').textContent).toContain('Copied');
+    expect(screen.getByText('1 of 1 copied')).toBeTruthy();
   });
 
   it('initializes a row as already-copied when its id is in the copiedIds prop', () => {
-    render(<SetupAdvisorSheet {...baseProps()} copiedIds={new Set(['mcp-supabase'])} />);
+    render(<SetupAdvisorSheet {...baseProps()} copiedIds={new Set(['mcp-supabase'])} copiedCount={1} />);
 
     expect(screen.getByTestId('automation-recommender-copy-mcp-supabase').textContent).toContain('Copied');
     expect(screen.getByText('1 of 1 copied')).toBeTruthy();
@@ -99,7 +103,9 @@ describe('SetupAdvisorSheet — copy', () => {
 });
 
 describe('SetupAdvisorSheet — copy failure', () => {
-  it('shows Copy failed and reverts without changing the footer counter, when writeText rejects', async () => {
+  // Not reporting the id is what keeps the counter still: the container only
+  // ever bumps it in response to onCopy.
+  it('shows Copy failed, reverts, and never reports the id, when writeText rejects', async () => {
     writeTextMock.mockRejectedValue(new Error('denied'));
     const onCopy = vi.fn();
     render(<SetupAdvisorSheet {...baseProps()} onCopy={onCopy} />);
@@ -117,7 +123,6 @@ describe('SetupAdvisorSheet — copy failure', () => {
       { timeout: 3000 },
     );
 
-    expect(screen.getByText('0 of 1 copied')).toBeTruthy();
     expect(onCopy).not.toHaveBeenCalled();
   });
 });

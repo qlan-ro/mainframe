@@ -7,7 +7,7 @@
  * file only proves the host wires identity, nav, and data together correctly.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { SetupAdvisorReport } from '@qlan-ro/mainframe-types';
 
 vi.mock('@/lib/api/setup-advisor', () => ({
@@ -23,7 +23,7 @@ vi.mock('../SetupAdvisorSheet', () => ({
     projectName: string;
     loading: boolean;
     report: SetupAdvisorReport | null;
-    copiedIds: Set<string>;
+    copiedIds: ReadonlySet<string>;
     onCopy: (recId: string) => void;
     onRetry: () => void;
   }) => (
@@ -109,17 +109,20 @@ describe('SetupAdvisorHost — no active project', () => {
 });
 
 describe('SetupAdvisorHost — fetch on the open rising edge', () => {
+  // The close and the re-open are two user gestures (the Dialog's onOpenChange,
+  // then the toolbar button), so each gets its own act() — batching them into
+  // one render would model an interaction that cannot happen.
   it('does not fetch on mount while closed, fetches once on open, and again on every re-open', async () => {
     vi.mocked(setupAdvisorApi.getAutomationRecommendations).mockResolvedValue(makeReport(['mcp-supabase']));
 
     render(<SetupAdvisorHost />);
     expect(setupAdvisorApi.getAutomationRecommendations).not.toHaveBeenCalled();
 
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
     await waitFor(() => expect(setupAdvisorApi.getAutomationRecommendations).toHaveBeenCalledTimes(1));
 
-    useSetupAdvisor.getState().closeSheet();
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().closeSheet());
+    act(() => useSetupAdvisor.getState().openSheet());
     await waitFor(() => expect(setupAdvisorApi.getAutomationRecommendations).toHaveBeenCalledTimes(2));
   });
 
@@ -127,7 +130,7 @@ describe('SetupAdvisorHost — fetch on the open rising edge', () => {
     vi.mocked(setupAdvisorApi.getAutomationRecommendations).mockResolvedValue(makeReport(['mcp-supabase']));
 
     const { rerender } = render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
     await waitFor(() => expect(setupAdvisorApi.getAutomationRecommendations).toHaveBeenCalledTimes(1));
 
     rerender(<SetupAdvisorHost />);
@@ -167,8 +170,8 @@ describe('SetupAdvisorHost — copy state survives close/reopen', () => {
     fireEvent.click(screen.getByTestId('stub-copy'));
     await waitFor(() => expect(screen.getByTestId('stub-copied-ids').textContent).toBe('mcp-supabase'));
 
-    useSetupAdvisor.getState().closeSheet();
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().closeSheet());
+    act(() => useSetupAdvisor.getState().openSheet());
 
     await waitFor(() => expect(setupAdvisorApi.getAutomationRecommendations).toHaveBeenCalledTimes(2));
     expect(screen.getByTestId('stub-copied-ids').textContent).toBe('mcp-supabase');
@@ -195,6 +198,34 @@ describe('SetupAdvisorHost — project switch while open', () => {
     await waitFor(() => expect(setupAdvisorApi.getAutomationRecommendations).toHaveBeenCalledTimes(2));
 
     resolveA(makeReport(['mcp-a']));
+
+    await waitFor(() => expect(screen.getByTestId('stub-rec-ids').textContent).toBe('mcp-b'));
+  });
+});
+
+describe('SetupAdvisorHost — report/project boundary', () => {
+  // Finding 14: the clearing effect runs after commit, so the render that first
+  // sees the new projectId still reads the old project's report out of the
+  // store. Nothing must reach the sheet under the wrong project's name — not
+  // even for the one frame before the refetch starts.
+  it('withholds a report fetched for a different project', () => {
+    vi.mocked(setupAdvisorApi.getAutomationRecommendations).mockImplementation(() => new Promise(() => {}));
+    useSetupAdvisorStore.setState({ report: makeReport(['mcp-a']), reportProjectId: 'proj-a' });
+    vi.mocked(useActiveIdentity).mockReturnValue(identity('proj-b'));
+    useSetupAdvisor.setState({ open: true });
+
+    render(<SetupAdvisorHost />);
+
+    expect(screen.getByTestId('stub-rec-ids').textContent).toBe('');
+  });
+
+  it('passes the report through once it belongs to the active project', async () => {
+    vi.mocked(setupAdvisorApi.getAutomationRecommendations).mockResolvedValue(makeReport(['mcp-b']));
+    useSetupAdvisorStore.setState({ report: makeReport(['mcp-a']), reportProjectId: 'proj-a' });
+    vi.mocked(useActiveIdentity).mockReturnValue(identity('proj-b'));
+    useSetupAdvisor.setState({ open: true });
+
+    render(<SetupAdvisorHost />);
 
     await waitFor(() => expect(screen.getByTestId('stub-rec-ids').textContent).toBe('mcp-b'));
   });

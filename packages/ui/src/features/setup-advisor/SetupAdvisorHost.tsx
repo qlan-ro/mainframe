@@ -4,53 +4,60 @@
  * the active project (useActiveIdentity). Follows TasksModalHost: resolve
  * identity, gate on projectId, refetch on the open rising edge.
  *
- * One effect keyed on [open, openSeq, projectId]: fetch on the open rising
- * edge (or a repeat `openSeq` bump — see use-setup-advisor.ts for why a bare
- * boolean transition isn't enough), or on a projectId change while already
- * open (dropping the stale report first via clearForProjectSwitch — the
- * store's `_loadSeq` guard makes a late response from the old project a
- * no-op even without this, but clearing prevents the old project's rows from
- * flashing before the new fetch resolves). A project switch while closed
- * must not fetch (spec: no cache, but also no wasted fetches for a sheet
- * nobody is looking at).
+ * One effect keyed on [open, projectId]: fetch on the open rising edge, or on
+ * a projectId change while already open (dropping the stale report first via
+ * clearForProjectSwitch — the store's `_loadSeq` guard already makes a late
+ * response from the old project a no-op, and clearing keeps the store from
+ * holding a report nobody can render). A project switch while closed must not
+ * fetch (spec: no cache, but also no wasted fetches for a sheet nobody is
+ * looking at).
+ *
+ * The effect cannot prevent the flash on its own — it runs after the render
+ * that already saw the new projectId — so the report is gated on
+ * `reportProjectId` at the prop boundary below.
  */
 import { useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';
-import { useSetupAdvisorStore } from './use-setup-advisor-store';
+import { selectCopiedCount, useSetupAdvisorStore } from './use-setup-advisor-store';
 import { SetupAdvisorSheet } from './SetupAdvisorSheet';
 
+/** Module-scoped so a project with no copy history hands the sheet a stable prop. */
+const EMPTY_COPIED: ReadonlySet<string> = new Set();
+
 export function SetupAdvisorHost() {
-  const { open, openSeq, closeSheet } = useSetupAdvisor();
+  const { open, closeSheet } = useSetupAdvisor();
   const { projectId, projectName } = useActiveIdentity();
-  const { report, loading, error, copiedByProject, load, clearForProjectSwitch, markCopied } =
+  const { report, reportProjectId, loading, error, copiedByProject, load, clearForProjectSwitch, markCopied } =
     useSetupAdvisorStore();
+  const copiedCount = useSetupAdvisorStore(selectCopiedCount);
 
   const prevOpen = useRef(false);
-  const prevOpenSeq = useRef(-1);
   const prevProjectId = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const isFreshOpen = open && !prevOpen.current;
-    const seqChanged = open && openSeq !== prevOpenSeq.current;
     const projectChanged = projectId !== prevProjectId.current;
     prevOpen.current = open;
-    prevOpenSeq.current = openSeq;
     prevProjectId.current = projectId;
 
     if (!projectId) return;
-    if (isFreshOpen || seqChanged) {
+    if (isFreshOpen) {
       void load(projectId);
     } else if (open && projectChanged) {
       clearForProjectSwitch();
       void load(projectId);
     }
-  }, [open, openSeq, projectId, load, clearForProjectSwitch]);
+  }, [open, projectId, load, clearForProjectSwitch]);
 
   if (!projectId) return null;
 
-  const copiedIds = copiedByProject[projectId] ?? new Set<string>();
+  const copiedIds = copiedByProject[projectId] ?? EMPTY_COPIED;
+  // The clearing effect runs after commit, so on a project switch this render
+  // still sees the old project's report. Gating on the id it was fetched for
+  // keeps those rows from ever appearing under the new project's name.
+  const reportForProject = reportProjectId === projectId ? report : null;
 
   return (
     <Dialog
@@ -64,11 +71,12 @@ export function SetupAdvisorHost() {
           <DialogTitle>Setup Advisor</DialogTitle>
         </DialogHeader>
         <SetupAdvisorSheet
-          report={report}
+          report={reportForProject}
           loading={loading}
           error={error}
           projectName={projectName}
           copiedIds={copiedIds}
+          copiedCount={copiedCount}
           onCopy={(recId) => markCopied(projectId, recId)}
           onRetry={() => void load(projectId)}
         />

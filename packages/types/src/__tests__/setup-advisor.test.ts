@@ -51,10 +51,9 @@ describe('AutomationRecommendationSchema', () => {
   });
 
   it('rejects an unknown category', () => {
-    expect(
-      AutomationRecommendationSchema.safeParse({ ...validRecommendation, category: 'themes' })
-        .success
-    ).toBe(false);
+    expect(AutomationRecommendationSchema.safeParse({ ...validRecommendation, category: 'themes' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects a missing command', () => {
@@ -81,7 +80,7 @@ describe('AutomationRecommendationSchema', () => {
       AutomationRecommendationSchema.safeParse({
         ...validRecommendation,
         provenance: 'first-party',
-      }).success
+      }).success,
     ).toBe(true);
   });
 
@@ -101,7 +100,7 @@ describe('AutomationRecommendationSchema', () => {
         ...validRecommendation,
         provenance: 'third-party',
         source: null,
-      }).success
+      }).success,
     ).toBe(false);
   });
 });
@@ -140,56 +139,41 @@ describe('RecommendationSourceSchema', () => {
   });
 
   it('rejects a negative installs count', () => {
-    expect(RecommendationSourceSchema.safeParse({ ...validSource, installs: -1 }).success).toBe(
-      false
-    );
+    expect(RecommendationSourceSchema.safeParse({ ...validSource, installs: -1 }).success).toBe(false);
   });
 
   it('rejects a non-integer installs count', () => {
-    expect(RecommendationSourceSchema.safeParse({ ...validSource, installs: 12.5 }).success).toBe(
-      false
-    );
+    expect(RecommendationSourceSchema.safeParse({ ...validSource, installs: 12.5 }).success).toBe(false);
   });
 });
 
 describe('ProjectFingerprintSchema', () => {
   it('accepts gitHost: null', () => {
-    expect(ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: null }).success).toBe(
-      true
-    );
+    expect(ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: null }).success).toBe(true);
   });
 
   it('accepts gitHost: github', () => {
-    expect(
-      ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'github' }).success
-    ).toBe(true);
+    expect(ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'github' }).success).toBe(true);
   });
 
   it('accepts gitHost: gitlab', () => {
-    expect(
-      ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'gitlab' }).success
-    ).toBe(true);
+    expect(ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'gitlab' }).success).toBe(true);
   });
 
   it('accepts gitHost: other', () => {
-    expect(
-      ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'other' }).success
-    ).toBe(true);
+    expect(ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'other' }).success).toBe(true);
   });
 
   it('rejects gitHost: bitbucket', () => {
-    expect(
-      ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'bitbucket' }).success
-    ).toBe(false);
+    expect(ProjectFingerprintSchema.safeParse({ ...validFingerprint, gitHost: 'bitbucket' }).success).toBe(false);
   });
 });
 
 describe('SetupAdvisorReportSchema', () => {
   it('accepts a fingerprint with an empty recommendations array', () => {
-    expect(
-      SetupAdvisorReportSchema.safeParse({ fingerprint: validFingerprint, recommendations: [] })
-        .success
-    ).toBe(true);
+    expect(SetupAdvisorReportSchema.safeParse({ fingerprint: validFingerprint, recommendations: [] }).success).toBe(
+      true,
+    );
   });
 
   it('rejects a report missing fingerprint', () => {

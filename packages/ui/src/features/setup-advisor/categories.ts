@@ -1,8 +1,9 @@
 /**
  * Category metadata for the Setup Advisor sheet: canonical tab order, the
- * icon/label used per category, the footer copy (plugins run inside Claude
- * Code, everything else runs in a terminal), and the first-present-category
- * helper that seeds the sheet's active tab.
+ * icon/label used per category, and the first-present-category helper that
+ * seeds the sheet's active tab. Describing what a recommendation hands the
+ * user is `payload.ts`'s job — that varies per recommendation, not per
+ * category.
  */
 import { Plug, Sparkles, Webhook, Bot, Puzzle, type LucideIcon } from 'lucide-react';
 import type { AutomationRecommendation, RecommendationCategory } from '@qlan-ro/mainframe-types';
@@ -23,14 +24,6 @@ export const CATEGORY_LABEL: Record<RecommendationCategory, string> = {
   hooks: 'Hooks',
   subagents: 'Subagents',
   plugins: 'Plugins',
-};
-
-export const CATEGORY_FOOTER_TEXT: Record<RecommendationCategory, string> = {
-  mcp: 'Read-only — commands run in your terminal.',
-  skills: 'Read-only — commands run in your terminal.',
-  hooks: 'Read-only — commands run in your terminal.',
-  subagents: 'Read-only — commands run in your terminal.',
-  plugins: 'Read-only — run this inside Claude Code.',
 };
 
 export function firstPresentCategory(recommendations: AutomationRecommendation[]): RecommendationCategory {

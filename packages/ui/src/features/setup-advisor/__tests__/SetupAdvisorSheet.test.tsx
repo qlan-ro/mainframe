@@ -60,11 +60,47 @@ const REC_MCP_2 = makeRec({ id: 'mcp-github', category: 'mcp', title: 'Add the G
 const REC_SKILLS = makeRec({ id: 'skills-storybook', category: 'skills', title: 'Add the Storybook skill' });
 const REC_PLUGINS = makeRec({ id: 'plugins-frontend-design', category: 'plugins', title: 'Install frontend-design' });
 
+// The two file payloads: a hooks JSON snippet and a subagent Markdown body.
+// Their first lines ("{" and "---") are exactly the meaningless glyphs the row
+// must not render, which is what makes them the right fixtures here.
+const REC_HOOKS = makeRec({
+  id: 'hooks-block-edits',
+  category: 'hooks',
+  title: 'Block edits to secrets and lockfiles',
+  command: '{\n  "hooks": {\n    "PreToolUse": []\n  }\n}',
+  targetPath: '.claude/settings.json',
+  provenance: 'first-party',
+});
+const REC_SUBAGENTS = makeRec({
+  id: 'subagents-security-reviewer',
+  category: 'subagents',
+  title: 'security-reviewer',
+  command: '---\nname: security-reviewer\n---\n\nYou review this project.',
+  targetPath: '.claude/agents/security-reviewer.md',
+  provenance: 'first-party',
+});
+// A SKILL.md scaffold — the reason payload kind is derived per recommendation
+// and not per category: `skills` holds both this and `npx skills add` commands.
+const REC_SKILLS_SCAFFOLD = makeRec({
+  id: 'skills-project-conventions',
+  category: 'skills',
+  title: 'Project conventions skill',
+  command: '---\nname: project-conventions\n---\n',
+  targetPath: '.claude/skills/project-conventions/SKILL.md',
+  provenance: 'first-party',
+});
+
 // Deliberately not in canonical category order — plugins first — so tab-order
 // assertions prove the component sorts, rather than mirroring input order.
 const REPORT_RICH: SetupAdvisorReport = {
   fingerprint: makeFingerprint(['TypeScript', 'React', 'PostgreSQL']),
   recommendations: [REC_PLUGINS, REC_MCP_1, REC_MCP_2, REC_SKILLS],
+};
+
+/** Every payload kind at once: shell commands, a Claude Code command, and three file payloads. */
+const REPORT_ALL_KINDS: SetupAdvisorReport = {
+  fingerprint: makeFingerprint(['TypeScript', 'React', 'PostgreSQL']),
+  recommendations: [REC_MCP_1, REC_SKILLS, REC_SKILLS_SCAFFOLD, REC_HOOKS, REC_SUBAGENTS, REC_PLUGINS],
 };
 
 function baseProps() {
@@ -73,7 +109,8 @@ function baseProps() {
     loading: false,
     error: null as string | null,
     projectName: 'mainframe',
-    copiedIds: new Set<string>(),
+    copiedIds: new Set<string>() as ReadonlySet<string>,
+    copiedCount: 0,
     onCopy: vi.fn(),
     onRetry: vi.fn(),
   };
@@ -142,6 +179,43 @@ describe('SetupAdvisorSheet — rows', () => {
     expect(screen.getByText('claude mcp add supabase npx @supabase/mcp-server')).toBeTruthy();
     expect(screen.queryByText('claude mcp list')).toBeNull();
   });
+
+  it('says how many lines the truncated preview hides, so a two-line command cannot copy in silence', () => {
+    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_RICH} />);
+
+    expect(screen.getByText('+1 more line')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// File payloads
+// ---------------------------------------------------------------------------
+
+describe('SetupAdvisorSheet — file payloads', () => {
+  it('names the destination file instead of the snippet’s first line, for hooks', () => {
+    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
+    fireEvent.click(screen.getByTestId('automation-recommender-tab-hooks'));
+
+    expect(screen.getByText('.claude/settings.json')).toBeTruthy();
+    expect(screen.getByText('Paste into', { exact: false })).toBeTruthy();
+    expect(screen.queryByText('{')).toBeNull();
+  });
+
+  it('names the destination file instead of the frontmatter fence, for subagents', () => {
+    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
+    fireEvent.click(screen.getByTestId('automation-recommender-tab-subagents'));
+
+    expect(screen.getByText('.claude/agents/security-reviewer.md')).toBeTruthy();
+    expect(screen.queryByText('---')).toBeNull();
+  });
+
+  it('distinguishes a SKILL.md scaffold from an install command inside the one skills tab', () => {
+    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
+    fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
+
+    expect(screen.getByText('.claude/skills/project-conventions/SKILL.md')).toBeTruthy();
+    expect(screen.getByText('default-command')).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -149,15 +223,34 @@ describe('SetupAdvisorSheet — rows', () => {
 // ---------------------------------------------------------------------------
 
 describe('SetupAdvisorSheet — footer', () => {
-  it('reads the terminal copy on mcp/skills/hooks/subagents and the Claude Code copy on plugins', () => {
+  it('reads the terminal copy on a tab of shell commands and the Claude Code copy on plugins', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_RICH} />);
 
-    expect(screen.getByText('Read-only — commands run in your terminal.')).toBeTruthy();
+    expect(screen.getByText('Read-only — nothing runs until you paste it in your terminal.')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('automation-recommender-tab-plugins'));
 
-    expect(screen.getByText('Read-only — run this inside Claude Code.')).toBeTruthy();
-    expect(screen.queryByText('Read-only — commands run in your terminal.')).toBeNull();
+    expect(screen.getByText('Read-only — nothing runs until you paste it into Claude Code.')).toBeTruthy();
+    expect(screen.queryByText('Read-only — nothing runs until you paste it in your terminal.')).toBeNull();
+  });
+
+  // The bug this pins: hooks and subagents hand over file contents, and the
+  // footer used to tell the user they were commands that run in a terminal.
+  it('promises a write, not a run, on a tab whose payloads are file contents', () => {
+    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
+
+    for (const tab of ['hooks', 'subagents']) {
+      fireEvent.click(screen.getByTestId(`automation-recommender-tab-${tab}`));
+      expect(screen.getByText('Read-only — nothing is written until you paste it into your project.')).toBeTruthy();
+      expect(screen.queryByText('Read-only — nothing runs until you paste it in your terminal.')).toBeNull();
+    }
+  });
+
+  it('falls back to the shared promise on a tab that mixes a command with a file payload', () => {
+    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
+    fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
+
+    expect(screen.getByText('Read-only — nothing is applied until you paste it.')).toBeTruthy();
   });
 
   it('counts every recommendation across all categories, not just the active tab', () => {
@@ -168,6 +261,19 @@ describe('SetupAdvisorSheet — footer', () => {
     fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
 
     expect(screen.getByText('0 of 4 copied')).toBeTruthy();
+  });
+
+  it('renders the copied total its container supplies, not one derived from copiedIds', () => {
+    render(
+      <SetupAdvisorSheet
+        {...baseProps()}
+        report={REPORT_RICH}
+        copiedIds={new Set(['mcp-supabase', 'skills-storybook'])}
+        copiedCount={2}
+      />,
+    );
+
+    expect(screen.getByText('2 of 4 copied')).toBeTruthy();
   });
 
   it('is hidden while loading and when there are no recommendations', () => {
@@ -215,17 +321,13 @@ describe('SetupAdvisorSheet — thin', () => {
     };
     render(<SetupAdvisorSheet {...baseProps()} report={report} />);
 
-    expect(
-      screen.getByText(
-        "Recommendations are sparse because little was detected — there's genuinely not much to automate yet.",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText('We detected only a few signals here, so the list is short.')).toBeTruthy();
   });
 
   it('does not render the sparse note when 3 or more signals were detected', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_RICH} />);
 
-    expect(screen.queryByText(/genuinely not much to automate yet/)).toBeNull();
+    expect(screen.queryByText('We detected only a few signals here, so the list is short.')).toBeNull();
   });
 });
 
@@ -254,11 +356,7 @@ describe('SetupAdvisorSheet — empty', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={report} />);
 
     expect(screen.getByText('No recommendations for this project yet.')).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Recommendations are sparse because little was detected — there's genuinely not much to automate yet.",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText('We detected only a few signals here, so the list is short.')).toBeTruthy();
   });
 });
 

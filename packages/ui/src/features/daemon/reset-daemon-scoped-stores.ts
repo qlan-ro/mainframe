@@ -59,5 +59,11 @@ export function resetDaemonScopedStores(): void {
 
   useComposerSegments.setState({ byThread: {} });
 
-  useSetupAdvisorStore.setState({ report: null, reportProjectId: null, loading: false, error: null, copiedByProject: {} });
+  useSetupAdvisorStore.setState({
+    report: null,
+    reportProjectId: null,
+    loading: false,
+    error: null,
+    copiedByProject: {},
+  });
 }
