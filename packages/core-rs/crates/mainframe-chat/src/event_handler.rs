@@ -101,6 +101,10 @@ pub trait EventHandlerDeps: Send + Sync {
     /// Claude `rate_limit_event`). Default no-op mirrors the TS optional callback: a
     /// ChatManager built without a QuotaManager simply drops it.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
+
+    /// A completed, non-error tool call that may have registered a worktree.
+    /// Sync fire-and-forget; the offer registry spawns its own rescan.
+    fn on_worktree_trigger(&self, _chat_id: &str) {}
 }
 
 /// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
@@ -192,6 +196,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             deps: self.deps.clone(),
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
+            pending_worktree_triggers: Mutex::new(HashSet::new()),
         })
     }
 
@@ -235,6 +240,19 @@ fn emit_display_for<D: EventHandlerDeps>(
     emit_display_delta(chat_id, &msgs, &mut cache, categories, &prepare, &mut emit);
 }
 
+/// A `git worktree` shell call, or Claude's own worktree tool. Neither result is
+/// parsed — the registry rescans git and decides for itself what changed.
+fn is_worktree_tool(name: &str, input: &HashMap<String, serde_json::Value>) -> bool {
+    if name == "EnterWorktree" {
+        return true;
+    }
+    matches!(name, "Bash" | "BashTool")
+        && input
+            .get("command")
+            .and_then(|value| value.as_str())
+            .is_some_and(|command| command.to_ascii_lowercase().contains("worktree"))
+}
+
 struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     chat_id: String,
     built_for_session_id: Option<String>,
@@ -244,6 +262,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     deps: Arc<D>,
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
+    pending_worktree_triggers: Mutex<HashSet<String>>,
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
@@ -419,6 +438,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                         .unwrap_or_else(|e| e.into_inner())
                         .insert(id.clone());
                 }
+                if is_worktree_tool(name, input) {
+                    self.pending_worktree_triggers
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(id.clone());
+                }
             }
         }
         let has_enter_plan_mode = content.iter().any(|b| {
@@ -493,6 +518,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     fn on_tool_result(&self, content: Vec<MessageContent>) {
         let mut edited_paths: Vec<String> = Vec::new();
         let mut subagent_completed = false;
+        let mut worktree_trigger = false;
         for block in &content {
             if let MessageContent::Node(MessageContentNode::ToolResult {
                 tool_use_id,
@@ -519,7 +545,19 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 {
                     subagent_completed = true;
                 }
+                if self
+                    .pending_worktree_triggers
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(tool_use_id)
+                {
+                    worktree_trigger = true;
+                }
             }
+        }
+        // Once per batch: two `git worktree add`s in one turn need one rescan.
+        if worktree_trigger {
+            self.deps.on_worktree_trigger(&self.chat_id);
         }
 
         let message = self.transient(ChatMessageType::ToolResult, content, None);
@@ -1140,6 +1178,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
+
+#[cfg(test)]
+mod worktree_trigger_tests;
 
 #[cfg(test)]
 mod tests {

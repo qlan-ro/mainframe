@@ -24,7 +24,7 @@ Each of these resolves a question the spec named but did not answer at the code 
 
 **A6 — the switch guard lives *only* in the registry; `Guards` is not extended.** The registry's `ChatOffers.switching: Option<String>` (Task 7) already holds the in-flight target per chat, so `claim_accept`/`release_accept` are the whole guard. Rejected alternative: a fourth `switching: HashMap<String, Arc<Notify>>` on `Guards` (`lifecycle_manager.rs:143-148`) for symmetry with `loading`/`starting`/`interrupting` — it would be a second copy of the same truth, acquired and released on different lines (drift risk), wrapping a `Notify` that nothing ever awaits. `join_flight` (`:157-172`) exists to *await* an in-flight operation; the spec requires accept to fail 409 rather than wait, so there is no awaiter and no reason to reach into `Guards` at all. `lifecycle_manager.rs` is therefore untouched except for the baseline-seeding dep (Task 10).
 
-**A7 — `refs/heads/` gets one helper.** The registry adds a third Rust stripping site, so extract `short_branch(&str) -> Option<&str>` into `mainframe-services/src/workspace/worktree.rs` next to `parse_worktree_list` and route `routes/worktree.rs:267` through it. That site currently uses `.replace("refs/heads/", "")` (replace-all), which mangles a branch like `feat/refs/heads/x`; the helper's `strip_prefix` is strictly correct. The two TS sites (`WorktreePopover.tsx:141`, `WorktreeExistingTab.tsx:87`) stay as-is — two duplications is below the 3+ threshold and they are legacy `'detached'`-literal paths outside this feature.
+**A7 — `refs/heads/` gets one helper.** The registry adds a third Rust stripping site, so extract `short_branch(&str) -> &str` into `mainframe-services/src/workspace/worktree.rs` next to `parse_worktree_list` and route `routes/worktree.rs:267` through it. It returns `&str`, not `Option<&str>`: detachedness is already carried by `WorktreeEntry.branch: Option<String>`, so the helper only ever sees a ref that exists. That site currently uses `.replace("refs/heads/", "")` (replace-all), which mangles a branch like `feat/refs/heads/x`; the helper's `strip_prefix` is strictly correct. The two TS sites (`WorktreePopover.tsx:141`, `WorktreeExistingTab.tsx:87`) stay as-is — two duplications is below the 3+ threshold and they are legacy `'detached'`-literal paths outside this feature.
 
 **A8 — the popover's legacy `'detached'` literal is left alone.** Spec ruling 16 makes the *accept route* persist `branchName = null` for a detached worktree. `WorktreePopover.tsx:141` sends the string `'detached'`, and Task 18 keeps that surface's existing `handleAttach` unchanged. The two paths therefore disagree for detached worktrees. This is deliberate: changing the popover would alter a shipped surface's persisted data for a case the spec did not scope. Recorded, not fixed.
 
@@ -125,7 +125,7 @@ Three lockstep places for a new chats column; the third has a length in its type
 **Files:**
 - `packages/core-rs/crates/mainframe-services/src/workspace/worktree.rs` — add next to `parse_worktree_list`:
   ```rust
-  /// `refs/heads/feat/x` -> `feat/x`; a detached entry (no ref) -> None.
+  /// `refs/heads/feat/x` -> `feat/x`; any other string passes through unchanged.
   /// strip_prefix, not replace: a branch named `feat/refs/heads/x` is legal.
   pub fn short_branch(git_ref: &str) -> &str { git_ref.strip_prefix("refs/heads/").unwrap_or(git_ref) }
   ```
@@ -225,7 +225,9 @@ Use an injected clock (`NowFn = Arc<dyn Fn() -> i64 + Send + Sync>`, precedent `
 Module shape follows `degraded_recovery.rs`: error enum with `status_code()`, one dep trait whose service-calling methods have default bodies, an `emit_*`-style seam (no inline `DaemonEvent` construction outside one small helper), async work in free-standing methods.
 
 **Files:**
-- `packages/core-rs/crates/mainframe-chat/src/worktree_offer.rs` (new)
+- `packages/core-rs/crates/mainframe-chat/src/worktree_offer.rs` (new) — the sync offer state machine (`OfferError`, `WorktreeOfferDeps`, `ChatOffers`, `snapshot`/`dismiss`/`claim_accept`/`release_accept`/`expire`/`on_binding_changed`/`forget`).
+- `packages/core-rs/crates/mainframe-chat/src/worktree_offer/rescan.rs` (new) — the async half (`seed_baseline`, `on_trigger`, `rescan`, canonicalization) as a second `impl WorktreeOfferRegistry` block. Split out to keep both files under the 300-line cap.
+- `packages/core-rs/crates/mainframe-chat/src/worktree_offer/tests.rs` (new) — Task 6's tests, as `#[cfg(test)] mod tests;`.
 - `packages/core-rs/crates/mainframe-chat/src/lib.rs` — `pub mod worktree_offer;`
 
 **Shape:**
@@ -306,7 +308,7 @@ Mirror `pending_file_paths` exactly. The sink stays synchronous and narrow — o
     - `matches!(name.as_str(), "Bash" | "BashTool")` and `input.get("command").and_then(|v| v.as_str())` contains `"worktree"` case-insensitively (`cmd.to_ascii_lowercase().contains("worktree")`), or
     - `name == "EnterWorktree"` (Claude-only extra signal; its result JSON is **never** parsed).
   - `on_tool_result` (`:493-539`) — inside the existing loop, after the `if *is_error { continue; }` guard (`:503-505`), `remove(tool_use_id)` from the new set into a `let mut worktree_trigger = false;`. After the loop, `if worktree_trigger { self.deps.on_worktree_trigger(&self.chat_id); }` — fired **once** per tool-result batch, not per block.
-- Inline tests in `event_handler.rs`'s existing test module (or its test-support fake deps in `src/test_support.rs`) — a fake `EventHandlerDeps` counting `on_worktree_trigger` calls:
+- `packages/core-rs/crates/mainframe-chat/src/event_handler/worktree_trigger_tests.rs` (new, registered as `#[cfg(test)] mod worktree_trigger_tests;`) — a fake `EventHandlerDeps` counting `on_worktree_trigger` calls. Its own file rather than `event_handler.rs`'s `mod tests`, which is already ~800 lines:
   1. `Bash` with `git worktree add …` + non-error result → exactly 1 call.
   2. `Bash` with `GIT WORKTREE LIST` (mixed case) → 1 call (case-insensitive substring).
   3. `Bash` with `ls -la` → 0 calls.
