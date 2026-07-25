@@ -128,6 +128,13 @@ repo and install count rendered in the rule.
 | pytest | `github/awesome-copilot` | `pytest-coverage` | 11881 |
 | prettier | `patricio0312rev/skills` | `eslint-prettier-config` | 898 |
 | eslint | `patricio0312rev/skills` | `eslint-prettier-config` | 898 |
+
+**Deliberate divergence — the prettier and eslint rows ship as one rule.** Both name the same
+repo, the same skill id, and the same install count, so two rules would have printed the same
+`npx skills add` line twice and asked the user to install one skill under two headings. They are
+merged into `skills-eslint-prettier`, whose evidence names whichever config the project actually
+has (ESLint first, then Prettier) — the same shape `hooks::linter` already uses. The table keeps
+both rows because the signal set has two signals; the dataset has one rule.
 | ruff | `github/awesome-copilot` | `ruff-recursive-fix` | 1337 |
 | tsconfig | `oimiragieo/agent-studio` | `tsconfig-json-rules` | 68 |
 | tailwind | `wshobson/agents` | `tailwind-design-system` | 55916 |
@@ -178,10 +185,15 @@ Anthropic's transport syntax reference for all rows: https://code.claude.com/doc
 | supabase | VERIFIED | `claude mcp add --scope project --transport http supabase "https://mcp.supabase.com/mcp"` | Supabase docs |
 | github | VERIFIED | `claude mcp add --transport http github https://api.githubcopilot.com/mcp/ --header "Authorization: Bearer YOUR_GITHUB_PAT"` | code.claude.com/docs/en/mcp |
 | sentry | VERIFIED | `claude mcp add --transport http sentry https://mcp.sentry.dev/mcp` | code.claude.com/docs/en/mcp, mcp.sentry.dev |
-| postgres | VERIFIED | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "postgresql://…"` | code.claude.com/docs/en/mcp |
+| postgres | VERIFIED | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "postgresql://USER:PASSWORD@HOST:5432/DATABASE"` | code.claude.com/docs/en/mcp |
 | aws | COMPOSED | `claude mcp add --transport stdio aws-api -- uvx awslabs.aws-api-mcp-server@latest` | server invocation from awslabs README; wrapper composed |
 | convex | MOVED | — | Convex documents a plugin, not MCP — see plugins below |
 | docker | DROP | — | no Claude Code command exists in Docker's documentation |
+
+The postgres row is the only one whose DSN is not upstream's literal text. Anthropic's page
+elides the connection string as `postgresql://…`; a U+2026 pasted into a terminal reaches
+dbhub's DSN parser as a character, not a prompt. The placeholder above matches the
+`YOUR_API_KEY` style the other rows already use.
 
 The AWS row is the only COMPOSED entry: the `uvx` invocation is vendor-documented, but AWS
 publishes JSON config rather than a `claude mcp add` line, so the wrapper comes from Anthropic's

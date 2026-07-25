@@ -12,7 +12,7 @@ use super::signals::build_signals;
 
 /// Where the file walk stops. `fileCount` is a size hint for the report, not a
 /// census, so a cap costs nothing and bounds the walk on a monorepo.
-const FILE_COUNT_CAP: usize = 5_000;
+pub(super) const FILE_COUNT_CAP: usize = 5_000;
 
 /// Tool label to the root entry-name prefixes that identify it. Prefixes cover
 /// both the config-file families (`.prettierrc`, `.prettierrc.json`) and the

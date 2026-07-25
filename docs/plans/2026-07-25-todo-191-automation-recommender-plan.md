@@ -742,8 +742,12 @@ report fixtures:**
   (`features/chat/parts/__tests__/markdown-text.test.tsx:280-288`); use `fireEvent`.
 - **Copy failure:** a rejecting `writeText` shows "Copy failed", reverts, and leaves the counter
   unchanged.
-- **Footer:** the left text reads exactly "Read-only — commands run in your terminal." (spec
-  line 361 — it is the surface's honesty claim, so assert the string). The right side reads
+- **Footer:** the left text is per category, not global (see "Footer copy is per category" above,
+  which supersedes spec line 361). On the plugins tab it reads exactly "Read-only — run this
+  inside Claude Code."; on mcp, skills, hooks, and subagents, "Read-only — commands run in your
+  terminal." It is the surface's honesty claim, so assert both strings, and assert that switching
+  to the plugins tab changes it. Derive it from the active category — the `Rule` contract
+  deliberately carries no footer field. The right side reads
   `{done} of {total} copied` across **all** categories, `total` counts every recommendation, and
   it gains `text-mf-success` once `done > 0`. Hidden while loading and when `total` is 0. The
   word "installed"/"done"/"configured" appears nowhere.

@@ -90,7 +90,7 @@ pub struct ProjectFingerprint {
     pub testing: Vec<String>,
     pub tooling: Vec<String>,
     pub git_host: Option<GitHost>,
-    /// `.claude/` or `CLAUDE.md` present. No MVP rule consumes it; detected for todo #192.
+    /// `.claude/` or `CLAUDE.md` present. Its absence recommends `claude-code-setup`.
     pub has_claude_config: bool,
     pub has_env_files: bool,
     pub has_lock_files: bool,
