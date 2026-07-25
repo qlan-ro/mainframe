@@ -9,8 +9,11 @@
  *   composer-file-item-{id}         — `@` file/directory row (id = repo-relative path)
  *   composer-add-mention            — "@" toolbar button (appends `@` to the composer text)
  *   composer-prompt-highlight       — color-only overlay behind the transparent textarea
- *   chat-selection-toolbar/-quote   — floating "Quote" button on text selection (native)
- *   composer-quote-preview/-dismiss — dismissable quote pill above the composer input
+ *   chat-selection-toolbar          — floating toolbar shown on a text selection in a message
+ *   chat-selection-quote/-new-session — its two actions (append a quote segment / open a draft)
+ *   composer-segments/composer-segment — the composer's stack of quote+prose segments
+ *   composer-quote-preview/-dismiss — one segment's quote pill and its ✕, both carrying that
+ *                                     segment's `data-segment-id` (address by id, not ordinal)
  *   composer-worktree-trigger/-popover/-active-info/-mid-session-warning
  *   composer-worktree-tab-new/-existing, -base-branch(-list/-option-*), -branch-name
  *   composer-worktree-enable/-cancel/-attach-{path}
@@ -223,7 +226,7 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     await closeTauriApp(app);
   });
 
-  test('selecting assistant text shows the floating Quote button', async () => {
+  test('selecting assistant text shows the floating selection toolbar', async () => {
     // TODO(investigate): live-verified TWICE (two independent runs, after fixing the turn-order
     // bug above so the assistant text assertion below now passes reliably) —
     // `chat-selection-toolbar` never appears after the programmatic Range-selection +
@@ -281,28 +284,46 @@ test.describe('§composer quote + worktree mid-session warning', () => {
 
     await expect(page.getByTestId('chat-selection-toolbar')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('chat-selection-quote')).toBeVisible();
+    await expect(page.getByTestId('chat-selection-new-session')).toBeVisible();
   });
 
   test('clicking Quote adds a quote preview pill above the composer', async () => {
     // Depends on the previous test's `chat-selection-quote` button being present — see the
-    // TODO(investigate) on "selecting assistant text shows the floating Quote button" above.
+    // TODO(investigate) on "selecting assistant text shows the floating selection toolbar" above.
     test.skip(true, 'TODO(investigate): depends on the skipped selection-toolbar test above');
 
     const { page } = app;
     await page.getByTestId('chat-selection-quote').click();
+    // The first Quote opens the live segment: exactly one pill, and no committed prose box
+    // yet (the live segment's prose stays in the native composer input).
     const preview = page.getByTestId('composer-quote-preview');
     await expect(preview).toBeVisible({ timeout: 5_000 });
+    await expect(preview).toHaveCount(1);
     await expect(preview).toContainText('project');
+
+    // Pill and dismiss address the same segment — quoting is now a list, so a bare
+    // `composer-quote-dismiss` would be ambiguous once a second quote is appended.
+    const segmentId = await preview.getAttribute('data-segment-id');
+    expect(segmentId).toBeTruthy();
+    await expect(
+      page.locator(`[data-testid="composer-quote-dismiss"][data-segment-id="${segmentId}"]`),
+    ).toHaveCount(1);
   });
 
   test('dismissing the quote preview clears it', async () => {
     // Depends on the "clicking Quote" test above having opened a quote preview — see the
-    // TODO(investigate) on "selecting assistant text shows the floating Quote button" above.
+    // TODO(investigate) on "selecting assistant text shows the floating selection toolbar" above.
     test.skip(true, 'TODO(investigate): depends on the skipped selection-toolbar test above');
 
     const { page } = app;
-    await page.getByTestId('composer-quote-dismiss').click();
+    const segmentId = await page.getByTestId('composer-quote-preview').getAttribute('data-segment-id');
+    expect(segmentId).toBeTruthy();
+    await page.locator(`[data-testid="composer-quote-dismiss"][data-segment-id="${segmentId}"]`).click();
+
+    // That segment carries no prose, so dismissing its quote drops the segment itself and
+    // the whole segments block unmounts — the composer is back to its plain shape.
     await expect(page.getByTestId('composer-quote-preview')).toHaveCount(0);
+    await expect(page.getByTestId('composer-segments')).toHaveCount(0);
   });
 
   test('worktree popover shows a mid-session warning once the chat has messages', async () => {

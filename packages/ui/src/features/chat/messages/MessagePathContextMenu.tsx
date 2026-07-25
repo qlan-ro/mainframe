@@ -14,6 +14,25 @@ import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { toFileRef } from '@/lib/files/file-ref';
 
+function CopyPathItem({
+  testId,
+  label,
+  copied,
+  onSelect,
+}: {
+  testId: string;
+  label: string;
+  copied: boolean;
+  onSelect: (event: Event) => void;
+}) {
+  return (
+    <ContextMenuItem data-testid={testId} onSelect={onSelect}>
+      {copied ? <Check className="mr-2 size-3.5 text-mf-success" /> : <Copy className="mr-2 size-3.5" />}
+      {copied ? 'Copied' : label}
+    </ContextMenuItem>
+  );
+}
+
 export function MessagePathContextMenu({ children }: { children: ReactNode }) {
   const [path, setPath] = useState<string | null>(null);
   const bases = useActiveBasesStore((s) => s.bases);
@@ -50,22 +69,18 @@ export function MessagePathContextMenu({ children }: { children: ReactNode }) {
           </ContextMenuItem>
         ) : (
           <>
-            <ContextMenuItem data-testid="tool-card-path-copy-absolute" onSelect={copyAbsolute}>
-              {copiedId === 'tool-card-path-copy-absolute' ? (
-                <Check className="mr-2 size-3.5 text-mf-success" />
-              ) : (
-                <Copy className="mr-2 size-3.5" />
-              )}
-              {copiedId === 'tool-card-path-copy-absolute' ? 'Copied' : 'Copy Absolute Path'}
-            </ContextMenuItem>
-            <ContextMenuItem data-testid="tool-card-path-copy-relative" onSelect={copyRelative}>
-              {copiedId === 'tool-card-path-copy-relative' ? (
-                <Check className="mr-2 size-3.5 text-mf-success" />
-              ) : (
-                <Copy className="mr-2 size-3.5" />
-              )}
-              {copiedId === 'tool-card-path-copy-relative' ? 'Copied' : 'Copy Relative Path'}
-            </ContextMenuItem>
+            <CopyPathItem
+              testId="tool-card-path-copy-absolute"
+              label="Copy Absolute Path"
+              copied={copiedId === 'tool-card-path-copy-absolute'}
+              onSelect={copyAbsolute}
+            />
+            <CopyPathItem
+              testId="tool-card-path-copy-relative"
+              label="Copy Relative Path"
+              copied={copiedId === 'tool-card-path-copy-relative'}
+              onSelect={copyRelative}
+            />
           </>
         )}
       </ContextMenuContent>
