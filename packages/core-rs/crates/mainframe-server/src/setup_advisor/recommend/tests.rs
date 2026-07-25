@@ -5,7 +5,7 @@
 use super::*;
 use mainframe_types::setup_advisor::{RecommendationCategory, RecommendationProvenance};
 
-use crate::setup_advisor::rule::RuleSource;
+use crate::setup_advisor::rule::{Evidence, RuleSource};
 
 const fn rule(
     id: &'static str,
@@ -24,7 +24,7 @@ const fn rule(
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority,
-        evidence,
+        evidence: Evidence::Custom(evidence),
     }
 }
 
@@ -114,7 +114,7 @@ fn carries_the_rules_static_fields_onto_the_recommendation() {
             installs: 1234,
         }),
         priority: 1,
-        evidence: |_| Some("@supabase/supabase-js in package.json".to_string()),
+        evidence: Evidence::Custom(|_| Some("@supabase/supabase-js in package.json".to_string())),
     };
 
     let out = recommend_with(&[&SUPABASE], &ProjectFingerprint::default());

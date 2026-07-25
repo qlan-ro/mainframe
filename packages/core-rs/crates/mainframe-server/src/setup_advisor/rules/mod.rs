@@ -1,5 +1,6 @@
 //! The rules dataset, one module per recommendation category.
 
+pub mod families;
 pub mod hooks;
 pub mod mcp;
 pub mod plugins;
@@ -16,12 +17,6 @@ use super::rule::Rule;
 
 /// Projects past this size stop fitting in one reviewer's head.
 const LARGE_PROJECT_FILES: u64 = 500;
-
-/// Whether a fingerprint vector carries a canonical label. Shared by the
-/// categories whose evidence is a plain membership test.
-fn has(values: &[String], label: &str) -> bool {
-    values.iter().any(|value| value == label)
-}
 
 /// Evidence for the rules gated on project size. The walk stops at
 /// `FILE_COUNT_CAP`, so a saturated count reads as "5000+" rather than claiming
@@ -47,7 +42,7 @@ fn large_project_evidence(fp: &ProjectFingerprint) -> Option<String> {
 pub fn all() -> Vec<&'static Rule> {
     mcp::RULES
         .iter()
-        .chain(skills::RULES.iter())
+        .chain(skills::rules())
         .chain(hooks::RULES.iter())
         .chain(subagents::RULES.iter())
         .chain(plugins::RULES.iter())

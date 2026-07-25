@@ -4,6 +4,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::extract::{Path as AxPath, State};
@@ -16,6 +17,12 @@ use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 use crate::routes::files::resolve_base;
 use crate::setup_advisor;
+
+/// How long the fingerprint gets before the request gives up on it. The scan
+/// walks a directory tree the daemon does not control, so its cost is the
+/// repository's to decide; without a ceiling one project holds a request open
+/// indefinitely and the caller has nothing to show for the wait.
+const FINGERPRINT_BUDGET: Duration = Duration::from_secs(15);
 
 async fn handle_automation_recommendations(ctx: &AppCtx, id: &str) -> Response {
     let base_path = match resolve_base(ctx, id, None).await {
@@ -30,9 +37,32 @@ async fn handle_automation_recommendations(ctx: &AppCtx, id: &str) -> Response {
         return fail(StatusCode::NOT_FOUND, "Project path not found");
     }
 
-    let fingerprint = setup_advisor::fingerprint(Path::new(&base_path)).await;
+    match build_report(&base_path, FINGERPRINT_BUDGET).await {
+        Some(report) => ok(report),
+        None => fail(
+            StatusCode::GATEWAY_TIMEOUT,
+            "Scanning the project took too long",
+        ),
+    }
+}
+
+/// Fingerprints `base_path` and maps the result through the rules dataset, or
+/// `None` when the scan outlasts `budget`.
+async fn build_report(base_path: &str, budget: Duration) -> Option<SetupAdvisorReport> {
+    let scan = setup_advisor::fingerprint(Path::new(base_path));
+    let fingerprint = match tokio::time::timeout(budget, scan).await {
+        Ok(fingerprint) => fingerprint,
+        Err(_) => {
+            tracing::warn!(
+                base_path,
+                budget_secs = budget.as_secs(),
+                "setup advisor: fingerprint exceeded its time budget"
+            );
+            return None;
+        }
+    };
     let recommendations = setup_advisor::recommend(&fingerprint);
-    ok(SetupAdvisorReport {
+    Some(SetupAdvisorReport {
         fingerprint,
         recommendations,
     })
@@ -50,4 +80,35 @@ pub fn router() -> Router<Arc<AppCtx>> {
         "/api/projects/{id}/automation-recommendations",
         get(get_automation_recommendations),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_scan_that_outlasts_its_budget_yields_no_report() {
+        let project = tempfile::tempdir().unwrap();
+
+        let report = build_report(&project.path().to_string_lossy(), Duration::ZERO).await;
+
+        assert!(report.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_scan_within_its_budget_yields_the_report() {
+        let project = tempfile::tempdir().unwrap();
+        std::fs::write(
+            project.path().join("package.json"),
+            r#"{ "dependencies": { "react": "18.2.0" } }"#,
+        )
+        .unwrap();
+
+        let report = build_report(&project.path().to_string_lossy(), FINGERPRINT_BUDGET)
+            .await
+            .expect("the scan of a one-file project fit in the budget");
+
+        assert!(report.fingerprint.frameworks.contains(&"react".to_string()));
+        assert!(!report.recommendations.is_empty());
+    }
 }

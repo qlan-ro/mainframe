@@ -15,36 +15,21 @@ use mainframe_types::setup_advisor::{
     GitHost, ProjectFingerprint, RecommendationCategory, RecommendationProvenance,
 };
 
-use super::{has, large_project_evidence};
-use crate::setup_advisor::rule::Rule;
+use super::families::{ANY_ROOT_TOOLING, FRONTEND_FRAMEWORKS, SENSITIVE_APIS};
+use super::large_project_evidence;
+use crate::setup_advisor::detections::Field;
+use crate::setup_advisor::rule::{Evidence, Rule};
 
-const FRONTEND_FRAMEWORKS: &[&str] = &["react", "nextjs", "vue", "angular", "svelte"];
+/// The suffix that turns a matched dependency label into evidence.
+const IN_DEPENDENCIES: &str = "in the project dependencies";
 
-/// Dependencies whose presence means the project handles money or identity.
-const SENSITIVE_APIS: &[&str] = &["stripe", "next-auth", "clerk", "auth0", "passport"];
-
-/// Root configs that make a generated hooks setup worth having, paired with the
-/// copy that names the file the user will recognize.
-const HOOKABLE_TOOLING: &[(&str, &str)] = &[
-    ("prettier", "a Prettier config at the repo root"),
-    ("eslint", "an ESLint config at the repo root"),
-    ("ruff", "a ruff.toml at the repo root"),
-    ("tsconfig", "a tsconfig.json at the repo root"),
-];
-
-/// Names the dependency that actually fired rather than the whole candidate list.
-fn dependency_evidence(values: &[String], candidates: &[&'static str]) -> Option<String> {
-    candidates
-        .iter()
-        .find(|candidate| has(values, candidate))
-        .map(|label| format!("{label} in the project dependencies"))
+fn no_claude_config(fp: &ProjectFingerprint) -> Option<String> {
+    (!fp.has_claude_config).then(|| "no .claude/ or CLAUDE.md at the repo root".to_string())
 }
 
-fn hookable_tooling(fp: &ProjectFingerprint) -> Option<String> {
-    HOOKABLE_TOOLING
-        .iter()
-        .find(|(label, _)| has(&fp.tooling, label))
-        .map(|(_, evidence)| (*evidence).to_string())
+fn claude_config(fp: &ProjectFingerprint) -> Option<String> {
+    fp.has_claude_config
+        .then(|| "a .claude/ directory or CLAUDE.md at the repo root".to_string())
 }
 
 /// Decision 22: the fingerprint reports no host for a worktree checkout, so the
@@ -70,9 +55,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 10,
-        evidence: |fp| {
-            (!fp.has_claude_config).then(|| "no .claude/ or CLAUDE.md at the repo root".to_string())
-        },
+        evidence: Evidence::Custom(no_claude_config),
     },
     // Manifest-verified name. Convex documents a plugin, not an MCP server.
     Rule {
@@ -86,7 +69,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 20,
-        evidence: |fp| dependency_evidence(&fp.databases, &["convex"]),
+        evidence: Evidence::First(Field::Database, &["convex"], IN_DEPENDENCIES),
     },
     // Manifest-verified name.
     Rule {
@@ -100,7 +83,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 30,
-        evidence: |fp| dependency_evidence(&fp.external_apis, SENSITIVE_APIS),
+        evidence: Evidence::First(Field::ExternalApi, SENSITIVE_APIS, IN_DEPENDENCIES),
     },
     // Manifest-verified name.
     Rule {
@@ -114,9 +97,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 40,
-        evidence: |fp| {
-            has(&fp.languages, "typescript").then(|| "TypeScript sources detected".to_string())
-        },
+        evidence: Evidence::Detected(Field::Language, "typescript", "TypeScript sources detected"),
     },
     // Manifest-verified name.
     Rule {
@@ -130,9 +111,11 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 40,
-        evidence: |fp| {
-            has(&fp.languages, "python").then(|| "a pyproject.toml at the repo root".to_string())
-        },
+        evidence: Evidence::Detected(
+            Field::Language,
+            "python",
+            "a Python project manifest at the repo root",
+        ),
     },
     // Manifest-verified name.
     Rule {
@@ -146,7 +129,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 40,
-        evidence: |fp| has(&fp.languages, "go").then(|| "a go.mod at the repo root".to_string()),
+        evidence: Evidence::Detected(Field::Language, "go", "a go.mod at the repo root"),
     },
     // Manifest-verified name.
     Rule {
@@ -160,9 +143,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 40,
-        evidence: |fp| {
-            has(&fp.languages, "rust").then(|| "a Cargo.toml at the repo root".to_string())
-        },
+        evidence: Evidence::Detected(Field::Language, "rust", "a Cargo.toml at the repo root"),
     },
     // Manifest-verified name.
     Rule {
@@ -176,7 +157,11 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 40,
-        evidence: |fp| has(&fp.languages, "java").then(|| "a pom.xml at the repo root".to_string()),
+        evidence: Evidence::Detected(
+            Field::Language,
+            "java",
+            "a Maven or Gradle build file at the repo root",
+        ),
     },
     // Manifest-verified name.
     Rule {
@@ -190,7 +175,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 50,
-        evidence: |fp| dependency_evidence(&fp.frameworks, FRONTEND_FRAMEWORKS),
+        evidence: Evidence::First(Field::Framework, FRONTEND_FRAMEWORKS, IN_DEPENDENCIES),
     },
     // Manifest-verified name.
     Rule {
@@ -204,7 +189,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 60,
-        evidence: git_remote,
+        evidence: Evidence::Custom(git_remote),
     },
     // Manifest-verified name.
     Rule {
@@ -218,7 +203,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 70,
-        evidence: hookable_tooling,
+        evidence: ANY_ROOT_TOOLING,
     },
     // Manifest-verified name.
     Rule {
@@ -232,7 +217,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 80,
-        evidence: large_project_evidence,
+        evidence: Evidence::Custom(large_project_evidence),
     },
     // Manifest-verified name.
     Rule {
@@ -246,7 +231,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 90,
-        evidence: git_remote,
+        evidence: Evidence::Custom(git_remote),
     },
     // Manifest-verified name.
     Rule {
@@ -260,11 +245,7 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 100,
-        evidence: |fp| {
-            fp.languages
-                .first()
-                .map(|language| format!("{language} sources in the project"))
-        },
+        evidence: Evidence::Any(Field::Language, "sources in the project"),
     },
     // Manifest-verified name.
     Rule {
@@ -278,9 +259,6 @@ pub static RULES: &[Rule] = &[
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 110,
-        evidence: |fp| {
-            fp.has_claude_config
-                .then(|| "a .claude/ directory or CLAUDE.md at the repo root".to_string())
-        },
+        evidence: Evidence::Custom(claude_config),
     },
 ];

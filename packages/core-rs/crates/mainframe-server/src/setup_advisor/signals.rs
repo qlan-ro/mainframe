@@ -2,16 +2,7 @@
 
 use mainframe_types::setup_advisor::{GitHost, ProjectFingerprint};
 
-/// Which fingerprint vector a chip's detection key is looked up in.
-#[derive(Debug, Clone, Copy)]
-enum Field {
-    Language,
-    Framework,
-    Database,
-    ExternalApi,
-    Testing,
-    Tooling,
-}
+use super::detections::{Field, has, push_unique, values};
 
 /// Detection key to chip label, in output order. A key absent from this table
 /// renders no chip: labels are chosen, never title-cased off a raw key.
@@ -63,28 +54,11 @@ const CHIPS: &[(Field, &str, &str)] = &[
 /// project has them, so they tell the reader nothing.
 const DIR_CHIPS: &[(&str, &str)] = &[("tests", "Tests directory"), ("api", "API directory")];
 
-fn field_values(fp: &ProjectFingerprint, field: Field) -> &[String] {
-    match field {
-        Field::Language => &fp.languages,
-        Field::Framework => &fp.frameworks,
-        Field::Database => &fp.databases,
-        Field::ExternalApi => &fp.external_apis,
-        Field::Testing => &fp.testing,
-        Field::Tooling => &fp.tooling,
-    }
-}
-
-fn push_unique(chips: &mut Vec<String>, label: &str) {
-    if !chips.iter().any(|existing| existing == label) {
-        chips.push(label.to_string());
-    }
-}
-
 /// Renders `fp`'s detections as display chips, deduplicated, in a fixed order.
 pub fn build_signals(fp: &ProjectFingerprint) -> Vec<String> {
     let mut chips = Vec::new();
     for &(field, key, label) in CHIPS {
-        if field_values(fp, field).iter().any(|value| value == key) {
+        if has(values(fp, field), key) {
             push_unique(&mut chips, label);
         }
     }
@@ -99,7 +73,7 @@ pub fn build_signals(fp: &ProjectFingerprint) -> Vec<String> {
         );
     }
     for &(key, label) in DIR_CHIPS {
-        if fp.dirs.iter().any(|dir| dir == key) {
+        if has(&fp.dirs, key) {
             push_unique(&mut chips, label);
         }
     }

@@ -1,10 +1,15 @@
-//! The eight custom-skill SKILL.md snippets, transcribed at implementation time
-//! from the upstream `claude-code-setup v1.0.0` bundle's
+//! The eight custom-skill SKILL.md snippets, derived from the upstream
+//! `claude-code-setup v1.0.0` bundle's
 //! `skills/claude-automation-recommender/references/skills-reference.md`.
 //!
 //! Nothing here is vendored: the snippets are the rules' `command` text, which the
 //! user pastes into a file their own repo owns. They are the one exception to the
 //! "transcribe from the tool's documentation" rule — there is no tool.
+//!
+//! Where upstream split a skill across companion files — an OpenAPI template, a
+//! `templates/` directory, a validation script — the bodies here are rewritten to
+//! stand alone. The card writes exactly one file, so a body that reads a second
+//! one sends the agent after something that has never existed.
 
 pub(super) const API_DOC: &str = r#"---
 name: api-doc
@@ -13,12 +18,12 @@ description: Generate OpenAPI documentation for an endpoint. Use when documentin
 
 Generate OpenAPI documentation for the endpoint at $ARGUMENTS.
 
-Use the template in [openapi-template.yaml](openapi-template.yaml) as the structure.
-
 1. Read the endpoint code
-2. Extract path, method, parameters, request/response schemas
-3. Fill in the template with actual values
-4. Output the completed YAML
+2. Extract the path, method, parameters, and request and response schemas
+3. Emit an OpenAPI 3.1 path item: `summary`, `parameters`, `requestBody`, and a
+   `responses` entry for every status the handler can return
+4. Match the style of the project's existing OpenAPI documents. If there are
+   none, emit a whole document, with `openapi`, `info`, and `paths`
 "#;
 
 pub(super) const CREATE_MIGRATION: &str = r#"---
@@ -30,10 +35,11 @@ allowed-tools: Read, Write, Bash
 
 Create a migration for: $ARGUMENTS
 
-1. Generate migration file in `migrations/` with timestamp prefix
-2. Include up and down functions
-3. Run validation: `bash ~/.claude/skills/create-migration/scripts/validate-migration.sh`
-4. Report any issues found
+1. Read the most recent migration and follow its naming, format, and driver
+2. Write the new migration in the same directory, with a timestamp prefix
+3. Write both directions; the down must undo the up exactly, leaving no column,
+   index, or constraint behind
+4. Report anything the down cannot undo, such as data in a dropped column
 "#;
 
 pub(super) const GEN_TEST: &str = r#"---
@@ -44,14 +50,12 @@ disable-model-invocation: true
 
 Generate tests for: $ARGUMENTS
 
-Reference these examples for the expected patterns:
-- Unit tests: [examples/unit-test.ts](examples/unit-test.ts)
-- Integration tests: [examples/integration-test.ts](examples/integration-test.ts)
-
 1. Analyze the source file
-2. Identify functions/methods to test
-3. Generate tests matching project conventions
-4. Place in appropriate test directory
+2. Read the nearest existing test file. Its runner, imports, layout, and naming
+   are this project's conventions — follow them rather than a generic template
+3. Cover each exported function's success path, its failure paths, and the
+   boundaries of whatever it validates
+4. Write the tests where the existing ones live
 "#;
 
 pub(super) const NEW_COMPONENT: &str = r#"---
@@ -62,13 +66,11 @@ disable-model-invocation: true
 
 Create component: $ARGUMENTS
 
-Use templates in [templates/](templates/) directory:
-1. Generate component from component.tsx.template
-2. Generate tests from component.test.tsx.template
-3. Generate Storybook story from component.stories.tsx.template
-
-Replace {{ComponentName}} with the PascalCase name.
-Replace {{component-name}} with the kebab-case name.
+1. Read a neighbouring component and its test and story. Their file layout,
+   imports, prop typing, and filename casing are the pattern to copy
+2. Write the component, its test, and its story next to that neighbour
+3. Give the test a real assertion about what the component renders, not a
+   placeholder
 "#;
 
 pub(super) const PR_CHECK: &str = r#"---
@@ -82,9 +84,15 @@ context: fork
 - Diff: !`gh pr diff`
 - Description: !`gh pr view`
 
-Review against [checklist.md](checklist.md).
+Review the diff against the checklist below, marking each item ✅ or ❌ with an
+explanation. Edit the checklist to match what this project actually cares about.
 
-For each item, mark ✅ or ❌ with explanation.
+1. The description says what changed and why
+2. Every behaviour change is covered by a test that would fail without it
+3. No secrets, credentials, or personal paths appear in the diff
+4. Errors are handled or propagated, never swallowed
+5. Public API changes ship with the documentation change
+6. Nothing unrelated to the stated change is in the diff
 "#;
 
 pub(super) const RELEASE_NOTES: &str = r#"---
@@ -110,21 +118,25 @@ description: Code style and patterns for this project. Apply when writing or rev
 user-invocable: false
 ---
 
-## Naming Conventions
-- React components: PascalCase
-- Utilities: camelCase
-- Constants: UPPER_SNAKE_CASE
-- Files: kebab-case
+TEMPLATE — nothing below has been filled in yet. This file is loaded on its own,
+without anyone asking for it, so an invented rule here becomes one the agent
+enforces on every file it touches. Replace each line with a convention this
+project actually holds, and delete the sections it has none for. Until then this
+file states no convention, and an unreplaced line is not one.
+
+## Naming
+
+- TODO: the casing this project uses for components, functions, constants, files
 
 ## Patterns
-- Use `Result<T, E>` for fallible operations, not exceptions
-- Prefer composition over inheritance
-- All API responses use `{ data, error, meta }` shape
+
+- TODO: how a fallible operation reports failure here
+- TODO: the shape every API response takes
+- TODO: the layering or composition rule this project keeps to
 
 ## Forbidden
-- No `any` types
-- No `console.log` in production code
-- No synchronous file I/O
+
+- TODO: what review rejects on sight
 "#;
 
 pub(super) const SETUP_DEV: &str = r#"---
@@ -135,11 +147,12 @@ disable-model-invocation: true
 
 Set up development environment:
 
-1. Check prerequisites: `bash scripts/check-prerequisites.sh`
+1. Read the README for the required runtime and tool versions, then check each
+   installed version against it and report every mismatch before going on
 2. Install dependencies: `npm install`
-3. Copy environment template: `cp .env.example .env`
-4. Set up database: `npm run db:setup`
-5. Verify setup: `npm test`
+3. Copy the environment template: `cp .env.example .env`
+4. Set up the database: `npm run db:setup`
+5. Verify the setup: `npm test`
 
 Report any issues encountered.
 "#;

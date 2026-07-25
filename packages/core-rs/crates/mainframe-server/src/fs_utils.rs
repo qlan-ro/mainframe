@@ -6,6 +6,7 @@
 //! fallback). Also hosts two Node-`path` shims (`relative`, `path_resolve`) the
 //! route handlers lean on, since the std library has no direct analogue.
 
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
 use mainframe_git::{GitExecCode, exec_git};
@@ -196,6 +197,11 @@ pub(crate) async fn walk_project_files(
     let root = Path::new(project_path);
     let mut files: Vec<String> = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
+    // Every directory this walk has already entered, by resolved path. A symlink
+    // pointing back inside the project is contained, so without this the walk
+    // re-enters the subtree it lands in — and `limit` cannot stop it, because it
+    // counts files while the fan-out is in directories.
+    let mut entered: HashSet<PathBuf> = HashSet::new();
 
     while let Some(dir) = stack.pop() {
         if files.len() >= limit {
@@ -237,7 +243,9 @@ pub(crate) async fn walk_project_files(
                 Err(_) => continue,
             };
             if is_dir {
-                stack.push(full_path);
+                if entered.insert(real_full) {
+                    stack.push(full_path);
+                }
             } else {
                 files.push(relative(root, &real_full));
             }
@@ -247,51 +255,7 @@ pub(crate) async fn walk_project_files(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn binary_extension_matches_simple_and_double_extensions() {
-        assert!(has_binary_extension("logo.png"));
-        assert!(has_binary_extension("src/app.min.js"));
-        assert!(has_binary_extension("styles.min.css"));
-        assert!(has_binary_extension("bundle.js.map"));
-        assert!(!has_binary_extension("index.ts"));
-        assert!(!has_binary_extension("README"));
-        assert!(!has_binary_extension(".env"));
-    }
-
-    #[test]
-    fn relative_drops_shared_prefix_and_climbs() {
-        assert_eq!(relative(Path::new("/a/b"), Path::new("/a/b/c/d")), "c/d");
-        assert_eq!(relative(Path::new("/a/b"), Path::new("/a/x")), "../x");
-        assert_eq!(relative(Path::new("/a/b"), Path::new("/a/b")), "");
-    }
-
-    #[test]
-    fn path_resolve_collapses_dot_segments() {
-        assert_eq!(path_resolve("/a/b", "c/../d"), "/a/b/d");
-        assert_eq!(path_resolve("/a/b", "../e"), "/a/e");
-        assert_eq!(path_resolve("/a/b", "/x/y"), "/x/y");
-    }
-
-    #[tokio::test]
-    async fn walk_collects_files_and_skips_ignored_dirs() {
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("a.txt"), "x").unwrap();
-        std::fs::create_dir_all(tmp.path().join("node_modules")).unwrap();
-        std::fs::write(tmp.path().join("node_modules/dep.js"), "y").unwrap();
-        std::fs::create_dir_all(tmp.path().join("src")).unwrap();
-        std::fs::write(tmp.path().join("src/index.ts"), "z").unwrap();
-
-        // Callers pass a realpath'd base (macOS /tmp → /private/tmp); mirror that.
-        let root = std::fs::canonicalize(tmp.path()).unwrap();
-        let files = walk_project_files(&root.to_string_lossy(), true, WALK_LIMIT).await;
-        assert!(files.iter().any(|f| f == "a.txt"));
-        assert!(files.iter().any(|f| f == "src/index.ts"));
-        assert!(!files.iter().any(|f| f.contains("node_modules")));
-    }
-}
+mod tests;
 
 // PORT STATUS: src/server/fs-utils.ts (IGNORED_DIRS, BINARY_EXTENSIONS,
 // hasBinaryExtension, listProjectFiles/walkProjectFiles)

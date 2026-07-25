@@ -10,28 +10,13 @@ use mainframe_types::setup_advisor::{
     ProjectFingerprint, RecommendationCategory, RecommendationProvenance,
 };
 
-use super::{has, large_project_evidence};
-use crate::setup_advisor::rule::Rule;
+use super::families::{BACKEND_FRAMEWORKS, FRONTEND_FRAMEWORKS, SENSITIVE_APIS};
+use super::large_project_evidence;
+use crate::setup_advisor::detections::{Field, has};
+use crate::setup_advisor::rule::{Evidence, Rule};
 
-/// Dependencies whose presence means the project handles money or identity.
-const SENSITIVE_APIS: &[&str] = &["stripe", "next-auth", "clerk", "auth0", "passport"];
-
-const FRONTEND_FRAMEWORKS: &[&str] = &["react", "nextjs", "vue", "angular", "svelte"];
-
-const BACKEND_FRAMEWORKS: &[&str] = &["express", "fastapi", "django"];
-
-/// The first of `candidates` present in `values`, so the evidence names the
-/// dependency that actually fired rather than the whole list.
-fn first_of(values: &[String], candidates: &[&'static str]) -> Option<&'static str> {
-    candidates
-        .iter()
-        .copied()
-        .find(|candidate| has(values, candidate))
-}
-
-fn dependency_evidence(values: &[String], candidates: &[&'static str]) -> Option<String> {
-    first_of(values, candidates).map(|label| format!("{label} in the project dependencies"))
-}
+/// The suffix that turns a matched dependency label into evidence.
+const IN_DEPENDENCIES: &str = "in the project dependencies";
 
 /// Fires only on a real gap: code in a known language, no test framework, and
 /// no `tests/` directory to hold one.
@@ -45,12 +30,10 @@ fn missing_tests(fp: &ProjectFingerprint) -> Option<String> {
 
 /// An `api/` directory and a backend framework are the same fact to the reader:
 /// this project serves an interface someone else calls.
-fn api_surface(fp: &ProjectFingerprint) -> Option<String> {
-    if has(&fp.dirs, "api") {
-        return Some("an api/ directory at the repo root".to_string());
-    }
-    dependency_evidence(&fp.frameworks, BACKEND_FRAMEWORKS)
-}
+const API_SURFACE: Evidence = Evidence::Either(&[
+    Evidence::Detected(Field::Dir, "api", "an api/ directory at the repo root"),
+    Evidence::First(Field::Framework, BACKEND_FRAMEWORKS, IN_DEPENDENCIES),
+]);
 
 pub static RULES: &[Rule] = &[
     // Body authored here; frontmatter per code.claude.com/docs/en/sub-agents.
@@ -78,7 +61,7 @@ only — do not edit.
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 10,
-        evidence: |fp| dependency_evidence(&fp.external_apis, SENSITIVE_APIS),
+        evidence: Evidence::First(Field::ExternalApi, SENSITIVE_APIS, IN_DEPENDENCIES),
     },
     // Body authored here; frontmatter per code.claude.com/docs/en/sub-agents.
     Rule {
@@ -105,7 +88,7 @@ passes.
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 20,
-        evidence: missing_tests,
+        evidence: Evidence::Custom(missing_tests),
     },
     // Body authored here; frontmatter per code.claude.com/docs/en/sub-agents.
     Rule {
@@ -131,7 +114,7 @@ Say when a change is fine. Report only — do not edit.
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 30,
-        evidence: large_project_evidence,
+        evidence: Evidence::Custom(large_project_evidence),
     },
     // Body authored here; frontmatter per code.claude.com/docs/en/sub-agents.
     Rule {
@@ -157,11 +140,7 @@ proposing a change, and propose the smallest one that fixes it.
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 40,
-        evidence: |fp| {
-            fp.databases
-                .first()
-                .map(|db| format!("{db} in the project dependencies"))
-        },
+        evidence: Evidence::Any(Field::Database, IN_DEPENDENCIES),
     },
     // Body authored here; frontmatter per code.claude.com/docs/en/sub-agents.
     Rule {
@@ -187,7 +166,7 @@ what the endpoint does, never what it should do.
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 50,
-        evidence: api_surface,
+        evidence: API_SURFACE,
     },
     // Body authored here; frontmatter per code.claude.com/docs/en/sub-agents.
     Rule {
@@ -213,6 +192,6 @@ component and the state that is missing. Report only — do not edit.
         provenance: RecommendationProvenance::FirstParty,
         source: None,
         priority: 60,
-        evidence: |fp| dependency_evidence(&fp.frameworks, FRONTEND_FRAMEWORKS),
+        evidence: Evidence::First(Field::Framework, FRONTEND_FRAMEWORKS, IN_DEPENDENCIES),
     },
 ];

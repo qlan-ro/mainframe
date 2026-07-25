@@ -8,6 +8,7 @@ use std::path::Path;
 use mainframe_types::setup_advisor::ProjectFingerprint;
 
 use crate::path_utils::is_within_base;
+use crate::setup_advisor::detections::push_unique;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Bucket {
@@ -61,19 +62,31 @@ const SCOPES: &[(&str, Bucket, &str)] = &[
 ///
 /// `package.json` is deliberately absent: it says JavaScript, not TypeScript, so
 /// the TypeScript claim comes from `tsconfig.json` or a `typescript` dependency.
+/// `setup.py` and `Pipfile` are here rather than parsed: one is a program and the
+/// other duplicates what `requirements.txt` already gives us in a readable form.
 const BARE_LANGUAGE_MANIFESTS: &[(&str, &str)] = &[
     ("Cargo.toml", "rust"),
     ("go.mod", "go"),
     ("pom.xml", "java"),
+    ("build.gradle", "java"),
+    ("build.gradle.kts", "java"),
     ("tsconfig.json", "typescript"),
+    ("setup.py", "python"),
+    ("Pipfile", "python"),
 ];
 
-/// Reads `name` from `real_root`, refusing to follow a symlink out of the project.
+/// A manifest this large is not one. Matching `routes/files.rs`, which caps a
+/// read at the same 2 MB — reading first and judging afterwards turns a checked-in
+/// blob named `package.json` into an unbounded allocation per request.
+const MAX_MANIFEST_BYTES: u64 = 2 * 1024 * 1024;
+
+/// The canonical path of `name` under `real_root`, or `None` when it does not
+/// exist or resolves outside the project.
 ///
-/// A bare `read_to_string(root.join(name))` follows the link and silently reads an
-/// arbitrary file; a cloned repo can ship such a link. Canonicalizing before the
-/// read is what makes the containment check meaningful.
-pub(super) async fn read_contained_root_file(real_root: &Path, name: &str) -> Option<String> {
+/// A bare `root.join(name)` follows a symlink and silently reaches an arbitrary
+/// file; a cloned repo can ship such a link. Canonicalizing before the check is
+/// what makes the containment meaningful.
+async fn contained_root_file(real_root: &Path, name: &str) -> Option<std::path::PathBuf> {
     let real = tokio::fs::canonicalize(real_root.join(name)).await.ok()?;
     if !is_within_base(real_root, &real) {
         tracing::warn!(
@@ -82,13 +95,29 @@ pub(super) async fn read_contained_root_file(real_root: &Path, name: &str) -> Op
         );
         return None;
     }
-    tokio::fs::read_to_string(&real).await.ok()
+    Some(real)
 }
 
-fn push_unique(target: &mut Vec<String>, label: &str) {
-    if !target.iter().any(|existing| existing == label) {
-        target.push(label.to_string());
+/// Whether `real_root` has `name`. Never reads it: for the language manifests the
+/// presence is the whole signal, so a large one still identifies its language.
+async fn contained_root_file_exists(real_root: &Path, name: &str) -> bool {
+    contained_root_file(real_root, name).await.is_some()
+}
+
+/// Reads `name` from `real_root`, refusing to follow a symlink out of the project
+/// and refusing to read past `MAX_MANIFEST_BYTES`.
+pub(super) async fn read_contained_root_file(real_root: &Path, name: &str) -> Option<String> {
+    let real = contained_root_file(real_root, name).await?;
+    let size = tokio::fs::metadata(&real).await.ok()?.len();
+    if size > MAX_MANIFEST_BYTES {
+        tracing::warn!(
+            file = name,
+            size,
+            "setup advisor: manifest exceeds the size cap; skipping it"
+        );
+        return None;
     }
+    tokio::fs::read_to_string(&real).await.ok()
 }
 
 fn record(fp: &mut ProjectFingerprint, bucket: Bucket, label: &str) {
@@ -181,6 +210,23 @@ fn pyproject_dependencies(parsed: &toml::Value) -> Vec<String> {
     names
 }
 
+/// `requirements.txt` is one requirement per line, with `#` comments and lines
+/// that configure pip (`-r base.txt`, `--index-url ...`) rather than name a
+/// dependency.
+async fn detect_requirements_txt(real_root: &Path, fp: &mut ProjectFingerprint) {
+    let Some(raw) = read_contained_root_file(real_root, "requirements.txt").await else {
+        return;
+    };
+    record(fp, Bucket::Language, "python");
+    for line in raw.lines() {
+        let requirement = line.split('#').next().unwrap_or_default().trim();
+        if requirement.is_empty() || requirement.starts_with('-') {
+            continue;
+        }
+        classify(fp, requirement_name(requirement));
+    }
+}
+
 async fn detect_pyproject(real_root: &Path, fp: &mut ProjectFingerprint) {
     let Some(raw) = read_contained_root_file(real_root, "pyproject.toml").await else {
         return;
@@ -209,9 +255,10 @@ pub async fn detect_root_manifests(real_root: &Path, fp: &mut ProjectFingerprint
 
     detect_package_json(&real_root, fp).await;
     detect_pyproject(&real_root, fp).await;
+    detect_requirements_txt(&real_root, fp).await;
 
     for (name, language) in BARE_LANGUAGE_MANIFESTS {
-        if read_contained_root_file(&real_root, name).await.is_some() {
+        if contained_root_file_exists(&real_root, name).await {
             record(fp, Bucket::Language, language);
         }
     }

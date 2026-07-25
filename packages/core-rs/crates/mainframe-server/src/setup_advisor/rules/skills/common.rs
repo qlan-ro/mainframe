@@ -1,32 +1,8 @@
 //! Constructors and predicates shared by the skills sub-families.
 
-use mainframe_types::setup_advisor::{
-    ProjectFingerprint, RecommendationCategory, RecommendationProvenance,
-};
+use mainframe_types::setup_advisor::{RecommendationCategory, RecommendationProvenance};
 
-use crate::setup_advisor::rule::{Rule, RuleSource};
-
-pub(super) type Evidence = fn(&ProjectFingerprint) -> Option<String>;
-
-/// `Some(evidence)` when `label` is present in `values`. `evidence` is a rule
-/// constant: fingerprint content is display data and never reaches a command.
-pub(super) fn detected(values: &[String], label: &str, evidence: &str) -> Option<String> {
-    values
-        .iter()
-        .any(|value| value == label)
-        .then(|| evidence.to_string())
-}
-
-/// Names the first of `labels` present in `values`, for rules that fire on a
-/// family rather than one label. Safe to interpolate because the fingerprint
-/// only ever holds canonical labels from `manifests.rs`, never a raw dependency
-/// name — and it lands in display text, not in a command.
-pub(super) fn first_of(values: &[String], labels: &[&str]) -> Option<String> {
-    labels
-        .iter()
-        .find(|label| values.iter().any(|value| value == *label))
-        .map(|label| format!("{label} detected in this project"))
-}
+use crate::setup_advisor::rule::{Evidence, Rule, RuleSource};
 
 /// A rule whose command installs a published repo through `npx skills add`.
 ///
@@ -88,6 +64,9 @@ pub(super) const fn vendor(
 /// An unaffiliated author's repo. `repo` and `installs` are what let the user see
 /// they are pulling a stranger's content, so both are transcribed exactly from
 /// the provenance doc's third-party table.
+///
+/// For the same reason no command in this tier passes `-y`: the confirmation it
+/// would skip is the last place the install names whose content is about to run.
 #[allow(clippy::too_many_arguments)]
 pub(super) const fn aggregator(
     id: &'static str,

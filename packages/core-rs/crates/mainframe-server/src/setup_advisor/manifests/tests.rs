@@ -5,6 +5,11 @@ use mainframe_types::setup_advisor::ProjectFingerprint;
 use std::fs;
 use tempfile::tempdir;
 
+/// The non-`pyproject.toml`, non-`pom.xml` ways a project names its language.
+mod languages;
+/// What detection refuses to read.
+mod limits;
+
 /// Writes each `(relative_path, contents)` pair into a fresh tempdir (creating
 /// parent dirs as needed), runs detection against it, and returns the result.
 async fn fingerprint_of(files: &[(&str, &str)]) -> ProjectFingerprint {

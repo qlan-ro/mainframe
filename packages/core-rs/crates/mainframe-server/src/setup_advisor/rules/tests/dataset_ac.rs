@@ -58,11 +58,13 @@ fn a_postgres_and_prettier_project_recommends_across_all_five_categories() {
         "npx skills add supabase/agent-skills --skill supabase-postgres-best-practices -a claude-code -g -y"
     );
 
+    // No `-y`: the third-party tier keeps its install confirmation, which is the
+    // decision `install_flags.rs` enforces across the tier.
     let merged = rec(&recs, "skills-eslint-prettier");
     assert_eq!(merged.provenance, RecommendationProvenance::ThirdParty);
     assert_eq!(
         merged.command,
-        "npx skills add patricio0312rev/skills --skill eslint-prettier-config -a claude-code -g -y"
+        "npx skills add patricio0312rev/skills --skill eslint-prettier-config -a claude-code -g"
     );
 
     let hook = rec(&recs, "hooks-format-on-edit");

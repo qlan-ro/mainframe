@@ -17,6 +17,13 @@ use crate::setup_advisor::recommend::recommend;
 /// T17: blind characterization of the shipped dataset, derived from the spec
 /// and the command-provenance table rather than these rule files.
 mod dataset_ac;
+/// Every rule's own firing signal, one case each.
+mod firing;
+/// The hooks snippets run under `sh`; their exit codes are the behavior.
+mod hook_snippets;
+mod hooks;
+mod install_flags;
+mod scaffolds;
 
 /// Every rule allowed to depend on a resolved remote. Adding a rule that fires
 /// only when a host is present fails `remote_derived_rules_are_all_declared`
@@ -53,7 +60,7 @@ fn rules_that_need_a_remote(host: GitHost) -> Vec<&'static str> {
     let with = bare_fingerprint(Some(host));
     all()
         .into_iter()
-        .filter(|rule| (rule.evidence)(&with).is_some() && (rule.evidence)(&without).is_none())
+        .filter(|rule| rule.evaluate(&with).is_some() && rule.evaluate(&without).is_none())
         .map(|rule| rule.id)
         .collect()
 }

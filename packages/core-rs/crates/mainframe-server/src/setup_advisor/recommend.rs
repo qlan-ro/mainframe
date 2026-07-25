@@ -64,7 +64,10 @@ fn category_slice(
     firing.sort_by_key(|rule| (rule.priority, rule.id));
     firing
         .iter()
-        .filter_map(|rule| (rule.evidence)(fp).map(|signal| to_recommendation(rule, signal)))
+        .filter_map(|rule| {
+            rule.evaluate(fp)
+                .map(|signal| to_recommendation(rule, signal))
+        })
         .take(PER_CATEGORY_CAP)
         .collect()
 }
