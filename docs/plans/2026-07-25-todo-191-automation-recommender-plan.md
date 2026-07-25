@@ -152,6 +152,29 @@ which, so T15/T16 scope is known.
 
 ---
 
+### Contract amendment — provenance tier and source attribution (applies to T3–T5, T14, T15/T16, T25/T26)
+
+The user's supply-chain ruling made third-party aggregator repos shippable **on condition that
+each rule shows whose code it installs**. That turns provenance into part of the wire contract,
+not a docs-only note. Added to `AutomationRecommendation` in both the TS and Rust types:
+
+```ts
+export type RecommendationProvenance = 'first-party' | 'vendor-official' | 'third-party';
+export interface RecommendationSource { repo: string; installs: number }
+// AutomationRecommendation gains: provenance (required), source?: RecommendationSource
+```
+
+Rust mirrors it as a `#[serde(rename_all = "kebab-case")]` enum plus
+`#[serde(skip_serializing_if = "Option::is_none")] source: Option<RecommendationSource>`, so an
+absent source is omitted rather than nulled — consistent with `targetPath`.
+
+Tier assignment per category and the aggregator table live in
+`docs/research/2026-07-25-todo-191-command-provenance.md`. T14's `Rule` struct carries both as
+`&'static` data. The sheet UI (T25/T26) must render `third-party` visually distinct from the
+other two; flattening the distinction defeats the ruling.
+
+---
+
 ### T3 — TS type schema tests (red) · test-writer
 
 **File:** `packages/types/src/__tests__/setup-advisor.test.ts` (new)
@@ -243,9 +266,16 @@ with no dead-code warnings (use `#[allow(dead_code)]` nowhere — wire the re-ex
 **Do:** `tempfile::tempdir()` fixtures, hardcoded expectations, no recomputation of the
 implementation's own mapping:
 - `package.json` with `next`, `react`, `@supabase/supabase-js` in `dependencies` and `vitest`,
-  `@playwright/test` in `devDependencies` → `languages` contains `typescript`, `frameworks`
-  contains `react` and `nextjs`, `databases` contains `supabase`, `testing` contains `vitest`
-  and `playwright`.
+  `@playwright/test`, `typescript` in `devDependencies` → `languages` contains `typescript`,
+  `frameworks` contains `react` and `nextjs`, `databases` contains `supabase`, `testing` contains
+  `vitest` and `playwright`.
+- **TypeScript is claimed, never assumed** (user ruling, corrects this task's original
+  expectation): `typescript` requires a root `tsconfig.json` **or** a `typescript` entry in
+  `dependencies`/`devDependencies`. A `package.json` says JavaScript, not TypeScript. Three cases:
+  `react` with no `typescript` dep and no `tsconfig.json` → `languages` does **not** contain
+  `typescript` while `frameworks` still contains `react`; a `package.json` with no `typescript`
+  dep plus a root `tsconfig.json` → claimed; a bare `tsconfig.json` with no `package.json` →
+  claimed.
 - Auth libraries `next-auth`, `@clerk/nextjs`, `@auth0/auth0-react`, `passport` land in
   `externalApis` (the security-reviewer subagent rule depends on this).
 - `stripe`, `@aws-sdk/client-s3`, `@sentry/node`, `@anthropic-ai/sdk`, `openai`, `langchain` →

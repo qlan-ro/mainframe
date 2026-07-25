@@ -157,7 +157,7 @@ pub fn path_resolve(base: &str, requested: &str) -> String {
 /// files, falling back to the ignored-dir-skipping walk when git fails.
 pub async fn list_project_files(project_path: &str, include_ignored: bool) -> Vec<String> {
     if include_ignored {
-        return walk_project_files(project_path, false).await;
+        return walk_project_files(project_path, false, WALK_LIMIT).await;
     }
 
     let args = [
@@ -179,21 +179,26 @@ pub async fn list_project_files(project_path: &str, include_ignored: bool) -> Ve
             if err.code != Some(GitExecCode::Number(128)) {
                 tracing::warn!(error = %err, project_path, "git ls-files failed unexpectedly, falling back to walk");
             }
-            walk_project_files(project_path, true).await
+            walk_project_files(project_path, true, WALK_LIMIT).await
         }
     }
 }
 
-/// Recursive project walk with a hard `WALK_LIMIT`. Each entry is realpath'd and
-/// confirmed inside `project_path` (symlink containment); `.git` is always
-/// skipped, other ignored dirs only when `skip_ignored_dirs`.
-async fn walk_project_files(project_path: &str, skip_ignored_dirs: bool) -> Vec<String> {
+/// Recursive project walk stopping at `limit` files. Each entry is realpath'd and
+/// confirmed inside `project_path` — which must already be canonicalized, or a
+/// symlinked root fails containment for every entry. `.git` is always skipped,
+/// other ignored dirs only when `skip_ignored_dirs`.
+pub(crate) async fn walk_project_files(
+    project_path: &str,
+    skip_ignored_dirs: bool,
+    limit: usize,
+) -> Vec<String> {
     let root = Path::new(project_path);
     let mut files: Vec<String> = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
-        if files.len() >= WALK_LIMIT {
+        if files.len() >= limit {
             break;
         }
         let mut read_dir = match tokio::fs::read_dir(&dir).await {
@@ -204,7 +209,7 @@ async fn walk_project_files(project_path: &str, skip_ignored_dirs: bool) -> Vec<
             }
         };
         while let Ok(Some(entry)) = read_dir.next_entry().await {
-            if files.len() >= WALK_LIMIT {
+            if files.len() >= limit {
                 break;
             }
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -281,7 +286,7 @@ mod tests {
 
         // Callers pass a realpath'd base (macOS /tmp → /private/tmp); mirror that.
         let root = std::fs::canonicalize(tmp.path()).unwrap();
-        let files = walk_project_files(&root.to_string_lossy(), true).await;
+        let files = walk_project_files(&root.to_string_lossy(), true, WALK_LIMIT).await;
         assert!(files.iter().any(|f| f == "a.txt"));
         assert!(files.iter().any(|f| f == "src/index.ts"));
         assert!(!files.iter().any(|f| f.contains("node_modules")));

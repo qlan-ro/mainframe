@@ -27,6 +27,10 @@ vendor-official** source — the owner is the technology's own org, or a maintai
 
 **17 of 37 signals (46%) match. 20 of 37 (54%) do not.**
 
+That 46% is the number that matters, and it is the one the tiering preserves. With aggregators
+allowed, 36 of 37 signals have a registry source — but 19 of those 36 are strangers' repos, and
+a reader who sees only "36 of 37 covered" has been told the opposite of the truth.
+
 The split is not random. It falls exactly along vendor-vs-generic lines:
 
 - **Vendor/product signals are well covered** — Supabase, Prisma, Convex, Stripe, AWS, Sentry,
@@ -36,12 +40,38 @@ The split is not random. It falls exactly along vendor-vs-generic lines:
   owner exists in the registry. For these the top hits are aggregator repos
   (`github/awesome-copilot`, `wshobson/agents`, `jeffallan/claude-skills`).
 
-**Open decision, flagged not taken:** aggregator repos are real registry entries, so they satisfy
-the spec's literal "verified to exist on skills.sh" test. But recommending an unaffiliated
-third-party repo to a user, whose command then installs that repo's content onto their machine,
-is a supply-chain call — not an implementation call. This table therefore takes the conservative
-path: **first-party sources only; every generic signal uses the custom-scaffold FALLBACK.** If
-the user wants aggregator sources shipped, the 20 FALLBACK rows below are what changes.
+**Supply-chain decision, ruled by the user:** aggregator repos ship, but attributed. A rule
+sourced from an unaffiliated author must show whose repo it installs and how many installs that
+repo's skill has, so the reader can tell a stranger's content from the vendor's. The 46% headline
+above stays as the honest first-party count; it is not inflated by the aggregator rows.
+
+## Provenance tiers
+
+Every rule carries one. The tier reaches the wire contract as
+`AutomationRecommendation.provenance`.
+
+| Tier | Meaning |
+|---|---|
+| `first-party` | Nothing external is fetched — an Anthropic command, a hook config snippet, or a scaffold this app authors |
+| `vendor-official` | Published by the technology's own vendor, or by a core maintainer of it |
+| `third-party` | An unaffiliated author's aggregator repo |
+
+`source` (`owner/repo` + install count) rides alongside the tier, and is set on every skills rule
+— the only category that installs a named repo at a known install count. MCP, hooks, subagents,
+and plugins rules carry a tier but no `source`: there is no registry entry to attribute, and a
+fabricated count would be worse than none.
+
+Per category: skills rules are `vendor-official` or `third-party` per the tables below; MCP rules
+are `vendor-official` (the vendor's own server package); plugins, hooks, and subagents rules are
+`first-party` (Anthropic's marketplace, Anthropic's config schema, our own Markdown).
+
+The UI must keep `third-party` visually distinct. Flattening the distinction is the one thing
+this table exists to prevent.
+
+`antfu` (Vue and Vitest core teams) and `vercel-labs` (Vercel's own org) are `vendor-official` by
+maintainership, not by owner-name matching. `supabase/agent-skills` supplies the postgres row
+because no `postgres/` owner exists — it is vendor-adjacent, and that row's `why` string must not
+imply Postgres published it.
 
 ## Skills — `npx skills add`
 
@@ -52,7 +82,7 @@ is interactive on any multi-skill repo and must not ship in a rule.
 npx skills add <owner/repo> --skill <skill-id> -a claude-code -g -y
 ```
 
-### Matched — first-party registry sources (17)
+### Vendor-official sources (17)
 
 | Signal | Source | Skill id | Installs |
 |---|---|---|---|
@@ -74,20 +104,55 @@ npx skills add <owner/repo> --skill <skill-id> -a claude-code -g -y
 | clerk | `clerk/skills` | `clerk` | 19348 |
 | auth0 | `auth0/agent-skills` | `auth0-quickstart` | 2663 |
 
-`antfu` and `vercel-labs` count as first-party by maintainership: antfu is on the Vue and Vitest
-core teams, `vercel-labs` is Vercel's own org. `supabase/agent-skills` supplies the postgres row
-because no `postgres/` owner exists; it is vendor-adjacent, not neutral, and the rule's `why`
-string should not imply otherwise.
+All 17 rows are tier `vendor-official`, and all carry a `source`.
 
-### Unmatched — no first-party source (20)
+### Third-party aggregator sources (19)
 
-`typescript`, `python`, `rust`, `java`, `golang`, `nextjs`, `express`, `django`, `angular`,
-`drizzle`, `jest`, `pytest`, `prettier`, `eslint`, `ruff`, `tsconfig`, `tailwind`, `docker`,
-`next-auth`, `passport`
+No vendor publishes a skill for these signals. Each row below is an unaffiliated author's repo,
+selected by relevance first and install count second, and ships as tier `third-party` with the
+repo and install count rendered in the rule.
 
-Two near-misses worth recording so they are not re-litigated: `analogjs/angular-skills` (9848)
-is an Angular-ecosystem org but not Angular itself; `samber/cc-skills-golang` (35764) is popular
-but unaffiliated with the Go team. Both are excluded under the conservative rule above.
+| Signal | Source | Skill id | Installs |
+|---|---|---|---|
+| typescript | `wshobson/agents` | `typescript-advanced-types` | 55514 |
+| python | `wshobson/agents` | `python-performance-optimization` | 29714 |
+| rust | `wshobson/agents` | `rust-async-patterns` | 16153 |
+| java | `github/awesome-copilot` | `java-springboot` | 18370 |
+| golang | `samber/cc-skills-golang` | `golang-code-style` | 35764 |
+| nextjs | `wshobson/agents` | `nextjs-app-router-patterns` | 25370 |
+| express | `aj-geddes/useful-ai-prompts` | `nodejs-express-server` | 2990 |
+| django | `affaan-m/everything-claude-code` | `django-patterns` | 7357 |
+| angular | `analogjs/angular-skills` | `angular-component` | 9848 |
+| drizzle | `bobmatnyc/claude-mpm-skills` | `drizzle-orm` | 4354 |
+| jest | `github/awesome-copilot` | `javascript-typescript-jest` | 11922 |
+| pytest | `github/awesome-copilot` | `pytest-coverage` | 11881 |
+| prettier | `patricio0312rev/skills` | `eslint-prettier-config` | 898 |
+| eslint | `patricio0312rev/skills` | `eslint-prettier-config` | 898 |
+| ruff | `github/awesome-copilot` | `ruff-recursive-fix` | 1337 |
+| tsconfig | `oimiragieo/agent-studio` | `tsconfig-json-rules` | 68 |
+| tailwind | `wshobson/agents` | `tailwind-design-system` | 55916 |
+| docker | `github/awesome-copilot` | `multi-stage-dockerfile` | 18987 |
+| next-auth | `mindrally/skills` | `nextauth-authentication` | 938 |
+
+`analogjs` is an Angular-ecosystem org but not the Angular team, and `samber` is unaffiliated
+with the Go team; both stay `third-party`.
+
+Two low-install rows are worth a second look before shipping: `tsconfig` (68 installs) and
+`prettier`/`eslint` (898). They are genuinely on-topic, but at those counts the attribution is
+carrying most of the weight.
+
+**Rejected higher-install hits**, recorded so they are not re-litigated: `mattpocock/skills`
+`setup-pre-commit` (159225) for prettier — a generic pre-commit skill, not Prettier-specific;
+`microsoft/azure-skills` `python-appservice-deploy` (82665) for python — Azure deployment, not
+the language; `clerk/skills` `clerk-nextjs-patterns` (28195) for nextjs — Clerk auth, not Next.js.
+Install count never overrode relevance.
+
+### No source at any tier (1)
+
+`passport` — every hit was a generic NestJS skill or an unrelated domain (travel documents,
+Laravel auth), and `q=passportjs` returned zero results. It gets no skills rule. The signal is
+not wasted: it still reaches the user through `externalApis`, which drives the
+`security-guidance` plugin rule and the security-reviewer subagent.
 
 ### Custom-scaffold fallbacks (8)
 
@@ -99,6 +164,8 @@ snippet; `targetPath` is `.claude/skills/<name>/SKILL.md`.
 `project-conventions`, `setup-dev`
 
 The plan listed seven; the reference file carries eight. `setup-dev` is included.
+
+Tier `first-party`, no `source`: these scaffold a file the user owns, fetching nothing.
 
 ## MCP servers — `claude mcp add`
 

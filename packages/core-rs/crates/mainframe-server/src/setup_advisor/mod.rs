@@ -4,6 +4,7 @@
 //! `docs/research/2026-07-25-todo-191-command-provenance.md`.
 
 pub mod fingerprint;
+mod git_host;
 pub mod manifests;
 pub mod recommend;
 pub mod rule;

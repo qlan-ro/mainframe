@@ -20,6 +20,7 @@ enum Bucket {
 
 /// Exact dependency name to (bucket, canonical label).
 const EXACT: &[(&str, Bucket, &str)] = &[
+    ("typescript", Bucket::Language, "typescript"),
     ("react", Bucket::Framework, "react"),
     ("next", Bucket::Framework, "nextjs"),
     ("vue", Bucket::Framework, "vue"),
@@ -57,10 +58,14 @@ const SCOPES: &[(&str, Bucket, &str)] = &[
 ];
 
 /// Manifests whose mere presence identifies a language.
+///
+/// `package.json` is deliberately absent: it says JavaScript, not TypeScript, so
+/// the TypeScript claim comes from `tsconfig.json` or a `typescript` dependency.
 const BARE_LANGUAGE_MANIFESTS: &[(&str, &str)] = &[
     ("Cargo.toml", "rust"),
     ("go.mod", "go"),
     ("pom.xml", "java"),
+    ("tsconfig.json", "typescript"),
 ];
 
 /// Reads `name` from `real_root`, refusing to follow a symlink out of the project.
@@ -68,12 +73,12 @@ const BARE_LANGUAGE_MANIFESTS: &[(&str, &str)] = &[
 /// A bare `read_to_string(root.join(name))` follows the link and silently reads an
 /// arbitrary file; a cloned repo can ship such a link. Canonicalizing before the
 /// read is what makes the containment check meaningful.
-async fn read_contained_root_file(real_root: &Path, name: &str) -> Option<String> {
+pub(super) async fn read_contained_root_file(real_root: &Path, name: &str) -> Option<String> {
     let real = tokio::fs::canonicalize(real_root.join(name)).await.ok()?;
     if !is_within_base(real_root, &real) {
         tracing::warn!(
             file = name,
-            "setup advisor: root manifest resolves outside the project; skipping"
+            "setup advisor: root file resolves outside the project; skipping"
         );
         return None;
     }
@@ -128,7 +133,6 @@ async fn detect_package_json(real_root: &Path, fp: &mut ProjectFingerprint) {
         tracing::warn!("setup advisor: package.json is not valid JSON; skipping it");
         return;
     };
-    record(fp, Bucket::Language, "typescript");
     for section in ["dependencies", "devDependencies"] {
         let Some(entries) = parsed.get(section).and_then(|v| v.as_object()) else {
             continue;
