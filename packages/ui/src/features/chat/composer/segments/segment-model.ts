@@ -55,3 +55,15 @@ export function dismissQuote(composition: Composition, id: string): Composition 
 
   return { committed: nextCommitted, liveQuote };
 }
+
+/**
+ * Edits a committed segment's prose in place (the plain `<textarea>` a
+ * committed box renders — the live segment's prose has no store-side
+ * counterpart to edit, it lives only in the native composer input).
+ */
+export function updateSegmentText(composition: Composition, id: string, text: string): Composition {
+  return {
+    ...composition,
+    committed: composition.committed.map((segment) => (segment.id === id ? { ...segment, text } : segment)),
+  };
+}

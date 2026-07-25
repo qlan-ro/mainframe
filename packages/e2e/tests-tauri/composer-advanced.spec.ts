@@ -18,10 +18,6 @@
  *   chat-queued-message/-edit/-cancel        — queued user turn + its hover actions
  *
  * `/` skills: the native mock-cli adapter scans only the temporary project's `.claude/skills`.
- *
- * Orphaned finding (see report): `QuoteBlock` (components/ui/assistant-ui/quote.tsx) is
- * exported but never mounted in UserMessage.tsx — a sent message does NOT render a quote block
- * today. The plan's "sent message renders quote block" sub-scenario is skipped with a TODO.
  */
 
 import { test, expect } from '@playwright/test';
@@ -307,13 +303,6 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     const { page } = app;
     await page.getByTestId('composer-quote-dismiss').click();
     await expect(page.getByTestId('composer-quote-preview')).toHaveCount(0);
-  });
-
-  // TODO(app-tauri): QuoteBlock (components/ui/assistant-ui/quote.tsx) is exported but never
-  // mounted in UserMessage.tsx — a sent message renders no quote block today. Un-skip once it's
-  // wired (or drop if the design deliberately keeps quoting composer-only).
-  test.skip('a sent message with an active quote renders a quote block', async () => {
-    // TODO(app-tauri): QuoteBlock is orphaned — see the file-level docstring.
   });
 
   test('worktree popover shows a mid-session warning once the chat has messages', async () => {
