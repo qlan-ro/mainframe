@@ -79,6 +79,15 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
         Vec::new()
     }
+    /// Record the worktrees that already existed when the chat activated, so a
+    /// switch offer only ever names one registered since.
+    fn seed_worktree_baseline<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _project_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        None
+    }
 
     // adapters + sink ---------------------------------------------------------
     fn create_session(
@@ -790,6 +799,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let Some(project_path) = self.deps.projects_get_path(&chat.project_id) else {
             return;
         };
+        // Before the early returns below: a chat with no session still needs a
+        // baseline, and it must be re-seeded on every activation after a restart.
+        if let Some(fut) = self.deps.seed_worktree_baseline(chat_id, &project_path) {
+            fut.await;
+        }
         let effective_path = chat.worktree_path.clone().unwrap_or(project_path);
 
         if let Some(wt) = &chat.worktree_path

@@ -8,7 +8,7 @@
 //! Rust analogue of the TS closure bag. Non-generic (`dyn ChatManagerDeps`) to
 //! avoid generic self-recursion in the wiring.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
@@ -47,6 +47,8 @@ use crate::permission_manager::PermissionManager;
 use crate::title_generator::derive_title_from_message;
 use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
+use crate::worktree_offer::{OfferError, WorktreeOfferDeps, WorktreeOfferRegistry};
+use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 /// Result of `processAttachments` (attachment-processor.ts is a separate port
 /// target; the shape is mirrored here for the sendMessage seam).
@@ -171,6 +173,12 @@ pub trait ChatManagerDeps: Send + Sync {
     fn add_skill_file(&self, chat_id: &str, entry: &SkillFileEntry) -> bool;
     fn update_todos(&self, chat_id: &str, todos: &[TodoItem]);
     fn add_detected_prs(&self, chat_id: &str, prs: &[DetectedPr]) -> Vec<DetectedPr>;
+    fn get_dismissed_worktrees(&self, _chat_id: &str) -> Vec<String> {
+        Vec::new()
+    }
+    fn add_dismissed_worktree(&self, _chat_id: &str, _worktree_path: &str) -> bool {
+        false
+    }
 
     fn create_session(
         &self,
@@ -400,6 +408,7 @@ struct EhDeps {
     active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     queued_refs: QueuedRefs,
+    worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
 impl EventHandlerDeps for EhDeps {
@@ -464,17 +473,32 @@ impl EventHandlerDeps for EhDeps {
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         self.deps.on_provider_quota(adapter_id, quota);
     }
+    fn on_worktree_trigger(&self, chat_id: &str) {
+        self.worktree_offers.on_trigger(chat_id);
+    }
 }
 
 struct LcDeps {
     deps: Arc<dyn ChatManagerDeps>,
     permissions: Arc<Mutex<PermissionManager>>,
     event_handler: Arc<EventHandler<EhDeps>>,
+    worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
 impl LifecycleManagerDeps for LcDeps {
     fn chats_get(&self, id: &str) -> Option<Chat> {
         self.deps.chats_get(id)
+    }
+    fn seed_worktree_baseline<'a>(
+        &'a self,
+        chat_id: &'a str,
+        project_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        Some(Box::pin(async move {
+            self.worktree_offers
+                .seed_baseline(chat_id, project_path)
+                .await;
+        }))
     }
     fn chats_create(
         &self,
@@ -667,6 +691,7 @@ struct CmDeps {
     active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
 impl ConfigManagerDeps for CmDeps {
@@ -728,6 +753,10 @@ impl ConfigManagerDeps for CmDeps {
         Some(Box::pin(async move {
             self.lifecycle.await_starting(chat_id).await;
         }))
+    }
+    fn on_binding_changed(&self, chat_id: &str, worktree_path: Option<&str>) {
+        self.worktree_offers
+            .on_binding_changed(chat_id, worktree_path);
     }
 }
 
@@ -914,6 +943,51 @@ impl DegradedRecoveryDeps for RecoveryWrapper {
     }
 }
 
+/// Shared-internals wrapper backing the worktree offer registry. Built before the
+/// sub-manager wrappers so each of them can hold an `Arc` to the same registry.
+struct OfferDeps {
+    deps: Arc<dyn ChatManagerDeps>,
+    active_chats: Registry,
+    permissions: Arc<Mutex<PermissionManager>>,
+}
+
+impl WorktreeOfferDeps for OfferDeps {
+    fn emit_event(&self, event: DaemonEvent) {
+        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+    }
+    fn projects_get_path(&self, project_id: &str) -> Option<String> {
+        self.deps.projects_get_path(project_id)
+    }
+    fn chat_binding(&self, chat_id: &str) -> Option<(String, Option<String>)> {
+        let chat = self
+            .active_chats
+            .get(chat_id)
+            .map(|c| {
+                c.value()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .chat
+                    .clone()
+            })
+            .or_else(|| self.deps.chats_get(chat_id))?;
+        Some((chat.project_id, chat.worktree_path))
+    }
+    fn other_chat_worktrees(&self, project_id: &str, chat_id: &str) -> HashSet<String> {
+        self.deps
+            .chats_list(project_id)
+            .into_iter()
+            .filter(|chat| chat.id != chat_id)
+            .filter_map(|chat| chat.worktree_path)
+            .collect()
+    }
+    fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String> {
+        self.deps.get_dismissed_worktrees(chat_id)
+    }
+    fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool {
+        self.deps.add_dismissed_worktree(chat_id, worktree_path)
+    }
+}
+
 pub struct ChatManager {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
@@ -926,6 +1000,7 @@ pub struct ChatManager {
     config: ChatConfigManager<CmDeps>,
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
+    worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
 impl ChatManager {
@@ -935,11 +1010,18 @@ impl ChatManager {
         let permissions = Arc::new(Mutex::new(PermissionManager::new()));
         let queued_refs: QueuedRefs = Arc::new(Mutex::new(HashMap::new()));
 
+        let worktree_offers = Arc::new(WorktreeOfferRegistry::new(Arc::new(OfferDeps {
+            deps: deps.clone(),
+            active_chats: active_chats.clone(),
+            permissions: permissions.clone(),
+        })));
+
         let eh_deps = Arc::new(EhDeps {
             deps: deps.clone(),
             active_chats: active_chats.clone(),
             permissions: permissions.clone(),
             queued_refs: queued_refs.clone(),
+            worktree_offers: worktree_offers.clone(),
         });
         let event_handler = Arc::new(EventHandler::new(
             messages.clone(),
@@ -951,6 +1033,7 @@ impl ChatManager {
             deps: deps.clone(),
             permissions: permissions.clone(),
             event_handler: event_handler.clone(),
+            worktree_offers: worktree_offers.clone(),
         });
         let lifecycle = Arc::new(ChatLifecycleManager::new(
             lc_deps,
@@ -974,6 +1057,7 @@ impl ChatManager {
             active_chats: active_chats.clone(),
             permissions: permissions.clone(),
             lifecycle: lifecycle.clone(),
+            worktree_offers: worktree_offers.clone(),
         });
 
         let mut idle_scanner = crate::idle_scanner::IdleSessionScanner::new(active_chats.clone());
@@ -991,6 +1075,7 @@ impl ChatManager {
             config,
             idle_scanner: Mutex::new(idle_scanner),
             external_sessions: None,
+            worktree_offers,
         }
     }
 
@@ -1206,12 +1291,14 @@ impl ChatManager {
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
         self.deps.tracker_remove_chat(chat_id);
         self.event_handler.clear_display_cache(chat_id);
+        self.worktree_offers.forget(chat_id);
     }
 
     pub async fn end_chat(&self, chat_id: &str) {
         self.lifecycle.end_chat(chat_id).await;
         self.deps.tracker_remove_chat(chat_id);
         self.event_handler.clear_display_cache(chat_id);
+        self.worktree_offers.forget(chat_id);
     }
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {
@@ -1552,11 +1639,46 @@ impl ChatManager {
         &self,
         chat_id: &str,
         worktree_path: &str,
-        branch_name: &str,
+        branch_name: Option<&str>,
     ) -> Result<(), ConfigError> {
         self.config
             .attach_worktree(chat_id, worktree_path, branch_name)
             .await
+    }
+
+    pub fn worktree_offers_for_chat(&self, chat_id: &str) -> Vec<WorktreeSwitchOffer> {
+        self.worktree_offers.snapshot(chat_id)
+    }
+
+    pub fn dismiss_worktree_offer(
+        &self,
+        chat_id: &str,
+        worktree_path: &str,
+    ) -> Result<(), OfferError> {
+        self.worktree_offers.dismiss(chat_id, worktree_path)
+    }
+
+    /// Claims the one switch slot, rebinds, then releases it. The `resolved`
+    /// event comes from `on_binding_changed`, never from here.
+    pub async fn accept_worktree_offer(
+        &self,
+        chat_id: &str,
+        worktree_path: &str,
+    ) -> Result<(), OfferError> {
+        let offer = self.worktree_offers.claim_accept(chat_id, worktree_path)?;
+
+        if tokio::fs::metadata(worktree_path).await.is_err() {
+            self.worktree_offers.release_accept(chat_id);
+            self.worktree_offers.expire(chat_id, worktree_path);
+            return Err(OfferError::Vanished);
+        }
+
+        let result = self
+            .config
+            .attach_worktree(chat_id, worktree_path, offer.branch_name.as_deref())
+            .await;
+        self.worktree_offers.release_accept(chat_id);
+        result.map_err(|err| OfferError::Message(err.to_string()))
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {

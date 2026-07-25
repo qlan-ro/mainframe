@@ -53,6 +53,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::chat_commands::router())
         .merge(routes::context::router())
         .merge(routes::worktree::router())
+        .merge(routes::worktree_offer::router())
         .merge(routes::chat_recovery::router())
         .merge(routes::external_sessions::router())
         .merge(routes::background_tasks::router())

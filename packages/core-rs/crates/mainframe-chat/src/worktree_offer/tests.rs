@@ -11,6 +11,7 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
 
 const CHAT: &str = "chat-1";
+const OTHER_CHAT: &str = "chat-2";
 const PROJECT_ID: &str = "p-1";
 const PROJECT_PATH: &str = "/repo";
 /// The two clock readings every `detected_at` assertion below is pinned to.
@@ -476,6 +477,40 @@ async fn snapshot_returns_pending_offers_ordered_by_detected_at_ascending() {
             offer("/repo/.worktrees/zeta", Some("feat/zeta"), T1),
             offer("/repo/.worktrees/alpha", Some("feat/alpha"), T2),
         ]
+    );
+}
+
+#[tokio::test]
+async fn snapshot_is_scoped_to_the_chat() {
+    let h = Harness::new();
+    h.seed_empty_baseline().await;
+    h.set_worktrees(vec![entry(
+        "/repo/.worktrees/mine",
+        Some("refs/heads/feat/mine"),
+    )]);
+    h.rescan().await;
+
+    // chat-2 baselines on chat-1's worktree, so only `theirs` is ever new to it.
+    h.registry.seed_baseline(OTHER_CHAT, PROJECT_PATH).await;
+    h.set_clock(T2);
+    h.set_worktrees(vec![
+        entry("/repo/.worktrees/mine", Some("refs/heads/feat/mine")),
+        entry("/repo/.worktrees/theirs", Some("refs/heads/feat/theirs")),
+    ]);
+    h.registry.clone().rescan(OTHER_CHAT.to_string()).await;
+
+    assert_eq!(
+        h.snapshot(),
+        vec![offer("/repo/.worktrees/mine", Some("feat/mine"), T1)]
+    );
+    assert_eq!(
+        h.registry.snapshot(OTHER_CHAT),
+        vec![WorktreeSwitchOffer {
+            chat_id: OTHER_CHAT.to_string(),
+            worktree_path: "/repo/.worktrees/theirs".to_string(),
+            branch_name: Some("feat/theirs".to_string()),
+            detected_at: T2,
+        }]
     );
 }
 

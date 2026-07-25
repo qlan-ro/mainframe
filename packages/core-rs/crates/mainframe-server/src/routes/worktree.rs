@@ -184,7 +184,10 @@ async fn attach_worktree(
         tracing::warn!(chat_id = %id, "attach-worktree needs ChatManager (unwired)");
         return fail(StatusCode::BAD_REQUEST, "Failed to attach worktree");
     };
-    match cm.attach_worktree(&id, &worktree_path, &branch_name).await {
+    match cm
+        .attach_worktree(&id, &worktree_path, Some(&branch_name))
+        .await
+    {
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "attach-worktree failed");

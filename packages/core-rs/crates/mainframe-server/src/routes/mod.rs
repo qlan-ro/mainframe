@@ -37,6 +37,7 @@ pub mod suggestions;
 pub mod tags;
 pub mod tunnel;
 pub mod worktree;
+pub mod worktree_offer;
 
 // PORT STATUS: src/server/routes/index.ts (mount table)
 // confidence: high
