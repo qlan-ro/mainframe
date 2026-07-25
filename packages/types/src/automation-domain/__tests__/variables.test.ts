@@ -6,6 +6,8 @@ import type { TokenDescriptor, TokenSourceKind } from '../tokens.js';
 import {
   buildVariableNamespace,
   extractVariableRefs,
+  formatVariableRef,
+  opensVariableRef,
   renameVariableInDefinition,
   renameVariableRefs,
   renderVariableText,
@@ -50,6 +52,63 @@ describe('extractVariableRefs', () => {
   it('finds every ref in a multi-ref string', () => {
     const refs = extractVariableRefs('$a then $b');
     expect(refs.map((r) => r.name)).toEqual(['a', 'b']);
+  });
+});
+
+/**
+ * The braced spelling exists for the one thing the bare one cannot do: a ref
+ * with no word boundary in front of it. `todo/$id` is literal text, so the
+ * picker and the load-time converter write `todo/${id}` instead.
+ */
+describe('extractVariableRefs — the braced ${name} spelling', () => {
+  it('finds a braced ref glued to the preceding word', () => {
+    expect(extractVariableRefs('todo/${id}')).toEqual([{ name: 'id', path: [], start: 5, end: 10, delimited: true }]);
+  });
+
+  it('consumes a dotted path inside the braces', () => {
+    expect(extractVariableRefs('${trigger_payload.pr.title}')).toEqual([
+      { name: 'trigger_payload', path: ['pr', 'title'], start: 0, end: 27, delimited: true },
+    ]);
+  });
+
+  it('ends the ref at the closing brace, leaving the rest as text', () => {
+    const refs = extractVariableRefs('a${x}b');
+    expect(refs).toEqual([{ name: 'x', path: [], start: 1, end: 5, delimited: true }]);
+  });
+
+  it('ignores an unclosed brace rather than swallowing the rest of the line', () => {
+    expect(extractVariableRefs('${unclosed and more')).toEqual([]);
+  });
+
+  it('ignores an empty brace', () => {
+    expect(extractVariableRefs('${}')).toEqual([]);
+  });
+});
+
+describe('formatVariableRef', () => {
+  it('writes the bare spelling at the start of the text', () => {
+    expect(formatVariableRef('id', [], '')).toBe('$id');
+  });
+
+  it('writes the bare spelling after whitespace', () => {
+    expect(formatVariableRef('id', [], 'Ship ')).toBe('$id');
+  });
+
+  it('writes the braced spelling mid-word, where a bare $ would be literal text', () => {
+    expect(formatVariableRef('id', [], 'todo/')).toBe('${id}');
+  });
+
+  it('carries the dotted path in either spelling', () => {
+    expect(formatVariableRef('payload', ['pr', 'title'], '')).toBe('$payload.pr.title');
+    expect(formatVariableRef('payload', ['pr', 'title'], 'x')).toBe('${payload.pr.title}');
+  });
+});
+
+describe('opensVariableRef', () => {
+  it('is true at the start and after whitespace, false mid-word', () => {
+    expect(opensVariableRef('$a', 0)).toBe(true);
+    expect(opensVariableRef('x $a', 2)).toBe(true);
+    expect(opensVariableRef('x$a', 1)).toBe(false);
   });
 });
 
@@ -190,6 +249,14 @@ describe('renameVariableRefs', () => {
   it('leaves text without the name untouched', () => {
     expect(renameVariableRefs('nothing here', 'old', 'new')).toBe('nothing here');
   });
+
+  it('keeps each ref in the spelling it already used — rewriting a braced ref bare would make it literal text', () => {
+    expect(renameVariableRefs('todo/${old} and $old', 'old', 'new')).toBe('todo/${new} and $new');
+  });
+
+  it('keeps the dotted path when rewriting a braced ref', () => {
+    expect(renameVariableRefs('x${old.pr.title}', 'old', 'new')).toBe('x${new.pr.title}');
+  });
 });
 
 describe('renameVariableInDefinition', () => {
@@ -283,7 +350,7 @@ describe('renderVariableText — shared substitution fixture', () => {
   ).cases;
 
   it('covers the cases the two implementations are most likely to disagree on', () => {
-    expect(cases.length).toBeGreaterThanOrEqual(14);
+    expect(cases.length).toBeGreaterThanOrEqual(18);
   });
 
   it.each(cases.map((c) => [c.name, c] as const))('%s', (_name, testCase) => {

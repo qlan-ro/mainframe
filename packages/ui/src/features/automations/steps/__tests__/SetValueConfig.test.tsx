@@ -139,7 +139,7 @@ describe('SetValueConfig — name commit semantics', () => {
 
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('automations-step-config-v1-name-error')).toHaveTextContent(
-      'Another value in scope is already called $headline',
+      'Another value in this automation is already called $headline',
     );
   });
 

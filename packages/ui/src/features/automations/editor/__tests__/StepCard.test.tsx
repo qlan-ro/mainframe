@@ -96,6 +96,45 @@ describe('StepCard — issue strip', () => {
     expect(screen.getByText('Second issue for a.')).toBeInTheDocument();
     expect(screen.queryByText('Issue for b.')).not.toBeInTheDocument();
   });
+
+  // A warning leaves Save enabled, so painting the card in the blocking
+  // treatment would tell the user to fix something that isn't in their way.
+  it('marks the strip a warning when nothing pinned to this step blocks saving', () => {
+    const step: AutomationStep = { id: 'a', kind: 'notify', message: [] };
+    const issues: ValidationIssue[] = [{ stepId: 'a', level: 'warning', msg: 'Nothing is called $HOME yet.' }];
+    render(
+      <StepCard
+        step={step}
+        onChange={vi.fn()}
+        tokens={[]}
+        catalog={NO_CATALOG}
+        issues={issues}
+        onDragStart={vi.fn()}
+        onDragEnd={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('automations-step-issues-a')).toHaveAttribute('data-level', 'warning');
+  });
+
+  it('marks the strip an error as soon as one pinned issue blocks saving', () => {
+    const step: AutomationStep = { id: 'a', kind: 'notify', message: [] };
+    const issues: ValidationIssue[] = [
+      { stepId: 'a', level: 'warning', msg: 'Nothing is called $HOME yet.' },
+      { stepId: 'a', level: 'error', msg: 'No message yet.' },
+    ];
+    render(
+      <StepCard
+        step={step}
+        onChange={vi.fn()}
+        tokens={[]}
+        catalog={NO_CATALOG}
+        issues={issues}
+        onDragStart={vi.fn()}
+        onDragEnd={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('automations-step-issues-a')).toHaveAttribute('data-level', 'error');
+  });
 });
 
 describe('StepCard — title editing', () => {

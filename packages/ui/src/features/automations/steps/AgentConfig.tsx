@@ -41,6 +41,7 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
         value={singlePart(step.prompt)}
         onChange={(prompt) => patch({ prompt: textToChipText(prompt) })}
         scope={tokens}
+        adapterId={step.adapterId}
         placeholder="What should the agent do?"
         minHeight={56}
         bare

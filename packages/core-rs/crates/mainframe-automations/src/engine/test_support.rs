@@ -243,6 +243,7 @@ pub(crate) fn run_action_step(id: &str, action_id: &str, keep_going: bool) -> St
         credential: None,
         params: Default::default(),
         output_as: None,
+        output_name: None,
     })
 }
 
@@ -261,6 +262,7 @@ pub(crate) fn ask_me_step(id: &str) -> Step {
         keep_going: false,
         title: "Pick one".to_string(),
         fields: vec![],
+        output_name: None,
     })
 }
 
@@ -278,7 +280,18 @@ pub(crate) fn ask_agent_step(id: &str, keep_going: bool) -> Step {
         timeout_minutes: None,
         expects: None,
         attachments: None,
+        output_name: None,
     })
+}
+
+/// An agent step as the editor saves it: carrying the `outputName` minted when
+/// the step was created.
+pub(crate) fn named_ask_agent_step(id: &str, output_name: &str) -> Step {
+    let Step::AskAgent(mut step) = ask_agent_step(id, false) else {
+        unreachable!("ask_agent_step builds an AskAgent")
+    };
+    step.output_name = Some(output_name.to_string());
+    Step::AskAgent(step)
 }
 
 pub(crate) fn token_ref(step_id: &str, output: &str, field: Option<&str>) -> TokenRef {

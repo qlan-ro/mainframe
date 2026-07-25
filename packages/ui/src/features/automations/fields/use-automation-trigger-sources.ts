@@ -21,7 +21,8 @@ import { getSkills } from '@/lib/api/skills';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { useAdapters } from '@/store/adapters';
 import { buildSkillsTriggerAdapter } from '@/features/chat/composer/triggers/skills-trigger-adapter';
-import { createMentionCache, buildMentionTriggerAdapter } from '@/features/chat/composer/triggers/mention-adapter';
+import { createMentionCache } from '@/features/chat/composer/triggers/mention-adapter';
+import { useMentionTriggerAdapter } from '@/features/chat/composer/triggers/use-mention-trigger-adapter';
 import {
   literalDirectiveFormatter,
   mentionDirectiveFormatter,
@@ -66,11 +67,10 @@ function useAutomationSkills(projectId: string | null, adapterId: string | null,
 
 export interface UseAutomationTriggerSourcesOptions {
   /**
-   * Skips both the skills and files fetches. `TriggerTextField` calls this
-   * hook from every instance regardless of `triggers` mode (its props carry
-   * no `adapterId` to gate on) — `variables-only` fields like the worktree
-   * branch name would otherwise fire a redundant `getSkills`/file search on
-   * every mount.
+   * Skips both the skills and files fetches. `TriggerTextField` must call this
+   * hook from every instance regardless of `triggers` mode — a hook can't be
+   * conditional — so `variables-only` fields like the worktree branch name
+   * would otherwise fire a `getSkills`/file search they never read.
    */
   enabled?: boolean;
 }
@@ -95,19 +95,15 @@ export function useAutomationTriggerSources(
         getFileTree: (dir) =>
           enabled && activeProjectId ? getFileTree(IGNORED_PORT, activeProjectId, dir) : Promise.resolve([]),
         browseFilesystem: (dir) =>
-          enabled ? browseFilesystem(IGNORED_PORT, dir, { includeFiles: true, includeHidden: true }) : Promise.resolve([]),
+          enabled
+            ? browseFilesystem(IGNORED_PORT, dir, { includeFiles: true, includeHidden: true })
+            : Promise.resolve([]),
       }),
     [enabled, activeProjectId],
   );
 
-  // Bump on cache emit so the mention adapter memo gets a fresh reference —
-  // `useTriggerField`'s navigation memo is keyed on the adapter identity.
-  const [version, bump] = useState(0);
-  useEffect(() => mentionCache.subscribe(() => bump((n) => n + 1)), [mentionCache]);
-  const mentionAdapter = useMemo(
-    () => buildMentionTriggerAdapter(mentionCache, []),
-    [mentionCache, version],
-  );
+  // No agents: an automation step has no chat to source a subagent list from.
+  const mentionAdapter = useMentionTriggerAdapter(mentionCache);
 
   return useMemo(
     () => [

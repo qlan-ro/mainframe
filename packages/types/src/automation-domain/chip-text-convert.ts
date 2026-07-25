@@ -1,14 +1,26 @@
 /**
  * The bridge between the wire's `ChipText` and the plain text the editor now
  * edits. Fields stay `ChipText` on the wire (a `["plain string"]` array is
- * already valid), so nothing about the contract changes: the editor reads text
- * in, writes a single string part back, and legacy `{token}` parts are upgraded
- * to `$name` on load.
+ * already valid), so nothing about the contract changes.
+ *
+ * The two directions are inverses and both run at a boundary: `{token}` parts
+ * become `$name` on load, and `$name` refs become `{token}` parts again on
+ * save. Converting back matters because a `{token}` addresses a step
+ * *structurally* — surviving any later renaming or reordering — while `$name`
+ * is resolved through the namespace in scope. Saving text-only would leave the
+ * automation's meaning riding on names alone.
  */
-import type { ActionCatalogEntry, AutomationDefinition, AutomationStep, ChipText, TokenRef } from '../automation.js';
+import type { ActionCatalogEntry, AutomationDefinition, ChipText, TokenRef } from '../automation.js';
 import { isTokenPart } from './chip-parts.js';
+import { mapStepChipText } from './step-chip-text.js';
 import { scopeAt } from './token-scope.js';
-import { buildVariableNamespace, sanitizeVariableName } from './variables.js';
+import {
+  buildVariableNamespace,
+  extractVariableRefs,
+  formatVariableRef,
+  sanitizeVariableName,
+  type VariableNamespace,
+} from './variables.js';
 
 /**
  * A saved field as editable text. Pass the `nameFor` of a namespace built at
@@ -21,13 +33,19 @@ import { buildVariableNamespace, sanitizeVariableName } from './variables.js';
  * `$name` nothing defines.
  */
 export function chipTextToText(parts: ChipText, nameFor: (ref: TokenRef) => string | null): string {
-  return parts
-    .map((part) => {
-      if (!isTokenPart(part)) return part;
-      const name = nameFor(part.token) ?? sanitizeVariableName(part.token.output);
-      return part.token.field ? `$${name}.${part.token.field}` : `$${name}`;
-    })
-    .join('');
+  let text = '';
+  for (const part of parts) {
+    if (!isTokenPart(part)) {
+      text += part;
+      continue;
+    }
+    const name = nameFor(part.token) ?? sanitizeVariableName(part.token.output);
+    const path = part.token.field ? part.token.field.split('.') : [];
+    // A token landing mid-word (`todo/` + ref) has to be written `${name}`:
+    // a bare `$` there is literal text no extractor would ever see.
+    text += formatVariableRef(name, path, text);
+  }
+  return text;
 }
 
 /** Edited text back onto the wire. Empty text is no parts, the spelling the contract already uses for an unfilled field. */
@@ -35,39 +53,38 @@ export function textToChipText(text: string): ChipText {
   return text === '' ? [] : [text];
 }
 
-function normalizeChipText(definition: AutomationDefinition, catalog: ActionCatalogEntry[], stepId: string, value: ChipText): ChipText {
-  const { nameFor } = buildVariableNamespace(scopeAt(definition, catalog, stepId));
-  return textToChipText(chipTextToText(value, nameFor));
+/**
+ * Edited text with every resolvable `$name` turned back into the `{token}` it
+ * came from. A name nothing in scope defines stays literal text — the user is
+ * mid-edit, or typed a `$` that means nothing here, and `validate` reports it.
+ */
+export function textToRefs(text: string, namespace: VariableNamespace): ChipText {
+  const parts: ChipText = [];
+  let cursor = 0;
+  for (const ref of extractVariableRefs(text)) {
+    const descriptor = namespace.byName.get(ref.name);
+    if (!descriptor) continue;
+    if (ref.start > cursor) parts.push(text.slice(cursor, ref.start));
+    const token: TokenRef = { stepId: descriptor.ref.stepId, output: descriptor.ref.output };
+    if (ref.path.length > 0) token.field = ref.path.join('.');
+    parts.push({ token });
+    cursor = ref.end;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return parts;
 }
 
-function normalizeStep(definition: AutomationDefinition, catalog: ActionCatalogEntry[], step: AutomationStep): AutomationStep {
-  const normalize = (value: ChipText): ChipText => normalizeChipText(definition, catalog, step.id, value);
-  switch (step.kind) {
-    case 'ask_agent': {
-      const next: AutomationStep = { ...step, prompt: normalize(step.prompt) };
-      if (step.worktree) next.worktree = { ...step.worktree, branchName: normalize(step.worktree.branchName) };
-      return next;
-    }
-    case 'notify':
-      return { ...step, message: normalize(step.message) };
-    case 'set_variable':
-      return { ...step, value: normalize(step.value) };
-    case 'run_action':
-      return {
-        ...step,
-        params: Object.fromEntries(Object.entries(step.params).map(([key, value]) => [key, normalize(value)])),
-      };
-    case 'if':
-      return {
-        ...step,
-        then: step.then.map((inner) => normalizeStep(definition, catalog, inner)),
-        otherwise: step.otherwise.map((inner) => normalizeStep(definition, catalog, inner)),
-      };
-    case 'repeat':
-      return { ...step, steps: step.steps.map((inner) => normalizeStep(definition, catalog, inner)) };
-    case 'ask_me':
-      return step;
-  }
+function convertDefinition(
+  definition: AutomationDefinition,
+  catalog: ActionCatalogEntry[],
+  convert: (value: ChipText, namespace: VariableNamespace) => ChipText,
+): AutomationDefinition {
+  const steps = definition.steps.map((step) =>
+    mapStepChipText(step, (value, owner) =>
+      convert(value, buildVariableNamespace(scopeAt(definition, catalog, owner.id))),
+    ),
+  );
+  return { ...definition, steps };
 }
 
 /**
@@ -77,6 +94,26 @@ function normalizeStep(definition: AutomationDefinition, catalog: ActionCatalogE
  * in `AutomationEditor.draftFrom`; every step config component downstream
  * only ever reads/writes plain strings, never re-running this resolution.
  */
-export function normalizeDefinitionChipText(definition: AutomationDefinition, catalog: ActionCatalogEntry[]): AutomationDefinition {
-  return { ...definition, steps: definition.steps.map((step) => normalizeStep(definition, catalog, step)) };
+export function normalizeDefinitionChipText(
+  definition: AutomationDefinition,
+  catalog: ActionCatalogEntry[],
+): AutomationDefinition {
+  return convertDefinition(definition, catalog, (value, namespace) =>
+    textToChipText(chipTextToText(value, namespace.nameFor)),
+  );
+}
+
+/**
+ * The save-side inverse of `normalizeDefinitionChipText`: the text the editor
+ * produced, with every in-scope `$name` restored to a structural `{token}`.
+ * Called once in `AutomationEditor.handleSave`, so a definition survives a trip
+ * through the editor with its refs intact.
+ */
+export function definitionTextToRefs(
+  definition: AutomationDefinition,
+  catalog: ActionCatalogEntry[],
+): AutomationDefinition {
+  return convertDefinition(definition, catalog, (value, namespace) =>
+    textToRefs(chipTextToText(value, namespace.nameFor), namespace),
+  );
 }

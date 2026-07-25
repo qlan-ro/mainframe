@@ -13,7 +13,7 @@
  * button-driven flow never has.
  */
 import { useState, type RefObject } from 'react';
-import type { TokenDescriptor } from '@qlan-ro/mainframe-types';
+import { formatVariableRef, type TokenDescriptor } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { buildVariablesTriggerAdapter } from './variables-trigger-adapter';
@@ -34,8 +34,11 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
   function pick(name: string) {
     const el = textareaRef.current;
     const caret = el?.selectionStart ?? value.length;
-    const literal = `$${name}`;
-    onChange(value.slice(0, caret) + literal + value.slice(caret));
+    const before = value.slice(0, caret);
+    // Mid-word (`todo/` + name) a bare `$` is literal text; `formatVariableRef`
+    // picks the braced spelling there, so the insertion always resolves.
+    const literal = formatVariableRef(name, [], before);
+    onChange(before + literal + value.slice(caret));
     setOpen(false);
     const nextCaret = caret + literal.length;
     el?.focus();
@@ -51,7 +54,9 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
           aria-label="Insert variable"
           className="flex size-[20px] items-center justify-center rounded-md text-caption font-semibold text-primary hover:bg-accent"
         >
-          <span aria-hidden className="font-mono">⟨⟩</span>
+          <span aria-hidden className="font-mono">
+            ⟨⟩
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -62,7 +67,6 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
         // `pick()` already moved it to the textarea at the insertion point.
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-
         <Command>
           <CommandList>
             <CommandEmpty className="px-2 py-4 text-caption text-muted-foreground">
@@ -70,7 +74,11 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
             </CommandEmpty>
             <CommandGroup>
               {items.map((item) => (
-                <CommandItem key={item.id} data-testid={`${pickerTestId}-option-${item.id}`} onSelect={() => pick(item.id)}>
+                <CommandItem
+                  key={item.id}
+                  data-testid={`${pickerTestId}-option-${item.id}`}
+                  onSelect={() => pick(item.id)}
+                >
                   <span className="truncate text-body text-foreground">{item.label}</span>
                   {item.description && (
                     <span className="ml-auto truncate text-caption text-muted-foreground">{item.description}</span>

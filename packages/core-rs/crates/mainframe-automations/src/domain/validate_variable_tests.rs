@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 
 use super::AutomationDefinition;
-use super::validate::validate;
+use super::validate::{ValidationLevel, validate};
 
 fn def(value: Value) -> AutomationDefinition {
     serde_json::from_value(value).unwrap()
@@ -109,16 +109,85 @@ fn item_is_in_scope_only_inside_a_repeat_body() {
     );
 }
 
+/// `cd $HOME && pnpm build` is a legitimate prompt: the engine leaves an
+/// unresolved name literal, so flagging it must not block the save.
 #[test]
-fn a_second_step_may_not_claim_a_name_already_in_scope() {
+fn an_unresolved_name_is_a_warning_not_a_blocking_error() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "n1", "kind": "notify", "message": ["cd $HOME && pnpm build"]}]
+    })));
+    assert_eq!(
+        errors.iter().map(|e| e.level).collect::<Vec<_>>(),
+        [ValidationLevel::Warning]
+    );
+}
+
+#[test]
+fn two_steps_sharing_a_name_are_both_flagged() {
     let errors = validate(&def(json!({
         "triggers": [],
         "steps": [set_variable("v1", "headline"), set_variable("v2", "headline")]
     })));
-    assert_eq!(messages_for(&errors, "v1"), Vec::<String>::new());
+    let expected =
+        ["Another value in this automation is already called $headline — rename one of them."];
+    assert_eq!(messages_for(&errors, "v1"), expected);
     assert_eq!(
         messages_for(&errors, "v2"),
-        ["Another value in scope is already called $headline — rename one of them."]
+        expected,
+        "neither step is the obvious one to rename, so both say so"
+    );
+}
+
+/// M6: both arms leak into scope once the block closes, so the second holder
+/// is unaddressable and every `$summary` written for it renders empty.
+#[test]
+fn two_if_arms_may_not_each_define_the_same_name() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{
+            "id": "if1", "kind": "if", "match": "all", "conditions": [],
+            "then": [set_variable("v1", "summary")],
+            "otherwise": [set_variable("v2", "summary")]
+        }]
+    })));
+    assert_eq!(
+        messages_for(&errors, "v1"),
+        ["Another value in this automation is already called $summary — rename one of them."]
+    );
+    assert_eq!(messages_for(&errors, "v2").len(), 1);
+}
+
+#[test]
+fn two_isolated_repeat_bodies_may_reuse_a_name() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [
+            {"id": "list", "kind": "run_action", "actionId": "github.list_prs", "params": {}},
+            {"id": "r1", "kind": "repeat", "items": {"stepId": "list", "output": "prs"},
+             "steps": [set_variable("v1", "greeting")]},
+            {"id": "r2", "kind": "repeat", "items": {"stepId": "list", "output": "prs"},
+             "steps": [set_variable("v2", "greeting")]}
+        ]
+    })));
+    assert_eq!(errors, vec![], "a repeat body is its own naming region");
+}
+
+#[test]
+fn a_name_claimed_later_in_the_enclosing_region_still_clashes() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [
+            set_variable("v0", "people"),
+            {"id": "list", "kind": "run_action", "actionId": "github.list_prs", "params": {}},
+            {"id": "r1", "kind": "repeat", "items": {"stepId": "list", "output": "prs"},
+             "steps": [set_variable("inner", "people")]}
+        ]
+    })));
+    assert_eq!(
+        messages_for(&errors, "inner"),
+        ["Another value in this automation is already called $people — rename one of them."],
+        "an enclosing region's names reach into the body"
     );
 }
 

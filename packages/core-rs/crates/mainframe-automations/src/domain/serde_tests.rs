@@ -97,6 +97,36 @@ fn ask_agent_attachments_a9_round_trips_and_skips_when_absent() {
     );
 }
 
+/// The editor mints `outputName` on every producing step, and
+/// `deny_unknown_fields` would reject the whole save if the daemon didn't know
+/// the key.
+#[test]
+fn a_producing_step_round_trips_its_output_name() {
+    let step: Step = roundtrip(json!({
+        "id": "a2", "kind": "ask_agent", "prompt": ["go"], "outputName": "agent_result_2"
+    }));
+    let Step::AskAgent(agent) = step else {
+        panic!("expected ask_agent")
+    };
+    assert_eq!(agent.output_name.as_deref(), Some("agent_result_2"));
+
+    for raw in [
+        json!({"id": "f1", "kind": "ask_me", "title": "Pick", "fields": [], "outputName": "mood_2"}),
+        json!({"id": "r1", "kind": "run_action", "actionId": "github.list_prs", "params": {}, "outputName": "prs_2"}),
+    ] {
+        roundtrip::<Step>(raw);
+    }
+
+    let bare: Step = roundtrip(json!({"id": "plain", "kind": "ask_agent", "prompt": ["go"]}));
+    assert!(
+        serde_json::to_value(&bare)
+            .unwrap()
+            .get("outputName")
+            .is_none(),
+        "a step that never produced an output stays bare"
+    );
+}
+
 #[test]
 fn ask_me_step_uses_show_when_and_optional_required() {
     let step: Step = roundtrip(json!({

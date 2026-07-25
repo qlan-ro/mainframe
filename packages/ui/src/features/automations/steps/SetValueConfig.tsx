@@ -7,7 +7,10 @@
  * commit would rewrite the automation once per letter and rename half-typed
  * names into existence. A name that could never be typed back as `$name` is
  * refused at the commit, in `validate`'s own words — the value would otherwise
- * be unreachable until the footer explained why.
+ * be unreachable until the footer explained why. The pane only knows the names
+ * in scope *above* it, so a clash with a later step or the sibling `if` arm
+ * passes this check and is reported by `validate` on the card and in the
+ * footer instead; every name this check refuses, `validate` refuses too.
  *
  * No `MoreOptions`/`FailureToggle` here (unlike the other four panes): naming
  * a value runs no external work, so `keepGoing` has nothing to keep going

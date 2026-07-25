@@ -27,15 +27,20 @@ import { useAutomationsStore } from '../../data/use-automations-store';
 import { TriggerTextField, type TriggerTextFieldProps } from '../TriggerTextField';
 
 const PROJECT_ID = 'p1';
+const PROJECT_PATH = '/proj';
 const ADAPTER_ID = 'claude';
 
 const PROJECT_FIXTURE: Project = {
   id: PROJECT_ID,
   name: 'P',
-  path: '/proj',
+  path: PROJECT_PATH,
   createdAt: '2026-06-06T00:00:00.000Z',
   lastOpenedAt: '2026-06-06T00:00:00.000Z',
 };
+
+function adapter(id: string) {
+  return { id, name: id, description: '', installed: true, models: [], capabilities: { planMode: false } };
+}
 
 const SKILL_FIXTURE: Skill = {
   id: 'skill-1',
@@ -61,15 +66,7 @@ const SCOPE: TokenDescriptor[] = [
 
 function Field(props: Partial<TriggerTextFieldProps> & { initial?: string }) {
   const [value, setValue] = useState(props.initial ?? '');
-  return (
-    <TriggerTextField
-      value={value}
-      onChange={setValue}
-      testId="notify-message"
-      scope={SCOPE}
-      {...props}
-    />
-  );
+  return <TriggerTextField value={value} onChange={setValue} testId="notify-message" scope={SCOPE} {...props} />;
 }
 
 beforeEach(() => {
@@ -114,7 +111,16 @@ describe('TriggerTextField', () => {
   });
 
   it("fires '/' and '@' only when triggers='all', sourced from useAutomationTriggerSources", async () => {
-    seedAdapters([{ id: ADAPTER_ID, name: ADAPTER_ID, description: '', installed: true, models: [], capabilities: { planMode: false } }]);
+    seedAdapters([
+      {
+        id: ADAPTER_ID,
+        name: ADAPTER_ID,
+        description: '',
+        installed: true,
+        models: [],
+        capabilities: { planMode: false },
+      },
+    ]);
     useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
@@ -129,7 +135,16 @@ describe('TriggerTextField', () => {
   });
 
   it("never fetches skills/files, and '/' does not open a popover, in explicit variables-only mode", async () => {
-    seedAdapters([{ id: ADAPTER_ID, name: ADAPTER_ID, description: '', installed: true, models: [], capabilities: { planMode: false } }]);
+    seedAdapters([
+      {
+        id: ADAPTER_ID,
+        name: ADAPTER_ID,
+        description: '',
+        installed: true,
+        models: [],
+        capabilities: { planMode: false },
+      },
+    ]);
     useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
@@ -145,7 +160,16 @@ describe('TriggerTextField', () => {
   });
 
   it("defaults to 'all' when triggers is not given — matching prose fields like NotifyConfig/AutoForm", async () => {
-    seedAdapters([{ id: ADAPTER_ID, name: ADAPTER_ID, description: '', installed: true, models: [], capabilities: { planMode: false } }]);
+    seedAdapters([
+      {
+        id: ADAPTER_ID,
+        name: ADAPTER_ID,
+        description: '',
+        installed: true,
+        models: [],
+        capabilities: { planMode: false },
+      },
+    ]);
     useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
@@ -157,6 +181,30 @@ describe('TriggerTextField', () => {
 
     fireEvent.change(textarea, { target: { value: '/', selectionStart: 1, selectionEnd: 1 } });
     expect(screen.getByTestId('automations-skill-item-my-skill')).toBeInTheDocument();
+  });
+
+  it('an explicit adapterId sources skills from that adapter, not the first installed one', async () => {
+    seedAdapters([adapter(ADAPTER_ID), adapter('codex')]);
+    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+
+    render(<Field triggers="all" adapterId="codex" />);
+
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalled());
+    expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(0, 'codex', PROJECT_PATH);
+  });
+
+  it('omitting adapterId falls back to the first installed adapter', async () => {
+    seedAdapters([adapter(ADAPTER_ID), adapter('codex')]);
+    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+
+    render(<Field triggers="all" />);
+
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalled());
+    expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(0, ADAPTER_ID, PROJECT_PATH);
   });
 
   it('Enter inserts a newline — automations fields never submit on Enter', async () => {

@@ -2,8 +2,11 @@
  * AgentConfig — the Agent step's composer-shaped card (todo #234 T16): a
  * prompt field with a chip toolbar beneath it (model, permission, worktree)
  * and an advanced disclosure. The chips and the advanced fields are unit
- * tested in `steps/agent/__tests__/`; this suite covers the card itself and
- * the wiring that merges each part's patch into the whole step.
+ * tested in `steps/agent/__tests__/`; this suite covers the card itself,
+ * the wiring that merges each part's patch into the whole step, and that
+ * the prompt field's `/` skills are sourced from the step's own
+ * `adapterId` — mocking `@/lib/api/projects`/`skills`/`files` like
+ * `fields/__tests__/TriggerTextField.test.tsx` does.
  *
  * No Send button: an automation step is configured, never sent — the card
  * borrows the composer's shape, not its submit affordance.
@@ -12,7 +15,7 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { AdapterInfo, Project, Skill } from '@qlan-ro/mainframe-types';
 import type { AskAgentStep } from '../../contract';
 import type { TokenDescriptor } from '../../domain/tokens';
 import { useAutomationsStore } from '../../data/use-automations-store';
@@ -22,6 +25,39 @@ import { AgentConfig, type AgentConfigProps } from '../AgentConfig';
 vi.mock('@/lib/api/git', () => ({
   getGitBranches: vi.fn(async () => ({ local: [{ name: 'main' }, { name: 'dev' }], current: 'main' })),
 }));
+vi.mock('@/lib/api/projects', () => ({ getProjects: vi.fn() }));
+vi.mock('@/lib/api/skills', () => ({ getSkills: vi.fn() }));
+vi.mock('@/lib/api/files', () => ({
+  searchFiles: vi.fn(async () => []),
+  getFileTree: vi.fn(async () => []),
+  browseFilesystem: vi.fn(async () => []),
+}));
+
+import { getProjects } from '@/lib/api/projects';
+import { getSkills } from '@/lib/api/skills';
+
+const PROJECT_ID = 'proj-1';
+const PROJECT_PATH = '/proj';
+
+const PROJECT_FIXTURE: Project = {
+  id: PROJECT_ID,
+  name: 'P',
+  path: PROJECT_PATH,
+  createdAt: '2026-06-06T00:00:00.000Z',
+  lastOpenedAt: '2026-06-06T00:00:00.000Z',
+};
+
+const SKILL_FIXTURE: Skill = {
+  id: 'skill-1',
+  adapterId: 'codex',
+  name: 'my-skill',
+  displayName: 'My Skill',
+  description: 'Does something useful',
+  scope: 'project',
+  filePath: '/proj/.codex/skills/my-skill.md',
+  content: '# My Skill',
+  invocationName: 'my-skill',
+};
 
 const BASE_STEP: AskAgentStep = { id: 'a', kind: 'ask_agent', prompt: [] };
 const TOKENS: TokenDescriptor[] = [
@@ -66,7 +102,8 @@ const CLAUDE = adapter('claude', 'Claude', [
 const CODEX = adapter('codex', 'Codex', [{ id: 'gpt-5', label: 'GPT-5', isDefault: true }]);
 
 beforeEach(() => {
-  useAutomationsStore.setState({ activeProjectId: 'proj-1' });
+  vi.clearAllMocks();
+  useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
   resetAdapters();
   seedAdapters([CLAUDE, CODEX]);
 });
@@ -137,6 +174,21 @@ describe('AgentConfig — prompt', () => {
     await user.click(screen.getByTestId('automations-agent-a-prompt'));
     await user.keyboard('$');
     await waitFor(() => expect(screen.getByTestId('automations-agent-a-prompt-trigger-popover')).toBeInTheDocument());
+  });
+
+  it('sources the prompt field\'s "/" skills from the step\'s own adapterId, not the fallback adapter', async () => {
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    render(
+      <AgentConfig
+        step={{ ...BASE_STEP, adapterId: 'codex' }}
+        onChange={vi.fn()}
+        tokens={[]}
+        testId="automations-agent-a"
+      />,
+    );
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalled());
+    expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(0, 'codex', PROJECT_PATH);
   });
 });
 

@@ -77,6 +77,7 @@ async fn ask_agent_forwards_options_to_the_port_boundary() {
         timeout_minutes: Some(30),
         expects: None,
         attachments: Some(vec!["/tmp/shot.png".to_string()]),
+        output_name: None,
     };
     let def = definition(vec![Step::AskAgent(step)]);
     let run = rig

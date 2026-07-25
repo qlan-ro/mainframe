@@ -34,6 +34,7 @@ fn step(action_id: &str, params: Vec<(&str, Vec<crate::domain::ChipPart>)>) -> R
             .map(|(k, v)| (k.to_string(), v))
             .collect(),
         output_as: None,
+        output_name: None,
     }
 }
 

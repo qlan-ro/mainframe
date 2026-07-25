@@ -5,7 +5,8 @@
  * textarea driving the shared trigger engine directly (no assistant-ui
  * composer coupling): `$` (variables, from `scope`) is always wired; `/`
  * (skills) and `@` (files) are on by default (`triggers='all'`), sourced from
- * `useAutomationTriggerSources`. Fields whose value isn't prose — the
+ * `useAutomationTriggerSources` for the field's own `adapterId` — a Codex step
+ * must not offer Claude's skills. Fields whose value isn't prose — the
  * worktree branch name is the one T14 site — opt into `'variables-only'`,
  * which also passes `enabled: false` to that hook so they never fire a
  * skills/files fetch they'd never use.
@@ -38,6 +39,12 @@ export interface TriggerTextFieldProps {
   scope: TokenDescriptor[];
   /** Default `'all'` (`$` + `/` + `@`). `'variables-only'` fires just `$`. */
   triggers?: 'all' | 'variables-only';
+  /**
+   * The adapter whose skills `/` lists — the owning agent step's `adapterId`.
+   * Absent falls back to the first installed adapter, which is right for the
+   * fields that belong to no step (Notify, Set value, action inputs).
+   */
+  adapterId?: string;
   /** Drops the field's own border/background — for fields embedded in a card that already draws one. */
   bare?: boolean;
   /** Monospace value, for fields whose content is code or an identifier. */
@@ -52,6 +59,7 @@ export function TriggerTextField({
   testId,
   scope,
   triggers = 'all',
+  adapterId,
   bare = false,
   mono = false,
 }: TriggerTextFieldProps) {
@@ -59,7 +67,7 @@ export function TriggerTextField({
   const showAll = triggers === 'all';
 
   const variablesAdapter = useMemo(() => buildVariablesTriggerAdapter(scope), [scope]);
-  const sourceTriggers = useAutomationTriggerSources(undefined, { enabled: showAll });
+  const sourceTriggers = useAutomationTriggerSources(adapterId, { enabled: showAll });
 
   const triggerConfigs: TriggerConfig[] = useMemo(() => {
     const variableTrigger: TriggerConfig = {

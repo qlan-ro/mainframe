@@ -56,11 +56,31 @@ function labelFor(pattern: SchedulePattern): string {
   return summarizeTrigger({ id: '_', kind: 'schedule', schedule: pattern, onMissed: 'skip' });
 }
 
-function slug(label: string): string {
-  return label
+function slug(value: string): string {
+  return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+/**
+ * Stable identity for a pattern — the preset select's value, each option's
+ * React key, and its testid. Derived from the pattern's own fields, never from
+ * `labelFor`: rendered prose is a translation and a wording change away from
+ * silently rekeying every option.
+ */
+function patternId(pattern: SchedulePattern): string {
+  switch (pattern.type) {
+    case 'every_n_hours':
+      return `every-${pattern.n}-hours`;
+    case 'weekly':
+      return slug(`weekly-${pattern.days.join('-')}-${pattern.at}`);
+    case 'once':
+      return slug(`once-${pattern.at}`);
+    case 'daily':
+    case 'weekdays':
+      return slug(`${pattern.type}-${pattern.at}`);
+  }
 }
 
 function toCustom(pattern: SchedulePattern): RecurringPattern {
@@ -81,7 +101,7 @@ function deriveMode(pattern: SchedulePattern): Mode {
   // The custom editor can't express every-N-hours; the preset select carries
   // even a non-curated N as its own option.
   if (pattern.type === 'every_n_hours') return 'preset';
-  return SCHEDULE_PRESETS.some((p) => labelFor(p) === labelFor(pattern)) ? 'preset' : 'custom';
+  return SCHEDULE_PRESETS.some((p) => patternId(p) === patternId(pattern)) ? 'preset' : 'custom';
 }
 
 function CustomSchedule({
@@ -158,7 +178,9 @@ function CustomSchedule({
         type="time"
         data-testid={`${testId}-at`}
         value={pattern.at}
-        onChange={(e) => onChange({ ...pattern, at: e.target.value })}
+        // An empty field is a half-typed time, not a schedule — keep the last
+        // valid one rather than writing `at: ''`, which saves and never fires.
+        onChange={(e) => e.target.value && onChange({ ...pattern, at: e.target.value })}
         className="h-[28px] w-[108px] px-2.5 py-0 text-caption"
       />
     </div>
@@ -187,11 +209,18 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
     // the recurring pattern survives until the user actually picks a moment.
   }
 
-  const currentLabel = labelFor(pattern);
-  const presetLabels = SCHEDULE_PRESETS.map(labelFor);
-  const options = presetLabels.includes(currentLabel) ? presetLabels : [currentLabel, ...presetLabels];
+  const currentId = patternId(pattern);
+  const presetOptions = SCHEDULE_PRESETS.map((p) => ({ id: patternId(p), label: labelFor(p) }));
+  // A saved pattern the curated list doesn't offer still needs an option to select.
+  const options = presetOptions.some((o) => o.id === currentId)
+    ? presetOptions
+    : [{ id: currentId, label: labelFor(pattern) }, ...presetOptions];
   const summary =
-    mode === 'custom' ? labelFor(toCustom(pattern)) : mode === 'once' && pattern.type === 'once' ? currentLabel : null;
+    mode === 'custom'
+      ? labelFor(toCustom(pattern))
+      : mode === 'once' && pattern.type === 'once'
+        ? labelFor(pattern)
+        : null;
 
   return (
     <div className="flex flex-col gap-[9px]">
@@ -205,9 +234,9 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
 
       {mode === 'preset' && (
         <Select
-          value={currentLabel}
-          onValueChange={(label) => {
-            const picked = SCHEDULE_PRESETS.find((p) => labelFor(p) === label);
+          value={currentId}
+          onValueChange={(id) => {
+            const picked = SCHEDULE_PRESETS.find((p) => patternId(p) === id);
             if (picked) emit(picked);
           }}
         >
@@ -215,9 +244,9 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {options.map((label) => (
-              <SelectItem key={label} value={label} data-testid={`${testId}-preset-option-${slug(label)}`}>
-                {label}
+            {options.map((option) => (
+              <SelectItem key={option.id} value={option.id} data-testid={`${testId}-preset-option-${option.id}`}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>

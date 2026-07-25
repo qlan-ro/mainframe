@@ -34,13 +34,25 @@ interface AutomationStepBase {
   keepGoing?: boolean;
 }
 
+/**
+ * A producing step's stored variable name, minted once when the step first has
+ * an output and never recomputed (`automation-domain/output-name.ts`). Only its
+ * trailing `_2`/`_3` ordinal is read: a step produces several outputs, so the
+ * stored name pins the step's slot in the collision namespace and every output
+ * of that step carries the same ordinal. Optional for back-compat — a step
+ * without one falls back to position-ordered suffixing.
+ */
+interface ProducingStep extends AutomationStepBase {
+  outputName?: string;
+}
+
 export interface AutomationExpectedOutput {
   key: string;
   type: 'text' | 'number' | 'list' | 'choice';
   options?: string[];
 }
 
-export interface AskAgentStep extends AutomationStepBase {
+export interface AskAgentStep extends ProducingStep {
   kind: 'ask_agent';
   prompt: ChipText;
   adapterId?: string;
@@ -65,13 +77,13 @@ export interface AutomationFormField {
   showWhen?: { key: string; equals: string };
 }
 
-export interface AskMeStep extends AutomationStepBase {
+export interface AskMeStep extends ProducingStep {
   kind: 'ask_me';
   title: string;
   fields: AutomationFormField[];
 }
 
-export interface RunActionStep extends AutomationStepBase {
+export interface RunActionStep extends ProducingStep {
   kind: 'run_action';
   actionId: string;
   credential?: string;

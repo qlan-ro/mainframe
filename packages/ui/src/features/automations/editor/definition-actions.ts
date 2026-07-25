@@ -9,7 +9,8 @@
  * through those would fail silently on any nesting path that forgot to pass it.
  */
 import { renameVariableInDefinition } from '@qlan-ro/mainframe-types';
-import type { AutomationDefinition, AutomationStep } from '../contract';
+import type { ActionCatalogEntry, AutomationDefinition, AutomationStep } from '../contract';
+import { mintOutputNames, variableNamesInDefinition } from '../domain/output-name';
 
 /** Set-value names by step id, at any depth — a rename inside a block is still a rename. */
 function setValueNames(steps: AutomationStep[], into: Map<string, string>): Map<string, string> {
@@ -33,7 +34,11 @@ function setValueNames(steps: AutomationStep[], into: Map<string, string>): Map<
  * Renames are applied one at a time; a commit changes one name, so two renames
  * never chain within a single patch.
  */
-export function applyVariableRenames(previous: AutomationDefinition, next: AutomationDefinition): AutomationDefinition {
+export function applyVariableRenames(
+  previous: AutomationDefinition,
+  next: AutomationDefinition,
+  catalog: ActionCatalogEntry[],
+): AutomationDefinition {
   const before = setValueNames(previous.steps, new Map());
   const after = setValueNames(next.steps, new Map());
 
@@ -41,7 +46,27 @@ export function applyVariableRenames(previous: AutomationDefinition, next: Autom
   for (const [id, oldName] of before) {
     const newName = after.get(id);
     if (!oldName || !newName || newName === oldName) continue;
+    // Landing on a name something else already claims would rewrite *that*
+    // holder's own refs onto this step. Definition-wide, not scope-wide: the
+    // rewrite is textual, so it reaches into repeat bodies that share no scope.
+    // Leaving the refs put keeps them meaning what they meant, and `validate`
+    // reports the duplicate name the edit created.
+    if (variableNamesInDefinition(next, catalog, id).has(newName)) continue;
     result = renameVariableInDefinition(result, oldName, newName);
   }
   return result;
+}
+
+/**
+ * A recipe edit applied to the whole definition: the renames it carries, then
+ * an `outputName` for every producer that still lacks one. Minting here rather
+ * than in `Recipe` covers every insertion path at once — a nested `Recipe`'s
+ * `onChange` bubbles up through its `BlockCard` to this one call.
+ */
+export function applyStepsEdit(
+  previous: AutomationDefinition,
+  steps: AutomationStep[],
+  catalog: ActionCatalogEntry[],
+): AutomationDefinition {
+  return mintOutputNames(applyVariableRenames(previous, { ...previous, steps }, catalog), catalog);
 }

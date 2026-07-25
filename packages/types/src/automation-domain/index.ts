@@ -11,6 +11,8 @@ export * from './token-scope.js';
 export * from './comparators.js';
 export * from './chip-parts.js';
 export * from './variables.js';
+export * from './output-name.js';
+export * from './step-chip-text.js';
 export * from './chip-text-convert.js';
 export * from './resolve.js';
 export * from './validate.js';

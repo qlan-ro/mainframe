@@ -69,7 +69,9 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
   const meta = VERB_META[step.kind];
   const Icon = meta.icon;
   const myIssues = issues.filter((i) => i.stepId === step.id);
-  const bad = myIssues.length > 0;
+  // Only an error keeps the user from saving, so only an error gets the
+  // blocking red; a warning says "check this", not "you are stuck".
+  const bad = myIssues.some((i) => i.level === 'error');
 
   function patchTitle(title: string) {
     if (step.kind !== 'ask_me') return;
@@ -140,10 +142,23 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           <Trash2 size={12} aria-hidden />
         </button>
       </div>
-      {bad && (
-        <div className="flex flex-col gap-[4px] border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-[12px] pt-[7px] pb-[8px]">
+      {myIssues.length > 0 && (
+        <div
+          data-testid={`automations-step-issues-${step.id}`}
+          data-level={bad ? 'error' : 'warning'}
+          className={cn(
+            'flex flex-col gap-[4px] border-t-[0.5px] px-[12px] pt-[7px] pb-[8px]',
+            bad ? 'border-destructive/20 bg-destructive/[0.06]' : 'border-mf-warning/30 bg-mf-warning-tint',
+          )}
+        >
           {myIssues.map((issue, i) => (
-            <span key={i} className="flex items-start gap-1.5 text-caption font-semibold text-destructive">
+            <span
+              key={i}
+              className={cn(
+                'flex items-start gap-1.5 text-caption font-semibold',
+                issue.level === 'error' ? 'text-destructive' : 'text-mf-warning',
+              )}
+            >
               <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />
               {issue.msg}
             </span>

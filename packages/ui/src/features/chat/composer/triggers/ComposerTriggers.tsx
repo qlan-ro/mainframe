@@ -16,7 +16,7 @@
  * to a native `<TP>`.
  */
 
-import { useEffect, useMemo, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { ComposerPrimitive, INTERNAL, useAui, useAuiState } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
@@ -24,8 +24,13 @@ import { useDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { resolveDraftChatContext } from './resolve-draft-chat-context';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
-import { createMentionCache, buildMentionTriggerAdapter } from './mention-adapter';
-import { literalDirectiveFormatter, mentionDirectiveFormatter, shouldCloseTriggerOnInsert } from './directive-formatter';
+import { createMentionCache } from './mention-adapter';
+import { useMentionTriggerAdapter } from './use-mention-trigger-adapter';
+import {
+  literalDirectiveFormatter,
+  mentionDirectiveFormatter,
+  shouldCloseTriggerOnInsert,
+} from './directive-formatter';
 import { useTriggerField, type TriggerField } from '@/components/trigger-engine/use-trigger-field';
 import { TriggerFieldPopover } from '@/components/trigger-engine/TriggerFieldPopover';
 import type { TriggerConfig } from '@/components/trigger-engine/types';
@@ -63,15 +68,7 @@ function useComposerTriggerConfigs(): TriggerConfig[] {
     [port, projectId, chatId],
   );
 
-  // Bump a version counter every time the cache emits so the mentionAdapter memo
-  // deps change, forcing a new adapter reference — `useTriggerField`'s own
-  // navigation memo is keyed on the adapter, so a stale reference would never re-list.
-  const [version, bump] = useState(0);
-  useEffect(() => mentionCache.subscribe(() => bump((n) => n + 1)), [mentionCache]);
-  const mentionAdapter = useMemo(
-    () => buildMentionTriggerAdapter(mentionCache, agents),
-    [mentionCache, agents, version],
-  );
+  const mentionAdapter = useMentionTriggerAdapter(mentionCache, agents);
 
   return useMemo(
     () => [
@@ -107,7 +104,12 @@ function useComposerTriggerConfigs(): TriggerConfig[] {
 function ComposerInputPluginBridge({ field }: { field: TriggerField }) {
   const registry = INTERNAL.useComposerInputPluginRegistryOptional();
   useEffect(() => {
-    if (!registry) return;
+    if (!registry) {
+      // An assistant-ui bump that renames this INTERNAL export takes `/` and `@`
+      // out of the composer with no other symptom — say so rather than no-op.
+      console.warn('[composer-triggers] assistant-ui composer-input plugin registry missing — / and @ are disabled');
+      return;
+    }
     return registry.register({ handleKeyDown: field.handleKeyDown, setCursorPosition: field.setCursorPosition });
   }, [registry, field.handleKeyDown, field.setCursorPosition]);
   return null;
@@ -123,7 +125,12 @@ export function ComposerTriggers({
   const triggers = useComposerTriggerConfigs();
   const aui = useAui();
   const text = useAuiState((s) => s.composer.text);
-  const field = useTriggerField({ value: text, onChange: (next) => aui.composer().setText(next), triggers, textareaRef });
+  const field = useTriggerField({
+    value: text,
+    onChange: (next) => aui.composer().setText(next),
+    triggers,
+    textareaRef,
+  });
 
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>

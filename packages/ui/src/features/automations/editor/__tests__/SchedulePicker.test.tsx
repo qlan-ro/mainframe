@@ -89,6 +89,15 @@ describe('SchedulePicker — curated presets', () => {
     await user.click(screen.getByTestId('sched-preset-option-every-4-hours'));
     expect(onChange).toHaveBeenCalledWith({ ...schedule(), schedule: { type: 'every_n_hours', n: 4 } });
   });
+
+  it('picking a non-hourly preset calls onChange with that SchedulePattern', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<SchedulePicker trigger={schedule()} onChange={onChange} testId="sched" />);
+    await user.click(screen.getByTestId('sched-preset'));
+    await user.click(screen.getByTestId('sched-preset-option-weekdays-06-00'));
+    expect(onChange).toHaveBeenCalledWith({ ...schedule(), schedule: { type: 'weekdays', at: '06:00' } });
+  });
 });
 
 describe('SchedulePicker — custom mode', () => {
@@ -183,6 +192,20 @@ describe('SchedulePicker — custom mode', () => {
     );
     fireEvent.change(screen.getByTestId('sched-at'), { target: { value: '08:30' } });
     expect(onChange).toHaveBeenCalledWith({ ...schedule(), schedule: { type: 'weekdays', at: '08:30' } });
+  });
+
+  it('clearing the time emits nothing and keeps the last valid value', () => {
+    const onChange = vi.fn();
+    render(
+      <SchedulePicker
+        trigger={schedule({ schedule: { type: 'weekdays', at: '07:15' } })}
+        onChange={onChange}
+        testId="sched"
+      />,
+    );
+    fireEvent.change(screen.getByTestId('sched-at'), { target: { value: '' } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('sched-at')).toHaveValue('07:15');
   });
 });
 

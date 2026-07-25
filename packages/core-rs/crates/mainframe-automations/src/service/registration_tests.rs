@@ -1,8 +1,9 @@
-//! T7 — webhook registration. The editor's panel asks three things: what URL
-//! do I paste into GitHub, is the hook armed, and has anything ever arrived.
-//! Arming provisions the signing secret; the delivery stamp is read back from
-//! the store; and a `registration` a client sends on save never lands in the
-//! definition, so a stale save can't claim a hook is live.
+//! T7 — webhook registration. The editor's panel asks four things: what URL
+//! do I paste into GitHub, what do I sign with, is the hook armed, and has
+//! anything ever arrived. Arming provisions and reveals the signing secret
+//! (reads never carry it); the delivery stamp is read back from the store;
+//! and a `registration` a client sends on save never lands in the definition,
+//! so a stale save can't claim a hook is live.
 
 use crate::credentials::{CredentialKind, CredentialStore};
 use crate::domain::{
@@ -11,6 +12,7 @@ use crate::domain::{
 };
 use crate::engine::test_support::{notify_step, text};
 
+use super::registration::WebhookState;
 use super::service_tests::engine;
 
 fn webhook_definition(registration: Option<WebhookRegistration>) -> AutomationDefinition {
@@ -69,35 +71,76 @@ async fn arming_provisions_the_signing_secret_and_reports_no_delivery_yet() {
         engine.credential_kind("webhook:hook-1").await,
         Some(CredentialKind::Token)
     );
+    assert_eq!(
+        state.secret.as_deref(),
+        engine
+            .credentials
+            .get("webhook:hook-1")
+            .await
+            .map(|c| c.token)
+            .as_deref(),
+        "arming hands back the provisioned secret — nothing else can, so a \
+         hook whose secret stays hidden can never accept a delivery"
+    );
 }
 
 #[tokio::test]
-async fn re_arming_keeps_the_secret_already_handed_to_the_sender() {
+async fn re_arming_reveals_the_secret_already_handed_to_the_sender() {
     let (engine, _sink, _dir) = engine().await;
     let created = engine
         .create(create_input(webhook_definition(None)))
         .await
         .unwrap();
 
-    engine.arm_webhook(&created.id, "wt").await.unwrap();
     let first = engine
-        .credentials
-        .get("webhook:hook-1")
+        .arm_webhook(&created.id, "wt")
         .await
         .unwrap()
-        .token;
-    engine.arm_webhook(&created.id, "wt").await.unwrap();
+        .unwrap();
     let second = engine
-        .credentials
-        .get("webhook:hook-1")
+        .arm_webhook(&created.id, "wt")
         .await
         .unwrap()
-        .token;
+        .unwrap();
 
+    assert!(first.secret.is_some());
     assert_eq!(
-        first, second,
-        "re-opening the panel must not invalidate the signature GitHub is already computing"
+        first.secret, second.secret,
+        "re-opening the panel must reveal the same secret, not invalidate the \
+         signature the sender is already computing"
     );
+}
+
+#[tokio::test]
+async fn reading_a_registration_never_carries_the_secret() {
+    let (engine, _sink, _dir) = engine().await;
+    let created = engine
+        .create(create_input(webhook_definition(None)))
+        .await
+        .unwrap();
+    engine.arm_webhook(&created.id, "wt").await.unwrap();
+
+    let state = engine.webhook_state("hook-1").await.unwrap().unwrap();
+    assert_eq!(
+        state.secret, None,
+        "the secret is revealed once, by the arming the user asked for"
+    );
+}
+
+#[tokio::test]
+async fn debug_formatting_redacts_the_secret() {
+    let state = WebhookState {
+        hook_id: "hook-1".to_string(),
+        last_delivery_at: None,
+        secret: Some("s3cr3t".to_string()),
+    };
+
+    let rendered = format!("{state:?}");
+    assert!(
+        !rendered.contains("s3cr3t"),
+        "a signing key must not reach a log line through {{:?}}: {rendered}"
+    );
+    assert!(rendered.contains("[redacted]"));
 }
 
 #[tokio::test]

@@ -71,6 +71,26 @@ async fn bad_signature_is_rejected_before_anything_else() {
 }
 
 #[tokio::test]
+async fn an_unsigned_delivery_is_rejected() {
+    let h = harness(Some(WebhookPreset::GithubPrOpened)).await;
+    let body = opened_body();
+    let mut hdrs = headers(&h, &body, "d-1");
+    hdrs.signature = None;
+
+    let decision = h.processor.process("hook-1", &hdrs, &body, NOW_MS).await;
+    assert_eq!(
+        decision,
+        WebhookDecision::InvalidSignature,
+        "signing is mandatory — an armed hook accepts nothing it cannot verify"
+    );
+    assert_eq!(
+        h.state.last_delivery_at("hook-1").await.unwrap(),
+        None,
+        "an unsigned body must not be able to claim the hook is wired up"
+    );
+}
+
+#[tokio::test]
 async fn unknown_hook_and_invalid_json_are_typed_rejections() {
     let h = harness(None).await;
     let body = opened_body();

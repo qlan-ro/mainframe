@@ -7,6 +7,7 @@
 import type { ActionCatalogEntry, AutomationDefinition, AutomationStep, ChipText, TokenRef } from '../automation.js';
 import { TOKEN_STEP_BUILTIN } from '../automation.js';
 import { isTokenPart } from './chip-parts.js';
+import { variableNamesClashingWith } from './output-name.js';
 import { resolveTokenRef } from './resolve.js';
 import { scopeAt } from './token-scope.js';
 import type { TokenDescriptor } from './tokens.js';
@@ -63,17 +64,23 @@ function unresolvedVariableNames(step: AutomationStep, inScope: Set<string>): st
 }
 
 /**
- * A set-variable step's own name, checked against the scope in front of it
- * (which excludes the step itself). Exported so the editor's pane can refuse a
- * bad name at the keystroke that produced it, in the same words the footer
- * would use once saved.
+ * A set-variable step's own name, checked against every name that clashes with
+ * it (`variableNamesClashingWith`, which excludes this step's own).
+ *
+ * Region-wide, not scope-wide: a name defined *later* is still taken. Two `if`
+ * branches each naming a value `summary` both validate against the same
+ * pre-branch scope, yet both leak into scope after the block, where the `then`
+ * arm wins and every `$summary` written for the `otherwise` arm renders empty.
+ *
+ * Exported so the editor's pane can refuse a bad name at the keystroke that
+ * produced it, in the same words the footer would use once saved.
  */
-export function setVariableNameIssue(name: string, inScope: Set<string>): string | null {
+export function setVariableNameIssue(name: string, taken: Set<string>): string | null {
   const trimmed = name.trim();
   if (!trimmed) return 'Give this value a name.';
   if (!VARIABLE_NAME.test(trimmed))
     return 'Use lowercase letters, numbers and underscores for a value name, starting with a letter.';
-  if (inScope.has(trimmed)) return `Another value in scope is already called $${trimmed} — rename one of them.`;
+  if (taken.has(trimmed)) return `Another value in this automation is already called $${trimmed} — rename one of them.`;
   return null;
 }
 
@@ -112,15 +119,19 @@ export function validate(
       const namesInScope = variableNamesInScope(scope);
 
       for (const ref of collectTokenRefs(step)) checkTokenRef(step, scope, ref);
+      // A warning, not an error: the engine leaves an unresolved `$name`
+      // literal (tokens/substitute.rs `render_variable_text`), so a prompt
+      // saying `cd $HOME && pnpm build` runs exactly as written. Blocking Save
+      // on it made a legitimate shell command unsaveable.
       for (const name of unresolvedVariableNames(step, namesInScope)) {
         issues.push({
           stepId: step.id,
-          level: 'error',
+          level: 'warning',
           msg: `This step uses $${name}, but no earlier step defines it.`,
         });
       }
       if (step.kind === 'set_variable') {
-        const msg = setVariableNameIssue(step.name, namesInScope);
+        const msg = setVariableNameIssue(step.name, variableNamesClashingWith(definition, catalog, step.id));
         if (msg) issues.push({ stepId: step.id, level: 'error', msg });
       }
 

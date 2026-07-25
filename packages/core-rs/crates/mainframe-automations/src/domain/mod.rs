@@ -28,7 +28,7 @@ pub use trigger::{
     SchedulePattern, ScheduleTrigger, Trigger, WebhookPreset, WebhookRegistration, WebhookTrigger,
     WeekdaysSchedule, WeeklySchedule,
 };
-pub use validate::{ValidationError, validate};
+pub use validate::{ValidationError, ValidationLevel, validate};
 
 /// `skip_serializing_if` helper for wire-optional booleans that default false
 /// (`keepGoing`).

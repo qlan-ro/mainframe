@@ -116,6 +116,11 @@ pub struct AskAgentStep {
     /// A9: image/file paths handed to the agent session alongside the prompt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<String>>,
+    /// The variable-name ordinal the editor minted for this step (M1). Stored
+    /// rather than derived from position, so inserting a producer above this
+    /// one cannot steal `$agent_result` from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,6 +131,9 @@ pub struct AskMeStep {
     pub keep_going: bool,
     pub title: String,
     pub fields: Vec<AutomationFormField>,
+    /// Minted variable name — see [`AskAgentStep::output_name`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,6 +156,9 @@ pub struct RunActionStep {
     pub params: BTreeMap<String, ChipText>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_as: Option<OutputAs>,
+    /// Minted variable name — see [`AskAgentStep::output_name`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

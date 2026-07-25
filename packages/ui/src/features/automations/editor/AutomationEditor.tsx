@@ -11,7 +11,7 @@
  * session's current project, resolved once at `AutomationsHost`'s mount
  * boundary via `useActiveIdentity()` and mirrored into the store — exactly
  * like Todos (`TasksModalHost`'s `useActiveIdentity()`). Saving is blocked
- * until a project has resolved. `handleSave` also runs every `ask_agent`
+ * until a project has resolved. `definitionToSave` also runs every `ask_agent`
  * step through `stampAgentProjectId` (bullet 4) so the step's own
  * `projectId` — which the daemon engine actually reads at run time — always
  * matches, rather than falling back to an arbitrary "first project in the
@@ -22,40 +22,16 @@ import { Check, ChevronLeft, TriangleAlert, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
-import type { ActionCatalogEntry, AutomationCreateInput, AutomationDefinition } from '../contract';
+import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
-import { normalizeDefinitionChipText } from '../domain/chip-text-convert';
 import { builtinTokens, triggerTokens } from '../domain/tokens';
 import { validate, type ValidationIssue } from '../domain/validate';
-import { applyVariableRenames } from './definition-actions';
+import { applyStepsEdit } from './definition-actions';
+import { draftFrom, definitionToSave, EMPTY_DRAFT, type DraftState } from './draft';
 import { Recipe } from './Recipe';
 import { saveIssuesFrom } from './save-issues';
-import { stampAgentProjectId } from './stamp-agent-project-id';
 import { WhenCard } from './WhenCard';
-
-interface DraftState {
-  name: string;
-  description: string;
-  definition: AutomationDefinition;
-}
-
-const EMPTY_DRAFT: DraftState = {
-  name: '',
-  description: '',
-  definition: { triggers: [], steps: [] },
-};
-
-function draftFrom(
-  input: { name: string; description?: string; definition: AutomationDefinition },
-  catalog: ActionCatalogEntry[],
-): DraftState {
-  return {
-    name: input.name,
-    description: input.description ?? '',
-    definition: normalizeDefinitionChipText(input.definition, catalog),
-  };
-}
 
 function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
@@ -147,10 +123,7 @@ export function AutomationEditor() {
         description: draft.description || undefined,
         scope: 'project',
         projectId: activeProjectId,
-        definition: {
-          ...draft.definition,
-          steps: stampAgentProjectId(draft.definition.steps, activeProjectId),
-        },
+        definition: definitionToSave(draft.definition, catalog, activeProjectId),
       };
       const result =
         editorTarget?.mode === 'edit'
@@ -241,10 +214,7 @@ export function AutomationEditor() {
             <Recipe
               steps={draft.definition.steps}
               onChange={(steps) =>
-                updateDraft((d) => ({
-                  ...d,
-                  definition: applyVariableRenames(d.definition, { ...d.definition, steps }),
-                }))
+                updateDraft((d) => ({ ...d, definition: applyStepsEdit(d.definition, steps, catalog) }))
               }
               tokens={scopeTokens}
               catalog={catalog}

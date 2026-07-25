@@ -170,14 +170,20 @@ describe('validate — missing producer', () => {
 });
 
 describe('validate — $name references', () => {
-  it('flags a name no earlier step defines, pinned to the offending step', () => {
+  it('warns about a name no earlier step defines, pinned to the offending step', () => {
     const step: AutomationStep = { id: 'n1', kind: 'notify', message: ['Ship $nope today'] };
     const issues = validate('Name', { triggers: [], steps: [step] }, NO_CATALOG);
     expect(issues).toContainEqual({
       stepId: 'n1',
-      level: 'error',
+      level: 'warning',
       msg: 'This step uses $nope, but no earlier step defines it.',
     });
+  });
+
+  it('never blocks the save on one — the engine leaves an unknown $name literal, so a shell command is legitimate text', () => {
+    const step: AutomationStep = { id: 'a1', kind: 'ask_agent', prompt: ['cd $HOME && pnpm build'] };
+    const issues = validate('Name', { triggers: [], steps: [step] }, NO_CATALOG);
+    expect(issues.some((i) => i.level === 'error')).toBe(false);
   });
 
   it('accepts a dotted path on an in-scope name — only the base name is knowable statically', () => {
@@ -198,7 +204,7 @@ describe('validate — $name references', () => {
     };
     expect(validate('Name', definition, NO_CATALOG)).toContainEqual({
       stepId: 'n1',
-      level: 'error',
+      level: 'warning',
       msg: 'This step uses $notes, but no earlier step defines it.',
     });
   });
@@ -234,7 +240,7 @@ describe('validate — set-variable names', () => {
     });
   });
 
-  it('flags the second of two steps claiming the same name, leaving the first alone', () => {
+  it('flags both steps claiming the same name — either one is the one to rename', () => {
     const definition: AutomationDefinition = {
       triggers: [],
       steps: [
@@ -242,13 +248,11 @@ describe('validate — set-variable names', () => {
         { id: 'v2', kind: 'set_variable', name: 'notes', value: [] },
       ],
     };
-    const issues = validate('Name', definition, NO_CATALOG);
-    expect(issues).toContainEqual({
-      stepId: 'v2',
-      level: 'error',
-      msg: 'Another value in scope is already called $notes — rename one of them.',
-    });
-    expect(issues.some((i) => i.stepId === 'v1')).toBe(false);
+    const duplicate = { level: 'error', msg: 'Another value in this automation is already called $notes — rename one of them.' };
+    expect(validate('Name', definition, NO_CATALOG)).toEqual([
+      { stepId: 'v1', ...duplicate },
+      { stepId: 'v2', ...duplicate },
+    ]);
   });
 
   it('flags a set-variable name shadowed by a derived name already in scope', () => {
@@ -262,8 +266,44 @@ describe('validate — set-variable names', () => {
     expect(validate('Name', definition, NO_CATALOG)).toContainEqual({
       stepId: 'v1',
       level: 'error',
-      msg: 'Another value in scope is already called $agent_result — rename one of them.',
+      msg: 'Another value in this automation is already called $agent_result — rename one of them.',
     });
+  });
+
+  /**
+   * Both arms leak into scope once the block closes, so the second `summary`
+   * is unaddressable: `$summary` binds to the `then` arm and renders empty
+   * whenever the `otherwise` arm ran. Scope-only checking saw nothing wrong,
+   * because each arm is validated against the same pre-branch scope.
+   */
+  it('flags a name defined once in each if branch', () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        {
+          id: 'if1',
+          kind: 'if',
+          match: 'all',
+          conditions: [],
+          then: [{ id: 'v1', kind: 'set_variable', name: 'summary', value: [] }],
+          otherwise: [{ id: 'v2', kind: 'set_variable', name: 'summary', value: [] }],
+        },
+      ],
+    };
+    const flagged = validate('Name', definition, NO_CATALOG).filter((i) => i.msg.includes('already called'));
+    expect(flagged.map((i) => i.stepId)).toEqual(['v1', 'v2']);
+  });
+
+  it('flags a name a LATER step derives — being first in scope is no defence', () => {
+    const definition: AutomationDefinition = {
+      triggers: [],
+      steps: [
+        { id: 'v1', kind: 'set_variable', name: 'agent_result', value: [] },
+        { id: 'a1', kind: 'ask_agent', prompt: [] },
+      ],
+    };
+    const issues = validate('Name', definition, NO_CATALOG);
+    expect(issues.some((i) => i.stepId === 'v1' && i.msg.includes('already called'))).toBe(true);
   });
 
   it('allows the same name in two isolated repeat bodies', () => {

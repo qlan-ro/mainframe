@@ -57,6 +57,20 @@ describe('VariablePickerButton', () => {
     expect(document.activeElement).toBe(textarea);
   });
 
+  // A bare `$` only opens a reference at a word boundary, so `todo/$id` is
+  // literal text; the braced spelling is the only one that resolves there.
+  it('inserts the braced ${name} when the caret is mid-word', async () => {
+    const user = userEvent.setup();
+    render(<Field scope={SCOPE} initial="todo/" />);
+    const textarea = screen.getByTestId('msg') as HTMLTextAreaElement;
+    textarea.setSelectionRange(5, 5);
+
+    await user.click(screen.getByTestId('msg-var-picker'));
+    await user.click(screen.getByTestId('msg-var-picker-option-trigger_result'));
+
+    expect(textarea.value).toBe('todo/${trigger_result}');
+  });
+
   it('shows an empty state instead of a broken popover when scope is empty', async () => {
     const user = userEvent.setup();
     render(<Field scope={[]} />);

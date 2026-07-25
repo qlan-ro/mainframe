@@ -12,10 +12,10 @@
  * this test doesn't need the assistant-ui runtime provider).
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiRequestError } from '@/lib/api/http';
-import type { AutomationCreateInput, AutomationSummary } from '../../contract';
+import type { AutomationCreateInput, AutomationStep, AutomationSummary } from '../../contract';
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
@@ -248,7 +248,6 @@ describe('AutomationEditor — renaming a value rewrites the steps that use it',
     expect(screen.getByTestId('automations-editor-issues')).toHaveTextContent(
       'This step uses $field_1, but no earlier step defines it.',
     );
-    expect(screen.getByTestId('automations-editor-save')).toBeDisabled();
   });
 });
 
@@ -265,13 +264,20 @@ describe('AutomationEditor — unresolved $name', () => {
     render(<AutomationEditor />);
   }
 
-  it('reports the missing name on the step that uses it and gates Save', () => {
+  it('reports the missing name on the step that uses it', () => {
     openUnresolved();
 
     expect(screen.getByTestId('automations-step-n1')).toHaveTextContent(
       'This step uses $nope, but no earlier step defines it.',
     );
-    expect(screen.getByTestId('automations-editor-save')).toBeDisabled();
+  });
+
+  // The engine leaves an unresolved `$name` literal, so `cd $HOME && pnpm build`
+  // is a legitimate prompt. Blocking Save on it made that unsaveable.
+  it('leaves Save available — an unresolved name is a warning, not an error', () => {
+    openUnresolved();
+
+    expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
   });
 
   it('clears the issue once the ref is fixed', async () => {
@@ -284,6 +290,85 @@ describe('AutomationEditor — unresolved $name', () => {
 
     expect(screen.getByTestId('automations-step-n1')).not.toHaveTextContent('no earlier step defines it');
     expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
+  });
+});
+
+/**
+ * The editor edits plain text, but the wire carries `{token}` parts that address
+ * a step structurally. Both conversions have to run at this boundary, or a trip
+ * through the editor quietly demotes every ref to a name — and a name whose
+ * ordinal is minted from position rebinds the moment a producer moves.
+ */
+describe('AutomationEditor — a definition survives the round trip', () => {
+  const STEPS: AutomationStep[] = [
+    { id: 'a1', kind: 'ask_agent', prompt: ['Summarize'] },
+    { id: 'a2', kind: 'ask_agent', prompt: ['Review'] },
+    { id: 'n1', kind: 'notify', message: ['Ship ', { token: { stepId: 'a1', output: 'result' } }] },
+  ];
+
+  let sent: AutomationCreateInput | undefined;
+
+  function openEditor(steps: AutomationStep[]) {
+    sent = undefined;
+    useAutomationsStore.setState({
+      definitions: [{ ...EXISTING, id: 'auto-5', definition: { triggers: [], steps } }],
+      activeProjectId: 'proj-1',
+      gateway: fakeGateway({
+        updateAutomation: async (_id, input) => {
+          sent = input;
+          return { ...EXISTING, ...input, projectId: input.projectId ?? null };
+        },
+      }),
+    });
+    useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: 'auto-5' } });
+    render(<AutomationEditor />);
+  }
+
+  async function save(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByTestId('automations-editor-save'));
+    await waitFor(() => expect(sent).toBeDefined());
+  }
+
+  function savedMessage(id: string) {
+    const step = sent?.definition.steps.find((s) => s.id === id);
+    if (step?.kind !== 'notify') throw new Error(`no notify step ${id}`);
+    return step.message;
+  }
+
+  function dragAbove(dragged: string, target: string) {
+    const dataTransfer = { dropEffect: '' } as unknown as DataTransfer;
+    fireEvent.dragStart(screen.getByTestId(`automations-step-grip-${dragged}`), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(`automations-step-${target}`), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(`automations-step-${target}`), { dataTransfer });
+  }
+
+  it('saves the tokens it loaded, not the text the editor showed', async () => {
+    const user = userEvent.setup();
+    openEditor(STEPS);
+
+    await save(user);
+
+    expect(savedMessage('n1')).toEqual(['Ship ', { token: { stepId: 'a1', output: 'result' } }]);
+  });
+
+  it('mints an outputName per producer, so their names stop depending on position', async () => {
+    const user = userEvent.setup();
+    openEditor(STEPS);
+
+    await save(user);
+
+    expect(sent?.definition.steps[0]).toMatchObject({ id: 'a1', outputName: 'agent_result' });
+    expect(sent?.definition.steps[1]).toMatchObject({ id: 'a2', outputName: 'agent_result_2' });
+  });
+
+  it('keeps a ref on its own step after another producer is dragged above it', async () => {
+    const user = userEvent.setup();
+    openEditor(STEPS);
+
+    dragAbove('a2', 'a1');
+    await save(user);
+
+    expect(savedMessage('n1')).toEqual(['Ship ', { token: { stepId: 'a1', output: 'result' } }]);
   });
 });
 

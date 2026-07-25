@@ -14,7 +14,7 @@ use crate::actions::{ActionCatalogEntry, ActionRegistry};
 use crate::credentials::{
     CredentialError, CredentialKind, CredentialStore, Credentials, FileCredentialStore,
 };
-use crate::domain::{AutomationCreateInput, ValidationError, validate};
+use crate::domain::{AutomationCreateInput, ValidationError, ValidationLevel, validate};
 use crate::engine::{AgentVerb, Interpreter};
 use crate::error::StoreError;
 use crate::interactions::{InteractionError, InteractionService};
@@ -262,7 +262,13 @@ impl AutomationsEngine {
 }
 
 fn validated(input: &AutomationCreateInput) -> Result<(), EngineError> {
-    let errors = validate(&input.definition);
+    // A rejection carries only what blocks it. Warnings never block — the
+    // editor computes and shows its own beside a working Save button, and a
+    // client that treats every returned issue as fatal would wedge on one.
+    let errors: Vec<_> = validate(&input.definition)
+        .into_iter()
+        .filter(|e| e.level == ValidationLevel::Error)
+        .collect();
     if errors.is_empty() {
         Ok(())
     } else {

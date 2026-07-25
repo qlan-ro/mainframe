@@ -9,7 +9,8 @@ use serde_json::Value;
 
 use crate::domain::{AutomationDefinition, TokenRef};
 use crate::engine::test_support::{
-    FakeClock, ask_agent_step, notify_step, repeat_step, set_variable_step, text, token_ref,
+    FakeClock, ask_agent_step, named_ask_agent_step, notify_step, repeat_step, set_variable_step,
+    text, token_ref,
 };
 
 use super::scope::Scope;
@@ -49,6 +50,29 @@ fn a_dollar_opens_a_ref_only_at_a_word_boundary() {
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].name, "release_notes");
     assert_eq!(&input[refs[0].start..refs[0].end], "$release_notes");
+}
+
+#[test]
+fn a_braced_ref_resolves_where_a_bare_one_would_be_literal_text() {
+    let input = "todo/${id}";
+    let refs = extract_variable_refs(input);
+    assert_eq!(refs.len(), 1, "the braced spelling needs no word boundary");
+    assert_eq!(refs[0].name, "id");
+    assert_eq!(&input[refs[0].start..refs[0].end], "${id}");
+}
+
+#[test]
+fn a_braced_ref_digs_a_dotted_path() {
+    let refs = extract_variable_refs("See ${payload.pr.title}!");
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].name, "payload");
+    assert_eq!(refs[0].path, ["pr", "title"]);
+}
+
+#[test]
+fn an_unclosed_brace_is_literal_text() {
+    assert!(extract_variable_refs("${id and more").is_empty());
+    assert!(extract_variable_refs("${}").is_empty());
 }
 
 #[test]
@@ -146,6 +170,46 @@ fn later_holders_of_a_derived_name_get_a_numeric_suffix() {
     assert_eq!(target(names, "agent_result_2"), step_ref("a2", "result"));
 }
 
+/// The M1 case: the editor stamps `outputName` when a step is created, so a
+/// producer inserted *above* an existing one takes the free ordinal instead of
+/// stealing the bare name and demoting the incumbent to `_2`.
+#[test]
+fn a_stored_output_name_outranks_a_steps_position() {
+    let definition = definition(vec![
+        named_ask_agent_step("newer", "agent_result_2"),
+        named_ask_agent_step("older", "agent_result"),
+        notify_step("n", vec![text("$agent_result")]),
+    ]);
+
+    let names = &build_name_index(&definition)["n"];
+    assert_eq!(
+        target(names, "agent_result"),
+        step_ref("older", "result"),
+        "the incumbent keeps its name after a producer is inserted above it"
+    );
+    assert_eq!(target(names, "agent_result_2"), step_ref("newer", "result"));
+}
+
+#[test]
+fn a_step_without_a_stored_output_name_still_gets_a_positional_suffix() {
+    let definition = definition(vec![
+        named_ask_agent_step("stored", "agent_result_2"),
+        ask_agent_step("legacy", false),
+        notify_step("n", vec![text("$agent_result")]),
+    ]);
+
+    let names = &build_name_index(&definition)["n"];
+    assert_eq!(
+        target(names, "agent_result"),
+        step_ref("legacy", "result"),
+        "a definition saved before outputName existed keeps the names it had"
+    );
+    assert_eq!(
+        target(names, "agent_result_2"),
+        step_ref("stored", "result")
+    );
+}
+
 #[test]
 fn a_duplicate_set_variable_name_keeps_the_first_holder() {
     let definition = definition(vec![
@@ -172,7 +236,7 @@ fn renders_every_shared_substitution_case() {
         .unwrap_or_else(|e| panic!("fixture {} must be readable: {e}", path.display()));
     let fixture: Value = serde_json::from_str(&raw).unwrap();
     let cases = fixture["cases"].as_array().unwrap();
-    assert!(cases.len() >= 14, "the fixture must not silently shrink");
+    assert!(cases.len() >= 18, "the fixture must not silently shrink");
 
     for case in cases {
         let name = case["name"].as_str().unwrap();

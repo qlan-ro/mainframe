@@ -1,7 +1,10 @@
 //! Webhook registration — the server-computed half of a webhook trigger.
-//! Arming provisions the signing secret; reading reports the last delivery.
+//! Arming provisions and reveals the signing secret (nothing else can, and a
+//! sender needs it to sign); reading reports only the last delivery.
 //! The ingest URL is composed one layer up: only the server crate knows the
 //! port the daemon is listening on.
+
+use std::fmt;
 
 use crate::credentials::CredentialStore;
 use crate::domain::{AutomationDefinition, Trigger};
@@ -11,13 +14,32 @@ use super::{AutomationsEngine, EngineError};
 
 /// Everything the engine knows about a hook. The route pairs it with the
 /// ingest URL to form the wire `WebhookRegistration`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WebhookState {
     pub hook_id: String,
     /// RFC 3339; `None` means armed but never delivered.
     pub last_delivery_at: Option<String>,
+    /// The HMAC key the sender must sign with — `Some` only on the arm path,
+    /// so a read is structurally incapable of handing it out.
+    pub secret: Option<String>,
 }
 
+/// Manual Debug: the secret must not reach logs or error messages, matching
+/// the `Credentials` redaction (plan T6.1).
+impl fmt::Debug for WebhookState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WebhookState")
+            .field("hook_id", &self.hook_id)
+            .field("last_delivery_at", &self.last_delivery_at)
+            .field("secret", &self.secret.as_ref().map(|_| "[redacted]"))
+            .finish()
+    }
+}
+
+/// Arming both provisions the secret and reveals it. Re-arming reveals the
+/// same one rather than rotating: it is the user's only way back to a secret
+/// they lost, and rotating would break the signature the sender already
+/// computes.
 pub(super) async fn arm(
     engine: &AutomationsEngine,
     automation_id: &str,
@@ -29,8 +51,11 @@ pub(super) async fn arm(
     let Some(hook_id) = hook_id_of(&record.definition, trigger_id) else {
         return Ok(None);
     };
-    ensure_webhook_secret(engine.credentials.as_ref(), &hook_id).await?;
-    Ok(Some(state(engine, &hook_id).await?))
+    let secret = ensure_webhook_secret(engine.credentials.as_ref(), &hook_id).await?;
+    Ok(Some(WebhookState {
+        secret: Some(secret),
+        ..state(engine, &hook_id).await?
+    }))
 }
 
 /// `None` until the hook is armed: without a secret no sender could have been
@@ -64,6 +89,7 @@ async fn state(engine: &AutomationsEngine, hook_id: &str) -> Result<WebhookState
     Ok(WebhookState {
         hook_id: hook_id.to_string(),
         last_delivery_at: engine.webhook_deliveries.last_delivery_at(hook_id).await?,
+        secret: None,
     })
 }
 

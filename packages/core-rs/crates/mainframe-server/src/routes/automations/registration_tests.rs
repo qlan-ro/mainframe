@@ -6,7 +6,10 @@ use axum::body::{Bytes, to_bytes};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
+use hmac::{Hmac, Mac};
+use mainframe_automations::triggers::{WebhookDecision, WebhookHeaders};
 use serde_json::{Value, json};
+use sha2::Sha256;
 
 use crate::routes::automations_test_support::{AutomationsHarness, automations_ctx};
 
@@ -63,6 +66,55 @@ async fn register_arms_the_hook_and_returns_the_local_ingest_url() {
         body["data"]["lastDeliveryAt"],
         Value::Null,
         "a present null is 'armed, never delivered'"
+    );
+}
+
+/// GitHub's `sha256=<lowercase-hex>` HMAC over the exact body bytes.
+fn sign(secret: &str, body: &[u8]) -> String {
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(body);
+    format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
+}
+
+#[tokio::test]
+async fn a_delivery_signed_with_the_registration_secret_is_accepted() {
+    let h = automations_ctx().await;
+    let id = create_webhook_automation(&h).await;
+
+    let (_, registered) =
+        read(register(State(h.ctx.clone()), Path((id.clone(), "wt".to_string()))).await).await;
+    let secret = registered["data"]["secret"]
+        .as_str()
+        .expect("registering hands back the signing secret the sender needs")
+        .to_string();
+
+    let body = br#"{"id":"d-1","action":"opened"}"#;
+    let decision = h
+        .engine
+        .process_webhook(
+            "hook-1",
+            &WebhookHeaders {
+                signature: Some(sign(&secret, body)),
+                ..WebhookHeaders::default()
+            },
+            body,
+        )
+        .await;
+    assert!(
+        matches!(decision, WebhookDecision::Accepted { run_id: Some(_) }),
+        "a delivery signed with the registration secret must run, got {decision:?}"
+    );
+
+    let (_, read_back) = read(get_one(State(h.ctx.clone()), Path(id)).await).await;
+    let registration = &read_back["data"]["definition"]["triggers"][0]["registration"];
+    assert!(
+        registration["lastDeliveryAt"].is_string(),
+        "the panel reports the delivery it just accepted"
+    );
+    assert_eq!(
+        registration.get("secret"),
+        None,
+        "reads never carry the signing secret — registering is the only path"
     );
 }
 

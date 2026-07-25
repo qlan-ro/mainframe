@@ -27,6 +27,8 @@ pub struct VariableRef {
     pub start: usize,
     /// Exclusive byte end of the whole match.
     pub end: usize,
+    /// Set on the braced `${name}` spelling, which needs no word boundary.
+    pub delimited: bool,
 }
 
 /// What a name resolves to. `Current item` has no producing step, so it can
@@ -71,40 +73,78 @@ fn opens_ref(text: &str, index: usize) -> bool {
             .is_some_and(char::is_whitespace)
 }
 
-/// Every `$name` / `$name.path` occurrence, with exact offsets. A trailing
-/// bare period is never consumed: `$release_notes.` resolves the variable and
-/// leaves the period as text. Scanning is byte-wise, which is UTF-8 safe here
-/// because every byte it matches on is ASCII.
+/// The `name.path` body shared by both spellings, from `from`; `end == from`
+/// means "no name here".
+fn scan_body(text: &str, from: usize) -> (String, Vec<String>, usize) {
+    let bytes = text.as_bytes();
+    if !bytes.get(from).is_some_and(|b| is_name_start(*b)) {
+        return (String::new(), Vec::new(), from);
+    }
+    let name_end = scan_segment(bytes, from);
+
+    let mut path = Vec::new();
+    let mut end = name_end;
+    while bytes.get(end) == Some(&b'.') {
+        let segment_end = scan_segment(bytes, end + 1);
+        if segment_end == end + 1 {
+            break;
+        }
+        path.push(text[end + 1..segment_end].to_string());
+        end = segment_end;
+    }
+    (text[from..name_end].to_string(), path, end)
+}
+
+/// Every `$name` / `$name.path` / `${name}` occurrence, with exact offsets. A
+/// trailing bare period is never consumed: `$release_notes.` resolves the
+/// variable and leaves the period as text. Scanning is byte-wise, which is
+/// UTF-8 safe here because every byte it matches on is ASCII.
+///
+/// The braced spelling exists because the bare one needs a word boundary, so
+/// `todo/$id` is literal text; the editor inserts `${id}` mid-word, and it is
+/// recognized anywhere.
 pub fn extract_variable_refs(text: &str) -> Vec<VariableRef> {
     let bytes = text.as_bytes();
     let mut refs = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] != b'$'
-            || !opens_ref(text, i)
-            || !bytes.get(i + 1).is_some_and(|b| is_name_start(*b))
-        {
+        if bytes[i] != b'$' {
             i += 1;
             continue;
         }
-        let name_end = scan_segment(bytes, i + 1);
 
-        let mut path = Vec::new();
-        let mut end = name_end;
-        while bytes.get(end) == Some(&b'.') {
-            let segment_end = scan_segment(bytes, end + 1);
-            if segment_end == end + 1 {
-                break;
+        if bytes.get(i + 1) == Some(&b'{') {
+            let (name, path, end) = scan_body(text, i + 2);
+            if end == i + 2 || bytes.get(end) != Some(&b'}') {
+                i += 1;
+                continue;
             }
-            path.push(text[end + 1..segment_end].to_string());
-            end = segment_end;
+            refs.push(VariableRef {
+                name,
+                path,
+                start: i,
+                end: end + 1,
+                delimited: true,
+            });
+            i = end + 1;
+            continue;
         }
 
+        if !opens_ref(text, i) {
+            i += 1;
+            continue;
+        }
+        let (name, path, end) = scan_body(text, i + 1);
+        if end == i + 1 {
+            i += 1;
+            continue;
+        }
         refs.push(VariableRef {
-            name: text[i + 1..name_end].to_string(),
+            name,
             path,
             start: i,
             end,
+            delimited: false,
         });
         i = end;
     }
@@ -147,7 +187,7 @@ pub fn sanitize_variable_name(raw: &str) -> String {
 }
 
 /// The base identifier a descriptor derives, before collision suffixing.
-fn variable_name_for(info: &TokenInfo) -> String {
+pub(crate) fn variable_name_for(info: &TokenInfo) -> String {
     match info.source_kind {
         TokenSourceKind::Trigger => format!("trigger_{}", sanitize_variable_name(&info.output)),
         TokenSourceKind::Agent if IMPLICIT_AGENT_OUTPUTS.contains(&info.output.as_str()) => {
@@ -159,17 +199,28 @@ fn variable_name_for(info: &TokenInfo) -> String {
     }
 }
 
-/// Assigns a final name to every descriptor, in list order. The first holder
-/// of a base name keeps it; later holders get `_2`, `_3`. A set-variable name
-/// is never suffixed — the user typed it, so a second step claiming it is a
-/// mistake, not a second addressable value: the first wins and `validate`
-/// reports the duplicate.
+/// Assigns a final name to every descriptor, in list order.
+///
+/// A descriptor's name is its base plus the ordinal its producing step minted
+/// once, at creation (`scope::output_name_ordinal`) — *not* its position here.
+/// That is the point: insert a second agent step above the first and the first
+/// keeps `$agent_result`, because the ordinal travels with the step rather than
+/// with the row it sits in. Steps saved before `outputName` existed carry no
+/// ordinal and fall back to position-ordered suffixing, so old definitions keep
+/// the names they had.
+///
+/// A set-variable name is never suffixed — the user typed it, so a second step
+/// claiming it is a mistake, not a second addressable value: the first wins and
+/// `validate` reports the duplicate.
 pub(crate) fn build_variable_namespace(scope: &[TokenInfo]) -> NameMap {
     let mut by_name = NameMap::new();
     for info in scope {
         let base = variable_name_for(info);
-        let mut name = base.clone();
-        if by_name.contains_key(&base) {
+        let mut name = match info.name_ordinal {
+            Some(ordinal) => format!("{base}_{ordinal}"),
+            None => base.clone(),
+        };
+        if by_name.contains_key(&name) {
             if info.source_kind == TokenSourceKind::Variable {
                 continue;
             }

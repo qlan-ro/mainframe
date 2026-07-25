@@ -43,6 +43,10 @@ pub(crate) struct TokenInfo {
     /// Stamped by whoever produced the info; `info` defaults to `Builtin`
     /// because builtins are the only family with no stamping step.
     pub source_kind: TokenSourceKind,
+    /// The producing step's stored collision ordinal, so
+    /// `build_variable_namespace` can name this without consulting position.
+    /// `None` on a step saved before `outputName` existed.
+    pub name_ordinal: Option<u32>,
 }
 
 fn info(
@@ -59,6 +63,7 @@ fn info(
         label: label.to_string(),
         source: source.to_string(),
         source_kind: TokenSourceKind::Builtin,
+        name_ordinal: None,
     }
 }
 
@@ -151,12 +156,33 @@ fn form_field_type(t: FormFieldType) -> TokenType {
 /// produces nothing — its `Current item` is synthesized by the walk and
 /// never leaks.
 pub(crate) fn step_produces(step: &Step) -> Vec<TokenInfo> {
-    let produced = produced_by(step);
+    let mut produced = produced_by(step);
+    if let Some(ordinal) = output_name_ordinal(step) {
+        for info in &mut produced {
+            info.name_ordinal = Some(ordinal);
+        }
+    }
     match own_source_kind(step) {
         Some(kind) => stamp(kind, produced),
         // `If` re-emits its branches' infos, already stamped by their steps.
         None => produced,
     }
+}
+
+/// The trailing `_N` of a step's minted `outputName`, which is the whole of
+/// what naming needs from it (the base is re-derived per output).
+pub(crate) fn output_name_ordinal(step: &Step) -> Option<u32> {
+    let stored = match step {
+        Step::AskAgent(s) => s.output_name.as_deref(),
+        Step::AskMe(s) => s.output_name.as_deref(),
+        Step::RunAction(s) => s.output_name.as_deref(),
+        _ => None,
+    }?;
+    let digits = stored.rsplit_once('_')?.1;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 fn own_source_kind(step: &Step) -> Option<TokenSourceKind> {
