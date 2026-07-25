@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, FolderGit2, GitBranch, Moon, Search, Sun } from 'lucide-react';
+import { ChevronDown, FolderGit2, GitBranch, Moon, ScanSearch, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { getGitBranch } from '@/lib/api/git';
+import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { BranchPopover } from '../features/git/BranchPopover';
 import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
@@ -95,6 +96,7 @@ export function MainToolbar({
   const isDark = mode === 'dark';
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
   const toggleInspector = useUiPrefs((s) => s.toggleInspector);
+  const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
   const geo = windowStyleGeometry(windowStyle);
 
   // Read the live current branch from git so the chip shows for EVERY session,
@@ -234,6 +236,21 @@ export function MainToolbar({
         <ToolbarLaunchControls port={port} projectId={projectId} chatId={chatId} />
         <span className="mx-[4px] h-[16px] w-px bg-border" />
         <SurfaceRail />
+        {projectId && (
+          <>
+            <span className="mx-[4px] h-[16px] w-px bg-border" />
+            <Hint label="Setup Advisor">
+              <button
+                data-testid="automation-recommender-open"
+                type="button"
+                onClick={openSetupAdvisor}
+                className={ICON_BTN}
+              >
+                <ScanSearch size={14} />
+              </button>
+            </Hint>
+          </>
+        )}
         <Hint label={isDark ? 'Switch to light' : 'Switch to dark'}>
           <button data-testid="main-toolbar-theme" type="button" onClick={toggleTheme} className={ICON_BTN}>
             {isDark ? <Sun size={15} /> : <Moon size={15} />}

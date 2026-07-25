@@ -24,11 +24,13 @@ vi.mock('@/features/git/BranchPopover', () => ({
 }));
 
 import { MainToolbar } from '../MainToolbar';
+import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
   useUiPrefs.setState({ inspectorVisible: false });
+  useSetupAdvisor.setState({ open: false });
   mockEmit.mockReset();
   mockGetGitBranch.mockReset();
 });
@@ -397,5 +399,60 @@ describe('MainToolbar — theme toggle', () => {
     fireEvent.click(screen.getByTestId('main-toolbar-theme'));
 
     expect(useTheme.getState().mode).toBe('dark');
+  });
+});
+
+describe('MainToolbar — Setup Advisor button', () => {
+  it('renders automation-recommender-open when projectId is set', () => {
+    mockGetGitBranch.mockResolvedValue({ branch: null });
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    expect(screen.getByTestId('automation-recommender-open')).toBeDefined();
+  });
+
+  it('does not render automation-recommender-open when there is no projectId', () => {
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    expect(screen.queryByTestId('automation-recommender-open')).toBeNull();
+  });
+
+  it('clicking automation-recommender-open opens the Setup Advisor sheet', () => {
+    mockGetGitBranch.mockResolvedValue({ branch: null });
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    expect(useSetupAdvisor.getState().open).toBe(false);
+
+    fireEvent.click(screen.getByTestId('automation-recommender-open'));
+
+    expect(useSetupAdvisor.getState().open).toBe(true);
   });
 });
