@@ -1,8 +1,14 @@
 /**
- * AgentConfig — prompt ChipField (slash), provider+model picker; More
+ * AgentConfig — prompt TriggerTextField, provider+model picker; More
  * options: attachments, worktree (branch picker), timeout, permission,
  * Expect results (A2), FailureToggle (ts153 wf2-stepconfig.jsx
  * `WfAgentConfig`, ported onto `AskAgentStep`).
+ *
+ * todo #234 T14: prompt swapped from `ChipField` to `TriggerTextField` as a
+ * functional swap only (default `triggers='all'`) — its placeholder/slash
+ * affordance gets a full design pass in T16. The worktree branch name uses
+ * `triggers="variables-only"`: branch names take `$name` refs (e.g.
+ * `todo/$id`), never slash commands or `@`-files.
  *
  * One deliberate contract-driven deviation from ts153: **Timeout, not a
  * free-text budget cap.** ts153's "$4.00 or 20m" text field is replaced by
@@ -24,11 +30,13 @@ import { X } from 'lucide-react';
 import { BranchSelect } from '@/features/git/BranchSelect';
 import type { AskAgentStep } from '../contract';
 import { EXECUTION_MODES } from '../contract';
+import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';
 import { useAutomationsStore } from '../data/use-automations-store';
-import { ChipField } from '../fields/ChipField';
 import { MiniSelect } from '../fields/MiniSelect';
+import { TriggerTextField } from '../fields/TriggerTextField';
 import { AgentModelPicker } from './AgentModelPicker';
+import { singlePart } from './action-fields';
 import { AttachmentsField } from './AttachmentsField';
 import { ExpectResultsBuilder } from './ExpectResultsBuilder';
 import { FailureToggle } from './FailureToggle';
@@ -52,14 +60,12 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
     <div className="flex flex-col gap-2.5">
       <div>
         <span className="mb-1.5 block text-caption font-medium text-muted-foreground">Prompt</span>
-        <ChipField
-          value={step.prompt}
-          onChange={(prompt) => onChange({ ...step, prompt })}
-          tokens={tokens}
+        <TriggerTextField
+          value={singlePart(step.prompt)}
+          onChange={(prompt) => onChange({ ...step, prompt: textToChipText(prompt) })}
+          scope={tokens}
           placeholder="What should the agent do? Type / for a slash command, ⟨⟩ to insert a result…"
-          multiline
           minHeight={62}
-          slash
           testId={`${testId}-prompt`}
         />
       </div>
@@ -86,11 +92,12 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
         <FieldRow label="Worktree" top>
           {worktree ? (
             <div className="flex flex-wrap items-center gap-2">
-              <ChipField
-                value={worktree.branchName}
-                onChange={(branchName) => onChange({ ...step, worktree: { ...worktree, branchName } })}
-                tokens={tokens}
+              <TriggerTextField
+                value={singlePart(worktree.branchName)}
+                onChange={(branchName) => onChange({ ...step, worktree: { ...worktree, branchName: textToChipText(branchName) } })}
+                scope={tokens}
                 placeholder="branch name"
+                triggers="variables-only"
                 testId={`${testId}-worktree-branch`}
               />
               <span className="text-caption text-muted-foreground">from</span>

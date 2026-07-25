@@ -18,6 +18,7 @@
  * to the automation's own resolved project (`store.activeProjectId`, bullet
  * 4) rather than a per-step project picker.
  */
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -25,13 +26,28 @@ import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import type { AskAgentStep } from '../../contract';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { resetAdapters, seedAdapters } from '@/store/adapters';
-import { AgentConfig } from '../AgentConfig';
+import { AgentConfig, type AgentConfigProps } from '../AgentConfig';
 
 vi.mock('@/lib/api/git', () => ({
   getGitBranches: vi.fn(async () => ({ local: [{ name: 'main' }, { name: 'dev' }], current: 'main' })),
 }));
 
 const BASE_STEP: AskAgentStep = { id: 'a', kind: 'ask_agent', prompt: [] };
+
+function Field(props: Omit<AgentConfigProps, 'onChange' | 'step'> & { initial: AskAgentStep; onChange?: AgentConfigProps['onChange'] }) {
+  const { initial, onChange, ...rest } = props;
+  const [step, setStep] = useState(initial);
+  return (
+    <AgentConfig
+      {...rest}
+      step={step}
+      onChange={(next) => {
+        setStep(next);
+        onChange?.(next);
+      }}
+    />
+  );
+}
 
 function adapter(id: string, name: string, installed: boolean, models: AdapterInfo['models']): AdapterInfo {
   return { id, name, description: '', installed, models, capabilities: { planMode: false } };
@@ -54,14 +70,13 @@ afterEach(() => {
 });
 
 describe('AgentConfig — essentials', () => {
-  it('renders the prompt ChipField bound to step.prompt', async () => {
+  it('renders the prompt TriggerTextField bound to step.prompt', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    render(<Field initial={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
     await user.click(screen.getByTestId('automations-agent-a-prompt'));
     await user.keyboard('Plan my day');
-    await user.tab();
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, prompt: ['Plan my day'] });
+    expect(onChange).toHaveBeenLastCalledWith({ ...BASE_STEP, prompt: ['Plan my day'] });
   });
 
   it('renders a provider+model picker fed by the live adapter catalog, defaulting to the first installed provider and its default model', () => {
@@ -133,6 +148,18 @@ describe('AgentConfig — More options: worktree', () => {
     await user.click(screen.getByTestId('automations-agent-a-worktree-base-option-dev'));
 
     expect(onChange).toHaveBeenLastCalledWith({ ...step, worktree: { baseBranch: 'dev', branchName: [] } });
+  });
+
+  it('renders the branch name field as a variables-only TriggerTextField — "/" stays literal, no skills popover (branches take $refs, not commands)', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const step: AskAgentStep = { ...BASE_STEP, worktree: { baseBranch: 'main', branchName: [] } };
+    render(<Field initial={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-more'));
+    await user.click(screen.getByTestId('automations-agent-a-worktree-branch'));
+    await user.keyboard('todo/id');
+    expect(screen.queryByTestId('automations-agent-a-worktree-branch-trigger-popover')).not.toBeInTheDocument();
+    expect(onChange).toHaveBeenLastCalledWith({ ...step, worktree: { ...step.worktree, branchName: ['todo/id'] } });
   });
 
   it('removing the worktree clears it back to undefined', async () => {

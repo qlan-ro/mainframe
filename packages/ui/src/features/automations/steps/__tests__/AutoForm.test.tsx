@@ -4,12 +4,27 @@
  * contract's `Record<string, ChipText>` params). TDD: test written first,
  * implemented after.
  */
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ChipText } from '../../contract';
 import type { ActionParamsSchema } from '../action-fields';
-import { AutoForm } from '../AutoForm';
+import { AutoForm, type AutoFormProps } from '../AutoForm';
+
+function StatefulAutoForm(props: Omit<AutoFormProps, 'onChange'> & { onChange: AutoFormProps['onChange'] }) {
+  const [params, setParams] = useState(props.params);
+  return (
+    <AutoForm
+      {...props}
+      params={params}
+      onChange={(next) => {
+        setParams(next);
+        props.onChange(next);
+      }}
+    />
+  );
+}
 
 describe('AutoForm', () => {
   it('renders a text field bound to params[key] and commits typed input', async () => {
@@ -50,7 +65,7 @@ describe('AutoForm', () => {
     expect(onChange).toHaveBeenCalledWith({ runIn: ['worktree'] });
   });
 
-  it('renders a chip field via ChipField, inserting a token part on pick', async () => {
+  it('renders a chip field via TriggerTextField, inserting a $name on variable pick', async () => {
     const user = userEvent.setup();
     const schema: ActionParamsSchema = { fields: [{ key: 'title', label: 'Title', control: 'chip' }] };
     const onChange = vi.fn();
@@ -72,9 +87,9 @@ describe('AutoForm', () => {
         testId="automations-autoform-a"
       />,
     );
-    await user.click(screen.getByTestId('automations-autoform-a-title-picker'));
-    await user.click(screen.getByTestId('automations-autoform-a-title-picker-option-ask-1-title'));
-    expect(onChange).toHaveBeenCalledWith({ title: [{ token: { stepId: 'ask-1', output: 'title' } }] });
+    await user.click(screen.getByTestId('automations-autoform-a-title-var-picker'));
+    await user.click(screen.getByTestId('automations-autoform-a-title-var-picker-option-title'));
+    expect(onChange).toHaveBeenCalledWith({ title: ['$title'] });
   });
 
   it('hides a field whose showWhen does not match the sibling value, and shows it once it does', async () => {
@@ -127,7 +142,7 @@ describe('AutoForm', () => {
     const onChange = vi.fn();
     const params: Record<string, ChipText> = { databaseId: ['Health Log'] };
     render(
-      <AutoForm schema={schema} params={params} onChange={onChange} tokens={[]} testId="automations-autoform-a" />,
+      <StatefulAutoForm schema={schema} params={params} onChange={onChange} tokens={[]} testId="automations-autoform-a" />,
     );
     expect(screen.getByTestId('automations-autoform-a-column-Date')).toBeInTheDocument();
     expect(screen.getByTestId('automations-autoform-a-column-Mood')).toBeInTheDocument();

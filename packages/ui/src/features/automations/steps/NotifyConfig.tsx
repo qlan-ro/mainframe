@@ -1,13 +1,15 @@
 /**
- * NotifyConfig — message ChipField + auto-links note (ts153
+ * NotifyConfig — message TriggerTextField + auto-links note (ts153
  * wf2-stepconfig.jsx `WfNotifyConfig`, ported onto `NotifyStep.message`).
  * The note is a UX reminder only — `automation.notification`'s
  * `links:{runId, chatIds}` is populated by the engine (contract §4), never
  * authored here.
  */
 import type { NotifyStep } from '../contract';
+import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';
-import { ChipField } from '../fields/ChipField';
+import { TriggerTextField } from '../fields/TriggerTextField';
+import { singlePart } from './action-fields';
 import { FailureToggle } from './FailureToggle';
 import { MoreOptions } from './MoreOptions';
 
@@ -22,12 +24,11 @@ export function NotifyConfig({ step, onChange, tokens, testId }: NotifyConfigPro
   return (
     <div className="flex flex-col gap-[8px]">
       <span className="text-caption font-medium text-muted-foreground">Message</span>
-      <ChipField
-        value={step.message}
-        onChange={(message) => onChange({ ...step, message })}
-        tokens={tokens}
+      <TriggerTextField
+        value={singlePart(step.message)}
+        onChange={(message) => onChange({ ...step, message: textToChipText(message) })}
+        scope={tokens}
         placeholder="What should the notification say?"
-        multiline
         minHeight={48}
         testId={`${testId}-message`}
       />

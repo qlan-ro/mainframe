@@ -22,9 +22,10 @@ import { Check, ChevronLeft, TriangleAlert, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
-import type { AutomationCreateInput, AutomationDefinition } from '../contract';
+import type { ActionCatalogEntry, AutomationCreateInput, AutomationDefinition } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
+import { normalizeDefinitionChipText } from '../domain/chip-text-convert';
 import { builtinTokens, triggerTokens } from '../domain/tokens';
 import { validate } from '../domain/validate';
 import { Recipe } from './Recipe';
@@ -43,8 +44,15 @@ const EMPTY_DRAFT: DraftState = {
   definition: { triggers: [], steps: [] },
 };
 
-function draftFrom(input: { name: string; description?: string; definition: AutomationDefinition }): DraftState {
-  return { name: input.name, description: input.description ?? '', definition: input.definition };
+function draftFrom(
+  input: { name: string; description?: string; definition: AutomationDefinition },
+  catalog: ActionCatalogEntry[],
+): DraftState {
+  return {
+    name: input.name,
+    description: input.description ?? '',
+    definition: normalizeDefinitionChipText(input.definition, catalog),
+  };
 }
 
 function errorMessage(err: unknown): string | undefined {
@@ -92,7 +100,7 @@ export function AutomationEditor() {
   const newDraft = editorTarget?.mode === 'new' ? editorTarget.draft : undefined;
 
   const [draft, setDraft] = useState<DraftState>(() =>
-    existing ? draftFrom(existing) : newDraft ? draftFrom(newDraft) : EMPTY_DRAFT,
+    existing ? draftFrom(existing, catalog) : newDraft ? draftFrom(newDraft, catalog) : EMPTY_DRAFT,
   );
   const [saving, setSaving] = useState(false);
 
@@ -102,7 +110,7 @@ export function AutomationEditor() {
   // switches between two `edit` targets (or `edit` ↔ `new`) without this component
   // unmounting in between.
   useEffect(() => {
-    setDraft(existing ? draftFrom(existing) : newDraft ? draftFrom(newDraft) : EMPTY_DRAFT);
+    setDraft(existing ? draftFrom(existing, catalog) : newDraft ? draftFrom(newDraft, catalog) : EMPTY_DRAFT);
   }, [editKey]);
 
   const issues = useMemo(() => {
