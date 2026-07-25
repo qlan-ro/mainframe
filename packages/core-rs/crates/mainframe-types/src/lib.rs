@@ -30,3 +30,4 @@ pub mod suggestion;
 pub mod tags;
 pub mod task_progress;
 pub mod workflow;
+pub mod worktree_offer;

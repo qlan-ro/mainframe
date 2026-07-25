@@ -23,7 +23,7 @@ use mainframe_adapter_api::{AdapterSession, BoxFuture};
 use mainframe_background_tasks::kill::{
     KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
 };
-use mainframe_services::workspace::{get_worktrees, remove_worktree};
+use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
@@ -260,12 +260,8 @@ async fn validate_and_delete_worktree(
     let Some(matched) = matched else {
         return Err("Worktree path is not a registered worktree of this project".to_string());
     };
-    let resolved_branch = branch_name.or_else(|| {
-        matched
-            .branch
-            .as_ref()
-            .map(|b| b.replace("refs/heads/", ""))
-    });
+    let resolved_branch =
+        branch_name.or_else(|| matched.branch.as_ref().map(|b| short_branch(b).to_string()));
     let Some(resolved_branch) = resolved_branch else {
         return Err("Cannot determine branch name for worktree".to_string());
     };

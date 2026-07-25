@@ -94,6 +94,12 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeEntry> {
     entries
 }
 
+/// `refs/heads/feat/x` → `feat/x`. `strip_prefix`, not `replace`: a branch named
+/// `feat/refs/heads/x` is legal and must survive intact.
+pub fn short_branch(git_ref: &str) -> &str {
+    git_ref.strip_prefix("refs/heads/").unwrap_or(git_ref)
+}
+
 pub async fn get_worktrees(project_path: &str) -> Vec<WorktreeEntry> {
     match exec_git(
         &["worktree", "list", "--porcelain"],
@@ -258,6 +264,27 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_branch_strips_the_leading_refs_heads() {
+        assert_eq!(
+            short_branch("refs/heads/feat/switch-offer"),
+            "feat/switch-offer"
+        );
+    }
+
+    #[test]
+    fn short_branch_leaves_an_embedded_refs_heads_intact() {
+        assert_eq!(
+            short_branch("refs/heads/feat/refs/heads/x"),
+            "feat/refs/heads/x"
+        );
+    }
+
+    #[test]
+    fn short_branch_returns_a_bare_name_unchanged() {
+        assert_eq!(short_branch("main"), "main");
+    }
 
     #[tokio::test]
     async fn present_true_for_linked_worktree_git_file_pointer() {
