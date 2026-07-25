@@ -21,10 +21,11 @@ interface BadgeSpec {
   className: string;
 }
 
-function badgeFor(entry: PortTunnelEntry | undefined): BadgeSpec | null {
+// `busy` leads the store: the entry only exists once the daemon's first event
+// lands, and the badge has to answer the click before that round trip.
+function badgeFor(entry: PortTunnelEntry | undefined, busy: boolean): BadgeSpec | null {
+  if (busy) return { label: 'tunnelling…', className: 'bg-muted text-muted-foreground' };
   switch (entry?.state) {
-    case 'starting':
-      return { label: 'tunnelling…', className: 'bg-muted text-muted-foreground' };
     case 'ready':
       return { label: 'tunnelled', className: 'bg-mf-success-tint text-mf-success' };
     case 'error':
@@ -42,7 +43,7 @@ interface UrlChipProps {
 export function UrlChip({ href, port }: UrlChipProps) {
   const { isLocal, entry, busy, open, stop } = useUrlTunnel(href, port);
 
-  const badge = isLocal ? null : badgeFor(entry);
+  const badge = isLocal ? null : badgeFor(entry, busy);
   const openLabel = isLocal ? 'Open' : entry?.state === 'ready' ? 'Reopen tunnel URL' : 'Tunnel and open';
   const OpenIcon = isLocal ? ExternalLink : Globe;
   // An errored entry is a failure marker, not a live tunnel — there is nothing
