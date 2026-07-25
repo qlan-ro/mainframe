@@ -173,25 +173,35 @@ even if a fresh `init` is not re-emitted for the local-command turn, the next
 
 ### How Mainframe manages a Claude session today
 
+> Citations below are the **Rust daemon** (`packages/core-rs`), which has been
+> the only daemon since the cutover at `a8d1a561`. An earlier revision of this
+> section cited the TypeScript daemon in `packages/core`; those files still
+> exist on disk but nothing imports the package — it is retained only for its
+> `package.json` version, which the release pipeline reads. Do not implement
+> against them.
+
 - Each chat stores its CLI session id in `chats.claude_session_id`
-  (`packages/core/src/db/chats.ts`).
+  (`mainframe-db/src/chats.rs:18,49`; column declared in
+  `mainframe-db/src/migrations.rs:57`).
 - Resume passes it as `--resume <claudeSessionId>`:
-  `lifecycle-manager.ts:399-402,516-518` construct the session with
-  `chatId: chat.claudeSessionId`; `session.ts:149,212` turn that into the
-  `--resume` arg. A chat with no stored id spawns **without** `--resume`, and the
-  CLI mints a fresh id.
+  `mainframe-server/src/chat_deps.rs:141-153` builds `SessionOptions` with
+  `chat_id: Some(claude_session_id)`;
+  `mainframe-adapter-claude/src/session.rs:419` stores that as
+  `resume_session_id`, and `build_args` (`session.rs:366-369`) turns it into
+  the `--resume` arg. A chat with no stored id spawns **without** `--resume`,
+  and the CLI mints a fresh id.
 - Mainframe already captures the CLI's real session id from `system:init`:
-  `events.ts:57` calls `sink.onInit(session_id)`, and
-  `chat/event-handler.ts:146-150` writes it back with
-  `db.chats.update(chatId, { claudeSessionId })`. **This plumbing is exactly
-  what a native clear needs.**
+  `mainframe-adapter-claude/src/events.rs:105` calls `sink.on_init(&session_id)`,
+  and `mainframe-chat/src/event_handler.rs:320-338` writes it back via
+  `chats_update(.., claude_session_id)` (and recomputes the session file path).
+  **This plumbing is exactly what a native clear needs.**
 
 ### Recommended mapping — two viable options
 
 **Option A (preferred, 2.1.211+): in-process clear via `post-text`.**
 Send `/clear` as a stream-json `user` message on the existing child process,
 then reconcile the new session id from the next stdout event (via the existing
-`onInit`, or by reading `session_id` off the following event). This is the
+`on_init`, or by reading `session_id` off the following event). This is the
 closest possible parity with the CLI's own `/clear`: same process, real
 `SessionEnd('clear')` / `SessionStart('clear')` hooks, and **backgrounded tasks
 + per-agent state preserved** — none of which a respawn can reproduce. Requires
@@ -200,9 +210,9 @@ gating on CLI ≥ the version that ships `supportsNonInteractive: true` +
 2026-03-31 source, so probe/version-gate it).
 
 **Option B (fallback, any version): fresh spawn without `--resume`.**
-Kill the child, null `claude_session_id` for the chat, and let `doStartChat`
-spawn a new CLI without `--resume`; `onInit` repopulates `claude_session_id`
-with the fresh id. Simple and uses only existing plumbing, but see the
+Kill the child, null `claude_session_id` for the chat, and let the chat-start
+path (`mainframe-chat/src/lifecycle_manager.rs`) spawn a new CLI without
+`--resume`; `on_init` repopulates `claude_session_id` with the fresh id. Simple and uses only existing plumbing, but see the
 [headless gaps](#what-cannot-be-replicated-headlessly).
 
 ### What Mainframe should retain
