@@ -18,6 +18,7 @@ import type { Project } from '@qlan-ro/mainframe-types';
 import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
 import { initializeDraft } from '../new-thread/initialize-draft';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
+import { useOpenNewThreadDraft } from '../new-thread/use-open-new-thread-draft';
 import { useSettingsStore } from '@/store/settings';
 import { useAdapters } from '@/store/adapters';
 import { NewSessionPickerPopover } from './NewSessionPickerPopover';
@@ -54,6 +55,7 @@ export function SessionsNewButton({
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
   const port = useDaemonPort();
+  const openNewThreadDraft = useOpenNewThreadDraft();
 
   const initialize = async (localId: string, projectId: string) => {
     try {
@@ -91,19 +93,7 @@ export function SessionsNewButton({
   }
 
   const pick = (projectId: string) => {
-    void (async () => {
-      rememberReturn();
-      // Clear the CURRENT slot before switching, so a reused draft never flashes
-      // its stale project on activation. No-op when no slot exists.
-      resetNewThreadDraft(runtime.threads.getState().newThreadId);
-      // switchToNewThread OWNS the slot: `newThreadId` is undefined until it
-      // mints one (and again after each first send commits a draft), so the id
-      // is only readable once the switch has resolved.
-      await runtime.threads.switchToNewThread();
-      const nid = runtime.threads.getState().newThreadId;
-      if (nid == null) return;
-      await initialize(nid, projectId);
-    })();
+    void openNewThreadDraft({ projectId });
   };
 
   return (
