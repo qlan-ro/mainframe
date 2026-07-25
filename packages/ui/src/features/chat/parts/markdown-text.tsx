@@ -18,7 +18,7 @@
  * `MarkdownText` is the `TextMessagePartComponent` wired into AssistantMessage.
  * `markdownComponents` is exported separately so UserMessage can reuse it.
  */
-import React, { memo, useState, useCallback, useEffect, useRef, type FC } from 'react';
+import React, { memo, useState, useCallback, type FC } from 'react';
 import type { TextMessagePartComponent } from '@assistant-ui/react';
 import {
   MarkdownTextPrimitive,
@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { useHost } from '@/lib/host';
+import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
@@ -106,29 +107,8 @@ function LinkWithPreview({
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
   const host = useHost();
   const { copied, copy } = useCopyHref(href);
-
-  // Radix closes a ContextMenuItem's menu immediately on select. The item
-  // must preventDefault that default, show "Copied" feedback in place, then
-  // close itself on a short delay (mirrors CodeHeader's inline copy pattern).
-  const [menuCopied, setMenuCopied] = useState(false);
-  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // ContextMenu's root open state is uncontrolled — Radix's ContextMenu.Root
-  // takes no `open` prop, only `onOpenChange` as an observer — so there is no
-  // prop that closes it programmatically. Escape is the one DOM signal its
-  // DismissableLayer treats as a dismiss request.
-  const closeMenu = useCallback(() => {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  }, []);
-
-  const handleMenuOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      clearTimeout(closeTimeoutRef.current);
-      setMenuCopied(false);
-    }
-  }, []);
-
-  useEffect(() => () => clearTimeout(closeTimeoutRef.current), []);
+  const { copiedId, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
+  const menuCopied = copiedId === 'copy-link';
 
   const handleOpen = useCallback(
     (e?: React.MouseEvent) => {
@@ -141,16 +121,7 @@ function LinkWithPreview({
     [href, host],
   );
 
-  const handleMenuCopy = useCallback(
-    (e: Event) => {
-      e.preventDefault();
-      copy();
-      setMenuCopied(true);
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = setTimeout(closeMenu, 900);
-    },
-    [copy, closeMenu],
-  );
+  const handleMenuCopy = onCopySelect('copy-link', copy);
 
   // Design: a faint border-bottom rule (not a solid text-decoration underline).
   const LINK_RULE_CLASS = 'aui-md-a text-primary no-underline border-b border-primary/40';
@@ -161,7 +132,7 @@ function LinkWithPreview({
 
   return (
     <Tooltip>
-      <ContextMenu onOpenChange={handleMenuOpenChange}>
+      <ContextMenu onOpenChange={handleOpenChange}>
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
             <a
@@ -169,6 +140,10 @@ function LinkWithPreview({
               href={href}
               onClick={handleOpen}
               {...props}
+              // stopPropagation only — never preventDefault: Radix composes a
+              // nested trigger's own onContextMenu with checkForDefaultPrevented,
+              // so calling preventDefault here would also block THIS link's menu.
+              onContextMenu={(e) => e.stopPropagation()}
             />
           </ContextMenuTrigger>
         </TooltipTrigger>

@@ -25,6 +25,7 @@ import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { markdownComponents, MARKDOWN_ROOT_CLASS } from '../markdown-text';
 import { CodeHeader } from '../CodeHeader';
 import { SyntaxHighlighter } from '../syntax-highlight';
+import { MessagePathContextMenu } from '@/features/chat/messages/MessagePathContextMenu';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -329,5 +330,27 @@ describe('LinkWithPreview context-menu copy feedback', () => {
     });
 
     expect(screen.queryByTestId('chat-link-copy')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Link menu wins innermost (274-A8) — right-clicking a link inside a message
+// wrapped in MessagePathContextMenu must open only the link's own menu.
+// ---------------------------------------------------------------------------
+
+describe('LinkWithPreview inside MessagePathContextMenu — link menu wins innermost', () => {
+  it('right-clicking the link opens only the link menu, not the outer path menu', () => {
+    wrap(
+      <MessagePathContextMenu>
+        <A href="https://example.com">link text</A>
+      </MessagePathContextMenu>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole('link', { name: 'link text' }));
+
+    expect(screen.getByTestId('chat-link-copy')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-link-open')).toBeInTheDocument();
+    expect(screen.queryByTestId('tool-card-path-copy-absolute')).toBeNull();
+    expect(screen.queryByTestId('chat-menu-empty')).toBeNull();
   });
 });
