@@ -4,16 +4,17 @@
  *
  * ts153 gave every step an editable free-text `title`; the contract only
  * carries one (`AskMeStep.title` — also its token-source display label), so
- * only `ask_me` renders an editable input here. The other three verbs show
- * their static `VERB_META` label as plain text — deliberate, contract-driven
+ * only `ask_me` renders an editable input here. Every other verb shows its
+ * static `VERB_META` label as plain text — deliberate, contract-driven
  * deviation, not an oversight.
  *
- * The "Set up" disclosure switches on `step.kind` to the matching Phase 4
- * config panel (AgentConfig/AskMeConfig/ActionConfig/NotifyConfig), all
- * keyed off this card's own `automations-step-config-<id>` testid as their
- * prefix.
+ * The "Set up" disclosure dispatches `step.kind` through `STEP_CONFIGS` to the
+ * matching config panel, all keyed off this card's own
+ * `automations-step-config-<id>` testid as their prefix. The map is exhaustive
+ * over `LeafStep['kind']`, so a new verb fails to compile until its pane is
+ * registered — the four-branch `&&` chain it replaced just rendered nothing.
  */
-import { useState } from 'react';
+import { createElement, useState, type FC } from 'react';
 import { GripVertical, Sliders, Trash2, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ActionCatalogEntry, AskMeStep, AutomationStep } from '../contract';
@@ -23,8 +24,35 @@ import { AgentConfig } from '../steps/AgentConfig';
 import { AskMeConfig } from '../steps/AskMeConfig';
 import { ActionConfig } from '../steps/ActionConfig';
 import { NotifyConfig } from '../steps/NotifyConfig';
+import { SetValueConfig } from '../steps/SetValueConfig';
 import { StepSummary, type LeafStep } from './StepSummary';
 import { VERB_META } from './verb-meta';
+
+interface StepConfigProps<K extends LeafStep['kind']> {
+  step: Extract<LeafStep, { kind: K }>;
+  onChange: (next: Extract<LeafStep, { kind: K }>) => void;
+  tokens: TokenDescriptor[];
+  catalog: ActionCatalogEntry[];
+  testId: string;
+}
+
+const STEP_CONFIGS: { [K in LeafStep['kind']]: FC<StepConfigProps<K>> } = {
+  ask_agent: AgentConfig,
+  ask_me: AskMeConfig,
+  run_action: ActionConfig,
+  set_variable: SetValueConfig,
+  notify: NotifyConfig,
+};
+
+/**
+ * Generic so `step`, `onChange` and the pane stay tied to one `kind` — no cast
+ * bridges them. `createElement`, not JSX: JSX resolves the element type through
+ * `LibraryManagedAttributes`, which collapses the deferred `STEP_CONFIGS[K]`
+ * into a union of all five panes and then rejects every prop set.
+ */
+function StepConfig<K extends LeafStep['kind']>({ kind, props }: { kind: K; props: StepConfigProps<K> }) {
+  return createElement<StepConfigProps<K>>(STEP_CONFIGS[kind], props);
+}
 
 export interface StepCardProps {
   step: LeafStep;
@@ -127,38 +155,10 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-testid={`automations-step-config-${step.id}`}
           className="border-t-[0.5px] border-border pt-[2px] pr-[12px] pb-[14px] pl-[46px]"
         >
-          {step.kind === 'ask_agent' && (
-            <AgentConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              tokens={tokens}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
-          {step.kind === 'ask_me' && (
-            <AskMeConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
-          {step.kind === 'run_action' && (
-            <ActionConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              tokens={tokens}
-              catalog={catalog}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
-          {step.kind === 'notify' && (
-            <NotifyConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              tokens={tokens}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
+          <StepConfig
+            kind={step.kind}
+            props={{ step, onChange, tokens, catalog, testId: `automations-step-config-${step.id}` }}
+          />
         </div>
       )}
     </div>

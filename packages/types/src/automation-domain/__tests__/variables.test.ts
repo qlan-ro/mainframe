@@ -10,6 +10,7 @@ import {
   renameVariableRefs,
   renderVariableText,
   variableNameFor,
+  variableNamesInScope,
 } from '../variables.js';
 
 function descriptor(ref: TokenRef, sourceKind: TokenSourceKind, label = 'Label'): TokenDescriptor {
@@ -123,6 +124,20 @@ describe('buildVariableNamespace', () => {
     const namespace = buildVariableNamespace([descriptor({ stepId: 'trigger', output: 'payload' }, 'trigger')]);
     expect(namespace.nameFor({ stepId: 'trigger', output: 'payload', field: 'pr.title' })).toBe('trigger_payload');
     expect(namespace.nameFor({ stepId: 'nope', output: 'payload' })).toBeNull();
+  });
+});
+
+describe('variableNamesInScope', () => {
+  it('reports the assigned names, suffixes included — not the derived bases', () => {
+    const names = variableNamesInScope([
+      descriptor({ stepId: 'a1', output: 'result' }, 'agent'),
+      descriptor({ stepId: 'a2', output: 'result' }, 'agent'),
+    ]);
+    expect([...names]).toEqual(['agent_result', 'agent_result_2']);
+  });
+
+  it('is empty for an empty scope', () => {
+    expect(variableNamesInScope([]).size).toBe(0);
   });
 });
 

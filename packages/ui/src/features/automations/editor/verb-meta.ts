@@ -107,12 +107,7 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
   },
 };
 
-/**
- * `set_variable` is deliberately absent: the daemon and the fixtures already
- * carry the kind (so `VERB_META` must render it), but there is no config pane
- * to author one with yet — offering it would add an uneditable step.
- */
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
-  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'notify'] },
+  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify'] },
   { label: 'Add structure', kinds: ['if', 'repeat'] },
 ];

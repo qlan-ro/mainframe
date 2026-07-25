@@ -29,6 +29,7 @@ export function createHttpGateway(): AutomationsGateway {
     updateAutomation: api.updateAutomation,
     deleteAutomation: api.deleteAutomation,
     setEnabled: api.setAutomationEnabled,
+    registerWebhook: api.registerAutomationWebhook,
 
     startRun: api.startAutomationRun,
     listRuns: api.listAutomationRuns,

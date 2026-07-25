@@ -28,6 +28,7 @@ vi.mock('@/lib/api/automations', () => ({
   updateAutomation: vi.fn(),
   deleteAutomation: vi.fn(),
   setAutomationEnabled: vi.fn(),
+  registerAutomationWebhook: vi.fn(),
   startAutomationRun: vi.fn(),
   listAutomationRuns: vi.fn(),
   getAutomationRun: vi.fn(),

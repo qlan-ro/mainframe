@@ -14,6 +14,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ApiRequestError } from '@/lib/api/http';
 import type { AutomationCreateInput, AutomationSummary } from '../../contract';
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
@@ -172,6 +173,174 @@ describe('AutomationEditor — edit existing', () => {
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: 'auto-1' } });
     render(<AutomationEditor />);
     expect(screen.getByTestId('automations-step-s1')).toBeInTheDocument();
+  });
+});
+
+describe('AutomationEditor — renaming a value rewrites the steps that use it', () => {
+  function openEditor(message: string) {
+    const withValue: AutomationSummary = {
+      ...EXISTING,
+      id: 'auto-2',
+      definition: {
+        triggers: [],
+        steps: [
+          { id: 'v1', kind: 'set_variable', name: 'headline', value: ['Release day'] },
+          { id: 'n1', kind: 'notify', message: [message] },
+        ],
+      },
+    };
+    useAutomationsStore.setState({ definitions: [withValue], activeProjectId: 'proj-1' });
+    useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: withValue.id } });
+    render(<AutomationEditor />);
+  }
+
+  async function rename(user: ReturnType<typeof userEvent.setup>, to: string) {
+    await user.click(screen.getByTestId('automations-step-setup-v1'));
+    await user.clear(screen.getByTestId('automations-step-config-v1-name'));
+    await user.keyboard(`${to}{Enter}`);
+  }
+
+  it("rewrites a later step's $ref, leaving a longer lookalike name alone", async () => {
+    const user = userEvent.setup();
+    openEditor('Ship $headline, not $headliner');
+
+    await rename(user, 'title');
+
+    await user.click(screen.getByTestId('automations-step-setup-n1'));
+    expect(screen.getByTestId('automations-step-config-n1-message')).toHaveValue('Ship $title, not $headliner');
+  });
+
+  it('keeps the automation valid across the rename — no step is left pointing at a name that is gone', async () => {
+    const user = userEvent.setup();
+    openEditor('Ship $headline');
+
+    await rename(user, 'title');
+
+    expect(screen.getByTestId('automations-editor-issues')).not.toHaveTextContent('no earlier step defines it');
+    expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
+  });
+
+  it('reports a stale $ref instead of rewriting it when the renamed key belongs to an Ask me field (Decision 9)', () => {
+    useAutomationsStore.setState({
+      definitions: [
+        {
+          ...EXISTING,
+          id: 'auto-3',
+          definition: {
+            triggers: [],
+            steps: [
+              {
+                id: 'q1',
+                kind: 'ask_me',
+                title: 'Check-in',
+                fields: [{ key: 'renamed', label: 'Headline', type: 'text' }],
+              },
+              { id: 'n1', kind: 'notify', message: ['Ship $field_1'] },
+            ],
+          },
+        },
+      ],
+      activeProjectId: 'proj-1',
+    });
+    useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: 'auto-3' } });
+    render(<AutomationEditor />);
+
+    expect(screen.getByTestId('automations-editor-issues')).toHaveTextContent(
+      'This step uses $field_1, but no earlier step defines it.',
+    );
+    expect(screen.getByTestId('automations-editor-save')).toBeDisabled();
+  });
+});
+
+describe('AutomationEditor — unresolved $name', () => {
+  const UNRESOLVED: AutomationSummary = {
+    ...EXISTING,
+    id: 'auto-4',
+    definition: { triggers: [], steps: [{ id: 'n1', kind: 'notify', message: ['Ship $nope'] }] },
+  };
+
+  function openUnresolved() {
+    useAutomationsStore.setState({ definitions: [UNRESOLVED], activeProjectId: 'proj-1' });
+    useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: UNRESOLVED.id } });
+    render(<AutomationEditor />);
+  }
+
+  it('reports the missing name on the step that uses it and gates Save', () => {
+    openUnresolved();
+
+    expect(screen.getByTestId('automations-step-n1')).toHaveTextContent(
+      'This step uses $nope, but no earlier step defines it.',
+    );
+    expect(screen.getByTestId('automations-editor-save')).toBeDisabled();
+  });
+
+  it('clears the issue once the ref is fixed', async () => {
+    const user = userEvent.setup();
+    openUnresolved();
+
+    await user.click(screen.getByTestId('automations-step-setup-n1'));
+    await user.clear(screen.getByTestId('automations-step-config-n1-message'));
+    await user.type(screen.getByTestId('automations-step-config-n1-message'), 'Ship it');
+
+    expect(screen.getByTestId('automations-step-n1')).not.toHaveTextContent('no earlier step defines it');
+    expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
+  });
+});
+
+describe('AutomationEditor — a rejected save', () => {
+  function openValidDraft(rejection: unknown) {
+    useAutomationsStore.setState({
+      definitions: [EXISTING],
+      activeProjectId: 'proj-1',
+      gateway: fakeGateway({
+        updateAutomation: async () => {
+          throw rejection;
+        },
+      }),
+    });
+    useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: EXISTING.id } });
+    render(<AutomationEditor />);
+  }
+
+  it("puts the daemon's per-step rejection on that step and re-gates Save", async () => {
+    const user = userEvent.setup();
+    openValidDraft(
+      new ApiRequestError('This step uses $nope, but no earlier step defines it.', [
+        { stepId: 's1', message: 'This step uses $nope, but no earlier step defines it.' },
+      ]),
+    );
+
+    await user.click(screen.getByTestId('automations-editor-save'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('automations-step-s1')).toHaveTextContent(
+        'This step uses $nope, but no earlier step defines it.',
+      ),
+    );
+    expect(screen.getByTestId('automations-editor-save')).toBeDisabled();
+  });
+
+  it('drops the daemon issues on the next edit, so the fix re-enables Save', async () => {
+    const user = userEvent.setup();
+    openValidDraft(new ApiRequestError('nope', [{ stepId: 's1', message: 'Choose an action for this step.' }]));
+
+    await user.click(screen.getByTestId('automations-editor-save'));
+    await waitFor(() => expect(screen.getByTestId('automations-editor-save')).toBeDisabled());
+
+    await user.type(screen.getByTestId('automations-editor-name'), '!');
+
+    expect(screen.getByTestId('automations-step-s1')).not.toHaveTextContent('Choose an action for this step.');
+    expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
+  });
+
+  it('leaves Save available after a failure that says nothing about the draft', async () => {
+    const user = userEvent.setup();
+    openValidDraft(new Error('Failed to fetch'));
+
+    await user.click(screen.getByTestId('automations-editor-save'));
+
+    await waitFor(() => expect(screen.getByTestId('automations-editor-save')).toBeEnabled());
+    expect(screen.getByTestId('automations-editor-issues')).not.toHaveTextContent('Failed to fetch');
   });
 });
 

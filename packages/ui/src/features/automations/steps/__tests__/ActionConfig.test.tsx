@@ -5,6 +5,7 @@
  * are all top-level, never nested under an `args` bag). TDD: test written
  * first, implemented after.
  */
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,6 +13,27 @@ import { useAutomationsStore } from '../../data/use-automations-store';
 import { ACTION_CATALOG_FIXTURE } from '../../fixtures/action-catalog';
 import type { RunActionStep } from '../../contract';
 import { ActionConfig } from '../ActionConfig';
+
+/**
+ * Holds the step the way the editor does. The param fields are fully
+ * controlled, so a static `step` prop would feed every keystroke back the
+ * original value and only the last character would survive.
+ */
+function StatefulActionConfig({ step, onChange }: { step: RunActionStep; onChange: (next: RunActionStep) => void }) {
+  const [current, setCurrent] = useState(step);
+  return (
+    <ActionConfig
+      step={current}
+      onChange={(next) => {
+        setCurrent(next);
+        onChange(next);
+      }}
+      tokens={[]}
+      catalog={ACTION_CATALOG_FIXTURE}
+      testId="automations-action-a"
+    />
+  );
+}
 
 describe('ActionConfig — unpicked', () => {
   it('embeds the ActionCatalog when actionId is empty, and picking sets actionId', async () => {
@@ -90,19 +112,11 @@ describe('ActionConfig — picked, no credential (run_command)', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'files.read', params: {} };
-    render(
-      <ActionConfig
-        step={step}
-        onChange={onChange}
-        tokens={[]}
-        catalog={ACTION_CATALOG_FIXTURE}
-        testId="automations-action-a"
-      />,
-    );
+    render(<StatefulActionConfig step={step} onChange={onChange} />);
     await user.click(screen.getByTestId('automations-action-a-form-path'));
     await user.keyboard('~/notes/log.md');
     await user.tab();
-    expect(onChange).toHaveBeenCalledWith({
+    expect(onChange).toHaveBeenLastCalledWith({
       id: 'a',
       kind: 'run_action',
       actionId: 'files.read',

@@ -14,10 +14,11 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Comparator, ConditionRow as ConditionRowModel, TokenRef } from '../contract';
 import { comparatorNeedsValue, comparatorsFor, isMultiValue } from '../domain/comparators';
 import type { TokenDescriptor } from '../domain/tokens';
-import { MiniSelect } from '../fields/MiniSelect';
 import { TokenChip } from '../fields/TokenChip';
 import { TokenPicker } from '../fields/TokenPicker';
 
@@ -155,8 +156,7 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
     onChange({ token: ref, comparator: nextComparators[0] ?? 'is' });
   }
 
-  function handleComparatorLabel(label: string) {
-    const comparator = comparators.find((c) => COMPARATOR_LABELS[c] === label) ?? comparators[0] ?? 'is';
+  function handleComparator(comparator: Comparator) {
     onChange({ ...condition, comparator, value: comparatorNeedsValue(comparator) ? condition.value : undefined });
   }
 
@@ -164,13 +164,18 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
     <div className="flex flex-wrap items-center gap-1.5">
       <TokenChip descriptor={descriptor} testId={`${testId}-token`} />
       <TokenPicker tokens={tokens} onInsert={handleTokenPick} testId={`${testId}-token-picker`} />
-      <MiniSelect
-        value={COMPARATOR_LABELS[condition.comparator]}
-        options={comparators.map((c) => COMPARATOR_LABELS[c])}
-        onChange={handleComparatorLabel}
-        testId={`${testId}-comparator`}
-        width={116}
-      />
+      <Select value={condition.comparator} onValueChange={(next) => handleComparator(next as Comparator)}>
+        <SelectTrigger data-testid={`${testId}-comparator`} className="h-[28px] w-[116px] text-caption">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {comparators.map((comparator) => (
+            <SelectItem key={comparator} value={comparator} data-testid={`${testId}-comparator-option-${comparator}`}>
+              {COMPARATOR_LABELS[comparator]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {needsValue &&
         (multi ? (
           <MultiValueEditor
@@ -180,22 +185,30 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
             testId={`${testId}-value`}
           />
         ) : descriptor?.type === 'choice' && descriptor.options ? (
-          <MiniSelect
+          <Select
             value={typeof condition.value === 'string' ? condition.value : (descriptor.options[0] ?? '')}
-            options={descriptor.options}
-            onChange={(value) => onChange({ ...condition, value })}
-            testId={`${testId}-value`}
-            width={130}
-          />
+            onValueChange={(value) => onChange({ ...condition, value })}
+          >
+            <SelectTrigger data-testid={`${testId}-value`} className="h-[28px] w-[130px] text-caption">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {descriptor.options.map((option) => (
+                <SelectItem key={option} value={option} data-testid={`${testId}-value-option-${option}`}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : (
-          <input
+          <Input
             data-testid={`${testId}-value`}
             value={
               typeof condition.value === 'string' || typeof condition.value === 'number' ? String(condition.value) : ''
             }
             onChange={(e) => onChange({ ...condition, value: e.target.value })}
             placeholder="value"
-            className="h-[28px] w-[130px] rounded-md border-[0.5px] border-input bg-card px-2.5 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-[28px] w-[130px] px-2.5 py-0 text-caption"
           />
         ))}
     </div>

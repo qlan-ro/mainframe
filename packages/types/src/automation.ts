@@ -86,16 +86,7 @@ export interface NotifyStep extends AutomationStepBase {
 
 /** A3 adds `is_one_of`; `contains` is polymorphic (text substring / list membership). */
 export type Comparator =
-  | 'is'
-  | 'is_not'
-  | 'contains'
-  | 'starts_with'
-  | 'eq'
-  | 'lt'
-  | 'gt'
-  | 'is_empty'
-  | 'not_empty'
-  | 'is_one_of';
+  'is' | 'is_not' | 'contains' | 'starts_with' | 'eq' | 'lt' | 'gt' | 'is_empty' | 'not_empty' | 'is_one_of';
 
 export interface ConditionRow {
   token: TokenRef;
@@ -125,13 +116,7 @@ export interface SetVariableStep extends AutomationStepBase {
 }
 
 export type AutomationStep =
-  | AskAgentStep
-  | AskMeStep
-  | RunActionStep
-  | NotifyStep
-  | SetVariableStep
-  | IfBlock
-  | RepeatBlock;
+  AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | IfBlock | RepeatBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }
@@ -167,13 +152,21 @@ export interface EventTrigger {
  */
 export type WebhookPreset = 'github_pr_opened' | 'github_pr_merged';
 
+/** Server-computed on read; the daemon ignores it on write. Mirrors the Rust `WebhookRegistration`. */
+export interface WebhookRegistration {
+  hookId: string;
+  /** The local ingest endpoint — reachable only from this machine. */
+  url: string;
+  /** A present `null` means "registered, never delivered"; an absent `registration` means "not registered". */
+  lastDeliveryAt: string | null;
+}
+
 export interface WebhookTrigger {
   id: string;
   kind: 'webhook';
   hookId: string;
   preset?: WebhookPreset;
-  /** Server-computed on read; the daemon ignores it on write. `url` is the local ingest endpoint — reachable only from this machine. */
-  registration?: { hookId: string; url: string; lastDeliveryAt: string | null };
+  registration?: WebhookRegistration;
 }
 
 export type AutomationTrigger = ScheduleTrigger | EventTrigger | WebhookTrigger;

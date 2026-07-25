@@ -13,15 +13,11 @@
  * under a `columns` object). Its own key (conventionally `__columns`) is
  * virtual — never written to params (ts153's `WfActionForm` skipped writing
  * its `__columns` key the same way).
- *
- * `'code'` lost `ChipField`'s `mono` styling in the `TriggerTextField` swap —
- * `TriggerTextField` has no monospace option today. No current schema uses
- * `'code'`, so this is a flagged gap, not a regression against a real field.
  */
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ChipText } from '../contract';
 import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';
-import { MiniSelect } from '../fields/MiniSelect';
 import { TriggerTextField } from '../fields/TriggerTextField';
 import type { ActionFieldSchema, ActionParamsSchema } from './action-fields';
 import { singlePart } from './action-fields';
@@ -69,13 +65,18 @@ export function AutoForm({ schema, params, onChange, tokens, testId }: AutoFormP
           const options = field.options ?? [];
           return (
             <FieldRow key={field.key} label={field.label}>
-              <MiniSelect
-                value={singlePart(value) || (options[0] ?? '')}
-                options={options}
-                onChange={(v) => set(field.key, [v])}
-                testId={fieldTestId}
-                width={200}
-              />
+              <Select value={singlePart(value) || (options[0] ?? '')} onValueChange={(v) => set(field.key, [v])}>
+                <SelectTrigger data-testid={fieldTestId} className="h-[30px] w-[200px] text-caption">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {options.map((option) => (
+                    <SelectItem key={option} value={option} data-testid={`${fieldTestId}-option-${option}`}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </FieldRow>
           );
         }
@@ -101,6 +102,7 @@ export function AutoForm({ schema, params, onChange, tokens, testId }: AutoFormP
                 scope={tokens}
                 placeholder={field.placeholder}
                 minHeight={field.control === 'code' ? 54 : 48}
+                mono={field.control === 'code'}
                 testId={fieldTestId}
               />
             </FieldRow>

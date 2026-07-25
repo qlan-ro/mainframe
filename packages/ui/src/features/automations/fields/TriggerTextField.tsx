@@ -13,7 +13,9 @@
  * Styled on the composer's field classes, minus `text-transparent
  * caret-foreground` — those exist only for the composer's `ComposerHighlight`
  * overlay, which this field doesn't have; porting them verbatim would render
- * invisible text.
+ * invisible text. `bare` drops the field's own chrome for fields embedded in
+ * a card that already draws one (the Agent step's prompt); `mono` is for
+ * fields whose value is code or an identifier.
  */
 import { useMemo, useRef, type KeyboardEvent } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
@@ -36,6 +38,10 @@ export interface TriggerTextFieldProps {
   scope: TokenDescriptor[];
   /** Default `'all'` (`$` + `/` + `@`). `'variables-only'` fires just `$`. */
   triggers?: 'all' | 'variables-only';
+  /** Drops the field's own border/background — for fields embedded in a card that already draws one. */
+  bare?: boolean;
+  /** Monospace value, for fields whose content is code or an identifier. */
+  mono?: boolean;
 }
 
 export function TriggerTextField({
@@ -46,6 +52,8 @@ export function TriggerTextField({
   testId,
   scope,
   triggers = 'all',
+  bare = false,
+  mono = false,
 }: TriggerTextFieldProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const showAll = triggers === 'all';
@@ -75,7 +83,7 @@ export function TriggerTextField({
   return (
     <div
       data-testid={`${testId}-container`}
-      className="relative rounded-md border-[0.5px] border-input bg-card"
+      className={cn('relative', !bare && 'rounded-md border-[0.5px] border-input bg-card')}
       style={{ minHeight }}
     >
       <TextareaAutosize
@@ -92,15 +100,27 @@ export function TriggerTextField({
         onClick={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
         onKeyUp={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
         className={cn(
-          'w-full resize-none bg-transparent px-[14px] py-[10px] pr-9 font-sans text-body leading-relaxed',
+          'w-full resize-none bg-transparent px-[14px] pr-9 text-body leading-relaxed',
+          bare ? 'pt-[10px] pb-[4px]' : 'py-[10px]',
+          mono ? 'font-mono' : 'font-sans',
           'text-foreground outline-none placeholder:text-mf-text-3',
         )}
         {...field.ariaProps}
       />
       <div className="absolute right-1.5 top-1.5">
-        <VariablePickerButton scope={scope} testId={testId} value={value} onChange={onChange} textareaRef={textareaRef} />
+        <VariablePickerButton
+          scope={scope}
+          testId={testId}
+          value={value}
+          onChange={onChange}
+          textareaRef={textareaRef}
+        />
       </div>
-      <TriggerFieldPopover field={field} testId={`${testId}-trigger-popover`} className="absolute left-0 top-full mt-1" />
+      <TriggerFieldPopover
+        field={field}
+        testId={`${testId}-trigger-popover`}
+        className="absolute left-0 top-full mt-1"
+      />
     </div>
   );
 }

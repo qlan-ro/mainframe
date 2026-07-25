@@ -3,6 +3,7 @@
  * "Set up" disclosure (ts153 wf2-editor.jsx `WfStepCard`'s non-block
  * branch). TDD: test written first, implemented after.
  */
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,8 +11,33 @@ import { ACTION_CATALOG_FIXTURE } from '../../fixtures/action-catalog';
 import type { ActionCatalogEntry, AutomationStep } from '../../contract';
 import type { ValidationIssue } from '../../domain/validate';
 import { StepCard } from '../StepCard';
+import type { LeafStep } from '../StepSummary';
 
 const NO_CATALOG: ActionCatalogEntry[] = [];
+
+/**
+ * Holds the step the way the editor does. The config panes are fully
+ * controlled, so a static `step` prop would feed every keystroke back the
+ * original value and only the last character would survive.
+ */
+function StatefulStepCard({ step, onChange }: { step: LeafStep; onChange: (next: LeafStep) => void }) {
+  const [current, setCurrent] = useState(step);
+  return (
+    <StepCard
+      step={current}
+      onChange={(next) => {
+        if (next === null || next.kind === 'if' || next.kind === 'repeat') return; // a leaf pane emits neither
+        setCurrent(next);
+        onChange(next);
+      }}
+      tokens={[]}
+      catalog={NO_CATALOG}
+      issues={[]}
+      onDragStart={vi.fn()}
+      onDragEnd={vi.fn()}
+    />
+  );
+}
 
 describe('StepCard — issue strip', () => {
   it("shows the issue strip only when there is an issue pinned to this step's id", () => {
@@ -227,14 +253,13 @@ describe('StepCard — Set up renders the right verb config (Phase 4)', () => {
     expect(screen.getByTestId('automations-step-config-a-message')).toBeInTheDocument();
   });
 
-  it('edits inside the config panel flow back through onChange as a patched step', async () => {
+  it('set_variable renders SetValueConfig (its name field)', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    const step: AutomationStep = { id: 'a', kind: 'notify', message: [] };
+    const step: AutomationStep = { id: 'a', kind: 'set_variable', name: '', value: [''] };
     render(
       <StepCard
         step={step}
-        onChange={onChange}
+        onChange={vi.fn()}
         tokens={[]}
         catalog={NO_CATALOG}
         issues={[]}
@@ -243,9 +268,18 @@ describe('StepCard — Set up renders the right verb config (Phase 4)', () => {
       />,
     );
     await user.click(screen.getByTestId('automations-step-setup-a'));
+    expect(screen.getByTestId('automations-step-config-a-name')).toBeInTheDocument();
+  });
+
+  it('edits inside the config panel flow back through onChange as a patched step', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const step: LeafStep = { id: 'a', kind: 'notify', message: [] };
+    render(<StatefulStepCard step={step} onChange={onChange} />);
+    await user.click(screen.getByTestId('automations-step-setup-a'));
     await user.click(screen.getByTestId('automations-step-config-a-message'));
     await user.keyboard('Ready');
     await user.tab();
-    expect(onChange).toHaveBeenCalledWith({ ...step, message: ['Ready'] });
+    expect(onChange).toHaveBeenLastCalledWith({ ...step, message: ['Ready'] });
   });
 });

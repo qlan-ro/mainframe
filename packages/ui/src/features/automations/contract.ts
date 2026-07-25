@@ -32,6 +32,7 @@ export type {
   AutomationEventName,
   EventTrigger,
   WebhookTrigger,
+  WebhookRegistration,
   AutomationTrigger,
   AutomationDefinition,
   AutomationScope,

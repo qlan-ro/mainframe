@@ -27,8 +27,10 @@ import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { normalizeDefinitionChipText } from '../domain/chip-text-convert';
 import { builtinTokens, triggerTokens } from '../domain/tokens';
-import { validate } from '../domain/validate';
+import { validate, type ValidationIssue } from '../domain/validate';
+import { applyVariableRenames } from './definition-actions';
 import { Recipe } from './Recipe';
+import { saveIssuesFrom } from './save-issues';
 import { stampAgentProjectId } from './stamp-agent-project-id';
 import { WhenCard } from './WhenCard';
 
@@ -103,6 +105,13 @@ export function AutomationEditor() {
     existing ? draftFrom(existing, catalog) : newDraft ? draftFrom(newDraft, catalog) : EMPTY_DRAFT,
   );
   const [saving, setSaving] = useState(false);
+  const [saveIssues, setSaveIssues] = useState<ValidationIssue[]>([]);
+
+  /** Any edit retires the daemon's verdict — it judged a draft that no longer exists. */
+  function updateDraft(patch: (d: DraftState) => DraftState) {
+    setSaveIssues([]);
+    setDraft(patch);
+  }
 
   // Re-seed only when the target identity changes (`editKey`), not on every store
   // tick — mirrors the initializer above so the mount-time run is a harmless no-op
@@ -110,15 +119,17 @@ export function AutomationEditor() {
   // switches between two `edit` targets (or `edit` ↔ `new`) without this component
   // unmounting in between.
   useEffect(() => {
+    setSaveIssues([]);
     setDraft(existing ? draftFrom(existing, catalog) : newDraft ? draftFrom(newDraft, catalog) : EMPTY_DRAFT);
   }, [editKey]);
 
   const issues = useMemo(() => {
     const base = validate(draft.name, draft.definition, catalog);
-    return activeProjectId
+    const withProject = activeProjectId
       ? base
       : [{ stepId: null, level: 'error' as const, msg: 'Pick an active project first.' }, ...base];
-  }, [draft.name, draft.definition, catalog, activeProjectId]);
+    return [...withProject, ...saveIssues];
+  }, [draft.name, draft.definition, catalog, activeProjectId, saveIssues]);
   const errors = issues.filter((i) => i.level === 'error');
   const ok = errors.length === 0;
 
@@ -148,6 +159,7 @@ export function AutomationEditor() {
       patchDefinition(result);
       closeEditor();
     } catch (err) {
+      setSaveIssues(saveIssuesFrom(err));
       mfToast.error('Could not save the automation', { description: errorMessage(err) });
     } finally {
       setSaving(false);
@@ -200,14 +212,14 @@ export function AutomationEditor() {
             <input
               data-testid="automations-editor-name"
               value={draft.name}
-              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              onChange={(e) => updateDraft((d) => ({ ...d, name: e.target.value }))}
               placeholder="Name this automation"
               className="border-none bg-transparent p-0 text-title font-bold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
             />
             <input
               data-testid="automations-editor-description"
               value={draft.description}
-              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              onChange={(e) => updateDraft((d) => ({ ...d, description: e.target.value }))}
               placeholder="What does it do? (optional)"
               className="border-none bg-transparent p-0 text-body text-muted-foreground outline-none placeholder:text-muted-foreground"
             />
@@ -220,14 +232,20 @@ export function AutomationEditor() {
           >
             <WhenCard
               triggers={draft.definition.triggers}
-              onChange={(triggers) => setDraft((d) => ({ ...d, definition: { ...d.definition, triggers } }))}
+              onChange={(triggers) => updateDraft((d) => ({ ...d, definition: { ...d.definition, triggers } }))}
+              automationId={existing?.id}
             />
           </EditorSection>
 
           <EditorSection index={2} label="Do" hint="Step by step, top to bottom">
             <Recipe
               steps={draft.definition.steps}
-              onChange={(steps) => setDraft((d) => ({ ...d, definition: { ...d.definition, steps } }))}
+              onChange={(steps) =>
+                updateDraft((d) => ({
+                  ...d,
+                  definition: applyVariableRenames(d.definition, { ...d.definition, steps }),
+                }))
+              }
               tokens={scopeTokens}
               catalog={catalog}
               issues={issues}

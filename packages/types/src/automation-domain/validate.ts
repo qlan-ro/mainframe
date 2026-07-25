@@ -4,19 +4,13 @@
  * issue is pinned to the offending `stepId` (`null` only for automation-level
  * issues) so `StepCard` can render a red strip on the card itself.
  */
-import type {
-  ActionCatalogEntry,
-  AutomationDefinition,
-  AutomationStep,
-  ChipText,
-  TokenRef,
-} from '../automation.js';
+import type { ActionCatalogEntry, AutomationDefinition, AutomationStep, ChipText, TokenRef } from '../automation.js';
 import { TOKEN_STEP_BUILTIN } from '../automation.js';
 import { isTokenPart } from './chip-parts.js';
 import { resolveTokenRef } from './resolve.js';
 import { scopeAt } from './token-scope.js';
 import type { TokenDescriptor } from './tokens.js';
-import { buildVariableNamespace, extractVariableRefs } from './variables.js';
+import { extractVariableRefs, variableNamesInScope } from './variables.js';
 
 export interface ValidationIssue {
   stepId: string | null;
@@ -68,8 +62,13 @@ function unresolvedVariableNames(step: AutomationStep, inScope: Set<string>): st
   return [...unresolved];
 }
 
-/** A set-variable step's own name, checked against the scope in front of it (which excludes the step itself). */
-function setVariableNameIssue(name: string, inScope: Set<string>): string | null {
+/**
+ * A set-variable step's own name, checked against the scope in front of it
+ * (which excludes the step itself). Exported so the editor's pane can refuse a
+ * bad name at the keystroke that produced it, in the same words the footer
+ * would use once saved.
+ */
+export function setVariableNameIssue(name: string, inScope: Set<string>): string | null {
   const trimmed = name.trim();
   if (!trimmed) return 'Give this value a name.';
   if (!VARIABLE_NAME.test(trimmed))
@@ -110,7 +109,7 @@ export function validate(
   const walk = (steps: AutomationStep[]) => {
     for (const step of steps) {
       const scope = scopeAt(definition, catalog, step.id);
-      const namesInScope = new Set(buildVariableNamespace(scope).byName.keys());
+      const namesInScope = variableNamesInScope(scope);
 
       for (const ref of collectTokenRefs(step)) checkTokenRef(step, scope, ref);
       for (const name of unresolvedVariableNames(step, namesInScope)) {
@@ -150,9 +149,7 @@ export function validate(
         // in scope — an out-of-scope ref already gets its own existence
         // error, and piling a second, contradictory message on top of it
         // would be confusing.
-        const itemsToken = scope.find(
-          (t) => t.ref.stepId === step.items.stepId && t.ref.output === step.items.output,
-        );
+        const itemsToken = scope.find((t) => t.ref.stepId === step.items.stepId && t.ref.output === step.items.output);
         if (itemsToken && itemsToken.type !== 'list') {
           issues.push({
             stepId: step.id,

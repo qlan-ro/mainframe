@@ -52,6 +52,20 @@ describe('TokenChip', () => {
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
+  it("renders a set-variable token under the variable kind's own violet tint", () => {
+    const variableToken: TokenDescriptor = {
+      ref: { stepId: 'v1', output: 'value' },
+      label: 'headline',
+      type: 'text',
+      sourceKind: 'variable',
+      source: 'Set value',
+    };
+    render(<TokenChip descriptor={variableToken} testId="chip-var" />);
+    const chip = screen.getByTestId('chip-var');
+    expect(chip).toHaveTextContent('headline');
+    expect(chip.className).toContain(sourceKindStyle('variable').tintClass);
+  });
+
   it('falls back to a "Missing value" chip when the descriptor cannot be resolved', () => {
     render(<TokenChip descriptor={null} testId="chip-5" />);
     expect(screen.getByTestId('chip-5')).toHaveTextContent('Missing value');

@@ -46,7 +46,7 @@ describe('AutoForm', () => {
     expect(onChange).toHaveBeenLastCalledWith({ repo: ['org/repo!'] });
   });
 
-  it('renders a select field via a native select and commits the chosen option as a single-part ChipText', async () => {
+  it('renders a select field via the shared select primitive and commits the chosen option as a single-part ChipText', async () => {
     const user = userEvent.setup();
     const schema: ActionParamsSchema = {
       fields: [{ key: 'runIn', label: 'Run in', control: 'select', options: ['project root', 'worktree', 'custom'] }],
@@ -61,7 +61,9 @@ describe('AutoForm', () => {
         testId="automations-autoform-a"
       />,
     );
-    await user.selectOptions(screen.getByTestId('automations-autoform-a-runIn'), 'worktree');
+    expect(screen.getByTestId('automations-autoform-a-runIn')).toHaveTextContent('project root');
+    await user.click(screen.getByTestId('automations-autoform-a-runIn'));
+    await user.click(screen.getByTestId('automations-autoform-a-runIn-option-worktree'));
     expect(onChange).toHaveBeenCalledWith({ runIn: ['worktree'] });
   });
 
@@ -90,6 +92,20 @@ describe('AutoForm', () => {
     await user.click(screen.getByTestId('automations-autoform-a-title-var-picker'));
     await user.click(screen.getByTestId('automations-autoform-a-title-var-picker-option-title'));
     expect(onChange).toHaveBeenCalledWith({ title: ['$title'] });
+  });
+
+  it('renders a code field monospaced, so a script reads as one', () => {
+    const schema: ActionParamsSchema = { fields: [{ key: 'script', label: 'Script', control: 'code' }] };
+    render(
+      <AutoForm
+        schema={schema}
+        params={{ script: ['echo hi'] }}
+        onChange={vi.fn()}
+        tokens={[]}
+        testId="automations-autoform-a"
+      />,
+    );
+    expect(screen.getByTestId('automations-autoform-a-script').className).toContain('font-mono');
   });
 
   it('hides a field whose showWhen does not match the sibling value, and shows it once it does', async () => {
@@ -142,7 +158,13 @@ describe('AutoForm', () => {
     const onChange = vi.fn();
     const params: Record<string, ChipText> = { databaseId: ['Health Log'] };
     render(
-      <StatefulAutoForm schema={schema} params={params} onChange={onChange} tokens={[]} testId="automations-autoform-a" />,
+      <StatefulAutoForm
+        schema={schema}
+        params={params}
+        onChange={onChange}
+        tokens={[]}
+        testId="automations-autoform-a"
+      />,
     );
     expect(screen.getByTestId('automations-autoform-a-column-Date')).toBeInTheDocument();
     expect(screen.getByTestId('automations-autoform-a-column-Mood')).toBeInTheDocument();

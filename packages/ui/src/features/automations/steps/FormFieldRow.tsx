@@ -7,9 +7,10 @@
  * a sibling.
  */
 import { GripVertical, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import type { AutomationFormField } from '../contract';
-import { MiniSelect } from '../fields/MiniSelect';
 import { OptionsEditor } from './OptionsEditor';
 
 const FIELD_TYPES: AutomationFormField['type'][] = ['text', 'number', 'choice', 'multi', 'textarea'];
@@ -30,27 +31,34 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
     <div className="flex flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-card p-2">
       <div className="flex items-center gap-1.5">
         <GripVertical size={13} className="shrink-0 text-muted-foreground" aria-hidden />
-        <input
+        <Input
           data-testid={`${testId}-label`}
           value={field.label ?? ''}
           onChange={(e) => onPatch({ label: e.target.value })}
           placeholder="Label"
-          className="h-[26px] min-w-[60px] flex-1 rounded-md border-[0.5px] border-input bg-card px-2 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-[26px] min-w-[60px] flex-1 px-2 py-0 text-caption"
         />
-        <MiniSelect
+        <Select
           value={field.type}
-          options={FIELD_TYPES}
-          onChange={(t) => {
-            const type = t as AutomationFormField['type'];
+          onValueChange={(next) => {
+            const type = next as AutomationFormField['type'];
             onPatch({
               type,
               options: type === 'choice' || type === 'multi' ? (field.options ?? []) : undefined,
             });
           }}
-          testId={`${testId}-type`}
-          mono
-          width={104}
-        />
+        >
+          <SelectTrigger data-testid={`${testId}-type`} className="h-[26px] w-[104px] font-mono text-caption">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FIELD_TYPES.map((type) => (
+              <SelectItem key={type} value={type} data-testid={`${testId}-type-option-${type}`} className="font-mono">
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <label className="flex shrink-0 items-center gap-1.5" title="Required">
           <span className="text-caption font-medium text-muted-foreground">Req</span>
           <Switch
@@ -83,21 +91,33 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
       {field.showWhen ? (
         <div className="flex flex-wrap items-center gap-1.5 pl-[20px]">
           <span className="text-caption font-medium text-muted-foreground">Show when</span>
-          <MiniSelect
+          <Select
             value={field.showWhen.key}
-            options={others.length ? others.map((o) => o.key) : [field.showWhen.key]}
-            onChange={(key) => onPatch({ showWhen: { key, equals: field.showWhen?.equals ?? '' } })}
-            testId={`${testId}-showwhen-key`}
-            mono
-            width={120}
-          />
+            onValueChange={(key) => onPatch({ showWhen: { key, equals: field.showWhen?.equals ?? '' } })}
+          >
+            <SelectTrigger data-testid={`${testId}-showwhen-key`} className="h-[26px] w-[120px] font-mono text-caption">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(others.length ? others.map((o) => o.key) : [field.showWhen.key]).map((key) => (
+                <SelectItem
+                  key={key}
+                  value={key}
+                  data-testid={`${testId}-showwhen-key-option-${key}`}
+                  className="font-mono"
+                >
+                  {key}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <span className="font-mono text-caption text-muted-foreground">=</span>
-          <input
+          <Input
             data-testid={`${testId}-showwhen-equals`}
             value={field.showWhen.equals}
             onChange={(e) => onPatch({ showWhen: { key: field.showWhen?.key ?? '', equals: e.target.value } })}
             placeholder="value"
-            className="h-[26px] w-[120px] rounded-md border-[0.5px] border-input bg-card px-2 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-[26px] w-[120px] px-2 py-0 text-caption"
           />
           <button
             type="button"

@@ -20,9 +20,11 @@
  *  10. requestEmpty throws on HTTP error.
  *  11. requestNoContent resolves void on 204 without reading the body.
  *  12. requestNoContent throws on HTTP error.
+ *  13. request carries a body's per-item `errors[]` through as `details`.
+ *  14. request tolerates a missing or malformed `errors[]` (empty `details`).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { request, requestEmpty, requestNoContent } from '../http';
+import { ApiRequestError, request, requestEmpty, requestNoContent } from '../http';
 import { setActiveDaemon } from '../../daemon/active-daemon';
 
 const LOCAL_DAEMON = {
@@ -82,6 +84,66 @@ describe('request — HTTP error extraction', () => {
     mockFetch({ ok: false, status: 503, json: () => Promise.reject(new Error('not json')) });
 
     await expect(request('GET', URL)).rejects.toThrow('HTTP 503');
+  });
+});
+
+describe('request — per-item error details', () => {
+  it("carries a body's `errors[]` through as `details` alongside the flat message", async () => {
+    mockFetch({
+      ok: false,
+      status: 400,
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: 'Give this value a name.; This step uses $nope, but no earlier step defines it.',
+          errors: [
+            { stepId: 'v1', message: 'Give this value a name.' },
+            { stepId: 'n1', message: 'This step uses $nope, but no earlier step defines it.' },
+          ],
+        }),
+    });
+
+    await expect(request('POST', URL, {})).rejects.toMatchObject({
+      message: 'Give this value a name.; This step uses $nope, but no earlier step defines it.',
+      details: [
+        { stepId: 'v1', message: 'Give this value a name.' },
+        { stepId: 'n1', message: 'This step uses $nope, but no earlier step defines it.' },
+      ],
+    });
+  });
+
+  it('keeps an automation-level detail (no stepId) with a null stepId', async () => {
+    mockFetch({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'nope', errors: [{ message: 'Give your automation a name.' }] }),
+    });
+
+    await expect(request('POST', URL, {})).rejects.toMatchObject({
+      details: [{ stepId: null, message: 'Give your automation a name.' }],
+    });
+  });
+
+  it('reports empty details for an error body with no `errors` field', async () => {
+    mockFetch({ ok: false, status: 500, json: () => Promise.resolve({ error: 'db exploded' }) });
+
+    await expect(request('GET', URL)).rejects.toMatchObject({ details: [] });
+  });
+
+  it('drops malformed `errors` entries rather than throwing while building the error', async () => {
+    mockFetch({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'nope', errors: ['not an object', null, { stepId: 's1' }, { message: 7 }] }),
+    });
+
+    await expect(request('POST', URL, {})).rejects.toMatchObject({ details: [] });
+  });
+
+  it('throws an ApiRequestError so callers can narrow before reading details', async () => {
+    mockFetch({ ok: false, status: 400, json: () => Promise.resolve({ error: 'nope' }) });
+
+    await expect(request('POST', URL, {})).rejects.toBeInstanceOf(ApiRequestError);
   });
 });
 
