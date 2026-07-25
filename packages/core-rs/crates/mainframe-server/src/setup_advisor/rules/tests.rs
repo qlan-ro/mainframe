@@ -14,6 +14,10 @@ use mainframe_types::setup_advisor::{GitHost, ProjectFingerprint};
 use super::{all, large_project_evidence};
 use crate::setup_advisor::recommend::recommend;
 
+/// T17: blind characterization of the shipped dataset, derived from the spec
+/// and the command-provenance table rather than these rule files.
+mod dataset_ac;
+
 /// Every rule allowed to depend on a resolved remote. Adding a rule that fires
 /// only when a host is present fails `remote_derived_rules_are_all_declared`
 /// until it is listed here — which is the point: each entry is a claim that the

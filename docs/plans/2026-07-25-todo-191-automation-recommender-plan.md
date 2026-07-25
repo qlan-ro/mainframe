@@ -500,10 +500,13 @@ command), one moved to plugins (convex), one composed rather than transcribed (a
 **Do:** transcribe the spec's category mappings. Each file opens with a header comment citing
 the upstream plugin (`claude-code-setup v1.0.0`) and the reference file its mappings came from,
 and each rule carries a one-line comment recording where its `command` was verified (T2's table).
-- **mcp** (`adapters: ["*"]`, priority-ranked): any framework → context7; react/vue/nextjs →
-  Playwright; supabase → Supabase; postgres → Postgres; `gitHost == Github` → GitHub; aws → AWS;
-  sentry → Sentry. **No docker rule** — dropped, no verifiable command. **No convex rule** — moved
-  to plugins.
+- **mcp** (`adapters: ["*"]`): supabase → Supabase; postgres → Postgres; sentry → Sentry; aws →
+  AWS; react/vue/nextjs → Playwright; `gitHost == Github` → GitHub; any framework → context7.
+  **No docker rule** — dropped, no verifiable command. **No convex rule** — moved to plugins.
+  **Priority is ordered by evidence specificity, narrowest first** (corrected 2026-07-25; this
+  list was previously written broadest-first). Under the hard cap of 2, context7 fires on any
+  framework at all, so ranking it first would spend a slot on every project and hide Supabase or
+  Sentry from the projects that actually run them.
 - **skills** (`adapters: ["*"]`): the 17 first-party sources in T2's table, each as the
   deterministic long form `npx skills add <owner/repo> --skill <skill-id> -a claude-code -g -y`.
   The bare `npx skills add <source>` is interactive on multi-skill repos and must never ship. The
