@@ -10,7 +10,7 @@ use mainframe_adapter_api::AdapterRegistry;
 use mainframe_automations::AutomationsEngine;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
-use mainframe_launch::{LaunchRegistry, TunnelManager};
+use mainframe_launch::{LaunchRegistry, PortTunnelRegistry, TunnelManager};
 use mainframe_lsp::LspManager;
 use mainframe_plugins::PluginManager;
 use mainframe_runtime::ResolvedPath;
@@ -123,6 +123,9 @@ pub struct AppCtx {
     /// The cloudflared `TunnelManager` (contract `tunnelManager` handle). Backs the
     /// `/api/tunnel/*` routes. `None` in the route-unit harness.
     pub tunnel_manager: Option<Arc<TunnelManager>>,
+    /// Per-port quick tunnels for the localhost chips (#279), sharing the
+    /// `TunnelManager` above. `Some` whenever `tunnel_manager` is.
+    pub port_tunnels: Option<Arc<PortTunnelRegistry>>,
     /// The `LspManager` (contract `lspManager` handle). Backs `GET
     /// /api/lsp/languages` and the `/lsp/:projectId/:language` WS upgrade. `None`
     /// in the route-unit harness.
@@ -240,6 +243,7 @@ impl AppCtx {
             chat_manager: None,
             launch_registry: None,
             tunnel_manager: None,
+            port_tunnels: None,
             lsp_manager: None,
             plugin_manager: None,
             automations: None,

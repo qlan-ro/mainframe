@@ -98,6 +98,7 @@ pub(crate) async fn automations_ctx() -> AutomationsHarness {
         chat_manager: None,
         launch_registry: None,
         tunnel_manager: None,
+        port_tunnels: None,
         lsp_manager: None,
         plugin_manager: None,
         automations: Some(engine.clone()),

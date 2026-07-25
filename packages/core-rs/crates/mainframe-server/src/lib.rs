@@ -25,7 +25,10 @@ pub mod ws_schemas;
 
 pub use automations_deps::build_automations_engine;
 pub use chat_deps::build_chat_manager;
-pub use chat_seams::{LaunchStopper, RegistryLaunchStopper, default_launch_stopper};
+pub use chat_seams::{
+    LaunchStopper, NoopScopeTunnelStopper, RegistryLaunchStopper, RegistryScopeTunnelStopper,
+    ScopeTunnelStopper, default_launch_stopper, default_scope_tunnel_stopper,
+};
 pub use ctx::{AppCtx, GitFactory, Services};
 pub use db::Db;
 pub use http::build_app;

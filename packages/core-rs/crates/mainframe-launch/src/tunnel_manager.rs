@@ -690,14 +690,10 @@ async fn next_line_stderr(lines: &mut Option<Lines<BufReader<ChildStderr>>>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{
+        recorder, write_chatty_cloudflared, write_fake_cloudflared, write_silent_cloudflared,
+    };
     use std::sync::Mutex;
-
-    fn recorder() -> (BroadcastFn, Arc<Mutex<Vec<DaemonEvent>>>) {
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let sink = events.clone();
-        let f: BroadcastFn = Arc::new(move |ev| sink.lock().unwrap().push(ev));
-        (f, events)
-    }
 
     /// The boot-resolved login-shell PATH must land in the spawned `cloudflared`
     /// command's env (packaged apps otherwise ENOENT on homebrew-installed
@@ -969,34 +965,6 @@ mod tests {
 
     // --- start: DNS wait outlasts the (post-connection cleared) start timeout ---
 
-    /// Write an executable stand-in for `cloudflared` that prints the URL + the
-    /// registration line, then sleeps so the child stays alive.
-    fn write_fake_cloudflared(dir: &std::path::Path) -> String {
-        let script = dir.join("fake-cloudflared.sh");
-        std::fs::write(
-            &script,
-            "#!/bin/sh\necho 'https://abc-def.trycloudflare.com'\necho 'Registered tunnel connection'\nsleep 100\n",
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        script.to_string_lossy().into_owned()
-    }
-
-    /// `cloudflared` stand-in that keeps logging after registration, like the
-    /// real binary (which dies on SIGPIPE if the daemon stops reading its pipes).
-    fn write_chatty_cloudflared(dir: &std::path::Path) -> String {
-        let script = dir.join("chatty-cloudflared.sh");
-        std::fs::write(
-            &script,
-            "#!/bin/sh\necho 'https://abc-def.trycloudflare.com'\necho 'Registered tunnel connection'\nwhile true; do echo 'INF heartbeat'; sleep 0.05; done\n",
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        script.to_string_lossy().into_owned()
-    }
-
     #[tokio::test]
     async fn tunnel_survives_continued_child_logging_after_start_resolves() {
         let dir = tempfile::tempdir().unwrap();
@@ -1118,16 +1086,6 @@ mod tests {
         let mut manager = TunnelManager::with_config(None, config);
         manager.registry = registry;
         manager
-    }
-
-    /// `cloudflared` stand-in that only sleeps — never prints a URL, so the tunnel
-    /// stays mid-start (in `pending`, not promoted into `tunnels`).
-    fn write_silent_cloudflared(dir: &std::path::Path) -> String {
-        let script = dir.join("silent-cloudflared.sh");
-        std::fs::write(&script, "#!/bin/sh\nsleep 100\n").unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        script.to_string_lossy().into_owned()
     }
 
     #[test]

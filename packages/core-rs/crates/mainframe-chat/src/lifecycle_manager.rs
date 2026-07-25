@@ -108,6 +108,14 @@ pub trait LifecycleManagerDeps: Send + Sync {
         project_id: &'a str,
         effective_path: &'a str,
     ) -> Option<BoxFuture<'a, ()>>;
+    /// Tear down the scope's port tunnels (#279). Separate from
+    /// `stop_launch_processes`, which no-ops for a scope that never ran a launch
+    /// config — the very scopes a localhost chip is most likely to have tunnelled.
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>>;
 
     // Claude-specific + tuning seams ------------------------------------------
     /// Post `loadHistory`: mention extraction + PR-URL scan + plan/skill-file
@@ -598,6 +606,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 {
                     fut.await;
                 }
+                if let Some(fut) = self
+                    .deps
+                    .stop_scope_tunnels(&chat.project_id, effective_path)
+                {
+                    fut.await;
+                }
                 self.deps.emit_event(DaemonEvent::LaunchScopeReleased {
                     project_id: chat.project_id.clone(),
                     effective_path: effective_path.clone(),
@@ -1009,16 +1023,30 @@ mod tests {
         order: Mutex<Vec<String>>,
         events: Mutex<Vec<DaemonEvent>>,
         stop_calls: Mutex<Vec<(String, String)>>,
+        tunnel_stop_calls: Mutex<Vec<(String, String)>>,
+        /// `false` reproduces a scope that never ran a launch config, where
+        /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it.
+        has_launches: bool,
     }
 
     impl FakeDeps {
         fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
+            Self::build(chat, siblings, true)
+        }
+
+        fn launchless(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
+            Self::build(chat, siblings, false)
+        }
+
+        fn build(chat: Chat, siblings: Vec<Chat>, has_launches: bool) -> Arc<Self> {
             Arc::new(Self {
                 chat,
                 siblings,
                 order: Mutex::new(Vec::new()),
                 events: Mutex::new(Vec::new()),
                 stop_calls: Mutex::new(Vec::new()),
+                tunnel_stop_calls: Mutex::new(Vec::new()),
+                has_launches,
             })
         }
     }
@@ -1086,7 +1114,21 @@ mod tests {
             project_id: &'a str,
             effective_path: &'a str,
         ) -> Option<BoxFuture<'a, ()>> {
+            if !self.has_launches {
+                return None;
+            }
             self.stop_calls
+                .lock()
+                .unwrap()
+                .push((project_id.to_string(), effective_path.to_string()));
+            Some(Box::pin(async {}))
+        }
+        fn stop_scope_tunnels<'a>(
+            &'a self,
+            project_id: &'a str,
+            effective_path: &'a str,
+        ) -> Option<BoxFuture<'a, ()>> {
+            self.tunnel_stop_calls
                 .lock()
                 .unwrap()
                 .push((project_id.to_string(), effective_path.to_string()));
@@ -1171,6 +1213,36 @@ mod tests {
             deps.stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/wt/x".to_string())]
         );
+        assert_eq!(
+            deps.tunnel_stop_calls.lock().unwrap().as_slice(),
+            &[("p1".to_string(), "/wt/x".to_string())]
+        );
+        assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
+            e,
+            DaemonEvent::LaunchScopeReleased { project_id, effective_path }
+                if project_id == "p1" && effective_path == "/wt/x"
+        )));
+    }
+
+    /// Port tunnels outlive every scope whose teardown hangs off the launch
+    /// registry: a chat that never ran a launch config gets `None` from
+    /// `stop_launch_processes`, so the tunnel stop has to be its own seam.
+    #[tokio::test]
+    async fn launchless_scope_release_still_stops_port_tunnels() {
+        let chat = {
+            let mut c = chat_over("c1", Some("/wt/x"), ChatStatus::Active);
+            c.branch_name = Some("feat/x".to_string());
+            c
+        };
+        let deps = FakeDeps::launchless(chat, Vec::new());
+        let mgr = manager(deps.clone());
+        mgr.archive_chat("c1", false).await;
+
+        assert!(deps.stop_calls.lock().unwrap().is_empty());
+        assert_eq!(
+            deps.tunnel_stop_calls.lock().unwrap().as_slice(),
+            &[("p1".to_string(), "/wt/x".to_string())]
+        );
         assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
             e,
             DaemonEvent::LaunchScopeReleased { project_id, effective_path }
@@ -1191,6 +1263,7 @@ mod tests {
         mgr.archive_chat("c1", false).await;
 
         assert!(deps.stop_calls.lock().unwrap().is_empty());
+        assert!(deps.tunnel_stop_calls.lock().unwrap().is_empty());
         assert!(
             !deps
                 .events
@@ -1210,6 +1283,10 @@ mod tests {
 
         assert_eq!(
             deps.stop_calls.lock().unwrap().as_slice(),
+            &[("p1".to_string(), "/proj".to_string())]
+        );
+        assert_eq!(
+            deps.tunnel_stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/proj".to_string())]
         );
         assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
