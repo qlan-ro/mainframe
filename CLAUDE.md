@@ -20,7 +20,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet 
 
 - Before any new bug/feature work, pull latest main and start a new branch on it
 - Before any work, check needed skills to guide your development see [Skills](#skills)
-- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs are in `docs/adapters/claude/`: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md), [COMPACTION](docs/adapters/claude/COMPACTION.md), [INTERRUPT](docs/adapters/claude/INTERRUPT.md), [CONTEXT_USAGE](docs/adapters/claude/CONTEXT_USAGE.md), [MODELS](docs/adapters/claude/MODELS.md), [TODOS](docs/adapters/claude/TODOS.md), [PR_TRACKING](docs/adapters/claude/PR_TRACKING.md)
+- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs: [Claude `/clear`](docs/adapters/claude/CLEAR.md) and the consumed-surface checklists ([Claude](docs/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
 - For git workflow and commit practices, see [Git](#git)
@@ -76,6 +76,7 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 | About to claim work is done, commit, or open a PR | `verification-before-completion` |
 | Building UI components, pages, or making visual design decisions | `ui-ux-pro-max` |
 | Writing docs, commits, PRs, error messages, or UI copy | `writing-clearly-and-concisely` |
+| Checking whether new Claude Code / Codex releases affect Mainframe's adapters | `changelog-watch` |
 
 Domain skills (typescript-expert, nodejs-best-practices, vercel-react-best-practices, senior-architect, code-audit) are preloaded by the roster agents in `~/.claude/agents/` — delegate to core-dev/ui-dev/planner/test-writer/quality-reviewer instead of invoking them inline.
 
