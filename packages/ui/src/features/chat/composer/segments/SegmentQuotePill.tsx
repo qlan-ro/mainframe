@@ -21,7 +21,7 @@ export function SegmentQuotePill({
     <div
       data-testid="composer-quote-preview"
       data-segment-id={segmentId}
-      className="mx-3 mt-2 flex items-start gap-2 rounded-lg border-l-2 border-primary bg-muted px-3 py-2"
+      className="mx-3 mt-2 flex items-start gap-2 rounded-lg bg-muted px-3 py-2"
     >
       <QuoteIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
       <p className="line-clamp-2 min-w-0 flex-1 text-label text-muted-foreground">{quote}</p>
