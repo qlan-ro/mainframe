@@ -108,7 +108,6 @@ function baseProps() {
     report: null as SetupAdvisorReport | null,
     loading: false,
     error: null as string | null,
-    projectName: 'mainframe',
     copiedIds: new Set<string>() as ReadonlySet<string>,
     copiedCount: 0,
     onCopy: vi.fn(),
@@ -121,7 +120,7 @@ function baseProps() {
 // ---------------------------------------------------------------------------
 
 describe('SetupAdvisorSheet — loading', () => {
-  it('shows the loading skeleton and header, and no empty-state flash', () => {
+  it('shows the loading skeleton and no empty-state flash', () => {
     render(<SetupAdvisorSheet {...baseProps()} loading={true} report={null} />);
 
     expect(screen.getByTestId('automation-recommender-loading')).toBeTruthy();
@@ -357,18 +356,6 @@ describe('SetupAdvisorSheet — empty', () => {
 
     expect(screen.getByText('No recommendations for this project yet.')).toBeTruthy();
     expect(screen.getByText('We detected only a few signals here, so the list is short.')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Container
-// ---------------------------------------------------------------------------
-
-describe('SetupAdvisorSheet — container', () => {
-  it('carries the sheet container testid in the loaded case', () => {
-    render(<SetupAdvisorSheet {...baseProps()} report={REPORT_RICH} />);
-
-    expect(screen.getByTestId('automation-recommender-sheet')).toBeTruthy();
   });
 });
 

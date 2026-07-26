@@ -213,7 +213,8 @@ export function MainToolbar({
         </span>
       </div>
 
-      {/* Right: controls — order mirrors the artboard (search → launch → play → surfaces → theme → inspector). */}
+      {/* Right: controls — the artboard's three groups: search │ project tools
+          (Setup Advisor · launch · play) │ workspace (surfaces · theme · inspector). */}
       <div className="flex flex-shrink-0 items-center gap-[4px]">
         <Hint label="Search (⌘O)">
           <button
@@ -232,25 +233,22 @@ export function MainToolbar({
           </button>
         </Hint>
         <span className="mx-[4px] h-[16px] w-px bg-border" />
+        {projectId && (
+          <Hint label="Setup Advisor">
+            <button
+              data-testid="automation-recommender-open"
+              type="button"
+              onClick={openSetupAdvisor}
+              className={ICON_BTN}
+            >
+              <ScanSearch size={14} />
+            </button>
+          </Hint>
+        )}
         {/* Launch picker ("Preview" dropdown) + run button, wired to the launch subsystem. */}
         <ToolbarLaunchControls port={port} projectId={projectId} chatId={chatId} />
         <span className="mx-[4px] h-[16px] w-px bg-border" />
         <SurfaceRail />
-        {projectId && (
-          <>
-            <span className="mx-[4px] h-[16px] w-px bg-border" />
-            <Hint label="Setup Advisor">
-              <button
-                data-testid="automation-recommender-open"
-                type="button"
-                onClick={openSetupAdvisor}
-                className={ICON_BTN}
-              >
-                <ScanSearch size={14} />
-              </button>
-            </Hint>
-          </>
-        )}
         <Hint label={isDark ? 'Switch to light' : 'Switch to dark'}>
           <button data-testid="main-toolbar-theme" type="button" onClick={toggleTheme} className={ICON_BTN}>
             {isDark ? <Sun size={15} /> : <Moon size={15} />}

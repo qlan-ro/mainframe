@@ -19,7 +19,7 @@ export function EvidenceDisclosure({ signals }: EvidenceDisclosureProps) {
         type="button"
         data-testid="automation-recommender-evidence-toggle"
         onClick={() => setExpanded((prev) => !prev)}
-        className="flex items-center gap-1 text-caption text-muted-foreground"
+        className="flex items-center gap-1 text-caption text-muted-foreground transition-colors hover:text-foreground"
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         What we detected ({signals.length})

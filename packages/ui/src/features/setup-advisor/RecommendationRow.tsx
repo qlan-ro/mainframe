@@ -41,7 +41,7 @@ function SourceAttribution({ rec }: { rec: AutomationRecommendation }) {
 function PayloadPreview({ rec }: { rec: AutomationRecommendation }) {
   if (rec.targetPath) {
     return (
-      <span className="truncate text-caption text-muted-foreground">
+      <span className="min-w-0 truncate text-caption text-muted-foreground">
         Paste into <span className="select-text font-mono text-foreground">{rec.targetPath}</span>
       </span>
     );
@@ -51,7 +51,7 @@ function PayloadPreview({ rec }: { rec: AutomationRecommendation }) {
   const hidden = lines.length - 1;
   return (
     <>
-      <span className="select-text truncate font-mono text-caption">{lines[0] ?? rec.command}</span>
+      <span className="min-w-0 select-text truncate font-mono text-caption">{lines[0] ?? rec.command}</span>
       {hidden > 0 && (
         <span className="flex-shrink-0 text-caption text-muted-foreground">
           +{hidden} more {hidden === 1 ? 'line' : 'lines'}
@@ -90,8 +90,10 @@ export function RecommendationRow({ rec, copied, onCopied }: RecommendationRowPr
           data-testid={`automation-recommender-copy-${rec.id}`}
           onClick={() => void handleCopy()}
           className={cn(
-            'ml-auto flex flex-shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-caption',
-            copied && !failed ? 'border-transparent bg-mf-success-tint text-mf-success' : 'text-muted-foreground',
+            'ml-auto flex flex-shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-caption transition-colors',
+            copied && !failed
+              ? 'border-transparent bg-mf-success-tint text-mf-success'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
           )}
         >
           {failed ? 'Copy failed' : copied ? <CopiedLabel /> : <CopyLabel />}

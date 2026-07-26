@@ -52,7 +52,6 @@ function baseProps() {
     report: REPORT,
     loading: false,
     error: null as string | null,
-    projectName: 'mainframe',
     copiedIds: new Set<string>() as ReadonlySet<string>,
     copiedCount: 0,
     onCopy: vi.fn(),

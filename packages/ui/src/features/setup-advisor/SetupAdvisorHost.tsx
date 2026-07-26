@@ -17,6 +17,7 @@
  * `reportProjectId` at the prop boundary below.
  */
 import { useEffect, useRef } from 'react';
+import { ScanSearch } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';
@@ -66,15 +67,22 @@ export function SetupAdvisorHost() {
         if (!o) closeSheet();
       }}
     >
-      <DialogContent hideClose className="rounded-xl border border-border bg-card shadow-2xl max-w-[640px] p-0 gap-0">
-        <DialogHeader className="sr-only">
-          <DialogTitle>Setup Advisor</DialogTitle>
+      <DialogContent
+        data-testid="automation-recommender-sheet"
+        className="flex max-h-[85vh] w-full max-w-[640px] flex-col gap-0 p-0"
+      >
+        {/* pr-9 clears the dialog's built-in close button (26px at right-3). */}
+        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-9">
+          <DialogTitle className="flex items-center gap-2 text-heading font-bold">
+            <ScanSearch size={14} className="shrink-0 text-primary" aria-hidden />
+            Setup Advisor
+            <span className="min-w-0 truncate text-body font-normal text-muted-foreground">{projectName}</span>
+          </DialogTitle>
         </DialogHeader>
         <SetupAdvisorSheet
           report={reportForProject}
           loading={loading}
           error={error}
-          projectName={projectName}
           copiedIds={copiedIds}
           copiedCount={copiedCount}
           onCopy={(recId) => markCopied(projectId, recId)}

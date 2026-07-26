@@ -420,6 +420,25 @@ describe('MainToolbar — Setup Advisor button', () => {
     expect(screen.getByTestId('automation-recommender-open')).toBeDefined();
   });
 
+  it('places the Setup Advisor button before the launch controls', () => {
+    mockGetGitBranch.mockResolvedValue({ branch: null });
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    const advisor = screen.getByTestId('automation-recommender-open');
+    const launch = screen.getByTestId('main-toolbar-launch');
+    expect(advisor.compareDocumentPosition(launch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('does not render automation-recommender-open when there is no projectId', () => {
     render(
       <MainToolbar

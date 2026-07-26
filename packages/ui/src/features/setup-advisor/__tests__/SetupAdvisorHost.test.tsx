@@ -20,7 +20,6 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 
 vi.mock('../SetupAdvisorSheet', () => ({
   SetupAdvisorSheet: (props: {
-    projectName: string;
     loading: boolean;
     report: SetupAdvisorReport | null;
     copiedIds: ReadonlySet<string>;
@@ -28,7 +27,6 @@ vi.mock('../SetupAdvisorSheet', () => ({
     onRetry: () => void;
   }) => (
     <div data-testid="setup-advisor-sheet-stub">
-      <div data-testid="stub-project-name">{props.projectName}</div>
       <div data-testid="stub-loading">{String(props.loading)}</div>
       <div data-testid="stub-rec-ids">
         {props.report ? props.report.recommendations.map((r) => r.id).join(',') : ''}
@@ -139,8 +137,8 @@ describe('SetupAdvisorHost — fetch on the open rising edge', () => {
   });
 });
 
-describe('SetupAdvisorHost — project name and loading', () => {
-  it('renders the project name immediately, including while loading', () => {
+describe('SetupAdvisorHost — dialog chrome and loading', () => {
+  it('renders the header project name immediately, including while loading', () => {
     let resolveFetch!: (v: SetupAdvisorReport) => void;
     vi.mocked(setupAdvisorApi.getAutomationRecommendations).mockImplementation(
       () =>
@@ -153,7 +151,10 @@ describe('SetupAdvisorHost — project name and loading', () => {
 
     render(<SetupAdvisorHost />);
 
-    expect(screen.getByTestId('stub-project-name').textContent).toBe('Mainframe');
+    expect(screen.getByTestId('automation-recommender-sheet')).toBeTruthy();
+    expect(screen.getByText('Setup Advisor')).toBeTruthy();
+    expect(screen.getByText('Mainframe')).toBeTruthy();
+    expect(screen.getByTestId('dialog-close')).toBeTruthy();
     expect(screen.getByTestId('stub-loading').textContent).toBe('true');
     resolveFetch(makeReport([]));
   });

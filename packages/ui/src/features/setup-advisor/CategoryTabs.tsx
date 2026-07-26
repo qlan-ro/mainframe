@@ -26,7 +26,7 @@ export function CategoryTabs({ recommendations, active, onSelect }: CategoryTabs
   const present = CATEGORY_ORDER.filter((category) => (counts.get(category) ?? 0) > 0);
 
   return (
-    <div className="flex items-center gap-4 border-b border-border px-4">
+    <div className="flex shrink-0 gap-4 border-b border-border px-4">
       {present.map((category) => {
         const Icon = CATEGORY_ICON[category];
         const isActive = category === active;
@@ -37,8 +37,10 @@ export function CategoryTabs({ recommendations, active, onSelect }: CategoryTabs
             data-testid={`automation-recommender-tab-${category}`}
             onClick={() => onSelect(category)}
             className={cn(
-              'flex items-center gap-1.5 border-b-2 py-2 text-body',
-              isActive ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground',
+              '-mb-px flex items-center gap-1.5 border-b-2 py-2 text-body transition-colors',
+              isActive
+                ? 'border-primary font-medium text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             <Icon size={14} />
