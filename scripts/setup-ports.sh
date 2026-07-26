@@ -45,26 +45,17 @@ echo "Wrote $ENV_FILE"
 echo "  DAEMON_PORT=$DAEMON_PORT (renderer also reads via VITE_DAEMON_HTTP_PORT/WS_PORT)"
 echo "  VITE_PORT=$VITE_PORT"
 
-# Install dependencies and build types package
+# --frozen-lockfile is load-bearing, not hygiene: a plain install re-resolves the
+# whole workspace, and in a worktree the `packages/mobile` submodule isn't
+# populated, so pnpm silently strips every one of its entries from the lockfile.
+# Frozen installs fine without the submodule and never writes the file.
 echo ""
 echo "Installing dependencies…"
-(cd "$PROJECT_ROOT" && pnpm install)
+(cd "$PROJECT_ROOT" && pnpm install --frozen-lockfile)
 
 echo ""
 echo "Building @qlan-ro/mainframe-types…"
 (cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-types build)
-
-# --minimal: browser-mode test runs need only ports + install + types
-# (daemon runs from source via tsx; Vite serves the renderer from source).
-if [ "${1:-}" = "--minimal" ]; then
-  echo ""
-  echo "Minimal setup complete (skipped core build)."
-  exit 0
-fi
-
-echo ""
-echo "Building @qlan-ro/mainframe-core…"
-(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-core build)
 
 echo ""
 echo "Worktree setup complete."
