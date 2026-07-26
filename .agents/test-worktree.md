@@ -67,19 +67,20 @@ Limits for multi-branch runs (consumed by the skill's Fleet Mode):
   run genuinely in parallel.
 - **Max parallel runs: 4 total**, but at most one tauri run at a time (its
   full native build thrashes the machine; browser runs are cheap).
-- **Prefer the browser target.** Native builds are slow and heavy; the
-  browser target (vite + daemon, no cargo) is the default path for
-  renderer/daemon-only scenario sets — reserve tauri for genuinely native
-  surfaces.
+- **Prefer the browser target.** It builds only the daemon, where tauri also
+  compiles the whole native shell — so it stays the default path for
+  renderer/daemon-only scenario sets. Reserve tauri for genuinely native
+  surfaces. Neither target is free in a fresh worktree: cargo can't share a
+  target dir across worktrees, so the first run in one pays a cold compile.
 - Daemon/Vite ports and `MAINFRAME_DATA_DIR=~/.mainframe_dev` are isolated
   per run by `scripts/setup-ports.sh`, so parallel runs don't collide there —
   but they DO share `~/.mainframe_dev`; scenarios that assert on global DB
   state (project/chat counts) belong in sequential runs.
-- **Process kills in a fleet:** the Cleanup section below matches ANY
-  `mainframe-core/desktop run dev` process — including live test runs — so
-  it runs exactly once (orchestrator, before any env exists). Per-branch
-  teardown uses the Stop / Restart section, which is scoped to that
-  worktree's own `.env` ports and is parallel-safe.
+- **Process kills in a fleet:** the Cleanup section below kills ANY listener in
+  the test port ranges — including live test runs — so it runs exactly once
+  (orchestrator, before any env exists). Per-branch teardown uses the Stop /
+  Restart section, which is scoped to that worktree's own `.env` ports and is
+  parallel-safe.
 - Protected port `31415` applies to every run, always.
 
 ## Protected Ports
