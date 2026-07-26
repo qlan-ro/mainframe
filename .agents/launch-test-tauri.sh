@@ -18,8 +18,11 @@ if [ "$DAEMON_PORT" = "31415" ]; then
   exit 2
 fi
 
-# Fresh-worktree provisioning (idempotent).
-[ -d node_modules ] || pnpm install
+# Fresh-worktree provisioning (idempotent). --frozen-lockfile is load-bearing:
+# a plain install re-resolves the workspace, and in a worktree the
+# `packages/mobile` submodule isn't populated, so pnpm strips it from the
+# lockfile. Frozen installs fine without it and never writes the file.
+pnpm install --frozen-lockfile
 cd packages/app-tauri
 
 # `pnpm tauri:dev` is the whole stack: it compiles+runs the Rust shell, starts
