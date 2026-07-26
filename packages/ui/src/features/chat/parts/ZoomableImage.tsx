@@ -7,9 +7,12 @@
  * Single-image zoom only — the native `MessagePartPrimitive.Image` is a bare
  * `<img>` with no zoom, and the inventory decided single-image in-message zoom
  * can go native/shadcn (the multi-image gallery lightbox stays a separate
- * keep-ours). Built on our existing shadcn `Dialog` so no new dependency.
+ * keep-ours). The dialog shell, image, and click-to-dismiss behavior live in
+ * `LightboxSurface`.
  */
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useState } from 'react';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { LightboxSurface } from './LightboxSurface';
 
 interface ZoomableImageProps {
   src: string;
@@ -21,8 +24,10 @@ interface ZoomableImageProps {
 }
 
 export function ZoomableImage({ src, alt = '', className, onLoad }: ZoomableImageProps) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button
           type="button"
@@ -33,13 +38,13 @@ export function ZoomableImage({ src, alt = '', className, onLoad }: ZoomableImag
           <img src={src} alt={alt} className={className} onLoad={onLoad} />
         </button>
       </DialogTrigger>
-      <DialogContent
-        data-testid="chat-image-zoom-dialog"
-        className="max-w-[92vw] border-none bg-transparent p-0 shadow-none"
-      >
-        <DialogTitle className="sr-only">Image preview</DialogTitle>
-        <img src={src} alt={alt} className="mx-auto max-h-[88vh] max-w-full rounded-md object-contain" />
-      </DialogContent>
+      <LightboxSurface
+        testId="chat-image-zoom-dialog"
+        imageTestId="chat-image-zoom-image"
+        src={src}
+        alt={alt}
+        onDismiss={() => setOpen(false)}
+      />
     </Dialog>
   );
 }

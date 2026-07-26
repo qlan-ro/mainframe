@@ -19,6 +19,7 @@ import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
 import { useSettingsStore } from '@/store/settings';
 import { useAdaptersStore } from '@/store/adapters';
+import { useSessionFilters } from '@/store/session-filters';
 
 const runtimeState = { newThreadId: undefined as string | undefined, mainThreadId: null as string | null };
 let switchCounter = 0;
@@ -72,6 +73,18 @@ import { SessionsNewButton } from '../SessionsNewButton';
 
 const projects: Project[] = [{ id: 'p1', name: 'Alpha', path: '/a' } as Project];
 
+function renderPillView() {
+  return render(
+    <SessionsNewButton
+      filterProjectId="p1"
+      filterProjectName="Alpha"
+      projects={projects}
+      sessionCounts={{ p1: 0 }}
+      onAddProject={vi.fn()}
+    />,
+  );
+}
+
 function renderAllView() {
   return render(
     <SessionsNewButton
@@ -103,6 +116,33 @@ beforeEach(() => {
   useDraftReturnTarget.setState({ returnThreadId: null });
   useSettingsStore.setState((s) => ({ general: { ...s.general, defaultAdapterId: null } }));
   useAdaptersStore.setState({ byId: {} });
+  useSessionFilters.setState({ filterProjectId: null });
+});
+
+describe('SessionsNewButton — project pill active', () => {
+  it('runs the same draft sequence as the picker: mints a slot, seeds its config, remembers the pre-switch session', async () => {
+    runtimeState.mainThreadId = 'chat-existing';
+    renderPillView();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sessions-new-button'));
+    });
+
+    expect(switchToNewThread).toHaveBeenCalledTimes(1);
+    expect(getDraftConfig('__LOCALID_1')).toEqual(completeSnapshot('p1', 'claude'));
+    expect(useDraftReturnTarget.getState().returnThreadId).toBe('chat-existing');
+  });
+
+  it('leaves the active project filter alone — the draft is already in that project', async () => {
+    useSessionFilters.setState({ filterProjectId: 'p1' });
+    renderPillView();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sessions-new-button'));
+    });
+
+    expect(useSessionFilters.getState().filterProjectId).toBe('p1');
+  });
 });
 
 describe('SessionsNewButton — All view, clicking the "+" trigger', () => {

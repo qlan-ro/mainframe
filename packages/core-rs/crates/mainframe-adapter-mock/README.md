@@ -25,7 +25,9 @@ event payloads are logged and dropped without terminating the session.
 Fixture names use `{sanitized-key}.{index}.ndjson`. Events are cached by the session id from
 `onInit`, with the latest live fixture as a fallback, so history reads reconstruct messages without
 advancing the fixture index. Recorded absolute paths under `mf-e2e-*` are remapped to the current
-test project.
+test project on history reads; fixtures that must carry a project-absolute path in tool arguments
+or result text write `{{PROJECT_PATH}}`, substituted with the live project path as the fixture
+loads, so live replay carries it too.
 
 The adapter exposes a fixed three-model catalog and Claude-compatible tool categories. Its skills
 and agents scanners read only the temporary project's `.claude` directory; they never inspect the

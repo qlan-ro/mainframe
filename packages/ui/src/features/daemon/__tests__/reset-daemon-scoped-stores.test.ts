@@ -11,6 +11,7 @@
  *  6. session-filters store clears filterProjectId, selectedTags, selectedSynthetic
  *  7. quota store clears byId (a daemon switch never shows the previous daemon's quota)
  *  8. Integration: switchTo invokes the reset (useUnreadStore is empty after a switch)
+ *  9. composer-segments store resets byThread to {} (a seeded segment composition is gone)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -72,6 +73,7 @@ import { useSandboxStore } from '@/store/sandbox';
 import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
 import { useQuotaStore, applyProviderQuota } from '@/store/quota';
+import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { resetDaemonScopedStores } from '../reset-daemon-scoped-stores';
 
 // ---------------------------------------------------------------------------
@@ -105,6 +107,7 @@ function seedStores() {
     modelWindows: [],
     session: { kind: 'session', usedPercent: 42, resetsAt: Date.now() + 3_600_000 },
   } as any);
+  useComposerSegments.getState().append('thread-a', { quote: 'Q1', liveText: 'intro' });
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +182,14 @@ describe('resetDaemonScopedStores — quota', () => {
     expect(Object.keys(useQuotaStore.getState().byId)).toContain('claude');
     resetDaemonScopedStores();
     expect(useQuotaStore.getState().byId).toEqual({});
+  });
+});
+
+describe('resetDaemonScopedStores — composer-segments', () => {
+  it('resets byThread so a seeded segment composition is gone', () => {
+    expect(useComposerSegments.getState().byThread['thread-a']).toBeDefined();
+    resetDaemonScopedStores();
+    expect(useComposerSegments.getState().byThread).toEqual({});
   });
 });
 

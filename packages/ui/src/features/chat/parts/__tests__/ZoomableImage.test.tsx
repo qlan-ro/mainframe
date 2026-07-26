@@ -15,9 +15,11 @@
  *  2. Clicking the trigger opens the dialog; dialog content contains a full-
  *     size img with the same src.
  *  3. The alt prop is forwarded to the thumbnail img.
+ *  4. Clicking the full-size image or the dimmed area around it dismisses the
+ *     dialog; Escape still dismisses it too.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ZoomableImage } from '../ZoomableImage';
 
 // ---------------------------------------------------------------------------
@@ -76,5 +78,42 @@ describe('ZoomableImage', () => {
     const trigger = screen.getByTestId('chat-image-zoom-trigger');
     const thumbnail = trigger.querySelector('img');
     expect(thumbnail).toHaveAttribute('alt', 'a cat');
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. Dismissal
+  // -------------------------------------------------------------------------
+
+  it('clicking the full-size image closes the dialog', async () => {
+    render(<ZoomableImage src="https://example.com/photo.png" />);
+
+    fireEvent.click(screen.getByTestId('chat-image-zoom-trigger'));
+    await screen.findByTestId('chat-image-zoom-dialog');
+
+    const fullSizeImg = screen.getByTestId('chat-image-zoom-image');
+    expect(fullSizeImg).toHaveAttribute('src', 'https://example.com/photo.png');
+
+    fireEvent.click(fullSizeImg);
+    await waitFor(() => expect(screen.queryByTestId('chat-image-zoom-dialog')).toBeNull());
+  });
+
+  it('clicking the dimmed area beside the image closes the dialog', async () => {
+    render(<ZoomableImage src="https://example.com/photo.png" />);
+
+    fireEvent.click(screen.getByTestId('chat-image-zoom-trigger'));
+    const dialog = await screen.findByTestId('chat-image-zoom-dialog');
+
+    fireEvent.click(dialog);
+    await waitFor(() => expect(screen.queryByTestId('chat-image-zoom-dialog')).toBeNull());
+  });
+
+  it('Escape still closes the dialog', async () => {
+    render(<ZoomableImage src="https://example.com/photo.png" />);
+
+    fireEvent.click(screen.getByTestId('chat-image-zoom-trigger'));
+    const dialog = await screen.findByTestId('chat-image-zoom-dialog');
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('chat-image-zoom-dialog')).toBeNull());
   });
 });
