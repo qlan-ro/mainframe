@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Launch the BROWSER target for test-worktree: daemon + shared renderer in a
-# plain browser — no Electron, no Rust. For renderer/daemon-only scenario
-# sets (no native shell surfaces). Blocks until ready; prints READY + facts.
-# Typical bring-up: 1-2 minutes. Engine: playwright-cli fresh browser at APP_URL.
+# plain browser — no Tauri shell. For renderer/daemon-only scenario sets (no
+# native shell surfaces). Blocks until ready; prints READY + facts. Bring-up is
+# 1-2 minutes on a warm worktree, several more if the daemon compiles cold.
+# Engine: playwright-cli fresh browser at APP_URL.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$PROJECT_ROOT"
 
-# 1. Isolated ports + install + types build only (no shell builds).
-bash scripts/setup-ports.sh --minimal
+# 1. Isolated ports + install + types build.
+bash scripts/setup-ports.sh
 
 # 2. Load the isolated ports.
 set -a
@@ -21,11 +22,17 @@ export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
 DAEMON_LOG="/tmp/mf-daemon-${DAEMON_PORT}.log"
 UI_LOG="/tmp/mf-ui-${DAEMON_PORT}.log"
 
-# 3. Daemon (from source via tsx).
+# 3. Daemon — the Rust binary. Cargo never shares a target dir across worktrees
+# (five consumers hardcode packages/core-rs/target), so a fresh worktree pays a
+# cold compile of several minutes and several GB here; a warm one links in
+# seconds. `cargo sweep`/`cargo clean --profile dev` reclaim it afterwards.
+echo "Building mainframe-daemon (cold builds take several minutes)…"
+cargo build --manifest-path packages/core-rs/Cargo.toml -p mainframe-daemon
+
 DAEMON_PORT="$DAEMON_PORT" \
 MAINFRAME_DATA_DIR="$MAINFRAME_DATA_DIR" \
 LOG_LEVEL=debug \
-  pnpm --filter @qlan-ro/mainframe-core run dev > "$DAEMON_LOG" 2>&1 &
+  packages/core-rs/target/debug/mainframe-daemon > "$DAEMON_LOG" 2>&1 &
 
 # 4. Shared renderer (Vite). Browser dev mode reads VITE_DAEMON_PORT (singular)
 # in fake-adapter.ts — the HTTP/WS pair is the electron/tauri shape and is NOT
