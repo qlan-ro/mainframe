@@ -121,6 +121,7 @@ export function ClickableFilePath({ filePath }: { filePath: string }) {
       <TooltipTrigger asChild>
         <span
           data-testid="tool-card-file-path"
+          data-file-path={filePath}
           role="button"
           tabIndex={0}
           onClick={handleClick}

@@ -9,8 +9,11 @@
  *   composer-file-item-{id}         — `@` file/directory row (id = repo-relative path)
  *   composer-add-mention            — "@" toolbar button (appends `@` to the composer text)
  *   composer-prompt-highlight       — color-only overlay behind the transparent textarea
- *   chat-selection-toolbar/-quote   — floating "Quote" button on text selection (native)
- *   composer-quote-preview/-dismiss — dismissable quote pill above the composer input
+ *   chat-selection-toolbar          — floating toolbar shown on a text selection in a message
+ *   chat-selection-quote/-new-session — its two actions (append a quote segment / open a draft)
+ *   composer-segments/composer-segment — the composer's stack of quote+prose segments
+ *   composer-quote-preview/-dismiss — one segment's quote pill and its ✕, both carrying that
+ *                                     segment's `data-segment-id` (address by id, not ordinal)
  *   composer-worktree-trigger/-popover/-active-info/-mid-session-warning
  *   composer-worktree-tab-new/-existing, -base-branch(-list/-option-*), -branch-name
  *   composer-worktree-enable/-cancel/-attach-{path}
@@ -18,10 +21,6 @@
  *   chat-queued-message/-edit/-cancel        — queued user turn + its hover actions
  *
  * `/` skills: the native mock-cli adapter scans only the temporary project's `.claude/skills`.
- *
- * Orphaned finding (see report): `QuoteBlock` (components/ui/assistant-ui/quote.tsx) is
- * exported but never mounted in UserMessage.tsx — a sent message does NOT render a quote block
- * today. The plan's "sent message renders quote block" sub-scenario is skipped with a TODO.
  */
 
 import { test, expect } from '@playwright/test';
@@ -214,8 +213,8 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     // "2 + 2" reasoning/"4" turn, not "Files in the project...". `chat.spec.ts`'s own
     // `messaging`-recording describe (§messaging M1/M2) sends the exact same two prompts in the
     // exact same order for this exact reason — mirror it here so the turns line up. Sent in
-    // `beforeAll` (not the first test) so `hasMessages` is established regardless of which
-    // individual test below is skipped.
+    // `beforeAll` (not the first test) so `hasMessages` is established before any test below
+    // runs, whichever one runs first.
     await sendMessage(app.page, 'What is 2 + 2? Reply with just the number.');
     await waitForIdle(app.page, 60_000);
     await sendMessage(app.page, 'List the files in this project using bash ls.');
@@ -227,30 +226,7 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     await closeTauriApp(app);
   });
 
-  test('selecting assistant text shows the floating Quote button', async () => {
-    // TODO(investigate): live-verified TWICE (two independent runs, after fixing the turn-order
-    // bug above so the assistant text assertion below now passes reliably) —
-    // `chat-selection-toolbar` never appears after the programmatic Range-selection +
-    // synthetic `document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true}))` below.
-    // Read `SelectionToolbarPrimitive.Root`'s actual installed source
-    // (@assistant-ui/react/dist/primitives/selectionToolbar/SelectionToolbarRoot.js): it listens
-    // for `document`-level `mouseup` → `requestAnimationFrame` → `window.getSelection()` →
-    // `getSelectionMessageId` (walks `anchorNode`/`focusNode` up via `.closest`-equivalent
-    // `parentElement` loop for a `data-message-id` attribute, present on `chat-assistant-message`
-    // here) — structurally this SHOULD react to a programmatic Range + dispatched `mouseup`, and
-    // the report that authored this test cites reading this exact file to justify the approach.
-    // Could not conclusively determine, without more investigation, whether this is (a) a real
-    // gap in how the native primitive handles a non-`isTrusted` synthetic event vs. a real user
-    // gesture, or (b) a subtlety in the test's selection simulation. Flagging rather than guessing
-    // at either a product-bug skip or a test fix I'm not confident is correct. The two downstream
-    // tests in this describe that depend on the Quote button (Quote preview, dismiss) are skipped
-    // alongside it; "worktree mid-session warning" only needs `hasMessages` (now established in
-    // `beforeAll` above) and is unaffected, so it stays active.
-    test.skip(
-      true,
-      'TODO(investigate): chat-selection-toolbar never appears after programmatic selection + synthetic mouseup — needs live-instrumented repro',
-    );
-
+  test('selecting assistant text shows the floating selection toolbar', async () => {
     const { page } = app;
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
     await expect(lastAssistant).toContainText('Files in the project', { timeout: 10_000 });
@@ -258,11 +234,21 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     // Programmatic selection (deterministic vs. dblclick word-boundary guessing): select the
     // word "project" inside the assistant's final text reply and fire the native 'mouseup' the
     // SelectionToolbarPrimitive.Root listens for (checkSelection reads window.getSelection()).
-    await page.evaluate(() => {
+    //
+    // The walker is scoped to `.aui-md` (the rendered markdown), NOT the whole message: the
+    // reasoning block above it also contains "project", and everything outside `.aui-md`
+    // inherits `body { user-select: none }` (globals.css). A Range inside a `user-select: none`
+    // subtree is accepted by `addRange` (rangeCount becomes 1) but `getSelection().toString()`
+    // stays EMPTY, so the primitive's checkSelection reads no selection and never opens the
+    // toolbar — which is what made this test look like a product bug. The assertion below the
+    // evaluate pins the non-empty selection so a regression here can't be misread again.
+    const selected = await page.evaluate(() => {
       const messages = document.querySelectorAll('[data-testid="chat-assistant-message"]');
       const last = messages[messages.length - 1];
       if (!last) throw new Error('no assistant message found');
-      const walker = document.createTreeWalker(last, NodeFilter.SHOW_TEXT);
+      const markdown = last.querySelector('.aui-md');
+      if (!markdown) throw new Error('no rendered markdown (.aui-md) in the assistant message');
+      const walker = document.createTreeWalker(markdown, NodeFilter.SHOW_TEXT);
       let target: Text | null = null;
       let node: Node | null;
       while ((node = walker.nextNode())) {
@@ -280,40 +266,46 @@ test.describe('§composer quote + worktree mid-session warning', () => {
       const sel = window.getSelection();
       sel?.removeAllRanges();
       sel?.addRange(range);
+      const text = sel?.toString() ?? '';
       document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      return text;
     });
+    expect(selected).toBe('project');
 
     await expect(page.getByTestId('chat-selection-toolbar')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('chat-selection-quote')).toBeVisible();
+    await expect(page.getByTestId('chat-selection-new-session')).toBeVisible();
   });
 
   test('clicking Quote adds a quote preview pill above the composer', async () => {
-    // Depends on the previous test's `chat-selection-quote` button being present — see the
-    // TODO(investigate) on "selecting assistant text shows the floating Quote button" above.
-    test.skip(true, 'TODO(investigate): depends on the skipped selection-toolbar test above');
-
+    // Depends on the previous test leaving `chat-selection-quote` on screen.
     const { page } = app;
     await page.getByTestId('chat-selection-quote').click();
+    // The first Quote opens the live segment: exactly one pill, and no committed prose box
+    // yet (the live segment's prose stays in the native composer input).
     const preview = page.getByTestId('composer-quote-preview');
     await expect(preview).toBeVisible({ timeout: 5_000 });
+    await expect(preview).toHaveCount(1);
     await expect(preview).toContainText('project');
+
+    // Pill and dismiss address the same segment — quoting is now a list, so a bare
+    // `composer-quote-dismiss` would be ambiguous once a second quote is appended.
+    const segmentId = await preview.getAttribute('data-segment-id');
+    expect(segmentId).toBeTruthy();
+    await expect(page.locator(`[data-testid="composer-quote-dismiss"][data-segment-id="${segmentId}"]`)).toHaveCount(1);
   });
 
   test('dismissing the quote preview clears it', async () => {
-    // Depends on the "clicking Quote" test above having opened a quote preview — see the
-    // TODO(investigate) on "selecting assistant text shows the floating Quote button" above.
-    test.skip(true, 'TODO(investigate): depends on the skipped selection-toolbar test above');
-
+    // Depends on the "clicking Quote" test above having opened a quote preview.
     const { page } = app;
-    await page.getByTestId('composer-quote-dismiss').click();
-    await expect(page.getByTestId('composer-quote-preview')).toHaveCount(0);
-  });
+    const segmentId = await page.getByTestId('composer-quote-preview').getAttribute('data-segment-id');
+    expect(segmentId).toBeTruthy();
+    await page.locator(`[data-testid="composer-quote-dismiss"][data-segment-id="${segmentId}"]`).click();
 
-  // TODO(app-tauri): QuoteBlock (components/ui/assistant-ui/quote.tsx) is exported but never
-  // mounted in UserMessage.tsx — a sent message renders no quote block today. Un-skip once it's
-  // wired (or drop if the design deliberately keeps quoting composer-only).
-  test.skip('a sent message with an active quote renders a quote block', async () => {
-    // TODO(app-tauri): QuoteBlock is orphaned — see the file-level docstring.
+    // That segment carries no prose, so dismissing its quote drops the segment itself and
+    // the whole segments block unmounts — the composer is back to its plain shape.
+    await expect(page.getByTestId('composer-quote-preview')).toHaveCount(0);
+    await expect(page.getByTestId('composer-segments')).toHaveCount(0);
   });
 
   test('worktree popover shows a mid-session warning once the chat has messages', async () => {

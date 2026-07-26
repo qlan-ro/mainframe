@@ -22,6 +22,7 @@ import { useSandboxStore } from '@/store/sandbox';
 import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
 import { resetQuota } from '@/store/quota';
+import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 
 export function resetDaemonScopedStores(): void {
   useSessionTodosStore.setState({ byChat: {} });
@@ -54,4 +55,6 @@ export function resetDaemonScopedStores(): void {
   });
 
   resetQuota();
+
+  useComposerSegments.setState({ byThread: {} });
 }

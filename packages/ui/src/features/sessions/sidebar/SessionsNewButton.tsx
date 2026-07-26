@@ -3,27 +3,22 @@
  * Sessions section title (2026-07: was a small "+" header icon; now matches
  * AddProjectRow's full-row treatment for a consistent action-row look).
  *
- * Pill active  → starts the draft in that project directly (native New; the
- *                auto-config hook seeds the draft on activation).
- * "All" view   → opens the NewSessionPickerPopover to resolve the project first,
- *                then seeds the draft itself (auto-config stays out of the "All"
- *                view — it has no project to seed from).
+ * Pill active  → opens the draft in that project directly.
+ * "All" view   → opens the NewSessionPickerPopover to resolve the project first.
+ *
+ * Both branches run the one `openNewThreadDraft` sequence (spec §2.4): the pill
+ * branch used to hand-roll it around `ThreadListPrimitive.New`, and the copy
+ * had already drifted — it swallowed a failed initialization instead of
+ * surfacing it, so a missing adapter produced a blank draft and no message.
  *
  * Re-click retargets the single reused draft (never stacks); the pre-draft
  * selection is remembered so a discard can restore it.
  */
-import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
-import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
-import { initializeDraft } from '../new-thread/initialize-draft';
-import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
-import { useSettingsStore } from '@/store/settings';
-import { useAdapters } from '@/store/adapters';
+import { useOpenNewThreadDraft } from '../new-thread/use-open-new-thread-draft';
 import { NewSessionPickerPopover } from './NewSessionPickerPopover';
 import { useNewSessionPickerTarget } from './use-new-session-picker-target';
-import { useDaemonPort } from '../runtime/daemon-port-context';
-import { mfToast } from '@/lib/toast';
 
 // px-[12px] (not px-2/4px): matches SIDEBAR_BASE_INSET_PX, so the wrapping
 // SIDEBAR_INDENT_STEP_PX margin in SessionSidebar.tsx lands this row's content
@@ -46,65 +41,30 @@ export function SessionsNewButton({
   sessionCounts,
   onAddProject,
 }: SessionsNewButtonProps) {
-  const runtime = useAssistantRuntime();
   // Lifted so the global ⌘N hotkey and the zero-session boot fallback can open
   // this SAME anchored popover (see useNewSessionPickerTarget).
   const pickerOpen = useNewSessionPickerTarget((s) => s.open);
   const setPickerOpen = useNewSessionPickerTarget((s) => s.setOpen);
-  const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
-  const adapters = useAdapters();
-  const port = useDaemonPort();
+  const openNewThreadDraft = useOpenNewThreadDraft();
 
-  const initialize = async (localId: string, projectId: string) => {
-    try {
-      await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters });
-    } catch (error) {
-      mfToast.error('Couldn’t initialize session', {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
-  /** Snapshot the currently-active session so a discard can return to it. */
-  const rememberReturn = () => {
-    useDraftReturnTarget.getState().setReturnTarget(runtime.threads.getState().mainThreadId ?? null);
+  const pick = (projectId: string) => {
+    void openNewThreadDraft({ projectId });
   };
 
   if (filterProjectId != null) {
-    // Pill active — native New; auto-config seeds this project's draft on activation.
     return (
-      <ThreadListPrimitive.New
-        asChild
-        onClick={() => {
-          rememberReturn();
-          const localId = runtime.threads.getState().newThreadId;
-          resetNewThreadDraft(localId);
-          if (localId != null && adapters.length > 0) void initialize(localId, filterProjectId);
-        }}
+      <button
+        data-testid="sessions-new-button"
+        data-tut="sessions"
+        type="button"
+        className={ROW_BTN}
+        onClick={() => pick(filterProjectId)}
       >
-        <button data-testid="sessions-new-button" data-tut="sessions" type="button" className={ROW_BTN}>
-          <PlusIcon className="size-[13px] flex-shrink-0" />
-          <span>New session{filterProjectName != null ? ` in ${filterProjectName}` : ''}</span>
-        </button>
-      </ThreadListPrimitive.New>
+        <PlusIcon className="size-[13px] flex-shrink-0" />
+        <span>New session{filterProjectName != null ? ` in ${filterProjectName}` : ''}</span>
+      </button>
     );
   }
-
-  const pick = (projectId: string) => {
-    void (async () => {
-      rememberReturn();
-      // Clear the CURRENT slot before switching, so a reused draft never flashes
-      // its stale project on activation. No-op when no slot exists.
-      resetNewThreadDraft(runtime.threads.getState().newThreadId);
-      // switchToNewThread OWNS the slot: `newThreadId` is undefined until it
-      // mints one (and again after each first send commits a draft), so the id
-      // is only readable once the switch has resolved.
-      await runtime.threads.switchToNewThread();
-      const nid = runtime.threads.getState().newThreadId;
-      if (nid == null) return;
-      await initialize(nid, projectId);
-    })();
-  };
 
   return (
     <NewSessionPickerPopover

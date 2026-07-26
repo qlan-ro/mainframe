@@ -5,7 +5,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { StatusDot } from '../chrome';
+import { StatusDot, ClickableFilePath } from '../chrome';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 describe('StatusDot — data-testid + data-status', () => {
   it('renders data-status="pending" while the tool call is still in flight (result undefined)', () => {
@@ -22,5 +23,19 @@ describe('StatusDot — data-testid + data-status', () => {
   it('renders data-status="success" when the tool call finished without error', () => {
     render(<StatusDot result={{}} isError={false} />);
     expect(screen.getByTestId('tool-card-status-dot')).toHaveAttribute('data-status', 'success');
+  });
+});
+
+describe('ClickableFilePath — data-file-path', () => {
+  it('exposes the same raw filePath passed to openFile(), not the shortened label', () => {
+    const filePath = '/Users/doru/projects/myapp/src/deep/nested/module.ts';
+    render(
+      <TooltipProvider>
+        <ClickableFilePath filePath={filePath} />
+      </TooltipProvider>,
+    );
+    const pill = screen.getByTestId('tool-card-file-path');
+    expect(pill).toHaveAttribute('data-file-path', filePath);
+    expect(pill.textContent).toBe('nested/module.ts');
   });
 });
