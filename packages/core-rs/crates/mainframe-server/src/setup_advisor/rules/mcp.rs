@@ -1,0 +1,148 @@
+//! MCP server recommendations.
+//!
+//! Detection-to-recommendation mappings come from the upstream `claude-code-setup
+//! v1.0.0` plugin (`skills/claude-automation-recommender/references/mcp-servers.md`);
+//! every `command` comes from `docs/research/2026-07-25-todo-191-command-provenance.md`,
+//! the sole source of truth for this dataset.
+//!
+//! Two rows in that table ship no rule here: docker (no Claude Code command exists
+//! in Docker's documentation) and convex (Convex documents a plugin, not an MCP
+//! server, so it lives in `plugins.rs`).
+//!
+//! No command passes `--scope`, so every one lands in this checkout's local
+//! config. The alternatives both reach past what the card describes: `project`
+//! writes a `.mcp.json` the user then commits, and `user` configures every other
+//! project on the machine. `target_path` is `None` for the same reason — `claude
+//! mcp add` owns the file it writes, and naming it here would be a guess.
+
+use mainframe_types::setup_advisor::{
+    GitHost, ProjectFingerprint, RecommendationCategory, RecommendationProvenance,
+};
+
+use crate::setup_advisor::detections::Field;
+use crate::setup_advisor::rule::{Evidence, Rule};
+
+/// Frameworks whose work the Playwright server can actually drive.
+const BROWSER_FRAMEWORKS: &[&str] = &["react", "vue", "nextjs"];
+
+/// Every MCP rule is vendor-official with no `source`: the command installs the
+/// vendor's own server, and skills.sh — the only install-count source we have —
+/// does not index MCP servers. A fabricated count would be worse than none.
+const fn mcp_rule(
+    id: &'static str,
+    title: &'static str,
+    why: &'static str,
+    command: &'static str,
+    priority: u8,
+    evidence: Evidence,
+) -> Rule {
+    Rule {
+        id,
+        category: RecommendationCategory::Mcp,
+        title,
+        why,
+        command,
+        target_path: None,
+        adapters: &["*"],
+        provenance: RecommendationProvenance::VendorOfficial,
+        source: None,
+        priority,
+        evidence,
+    }
+}
+
+fn github_remote(fp: &ProjectFingerprint) -> Option<String> {
+    matches!(fp.git_host, Some(GitHost::Github)).then(|| "a github.com origin remote".to_string())
+}
+
+/// Ranked by how far the signal narrows the recommendation. The two near-universal
+/// rules sit last so they cannot crowd out the one server that talks to this
+/// project's own database or error stream.
+pub static RULES: &[Rule] = &[
+    // Command: provenance doc, MCP table, VERIFIED from Supabase's docs.
+    mcp_rule(
+        "mcp-supabase",
+        "Supabase MCP server",
+        "Inspect your tables, policies, and rows from the session instead of the dashboard.",
+        "claude mcp add --transport http supabase \"https://mcp.supabase.com/mcp\"",
+        1,
+        Evidence::Detected(
+            Field::Database,
+            "supabase",
+            "a @supabase/* dependency in package.json",
+        ),
+    ),
+    // Command: provenance doc, MCP table, VERIFIED from code.claude.com/docs/en/mcp.
+    mcp_rule(
+        "mcp-postgres",
+        "Postgres MCP server",
+        "Ask about your schema and data directly, instead of pasting query output in.",
+        "claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn \"postgresql://USER:PASSWORD@HOST:5432/DATABASE\"",
+        2,
+        Evidence::Detected(
+            Field::Database,
+            "postgres",
+            "a pg or postgres dependency in package.json",
+        ),
+    ),
+    // Command: provenance doc, MCP table, VERIFIED from code.claude.com/docs/en/mcp
+    // and mcp.sentry.dev.
+    mcp_rule(
+        "mcp-sentry",
+        "Sentry MCP server",
+        "Go from an alert to the offending line without leaving the session.",
+        "claude mcp add --transport http sentry https://mcp.sentry.dev/mcp",
+        3,
+        Evidence::Detected(
+            Field::ExternalApi,
+            "sentry",
+            "a @sentry/* dependency in package.json",
+        ),
+    ),
+    // Command: provenance doc, MCP table, COMPOSED — the `uvx` invocation is from
+    // the awslabs README, the wrapper from Anthropic's `--transport stdio` form.
+    mcp_rule(
+        "mcp-aws",
+        "AWS API MCP server",
+        "Read your live AWS resources instead of guessing at what is deployed.",
+        "claude mcp add --transport stdio aws-api -- uvx awslabs.aws-api-mcp-server@latest",
+        4,
+        Evidence::Detected(
+            Field::ExternalApi,
+            "aws",
+            "an @aws-sdk/* dependency in package.json",
+        ),
+    ),
+    // Command: provenance doc, MCP table, VERIFIED from the Playwright MCP README.
+    mcp_rule(
+        "mcp-playwright",
+        "Playwright MCP server",
+        "Let the agent open a real browser and check the UI it just changed.",
+        "claude mcp add playwright npx @playwright/mcp@latest",
+        5,
+        Evidence::First(
+            Field::Framework,
+            BROWSER_FRAMEWORKS,
+            "detected in this project",
+        ),
+    ),
+    // Command: provenance doc, MCP table, VERIFIED from code.claude.com/docs/en/mcp.
+    mcp_rule(
+        "mcp-github",
+        "GitHub MCP server",
+        "Read issues, pull requests, and CI results in the session instead of the browser.",
+        "claude mcp add --transport http github https://api.githubcopilot.com/mcp/ --header \"Authorization: Bearer YOUR_GITHUB_PAT\"",
+        6,
+        Evidence::Custom(github_remote),
+    ),
+    // Command: provenance doc, MCP table, VERIFIED from upstream SKILL.md:172 plus
+    // the context7 docs.
+    mcp_rule(
+        "mcp-context7",
+        "Context7 MCP server",
+        "Pull version-accurate library docs into the session instead of trusting recall.",
+        "claude mcp add --header \"CONTEXT7_API_KEY: YOUR_API_KEY\" --transport http context7 https://mcp.context7.com/mcp",
+        7,
+        Evidence::Any(Field::Framework, "detected in this project"),
+    ),
+];
