@@ -9,7 +9,7 @@
  * "Initializing session…" with no composer to fill.
  */
 import { useCallback } from 'react';
-import { useAssistantRuntime, useAui } from '@assistant-ui/react';
+import { useAssistantRuntime } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
 import { useAdapters } from '@/store/adapters';
 import { useSettingsStore } from '@/store/settings';
@@ -31,7 +31,11 @@ function focusComposerInput(): void {
 }
 
 export function useInstructionActions(): InstructionActions {
-  const aui = useAui();
+  // Chips render inside a message, where `MessageByIndexProvider` rebinds the
+  // aui context's `composer` to that message's edit composer — an inert no-op
+  // until the message is being edited, and a lookup that throws outright once
+  // the thread switch leaves the index unresolvable. `runtime.thread` tracks
+  // the main thread by selector, so its composer is always the live one.
   const runtime = useAssistantRuntime();
   const extras = useChatExtras();
   const port = useDaemonPort();
@@ -43,16 +47,12 @@ export function useInstructionActions(): InstructionActions {
 
   const append = useCallback(
     (insertText: string) => {
-      const composer = aui.composer();
-      // `composer.getState()` is tap-memoized and only refreshes on the next
-      // render, so a same-tick read returns pre-edit text and the append would
-      // clobber whatever the user just typed (the ComposerTriggers pattern).
-      const live = composer.__internal_getRuntime?.();
-      const existing = live ? live.getState().text : composer.getState().text;
+      const composer = runtime.thread.composer;
+      const existing = composer.getState().text;
       composer.setText(existing ? `${existing.trimEnd()}\n${insertText}` : insertText);
       focusComposerInput();
     },
-    [aui],
+    [runtime],
   );
 
   const runInNewSession = useCallback(
@@ -73,7 +73,7 @@ export function useInstructionActions(): InstructionActions {
           const localId = runtime.threads.getState().newThreadId;
           if (localId == null) throw new Error('No draft session was created');
           await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters, adapterId });
-          aui.composer().setText(insertText);
+          runtime.thread.composer.setText(insertText);
         } catch (error) {
           mfToast.error('Couldn’t start a new session', {
             description: error instanceof Error ? error.message : String(error),
@@ -81,7 +81,7 @@ export function useInstructionActions(): InstructionActions {
         }
       })();
     },
-    [aui, runtime, projectId, adapterId, port, defaultAdapterId, adapters],
+    [runtime, projectId, adapterId, port, defaultAdapterId, adapters],
   );
 
   return { append, runInNewSession };

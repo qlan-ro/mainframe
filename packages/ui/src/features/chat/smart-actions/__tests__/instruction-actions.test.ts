@@ -25,23 +25,26 @@ const switchToNewThread = vi.fn(async () => {
 });
 const switchToThread = vi.fn();
 const getComposerState = vi.fn(() => ({ text: '' }));
-const getLiveComposerState = vi.fn<() => { text: string } | null>(() => null);
 let newThreadId: string | null = '__LOCALID_1';
 
+/**
+ * Chips render inside a message, and `MessageByIndexProvider` rebinds the aui
+ * context's `composer` to that message's *edit* composer: a no-op while the
+ * message isn't being edited, and — once `switchToNewThread` empties the
+ * thread — an index lookup that throws. Modelling that here is the point of
+ * this mock: with a thread-composer-shaped stub the actions pass while the
+ * feature is dead in the app.
+ */
+const messageScopedComposer = () => {
+  throw new Error('useClientLookup: Index 3 out of bounds (length: 0)');
+};
+
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({
-    composer: () => {
-      const live = getLiveComposerState();
-      return {
-        setText,
-        send,
-        append,
-        getState: getComposerState,
-        __internal_getRuntime: live ? () => ({ getState: () => live }) : undefined,
-      };
-    },
-  }),
+  useAui: () => ({ composer: messageScopedComposer }),
   useAssistantRuntime: () => ({
+    thread: {
+      composer: { setText, send, append, getState: getComposerState },
+    },
     threads: {
       switchToNewThread,
       switchToThread,
@@ -107,7 +110,6 @@ beforeEach(() => {
   newThreadId = '__LOCALID_1';
   chatConfig = { projectId: 'proj-7', adapterId: 'codex' };
   getComposerState.mockReturnValue({ text: '' });
-  getLiveComposerState.mockReturnValue(null);
   switchToNewThread.mockImplementation(async () => {
     calls.push('switchToNewThread');
   });
@@ -138,14 +140,12 @@ describe('append', () => {
     expect(setText).toHaveBeenCalledWith('draft\n/domain-modeling');
   });
 
-  it('prefers the live runtime text over the tap-memoized snapshot', () => {
-    // `getState()` only refreshes on the next render, so a same-tick read
-    // returns pre-edit text and would clobber what the user just typed.
-    getComposerState.mockReturnValue({ text: 'stale' });
-    getLiveComposerState.mockReturnValue({ text: 'just typed' });
+  it('writes to the thread composer, never the message-scoped one', () => {
+    // The message-scoped composer throws; reaching for it would surface as an
+    // unhandled error instead of the prefill.
     const a = actions();
-    act(() => a.append('/domain-modeling'));
-    expect(setText).toHaveBeenCalledWith('just typed\n/domain-modeling');
+    expect(() => act(() => a.append('/domain-modeling'))).not.toThrow();
+    expect(setText).toHaveBeenCalledWith('/domain-modeling');
   });
 
   it('inserts the whole instruction line including arguments (the code-seam case)', () => {
