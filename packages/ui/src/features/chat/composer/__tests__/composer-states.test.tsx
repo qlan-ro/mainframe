@@ -61,10 +61,6 @@ vi.mock('@/components/ui/assistant-ui/attachment', () => ({
   ComposerAddMention: () => <button data-testid="composer-add-mention" />,
 }));
 
-vi.mock('@/components/ui/assistant-ui/quote', () => ({
-  ComposerQuotePreview: () => null,
-}));
-
 vi.mock('../triggers/ComposerTriggers', () => ({
   ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
 }));

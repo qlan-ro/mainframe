@@ -18,7 +18,7 @@
  * `MarkdownText` is the `TextMessagePartComponent` wired into AssistantMessage.
  * `markdownComponents` is exported separately so UserMessage can reuse it.
  */
-import React, { memo, useState, useCallback, useEffect, useRef, type FC } from 'react';
+import React, { memo, useState, useCallback, type FC } from 'react';
 import type { TextMessagePartComponent } from '@assistant-ui/react';
 import {
   MarkdownTextPrimitive,
@@ -27,11 +27,13 @@ import {
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Pluggable } from 'unified';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { useHost } from '@/lib/host';
+import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
+import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
@@ -76,23 +78,24 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
 
 // ── Link with URL tooltip ─────────────────────────────────────────────────────
 
-/** Writes `href` to clipboard and briefly shows "Copied" feedback. */
+/**
+ * Writes `href` to clipboard and briefly shows "Copied" feedback.
+ * Resolves with whether the write actually landed, so menu callers can say
+ * "Copy failed" instead of confirming a copy that never happened.
+ */
 function useCopyHref(href: string | undefined) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(
-    (e?: React.MouseEvent) => {
+    async (e?: React.MouseEvent): Promise<boolean> => {
       e?.preventDefault();
       e?.stopPropagation();
-      if (!href) return;
-      navigator.clipboard.writeText(href).then(
-        () => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        },
-        () => {
-          console.warn('[markdown-text] clipboard write failed');
-        },
-      );
+      if (!href) return false;
+      const ok = await writeToClipboard(href);
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+      return ok;
     },
     [href],
   );
@@ -106,29 +109,8 @@ function LinkWithPreview({
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
   const host = useHost();
   const { copied, copy } = useCopyHref(href);
-
-  // Radix closes a ContextMenuItem's menu immediately on select. The item
-  // must preventDefault that default, show "Copied" feedback in place, then
-  // close itself on a short delay (mirrors CodeHeader's inline copy pattern).
-  const [menuCopied, setMenuCopied] = useState(false);
-  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // ContextMenu's root open state is uncontrolled — Radix's ContextMenu.Root
-  // takes no `open` prop, only `onOpenChange` as an observer — so there is no
-  // prop that closes it programmatically. Escape is the one DOM signal its
-  // DismissableLayer treats as a dismiss request.
-  const closeMenu = useCallback(() => {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  }, []);
-
-  const handleMenuOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      clearTimeout(closeTimeoutRef.current);
-      setMenuCopied(false);
-    }
-  }, []);
-
-  useEffect(() => () => clearTimeout(closeTimeoutRef.current), []);
+  const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
+  const menuStatus = statusFor('copy-link');
 
   const handleOpen = useCallback(
     (e?: React.MouseEvent) => {
@@ -141,16 +123,7 @@ function LinkWithPreview({
     [href, host],
   );
 
-  const handleMenuCopy = useCallback(
-    (e: Event) => {
-      e.preventDefault();
-      copy();
-      setMenuCopied(true);
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = setTimeout(closeMenu, 900);
-    },
-    [copy, closeMenu],
-  );
+  const handleMenuCopy = onCopySelect('copy-link', copy);
 
   // Design: a faint border-bottom rule (not a solid text-decoration underline).
   const LINK_RULE_CLASS = 'aui-md-a text-primary no-underline border-b border-primary/40';
@@ -161,7 +134,7 @@ function LinkWithPreview({
 
   return (
     <Tooltip>
-      <ContextMenu onOpenChange={handleMenuOpenChange}>
+      <ContextMenu onOpenChange={handleOpenChange}>
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
             <a
@@ -169,13 +142,19 @@ function LinkWithPreview({
               href={href}
               onClick={handleOpen}
               {...props}
+              // stopPropagation only — never preventDefault: Radix composes a
+              // nested trigger's own onContextMenu with checkForDefaultPrevented,
+              // so calling preventDefault here would also block THIS link's menu.
+              onContextMenu={(e) => e.stopPropagation()}
             />
           </ContextMenuTrigger>
         </TooltipTrigger>
         <ContextMenuContent>
           <ContextMenuItem data-testid="chat-link-copy" onSelect={handleMenuCopy}>
-            {menuCopied ? <Check className="mr-2 size-3.5 text-mf-success" /> : <Copy className="mr-2 size-3.5" />}
-            {menuCopied ? 'Copied' : 'Copy link'}
+            {menuStatus === 'copied' && <Check className="mr-2 size-3.5 text-mf-success" />}
+            {menuStatus === 'failed' && <AlertTriangle className="mr-2 size-3.5 text-destructive" />}
+            {menuStatus === 'idle' && <Copy className="mr-2 size-3.5" />}
+            {menuStatus === 'copied' ? 'Copied' : menuStatus === 'failed' ? 'Copy failed' : 'Copy link'}
           </ContextMenuItem>
           <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
             Open link
@@ -187,7 +166,7 @@ function LinkWithPreview({
         <button
           data-testid="chat-link-copy-url"
           type="button"
-          onClick={copy}
+          onClick={(e) => void copy(e)}
           className={cn(
             'shrink-0 px-1.5 py-0.5 rounded-sm',
             'bg-accent hover:bg-muted text-muted-foreground hover:text-foreground',

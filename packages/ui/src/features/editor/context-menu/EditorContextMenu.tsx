@@ -4,8 +4,9 @@
  * Items:
  *   Copy              — copies the current selection to clipboard.
  *   Copy Reference    — builds `path:line (word)` and writes to clipboard.
- *   Add Agent Context — quotes `path:line` into the active chat composer via
- *                       `useAui().thread().composer().setQuote(...)`.
+ *   Add Agent Context — quotes `path:line` into the active thread's
+ *                       multi-quote composition via `useAppendQuoteSegment()`
+ *                       (spec #280, the segment-store append seam).
  *   Go to Definition  — ⌘-click equivalent via providers.getDefinition.
  *   Find All Refs     — calls providers.getReferences + shows the panel.
  *
@@ -16,7 +17,6 @@
  * cursor) is read from the EditorView ref at the moment the menu opens.
  */
 import { useCallback, useRef, useState } from 'react';
-import { useAui } from '@assistant-ui/react';
 import type { EditorView } from '@codemirror/view';
 import { Copy, Quote, Code2, Search, MessageSquare } from 'lucide-react';
 import {
@@ -30,6 +30,7 @@ import {
 import type { LspProviders, LspLocation } from '@/lib/lsp';
 import { buildReferenceForCm, writeToClipboard } from '@/lib/editor/copy-reference';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useAppendQuoteSegment } from '../../chat/composer/segments/use-append-quote-segment';
 import { jumpHistory } from '../lsp/navigation';
 import { ReferencesPanel } from '../lsp/references-panel';
 
@@ -88,7 +89,7 @@ function readCursorContext(view: EditorView): CursorContext {
 // ---------------------------------------------------------------------------
 
 export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, children }: EditorContextMenuProps) {
-  const aui = useAui();
+  const appendQuoteSegment = useAppendQuoteSegment();
   // References panel visibility state.
   const [references, setReferences] = useState<LspLocation[] | null>(null);
   const [refSymbol, setRefSymbol] = useState<string | undefined>(undefined);
@@ -133,16 +134,8 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
     if (!ctx) return;
     // Build the same `path:line (word)` string the Copy Reference command uses.
     const ref = buildReferenceForCm(filePath, ctx.line, ctx.word);
-    try {
-      // assistant-ui 0.14.14: setQuote requires a messageId (selection-toolbar
-      // path). The editor has no message origin, so we synthesize an empty
-      // messageId — the composer only uses it for display/dismiss, not for send.
-      aui.thread().composer().setQuote({ text: ref, messageId: '' });
-    } catch (err) {
-      // Composer may not be mounted (e.g. no active thread).
-      console.warn('[editor-context-menu] setQuote failed — no active composer', err);
-    }
-  }, [filePath, aui]);
+    appendQuoteSegment(ref);
+  }, [filePath, appendQuoteSegment]);
 
   // ── Go to Definition ──────────────────────────────────────────────────────
 

@@ -76,14 +76,30 @@ export function createAttachmentAdapter(): AttachmentAdapter {
     },
     async remove() {},
     async send(attachment) {
-      return {
-        id: attachment.id,
-        type: attachment.type,
-        name: attachment.name,
-        contentType: attachment.contentType,
-        content: attachment.content ?? [],
-        status: { type: 'complete' },
-      } satisfies CompleteAttachment;
+      return toCompleteAttachment(attachment);
     },
+  };
+}
+
+/**
+ * The adapter never does real network I/O on `send` (the daemon upload
+ * happens later, in the controller) — resolving a pending attachment is just
+ * this status flip. Exported so `use-submit-composition.ts` can produce the
+ * `CompleteAttachment[]` the native `append()` type requires without an
+ * adapter round-trip (composer.send() is bypassed there — see its docstring).
+ */
+function isCompleteAttachment(attachment: PendingAttachment | CompleteAttachment): attachment is CompleteAttachment {
+  return attachment.status.type === 'complete';
+}
+
+export function toCompleteAttachment(attachment: PendingAttachment | CompleteAttachment): CompleteAttachment {
+  if (isCompleteAttachment(attachment)) return attachment;
+  return {
+    id: attachment.id,
+    type: attachment.type,
+    name: attachment.name,
+    contentType: attachment.contentType,
+    content: attachment.content ?? [],
+    status: { type: 'complete' },
   };
 }

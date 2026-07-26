@@ -23,6 +23,8 @@ import { MessageActionBar } from './MessageActionBar';
 import { MessageTiming } from './MessageTiming';
 import { MessageTimestamp } from './MessageTimestamp';
 import { AssistantErrorBlock } from './AssistantErrorBlock';
+import { MessagePathContextMenu } from './MessagePathContextMenu';
+import { useIsNestedTranscript } from './nested-transcript-context';
 
 function RunningIndicator() {
   return (
@@ -39,6 +41,7 @@ export function AssistantMessage() {
   const groupBy = useMemo(() => makeChatGroupBy(meta.partGroups ?? {}), [meta.partGroups]);
   const summaries = meta.groupSummaries;
   const messageId = useAuiState((s) => s.message.id);
+  const isNested = useIsNestedTranscript();
 
   // Error turn → a styled destructive block instead of plain assistant prose.
   if (meta.errorText) {
@@ -53,54 +56,58 @@ export function AssistantMessage() {
     );
   }
 
+  const groupedParts = (
+    <MessagePrimitive.GroupedParts groupBy={groupBy}>
+      {({ part, children }) => {
+        // GroupPart nodes carry `indices`; leaf parts do not.
+        if ('indices' in part) {
+          if (part.type === 'group-reasoning') {
+            return <ReasoningGroup running={part.status?.type === 'running'}>{children}</ReasoningGroup>;
+          }
+          // group-tool-<groupId>: the summary was derived in the projection.
+          const groupId = parseToolGroupKey(part.type) ?? '';
+          return (
+            <MessageToolGroup
+              indices={part.indices}
+              running={part.status?.type === 'running'}
+              summary={summaries?.[groupId]}
+            >
+              {children}
+            </MessageToolGroup>
+          );
+        }
+
+        switch (part.type) {
+          case 'text':
+            // MarkdownText reads the text from part context; props satisfy the type.
+            return part.text === PERMISSION_PLACEHOLDER.text ? null : <MarkdownText {...part} />;
+          case 'reasoning':
+            return <div className="whitespace-pre-wrap">{part.text}</div>;
+          case 'tool-call':
+            return <MessageToolLeaf part={part} />;
+          case 'image':
+            return (
+              <ZoomableImage
+                src={part.image}
+                className="max-h-80 max-w-full rounded-md border border-border object-contain"
+              />
+            );
+          case 'indicator':
+            return <RunningIndicator />;
+          default:
+            return null;
+        }
+      }}
+    </MessagePrimitive.GroupedParts>
+  );
+
   return (
     <MessagePrimitive.Root
       data-testid="chat-assistant-message"
       data-message-id={messageId}
       className="group/message flex flex-col gap-2 py-3"
     >
-      <MessagePrimitive.GroupedParts groupBy={groupBy}>
-        {({ part, children }) => {
-          // GroupPart nodes carry `indices`; leaf parts do not.
-          if ('indices' in part) {
-            if (part.type === 'group-reasoning') {
-              return <ReasoningGroup running={part.status?.type === 'running'}>{children}</ReasoningGroup>;
-            }
-            // group-tool-<groupId>: the summary was derived in the projection.
-            const groupId = parseToolGroupKey(part.type) ?? '';
-            return (
-              <MessageToolGroup
-                indices={part.indices}
-                running={part.status?.type === 'running'}
-                summary={summaries?.[groupId]}
-              >
-                {children}
-              </MessageToolGroup>
-            );
-          }
-
-          switch (part.type) {
-            case 'text':
-              // MarkdownText reads the text from part context; props satisfy the type.
-              return part.text === PERMISSION_PLACEHOLDER.text ? null : <MarkdownText {...part} />;
-            case 'reasoning':
-              return <div className="whitespace-pre-wrap">{part.text}</div>;
-            case 'tool-call':
-              return <MessageToolLeaf part={part} />;
-            case 'image':
-              return (
-                <ZoomableImage
-                  src={part.image}
-                  className="max-h-80 max-w-full rounded-md border border-border object-contain"
-                />
-              );
-            case 'indicator':
-              return <RunningIndicator />;
-            default:
-              return null;
-          }
-        }}
-      </MessagePrimitive.GroupedParts>
+      {isNested ? groupedParts : <MessagePathContextMenu>{groupedParts}</MessagePathContextMenu>}
 
       {/* Reserve the action-bar height so hover-revealing it doesn't shift the layout. */}
       <div className="flex min-h-6 items-center gap-2 text-muted-foreground">

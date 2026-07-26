@@ -13,6 +13,10 @@ use crate::history::recorded_session_id;
 
 const MAX_DELAY_MS: u64 = 120;
 
+/// Recordings bake the absolute project root they were captured against; fixtures
+/// write this token instead so replayed paths point at the live project.
+const PROJECT_PATH_PLACEHOLDER: &str = "{{PROJECT_PATH}}";
+
 /// Per-event replay delay ceiling. Defaults to `MAX_DELAY_MS` so the suite stays
 /// fast, but `E2E_MOCK_MAX_DELAY_MS` widens it for the rare test that must observe
 /// a transient state (e.g. the sidebar 'working' dot) whose window would otherwise
@@ -131,6 +135,7 @@ impl ReplaySession {
                 AdapterError::Io(error)
             }
         })?;
+        let text = text.replace(PROJECT_PATH_PLACEHOLDER, &self.project_path);
         let events = crate::parse_fixture(&text)?;
         cache.store(&events);
         self.state.lock().unwrap_or_else(|e| e.into_inner()).replay = ReplayState::new(events);
@@ -284,5 +289,30 @@ mod tests {
 
         assert!(error.to_string().contains("/tmp/missing-recording.ndjson"));
         assert!(error.to_string().contains("fixture not found"));
+    }
+
+    #[tokio::test]
+    async fn fixture_project_path_placeholder_resolves_to_the_live_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let fixture = dir.path().join("recording.ndjson");
+        tokio::fs::write(
+            &fixture,
+            r#"{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"{{PROJECT_PATH}}/index.ts"}}]],"delayMs":0}"#,
+        )
+        .await
+        .unwrap();
+        let options = SessionOptions {
+            project_path: "/tmp/live-project".to_string(),
+            chat_id: None,
+            mainframe_chat_id: "chat-1".to_string(),
+        };
+        let session =
+            ReplaySession::from_fixture(options, fixture, Arc::new(ReplayCache::default()));
+
+        session.ensure_loaded().await.unwrap();
+
+        let state = session.state.lock().unwrap();
+        let file_path = state.replay.events[0].args[0][0]["input"]["file_path"].as_str();
+        assert_eq!(file_path, Some("/tmp/live-project/index.ts"));
     }
 }
