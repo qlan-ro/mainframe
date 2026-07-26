@@ -74,7 +74,8 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 | Multi-step implementation task, or after brainstorming approval | `writing-plans` |
 | Writing implementation code for any feature or bugfix | `test-driven-development` |
 | About to claim work is done, commit, or open a PR | `verification-before-completion` |
-| Building UI components, pages, or making visual design decisions | `ui-ux-pro-max` |
+| Writing any markup or class names in `packages/ui` | `mainframe-design-system` |
+| Open visual-design questions with no in-app template to mirror | `ui-ux-pro-max` |
 | Writing docs, commits, PRs, error messages, or UI copy | `writing-clearly-and-concisely` |
 | Checking whether new Claude Code / Codex releases affect Mainframe's adapters | `changelog-watch` |
 
