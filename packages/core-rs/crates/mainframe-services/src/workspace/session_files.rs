@@ -41,12 +41,25 @@ pub async fn move_session_files(
     let target = Path::new(target_dir);
     tokio::fs::create_dir_all(target).await?;
 
-    // 1. Move main JSONL
-    move_file(
+    // 1. Move main JSONL. Claude's own EnterWorktree tool relocates the transcript
+    // when the agent enters the worktree, so it is often already gone from the
+    // source dir by the time we rebind — absence is expected, not a failure.
+    match move_file(
         &source.join(format!("{session_id}.jsonl")),
         &target.join(format!("{session_id}.jsonl")),
     )
-    .await?;
+    .await
+    {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            tracing::warn!(
+                session_id,
+                source_dir,
+                "session transcript not in source dir — assuming it was already relocated"
+            );
+        }
+        Err(err) => return Err(err.into()),
+    }
 
     // 2. Move session directory (subagents + tool-results)
     let session_dir = source.join(session_id);
@@ -273,6 +286,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn works_when_main_jsonl_was_already_relocated() {
+        let (_base, src_base, tgt_base) = setup_source_dir().await;
+        // The CLI's EnterWorktree relocates the transcript itself, so by the time
+        // the daemon rebinds the chat the main JSONL is gone from the source dir.
+        tokio::fs::remove_file(src_base.join(format!("{SESSION_ID}.jsonl")))
+            .await
+            .unwrap();
+
+        move_session_files(
+            SESSION_ID,
+            src_base.to_str().unwrap(),
+            tgt_base.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
+
+        assert!(!tgt_base.join(format!("{SESSION_ID}.jsonl")).exists());
+        assert!(tgt_base.join(SESSION_ID).exists());
+        assert!(tgt_base.join("sidechain-999.jsonl").exists());
+    }
+
+    #[tokio::test]
     async fn works_when_session_directory_does_not_exist() {
         let base = tempfile::tempdir().unwrap();
         let src_base = base.path().join("source");
@@ -309,3 +344,6 @@ mod tests {
 // async recursion (Node `cp {recursive:true}`). The session-dir move and the
 // sidechain readdir/move loop swallow errors exactly like the TS try/catch blocks.
 // isSidechainOf reads only the first non-empty line and compares `sessionId`.
+// INTENTIONAL DIVERGENCE: a missing main JSONL is warned about, not thrown — the
+// TS version hard-failed the whole rebind whenever the CLI had already relocated
+// the transcript itself.

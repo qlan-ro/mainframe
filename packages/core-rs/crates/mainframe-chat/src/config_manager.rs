@@ -63,6 +63,20 @@ pub trait ConfigManagerDeps: Send + Sync {
     /// Fired after a binding change persists — the offer registry's single
     /// source of `resolved{accepted}`.
     fn on_binding_changed(&self, _chat_id: &str, _worktree_path: Option<&str>) {}
+    /// Relocate a Claude session's transcript files between project dirs. A seam
+    /// only so tests can exercise the failure path without touching a real `$HOME`.
+    fn move_claude_session_files<'a>(
+        &'a self,
+        session_id: &'a str,
+        old_dir: &'a str,
+        new_dir: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        Box::pin(async move {
+            move_session_files(session_id, old_dir, new_dir)
+                .await
+                .map_err(|e| e.to_string())
+        })
+    }
 }
 
 /// The chat's current effective directory: its worktree when bound, else the project root.
@@ -487,13 +501,28 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     &project.path,
                 ));
                 let new_dir = get_claude_project_dir(worktree_path);
-                move_session_files(
-                    &session_id,
-                    &old_dir.to_string_lossy(),
-                    &new_dir.to_string_lossy(),
-                )
-                .await
-                .map_err(|e| ConfigError::Message(e.to_string()))?;
+                if let Err(err) = self
+                    .deps
+                    .move_claude_session_files(
+                        &session_id,
+                        &old_dir.to_string_lossy(),
+                        &new_dir.to_string_lossy(),
+                    )
+                    .await
+                {
+                    // The chat is already stopped at this point — leaving it that way
+                    // would strand the session with no running CLI and no new binding.
+                    tracing::error!(
+                        chat_id,
+                        worktree_path,
+                        error = %err,
+                        "failed to move session files; restarting the chat on its current binding"
+                    );
+                    self.deps.start_chat(chat_id).await;
+                    return Err(ConfigError::Message(
+                        "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
+                    ));
+                }
             }
 
             self.apply_worktree_update(
@@ -571,6 +600,7 @@ mod tests {
         stop_chat_calls: AtomicUsize,
         stop_launch_calls: Mutex<Vec<(String, String)>>,
         binding_changed: Mutex<Vec<Option<String>>>,
+        move_files_error: Option<String>,
     }
 
     impl FakeDeps {
@@ -585,6 +615,7 @@ mod tests {
                 stop_chat_calls: AtomicUsize::new(0),
                 stop_launch_calls: Mutex::new(Vec::new()),
                 binding_changed: Mutex::new(Vec::new()),
+                move_files_error: None,
             }
         }
 
@@ -592,6 +623,13 @@ mod tests {
             Self {
                 project: Some(project),
                 ..Self::new(cell)
+            }
+        }
+
+        fn failing_move(cell: Arc<Mutex<ActiveChat>>, project: Project, error: &str) -> Self {
+            Self {
+                move_files_error: Some(error.to_string()),
+                ..Self::with_project(cell, project)
             }
         }
     }
@@ -643,6 +681,19 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(worktree_path.map(|s| s.to_string()));
+        }
+        fn move_claude_session_files<'a>(
+            &'a self,
+            _session_id: &'a str,
+            _old_dir: &'a str,
+            _new_dir: &'a str,
+        ) -> BoxFuture<'a, Result<(), String>> {
+            Box::pin(async move {
+                match &self.move_files_error {
+                    Some(err) => Err(err.clone()),
+                    None => Ok(()),
+                }
+            })
         }
     }
 
@@ -813,6 +864,59 @@ mod tests {
             stop_launch_calls.as_slice(),
             &[("p1".to_string(), "/old/wt".to_string())]
         );
+    }
+
+    fn claude_worktreed_chat() -> Chat {
+        let mut chat = worktreed_chat();
+        chat.adapter_id = "claude".to_string();
+        chat
+    }
+
+    #[tokio::test]
+    async fn restarts_the_chat_when_moving_session_files_fails() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(claude_worktreed_chat(), session);
+        let deps = FakeDeps::failing_move(
+            cell.clone(),
+            test_project(),
+            "No such file or directory (os error 2)",
+        );
+        let manager = ChatConfigManager::new(deps);
+
+        let err = manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Moving the session's history into the worktree failed. The session stayed where it was.",
+            "raw io text must not reach the user-facing toast"
+        );
+        assert_eq!(
+            manager.deps.start_chat_calls.load(Ordering::SeqCst),
+            1,
+            "expected the stopped chat to be restarted rather than stranded"
+        );
+    }
+
+    #[tokio::test]
+    async fn keeps_the_old_binding_when_moving_session_files_fails() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(claude_worktreed_chat(), session);
+        let deps = FakeDeps::failing_move(cell.clone(), test_project(), "boom");
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap_err();
+
+        assert!(manager.deps.updates.lock().unwrap().is_empty());
+        assert!(manager.deps.binding_changed.lock().unwrap().is_empty());
+        let chat = cell.lock().unwrap().chat.clone();
+        assert_eq!(chat.worktree_path.as_deref(), Some("/old/wt"));
+        assert_eq!(chat.branch_name.as_deref(), Some("old-branch"));
     }
 
     #[test]

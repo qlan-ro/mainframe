@@ -393,6 +393,38 @@ describe('WorktreePopover — isolated-state indicator', () => {
     const dot = trigger.querySelector('span[aria-hidden]');
     expect(dot).toBeNull();
   });
+
+  // An accepted worktree-switch offer rebinds the chat server-side; the daemon's
+  // chat.updated is the only thing that flips this control.
+  it('flips to the isolated state when the chat is rebound to a worktree', () => {
+    const { rerender } = renderPopover(makeChat());
+
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAttribute('aria-label', 'Isolate in worktree');
+
+    rerender(
+      <TooltipProvider>
+        <WorktreePopover chat={makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' })} hasMessages={false} />
+      </TooltipProvider>,
+    );
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger).toHaveAttribute('aria-label', 'Worktree: alpha');
+    expect(trigger.className).toContain('border-mf-success');
+    expect(trigger.querySelector('span[aria-hidden]')).not.toBeNull();
+  });
+
+  // Moving between worktrees relabels the trigger, not just the isolated flag.
+  it('relabels the trigger when the chat moves to a different worktree', () => {
+    const { rerender } = renderPopover(makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' }));
+
+    rerender(
+      <TooltipProvider>
+        <WorktreePopover chat={makeChat({ worktreePath: '/wt/beta', branchName: 'beta' })} hasMessages={false} />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAttribute('aria-label', 'Worktree: beta');
+  });
 });
 
 // ---------------------------------------------------------------------------
