@@ -8,6 +8,11 @@ import type { SchedulePattern } from '@qlan-ro/mainframe-types';
  * hours resets at midnight instead of firing every 5 hours, so the picker
  * offers only divisors and the schema rejects the rest at the write path —
  * this throws too, defending any caller that bypasses schema validation.
+ *
+ * A `once` pattern has no cron form at all — a one-off fires at an instant, and
+ * every cron expression recurs. The Rust daemon schedules it off its `at`
+ * timestamp instead of compiling it, so reaching here means a caller took the
+ * recurring path with a one-off pattern.
  */
 export function compileSchedule(pattern: SchedulePattern): string {
   switch (pattern.type) {
@@ -22,6 +27,8 @@ export function compileSchedule(pattern: SchedulePattern): string {
         throw new Error(`every_n_hours 'n' (${pattern.n}) must evenly divide 24`);
       }
       return `0 */${pattern.n} * * *`;
+    case 'once':
+      throw new Error(`a 'once' schedule (${pattern.at}) has no cron form — schedule it from its timestamp`);
   }
 }
 
