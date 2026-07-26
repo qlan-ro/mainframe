@@ -207,6 +207,24 @@ describe('TriggerTextField', () => {
     expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(0, ADAPTER_ID, PROJECT_PATH);
   });
 
+  it('skips an installed adapter that serves no skills and lists the next one that does', async () => {
+    seedAdapters([adapter('codex'), adapter(ADAPTER_ID)]);
+    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockImplementation(async (_port, id) => {
+      if (id === 'codex') throw new Error('Adapter not found or does not support skills');
+      return [SKILL_FIXTURE];
+    });
+
+    render(<Field triggers="all" />);
+
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalledTimes(2));
+
+    const textarea = screen.getByTestId('notify-message');
+    fireEvent.change(textarea, { target: { value: '/', selectionStart: 1, selectionEnd: 1 } });
+    expect(await screen.findByTestId('automations-skill-item-my-skill')).toBeInTheDocument();
+  });
+
   it('Enter inserts a newline — automations fields never submit on Enter', async () => {
     const user = userEvent.setup();
     render(<Field />);

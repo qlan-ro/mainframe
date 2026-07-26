@@ -6,8 +6,9 @@
  * `ComposerTriggers`' `useComposerTriggerConfigs`. Sourced from the
  * automation's own `activeProjectId` (no chat/session context — `SkillsProvider`
  * is chat-coupled and can't be reused) and from `adapterId` (the agent step's
- * configured adapter, or `useAdapters`' first installed adapter as a
- * default), mirroring `use-chat-skills.tsx`'s project-path resolution.
+ * configured adapter, or — for the fields belonging to no step — the first
+ * installed adapter that answers the skills route), mirroring
+ * `use-chat-skills.tsx`'s project-path resolution.
  *
  * `getSkills`/`searchFiles`/etc.'s `port` param is vestigial (`apiBase`
  * ignores it) — same `IGNORED_PORT` convention as `use-project-branches.ts`,
@@ -33,11 +34,19 @@ import { useAutomationsStore } from '../data/use-automations-store';
 
 const IGNORED_PORT = 0;
 
-function useAutomationSkills(projectId: string | null, adapterId: string | null, enabled: boolean): Skill[] {
+/**
+ * Only the Claude adapter serves the skills route today (`routes/skills.rs`
+ * answers 404 for the rest), and nothing in `AdapterInfo` says so — so a
+ * candidate that rejects is a candidate that has no skills, and the next one
+ * gets a turn. An adapter step passes exactly one candidate and never guesses.
+ */
+function useAutomationSkills(projectId: string | null, adapterIds: string[], enabled: boolean): Skill[] {
   const [skills, setSkills] = useState<Skill[]>([]);
+  const candidateKey = adapterIds.join(',');
 
   useEffect(() => {
-    if (!enabled || !projectId || !adapterId) {
+    const candidates = candidateKey ? candidateKey.split(',') : [];
+    if (!enabled || !projectId || candidates.length === 0) {
       setSkills([]);
       return;
     }
@@ -50,8 +59,16 @@ function useAutomationSkills(projectId: string | null, adapterId: string | null,
           if (!cancelled) setSkills([]);
           return;
         }
-        const list = await getSkills(IGNORED_PORT, adapterId, path);
-        if (!cancelled) setSkills(list);
+        for (const candidate of candidates) {
+          try {
+            const list = await getSkills(IGNORED_PORT, candidate, path);
+            if (!cancelled) setSkills(list);
+            return;
+          } catch (err) {
+            console.warn(`[automations-triggers] ${candidate} served no skills`, err);
+          }
+        }
+        if (!cancelled) setSkills([]);
       } catch (err) {
         console.warn('[automations-triggers] failed to load skills', err);
         if (!cancelled) setSkills([]);
@@ -60,7 +77,7 @@ function useAutomationSkills(projectId: string | null, adapterId: string | null,
     return () => {
       cancelled = true;
     };
-  }, [enabled, projectId, adapterId]);
+  }, [enabled, projectId, candidateKey]);
 
   return skills;
 }
@@ -75,16 +92,19 @@ export interface UseAutomationTriggerSourcesOptions {
   enabled?: boolean;
 }
 
-/** `adapterId`, when given, overrides `useAdapters`' first installed adapter. */
+/** `adapterId`, when given, is the only adapter `/` lists skills from. */
 export function useAutomationTriggerSources(
   adapterId?: string,
   { enabled = true }: UseAutomationTriggerSourcesOptions = {},
 ): TriggerConfig[] {
   const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
   const adapters = useAdapters();
-  const resolvedAdapterId = adapterId ?? adapters.find((a) => a.installed)?.id ?? null;
+  const candidateAdapterIds = useMemo(
+    () => (adapterId ? [adapterId] : adapters.filter((a) => a.installed).map((a) => a.id)),
+    [adapterId, adapters],
+  );
 
-  const skills = useAutomationSkills(activeProjectId, resolvedAdapterId, enabled);
+  const skills = useAutomationSkills(activeProjectId, candidateAdapterIds, enabled);
   const skillsAdapter = useMemo(() => buildSkillsTriggerAdapter(skills), [skills]);
 
   const mentionCache = useMemo(

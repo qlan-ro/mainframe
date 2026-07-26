@@ -41,8 +41,8 @@ export interface TriggerTextFieldProps {
   triggers?: 'all' | 'variables-only';
   /**
    * The adapter whose skills `/` lists — the owning agent step's `adapterId`.
-   * Absent falls back to the first installed adapter, which is right for the
-   * fields that belong to no step (Notify, Set value, action inputs).
+   * Absent, the fields that belong to no step (Notify, Set value, action
+   * inputs) take the first installed adapter that serves skills.
    */
   adapterId?: string;
   /** Drops the field's own border/background — for fields embedded in a card that already draws one. */
