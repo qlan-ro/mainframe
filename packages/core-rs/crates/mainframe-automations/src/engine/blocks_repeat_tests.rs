@@ -22,7 +22,7 @@ fn rendering_ports(rendered: Arc<Mutex<Vec<String>>>) -> FakePorts {
             rendered
                 .lock()
                 .unwrap()
-                .push(tokens::render(&step.message, ctx.scope));
+                .push(tokens::render(&step.message, ctx.scope, ctx.names));
             completed([("msg".to_string(), json!("hi"))].into_iter().collect())
         }),
         ..FakePorts::default()

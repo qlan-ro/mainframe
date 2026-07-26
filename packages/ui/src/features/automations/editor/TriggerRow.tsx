@@ -8,41 +8,113 @@
  * this component and `WhenCard`'s add menu only ever handle
  * schedule/event/webhook.
  *
- * The event picker's menu lists five entries: the three curated
- * `AutomationEventName` values plus two GitHub PR presets. Contract §1: PR
- * opened/merged are webhook presets under the hood (daemon-side match
- * predicate keyed by `hookId`), so picking one replaces the trigger with a
- * `WebhookTrigger` rather than storing an event name the contract doesn't
- * have. No live webhook-registration route exists yet (Phase 6 dependency)
- * — the `hookId` is a client-generated placeholder, matching the
- * always-placeholder URL/sample state webhook rows show regardless of
- * origin.
+ * The event picker offers the three curated `AutomationEventName` values
+ * and nothing else. Contract §1: GitHub PR opened/merged are webhook
+ * *presets* (a daemon-side match predicate keyed by `hookId`), not events —
+ * offering them here fabricated a webhook trigger out of an event picker.
+ *
+ * The source filter (`automationId`) narrows which automation to watch. The
+ * daemon drops a filtered binding whose event carries no source automation
+ * (`triggers/router.rs`: `(Some(_), None) => false`), so a filter on
+ * `session.finished` would silently never fire — hence the filter only
+ * exists, and only survives an event change, for the two automation events.
  */
-import { Calendar, Check, Globe, X, Zap } from 'lucide-react';
+import { Calendar, Globe, X, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
-import type { AutomationEventName, AutomationTrigger } from '../contract';
-import { MiniSelect } from '../fields/MiniSelect';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { AutomationEventName, AutomationTrigger, EventTrigger } from '../contract';
+import { useAutomationsStore } from '../data/use-automations-store';
 import { SchedulePicker } from './SchedulePicker';
+import { WebhookTriggerCard } from './WebhookTriggerCard';
 
-interface EventMenuOption {
-  label: string;
-  apply: (id: string) => AutomationTrigger;
-}
-
-const EVENT_OPTIONS: EventMenuOption[] = [
-  { label: 'A chat session finishes', apply: (id) => ({ id, kind: 'event', event: 'session.finished' }) },
-  { label: 'Another automation finishes', apply: (id) => ({ id, kind: 'event', event: 'automation.finished' }) },
-  { label: 'Another automation fails', apply: (id) => ({ id, kind: 'event', event: 'automation.failed' }) },
-  { label: 'A pull request is opened (GitHub)', apply: (id) => ({ id, kind: 'webhook', hookId: `pending-${id}` }) },
-  { label: 'A pull request is merged (GitHub)', apply: (id) => ({ id, kind: 'webhook', hookId: `pending-${id}` }) },
+const EVENTS: Array<{ value: AutomationEventName; label: string }> = [
+  { value: 'session.finished', label: 'A chat session finishes' },
+  { value: 'automation.finished', label: 'Another automation finishes' },
+  { value: 'automation.failed', label: 'Another automation fails' },
 ];
 
-const EVENT_LABELS: Record<AutomationEventName, string> = {
-  'session.finished': 'A chat session finishes',
-  'automation.finished': 'Another automation finishes',
-  'automation.failed': 'Another automation fails',
-};
+const SOURCE_FILTERABLE: ReadonlySet<AutomationEventName> = new Set<AutomationEventName>([
+  'automation.finished',
+  'automation.failed',
+]);
+
+const ANY_SOURCE = '__any__';
+
+function EventTriggerFields({
+  trigger,
+  onChange,
+  testId,
+}: {
+  trigger: EventTrigger;
+  onChange: (next: EventTrigger) => void;
+  testId: string;
+}) {
+  const definitions = useAutomationsStore((s) => s.definitions);
+
+  function handleEvent(event: AutomationEventName) {
+    const next: EventTrigger = { id: trigger.id, kind: 'event', event };
+    if (SOURCE_FILTERABLE.has(event) && trigger.automationId) next.automationId = trigger.automationId;
+    onChange(next);
+  }
+
+  function handleSource(value: string) {
+    const next: EventTrigger = { id: trigger.id, kind: 'event', event: trigger.event };
+    if (value !== ANY_SOURCE) next.automationId = value;
+    onChange(next);
+  }
+
+  const sources = definitions.map((definition) => ({ id: definition.id, label: definition.name }));
+  // A filter pointing at a deleted automation still filters — saying "Any" there would be a lie.
+  if (trigger.automationId && !sources.some((s) => s.id === trigger.automationId)) {
+    sources.push({ id: trigger.automationId, label: `Unknown automation (${trigger.automationId})` });
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <Select value={trigger.event} onValueChange={(next) => handleEvent(next as AutomationEventName)}>
+        <SelectTrigger data-testid={`${testId}-event-name`} className="h-[28px] w-[240px] text-caption">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {EVENTS.map((event) => (
+            <SelectItem
+              key={event.value}
+              value={event.value}
+              data-testid={`${testId}-event-name-option-${event.value.replace('.', '-')}`}
+            >
+              {event.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {SOURCE_FILTERABLE.has(trigger.event) && (
+        <>
+          <span className="text-caption text-muted-foreground">from</span>
+          <Select value={trigger.automationId ?? ANY_SOURCE} onValueChange={handleSource}>
+            <SelectTrigger data-testid={`${testId}-event-source`} className="h-[28px] w-[190px] text-caption">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY_SOURCE} data-testid={`${testId}-event-source-option-any`}>
+                Any automation
+              </SelectItem>
+              {sources.map((source) => (
+                <SelectItem
+                  key={source.id}
+                  value={source.id}
+                  data-testid={`${testId}-event-source-option-${source.id}`}
+                >
+                  {source.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      )}
+    </div>
+  );
+}
 
 const TRIGGER_META: Record<AutomationTrigger['kind'], { icon: LucideIcon; label: string }> = {
   schedule: { icon: Calendar, label: 'On a schedule' },
@@ -53,10 +125,12 @@ const TRIGGER_META: Record<AutomationTrigger['kind'], { icon: LucideIcon; label:
 export interface TriggerRowProps {
   trigger: AutomationTrigger;
   onChange: (next: AutomationTrigger | null) => void;
+  /** The owning automation, absent until it is saved — only the webhook card needs it. */
+  automationId?: string;
   testId: string;
 }
 
-export function TriggerRow({ trigger, onChange, testId }: TriggerRowProps) {
+export function TriggerRow({ trigger, onChange, automationId, testId }: TriggerRowProps) {
   const meta = TRIGGER_META[trigger.kind];
   const Icon = meta.icon;
 
@@ -75,34 +149,9 @@ export function TriggerRow({ trigger, onChange, testId }: TriggerRowProps) {
             <SchedulePicker trigger={trigger} onChange={onChange} testId={`${testId}-schedule`} />
           </div>
         )}
-        {trigger.kind === 'event' && (
-          <div className="mt-1.5">
-            <MiniSelect
-              value={EVENT_LABELS[trigger.event]}
-              options={EVENT_OPTIONS.map((o) => o.label)}
-              onChange={(label) => {
-                const option = EVENT_OPTIONS.find((o) => o.label === label);
-                if (option) onChange(option.apply(trigger.id));
-              }}
-              testId={`${testId}-event`}
-              width={280}
-            />
-          </div>
-        )}
+        {trigger.kind === 'event' && <EventTriggerFields trigger={trigger} onChange={onChange} testId={testId} />}
         {trigger.kind === 'webhook' && (
-          <div className="mt-1.5 flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 font-mono text-caption text-muted-foreground">
-              <Globe size={11} aria-hidden />
-              https://hooks.mainframe.app/w/{trigger.hookId}
-            </div>
-            <div className="flex items-center gap-1 text-caption text-muted-foreground">
-              <Check size={11} className="text-mf-success" aria-hidden />
-              Signature verified
-            </div>
-            <div className="text-caption text-muted-foreground">
-              No sample captured yet — capture one call to read its fields as tokens.
-            </div>
-          </div>
+          <WebhookTriggerCard trigger={trigger} onChange={onChange} automationId={automationId} testId={testId} />
         )}
       </div>
       <Hint label="Remove trigger">

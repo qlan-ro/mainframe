@@ -14,13 +14,14 @@ import type {
   ChipText,
   NotifyStep,
   RunActionStep,
+  SetVariableStep,
   TokenRef,
 } from '../contract';
 import { isTokenPart } from '../domain/chip-parts';
 import type { TokenDescriptor } from '../domain/tokens';
 import { TokenChip } from '../fields/TokenChip';
 
-export type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep;
+export type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep;
 
 interface StepSummaryProps {
   step: LeafStep;
@@ -85,5 +86,9 @@ export function StepSummary({ step, tokens, catalog }: StepSummaryProps) {
       return <AskMeSummary step={step} />;
     case 'run_action':
       return <RunActionSummary step={step} catalog={catalog} />;
+    case 'set_variable':
+      return (
+        <span className="text-caption text-muted-foreground">{step.name ? `Set $${step.name}` : 'Unnamed value'}</span>
+      );
   }
 }

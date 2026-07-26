@@ -23,6 +23,9 @@ export function createFakeGateway(overrides: Partial<AutomationsGateway> = {}): 
     setEnabled: async () => {
       throw new Error('not implemented');
     },
+    registerWebhook: async () => {
+      throw new Error('not implemented');
+    },
     startRun: async () => {
       throw new Error('not implemented');
     },

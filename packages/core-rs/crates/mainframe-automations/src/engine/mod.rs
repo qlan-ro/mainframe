@@ -27,7 +27,7 @@ use serde_json::{Map, Value};
 
 use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep};
 use crate::error::StoreError;
-use crate::tokens::Scope;
+use crate::tokens::{NameMap, Scope};
 
 /// Local dyn-future alias (the repo's `mainframe-adapter-api::BoxFuture`
 /// pattern — this crate must not depend on adapter-api).
@@ -58,6 +58,9 @@ pub struct VerbContext<'a> {
     pub run_id: &'a str,
     pub step_ref: &'a str,
     pub scope: &'a Scope<'a>,
+    /// The `$name`s this step can address — the scope walk's, not a flat
+    /// sweep (see `tokens::variables`).
+    pub names: &'a NameMap,
 }
 
 /// Post-finalize hook (T8.3): the CompletionEmitter turns a finalized
@@ -117,6 +120,9 @@ mod agent_tests;
 
 #[cfg(test)]
 mod blocks_if_tests;
+
+#[cfg(test)]
+mod variables_tests;
 
 #[cfg(test)]
 mod blocks_repeat_tests;

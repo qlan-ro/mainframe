@@ -19,7 +19,7 @@ describe('useAutomationsStore', () => {
 
   it('defaults to a seeded fixture gateway (no network needed)', async () => {
     const definitions = await useAutomationsStore.getState().gateway.listAutomations();
-    expect(definitions.length).toBe(6);
+    expect(definitions.length).toBe(7);
   });
 
   it('setActiveProjectId updates the field', () => {

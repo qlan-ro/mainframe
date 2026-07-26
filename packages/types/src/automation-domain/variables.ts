@@ -1,0 +1,267 @@
+/**
+ * The `$name` variable model — how a token becomes a name the user can type in
+ * a plain textarea, and how names are assigned when several tokens derive the
+ * same one.
+ *
+ * Naming is two-stage. `variableNameFor` derives a base identifier per
+ * descriptor; `buildVariableNamespace` then assigns final names over the
+ * descriptor list *in scope at the referencing step* — `scopeAt`'s output, in
+ * its order. Names are therefore position-dependent exactly where scope is:
+ * after `[repeat[agent A], agent B]`, B is `agent_result`, because A never
+ * leaves the repeat body. Callers must pass `scopeAt(...)`, never a flat sweep
+ * of every step, or the editor's names drift from the runtime's.
+ *
+ * `crates/mainframe-automations/src/tokens/variables.rs` is the runtime twin of
+ * this file and must stay in lockstep; the shared cases live in
+ * `packages/types/fixtures/automations/variable-substitution.json`.
+ */
+import type { AutomationDefinition, TokenRef } from '../automation.js';
+import { isTokenPart } from './chip-parts.js';
+import { mapStepChipText } from './step-chip-text.js';
+import type { TokenDescriptor } from './tokens.js';
+
+export interface VariableRef {
+  name: string;
+  /** Dotted suffix, dug into the resolved value with the same semantics as a legacy token's `field`. */
+  path: string[];
+  /** Index of the `$`. */
+  start: number;
+  /** Exclusive end of the whole match. */
+  end: number;
+  /** Set on the braced `${name}` spelling, which needs no word boundary. Absent on the bare `$name`. */
+  delimited?: true;
+}
+
+const NAME_START = /[A-Za-z_]/;
+const NAME_CHAR = /[A-Za-z0-9_]/;
+
+function scanName(text: string, from: number): number {
+  if (from >= text.length || !NAME_START.test(text[from]!)) return from;
+  return scanPathSegment(text, from);
+}
+
+/** A path segment may start with a digit — `$prs.0` indexes a list, the same descent a legacy token's `field` performs. */
+function scanPathSegment(text: string, from: number): number {
+  let end = from;
+  while (end < text.length && NAME_CHAR.test(text[end]!)) end += 1;
+  return end;
+}
+
+/** A `$` only opens a ref at the start of the text or after whitespace — the same word boundary the composer's `/` and `@` triggers use. */
+function opensRef(text: string, index: number): boolean {
+  return index === 0 || /\s/.test(text[index - 1]!);
+}
+
+/** The `name.path` body shared by both spellings, from `from`; `end === from` means "no name here". */
+function scanBody(text: string, from: number): { name: string; path: string[]; end: number } {
+  const nameEnd = scanName(text, from);
+  if (nameEnd === from) return { name: '', path: [], end: from };
+  const path: string[] = [];
+  let end = nameEnd;
+  while (text[end] === '.') {
+    const segmentEnd = scanPathSegment(text, end + 1);
+    if (segmentEnd === end + 1) break;
+    path.push(text.slice(end + 1, segmentEnd));
+    end = segmentEnd;
+  }
+  return { name: text.slice(from, nameEnd), path, end };
+}
+
+/**
+ * Every `$name` / `$name.path` / `${name}` occurrence, with exact offsets. A
+ * trailing bare period is never consumed: `$release_notes.` resolves the
+ * variable and leaves the period as text.
+ *
+ * The braced spelling exists because the bare one needs a word boundary, so
+ * `todo/$id` is literal text — the picker and `chipTextToText` emit `${id}`
+ * whenever they insert mid-word (`formatVariableRef`), and it is recognized
+ * anywhere.
+ */
+export function extractVariableRefs(text: string): VariableRef[] {
+  const refs: VariableRef[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== '$') continue;
+
+    if (text[i + 1] === '{') {
+      const body = scanBody(text, i + 2);
+      if (body.end === i + 2 || text[body.end] !== '}') continue;
+      refs.push({ name: body.name, path: body.path, start: i, end: body.end + 1, delimited: true });
+      i = body.end;
+      continue;
+    }
+
+    if (!opensRef(text, i)) continue;
+    const body = scanBody(text, i + 1);
+    if (body.end === i + 1) continue;
+    refs.push({ name: body.name, path: body.path, start: i, end: body.end });
+    i = body.end - 1;
+  }
+  return refs;
+}
+
+/** True where a bare `$` would open a ref — the boundary `formatVariableRef` checks before picking a spelling. */
+export function opensVariableRef(text: string, index: number): boolean {
+  return opensRef(text, index);
+}
+
+/**
+ * A ref as text, in the spelling that survives at this insertion point: bare
+ * `$name` after whitespace or at the start, braced `${name}` otherwise, where a
+ * bare `$` would be literal text.
+ */
+export function formatVariableRef(name: string, path: string[], precededBy: string): string {
+  const body = [name, ...path].join('.');
+  return opensRef(precededBy + '$', precededBy.length) ? `$${body}` : `\${${body}}`;
+}
+
+/** Dot-path descent: records by key, lists by integer index. Any miss along the way is `undefined`, never an error. */
+function dig(value: unknown, path: string[]): unknown {
+  let cursor = value;
+  for (const key of path) {
+    if (Array.isArray(cursor)) {
+      const index = Number(key);
+      cursor = Number.isInteger(index) ? cursor[index] : undefined;
+    } else if (typeof cursor === 'object' && cursor !== null) {
+      cursor = (cursor as Record<string, unknown>)[key];
+    } else {
+      return undefined;
+    }
+    if (cursor === undefined) return undefined;
+  }
+  return cursor;
+}
+
+/** Mirrors `TokenValue::coerce_to_string` in `crates/mainframe-automations/src/tokens/value.rs`. */
+function coerceToString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(coerceToString).join('\n');
+  if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+  return String(value);
+}
+
+/**
+ * Substitutes `$name` / `$name.path` against resolved values — the reference
+ * implementation the shared `variable-substitution.json` cases run through on
+ * both sides. An unknown base name stays literal (the user typed a `$` that
+ * means nothing here); a known base with a failed dig renders empty, exactly as
+ * a legacy field-dug token does.
+ */
+export function renderVariableText(text: string, values: Record<string, unknown>): string {
+  let out = '';
+  let cursor = 0;
+  for (const ref of extractVariableRefs(text)) {
+    if (!Object.prototype.hasOwnProperty.call(values, ref.name)) continue;
+    const dug = dig(values[ref.name], ref.path);
+    out += text.slice(cursor, ref.start) + (dug === undefined ? '' : coerceToString(dug));
+    cursor = ref.end;
+  }
+  return out + text.slice(cursor);
+}
+
+/** Outputs an agent step produces without the user naming them — they need the step-kind prefix to read as a variable. */
+const IMPLICIT_AGENT_OUTPUTS = new Set(['result', 'chatId']);
+
+/** Folds arbitrary text into a `$name`-safe identifier. Lossy on purpose — collisions are resolved by suffixing in `buildVariableNamespace`. */
+export function sanitizeVariableName(raw: string): string {
+  const snake = raw
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_');
+  if (snake === '') return '_';
+  return /[0-9]/.test(snake[0]!) ? `_${snake}` : snake;
+}
+
+/** The base identifier a descriptor derives, before collision suffixing. */
+export function variableNameFor(descriptor: TokenDescriptor): string {
+  switch (descriptor.sourceKind) {
+    case 'trigger':
+      return `trigger_${sanitizeVariableName(descriptor.ref.output)}`;
+    case 'agent':
+      return IMPLICIT_AGENT_OUTPUTS.has(descriptor.ref.output)
+        ? `agent_${sanitizeVariableName(descriptor.ref.output)}`
+        : sanitizeVariableName(descriptor.ref.output);
+    case 'item':
+      return 'item';
+    case 'variable':
+      return sanitizeVariableName(descriptor.label);
+    default:
+      return sanitizeVariableName(descriptor.ref.output);
+  }
+}
+
+export interface VariableNamespace {
+  byName: Map<string, TokenDescriptor>;
+  /** The name assigned to a ref, or `null` when it resolves to nothing in this scope. A ref's `field` is ignored — dotted paths are a text concern. */
+  nameFor(ref: TokenRef): string | null;
+}
+
+function refKey(ref: TokenRef): string {
+  return `${ref.stepId}\0${ref.output}`;
+}
+
+/**
+ * Assigns a final name to every descriptor, in list order.
+ *
+ * A descriptor's name is its base plus the ordinal its producing step minted
+ * once, at creation, against every name in the definition (`nameOrdinal`, from
+ * `output-name.ts`) — *not* its position here. That is the whole point: insert
+ * a second agent step above the first and the first keeps `$agent_result`,
+ * because the ordinal travels with the step rather than with the row it sits
+ * in. Steps saved before `outputName` existed carry no ordinal and fall back to
+ * position-ordered suffixing, so old definitions keep the names they had.
+ *
+ * A set-variable name is never suffixed — the user typed it, so a second step
+ * claiming it is a mistake, not a second addressable value: the first wins and
+ * `validate` reports the duplicate.
+ */
+export function buildVariableNamespace(descriptors: TokenDescriptor[]): VariableNamespace {
+  const byName = new Map<string, TokenDescriptor>();
+  const namesByRef = new Map<string, string>();
+
+  for (const descriptor of descriptors) {
+    const base = variableNameFor(descriptor);
+    let name = descriptor.nameOrdinal === undefined ? base : `${base}_${descriptor.nameOrdinal}`;
+    if (byName.has(name)) {
+      if (descriptor.sourceKind === 'variable') continue;
+      let suffix = 2;
+      while (byName.has(`${base}_${suffix}`)) suffix += 1;
+      name = `${base}_${suffix}`;
+    }
+    byName.set(name, descriptor);
+    namesByRef.set(refKey(descriptor.ref), name);
+  }
+
+  return { byName, nameFor: (ref) => namesByRef.get(refKey(ref)) ?? null };
+}
+
+/** Every name a step in this scope can type — the namespace's keys, for callers that only need membership. */
+export function variableNamesInScope(scope: TokenDescriptor[]): Set<string> {
+  return new Set(buildVariableNamespace(scope).byName.keys());
+}
+
+/** Rewrites `$old`, `$old.path` and `${old}` occurrences, each in the spelling it already used; `$older` and mid-word `$old` are left alone. */
+export function renameVariableRefs(text: string, oldName: string, newName: string): string {
+  const refs = extractVariableRefs(text).filter((ref) => ref.name === oldName);
+  let out = '';
+  let cursor = 0;
+  for (const ref of refs) {
+    const body = [newName, ...ref.path].join('.');
+    out += text.slice(cursor, ref.start) + (ref.delimited ? `\${${body}}` : `$${body}`);
+    cursor = ref.end;
+  }
+  return out + text.slice(cursor);
+}
+
+/** A new definition with every `$oldName` text reference rewritten, at any depth. Legacy `{token}` parts are untouched — they address a step structurally, not by name. */
+export function renameVariableInDefinition(
+  definition: AutomationDefinition,
+  oldName: string,
+  newName: string,
+): AutomationDefinition {
+  const steps = definition.steps.map((step) =>
+    mapStepChipText(step, (value) =>
+      value.map((part) => (isTokenPart(part) ? part : renameVariableRefs(part, oldName, newName))),
+    ),
+  );
+  return { ...definition, steps };
+}

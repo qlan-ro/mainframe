@@ -119,6 +119,19 @@ export function createFixtureGateway(): AutomationsGateway {
       return updated;
     },
 
+    async registerWebhook(automationId: string, triggerId: string) {
+      const existing = definitions.get(automationId) ?? notFound('automation', automationId);
+      const trigger = existing.definition.triggers.find((t) => t.id === triggerId);
+      if (!trigger || trigger.kind !== 'webhook') notFound('webhook trigger', triggerId);
+      // The dev host has no daemon, so the port is the documented default rather
+      // than a live one — the shape is what the fixture backend exists to exercise.
+      return {
+        hookId: trigger.hookId,
+        url: `http://127.0.0.1:31415/api/automation-webhooks/${trigger.hookId}`,
+        lastDeliveryAt: null,
+      };
+    },
+
     async startRun(automationId: string) {
       if (!definitions.has(automationId)) notFound('automation', automationId);
       const id = nextId('run');

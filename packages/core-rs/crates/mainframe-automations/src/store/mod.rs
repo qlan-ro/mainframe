@@ -1,17 +1,20 @@
 //! SQLite store on its own `<dataDir>/automations.db` (contract §3) — the
-//! three contract tables only; engine state is derived, never cached in
-//! extra tables (locked decision: scheduler state derived).
+//! three contract tables plus `automation_webhook_state`; engine state is
+//! otherwise derived, never cached in extra tables (locked decision:
+//! scheduler state derived).
 
 pub mod automation_store;
 pub mod db;
 pub mod interaction_store;
 pub(crate) mod run_rows;
 pub mod run_store;
+pub mod webhook_state;
 
 pub use automation_store::AutomationStore;
 pub use db::AutomationDb;
 pub use interaction_store::InteractionStore;
 pub use run_store::RunStore;
+pub use webhook_state::WebhookStateStore;
 
 use std::collections::BTreeMap;
 
@@ -223,6 +226,9 @@ mod run_store_tests;
 
 #[cfg(test)]
 mod test_support;
+
+#[cfg(test)]
+mod webhook_state_tests;
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1-T2.2), not a TS port
 // confidence: high

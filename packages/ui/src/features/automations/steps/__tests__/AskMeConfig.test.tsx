@@ -53,6 +53,31 @@ describe('AskMeConfig — field CRUD', () => {
     });
   });
 
+  it("changing a field's type seeds an options list for choice, and drops it again for text", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const step: AskMeStep = { ...BASE_STEP, fields: [{ key: 'mood', type: 'text', label: 'Mood' }] };
+    const { rerender } = render(<AskMeConfig step={step} onChange={onChange} testId="automations-askme-a" />);
+    await user.click(screen.getByTestId('automations-askme-a-field-0-type'));
+    await user.click(screen.getByTestId('automations-askme-a-field-0-type-option-choice'));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...step,
+      fields: [{ key: 'mood', type: 'choice', label: 'Mood', options: [] }],
+    });
+
+    const choiceStep: AskMeStep = {
+      ...BASE_STEP,
+      fields: [{ key: 'mood', type: 'choice', label: 'Mood', options: ['Great'] }],
+    };
+    rerender(<AskMeConfig step={choiceStep} onChange={onChange} testId="automations-askme-a" />);
+    await user.click(screen.getByTestId('automations-askme-a-field-0-type'));
+    await user.click(screen.getByTestId('automations-askme-a-field-0-type-option-text'));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...choiceStep,
+      fields: [{ key: 'mood', type: 'text', label: 'Mood', options: undefined }],
+    });
+  });
+
   it('removing a field drops it from step.fields', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -141,6 +166,30 @@ describe('AskMeConfig — show-when', () => {
       fields: [
         step.fields[0],
         { key: 'other', type: 'text', label: 'Other symptom', showWhen: { key: 'symptoms', equals: 'Other' } },
+      ],
+    });
+  });
+
+  it('repoints showWhen at another sibling field, keeping the value it compares against', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const step: AskMeStep = {
+      ...BASE_STEP,
+      fields: [
+        { key: 'symptoms', type: 'multi', label: 'Symptoms', options: ['Other'] },
+        { key: 'mood', type: 'text', label: 'Mood' },
+        { key: 'other', type: 'text', label: 'Other symptom', showWhen: { key: 'symptoms', equals: 'Other' } },
+      ],
+    };
+    render(<AskMeConfig step={step} onChange={onChange} testId="automations-askme-a" />);
+    await user.click(screen.getByTestId('automations-askme-a-field-2-showwhen-key'));
+    await user.click(screen.getByTestId('automations-askme-a-field-2-showwhen-key-option-mood'));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...step,
+      fields: [
+        step.fields[0],
+        step.fields[1],
+        { key: 'other', type: 'text', label: 'Other symptom', showWhen: { key: 'mood', equals: 'Other' } },
       ],
     });
   });

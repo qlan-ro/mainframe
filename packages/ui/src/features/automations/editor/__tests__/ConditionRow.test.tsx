@@ -11,6 +11,12 @@ import userEvent from '@testing-library/user-event';
 import type { TokenDescriptor } from '../../domain/tokens';
 import { ConditionRow } from '../ConditionRow';
 
+/** The shared select is a portalled popover — its options only exist once the trigger is open. */
+async function openOptions(user: ReturnType<typeof userEvent.setup>, testId: string): Promise<Array<string | null>> {
+  await user.click(screen.getByTestId(testId));
+  return screen.getAllByRole('option').map((option) => option.textContent);
+}
+
 const TEXT_TOKEN: TokenDescriptor = {
   ref: { stepId: 'pick-feature', output: 'result' },
   label: 'Result',
@@ -36,8 +42,17 @@ const NUMBER_TOKEN: TokenDescriptor = {
   source: 'Run a command',
 };
 
+const LIST_TOKEN: TokenDescriptor = {
+  ref: { stepId: 'count', output: 'files' },
+  label: 'Files',
+  type: 'list',
+  sourceKind: 'action',
+  source: 'Run a command',
+};
+
 describe('ConditionRow — comparators per token type', () => {
-  it('offers text comparators (is/is not/contains/starts with/is one of) for a text token', () => {
+  it('offers text comparators (is/is not/contains/starts with/is one of) for a text token', async () => {
+    const user = userEvent.setup();
     render(
       <ConditionRow
         condition={{ token: TEXT_TOKEN.ref, comparator: 'is' }}
@@ -46,13 +61,17 @@ describe('ConditionRow — comparators per token type', () => {
         testId="cond"
       />,
     );
-    const options = Array.from(screen.getByTestId('cond-comparator').querySelectorAll('option')).map(
-      (o) => o.textContent,
-    );
-    expect(options).toEqual(['is', 'is not', 'contains', 'starts with', 'is one of']);
+    expect(await openOptions(user, 'cond-comparator')).toEqual([
+      'is',
+      'is not',
+      'contains',
+      'starts with',
+      'is one of',
+    ]);
   });
 
-  it('offers number comparators (=, is not, <, >) for a number token', () => {
+  it('offers number comparators (=, is not, <, >) for a number token', async () => {
+    const user = userEvent.setup();
     render(
       <ConditionRow
         condition={{ token: NUMBER_TOKEN.ref, comparator: 'eq' }}
@@ -61,13 +80,11 @@ describe('ConditionRow — comparators per token type', () => {
         testId="cond"
       />,
     );
-    const options = Array.from(screen.getByTestId('cond-comparator').querySelectorAll('option')).map(
-      (o) => o.textContent,
-    );
-    expect(options).toEqual(['=', 'is not', '<', '>']);
+    expect(await openOptions(user, 'cond-comparator')).toEqual(['=', 'is not', '<', '>']);
   });
 
-  it('offers only is/is not/is one of for a choice token', () => {
+  it('offers only is/is not/is one of for a choice token', async () => {
+    const user = userEvent.setup();
     render(
       <ConditionRow
         condition={{ token: CHOICE_TOKEN.ref, comparator: 'is' }}
@@ -76,15 +93,33 @@ describe('ConditionRow — comparators per token type', () => {
         testId="cond"
       />,
     );
-    const options = Array.from(screen.getByTestId('cond-comparator').querySelectorAll('option')).map(
-      (o) => o.textContent,
+    expect(await openOptions(user, 'cond-comparator')).toEqual(['is', 'is not', 'is one of']);
+  });
+
+  it('emits the picked comparator and drops a value the new comparator has no use for', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <ConditionRow
+        condition={{ token: LIST_TOKEN.ref, comparator: 'contains', value: 'ok' }}
+        tokens={[LIST_TOKEN]}
+        onChange={onChange}
+        testId="cond"
+      />,
     );
-    expect(options).toEqual(['is', 'is not', 'is one of']);
+    await user.click(screen.getByTestId('cond-comparator'));
+    await user.click(screen.getByTestId('cond-comparator-option-is_empty'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      token: LIST_TOKEN.ref,
+      comparator: 'is_empty',
+      value: undefined,
+    });
   });
 });
 
 describe('ConditionRow — choice value editor', () => {
-  it("renders a dropdown of the token's own options for a single-value choice comparator", () => {
+  it("renders a dropdown of the token's own options for a single-value choice comparator", async () => {
+    const user = userEvent.setup();
     render(
       <ConditionRow
         condition={{ token: CHOICE_TOKEN.ref, comparator: 'is', value: 's' }}
@@ -93,8 +128,24 @@ describe('ConditionRow — choice value editor', () => {
         testId="cond"
       />,
     );
-    const options = Array.from(screen.getByTestId('cond-value').querySelectorAll('option')).map((o) => o.textContent);
-    expect(options).toEqual(['xs', 's', 'm']);
+    expect(screen.getByTestId('cond-value')).toHaveTextContent('s');
+    expect(await openOptions(user, 'cond-value')).toEqual(['xs', 's', 'm']);
+  });
+
+  it('commits the picked choice option as the condition value', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <ConditionRow
+        condition={{ token: CHOICE_TOKEN.ref, comparator: 'is', value: 's' }}
+        tokens={[CHOICE_TOKEN]}
+        onChange={onChange}
+        testId="cond"
+      />,
+    );
+    await user.click(screen.getByTestId('cond-value'));
+    await user.click(screen.getByTestId('cond-value-option-m'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ token: CHOICE_TOKEN.ref, comparator: 'is', value: 'm' });
   });
 });
 

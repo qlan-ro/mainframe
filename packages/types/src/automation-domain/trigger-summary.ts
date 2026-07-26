@@ -18,6 +18,10 @@ function summarizeSchedule(schedule: SchedulePattern): string {
     }
     case 'every_n_hours':
       return `Every ${schedule.n} hour${schedule.n === 1 ? '' : 's'}`;
+    case 'once': {
+      const [date, time] = schedule.at.split('T');
+      return `Once on ${date} at ${time}`;
+    }
   }
 }
 

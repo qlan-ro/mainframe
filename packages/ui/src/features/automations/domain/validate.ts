@@ -6,4 +6,4 @@
  * notes for the split rationale.
  */
 export type { ValidationIssue } from '@qlan-ro/mainframe-types';
-export { validate } from '@qlan-ro/mainframe-types';
+export { setVariableNameIssue, validate } from '@qlan-ro/mainframe-types';

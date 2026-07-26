@@ -133,6 +133,8 @@ function outputsForStep(step: AutomationStep, catalogOutputs: CatalogOutputs | u
       return step.fields.map((f) => f.key);
     case 'run_action':
       return catalogOutputs ? (catalogOutputs[step.actionId] ?? []) : null;
+    case 'set_variable':
+      return ['value'];
     case 'notify':
     case 'if':
     case 'repeat':
@@ -148,6 +150,8 @@ function collectOwnTokenRefs(step: AutomationStep): TokenRef[] {
       return [];
     case 'run_action':
       return Object.values(step.params).flatMap(chipTokens);
+    case 'set_variable':
+      return chipTokens(step.value);
     case 'notify':
       return chipTokens(step.message);
     case 'if':

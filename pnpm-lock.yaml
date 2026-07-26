@@ -427,6 +427,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.17)(react@19.2.8)
+      react-textarea-autosize:
+        specifier: ^8.5.9
+        version: 8.5.9(@types/react@19.2.17)(react@19.2.8)
       react-virtuoso:
         specifier: ^4.18.11
         version: 4.18.11(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

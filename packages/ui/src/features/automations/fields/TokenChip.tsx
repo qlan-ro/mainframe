@@ -13,7 +13,7 @@
  * `text-foreground` — never colored text on a colored fill.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Calendar, CircleDot, Clock, MessageCircle, Plug, Sparkles, TriangleAlert, X, Zap } from 'lucide-react';
+import { Calendar, CircleDot, Clock, MessageCircle, Plug, Sparkles, TriangleAlert, Variable, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TOKEN_STEP_BUILTIN } from '../contract';
 import type { TokenDescriptor, TokenSourceKind } from '../domain/tokens';
@@ -51,6 +51,12 @@ const SOURCE_STYLE: Record<TokenSourceKind, SourceStyle> = {
     iconClass: 'text-mf-auto-kind-loop',
     tintClass: 'bg-mf-auto-kind-loop/12',
     borderClass: 'border-mf-auto-kind-loop/30',
+  },
+  variable: {
+    icon: Variable,
+    iconClass: 'text-mf-accent-violet',
+    tintClass: 'bg-mf-accent-violet/12',
+    borderClass: 'border-mf-accent-violet/30',
   },
 };
 

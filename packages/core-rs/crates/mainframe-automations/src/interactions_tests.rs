@@ -142,6 +142,7 @@ fn ask_me_def(fields: Vec<AutomationFormField>) -> Vec<Step> {
         keep_going: false,
         title: "Log your day".to_string(),
         fields,
+        output_name: None,
     })]
 }
 

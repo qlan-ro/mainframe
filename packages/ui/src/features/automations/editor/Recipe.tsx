@@ -30,6 +30,8 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
       return { id, kind, actionId: '', params: {} };
     case 'notify':
       return { id, kind, message: [] };
+    case 'set_variable':
+      return { id, kind, name: '', value: [''] };
     case 'if':
       return { id, kind, match: 'all', conditions: [], then: [], otherwise: [] };
     case 'repeat': {

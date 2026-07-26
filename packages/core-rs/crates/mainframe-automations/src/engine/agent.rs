@@ -215,7 +215,7 @@ impl AgentWaitRegistry for AgentVerb {
 
 fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
     let expects = step.expects.clone().unwrap_or_default();
-    let mut prompt = render(&step.prompt, ctx.scope);
+    let mut prompt = render(&step.prompt, ctx.scope, ctx.names);
     if !expects.is_empty() {
         // A2: the output contract rides the first prompt (Node ask-agent.ts).
         prompt.push_str(&build_output_contract(&expects));
@@ -232,7 +232,7 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
         run_id: ctx.run_id.to_string(),
         worktree: step.worktree.as_ref().map(|worktree| WorktreeRequest {
             base_branch: worktree.base_branch.clone(),
-            branch_name: render(&worktree.branch_name, ctx.scope),
+            branch_name: render(&worktree.branch_name, ctx.scope, ctx.names),
         }),
         auto_approve: step.auto_approve.clone(),
         timeout_minutes: step.timeout_minutes,

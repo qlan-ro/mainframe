@@ -33,6 +33,11 @@ describe('summarizeTrigger', () => {
       { id: 't1', kind: 'event', event: 'automation.failed' },
       'When another automation fails',
     ],
+    [
+      'one-off schedule',
+      { id: 't1', kind: 'schedule', schedule: { type: 'once', at: '2026-08-01T14:00' }, onMissed: 'skip' },
+      'Once on 2026-08-01 at 14:00',
+    ],
     ['webhook trigger', { id: 't1', kind: 'webhook', hookId: 'abc123' }, 'Webhook'],
   ] as const)('summarizes %s', (_label, trigger, expected) => {
     expect(summarizeTrigger(trigger)).toBe(expected);

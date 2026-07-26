@@ -141,7 +141,7 @@ async fn keep_going_records_the_failure_continues_and_downstream_tokens_render_e
             completed(
                 [(
                     "rendered".to_string(),
-                    json!(tokens::render(&step.message, ctx.scope)),
+                    json!(tokens::render(&step.message, ctx.scope, ctx.names)),
                 )]
                 .into_iter()
                 .collect(),

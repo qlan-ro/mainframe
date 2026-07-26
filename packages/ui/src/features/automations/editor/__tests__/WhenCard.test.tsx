@@ -62,13 +62,18 @@ describe('WhenCard — add menu', () => {
     expect(typeof added?.id).toBe('string');
   });
 
-  it('picking "Webhook" appends a WebhookTrigger with a hookId', async () => {
+  it('picking "Webhook" appends a WebhookTrigger with a real hookId, not a placeholder', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<WhenCard triggers={[]} onChange={onChange} />);
     await user.click(screen.getByTestId('automations-when-add'));
     await user.click(screen.getByTestId('automations-when-add-webhook'));
     const arr = onChange.mock.calls[0]?.[0] as AutomationTrigger[];
-    expect(arr[0]?.kind).toBe('webhook');
+    const added = arr[0];
+    expect(added?.kind).toBe('webhook');
+    const hookId = added?.kind === 'webhook' ? added.hookId : '';
+    expect(hookId).not.toMatch(/^pending-/);
+    expect(hookId).not.toBe(added?.id);
+    expect(hookId.length).toBeGreaterThan(0);
   });
 });

@@ -9,6 +9,7 @@ use crate::domain::{AutomationDefinition, RunActionStep, Step, find_step_by_id};
 use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
 use crate::store::{RunRecord, RunStore, RunTriggerContext, StepStatus, TerminalStatus};
+use crate::tokens::build_name_index;
 
 use super::checkpoint::fail_step_entry;
 use super::run_locks::{RunLocks, cancel_requested};
@@ -124,8 +125,10 @@ impl Interpreter {
 
         let mut cancel_rx = self.locks.register_cancel(run_id);
         let walk_outcome = {
+            let names = build_name_index(&run.checkpoint.definition);
             let ctx = WalkCtx {
                 run_id: &run.id,
+                names: &names,
                 store: &self.deps.store,
                 ports: self.deps.ports.as_ref(),
                 clock: self.deps.clock.clone(),

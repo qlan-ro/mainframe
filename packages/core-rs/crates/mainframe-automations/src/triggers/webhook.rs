@@ -66,9 +66,20 @@ pub fn preset_predicate(preset: WebhookPreset) -> WebhookPresetPredicate {
     }
 }
 
-/// The ingest pipeline merges `X-GitHub-Event` into the payload under
-/// `event` before calling this; `merged` checks the nested
-/// `pull_request.merged` field GitHub actually sends on `closed`.
+/// The delivery body as an object, with `X-GitHub-Event` merged in under
+/// `event` so preset predicates can match on it — GitHub sends the event name
+/// in a header, not the body. `None` = not a JSON object (route → 400).
+pub fn parse_payload(raw_body: &[u8], github_event: Option<&str>) -> Option<Value> {
+    let mut payload = serde_json::from_slice::<Value>(raw_body).ok()?;
+    let body = payload.as_object_mut()?;
+    if let Some(event) = github_event {
+        body.insert("event".to_string(), Value::String(event.to_string()));
+    }
+    Some(payload)
+}
+
+/// `merged` checks the nested `pull_request.merged` field GitHub actually
+/// sends on `closed`.
 pub fn match_preset(predicate: &WebhookPresetPredicate, payload: &Value) -> bool {
     let Some(body) = payload.as_object() else {
         return false;
@@ -161,26 +172,33 @@ pub fn is_stale_delivery(timestamp_ms: i64, now_ms: i64) -> bool {
 /// (Node ensureWebhookSecret) — the service calls this when arming a
 /// webhook trigger; an existing secret is left alone so rotating requires
 /// an explicit delete.
+///
+/// Returns the secret because arming is the only path that may hand it to
+/// the user: `webhook:<hookId>` is unreachable through the credential API
+/// (that route's label rule forbids the colon), so a secret nobody returns
+/// is a secret nobody can sign with.
 pub async fn ensure_webhook_secret(
     credentials: &dyn CredentialStore,
     hook_id: &str,
-) -> Result<(), CredentialError> {
+) -> Result<String, CredentialError> {
     let label = format!("webhook:{hook_id}");
-    if credentials.get(&label).await.is_some() {
-        return Ok(());
+    if let Some(existing) = credentials.get(&label).await {
+        return Ok(existing.token);
     }
     let mut bytes = [0u8; 32];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
+    let token = hex::encode(bytes);
     credentials
         .set(
             &label,
             Credentials {
                 kind: CredentialKind::Token,
-                token: hex::encode(bytes),
+                token: token.clone(),
                 extra: None,
             },
         )
-        .await
+        .await?;
+    Ok(token)
 }
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
