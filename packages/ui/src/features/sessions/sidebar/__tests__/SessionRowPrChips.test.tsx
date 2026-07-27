@@ -24,7 +24,9 @@ it('renders one chip whose text is "#42" for a single PR', () => {
 
 it('renders exactly 2 chips for 5 PRs', () => {
   const { container } = render(
-    <SessionRowPrChips detectedPrs={[pr(1, 'created'), pr(2, 'created'), pr(3, 'created'), pr(4, 'created'), pr(5, 'created')]} />,
+    <SessionRowPrChips
+      detectedPrs={[pr(1, 'created'), pr(2, 'created'), pr(3, 'created'), pr(4, 'created'), pr(5, 'created')]}
+    />,
   );
   expect(container.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')).toHaveLength(2);
 });

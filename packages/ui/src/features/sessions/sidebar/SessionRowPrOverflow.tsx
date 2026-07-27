@@ -56,7 +56,12 @@ export function SessionRowPrOverflow({ detectedPrs }: { detectedPrs: DetectedPr[
           </button>
         </PopoverTrigger>
       </Hint>
-      <PopoverContent align="start" side="bottom" className="w-[210px]" data-testid="sessions-row-pr-overflow-panel">
+      <PopoverContent
+        align="start"
+        side="bottom"
+        className="max-h-[240px] w-[210px] overflow-y-auto"
+        data-testid="sessions-row-pr-overflow-panel"
+      >
         <div className="flex flex-col">
           {ordered.map((pr) => (
             <PrOverflowItem key={pr.url} pr={pr} />

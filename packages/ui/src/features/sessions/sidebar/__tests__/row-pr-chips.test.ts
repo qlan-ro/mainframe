@@ -40,7 +40,13 @@ describe('arrangeRowPrs', () => {
   });
 
   it('caps inline at 2 and spills the rest to overflow for 5 PRs', () => {
-    const result = arrangeRowPrs([pr(1, 'created'), pr(2, 'created'), pr(3, 'created'), pr(4, 'created'), pr(5, 'created')]);
+    const result = arrangeRowPrs([
+      pr(1, 'created'),
+      pr(2, 'created'),
+      pr(3, 'created'),
+      pr(4, 'created'),
+      pr(5, 'created'),
+    ]);
     expect(result.inline).toHaveLength(2);
     expect(result.overflow).toHaveLength(3);
     expect(result.ordered).toHaveLength(5);

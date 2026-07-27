@@ -40,6 +40,17 @@ it('clamps the visible label at "99+" while the aria-label keeps the exact count
   expect(indicator).toHaveAttribute('aria-label', 'Show all 120 pull requests');
 });
 
+it('caps the panel height and scrolls instead of growing unbounded for 120 PRs', async () => {
+  const many = Array.from({ length: 120 }, (_, i) => pr(i + 1, 'created'));
+  render(<SessionRowPrOverflow detectedPrs={many} />);
+  await userEvent.click(screen.getByTestId('sessions-row-pr-overflow'));
+
+  const panel = screen.getByTestId('sessions-row-pr-overflow-panel');
+  expect(panel.className).toMatch(/max-h-\[\d+px\]/);
+  expect(panel.className).toContain('overflow-y-auto');
+  expect(screen.getByTestId('sessions-row-pr-overflow-item-120')).toBeTruthy();
+});
+
 it('opens the panel on click, listing one item per PR including the inline ones', async () => {
   render(<SessionRowPrOverflow detectedPrs={fivePrs()} />);
   await userEvent.click(screen.getByTestId('sessions-row-pr-overflow'));
