@@ -58,6 +58,13 @@ pub async fn move_session_files(
                 "session transcript not in source dir — assuming it was already relocated"
             );
         }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            tracing::warn!(
+                session_id,
+                target_dir,
+                "session transcript already in target dir — keeping it and leaving the source copy alone"
+            );
+        }
         Err(err) => return Err(err.into()),
     }
 
@@ -81,7 +88,18 @@ pub async fn move_session_files(
             }
             let file_path = source.join(name.as_ref());
             if is_sidechain_of(&file_path, session_id).await {
-                move_file(&file_path, &target.join(name.as_ref())).await?;
+                match move_file(&file_path, &target.join(name.as_ref())).await {
+                    Ok(()) => {}
+                    // One collision must not abandon the rest of the sweep.
+                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                        tracing::warn!(
+                            session_id,
+                            sidechain = %name,
+                            "sidechain already in target dir — keeping it and leaving the source copy alone"
+                        );
+                    }
+                    Err(err) => return Err(err),
+                }
             }
         }
         Ok::<(), std::io::Error>(())
@@ -115,7 +133,16 @@ async fn is_sidechain_of(file_path: &Path, session_id: &str) -> bool {
 }
 
 /// Move a file or directory, falling back to copy+delete for cross-device moves.
+/// Refuses to overwrite: `rename` clobbers silently, and when a transcript is
+/// already at `dest` that copy is the live one — a leftover at `src` must not
+/// replace it.
 async fn move_file(src: &Path, dest: &Path) -> Result<(), std::io::Error> {
+    if tokio::fs::symlink_metadata(dest).await.is_ok() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("{} already exists", dest.display()),
+        ));
+    }
     match tokio::fs::rename(src, dest).await {
         Ok(()) => Ok(()),
         Err(err) if err.raw_os_error() == Some(EXDEV) => {
@@ -308,6 +335,72 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn keeps_the_transcript_already_in_the_target_dir() {
+        let (_base, src_base, tgt_base) = setup_source_dir().await;
+        // A dying CLI can recreate a stub in the source dir after the real
+        // transcript was relocated, so the copy in the target is the live one.
+        tokio::fs::write(src_base.join(format!("{SESSION_ID}.jsonl")), "stale stub")
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(&tgt_base).await.unwrap();
+        tokio::fs::write(
+            tgt_base.join(format!("{SESSION_ID}.jsonl")),
+            "the relocated transcript",
+        )
+        .await
+        .unwrap();
+
+        move_session_files(
+            SESSION_ID,
+            src_base.to_str().unwrap(),
+            tgt_base.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let kept = tokio::fs::read_to_string(tgt_base.join(format!("{SESSION_ID}.jsonl")))
+            .await
+            .unwrap();
+        assert_eq!(kept, "the relocated transcript");
+        assert!(tgt_base.join(SESSION_ID).exists());
+        assert!(tgt_base.join("sidechain-999.jsonl").exists());
+    }
+
+    #[tokio::test]
+    async fn keeps_a_sidechain_already_in_the_target_and_moves_the_others() {
+        let (_base, src_base, tgt_base) = setup_source_dir().await;
+        tokio::fs::write(
+            src_base.join("sidechain-aaa.jsonl"),
+            format!("{{\"sessionId\":\"{SESSION_ID}\"}}\n"),
+        )
+        .await
+        .unwrap();
+        tokio::fs::create_dir_all(&tgt_base).await.unwrap();
+        tokio::fs::write(
+            tgt_base.join("sidechain-999.jsonl"),
+            "the relocated sidechain",
+        )
+        .await
+        .unwrap();
+
+        move_session_files(
+            SESSION_ID,
+            src_base.to_str().unwrap(),
+            tgt_base.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let kept = tokio::fs::read_to_string(tgt_base.join("sidechain-999.jsonl"))
+            .await
+            .unwrap();
+        assert_eq!(kept, "the relocated sidechain");
+        // A collision on one sidechain must not abandon the rest of the sweep.
+        assert!(tgt_base.join("sidechain-aaa.jsonl").exists());
+        assert!(tgt_base.join(format!("{SESSION_ID}.jsonl")).exists());
+    }
+
+    #[tokio::test]
     async fn works_when_session_directory_does_not_exist() {
         let base = tempfile::tempdir().unwrap();
         let src_base = base.path().join("source");
@@ -346,4 +439,6 @@ mod tests {
 // isSidechainOf reads only the first non-empty line and compares `sessionId`.
 // INTENTIONAL DIVERGENCE: a missing main JSONL is warned about, not thrown — the
 // TS version hard-failed the whole rebind whenever the CLI had already relocated
-// the transcript itself.
+// the transcript itself. moveFile also refuses to overwrite an existing
+// destination; the TS `rename` clobbered an already-relocated transcript with
+// whatever stub was left behind in the source dir.
