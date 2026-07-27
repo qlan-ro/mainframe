@@ -4,15 +4,22 @@
  * second meta line (the old SessionRowMeta, since removed — its content now
  * lives in SessionMetaCard's hover card); here it collapses to icon-only
  * glyphs so the row stays one line. Worktree is icon-only (no basename text
- * — that lives in the hover card); PR keeps its short "#N" number; tags cap
- * at 3 dots (one fewer than the hover card's full pill list, since row space
+ * — that lives in the hover card); PR chips cap at 2 and hand the remainder
+ * to the row-level indicator (SessionRowPrOverflow), mirroring the tag dots'
+ * cap of 3 (one fewer than the hover card's full pill list, since row space
  * is tighter).
+ *
+ * This cluster is the row's shrinkable item: its class list is the shared
+ * SESSION_ROW_META_CLUSTER, so glyphs yield to the title's floor instead of
+ * taking its width. A new meta glyph goes inside here — see session-row-layout.ts.
  */
 import { FolderGit2 } from 'lucide-react';
 import type { TagColor, DetectedPr } from '@qlan-ro/mainframe-types';
 import { TAG_DOT_STYLE } from '../tags/tag-colors';
 import { Hint } from '@/components/ui/hint';
 import { worktreeBasename } from './worktree-basename';
+import { SessionRowPrChips } from './SessionRowPrChips';
+import { SESSION_ROW_META_CLUSTER } from './session-row-layout';
 
 const MAX_ROW_TAG_DOTS = 3;
 
@@ -38,10 +45,7 @@ export function SessionRowMetaIcons({
   if (!hasContent) return null;
 
   return (
-    <div
-      data-testid="sessions-row-meta-icons"
-      className="flex flex-shrink-0 items-center gap-[6px] text-muted-foreground"
-    >
+    <div data-testid="sessions-row-meta-icons" className={SESSION_ROW_META_CLUSTER}>
       {worktreePath != null && (
         <Hint
           label={
@@ -56,19 +60,7 @@ export function SessionRowMetaIcons({
           </span>
         </Hint>
       )}
-      {detectedPrs.map((pr) => (
-        <a
-          key={pr.number}
-          data-testid="sessions-row-meta-icon-pr"
-          href={pr.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center font-mono text-caption font-semibold text-mf-success hover:underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          #{pr.number}
-        </a>
-      ))}
+      <SessionRowPrChips detectedPrs={detectedPrs} />
       {visibleTags.length > 0 && colorOf != null && (
         <Hint label={tags.join(' · ')}>
           <span data-testid="sessions-row-meta-icon-tag-dots" className="inline-flex items-center gap-[3px]">
