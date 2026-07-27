@@ -296,7 +296,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             .permissions
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .shift(chat_id);
+            .shift(chat_id, &response.request_id);
         if let Some(next_request) = next_request {
             let notify = self
                 .deps

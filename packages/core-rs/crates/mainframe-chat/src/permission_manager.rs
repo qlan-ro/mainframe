@@ -130,9 +130,23 @@ impl PermissionManager {
         queue.len() == 1
     }
 
-    /// Drop the front request; returns the new front, or `None` when the queue empties.
-    pub fn shift(&mut self, chat_id: &str) -> Option<ControlRequest> {
+    /// Drop the front request only if it still matches `request_id`; returns the
+    /// new front, or `None` when the queue empties or the front no longer matches.
+    ///
+    /// The mismatch case (#284) means a concurrent `cancel` already popped this
+    /// same front and promoted + emitted a different request while the answer
+    /// for it was in flight; shifting again here would silently drop that
+    /// promoted request from the queue. Plain equality also covers the
+    /// `restore_pending_permission` placeholder (`request_id == ""`) answered
+    /// with an equally empty id, so no separate empty-id case is needed.
+    pub fn shift(&mut self, chat_id: &str, request_id: &str) -> Option<ControlRequest> {
         let queue = self.pending_permissions.get_mut(chat_id)?;
+        if queue
+            .front()
+            .is_none_or(|front| front.request_id != request_id)
+        {
+            return None;
+        }
         queue.pop_front();
         if queue.is_empty() {
             self.pending_permissions.remove(chat_id);
@@ -229,3 +243,7 @@ mod cancel_tests;
 // notes: `cancel`/`was_cancelled`/`forget` (#284) are Rust-side additions with no TS
 // notes: original: `control_cancel_request` removal-by-id + a bounded (32) per-chat
 // notes: tombstone ring so a late in-flight answer for a withdrawn request is dropped.
+// notes: `shift` (#284) gained an id-scoped guard with no TS original: it now pops
+// notes: the front only when it still matches the id being answered, so a `cancel`
+// notes: landing mid-response can't make the completion-side shift promote the
+// notes: wrong request past the one the cancel already promoted.

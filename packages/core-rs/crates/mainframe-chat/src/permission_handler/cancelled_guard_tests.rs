@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use mainframe_types::adapter::ControlBehavior;
 
 use super::*;
+use crate::test_support::{FakeSession, test_chat};
 
 #[derive(Default)]
 struct GuardDeps {
@@ -125,6 +126,114 @@ async fn an_answer_for_a_live_request_still_reaches_the_no_session_path() {
 
     assert!(result.is_ok());
     assert_eq!(deps.load(Ordering::SeqCst), 1);
+}
+
+/// Deps for the race test below: a real active session (so `respond_to_permission`
+/// reaches `handle_normal_permission`), with `emit_event` calls captured for
+/// inspection after the handler call returns.
+struct RaceDeps {
+    cell: Arc<Mutex<ActiveChat>>,
+    events: Arc<Mutex<Vec<DaemonEvent>>>,
+}
+
+impl PermissionHandlerDeps for RaceDeps {
+    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
+        Some(self.cell.clone())
+    }
+    fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+    fn emit_event(&self, event: DaemonEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+    fn emit_display(&self, _chat_id: &str) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn get_messages<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
+        Box::pin(async { Vec::new() })
+    }
+    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
+        false
+    }
+    fn plan_mode_handle_no_process(
+        &self,
+        _chat_id: &str,
+        _active: &Arc<Mutex<ActiveChat>>,
+        _response: &ControlResponse,
+    ) {
+    }
+    fn plan_mode_handle_clear_context<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _active: Arc<Mutex<ActiveChat>>,
+        _response: ControlResponse,
+    ) -> BoxFuture<'a, Result<(), AdapterError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn plan_mode_handle_escalation<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _active: Arc<Mutex<ActiveChat>>,
+        _response: ControlResponse,
+    ) -> BoxFuture<'a, Result<(), AdapterError>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+/// Pins the interleaving from #284's review: queue [r1, r2, r3]; the client
+/// answers r1; while `session.respond_to_permission` is in flight, a
+/// `control_cancel_request(r1)` lands and removes the front, promoting r2.
+/// A blind `shift` on resume would pop r2 too and promote r3, stranding r2 as
+/// "shown but unanswerable". The id-scoped `shift` must instead see its front
+/// no longer matches r1 and do nothing, leaving r2 pending.
+#[tokio::test]
+async fn a_cancel_landing_mid_response_does_not_promote_past_the_new_front() {
+    let mut permissions = PermissionManager::new();
+    permissions.enqueue("chat-1", request("r1"));
+    permissions.enqueue("chat-1", request("r2"));
+    permissions.enqueue("chat-1", request("r3"));
+    let permissions = Arc::new(Mutex::new(permissions));
+
+    let cancel_permissions = permissions.clone();
+    let session = Arc::new(FakeSession {
+        spawned: true,
+        on_respond_to_permission: Some(Arc::new(move || {
+            cancel_permissions.lock().unwrap().cancel("chat-1", "r1");
+        })),
+        ..FakeSession::default()
+    });
+    let cell = Arc::new(Mutex::new(ActiveChat {
+        chat: test_chat("chat-1"),
+        session: Some(session),
+        turn_started_at: None,
+    }));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let deps = RaceDeps {
+        cell,
+        events: events.clone(),
+    };
+    let handler = ChatPermissionHandler::new(
+        permissions.clone(),
+        Arc::new(Mutex::new(MessageCache::new())),
+        deps,
+    );
+
+    let result = handler.respond_to_permission("chat-1", allow("r1")).await;
+
+    assert!(result.is_ok());
+    assert_eq!(
+        permissions.lock().unwrap().get_pending("chat-1"),
+        Some(&request("r2"))
+    );
+    let promoted: Vec<_> = events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            DaemonEvent::PermissionRequested { request, .. } => Some(request.request_id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(promoted.is_empty(), "unexpected promotion: {promoted:?}");
 }
 
 #[tokio::test]

@@ -187,7 +187,7 @@ fn cancelling_a_queued_request_resolves_it_without_disturbing_the_front() {
         permissions.lock().unwrap().get_pending("chat-1"),
         Some(&request("r1"))
     );
-    assert_eq!(permissions.lock().unwrap().shift("chat-1"), None);
+    assert_eq!(permissions.lock().unwrap().shift("chat-1", "r1"), None);
 }
 
 #[test]

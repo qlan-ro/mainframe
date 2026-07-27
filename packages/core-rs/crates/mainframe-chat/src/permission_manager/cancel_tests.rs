@@ -44,7 +44,7 @@ fn cancelling_a_middle_request_leaves_the_front_and_the_order_intact() {
 
     assert_eq!(outcome, CancelOutcome::Queued);
     assert_eq!(manager.get_pending("chat-1"), Some(&request("r1")));
-    assert_eq!(manager.shift("chat-1"), Some(request("r3")));
+    assert_eq!(manager.shift("chat-1", "r1"), Some(request("r3")));
 }
 
 #[test]
@@ -65,7 +65,18 @@ fn cancelling_an_unknown_id_is_a_noop() {
 
     assert_eq!(outcome, CancelOutcome::Unknown);
     assert_eq!(manager.get_pending("chat-1"), Some(&request("r1")));
-    assert_eq!(manager.shift("chat-1"), Some(request("r2")));
+    assert_eq!(manager.shift("chat-1", "r1"), Some(request("r2")));
+}
+
+#[test]
+fn shift_is_a_noop_when_the_front_no_longer_matches_the_answered_id() {
+    let mut manager = seeded("chat-1", &["r1", "r2", "r3"]);
+    manager.cancel("chat-1", "r1"); // front is now r2, as if this raced ahead of the r1 answer
+
+    let outcome = manager.shift("chat-1", "r1");
+
+    assert_eq!(outcome, None);
+    assert_eq!(manager.get_pending("chat-1"), Some(&request("r2")));
 }
 
 #[test]
