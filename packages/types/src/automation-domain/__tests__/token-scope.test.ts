@@ -91,6 +91,21 @@ describe('scopeAt — the invisible rule made concrete', () => {
     expect(afterScope.some((t) => t.ref.stepId === 'inner')).toBe(false);
   });
 
+  it('a set-variable step is visible downstream and invisible to itself and to earlier steps', () => {
+    const setVariable: AutomationStep = { id: 'v1', kind: 'set_variable', name: 'notes', value: ['text'] };
+    const definition = def([askAgent('before'), setVariable, askAgent('after')]);
+
+    expect(scopeAt(definition, [], 'before').some((t) => t.ref.stepId === 'v1')).toBe(false);
+    expect(scopeAt(definition, [], 'v1').some((t) => t.ref.stepId === 'v1')).toBe(false);
+    expect(scopeAt(definition, [], 'after')).toContainEqual({
+      ref: { stepId: 'v1', output: 'value' },
+      label: 'notes',
+      type: 'text',
+      sourceKind: 'variable',
+      source: 'Set notes',
+    });
+  });
+
   it('Current item carries the field shape of the chosen list token, when known (contract §5: github.list_prs items)', () => {
     const sourceCatalog: ActionCatalogEntry[] = [
       {

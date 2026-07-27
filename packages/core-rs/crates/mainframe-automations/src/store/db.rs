@@ -1,6 +1,7 @@
 //! Opens `<dataDir>/automations.db` — a separate file from `mainframe.db`
 //! (contract §3), outside its migration chain, with its own `user_version=1`.
-//! Only the three contract tables are created; Node's `trigger_state` /
+//! The three contract tables plus `automation_webhook_state` (T7 — the one
+//! webhook fact that must outlive a restart); Node's `trigger_state` /
 //! `agent_waits` are that engine's private caches and both engines ignore
 //! unknown tables in the file.
 
@@ -50,6 +51,10 @@ CREATE TABLE IF NOT EXISTS automation_interactions (
   resolved_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_interactions_pending ON automation_interactions(status) WHERE status = 'pending';
+CREATE TABLE IF NOT EXISTS automation_webhook_state (
+  hook_id TEXT PRIMARY KEY,
+  last_delivery_at TEXT
+);
 ";
 
 /// The rusqlite `Connection` is `Send + !Sync`; it lives behind an

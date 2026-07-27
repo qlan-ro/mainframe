@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 use crate::domain::{
     AutomationCreateInput, AutomationDefinition, AutomationScope, DailySchedule, OnMissed,
-    SchedulePattern, ScheduleTrigger, Trigger,
+    OnceSchedule, SchedulePattern, ScheduleTrigger, Trigger,
 };
 use crate::engine::test_support::{CollectingSink, FakeClock, FakePorts};
 use crate::engine::{Interpreter, InterpreterDeps};
@@ -58,6 +58,17 @@ fn daily_definition(trigger_id: &str, at: &str, on_missed: OnMissed) -> Automati
         triggers: vec![Trigger::Schedule(ScheduleTrigger {
             id: trigger_id.to_string(),
             schedule: SchedulePattern::Daily(DailySchedule { at: at.to_string() }),
+            on_missed,
+        })],
+        steps: vec![],
+    }
+}
+
+fn once_definition(trigger_id: &str, at: &str, on_missed: OnMissed) -> AutomationDefinition {
+    AutomationDefinition {
+        triggers: vec![Trigger::Schedule(ScheduleTrigger {
+            id: trigger_id.to_string(),
+            schedule: SchedulePattern::Once(OnceSchedule { at: at.to_string() }),
             on_missed,
         })],
         steps: vec![],
@@ -177,6 +188,51 @@ async fn a_deleted_automation_mid_sweep_is_a_silent_no_op() {
     h.automations.delete(&id).await.unwrap();
     h.sweeper.sweep(at("2026-07-12T21:01:00+02:00")).await;
     assert!(h.runs.list_runs(&id, 10).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_once_schedule_fires_exactly_once_however_often_it_is_swept() {
+    let h = harness().await;
+    let id = create(
+        &h,
+        "release day",
+        once_definition("t1", "2026-08-14T09:00", OnMissed::Skip),
+    )
+    .await;
+
+    h.sweeper.sweep(at("2026-08-14T09:01:00+02:00")).await;
+    h.sweeper.sweep(at("2026-08-14T09:04:00+02:00")).await;
+
+    let runs = h.runs.list_runs(&id, 10).await.unwrap();
+    assert_eq!(runs.len(), 1, "the second sweep re-offers the same slot");
+    assert_eq!(
+        runs[0].checkpoint.trigger.scheduled_for.as_deref(),
+        Some("2026-08-14T09:00:00"),
+        "`once` keeps the uniform naive-local derivation, so the dedup key repeats"
+    );
+}
+
+#[tokio::test]
+async fn a_stale_once_slot_obeys_on_missed() {
+    let h = harness().await;
+    let skipped = create(
+        &h,
+        "skip",
+        once_definition("t1", "2026-08-14T09:00", OnMissed::Skip),
+    )
+    .await;
+    let made_up = create(
+        &h,
+        "run once",
+        once_definition("t2", "2026-08-14T09:00", OnMissed::RunOnce),
+    )
+    .await;
+
+    // A day late: the instant is long past the freshness window.
+    h.sweeper.sweep(at("2026-08-15T09:00:00+02:00")).await;
+
+    assert!(h.runs.list_runs(&skipped, 10).await.unwrap().is_empty());
+    assert_eq!(h.runs.list_runs(&made_up, 10).await.unwrap().len(), 1);
 }
 
 #[tokio::test]

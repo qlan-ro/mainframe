@@ -91,4 +91,15 @@ describe('StepSummary', () => {
     );
     expect(screen.getByText('Pick an action')).toBeInTheDocument();
   });
+
+  it('names the variable a set_variable step defines', () => {
+    render(
+      <StepSummary
+        step={{ id: 'v1', kind: 'set_variable', name: 'headline', value: ['Release day'] }}
+        tokens={[]}
+        catalog={CATALOG}
+      />,
+    );
+    expect(screen.getByText('Set $headline')).toBeInTheDocument();
+  });
 });

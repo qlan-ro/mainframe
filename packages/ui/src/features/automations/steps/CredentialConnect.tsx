@@ -14,6 +14,7 @@
  */
 import { useState } from 'react';
 import { Plug, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsStore } from '../data/use-automations-store';
 
@@ -86,15 +87,16 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="sm"
       data-testid={`${testId}-connect`}
       onClick={() => void connect()}
       disabled={busy}
-      className="inline-flex h-[28px] items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card px-2.5 text-caption font-semibold text-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+      className="gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
     >
       <Plug size={12} aria-hidden />
       Connect {service}…
-    </button>
+    </Button>
   );
 }

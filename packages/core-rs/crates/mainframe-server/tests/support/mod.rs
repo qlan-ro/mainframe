@@ -5,6 +5,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]
 
 use std::net::SocketAddr;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,13 +26,46 @@ use tokio::net::{TcpListener, TcpStream};
 pub struct TestServer {
     pub addr: SocketAddr,
     pub ctx: Arc<AppCtx>,
-    _data_dir: TempDir,
+    data_dir: TempDir,
+}
+
+/// Which stand-in `cloudflared` a tunnel-enabled harness spawns.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TunnelStub {
+    /// Prints a distinct URL per invocation and appends to `spawns.log`, so tests
+    /// can count spawns and tell a reused tunnel from a respawned one.
+    Counting,
+    /// Never prints a URL, so the tunnel stays mid-start.
+    Silent,
+}
+
+#[derive(Default)]
+pub struct TestServerOptions {
+    pub auth_secret: Option<String>,
+    /// `Some` wires a `PortTunnelRegistry` over a `TunnelManager` driving the stub.
+    pub tunnel: Option<TunnelStub>,
+    /// `AppCtx::port`. The tunnel routes gate on it being non-zero and report it
+    /// as `daemonPort`.
+    pub port: u16,
 }
 
 /// Spawn `build_app` on `127.0.0.1:0` with a fully real AppCtx (in-memory SQLite
 /// via the Db actor, real AttachmentStore/PushService/FileWatcherService). Serves
 /// with connect-info so the auth middleware + WS upgrade can read the peer IP.
 pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
+    spawn_test_server_with(TestServerOptions {
+        auth_secret,
+        ..TestServerOptions::default()
+    })
+    .await
+}
+
+pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
+    let TestServerOptions {
+        auth_secret,
+        tunnel,
+        port,
+    } = opts;
     let data_dir = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
     let (broadcast, _keepalive) = tokio::sync::broadcast::channel::<DaemonEvent>(1024);
@@ -39,6 +73,7 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
     let watcher = FileWatcherService::new(move |event| {
         let _ = watcher_tx.send(event);
     });
+    let port_tunnels = tunnel.map(|stub| build_port_tunnels(data_dir.path(), stub, &broadcast));
     let ctx = Arc::new(AppCtx {
         db,
         git: GitFactory,
@@ -55,13 +90,14 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
         chat_manager: None,
         launch_registry: None,
         tunnel_manager: None,
+        port_tunnels,
         lsp_manager: None,
         plugin_manager: None,
         automations: None,
         quota: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
-        port: 0,
+        port,
         auth_secret,
         resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
@@ -87,13 +123,62 @@ pub async fn spawn_test_server(auth_secret: Option<String>) -> TestServer {
     TestServer {
         addr,
         ctx,
-        _data_dir: data_dir,
+        data_dir,
     }
+}
+
+/// `PortTunnelRegistry` over a `TunnelManager` pointed at a stub script. The
+/// stubs mirror `mainframe-launch`'s own, which are `cfg(test)`-private to that
+/// crate and unreachable here.
+fn build_port_tunnels(
+    dir: &Path,
+    stub: TunnelStub,
+    broadcast: &tokio::sync::broadcast::Sender<DaemonEvent>,
+) -> Arc<mainframe_launch::PortTunnelRegistry> {
+    let log = dir.join("spawns.log");
+    let (name, body) = match stub {
+        TunnelStub::Counting => (
+            "counting-cloudflared.sh",
+            format!(
+                "#!/bin/sh\necho spawn >> {log}\nn=$(wc -l < {log} | tr -d ' ')\necho \"https://abc-def$n.trycloudflare.com\"\necho 'Registered tunnel connection'\nsleep 100\n",
+                log = log.to_string_lossy()
+            ),
+        ),
+        TunnelStub::Silent => (
+            "silent-cloudflared.sh",
+            "#!/bin/sh\nsleep 100\n".to_string(),
+        ),
+    };
+    let script = dir.join(name);
+    std::fs::write(&script, body).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let tx = broadcast.clone();
+    let manager = mainframe_launch::TunnelManager::with_config(
+        Some(Arc::new(move |event| {
+            let _ = tx.send(event);
+        })),
+        mainframe_launch::TunnelConfig {
+            cloudflared_bin: script.to_string_lossy().into_owned(),
+            dns_poll: Duration::from_millis(20),
+            dns_timeout: Duration::from_millis(100),
+            start_timeout: Duration::from_millis(3_000),
+            ..Default::default()
+        },
+    );
+    Arc::new(mainframe_launch::PortTunnelRegistry::new(Arc::new(manager)))
 }
 
 impl TestServer {
     pub fn http_url(&self, path: &str) -> String {
         format!("http://{}{}", self.addr, path)
+    }
+
+    /// How many times the `TunnelStub::Counting` script has been spawned.
+    pub fn tunnel_spawn_count(&self) -> usize {
+        std::fs::read_to_string(self.data_dir.path().join("spawns.log"))
+            .map(|s| s.lines().count())
+            .unwrap_or(0)
     }
 
     /// Register a device and return a token minted at its current auth epoch.

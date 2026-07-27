@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
     ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue, IfBlock,
-    NotifyStep, RepeatBlock, RunActionStep, Step, TokenRef,
+    NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step, TokenRef,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -243,6 +243,16 @@ pub(crate) fn run_action_step(id: &str, action_id: &str, keep_going: bool) -> St
         credential: None,
         params: Default::default(),
         output_as: None,
+        output_name: None,
+    })
+}
+
+pub(crate) fn set_variable_step(id: &str, name: &str, value: ChipText) -> Step {
+    Step::SetVariable(SetVariableStep {
+        id: id.to_string(),
+        keep_going: false,
+        name: name.to_string(),
+        value,
     })
 }
 
@@ -252,6 +262,7 @@ pub(crate) fn ask_me_step(id: &str) -> Step {
         keep_going: false,
         title: "Pick one".to_string(),
         fields: vec![],
+        output_name: None,
     })
 }
 
@@ -269,7 +280,18 @@ pub(crate) fn ask_agent_step(id: &str, keep_going: bool) -> Step {
         timeout_minutes: None,
         expects: None,
         attachments: None,
+        output_name: None,
     })
+}
+
+/// An agent step as the editor saves it: carrying the `outputName` minted when
+/// the step was created.
+pub(crate) fn named_ask_agent_step(id: &str, output_name: &str) -> Step {
+    let Step::AskAgent(mut step) = ask_agent_step(id, false) else {
+        unreachable!("ask_agent_step builds an AskAgent")
+    };
+    step.output_name = Some(output_name.to_string());
+    Step::AskAgent(step)
 }
 
 pub(crate) fn token_ref(step_id: &str, output: &str, field: Option<&str>) -> TokenRef {

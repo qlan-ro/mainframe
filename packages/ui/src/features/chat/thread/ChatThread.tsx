@@ -13,7 +13,7 @@ import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
 import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
-import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
+import { ChatSelectionToolbar } from './ChatSelectionToolbar';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { CompactingPill } from '../messages/SystemMessage';
@@ -126,8 +126,8 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Viewport>
 
-          {/* Floating "Quote" button on text selection inside a message (portals to body). */}
-          <SelectionToolbar />
+          {/* Floating Quote / New-session actions on text selection inside a message (portals to body). */}
+          <ChatSelectionToolbar />
         </ThreadPrimitive.Root>
       </SkillsProvider>
     </ComposerEditProvider>

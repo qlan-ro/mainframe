@@ -65,7 +65,7 @@ impl ProjectRegistry for FixedProjects {
     }
 }
 
-async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
+pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let sink = Arc::new(CollectingSink::default());
     let engine = AutomationsEngine::new(
@@ -224,6 +224,7 @@ fn ask_me_input(name: &str) -> AutomationCreateInput {
                 required: Some(false),
                 show_when: None,
             }],
+            output_name: None,
         })]),
     }
 }
@@ -267,6 +268,17 @@ async fn create_rejects_an_invalid_definition_with_plain_language_errors() {
         }
         other => panic!("expected validation error, got {other:?}"),
     }
+}
+
+/// A `$name` the automation never defines is a warning — the engine leaves it
+/// literal, so `cd $HOME && pnpm build` has to be savable.
+#[tokio::test]
+async fn create_accepts_a_definition_whose_only_issue_is_a_warning() {
+    let (engine, _sink, _dir) = engine().await;
+    let mut input = notify_input("Shell command");
+    input.definition.steps = vec![notify_step("n1", vec![text("cd $HOME && pnpm build")])];
+    let created = engine.create(input).await.unwrap();
+    assert_eq!(created.name, "Shell command");
 }
 
 #[tokio::test]

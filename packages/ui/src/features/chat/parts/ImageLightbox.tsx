@@ -6,14 +6,15 @@
  * The parent owns the open index (`null` = closed); this renders the current
  * image plus prev/next controls, a counter, and ArrowLeft/ArrowRight keyboard
  * nav (wrapping at the ends). Restores the desktop multi-image gallery
- * affordance that the single-image `ZoomableImage` didn't cover. Built on our
- * shadcn `Dialog` so no new dependency.
+ * affordance that the single-image `ZoomableImage` didn't cover. The dialog
+ * shell, image, and click-to-dismiss behavior live in `LightboxSurface`.
  *
  * For a single image the nav chrome is omitted (it degrades to a plain zoom).
  */
 import { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog } from '@/components/ui/dialog';
+import { LightboxSurface } from './LightboxSurface';
 
 export interface LightboxImage {
   src: string;
@@ -63,19 +64,13 @@ export function ImageLightbox({ images, index, onIndexChange }: ImageLightboxPro
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onIndexChange(null)}>
-      <DialogContent
-        data-testid="image-lightbox-dialog"
-        className="max-w-[92vw] border-none bg-transparent p-0 shadow-none"
+      <LightboxSurface
+        testId="image-lightbox-dialog"
+        imageTestId="image-lightbox-current"
+        src={current.src}
+        alt={current.alt}
+        onDismiss={() => onIndexChange(null)}
       >
-        <DialogTitle className="sr-only">Image preview</DialogTitle>
-
-        <img
-          data-testid="image-lightbox-current"
-          src={current.src}
-          alt={current.alt ?? ''}
-          className="mx-auto max-h-[88vh] max-w-full rounded-md object-contain"
-        />
-
         {hasNav && (
           <>
             <button
@@ -104,7 +99,7 @@ export function ImageLightbox({ images, index, onIndexChange }: ImageLightboxPro
             </div>
           </>
         )}
-      </DialogContent>
+      </LightboxSurface>
     </Dialog>
   );
 }

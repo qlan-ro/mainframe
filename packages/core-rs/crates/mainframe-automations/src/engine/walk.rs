@@ -11,6 +11,7 @@ use crate::domain::Step;
 use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
 use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus};
+use crate::tokens::{NameIndex, NameMap, render};
 
 use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
 use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks};
@@ -21,6 +22,7 @@ pub(crate) struct WalkCtx<'a> {
     pub ports: &'a dyn VerbPorts,
     pub clock: Arc<dyn Clock>,
     pub events: &'a dyn EventSink,
+    pub names: &'a NameIndex,
 }
 
 pub(crate) struct StepsResult {
@@ -109,10 +111,12 @@ async fn run_leaf(
     };
 
     let scope = build_scope(&current, frame, ctx.clock.clone());
+    let no_names = NameMap::new();
     let verb_ctx = VerbContext {
         run_id: ctx.run_id,
         step_ref,
         scope: &scope,
+        names: ctx.names.get(step.id()).unwrap_or(&no_names),
     };
     let outcome = dispatch(step, ctx.ports, verb_ctx).await;
 
@@ -202,6 +206,13 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
         Step::AskMe(s) => ports.ask_me(s, ctx).await,
         Step::RunAction(s) => ports.run_action(s, ctx).await,
         Step::Notify(s) => ports.notify(s, ctx).await,
+        // Pure and engine-internal: no port, and nothing to make idempotent.
+        Step::SetVariable(s) => StepOutcome::Completed {
+            outputs: Map::from_iter([(
+                "value".to_string(),
+                Value::String(render(&s.value, ctx.scope, ctx.names)),
+            )]),
+        },
         // Unreachable by construction (run_step routes blocks first); a
         // graceful error beats a forbidden panic in library code.
         Step::If(_) | Step::Repeat(_) => StepOutcome::Failed {

@@ -61,11 +61,13 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::agents::router())
         .merge(routes::skills::router())
         .merge(routes::suggestions::router())
+        .merge(routes::setup_advisor::router())
         .merge(routes::quota::router())
         // Task 5.5 route modules: launch (per-project process control), tunnel
         // (cloudflared), and the LSP language-status endpoint.
         .merge(routes::launch::router())
         .merge(routes::tunnel::router())
+        .merge(routes::tunnel_ports::router())
         .merge(routes::lsp_routes::router())
         // Automations v2 (T9.3). All behind auth EXCEPT the webhook ingress,
         // which middleware/auth.rs exempts by path (HMAC-verified instead).

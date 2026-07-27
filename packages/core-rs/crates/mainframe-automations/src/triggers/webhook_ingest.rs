@@ -14,11 +14,13 @@ use crate::credentials::CredentialStore;
 use crate::domain::{Trigger, WebhookTrigger};
 use crate::engine::Interpreter;
 use crate::error::StoreError;
-use crate::store::{AutomationRecord, AutomationStore, RunTriggerContext, RunTriggerKind};
+use crate::store::{
+    AutomationRecord, AutomationStore, RunTriggerContext, RunTriggerKind, WebhookStateStore,
+};
 
 use super::webhook::{
-    delivery_id, delivery_timestamp_ms, is_stale_delivery, match_preset, preset_predicate,
-    verify_signature,
+    delivery_id, delivery_timestamp_ms, is_stale_delivery, match_preset, parse_payload,
+    preset_predicate, verify_signature,
 };
 
 /// The header values the route extracts — this module never sees an HTTP
@@ -57,10 +59,22 @@ pub enum WebhookDecision {
     StartFailed { error: String },
 }
 
+impl WebhookDecision {
+    /// The one log site for a refused delivery. Without it the panel's "no
+    /// deliveries yet" reads the same whether the sender never called or every
+    /// call was refused. `reason` is a static string — the secret, the
+    /// signature and the body never appear in it.
+    fn rejected(self, hook_id: &str, reason: &'static str) -> Self {
+        tracing::warn!(hook_id, reason, "webhook delivery rejected");
+        self
+    }
+}
+
 pub struct WebhookProcessor {
     automations: AutomationStore,
     credentials: Arc<dyn CredentialStore>,
     interpreter: Arc<Interpreter>,
+    state: WebhookStateStore,
     /// Latest matching payload per (automationId, triggerId) — in-memory
     /// (R3); feeds the editor's "use a sample" affordance once routed.
     samples: Mutex<HashMap<(String, String), Value>>,
@@ -71,11 +85,13 @@ impl WebhookProcessor {
         automations: AutomationStore,
         credentials: Arc<dyn CredentialStore>,
         interpreter: Arc<Interpreter>,
+        state: WebhookStateStore,
     ) -> Self {
         Self {
             automations,
             credentials,
             interpreter,
+            state,
             samples: Mutex::new(HashMap::new()),
         }
     }
@@ -95,7 +111,10 @@ impl WebhookProcessor {
     ) -> WebhookDecision {
         let (automation, trigger) = match self.find_webhook_trigger(hook_id).await {
             Ok(Some(found)) => found,
-            Ok(None) => return WebhookDecision::UnknownHook,
+            Ok(None) => {
+                return WebhookDecision::UnknownHook
+                    .rejected(hook_id, "no automation carries this hook id");
+            }
             Err(err) => {
                 return WebhookDecision::StartFailed {
                     error: err.to_string(),
@@ -103,38 +122,18 @@ impl WebhookProcessor {
             }
         };
 
-        let Some(secret) = self.credentials.get(&format!("webhook:{hook_id}")).await else {
-            return WebhookDecision::InvalidSignature;
+        if let Err(reason) = self.verify(hook_id, headers, raw_body).await {
+            return WebhookDecision::InvalidSignature.rejected(hook_id, reason);
+        }
+        let Some(payload) = parse_payload(raw_body, headers.github_event.as_deref()) else {
+            return WebhookDecision::InvalidJson.rejected(hook_id, "body is not a JSON object");
         };
-        if !verify_signature(&secret.token, raw_body, headers.signature.as_deref()) {
-            return WebhookDecision::InvalidSignature;
-        }
 
-        let Ok(mut payload) = serde_json::from_slice::<Value>(raw_body) else {
-            return WebhookDecision::InvalidJson;
-        };
-        let Some(body) = payload.as_object_mut() else {
-            return WebhookDecision::InvalidJson;
-        };
-        if let Some(event) = &headers.github_event {
-            body.insert("event".to_string(), Value::String(event.clone()));
-        }
+        self.stamp_delivery(hook_id, now_ms).await;
 
-        if let Some(preset) = trigger.preset
-            && !match_preset(&preset_predicate(preset), &payload)
-        {
-            return WebhookDecision::PresetMismatch;
-        }
-
-        if let Some(timestamp) = delivery_timestamp_ms(&payload, headers.timestamp.as_deref())
-            && is_stale_delivery(timestamp, now_ms)
-        {
-            tracing::warn!(hook_id, timestamp, "stale webhook delivery dropped");
-            return WebhookDecision::StaleDelivery;
-        }
-
-        let Some(delivery) = delivery_id(&payload, headers.github_delivery.as_deref()) else {
-            return WebhookDecision::MissingDeliveryId;
+        let delivery = match screen(hook_id, &trigger, &payload, headers, now_ms) {
+            Ok(delivery) => delivery,
+            Err(decision) => return decision,
         };
 
         self.lock_samples()
@@ -145,22 +144,53 @@ impl WebhookProcessor {
         if !automation.enabled {
             return WebhookDecision::Accepted { run_id: None };
         }
+        self.start_run(automation, &trigger.id, payload, &delivery)
+            .await
+    }
 
+    /// The `Err` reason is for the server log only: a hook nobody armed, an
+    /// unsigned delivery and a wrong secret are one 401 on the wire but three
+    /// different fixes for whoever is wiring the sender up.
+    async fn verify(
+        &self,
+        hook_id: &str,
+        headers: &WebhookHeaders,
+        raw_body: &[u8],
+    ) -> Result<(), &'static str> {
+        let Some(secret) = self.credentials.get(&format!("webhook:{hook_id}")).await else {
+            return Err("hook is not armed — no signing secret is provisioned");
+        };
+        if headers.signature.is_none() {
+            return Err("delivery carried no signature header");
+        }
+        if !verify_signature(&secret.token, raw_body, headers.signature.as_deref()) {
+            return Err("signature does not match the hook's secret");
+        }
+        Ok(())
+    }
+
+    /// Bypasses TriggerFirer so a duplicate (200 no-op) and a start failure
+    /// (500, sender retries) stay distinguishable (A7).
+    async fn start_run(
+        &self,
+        automation: AutomationRecord,
+        trigger_id: &str,
+        payload: Value,
+        delivery: &str,
+    ) -> WebhookDecision {
         let context = RunTriggerContext {
             kind: RunTriggerKind::Webhook,
-            trigger_id: Some(trigger.id.clone()),
+            trigger_id: Some(trigger_id.to_string()),
             scheduled_for: None,
             payload: Some(payload),
         };
-        // Bypasses TriggerFirer so a duplicate (200 no-op) and a start
-        // failure (500, sender retries) stay distinguishable (A7).
         match self
             .interpreter
             .start_run(
                 &automation.id,
                 automation.definition,
                 context,
-                Some(format!("{}|{delivery}", trigger.id)),
+                Some(format!("{trigger_id}|{delivery}")),
             )
             .await
         {
@@ -180,6 +210,21 @@ impl WebhookProcessor {
             Err(err) => WebhookDecision::StartFailed {
                 error: err.to_string(),
             },
+        }
+    }
+
+    /// Records that a signed, well-formed delivery reached this hook. It runs
+    /// before the preset predicate on purpose: the registration panel asks
+    /// "is the sender reaching me", and a delivery the preset rejects answers
+    /// that just as well as one that fires a run. Bookkeeping never fails a
+    /// delivery.
+    async fn stamp_delivery(&self, hook_id: &str, now_ms: i64) {
+        let Some(at) = chrono::DateTime::from_timestamp_millis(now_ms) else {
+            tracing::warn!(hook_id, now_ms, "webhook delivery: unrepresentable clock");
+            return;
+        };
+        if let Err(err) = self.state.record_delivery(hook_id, &at.to_rfc3339()).await {
+            tracing::warn!(hook_id, error = %err, "webhook delivery: recording the delivery time failed");
         }
     }
 
@@ -214,6 +259,36 @@ impl WebhookProcessor {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+}
+
+/// The screens a verified delivery still has to clear before it may run: the
+/// preset predicate, the A7 staleness window, and the replay-dedup key it
+/// yields on success.
+fn screen(
+    hook_id: &str,
+    trigger: &WebhookTrigger,
+    payload: &Value,
+    headers: &WebhookHeaders,
+    now_ms: i64,
+) -> Result<String, WebhookDecision> {
+    if let Some(preset) = trigger.preset
+        && !match_preset(&preset_predicate(preset), payload)
+    {
+        return Err(WebhookDecision::PresetMismatch
+            .rejected(hook_id, "payload does not match the trigger's preset"));
+    }
+    if let Some(timestamp) = delivery_timestamp_ms(payload, headers.timestamp.as_deref())
+        && is_stale_delivery(timestamp, now_ms)
+    {
+        return Err(WebhookDecision::StaleDelivery.rejected(
+            hook_id,
+            "delivery is older than the 10-minute replay window",
+        ));
+    }
+    delivery_id(payload, headers.github_delivery.as_deref()).ok_or_else(|| {
+        WebhookDecision::MissingDeliveryId
+            .rejected(hook_id, "no X-GitHub-Delivery header and no payload id")
+    })
 }
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port

@@ -216,6 +216,13 @@ impl ChatManagerDeps for StoreDeps {
     ) -> Option<BoxFuture<'a, ()>> {
         None
     }
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        _project_id: &'a str,
+        _effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        None
+    }
     fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }

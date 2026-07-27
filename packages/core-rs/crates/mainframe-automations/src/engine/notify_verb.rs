@@ -54,7 +54,7 @@ impl NotifyVerb {
             run_id: ctx.run_id.to_string(),
             automation_id: run.automation_id.clone(),
             title,
-            body: render(&step.message, ctx.scope),
+            body: render(&step.message, ctx.scope, ctx.names),
             links: NotificationLinks {
                 run_id: ctx.run_id.to_string(),
                 chat_ids: run.checkpoint.agent_chat_ids(),

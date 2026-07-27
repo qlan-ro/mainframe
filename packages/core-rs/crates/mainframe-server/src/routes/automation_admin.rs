@@ -1,7 +1,8 @@
 //! Interactions, action catalog, credentials (Node
 //! routes/automation-admin.ts). Credential GETs never return secret
 //! material; the `^[a-zA-Z0-9_-]+$` label rule keeps the reserved
-//! `webhook:<hookId>` labels out of user-facing CRUD (no colon).
+//! `webhook:<hookId>` labels out of user-facing CRUD (no colon) — those are
+//! provisioned and revealed by the webhook register route instead.
 
 use std::sync::Arc;
 

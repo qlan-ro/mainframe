@@ -51,6 +51,7 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
         chat_manager: None,
         launch_registry: None,
         tunnel_manager: None,
+        port_tunnels: None,
         lsp_manager: None,
         plugin_manager: None,
         automations: None,

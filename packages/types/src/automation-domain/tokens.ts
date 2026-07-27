@@ -21,7 +21,7 @@ import type { ActionCatalogEntry, AutomationStep, AutomationTrigger, TokenRef } 
 import { TOKEN_STEP_BUILTIN, TOKEN_STEP_TRIGGER } from '../automation.js';
 
 export type TokenValueType = 'text' | 'number' | 'list' | 'choice' | 'date' | 'object';
-export type TokenSourceKind = 'builtin' | 'trigger' | 'agent' | 'askme' | 'action' | 'item';
+export type TokenSourceKind = 'builtin' | 'trigger' | 'agent' | 'askme' | 'action' | 'item' | 'variable';
 
 export interface TokenDescriptor {
   ref: TokenRef;
@@ -36,6 +36,8 @@ export interface TokenDescriptor {
   options?: string[];
   /** One-line hint the token picker shows alongside this token (todo #234 bullet 5) — reserved for tokens whose name alone doesn't say what they carry, e.g. an agent step's raw "Result". */
   description?: string;
+  /** The producing step's stored collision ordinal (`AskAgentStep.outputName` and friends): 2 makes this `$agent_result_2`. Absent means "the bare base name", or, if that is taken, position-ordered suffixing. */
+  nameOrdinal?: number;
 }
 
 /** `ask_agent`'s (and a curated event trigger's) "Result" token: the agent's raw final-message text, distinct from the named fields `expects` parses out of it. */
@@ -166,6 +168,8 @@ export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): 
     }
     case 'notify':
       return 'Notify me';
+    case 'set_variable':
+      return step.name ? `Set ${step.name}` : 'Set a value';
     case 'if':
       return 'If … otherwise';
     case 'repeat':
@@ -180,15 +184,29 @@ function askMeFieldType(type: 'text' | 'number' | 'choice' | 'multi' | 'textarea
   return 'text';
 }
 
+/** The `_2`/`_3` ordinal a producing step minted into its stored `outputName`, or `undefined` for the unsuffixed first holder. */
+export function outputNameOrdinal(step: AutomationStep): number | undefined {
+  if (step.kind !== 'ask_agent' && step.kind !== 'ask_me' && step.kind !== 'run_action') return undefined;
+  const suffix = /_(\d+)$/.exec(step.outputName ?? '');
+  return suffix ? Number(suffix[1]) : undefined;
+}
+
 /**
- * Tokens a single step produces (contract §5's named-output table). `if`
- * aggregates everything produced inside BOTH `then` and `otherwise` — branch
- * results leak to later siblings once the block closes (`scopeAt`, in
- * `token-scope.ts`). `repeat` produces nothing here: its `Current item`
- * token is isolated to its own `steps` and is synthesized by `scopeAt`,
- * never by this function.
+ * Tokens a single step produces (contract §5's named-output table), each
+ * stamped with the step's stored collision ordinal so `buildVariableNamespace`
+ * can name them without consulting their position. `if` aggregates everything
+ * produced inside BOTH `then` and `otherwise` — branch results leak to later
+ * siblings once the block closes (`scopeAt`, in `token-scope.ts`). `repeat`
+ * produces nothing here: its `Current item` token is isolated to its own
+ * `steps` and is synthesized by `scopeAt`, never by this function.
  */
 export function stepProduces(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenDescriptor[] {
+  const produced = producedBy(step, catalog);
+  const nameOrdinal = outputNameOrdinal(step);
+  return nameOrdinal === undefined ? produced : produced.map((descriptor) => ({ ...descriptor, nameOrdinal }));
+}
+
+function producedBy(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenDescriptor[] {
   const source = stepLabel(step, catalog);
   switch (step.kind) {
     case 'ask_agent': {
@@ -248,6 +266,16 @@ export function stepProduces(step: AutomationStep, catalog: ActionCatalogEntry[]
     }
     case 'notify':
       return [];
+    case 'set_variable':
+      return [
+        {
+          ref: { stepId: step.id, output: 'value' },
+          label: step.name,
+          type: 'text',
+          sourceKind: 'variable',
+          source,
+        },
+      ];
     case 'if': {
       const out: TokenDescriptor[] = [];
       for (const s of step.then) out.push(...stepProduces(s, catalog));

@@ -11,8 +11,8 @@
  * `testId` is index-keyed.
  */
 import { Plus, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AutomationExpectedOutput } from '../contract';
-import { MiniSelect } from '../fields/MiniSelect';
 import { OptionsEditor } from './OptionsEditor';
 
 const EXPECT_TYPES: AutomationExpectedOutput['type'][] = ['text', 'number', 'list', 'choice'];
@@ -56,17 +56,29 @@ export function ExpectResultsBuilder({ expects, onChange, testId }: ExpectResult
               placeholder="key"
               className="h-[26px] flex-1 rounded-md border-[0.5px] border-input bg-card px-2 font-mono text-caption text-foreground outline-none placeholder:text-muted-foreground"
             />
-            <MiniSelect
+            <Select
               value={row.type}
-              options={EXPECT_TYPES}
-              onChange={(t) => {
-                const type = t as AutomationExpectedOutput['type'];
+              onValueChange={(next) => {
+                const type = next as AutomationExpectedOutput['type'];
                 setRow(i, { type, options: type === 'choice' ? (row.options ?? []) : undefined });
               }}
-              testId={`${testId}-type-${i}`}
-              mono
-              width={100}
-            />
+            >
+              <SelectTrigger data-testid={`${testId}-type-${i}`} className="h-[26px] w-[100px] font-mono text-caption">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPECT_TYPES.map((type) => (
+                  <SelectItem
+                    key={type}
+                    value={type}
+                    data-testid={`${testId}-type-${i}-option-${type}`}
+                    className="font-mono"
+                  >
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <button
               type="button"
               data-testid={`${testId}-remove-${i}`}

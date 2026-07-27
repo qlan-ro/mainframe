@@ -37,21 +37,59 @@ function fetchInit(method: string, body?: unknown): RequestInit {
   return init;
 }
 
-async function extractError(res: Response): Promise<string> {
+/** One entry of a route's `errors[]` — `stepId` is the automations engine's; other routes may key their own. */
+export interface ApiErrorDetail {
+  stepId: string | null;
+  message: string;
+}
+
+/**
+ * The daemon's error body, kept whole. Routes that reject a document rather
+ * than a request (automations' `engine_error`) send `errors[]` alongside the
+ * joined `error` string; a bare `Error` would drop it and the caller could
+ * only ever show one flat sentence.
+ */
+export class ApiRequestError extends Error {
+  readonly details: ApiErrorDetail[];
+
+  constructor(message: string, details: ApiErrorDetail[] = []) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.details = details;
+  }
+}
+
+/** Malformed entries are dropped, not thrown on — a broken error body must not replace the error it describes. */
+function errorDetails(raw: unknown): ApiErrorDetail[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (entry === null || typeof entry !== 'object') return [];
+    const { stepId, message } = entry as { stepId?: unknown; message?: unknown };
+    if (typeof message !== 'string') return [];
+    return [{ stepId: typeof stepId === 'string' ? stepId : null, message }];
+  });
+}
+
+async function extractError(res: Response): Promise<ApiRequestError> {
   try {
-    const data = (await res.json()) as { error?: string; message?: string };
-    if (typeof data.error === 'string') return data.error;
-    if (typeof data.message === 'string') return data.message;
+    const data = (await res.json()) as { error?: unknown; message?: unknown; errors?: unknown };
+    const text =
+      typeof data.error === 'string'
+        ? data.error
+        : typeof data.message === 'string'
+          ? data.message
+          : `HTTP ${res.status}`;
+    return new ApiRequestError(text, errorDetails(data.errors));
   } catch {
     /* not JSON */
   }
-  return `HTTP ${res.status}`;
+  return new ApiRequestError(`HTTP ${res.status}`);
 }
 
 /** Fetch, unwrap the `ApiResponse<T>` envelope, and return `data`. Throws on HTTP or API error. */
 export async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, fetchInit(method, body));
-  if (!res.ok) throw new Error(await extractError(res));
+  if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponse<T>;
   if (!json.success) throw new Error(json.error);
   return json.data;
@@ -60,7 +98,7 @@ export async function request<T>(method: string, url: string, body?: unknown): P
 /** Like `request` but for routes that return `okEmpty` (no `data`). */
 export async function requestEmpty(method: string, url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, fetchInit(method, body));
-  if (!res.ok) throw new Error(await extractError(res));
+  if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponseEmpty;
   if (!json.success) throw new Error(json.error);
 }
@@ -68,7 +106,7 @@ export async function requestEmpty(method: string, url: string, body?: unknown):
 /** For routes that return HTTP 204 with no body (e.g. DELETE /api/tags/:name). */
 export async function requestNoContent(method: string, url: string): Promise<void> {
   const res = await fetch(url, fetchInit(method));
-  if (!res.ok) throw new Error(await extractError(res));
+  if (!res.ok) throw await extractError(res);
 }
 
 /**
@@ -78,14 +116,14 @@ export async function requestNoContent(method: string, url: string): Promise<voi
  */
 export async function requestPlugin<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, fetchInit(method, body));
-  if (!res.ok) throw new Error(await extractError(res));
+  if (!res.ok) throw await extractError(res);
   return (await res.json()) as T;
 }
 
 /** For plugin routes that return HTTP 204 with no body (DELETE). */
 export async function requestPluginNoContent(method: string, url: string): Promise<void> {
   const res = await fetch(url, { method, headers: authHeaders() });
-  if (!res.ok) throw new Error(await extractError(res));
+  if (!res.ok) throw await extractError(res);
 }
 
 /**

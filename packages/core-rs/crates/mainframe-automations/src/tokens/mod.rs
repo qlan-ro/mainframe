@@ -7,17 +7,22 @@ pub mod compare;
 pub mod scope;
 pub mod substitute;
 pub mod value;
+pub mod variables;
 
 pub use compare::evaluate;
 pub use scope::Scope;
 pub use substitute::render;
 pub use value::TokenValue;
+pub use variables::{NameIndex, NameMap, NameTarget, build_name_index};
 
 #[cfg(test)]
 mod compare_tests;
 
 #[cfg(test)]
 mod substitute_tests;
+
+#[cfg(test)]
+mod variables_tests;
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
 // confidence: high

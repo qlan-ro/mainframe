@@ -1,0 +1,158 @@
+{
+  "$comment": "Cross-language tie-breaker for `$name` substitution, NOT an automation definition. TS runs these through `automation-domain/variables.ts::renderVariableText`; Rust runs them through `tokens/substitute.rs::render`. `scope` maps an assigned variable name to its resolved value; a name absent from `scope` is unresolved.",
+  "cases": [
+    {
+      "name": "a plain name substitutes its value",
+      "text": "Ship $release_notes now",
+      "scope": {
+        "release_notes": "v2 is out"
+      },
+      "expected": "Ship v2 is out now"
+    },
+    {
+      "name": "a trailing period is text, not part of the name",
+      "text": "Ship $release_notes.",
+      "scope": {
+        "release_notes": "v2"
+      },
+      "expected": "Ship v2."
+    },
+    {
+      "name": "a dotted path digs into a record",
+      "text": "See $trigger_payload.pull_request.title",
+      "scope": {
+        "trigger_payload": {
+          "pull_request": {
+            "title": "Add cache"
+          }
+        }
+      },
+      "expected": "See Add cache"
+    },
+    {
+      "name": "a dotted path indexes a list",
+      "text": "First: $prs.0",
+      "scope": {
+        "prs": ["one", "two"]
+      },
+      "expected": "First: one"
+    },
+    {
+      "name": "a failed dig on a resolved base renders empty, as a field-dug token already does",
+      "text": "title: $trigger_payload.pull_request.nope",
+      "scope": {
+        "trigger_payload": {
+          "pull_request": {
+            "title": "Add cache"
+          }
+        }
+      },
+      "expected": "title: "
+    },
+    {
+      "name": "an unresolved base name stays literal",
+      "text": "Hello $nobody there",
+      "scope": {},
+      "expected": "Hello $nobody there"
+    },
+    {
+      "name": "an unresolved base name keeps its dotted path literal too",
+      "text": "Hello $nobody.deep there",
+      "scope": {},
+      "expected": "Hello $nobody.deep there"
+    },
+    {
+      "name": "a suffixed name addresses the second holder, leaving the first bare name intact",
+      "text": "$agent_result then $agent_result_2",
+      "scope": {
+        "agent_result": "first",
+        "agent_result_2": "second"
+      },
+      "expected": "first then second"
+    },
+    {
+      "name": "a dollar sign not at a word boundary is literal text",
+      "text": "a$b and https://example.test/$repo",
+      "scope": {
+        "b": "B",
+        "repo": "R"
+      },
+      "expected": "a$b and https://example.test/$repo"
+    },
+    {
+      "name": "a name starting with a digit is not a reference",
+      "text": "cost $1abc",
+      "scope": {},
+      "expected": "cost $1abc"
+    },
+    {
+      "name": "an integral number renders without a decimal point",
+      "text": "count $n",
+      "scope": {
+        "n": 5
+      },
+      "expected": "count 5"
+    },
+    {
+      "name": "a list renders newline-joined",
+      "text": "items:\n$items",
+      "scope": {
+        "items": ["a", "b"]
+      },
+      "expected": "items:\na\nb"
+    },
+    {
+      "name": "a record renders as JSON",
+      "text": "blob $rec",
+      "scope": {
+        "rec": {
+          "a": "x"
+        }
+      },
+      "expected": "blob {\"a\":\"x\"}"
+    },
+    {
+      "name": "every reference in a string is substituted",
+      "text": "$greeting, $name!",
+      "scope": {
+        "greeting": "Hi",
+        "name": "Ada"
+      },
+      "expected": "Hi, Ada!"
+    },
+    {
+      "name": "a braced reference substitutes where a bare one would be literal text",
+      "text": "todo/${id}",
+      "scope": {
+        "id": "42"
+      },
+      "expected": "todo/42"
+    },
+    {
+      "name": "a braced reference digs a dotted path",
+      "text": "See ${payload.pr.title}!",
+      "scope": {
+        "payload": {
+          "pr": {
+            "title": "Ship it"
+          }
+        }
+      },
+      "expected": "See Ship it!"
+    },
+    {
+      "name": "an unresolved braced name stays literal, braces and all",
+      "text": "cd ${HOME} && build",
+      "scope": {},
+      "expected": "cd ${HOME} && build"
+    },
+    {
+      "name": "an unclosed brace is literal text",
+      "text": "${id and more",
+      "scope": {
+        "id": "42"
+      },
+      "expected": "${id and more"
+    }
+  ]
+}

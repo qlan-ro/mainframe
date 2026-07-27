@@ -2,101 +2,17 @@
 //! valid+matching starts a run with the payload Record + captures the
 //! in-memory sample; bad signature 401s; preset mismatch 204s; a replayed
 //! delivery id is a 200 no-op; stale deliveries drop; disabled automations
-//! accept silently without a run (A7 + contract §4).
-
-use std::sync::Arc;
+//! accept silently without a run (A7 + contract §4). T7 adds the durable
+//! delivery stamp the editor's registration panel reads.
 
 use serde_json::json;
-use tempfile::TempDir;
 
-use crate::credentials::{CredentialStore, FileCredentialStore};
-use crate::domain::{
-    AutomationCreateInput, AutomationDefinition, AutomationScope, Trigger, WebhookPreset,
-    WebhookTrigger,
-};
-use crate::engine::test_support::{CollectingSink, FakeClock, FakePorts};
-use crate::engine::{Interpreter, InterpreterDeps};
-use crate::store::{AutomationDb, AutomationStore, RunStore, RunTriggerKind};
+use crate::domain::WebhookPreset;
+use crate::store::RunTriggerKind;
 
-use super::webhook::ensure_webhook_secret;
-use super::webhook_ingest::{WebhookDecision, WebhookHeaders, WebhookProcessor};
+use super::webhook_ingest::WebhookDecision;
+use super::webhook_ingest_test_support::{NOW_MS, harness, headers, opened_body};
 use super::webhook_tests::sign;
-
-const NOW_MS: i64 = 1_800_000_000_000;
-
-struct IngestHarness {
-    _dir: TempDir,
-    automations: AutomationStore,
-    runs: RunStore,
-    processor: WebhookProcessor,
-    secret: String,
-}
-
-async fn harness(preset: Option<WebhookPreset>) -> IngestHarness {
-    let dir = tempfile::tempdir().unwrap();
-    let db = AutomationDb::open(dir.path().join("automations.db"))
-        .await
-        .unwrap();
-    let automations = AutomationStore::new(db.clone());
-    let runs = RunStore::new(db);
-    let credentials =
-        Arc::new(FileCredentialStore::load(dir.path().join("automation-credentials.json")).await);
-    let interpreter = Arc::new(Interpreter::new(InterpreterDeps {
-        store: runs.clone(),
-        ports: Arc::new(FakePorts::default()),
-        events: Arc::new(CollectingSink::default()),
-        clock: Arc::new(FakeClock),
-        is_idempotent: None,
-        agent_waits: None,
-        on_finalized: None,
-    }));
-
-    automations
-        .create(AutomationCreateInput {
-            name: "pr watcher".to_string(),
-            description: None,
-            scope: AutomationScope::Global,
-            project_id: None,
-            definition: AutomationDefinition {
-                triggers: vec![Trigger::Webhook(WebhookTrigger {
-                    id: "wt".to_string(),
-                    hook_id: "hook-1".to_string(),
-                    preset,
-                })],
-                steps: vec![],
-            },
-        })
-        .await
-        .unwrap();
-    ensure_webhook_secret(credentials.as_ref(), "hook-1")
-        .await
-        .unwrap();
-    let secret = credentials.get("webhook:hook-1").await.unwrap().token;
-
-    let processor = WebhookProcessor::new(automations.clone(), credentials, interpreter);
-    IngestHarness {
-        _dir: dir,
-        automations,
-        runs,
-        processor,
-        secret,
-    }
-}
-
-fn headers(h: &IngestHarness, body: &[u8], delivery: &str) -> WebhookHeaders {
-    WebhookHeaders {
-        signature: Some(sign(&h.secret, body)),
-        github_event: Some("pull_request".to_string()),
-        github_delivery: Some(delivery.to_string()),
-        timestamp: None,
-    }
-}
-
-fn opened_body() -> Vec<u8> {
-    json!({"action": "opened", "pull_request": {"html_url": "https://x/pr/1"}})
-        .to_string()
-        .into_bytes()
-}
 
 #[tokio::test]
 async fn valid_matching_delivery_starts_a_run_with_payload_and_sample() {
@@ -152,6 +68,26 @@ async fn bad_signature_is_rejected_before_anything_else() {
             .is_empty()
     );
     assert!(h.processor.latest_sample(&automation_id, "wt").is_none());
+}
+
+#[tokio::test]
+async fn an_unsigned_delivery_is_rejected() {
+    let h = harness(Some(WebhookPreset::GithubPrOpened)).await;
+    let body = opened_body();
+    let mut hdrs = headers(&h, &body, "d-1");
+    hdrs.signature = None;
+
+    let decision = h.processor.process("hook-1", &hdrs, &body, NOW_MS).await;
+    assert_eq!(
+        decision,
+        WebhookDecision::InvalidSignature,
+        "signing is mandatory — an armed hook accepts nothing it cannot verify"
+    );
+    assert_eq!(
+        h.state.last_delivery_at("hook-1").await.unwrap(),
+        None,
+        "an unsigned body must not be able to claim the hook is wired up"
+    );
 }
 
 #[tokio::test]
@@ -294,4 +230,30 @@ async fn disabled_automation_accepts_silently_without_a_run() {
     );
     // The sample still captures — the editor can use it once re-enabled.
     assert!(h.processor.latest_sample(&automation_id, "wt").is_some());
+}
+
+#[tokio::test]
+async fn a_verified_delivery_stamps_the_hook_and_a_forged_one_does_not() {
+    let h = harness(Some(WebhookPreset::GithubPrOpened)).await;
+    let body = opened_body();
+
+    let mut forged = headers(&h, &body, "d-0");
+    forged.signature = Some(sign("wrong-secret", &body));
+    h.processor.process("hook-1", &forged, &body, NOW_MS).await;
+    assert_eq!(
+        h.state.last_delivery_at("hook-1").await.unwrap(),
+        None,
+        "an unsigned body must not be able to claim the hook is wired up"
+    );
+
+    // A delivery the preset rejects still proves GitHub is reaching us, which
+    // is the only question the registration panel asks.
+    let mismatch = json!({"action": "closed"}).to_string().into_bytes();
+    h.processor
+        .process("hook-1", &headers(&h, &mismatch, "d-1"), &mismatch, NOW_MS)
+        .await;
+    assert_eq!(
+        h.state.last_delivery_at("hook-1").await.unwrap().as_deref(),
+        Some("2027-01-15T08:00:00+00:00")
+    );
 }

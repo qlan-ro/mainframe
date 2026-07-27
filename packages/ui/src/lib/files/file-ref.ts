@@ -29,10 +29,10 @@ export interface FileRef {
    */
   relative: string;
   /**
-   * Absolute POSIX path, present whenever the input was absolute or a
-   * file:// URI. Undefined for pure already-relative inputs (no base to
-   * join against — callers that need to load an already-relative file always
-   * have a base from context).
+   * Absolute POSIX path. Present whenever the input was absolute, a
+   * file:// URI, or an already-relative path joined against a known base
+   * (worktree first, then project). Undefined only when the input is
+   * already-relative and neither base is defined.
    */
   absolute?: string;
   /** True when the path lives outside every known base. */
@@ -74,10 +74,13 @@ export function toFileRef(rawPath: string, bases: FileBases): FileRef {
     return toFileRef(decoded, bases);
   }
 
-  // Already-relative: strip leading ./ if present, keep as-is.
+  // Already-relative: strip leading ./ if present, join against the first
+  // defined base (worktree first, then project) for `absolute`.
   if (!normalized.startsWith('/')) {
     const stripped = normalized.startsWith('./') ? normalized.slice(2) : normalized;
-    return { relative: stripped, isExternal: false };
+    const base = bases.worktreePath ?? bases.projectPath;
+    const absolute = base ? `${base.endsWith('/') ? base.slice(0, -1) : base}/${stripped}` : undefined;
+    return { relative: stripped, absolute, isExternal: false };
   }
 
   // Absolute path: try bases in precedence order (worktree first).

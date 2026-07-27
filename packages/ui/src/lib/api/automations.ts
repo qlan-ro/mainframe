@@ -15,6 +15,7 @@ import type {
   AutomationRunSummary,
   AutomationSummary,
   AutomationTimelineEntry,
+  WebhookRegistration,
 } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
@@ -42,6 +43,10 @@ export const deleteAutomation = (id: string): Promise<void> =>
 
 export const setAutomationEnabled = (id: string, enabled: boolean): Promise<AutomationSummary> =>
   request('PATCH', `${b()}/automations/${encodeURIComponent(id)}/enabled`, { enabled });
+
+/** Arms a webhook trigger's hook server-side (idempotent) and returns the ingest URL the daemon will accept. */
+export const registerAutomationWebhook = (id: string, triggerId: string): Promise<WebhookRegistration> =>
+  request('POST', `${b()}/automations/${encodeURIComponent(id)}/webhooks/${encodeURIComponent(triggerId)}/register`);
 
 export const startAutomationRun = (id: string): Promise<AutomationRunSummary> =>
   request('POST', `${b()}/automations/${encodeURIComponent(id)}/runs`);

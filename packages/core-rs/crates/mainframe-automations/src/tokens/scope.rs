@@ -107,7 +107,7 @@ impl Scope<'_> {
 
 /// Dot-path descent (Node `digField`): records by key, lists by integer
 /// index; any miss along the way resolves to `None`, never an error.
-fn dig(value: &TokenValue, field: &str) -> Option<TokenValue> {
+pub(crate) fn dig(value: &TokenValue, field: &str) -> Option<TokenValue> {
     let mut cursor = value.clone();
     for key in field.split('.') {
         cursor = match cursor {

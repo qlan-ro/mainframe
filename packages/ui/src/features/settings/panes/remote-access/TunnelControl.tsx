@@ -4,6 +4,7 @@ import { NamedTunnelSection } from './NamedTunnelSection';
 import { QuickTunnelSection } from './QuickTunnelSection';
 import { PairingSection } from './PairingSection';
 import { DevicesSection } from './DevicesSection';
+import { ActivePortTunnelsSection } from './ActivePortTunnelsSection';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 
 interface TunnelControlProps {
@@ -53,6 +54,7 @@ export function TunnelControl({ port, tunnel }: TunnelControlProps): React.React
 
       {tunnel.verified && <PairingSection port={port} />}
       <DevicesSection port={port} />
+      <ActivePortTunnelsSection port={port} />
     </div>
   );
 }

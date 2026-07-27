@@ -28,7 +28,8 @@
  *   chat-code-copy — CodeHeader's Copy/Copied button (fenced code blocks only)
  *   chat-scroll-to-bottom — ThreadPrimitive.ScrollToBottom (native `disabled` at-bottom state)
  *   find-bar / thread-find-input / thread-find-prev / thread-find-next / thread-find-close
- *   chat-selection-toolbar / chat-selection-quote — SelectionToolbar (native quote-on-select)
+ *   chat-selection-toolbar / chat-selection-quote / chat-selection-new-session — the floating
+ *     selection actions (native SelectionToolbar root, our Quote / New session actions)
  *   chat-thread-viewport (+ [data-mf-chat-thread]) — the scrollable transcript viewport
  */
 import { test, expect, type Page } from '@playwright/test';

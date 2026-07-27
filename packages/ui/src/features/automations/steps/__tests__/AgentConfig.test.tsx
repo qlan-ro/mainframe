@@ -1,196 +1,266 @@
 /**
- * AgentConfig — prompt ChipField (slash), attachments, provider+model
- * picker; More options: worktree (branch picker), timeout, permission,
- * Expect results (A2), FailureToggle (ts153 wf2-stepconfig.jsx
- * `WfAgentConfig`, ported onto `AskAgentStep`).
+ * AgentConfig — the Agent step's composer-shaped card (todo #234 T16): a
+ * prompt field with a chip toolbar beneath it (model, permission, worktree)
+ * and an advanced disclosure. The chips and the advanced fields are unit
+ * tested in `steps/agent/__tests__/`; this suite covers the card itself,
+ * the wiring that merges each part's patch into the whole step, and that
+ * the prompt field's `/` skills are sourced from the step's own
+ * `adapterId` — mocking `@/lib/api/projects`/`skills`/`files` like
+ * `fields/__tests__/TriggerTextField.test.tsx` does.
  *
- * ts153's free-text "Budget cap" has no counterpart on the ratified
- * `AskAgentStep` — `timeoutMinutes: number` replaces it, contract wins over
- * the prototype. Attachments (image/file chips) WAS dropped in an earlier
- * pass as a deliberate contract-driven omission; the 2026-07-12
- * design-conformance pass reverses that and restores it (`AttachmentsField`,
- * `AskAgentStep.attachments?: string[]`).
- *
- * todo #234: the model list is now the live `useAdapters()` catalog (bullet
- * 7, replacing the hardcoded `AGENT_MODELS`/`AUTO_APPROVE_OPTIONS` arrays —
- * auto-approve is gone entirely, bullet 3), and the worktree base-branch
- * field is the shared `BranchSelect` picker fed by `getGitBranches`, scoped
- * to the automation's own resolved project (`store.activeProjectId`, bullet
- * 4) rather than a per-step project picker.
+ * No Send button: an automation step is configured, never sent — the card
+ * borrows the composer's shape, not its submit affordance.
  */
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { AdapterInfo, Project, Skill } from '@qlan-ro/mainframe-types';
 import type { AskAgentStep } from '../../contract';
+import type { TokenDescriptor } from '../../domain/tokens';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { resetAdapters, seedAdapters } from '@/store/adapters';
-import { AgentConfig } from '../AgentConfig';
+import { AgentConfig, type AgentConfigProps } from '../AgentConfig';
 
 vi.mock('@/lib/api/git', () => ({
   getGitBranches: vi.fn(async () => ({ local: [{ name: 'main' }, { name: 'dev' }], current: 'main' })),
 }));
+vi.mock('@/lib/api/projects', () => ({ getProjects: vi.fn() }));
+vi.mock('@/lib/api/skills', () => ({ getSkills: vi.fn() }));
+vi.mock('@/lib/api/files', () => ({
+  searchFiles: vi.fn(async () => []),
+  getFileTree: vi.fn(async () => []),
+  browseFilesystem: vi.fn(async () => []),
+}));
+
+import { getProjects } from '@/lib/api/projects';
+import { getSkills } from '@/lib/api/skills';
+
+const PROJECT_ID = 'proj-1';
+const PROJECT_PATH = '/proj';
+
+const PROJECT_FIXTURE: Project = {
+  id: PROJECT_ID,
+  name: 'P',
+  path: PROJECT_PATH,
+  createdAt: '2026-06-06T00:00:00.000Z',
+  lastOpenedAt: '2026-06-06T00:00:00.000Z',
+};
+
+const SKILL_FIXTURE: Skill = {
+  id: 'skill-1',
+  adapterId: 'codex',
+  name: 'my-skill',
+  displayName: 'My Skill',
+  description: 'Does something useful',
+  scope: 'project',
+  filePath: '/proj/.codex/skills/my-skill.md',
+  content: '# My Skill',
+  invocationName: 'my-skill',
+};
 
 const BASE_STEP: AskAgentStep = { id: 'a', kind: 'ask_agent', prompt: [] };
+const TOKENS: TokenDescriptor[] = [
+  {
+    ref: { stepId: 'trigger', output: 'result' },
+    label: 'Result',
+    type: 'text',
+    sourceKind: 'trigger',
+    source: 'Trigger',
+  },
+];
 
-function adapter(id: string, name: string, installed: boolean, models: AdapterInfo['models']): AdapterInfo {
-  return { id, name, description: '', installed, models, capabilities: { planMode: false } };
+/** `TriggerTextField` is genuinely controlled — multi-character typing needs the value fed back. */
+function Field(
+  props: Omit<AgentConfigProps, 'onChange' | 'step'> & {
+    initial: AskAgentStep;
+    onChange?: AgentConfigProps['onChange'];
+  },
+) {
+  const { initial, onChange, ...rest } = props;
+  const [step, setStep] = useState(initial);
+  return (
+    <AgentConfig
+      {...rest}
+      step={step}
+      onChange={(next) => {
+        setStep(next);
+        onChange?.(next);
+      }}
+    />
+  );
 }
 
-const CLAUDE = adapter('claude', 'Claude', true, [
+function adapter(id: string, name: string, models: AdapterInfo['models']): AdapterInfo {
+  return { id, name, description: '', installed: true, models, capabilities: { planMode: false } };
+}
+
+const CLAUDE = adapter('claude', 'Claude', [
   { id: 'sonnet-5', label: 'Sonnet 5', isDefault: true },
   { id: 'opus-4', label: 'Opus 4' },
 ]);
-const CODEX = adapter('codex', 'Codex', true, [{ id: 'gpt-5', label: 'GPT-5', isDefault: true }]);
+const CODEX = adapter('codex', 'Codex', [{ id: 'gpt-5', label: 'GPT-5', isDefault: true }]);
 
 beforeEach(() => {
-  useAutomationsStore.setState({ activeProjectId: 'proj-1' });
+  vi.clearAllMocks();
+  useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
   resetAdapters();
   seedAdapters([CLAUDE, CODEX]);
 });
 
 afterEach(() => {
   resetAdapters();
+  useAutomationsStore.setState({ activeProjectId: null });
 });
 
-describe('AgentConfig — essentials', () => {
-  it('renders the prompt ChipField bound to step.prompt', async () => {
+describe('AgentConfig — card', () => {
+  it('renders one focus-reactive card holding the prompt and its toolbar', () => {
+    render(<AgentConfig step={BASE_STEP} onChange={vi.fn()} tokens={[]} testId="automations-agent-a" />);
+    const pane = screen.getByTestId('automations-agent-a-pane');
+    for (const cls of [
+      'rounded-xl',
+      '[border-width:0.5px]',
+      'border-border',
+      'bg-card',
+      'shadow-sm',
+      'focus-within:border-ring',
+    ]) {
+      expect(pane.className).toContain(cls);
+    }
+    expect(pane).toContainElement(screen.getByTestId('automations-agent-a-prompt'));
+    expect(pane).toContainElement(screen.getByTestId('automations-agent-a-toolbar'));
+  });
+
+  it('renders the prompt as a bare field sitting flush in the card', () => {
+    render(<AgentConfig step={BASE_STEP} onChange={vi.fn()} tokens={[]} testId="automations-agent-a" />);
+    const prompt = screen.getByTestId('automations-agent-a-prompt');
+    expect(prompt).toHaveAttribute('placeholder', 'What should the agent do?');
+    for (const cls of ['px-[14px]', 'pt-[10px]', 'pb-[4px]']) {
+      expect(prompt.className).toContain(cls);
+    }
+    expect(screen.getByTestId('automations-agent-a-prompt-container')).toHaveStyle({ minHeight: '56px' });
+  });
+
+  it('lays the chips out in a toolbar row under the prompt', () => {
+    render(<AgentConfig step={BASE_STEP} onChange={vi.fn()} tokens={[]} testId="automations-agent-a" />);
+    const toolbar = screen.getByTestId('automations-agent-a-toolbar');
+    for (const cls of ['px-2.5', 'pt-[4px]', 'pb-[6px]']) {
+      expect(toolbar.className).toContain(cls);
+    }
+    for (const part of ['model', 'permission', 'worktree', 'advanced-toggle']) {
+      expect(toolbar).toContainElement(screen.getByTestId(`automations-agent-a-${part}`));
+    }
+  });
+
+  it('offers no Send button — a step is configured, never sent', () => {
+    render(<AgentConfig step={BASE_STEP} onChange={vi.fn()} tokens={[]} testId="automations-agent-a" />);
+    expect(screen.queryByRole('button', { name: /send/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('AgentConfig — prompt', () => {
+  it('writes typed prose into step.prompt as ChipText', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    render(<Field initial={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
     await user.click(screen.getByTestId('automations-agent-a-prompt'));
     await user.keyboard('Plan my day');
-    await user.tab();
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, prompt: ['Plan my day'] });
+    expect(onChange).toHaveBeenLastCalledWith({ ...BASE_STEP, prompt: ['Plan my day'] });
   });
 
-  it('renders a provider+model picker fed by the live adapter catalog, defaulting to the first installed provider and its default model', () => {
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    expect(screen.getByTestId('automations-agent-a-provider')).toHaveValue('claude');
-    expect(screen.getByTestId('automations-agent-a-model')).toHaveValue('sonnet-5');
-  });
-
-  it('picking a model patches step.model without touching adapterId', async () => {
+  it('opens the variable trigger popover on "$"', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.selectOptions(screen.getByTestId('automations-agent-a-model'), 'opus-4');
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, model: 'opus-4' });
+    render(<Field initial={BASE_STEP} tokens={TOKENS} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-prompt'));
+    await user.keyboard('$');
+    await waitFor(() => expect(screen.getByTestId('automations-agent-a-prompt-trigger-popover')).toBeInTheDocument());
   });
 
-  it("picking a different provider patches step.adapterId and resets model to that provider's default", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.selectOptions(screen.getByTestId('automations-agent-a-provider'), 'codex');
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, adapterId: 'codex', model: undefined });
-  });
-});
-
-describe('AgentConfig — More options: attachments', () => {
-  it('adds a placeholder attachment to step.attachments on click', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-attachments-add'));
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, attachments: ['screenshot-1.png'] });
-  });
-
-  it('removes an attachment on click, leaving the rest', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const step: AskAgentStep = { ...BASE_STEP, attachments: ['a.png', 'b.md'] };
-    render(<AgentConfig step={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-attachments-remove-0'));
-    expect(onChange).toHaveBeenCalledWith({ ...step, attachments: ['b.md'] });
-  });
-});
-
-describe('AgentConfig — More options: worktree', () => {
-  it('shows "Run in a fresh worktree" when no worktree is set; clicking it seeds one', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-worktree-add'));
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, worktree: { baseBranch: 'main', branchName: [] } });
-  });
-
-  it("renders a branch picker for base + a chip field for branch name, scoped to the automation's project; picking a branch patches baseBranch", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const step: AskAgentStep = { ...BASE_STEP, worktree: { baseBranch: 'main', branchName: [] } };
-    render(<AgentConfig step={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-
-    await waitFor(() =>
-      expect(screen.getByTestId('automations-agent-a-worktree-base')).toHaveTextContent('main (current)'),
+  it('sources the prompt field\'s "/" skills from the step\'s own adapterId, not the fallback adapter', async () => {
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    render(
+      <AgentConfig
+        step={{ ...BASE_STEP, adapterId: 'codex' }}
+        onChange={vi.fn()}
+        tokens={[]}
+        testId="automations-agent-a"
+      />,
     );
-    await user.click(screen.getByTestId('automations-agent-a-worktree-base'));
-    await user.click(screen.getByTestId('automations-agent-a-worktree-base-option-dev'));
-
-    expect(onChange).toHaveBeenLastCalledWith({ ...step, worktree: { baseBranch: 'dev', branchName: [] } });
-  });
-
-  it('removing the worktree clears it back to undefined', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const step: AskAgentStep = { ...BASE_STEP, worktree: { baseBranch: 'main', branchName: [] } };
-    render(<AgentConfig step={step} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-worktree-remove'));
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, worktree: undefined });
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalled());
+    expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(0, 'codex', PROJECT_PATH);
   });
 });
 
-it('renders no auto-approve affordance — permissionMode is the sole execution-scope control', async () => {
-  const user = userEvent.setup();
-  const onChange = vi.fn();
-  render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-  await user.click(screen.getByTestId('automations-agent-a-more'));
-  expect(screen.queryByTestId('automations-agent-a-approve-edits')).not.toBeInTheDocument();
+describe('AgentConfig — toolbar chips', () => {
+  it('merges the model chip’s patch into the step', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-model'));
+    await user.click(screen.getByTestId('automations-agent-a-model-option-codex-gpt-5'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ ...BASE_STEP, adapterId: 'codex', model: 'gpt-5' });
+  });
+
+  it('merges the permission chip’s patch into the step', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-permission'));
+    await user.click(screen.getByTestId('automations-agent-a-permission-option-acceptEdits'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ ...BASE_STEP, permissionMode: 'acceptEdits' });
+  });
+
+  it('merges the worktree chip’s patch into the step', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-worktree'));
+    await user.click(screen.getByTestId('automations-agent-a-worktree-toggle'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      ...BASE_STEP,
+      worktree: { baseBranch: 'main', branchName: [] },
+    });
+  });
+
+  it('reflects the step’s own agent on the model chip', () => {
+    render(
+      <AgentConfig
+        step={{ ...BASE_STEP, adapterId: 'codex' }}
+        onChange={vi.fn()}
+        tokens={[]}
+        testId="automations-agent-a"
+      />,
+    );
+    expect(screen.getByTestId('automations-agent-a-model')).toHaveTextContent('GPT-5');
+  });
 });
 
-describe('AgentConfig — More options: timeout + permission', () => {
-  it('patches step.timeoutMinutes from the numeric input', async () => {
+describe('AgentConfig — advanced disclosure', () => {
+  it('keeps the advanced fields hidden until the toggle is opened', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.type(screen.getByTestId('automations-agent-a-timeout'), '4');
-    expect(onChange).toHaveBeenLastCalledWith({ ...BASE_STEP, timeoutMinutes: 4 });
+    render(<AgentConfig step={BASE_STEP} onChange={vi.fn()} tokens={[]} testId="automations-agent-a" />);
+    expect(screen.queryByTestId('automations-agent-a-timeout')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('automations-agent-a-advanced-toggle'));
+    expect(screen.getByTestId('automations-agent-a-timeout')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-agent-a-attachments')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-agent-a-keepgoing')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-agent-a-expects-add')).toBeInTheDocument();
   });
 
-  it('patches step.permissionMode from the select, offering the real execution modes', async () => {
+  it('merges an advanced-field patch into the step', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.selectOptions(screen.getByTestId('automations-agent-a-permission'), 'acceptEdits');
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, permissionMode: 'acceptEdits' });
-  });
-});
-
-describe('AgentConfig — More options: expect results + failure toggle', () => {
-  it('renders ExpectResultsBuilder bound to step.expects', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
-    await user.click(screen.getByTestId('automations-agent-a-expects-add'));
-    const call = onChange.mock.calls[0]?.[0] as AskAgentStep | undefined;
-    expect(call?.expects).toHaveLength(1);
-  });
-
-  it('renders FailureToggle, patching step.keepGoing', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<AgentConfig step={BASE_STEP} onChange={onChange} tokens={[]} testId="automations-agent-a" />);
-    await user.click(screen.getByTestId('automations-agent-a-more'));
+    await user.click(screen.getByTestId('automations-agent-a-advanced-toggle'));
     await user.click(screen.getByTestId('automations-agent-a-keepgoing'));
-    expect(onChange).toHaveBeenCalledWith({ ...BASE_STEP, keepGoing: true });
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ ...BASE_STEP, keepGoing: true });
+  });
+
+  it('renders no auto-approve affordance — permissionMode is the sole execution-scope control', async () => {
+    const user = userEvent.setup();
+    render(<AgentConfig step={BASE_STEP} onChange={vi.fn()} tokens={[]} testId="automations-agent-a" />);
+    await user.click(screen.getByTestId('automations-agent-a-advanced-toggle'));
+    expect(screen.queryByTestId('automations-agent-a-approve-edits')).not.toBeInTheDocument();
   });
 });

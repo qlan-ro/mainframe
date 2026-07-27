@@ -18,6 +18,7 @@ pub mod path_utils;
 pub mod respond;
 pub mod ripgrep;
 pub mod routes;
+pub mod setup_advisor;
 pub mod suggestions;
 pub mod websocket;
 pub mod ws_file_watch;
@@ -25,7 +26,10 @@ pub mod ws_schemas;
 
 pub use automations_deps::build_automations_engine;
 pub use chat_deps::build_chat_manager;
-pub use chat_seams::{LaunchStopper, RegistryLaunchStopper, default_launch_stopper};
+pub use chat_seams::{
+    LaunchStopper, NoopScopeTunnelStopper, RegistryLaunchStopper, RegistryScopeTunnelStopper,
+    ScopeTunnelStopper, default_launch_stopper, default_scope_tunnel_stopper,
+};
 pub use ctx::{AppCtx, GitFactory, Services};
 pub use db::Db;
 pub use http::build_app;

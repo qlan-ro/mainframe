@@ -12,7 +12,7 @@ use crate::credentials::CredentialStore;
 use crate::domain::{ChipPart, ChipText, RunActionStep};
 use crate::ports::ProjectRegistry;
 use crate::store::{AutomationStore, RunStore};
-use crate::tokens::{Scope, render};
+use crate::tokens::{NameMap, Scope, render};
 
 use super::{StepOutcome, VerbContext};
 
@@ -64,7 +64,7 @@ impl RunActionVerb {
             },
         };
 
-        let input = build_action_input(step, ctx.scope);
+        let input = build_action_input(step, ctx.scope, ctx.names);
         let action_ctx = ActionCtx {
             creds,
             credential_label: step.credential.clone(),
@@ -108,13 +108,17 @@ impl RunActionVerb {
 /// boundaries (A1). `outputAs` is merged only for the two actions that
 /// declare it — injecting it into every action would corrupt e.g.
 /// notion.add_row's catchall property schema.
-pub(crate) fn build_action_input(step: &RunActionStep, scope: &Scope<'_>) -> Value {
+pub(crate) fn build_action_input(
+    step: &RunActionStep,
+    scope: &Scope<'_>,
+    names: &NameMap,
+) -> Value {
     let mut input = Map::new();
     for (key, chip_text) in &step.params {
         let value = if step.action_id == "run_command" && key == "script" {
             script_parts(chip_text, scope)
         } else {
-            Value::String(render(chip_text, scope))
+            Value::String(render(chip_text, scope, names))
         };
         input.insert(key.clone(), value);
     }

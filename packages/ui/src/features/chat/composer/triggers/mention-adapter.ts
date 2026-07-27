@@ -1,8 +1,8 @@
 /**
  * `@`-mention trigger adapter — desktop-parity, mode-aware.
  *
- * The native trigger resource calls `search(body)` where `body` is the text
- * after `@` (whitespace-bounded, slashes included). We classify it the same way
+ * The trigger engine calls `search(body)` where `body` is the text after `@`
+ * (whitespace-bounded, slashes included). We classify it the same way
  * desktop's `parseAtToken` does:
  *   - no slash → FUZZY: agents (from the preloaded provider list) + project
  *     file fuzzy-search (`searchFiles`).
@@ -17,10 +17,9 @@
  * Directory items keep the `@dir/` token OPEN for drill-down (see
  * `mentionDirectiveFormatter`); files/agents close it.
  */
-import type { Unstable_TriggerItem } from '@assistant-ui/react';
 import type { AgentConfig } from '@qlan-ro/mainframe-types';
 import type { FileResult, FileTreeEntry } from '@/lib/api/files';
-import type { TriggerAdapter } from './skills-trigger-adapter';
+import type { TriggerAdapter, TriggerItem } from '@/components/trigger-engine/types';
 
 // ---------------------------------------------------------------------------
 // Token classification (mirrors desktop parse-at-token body logic + isFilesystemDir)
@@ -40,19 +39,19 @@ export function classifyMention(body: string): Classified {
   return dir.startsWith('/') || dir.startsWith('~') ? { mode: 'fs', dir, leaf } : { mode: 'tree', dir, leaf };
 }
 
-const fileItem = (f: FileResult): Unstable_TriggerItem => ({
+const fileItem = (f: FileResult): TriggerItem => ({
   id: f.path,
   type: 'file',
   label: f.name,
   description: f.path,
 });
-const treeItem = (e: FileTreeEntry): Unstable_TriggerItem => ({
+const treeItem = (e: FileTreeEntry): TriggerItem => ({
   id: e.path,
   type: e.type === 'directory' ? 'directory' : 'file',
   label: e.name,
   description: e.path,
 });
-const agentItem = (a: AgentConfig): Unstable_TriggerItem => ({
+const agentItem = (a: AgentConfig): TriggerItem => ({
   id: a.name,
   type: 'agent',
   label: a.name,
@@ -71,17 +70,14 @@ export interface MentionCacheDeps {
 
 export interface MentionCache {
   /** Items for the parsed body, read synchronously from cache (agents merged by the adapter). */
-  getItems(body: string): Unstable_TriggerItem[];
+  getItems(body: string): TriggerItem[];
   /** Kick off the fetch for the parsed body (deduped per key); no-op for an empty fuzzy query. */
   request(body: string): void;
   subscribe(listener: () => void): () => void;
 }
 
 /** Cache key + fetch for a classified body. Null = nothing to fetch (empty fuzzy). */
-function fetchPlan(
-  deps: MentionCacheDeps,
-  c: Classified,
-): { key: string; run: () => Promise<Unstable_TriggerItem[]> } | null {
+function fetchPlan(deps: MentionCacheDeps, c: Classified): { key: string; run: () => Promise<TriggerItem[]> } | null {
   if (c.mode === 'fuzzy') {
     if (c.query === '') return null; // bare `@` → no file fetch (agents only)
     return { key: `f:${c.query}`, run: () => deps.searchFiles(c.query).then((r) => r.map(fileItem)) };
@@ -92,7 +88,7 @@ function fetchPlan(
 }
 
 export function createMentionCache(deps: MentionCacheDeps): MentionCache {
-  const cache = new Map<string, Unstable_TriggerItem[]>();
+  const cache = new Map<string, TriggerItem[]>();
   const inflight = new Set<string>();
   const listeners = new Set<() => void>();
   const emit = () => listeners.forEach((l) => l());
@@ -138,7 +134,7 @@ export function createMentionCache(deps: MentionCacheDeps): MentionCache {
 
 /** Search-first adapter (no categories) merging agents (fuzzy mode only) with the cached file/dir results. */
 export function buildMentionTriggerAdapter(cache: MentionCache, agents: AgentConfig[]): TriggerAdapter {
-  const items = (body: string): Unstable_TriggerItem[] => {
+  const items = (body: string): TriggerItem[] => {
     cache.request(body);
     const cached = cache.getItems(body);
     const c = classifyMention(body);

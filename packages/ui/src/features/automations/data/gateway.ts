@@ -14,6 +14,7 @@ import type {
   AutomationSummary,
   AutomationTimelineEntry,
   DaemonEvent,
+  WebhookRegistration,
 } from '../contract';
 
 export interface AutomationsGateway {
@@ -24,6 +25,14 @@ export interface AutomationsGateway {
   updateAutomation(id: string, input: AutomationCreateInput): Promise<AutomationSummary>;
   deleteAutomation(id: string): Promise<void>;
   setEnabled(id: string, enabled: boolean): Promise<AutomationSummary>;
+  /**
+   * Arms a webhook trigger's hook server-side and returns its ingest URL.
+   * Idempotent — re-registering an armed hook returns the same registration,
+   * which is also the only way the editor learns a saved automation's URL
+   * (the list route omits `registration`; only `GET /api/automations/:id`
+   * embeds it).
+   */
+  registerWebhook(automationId: string, triggerId: string): Promise<WebhookRegistration>;
 
   startRun(id: string): Promise<AutomationRunSummary>;
   listRuns(id: string): Promise<AutomationRunSummary[]>;

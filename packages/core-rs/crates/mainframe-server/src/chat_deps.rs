@@ -70,7 +70,7 @@ use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::broadcast;
 
-use crate::chat_seams::LaunchStopper;
+use crate::chat_seams::{LaunchStopper, ScopeTunnelStopper};
 use crate::ctx::GitFactory;
 use crate::db::Db;
 
@@ -124,6 +124,7 @@ pub struct DaemonChatDeps {
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
+    scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
     /// Process-lifetime Claude external-session enrichment cache — owned here
     /// (not a module-level singleton, forbidden by PORTING.md §5) and threaded
@@ -499,6 +500,15 @@ impl ChatManagerDeps for DaemonChatDeps {
             .stop_launch_processes(project_id, effective_path)
     }
 
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        self.scope_tunnels
+            .stop_scope_tunnels(project_id, effective_path)
+    }
+
     fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             let Some(session) = self.session_for_scan(chat_id) else {
@@ -799,6 +809,7 @@ pub fn build_chat_manager(
     git: GitFactory,
     broadcast: broadcast::Sender<DaemonEvent>,
     launch: Arc<dyn LaunchStopper>,
+    scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
     // Title generation is now adapter-aware (#430) — the resolved PATH lives with
     // the adapter's title spawn, so the ChatManager no longer needs it. The param
@@ -814,6 +825,7 @@ pub fn build_chat_manager(
         git,
         broadcast,
         launch,
+        scope_tunnels,
         quota,
         claude_external_session_cache: new_external_session_cache(),
     });
@@ -1095,7 +1107,7 @@ mod scan_loaded_history_tests {
     use mainframe_types::context::MentionKind;
 
     use super::*;
-    use crate::chat_seams::NoopLaunchStopper;
+    use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 
     fn text_msg(id: &str, r#type: ChatMessageType, text: &str) -> ChatMessage {
         ChatMessage {
@@ -1300,6 +1312,7 @@ mod scan_loaded_history_tests {
             git: GitFactory,
             broadcast,
             launch: Arc::new(NoopLaunchStopper),
+            scope_tunnels: Arc::new(NoopScopeTunnelStopper),
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
         }

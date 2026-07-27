@@ -106,6 +106,43 @@ describe('already-relative path', () => {
   });
 });
 
+// ── relative→absolute join (274-A11) ─────────────────────────────────────────
+
+describe('already-relative path joined against a base for `absolute`', () => {
+  it('joins against worktreePath, worktree wins over project', () => {
+    const ref = toFileRef('src/a.ts', { worktreePath: '/w', projectPath: '/p' });
+    expect(ref).toEqual({ relative: 'src/a.ts', absolute: '/w/src/a.ts', isExternal: false });
+  });
+
+  it('joins against projectPath when worktreePath is absent', () => {
+    const ref = toFileRef('src/a.ts', { projectPath: '/p' });
+    expect(ref.absolute).toBe('/p/src/a.ts');
+  });
+
+  it('leaves absolute undefined with no bases', () => {
+    const ref = toFileRef('src/a.ts', {});
+    expect(ref.absolute).toBeUndefined();
+  });
+
+  it('strips leading ./ before joining', () => {
+    const ref = toFileRef('./src/a.ts', { worktreePath: '/w' });
+    expect(ref.relative).toBe('src/a.ts');
+    expect(ref.absolute).toBe('/w/src/a.ts');
+  });
+
+  it('normalizes a trailing slash on the base, no doubled slash', () => {
+    const ref = toFileRef('src/a.ts', { worktreePath: '/w/' });
+    expect(ref.absolute).toBe('/w/src/a.ts');
+  });
+
+  it('agreement: the relative menu copy equals the open-file relative key', () => {
+    const rawPath = 'src/a.ts';
+    const ref = toFileRef(rawPath, { worktreePath: '/w', projectPath: '/p' });
+    // Pins that Copy Relative Path and the open-file intent can never diverge.
+    expect(ref.relative).toBe('src/a.ts');
+  });
+});
+
 // ── external path ─────────────────────────────────────────────────────────────
 
 describe('external path (not under any base)', () => {

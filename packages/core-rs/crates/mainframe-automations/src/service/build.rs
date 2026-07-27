@@ -8,7 +8,7 @@ use crate::credentials::FileCredentialStore;
 use crate::engine::{AgentVerb, Interpreter, InterpreterDeps, NotifyVerb, RunActionVerb};
 use crate::error::StoreError;
 use crate::interactions::{AskMeVerb, InteractionService};
-use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore};
+use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, WebhookStateStore};
 use crate::triggers::{
     CompletionEmitter, ScheduleSweeper, TriggerFirer, TriggerRouter, WebhookProcessor,
 };
@@ -85,10 +85,12 @@ pub(super) async fn build(
     ));
     completion.bind_router(router.clone());
     let sweeper = Arc::new(ScheduleSweeper::new(automations.clone(), firer));
+    let webhook_deliveries = WebhookStateStore::new(db.clone());
     let webhooks = WebhookProcessor::new(
         automations.clone(),
         credentials.clone(),
         interpreter.clone(),
+        webhook_deliveries.clone(),
     );
 
     Ok(Arc::new(AutomationsEngine {
@@ -100,6 +102,7 @@ pub(super) async fn build(
         registry,
         credentials,
         webhooks,
+        webhook_deliveries,
         sweeper,
         router,
         event_source: ports.event_source,

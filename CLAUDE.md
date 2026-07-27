@@ -20,7 +20,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet 
 
 - Before any new bug/feature work, pull latest main and start a new branch on it
 - Before any work, check needed skills to guide your development see [Skills](#skills)
-- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs: [Claude `/clear`](docs/adapters/claude/CLEAR.md) and the consumed-surface checklists ([Claude](docs/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
+- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs are in `docs/adapters/claude/`, verified against the 2026-03-31 source leak and CLI v2.1.220: [SESSIONS_JSONL](docs/adapters/claude/SESSIONS_JSONL.md) (transcript format, directory layout, worktree relocation), [HOOKS](docs/adapters/claude/HOOKS.md), [PERMISSIONS](docs/adapters/claude/PERMISSIONS.md), [SLASH_COMMANDS](docs/adapters/claude/SLASH_COMMANDS.md), [CLEAR](docs/adapters/claude/CLEAR.md). Two older docs are kept with staleness banners — read the five above first: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md) (v2.1.37; still the only coverage of the `--sdk-url` WebSocket transport) and [CLAUDE-JSONL-SCHEMA](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md) (v2.0.76–2.1.34 field frequencies, subordinate to SESSIONS_JSONL). For which fields Mainframe actually consumes, see the consumed-surface checklists ([Claude](docs/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
 - For git workflow and commit practices, see [Git](#git)
@@ -74,7 +74,8 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 | Multi-step implementation task, or after brainstorming approval | `writing-plans` |
 | Writing implementation code for any feature or bugfix | `test-driven-development` |
 | About to claim work is done, commit, or open a PR | `verification-before-completion` |
-| Building UI components, pages, or making visual design decisions | `ui-ux-pro-max` |
+| Writing any markup or class names in `packages/ui` | `mainframe-design-system` |
+| Open visual-design questions with no in-app template to mirror | `ui-ux-pro-max` |
 | Writing docs, commits, PRs, error messages, or UI copy | `writing-clearly-and-concisely` |
 | Checking whether new Claude Code / Codex releases affect Mainframe's adapters | `changelog-watch` |
 
@@ -102,6 +103,16 @@ Each rule exists because a violation required cleanup.
 - **Lazy-load heavy components** — editors/visualizations via `React.lazy` + `Suspense`.
 - **Hygiene** — no `@ts-ignore` (use `@ts-expect-error` + reason); comments say *why*, not *what*; remove dead code; extract shared helpers at 3+ duplications.
 - **No leftovers** — never close a feature with small deferred cleanups (dead code, stale comments); fix them in the same pass. "Deferred" is only for genuinely separate work.
+
+## Disk Hygiene
+
+Cargo never garbage-collects `target/`. Left alone, the two Rust target dirs reached 54 GB — every dependency, feature, or toolchain change strands the previous generation of artifacts permanently.
+
+- **Keep the dev debuginfo caps.** Both Rust manifests pin `[profile.dev] debug = "line-tables-only"` and `[profile.dev.package."*"] debug = false`. Backtraces still carry file:line; dependencies carry nothing. The default `debug = 2` costs 4–6× the disk per build generation.
+- **Sweep; don't wait for the disk to fill.** `cargo install cargo-sweep`, then `cargo sweep --installed && cargo sweep --time 14` in each target dir, drops stale fingerprints and leaves the current build warm. `cargo clean --profile dev` reclaims tens of GB at once and spares `release/`, so packaging doesn't rebuild cold.
+- **Do not set `CARGO_TARGET_DIR`.** Five consumers hardcode `packages/core-rs/target/{release,debug}`: daemon discovery in `app-tauri/src-tauri/src/lib.rs`, `e2e/fixtures/daemon.ts`, `provision-rust-daemon.mjs`, `build-standalone.sh`, and `build-release-local.sh`. Redirecting the target dir breaks `tauri:dev`, the E2E suite, and packaging. Teaching those five to honor the variable is the prerequisite for sharing a target dir at all — including across worktrees, so until then every `.worktrees/*` checkout that runs `cargo` grows its own multi-GB `target/`.
+- **`packages/core-rs` and `packages/app-tauri/src-tauri` are separate workspaces.** They share 142 dependencies by version but only 109 by resolved feature set, and those 109 are ~29% of shared source volume — the expensive crates (`tracing`, `tokio`, `libc`, `rustix`) differ. Do not merge the workspaces to dedupe them: profiles apply only at a workspace root, so src-tauri's `lto` and `panic = "abort"` would reach the daemon, and feature unification would hand it `tokio/test-util` and `libc/extra_traits` in production builds.
+- **Measure before blaming the worktrees.** `du -sh packages/*/target` accounts for most of the repo's size; a worktree stays ~23 MB until someone builds in it.
 
 ## Environment Variables
 

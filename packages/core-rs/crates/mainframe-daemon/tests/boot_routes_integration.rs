@@ -134,6 +134,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         chat_manager: None,
         launch_registry: Some(Arc::clone(&launch_registry)),
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),
+        port_tunnels: None,
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
         automations: None,

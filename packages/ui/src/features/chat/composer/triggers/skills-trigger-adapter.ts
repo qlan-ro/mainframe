@@ -4,16 +4,9 @@
  * on name / displayName / description.
  */
 import type { Skill } from '@qlan-ro/mainframe-types';
-import type { Unstable_TriggerItem } from '@assistant-ui/react';
+import type { TriggerAdapter, TriggerItem } from '@/components/trigger-engine/types';
 
-/** Structural shape of an assistant-ui TriggerAdapter (sync). */
-export interface TriggerAdapter {
-  categories(): readonly { id: string; label: string }[];
-  categoryItems(categoryId: string): readonly Unstable_TriggerItem[];
-  search?(query: string): readonly Unstable_TriggerItem[];
-}
-
-const toItem = (s: Skill): Unstable_TriggerItem => ({
+const toItem = (s: Skill): TriggerItem => ({
   id: s.invocationName ?? s.name,
   type: 'skill',
   label: s.displayName || s.name,
@@ -23,8 +16,8 @@ const toItem = (s: Skill): Unstable_TriggerItem => ({
 export function buildSkillsTriggerAdapter(skills: Skill[]): TriggerAdapter {
   const items = skills.map(toItem);
   return {
-    // Search-first: no categories → the native resource renders items for an
-    // empty query, so bare `/` lists all skills (see header note).
+    // Search-first: no categories, so `computeNavigation` always calls
+    // `search()` (even for `query === ''`) — bare `/` lists all skills.
     categories: () => [],
     categoryItems: () => items,
     search: (q) => {

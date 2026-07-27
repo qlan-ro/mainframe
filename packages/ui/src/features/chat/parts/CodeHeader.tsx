@@ -7,9 +7,12 @@ import { useState, useCallback, type FC } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { CodeHeaderProps } from '@assistant-ui/react-markdown';
 import { cn } from '@/lib/utils';
+import { InstructionChip } from '../smart-actions/InstructionChip';
+import { useInstructionChipForLine } from '../smart-actions/use-instruction-chip';
 
 export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const [copied, setCopied] = useState(false);
+  const chip = useInstructionChipForLine(code);
 
   const handleCopy = useCallback(() => {
     if (!code) return;
@@ -25,6 +28,10 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   }, [code]);
 
   const displayLang = language && language !== 'unknown' && language !== 'text' ? language : 'text';
+
+  // Both fence flavors call this slot — it is the one seam that can emit the
+  // block chip exactly once (the two body slots return null for it).
+  if (chip) return <InstructionChip target={chip} variant="block" />;
 
   return (
     <div

@@ -1,0 +1,83 @@
+/**
+ * Active port tunnels (#279) — the global kill switch for the in-chat chips.
+ *
+ * The chips alone leave gaps: the owning chat can be archived while the scope
+ * stays alive, another client on a shared daemon can open a tunnel into this
+ * machine, and local-daemon chips deliberately say nothing about tunnels. So
+ * this list renders regardless of daemon locality, and reads the same store the
+ * chips do — no second fetch path.
+ */
+import { useCallback } from 'react';
+import { Unplug } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { mfToast } from '@/lib/toast';
+import { stopPortTunnel } from '@/lib/api/tunnel-ports';
+import { usePortTunnelList, type PortTunnelListEntry } from '@/store/port-tunnels';
+
+interface ActivePortTunnelsSectionProps {
+  port: number;
+}
+
+export function ActivePortTunnelsSection({ port }: ActivePortTunnelsSectionProps): React.ReactElement | null {
+  const tunnels = usePortTunnelList();
+
+  const handleStop = useCallback(
+    (tunnelPort: number) => {
+      // The row clears on the daemon's `stopped` event, never optimistically —
+      // a failed stop must not hide a tunnel that is still public.
+      stopPortTunnel(port, tunnelPort).catch((err: unknown) => {
+        mfToast.error(`Couldn’t stop the tunnel on port ${tunnelPort}`, {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      });
+    },
+    [port],
+  );
+
+  if (tunnels.length === 0) return null;
+
+  return (
+    <div data-testid="settings-remote-access-port-tunnels-section" className="space-y-3">
+      <div>
+        <label className="text-label font-semibold text-muted-foreground">Active Port Tunnels</label>
+      </div>
+
+      <div className="space-y-1.5">
+        {tunnels.map((tunnel) => (
+          <PortTunnelRow key={tunnel.port} tunnel={tunnel} onStop={handleStop} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PortTunnelRow({
+  tunnel,
+  onStop,
+}: {
+  tunnel: PortTunnelListEntry;
+  onStop: (port: number) => void;
+}): React.ReactElement {
+  const detail = tunnel.url ?? (tunnel.state === 'error' ? (tunnel.error ?? 'Failed') : 'Starting…');
+
+  return (
+    <div className="flex items-center justify-between gap-2 p-2.5 bg-card border border-border rounded-md">
+      <div className="min-w-0">
+        <span className="text-label text-foreground">Port {tunnel.port}</span>
+        <span className="text-caption text-muted-foreground ml-2 break-all">{detail}</span>
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            data-testid={`remote-access-port-tunnel-stop-${tunnel.port}`}
+            onClick={() => onStop(tunnel.port)}
+            className="shrink-0 p-1 text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <Unplug size={14} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Stop tunnel</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
