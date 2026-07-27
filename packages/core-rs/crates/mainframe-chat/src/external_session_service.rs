@@ -10,7 +10,7 @@ use mainframe_types::adapter::{ExternalSession, ExternalSessionPage};
 use mainframe_types::chat::{Chat, ChatStatus, Project};
 use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::title_generator::derive_title_from_message;
 
@@ -347,6 +347,12 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         .as_deref()
         == Some("true")
     {
+        debug!(
+            chat_id = %chat.id,
+            adapter_id,
+            reason = "disabled_by_setting",
+            "title generation skipped"
+        );
         return;
     }
 
@@ -355,6 +361,12 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "claude".to_string());
     let Some(title) = deps.generate_title(adapter_id, content, &binary).await else {
+        debug!(
+            chat_id = %chat.id,
+            adapter_id,
+            reason = "no_title",
+            "title generation produced no title"
+        );
         return;
     };
 
