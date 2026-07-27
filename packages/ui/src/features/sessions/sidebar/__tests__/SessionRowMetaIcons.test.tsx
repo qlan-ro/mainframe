@@ -2,13 +2,18 @@
  * SessionRowMetaIcons — behavior tests (TDD red phase).
  *
  * The compact single-row trailing glyph cluster (2026-07 sidebar rebuild):
- * worktree icon (if worktreePath set) + a PR icon/number per detected PR +
- * up to 3 small colored tag dots. Icon-only (no worktree basename text) —
- * the full text lives in the SessionMetaCard hover card instead.
+ * worktree icon (if worktreePath set) + up to MAX_ROW_PR_CHIPS inline PR
+ * chips (session-owned first, via SessionRowPrChips/arrangeRowPrs) + up to
+ * 3 small colored tag dots. Icon-only (no worktree basename text) — the
+ * full text lives in the SessionMetaCard hover card instead. The cluster
+ * itself is the row's shrinkable item (SESSION_ROW_META_CLUSTER); the PR
+ * overflow indicator is a row-level sibling, not rendered here.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import { SessionRowMetaIcons } from '../SessionRowMetaIcons';
+import { SESSION_ROW_META_CLUSTER } from '../session-row-layout';
 
 const NO_PRS: never[] = [];
 
@@ -47,7 +52,7 @@ describe('SessionRowMetaIcons — worktree glyph', () => {
 });
 
 describe('SessionRowMetaIcons — PR glyph', () => {
-  it('renders sessions-row-meta-icon-pr with text "#42" for one detected PR', () => {
+  it('renders sessions-row-meta-icon-pr-42 with text "#42" for one detected PR', () => {
     render(
       <SessionRowMetaIcons
         detectedPrs={[
@@ -56,12 +61,40 @@ describe('SessionRowMetaIcons — PR glyph', () => {
         tags={[]}
       />,
     );
-    expect(screen.getByTestId('sessions-row-meta-icon-pr').textContent).toBe('#42');
+    expect(screen.getByTestId('sessions-row-meta-icon-pr-42').textContent).toBe('#42');
   });
 
   it('does not render a PR glyph when detectedPrs is empty', () => {
     render(<SessionRowMetaIcons detectedPrs={NO_PRS} tags={[]} />);
-    expect(screen.queryByTestId('sessions-row-meta-icon-pr')).toBeNull();
+    expect(screen.queryByTestId('sessions-row-meta-icon-pr-42')).toBeNull();
+  });
+
+  it('caps inline chips at 2 for 4 detected PRs and keeps the overflow indicator out of the cluster', () => {
+    const fourPrs: DetectedPr[] = [
+      { number: 1, url: 'https://github.com/org/r/pull/1', owner: 'org', repo: 'r', source: 'created' },
+      { number: 2, url: 'https://github.com/org/r/pull/2', owner: 'org', repo: 'r', source: 'created' },
+      { number: 3, url: 'https://github.com/org/r/pull/3', owner: 'org', repo: 'r', source: 'mentioned' },
+      { number: 4, url: 'https://github.com/org/r/pull/4', owner: 'org', repo: 'r', source: 'mentioned' },
+    ];
+    render(<SessionRowMetaIcons detectedPrs={fourPrs} tags={[]} />);
+
+    const cluster = screen.getByTestId('sessions-row-meta-icons');
+    expect(cluster.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')).toHaveLength(2);
+    expect(cluster.querySelector('[data-testid="sessions-row-pr-overflow"]')).toBeNull();
+  });
+});
+
+describe('SessionRowMetaIcons — the shared yield contract', () => {
+  it('carries the imported SESSION_ROW_META_CLUSTER class list', () => {
+    render(<SessionRowMetaIcons detectedPrs={NO_PRS} tags={['a']} colorOf={() => 'blue'} />);
+    expect(screen.getByTestId('sessions-row-meta-icons').className).toBe(SESSION_ROW_META_CLUSTER);
+  });
+
+  it('shrinks with the row (min-w-0, no flex-shrink-0)', () => {
+    render(<SessionRowMetaIcons detectedPrs={NO_PRS} tags={['a']} colorOf={() => 'blue'} />);
+    const cluster = screen.getByTestId('sessions-row-meta-icons');
+    expect(cluster.className).toContain('min-w-0');
+    expect(cluster.className).not.toContain('flex-shrink-0');
   });
 });
 
