@@ -793,20 +793,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .generate_title(&adapter_id, content, &binary)
             .await
         {
-            let chat = {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-                guard.chat.title = Some(title.clone());
-                guard.chat.clone()
-            };
-            self.deps.chats_update(
-                chat_id,
-                &LifecycleChatUpdate {
-                    title: Some(title),
-                    ..Default::default()
-                },
-            );
-            self.deps
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            self.apply_generated_title(chat_id, &cell, title);
         } else {
             debug!(
                 chat_id,
@@ -815,6 +802,23 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 "title generation produced no title"
             );
         }
+    }
+
+    fn apply_generated_title(&self, chat_id: &str, cell: &Arc<Mutex<ActiveChat>>, title: String) {
+        let chat = {
+            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            guard.chat.title = Some(title.clone());
+            guard.chat.clone()
+        };
+        self.deps.chats_update(
+            chat_id,
+            &LifecycleChatUpdate {
+                title: Some(title),
+                ..Default::default()
+            },
+        );
+        self.deps
+            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
     async fn do_load_chat(&self, chat_id: &str) {

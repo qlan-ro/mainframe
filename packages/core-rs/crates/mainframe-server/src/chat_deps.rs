@@ -1116,65 +1116,7 @@ mod scan_loaded_history_tests {
     use super::*;
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 
-    // Twin of `mainframe_chat::test_support::LogCapture` (D8): that helper is
-    // `mainframe-chat`-internal test scaffolding, and this crate has no
-    // dependency edge to reuse it from, so the routing-layer test carries its
-    // own copy.
-    struct ReasonVisitor(Option<String>);
-
-    impl tracing::field::Visit for ReasonVisitor {
-        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-            if field.name() == "reason" {
-                self.0 = Some(value.to_string());
-            }
-        }
-        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-            if field.name() == "reason" {
-                self.0 = Some(format!("{value:?}"));
-            }
-        }
-    }
-
-    type CapturedEvents = Arc<StdMutex<Vec<(tracing::Level, Option<String>)>>>;
-
-    struct LogCapture {
-        events: CapturedEvents,
-    }
-
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LogCapture {
-        fn on_event(
-            &self,
-            event: &tracing::Event<'_>,
-            _ctx: tracing_subscriber::layer::Context<'_, S>,
-        ) {
-            let mut visitor = ReasonVisitor(None);
-            event.record(&mut visitor);
-            self.events
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push((*event.metadata().level(), visitor.0));
-        }
-    }
-
-    impl LogCapture {
-        fn install() -> (impl tracing::Subscriber, CapturedEvents) {
-            use tracing_subscriber::layer::SubscriberExt;
-            let events = Arc::new(StdMutex::new(Vec::new()));
-            let layer = LogCapture {
-                events: events.clone(),
-            };
-            (tracing_subscriber::registry().with(layer), events)
-        }
-
-        fn events_with_reason(events: &CapturedEvents) -> Vec<(tracing::Level, String)> {
-            events
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .iter()
-                .filter_map(|(level, reason)| reason.clone().map(|r| (*level, r)))
-                .collect()
-        }
-    }
+    use mainframe_runtime::log_capture::LogCapture;
 
     fn text_msg(id: &str, r#type: ChatMessageType, text: &str) -> ChatMessage {
         ChatMessage {

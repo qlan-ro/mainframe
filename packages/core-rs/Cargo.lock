@@ -1342,7 +1342,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1522,7 +1521,6 @@ dependencies = [
  "toml",
  "tower-http",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
