@@ -1,0 +1,23 @@
+{
+  "_provenance": "synthetic",
+  "minimal": {
+    "type": "worktree.offer.raised",
+    "chatId": "chat_9f2a3b1c",
+    "offer": {
+      "chatId": "chat_9f2a3b1c",
+      "worktreePath": "/Users/dev/code/mainframe/.worktrees/detached-head",
+      "branchName": null,
+      "detectedAt": 1753401600000
+    }
+  },
+  "full": {
+    "type": "worktree.offer.raised",
+    "chatId": "chat_9f2a3b1c",
+    "offer": {
+      "chatId": "chat_9f2a3b1c",
+      "worktreePath": "/Users/dev/code/mainframe/.worktrees/feat-switch-offer",
+      "branchName": "feat/switch-offer",
+      "detectedAt": 1753401660000
+    }
+  }
+}

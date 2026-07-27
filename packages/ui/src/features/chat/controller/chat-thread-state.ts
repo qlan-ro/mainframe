@@ -10,7 +10,7 @@
  * State holds:
  *  - messagesById / messageOrder — the daemon's display list
  *  - loadState — REST seed status
- *  - runState — derived from daemon chat.updated / process.started events
+ *  - runState — derived from daemon chat.updated events + the optimistic send
  *  - interactions.permissions — from permission.requested / permission.resolved
  *  - interactions.queued — from message.queued.* events
  *  - pendingUserMessages — optimistic send, reconciled on echo
@@ -21,6 +21,7 @@ import type {
   ControlRequest,
   DisplayMessage,
   QueuedMessageRef,
+  WorktreeSwitchOffer,
 } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,18 @@ export interface ChatThreadState {
    * `backgroundActivity` snapshot. Drives the BackgroundActivityBar chip.
    */
   readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
+  /**
+   * Worktrees the agent created during this session that the chat is not bound
+   * to yet, keyed by canonical worktree path — fed by `worktree.offer.*`.
+   * Drives the WorktreeSwitchBanner.
+   */
+  readonly worktreeOffers: Readonly<Record<string, WorktreeSwitchOffer>>;
+  /**
+   * An accepted offer whose rebind is in flight. `restarting` until the daemon
+   * broadcasts a `chat.updated` carrying the target path, then `settled` — the
+   * banner shows the confirmation and clears it after a beat.
+   */
+  readonly switching: { readonly worktreePath: string; readonly phase: 'restarting' | 'settled' } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +135,13 @@ export type ChatStateEvent =
   | { type: 'compact.done' }
   | { type: 'background.upsert'; task: BackgroundActivityTask }
   | { type: 'background.ended'; taskId: string }
-  | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] };
+  | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] }
+  | { type: 'worktree.offer.added'; offer: WorktreeSwitchOffer }
+  | { type: 'worktree.offer.removed'; worktreePath: string }
+  | { type: 'worktree.offer.snapshot'; offers: WorktreeSwitchOffer[] }
+  | { type: 'worktree.switch.started'; worktreePath: string }
+  | { type: 'worktree.switch.failed' }
+  | { type: 'worktree.switch.cleared' };
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -144,6 +163,8 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     contextUsage: null,
     compacting: false,
     backgroundTasks: {} as Readonly<Record<string, BackgroundActivityTask>>,
+    worktreeOffers: {} as Readonly<Record<string, WorktreeSwitchOffer>>,
+    switching: null,
   };
 }
 
@@ -206,6 +227,30 @@ function sameBackgroundTasks(
     const c = current[t.id];
     return c !== undefined && c.kind === t.kind && c.description === t.description && c.startedAt === t.startedAt;
   });
+}
+
+/** True when the snapshot lists exactly the offers already in state (field-equal). */
+function sameWorktreeOffers(
+  current: Readonly<Record<string, WorktreeSwitchOffer>>,
+  snapshot: WorktreeSwitchOffer[],
+): boolean {
+  if (Object.keys(current).length !== snapshot.length) return false;
+  return snapshot.every((o) => {
+    const c = current[o.worktreePath];
+    return c !== undefined && c.branchName === o.branchName && c.detectedAt === o.detectedAt;
+  });
+}
+
+/**
+ * The daemon's `chat.updated` carrying the target path is the only confirmation
+ * that an accepted switch rebound the chat, so the settle is derived here rather
+ * than optimistically on accept.
+ */
+function nextSwitching(state: ChatThreadState, chat: Chat): ChatThreadState['switching'] {
+  const { switching } = state;
+  if (switching === null || switching.phase === 'settled') return switching;
+  if (chat.worktreePath !== switching.worktreePath) return switching;
+  return { worktreePath: switching.worktreePath, phase: 'settled' };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,11 +320,13 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
           state.contextUsage.totalTokens === persisted.totalTokens &&
           state.contextUsage.maxTokens === persisted.maxTokens);
       const sameConfig = sameComposerConfig(state.chatConfig, event.chat);
-      if (sameConfig && sameUsage) return state;
+      const switching = nextSwitching(state, event.chat);
+      if (sameConfig && sameUsage && switching === state.switching) return state;
       return {
         ...state,
         chatConfig: sameConfig ? state.chatConfig : event.chat,
         contextUsage: sameUsage ? state.contextUsage : persisted,
+        switching,
       };
     }
 
@@ -400,6 +447,35 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       for (const task of event.tasks) backgroundTasks[task.id] = task;
       return { ...state, backgroundTasks };
     }
+
+    case 'worktree.offer.added':
+      return {
+        ...state,
+        worktreeOffers: { ...state.worktreeOffers, [event.offer.worktreePath]: event.offer },
+      };
+
+    case 'worktree.offer.removed': {
+      if (!(event.worktreePath in state.worktreeOffers)) return state;
+      const worktreeOffers = { ...state.worktreeOffers };
+      delete worktreeOffers[event.worktreePath];
+      return { ...state, worktreeOffers };
+    }
+
+    case 'worktree.offer.snapshot': {
+      // Resent on every subscribe/reconnect — bail identity-stable when nothing
+      // moved so the composer doesn't re-render on reconnect churn.
+      if (sameWorktreeOffers(state.worktreeOffers, event.offers)) return state;
+      const worktreeOffers: Record<string, WorktreeSwitchOffer> = {};
+      for (const offer of event.offers) worktreeOffers[offer.worktreePath] = offer;
+      return { ...state, worktreeOffers };
+    }
+
+    case 'worktree.switch.started':
+      return { ...state, switching: { worktreePath: event.worktreePath, phase: 'restarting' } };
+
+    case 'worktree.switch.failed':
+    case 'worktree.switch.cleared':
+      return state.switching === null ? state : { ...state, switching: null };
 
     case 'local.message.queued':
       return {

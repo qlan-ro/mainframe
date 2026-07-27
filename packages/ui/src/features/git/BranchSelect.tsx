@@ -19,9 +19,10 @@ export interface BranchSelectProps {
   onChange: (v: string) => void;
   /** Test id prefix for the trigger; `${testId}-list` and `${testId}-option-<branch>` key the popover contents. */
   testId: string;
+  disabled?: boolean;
 }
 
-export function BranchSelect({ value, options, currentBranch, onChange, testId }: BranchSelectProps) {
+export function BranchSelect({ value, options, currentBranch, onChange, testId, disabled }: BranchSelectProps) {
   const [open, setOpen] = useState(false);
   const label = value ? (value === currentBranch ? `${value} (current)` : value) : 'Select…';
 
@@ -31,11 +32,13 @@ export function BranchSelect({ value, options, currentBranch, onChange, testId }
         <button
           type="button"
           data-testid={testId}
+          disabled={disabled}
           className={[
             'flex w-full items-center justify-between gap-[6px]',
             'rounded-[6px] border-[0.5px] border-border bg-muted',
             'px-[8px] py-[4px] text-caption text-foreground',
             'hover:bg-accent transition-colors focus-visible:outline-none',
+            'disabled:pointer-events-none disabled:opacity-40',
           ].join(' ')}
         >
           <span className="truncate">{label}</span>

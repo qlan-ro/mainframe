@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  classifyLocalhostUrl,
-  isTunnelEligiblePort,
-  parsePortTunnelLabel,
-  portTunnelLabel,
-} from '../port-tunnels.js';
+import { classifyLocalhostUrl, isTunnelEligiblePort, parsePortTunnelLabel, portTunnelLabel } from '../port-tunnels.js';
 
 describe('classifyLocalhostUrl', () => {
   it('reads an explicit port from every localhost host form', () => {

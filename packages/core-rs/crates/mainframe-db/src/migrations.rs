@@ -441,11 +441,24 @@ pub fn migrations() -> Vec<Migration> {
                 )
             },
         },
+        // Worktree switch offers a chat has turned down. Dismissal is permanent,
+        // so it has to outlive the in-memory offer registry and daemon restarts.
+        Migration {
+            version: 27,
+            up: |db| {
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "dismissed_worktrees",
+                    "ALTER TABLE chats ADD COLUMN dismissed_worktrees TEXT",
+                )
+            },
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 26;
+pub const LATEST_VERSION: i64 = 27;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

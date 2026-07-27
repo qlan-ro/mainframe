@@ -34,7 +34,7 @@ fn schema_sql(db: &Connection) -> String {
     sqls.join("\n")
 }
 
-const ALL_CHATS_COLUMNS: [&str; 31] = [
+const ALL_CHATS_COLUMNS: [&str; 32] = [
     "id",
     "adapter_id",
     "project_id",
@@ -66,6 +66,7 @@ const ALL_CHATS_COLUMNS: [&str; 31] = [
     "plan_mode",
     "session_file_path",
     "automation_run_id",
+    "dismissed_worktrees",
 ];
 
 // Builds an intermediate historical DB by replaying the real migration chain up to

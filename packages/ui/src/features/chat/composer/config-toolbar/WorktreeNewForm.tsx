@@ -38,6 +38,8 @@ export interface WorktreeNewFormProps {
   branches: string[];
   currentBranch: string;
   submitting: boolean;
+  /** Withhold the form without hiding it (e.g. a turn is in flight). */
+  disabled?: boolean;
   apiError: string | null;
   onEnable: (baseBranch: string, branchName: string) => void;
   onCancel: () => void;
@@ -47,6 +49,7 @@ export function WorktreeNewForm({
   branches,
   currentBranch,
   submitting,
+  disabled = false,
   apiError,
   onEnable,
   onCancel,
@@ -59,7 +62,7 @@ export function WorktreeNewForm({
   const effectiveBranch = baseBranch || currentBranch || branches[0] || '';
 
   const validationError = touched || branchName ? validateBranchName(branchName) : null;
-  const canSubmit = !submitting && !validationError && branchName.length > 0;
+  const canSubmit = !submitting && !disabled && !validationError && branchName.length > 0;
 
   function handleEnable() {
     setTouched(true);
@@ -79,6 +82,7 @@ export function WorktreeNewForm({
           currentBranch={currentBranch}
           onChange={(v) => setBaseBranch(v)}
           testId="composer-worktree-base-branch"
+          disabled={disabled}
         />
       </div>
 
@@ -91,6 +95,7 @@ export function WorktreeNewForm({
           id="wt-branch-name"
           type="text"
           data-testid="composer-worktree-branch-name"
+          disabled={disabled}
           value={branchName}
           onChange={(e) => {
             setBranchName(e.target.value);

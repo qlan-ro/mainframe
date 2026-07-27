@@ -9,12 +9,17 @@ use mainframe_db::schema::initialize_schema;
 use mainframe_db::{ChatListFilters, ChatUpdate, ChatsRepository, ProjectsRepository};
 use mainframe_types::chat::{ChatStatus, TodoItem, TodoStatus};
 
-fn setup() -> (ChatsRepository, ProjectsRepository) {
+fn setup_with_conn() -> (ChatsRepository, ProjectsRepository, Rc<Connection>) {
     let conn = Connection::open_in_memory().unwrap();
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
     let chats = ChatsRepository::new(Rc::clone(&conn), None);
     let projects = ProjectsRepository::new(Rc::clone(&conn));
+    (chats, projects, conn)
+}
+
+fn setup() -> (ChatsRepository, ProjectsRepository) {
+    let (chats, projects, _) = setup_with_conn();
     (chats, projects)
 }
 
@@ -172,4 +177,74 @@ fn list_filtered_excludes_chats_with_an_automation_run_id() {
 
     assert!(ids.contains(&manual.id));
     assert!(!ids.contains(&automated.id));
+}
+
+#[test]
+fn dismissed_worktrees_start_empty_and_round_trip_in_insertion_order() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/dismissed", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+    assert_eq!(
+        chats.get_dismissed_worktrees(&chat.id).unwrap(),
+        Vec::<String>::new()
+    );
+
+    assert!(chats.add_dismissed_worktree(&chat.id, "/wt/alpha").unwrap());
+    assert!(chats.add_dismissed_worktree(&chat.id, "/wt/beta").unwrap());
+
+    assert_eq!(
+        chats.get_dismissed_worktrees(&chat.id).unwrap(),
+        vec!["/wt/alpha".to_string(), "/wt/beta".to_string()]
+    );
+}
+
+#[test]
+fn adding_an_already_dismissed_worktree_returns_false_and_does_not_grow_the_list() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/dismissed-dup", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+    chats.add_dismissed_worktree(&chat.id, "/wt/alpha").unwrap();
+
+    assert!(!chats.add_dismissed_worktree(&chat.id, "/wt/alpha").unwrap());
+    assert_eq!(
+        chats.get_dismissed_worktrees(&chat.id).unwrap(),
+        vec!["/wt/alpha".to_string()]
+    );
+}
+
+#[test]
+fn dismissed_worktrees_falls_back_to_empty_when_the_stored_json_is_malformed() {
+    let (chats, projects, conn) = setup_with_conn();
+    let p = projects.create("/project/dismissed-bad", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+    conn.execute(
+        "UPDATE chats SET dismissed_worktrees = ? WHERE id = ?",
+        rusqlite::params!["{not json", chat.id],
+    )
+    .unwrap();
+
+    assert_eq!(
+        chats.get_dismissed_worktrees(&chat.id).unwrap(),
+        Vec::<String>::new()
+    );
+    // A malformed column must not block a later dismissal.
+    assert!(chats.add_dismissed_worktree(&chat.id, "/wt/alpha").unwrap());
+    assert_eq!(
+        chats.get_dismissed_worktrees(&chat.id).unwrap(),
+        vec!["/wt/alpha".to_string()]
+    );
+}
+
+#[test]
+fn dismissed_worktrees_are_scoped_per_chat() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/dismissed-scope", None).unwrap();
+    let one = chats.create(&p.id, "claude", None, None, None).unwrap();
+    let two = chats.create(&p.id, "claude", None, None, None).unwrap();
+    chats.add_dismissed_worktree(&one.id, "/wt/alpha").unwrap();
+
+    assert_eq!(
+        chats.get_dismissed_worktrees(&two.id).unwrap(),
+        Vec::<String>::new()
+    );
 }

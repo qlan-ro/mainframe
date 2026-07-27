@@ -32,6 +32,7 @@ vi.mock('@assistant-ui/react', () => {
 vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="composer-stub" /> }));
 vi.mock('../../composer/BackgroundActivityBar', () => ({ BackgroundActivityBar: () => null }));
+vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
 vi.mock('../../composer/edit/composer-edit-context', () => ({
   ComposerEditProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,

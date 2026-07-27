@@ -50,9 +50,12 @@ export function handleDaemonEvent(
       return { kind: 'noop' };
     }
 
+    // A spawned CLI is not a turn in flight. Restarts that carry no turn — a
+    // worktree switch, a config change — would otherwise strand the thread on
+    // "running" forever, since no result event is ever coming. Real runs arrive
+    // as `chat.updated` with isRunning, plus the optimistic dispatch on send.
     case 'process.started':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'run.started' } };
+      return { kind: 'noop' };
 
     case 'permission.requested':
       if (event.chatId !== chatId) return { kind: 'noop' };
@@ -117,6 +120,18 @@ export function handleDaemonEvent(
     case 'background_task.ended':
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };
+
+    case 'worktree.offer.raised':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'worktree.offer.added', offer: event.offer } };
+
+    case 'worktree.offer.resolved':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'worktree.offer.removed', worktreePath: event.worktreePath } };
+
+    case 'worktree.offer.snapshot':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'worktree.offer.snapshot', offers: event.offers } };
 
     case 'chat.compacting':
       if (event.chatId !== chatId) return { kind: 'noop' };

@@ -33,10 +33,7 @@ describe('findSlashInstructions', () => {
   });
 
   it('matches every token in the text', () => {
-    expect(findSlashInstructions('/alpha and /beta').map((m) => m.token)).toEqual([
-      '/alpha',
-      '/beta',
-    ]);
+    expect(findSlashInstructions('/alpha and /beta').map((m) => m.token)).toEqual(['/alpha', '/beta']);
   });
 
   it('ignores a token followed by a slash', () => {
@@ -64,12 +61,8 @@ describe('findSlashInstructions', () => {
   });
 
   it('stops the name at the first character outside the allowed charset', () => {
-    expect(findSlashInstructions('/domain modeling')).toEqual([
-      { start: 0, end: 7, token: '/domain', name: 'domain' },
-    ]);
-    expect(findSlashInstructions('/foo$bar')).toEqual([
-      { start: 0, end: 4, token: '/foo', name: 'foo' },
-    ]);
+    expect(findSlashInstructions('/domain modeling')).toEqual([{ start: 0, end: 7, token: '/domain', name: 'domain' }]);
+    expect(findSlashInstructions('/foo$bar')).toEqual([{ start: 0, end: 4, token: '/foo', name: 'foo' }]);
   });
 
   it('returns nothing for text with no slash', () => {

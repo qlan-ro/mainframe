@@ -1,6 +1,6 @@
 //! Ported from `packages/types/src/events.ts`.
 //!
-//! The daemon WebSocket wire contract: `DaemonEvent` (server→client, 55
+//! The daemon WebSocket wire contract: `DaemonEvent` (server→client, 63
 //! variants) and `ClientEvent` (client→server, 6 variants). Both are internally
 //! tagged on `type`; tag values are copied verbatim (dotted / colon-delimited)
 //! via per-variant `#[serde(rename = ...)]`, and struct-variant fields are
@@ -22,6 +22,7 @@ use crate::display::DisplayMessage;
 use crate::launch::LaunchProcessStatus;
 use crate::plugin::UiZone;
 use crate::workflow::{WorkflowInteractionSummary, WorkflowRunSummary, WorkflowStepStatus};
+use crate::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
 
 // ─── Small payload enums (event-local literal unions) ────────────────────────
 
@@ -303,6 +304,22 @@ pub enum DaemonEvent {
     },
     #[serde(rename = "chat.prDetected")]
     ChatPrDetected { chat_id: String, pr: DetectedPr },
+    #[serde(rename = "worktree.offer.raised")]
+    WorktreeOfferRaised {
+        chat_id: String,
+        offer: WorktreeSwitchOffer,
+    },
+    #[serde(rename = "worktree.offer.resolved")]
+    WorktreeOfferResolved {
+        chat_id: String,
+        worktree_path: String,
+        outcome: WorktreeOfferOutcome,
+    },
+    #[serde(rename = "worktree.offer.snapshot")]
+    WorktreeOfferSnapshot {
+        chat_id: String,
+        offers: Vec<WorktreeSwitchOffer>,
+    },
     #[serde(rename = "chat.trustRequired")]
     ChatTrustRequired {
         chat_id: String,
@@ -610,6 +627,27 @@ mod tests {
     fn fixture_error() {
         assert_daemon_roundtrip(include_str!(
             "../../../../../docs/rust-port/fixtures/event.error.json"
+        ));
+    }
+
+    #[test]
+    fn fixture_worktree_offer_raised() {
+        assert_daemon_roundtrip(include_str!(
+            "../../../../../docs/rust-port/fixtures/event.worktree-offer-raised.json"
+        ));
+    }
+
+    #[test]
+    fn fixture_worktree_offer_resolved() {
+        assert_daemon_roundtrip(include_str!(
+            "../../../../../docs/rust-port/fixtures/event.worktree-offer-resolved.json"
+        ));
+    }
+
+    #[test]
+    fn fixture_worktree_offer_snapshot() {
+        assert_daemon_roundtrip(include_str!(
+            "../../../../../docs/rust-port/fixtures/event.worktree-offer-snapshot.json"
         ));
     }
 

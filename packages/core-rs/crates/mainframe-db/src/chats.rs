@@ -460,6 +460,31 @@ impl ChatsRepository {
         Ok(true)
     }
 
+    /// Worktree paths this chat has permanently turned down. Daemon-internal —
+    /// deliberately absent from the `Chat` API payload.
+    pub fn get_dismissed_worktrees(&self, chat_id: &str) -> Result<Vec<String>, DbError> {
+        let raw = self.read_text_column("dismissed_worktrees", chat_id)?;
+        Ok(parse_json_array(raw))
+    }
+
+    /// Returns `false` when the path was already dismissed, without writing.
+    pub fn add_dismissed_worktree(
+        &self,
+        chat_id: &str,
+        worktree_path: &str,
+    ) -> Result<bool, DbError> {
+        let mut existing = self.get_dismissed_worktrees(chat_id)?;
+        if existing.iter().any(|p| p == worktree_path) {
+            return Ok(false);
+        }
+        existing.push(worktree_path.to_string());
+        self.db.execute(
+            "UPDATE chats SET dismissed_worktrees = ? WHERE id = ?",
+            rusqlite::params![serde_json::to_string(&existing)?, chat_id],
+        )?;
+        Ok(true)
+    }
+
     pub fn get_skill_files(&self, chat_id: &str) -> Result<Vec<SkillFileEntry>, DbError> {
         let raw = self.read_text_column("skill_files", chat_id)?;
         let entries: Vec<Value> = parse_json_array(raw);

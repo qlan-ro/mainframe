@@ -445,6 +445,20 @@ async fn handle_client_event(
                     refs,
                 },
             );
+            // Sent even when empty: this snapshot is the client's only re-seed
+            // path for offers, so a reconnect must also clear stale ones.
+            let offers = ctx
+                .chat_manager
+                .as_ref()
+                .map(|cm| cm.worktree_offers_for_chat(&chat_id))
+                .unwrap_or_default();
+            send(
+                out_tx,
+                &DaemonEvent::WorktreeOfferSnapshot {
+                    chat_id: chat_id.clone(),
+                    offers,
+                },
+            );
             send(out_tx, &DaemonEvent::SubscribeAck { chat_id });
         }
         ClientEvent::Unsubscribe { chat_id } => {

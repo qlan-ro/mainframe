@@ -75,7 +75,7 @@ export function ComposerToolbar() {
           providerDefaults={providerDefaults}
         />
       )}
-      <WorktreePopover chat={chat} hasMessages={hasMessages} />
+      <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />
     </>
   );
 }

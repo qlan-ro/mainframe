@@ -58,12 +58,13 @@ export function WorktreeTabBar({ active, onChange }: TabBarProps) {
 
 export interface ExistingTabProps {
   worktrees: WorktreeEntry[];
-  submitting: boolean;
+  /** Withhold the attach rows without hiding them (submit in flight, or a turn is). */
+  disabled: boolean;
   onAttach: (wt: WorktreeEntry) => void;
   error: string | null;
 }
 
-export function WorktreeExistingTab({ worktrees, submitting, onAttach, error }: ExistingTabProps) {
+export function WorktreeExistingTab({ worktrees, disabled, onAttach, error }: ExistingTabProps) {
   if (worktrees.length === 0) {
     return <MenuEmpty>No existing worktrees found</MenuEmpty>;
   }
@@ -75,7 +76,7 @@ export function WorktreeExistingTab({ worktrees, submitting, onAttach, error }: 
           key={wt.path}
           type="button"
           data-testid={`composer-worktree-attach-${wt.path}`}
-          disabled={submitting}
+          disabled={disabled}
           onClick={() => onAttach(wt)}
           className={[
             'flex w-full flex-col items-start gap-[1px] rounded-[6px] px-[8px] py-[6px]',

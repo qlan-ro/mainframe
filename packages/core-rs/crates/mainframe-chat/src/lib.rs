@@ -32,6 +32,8 @@ pub mod resolve_tuning_for_chat;
 pub mod title_generator;
 pub mod transcript_presence;
 pub mod types;
+pub mod worktree_offer;
+pub mod worktree_offer_scan;
 
 #[cfg(test)]
 mod test_support;

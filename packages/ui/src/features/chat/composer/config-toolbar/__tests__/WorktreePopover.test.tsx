@@ -80,10 +80,10 @@ function makeChat(overrides?: Partial<Chat>): Chat {
 // Render helper
 // ---------------------------------------------------------------------------
 
-function renderPopover(chat: Chat, hasMessages = false) {
+function renderPopover(chat: Chat, hasMessages = false, busy = false) {
   return render(
     <TooltipProvider>
-      <WorktreePopover chat={chat} hasMessages={hasMessages} />
+      <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} />
     </TooltipProvider>,
   );
 }
@@ -129,6 +129,39 @@ describe('WorktreePopover — active-info state', () => {
 
     expect(await screen.findByTestId('composer-worktree-active-info')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-worktree-branch-name')).not.toBeInTheDocument();
+  });
+
+  it('lists the other worktrees the isolated session can move to, excluding its own', async () => {
+    getProjectWorktreesMock.mockResolvedValueOnce([
+      { path: '/wt/c1', branch: 'refs/heads/feat/c1' },
+      { path: '/wt/feat-a', branch: 'refs/heads/feat-a' },
+    ]);
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat);
+
+    openPopover();
+
+    expect(await screen.findByTestId('composer-worktree-attach-/wt/feat-a')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-attach-/wt/c1')).not.toBeInTheDocument();
+    // The New tab stays hidden for an already-isolated session.
+    expect(screen.queryByTestId('composer-worktree-tab-new')).not.toBeInTheDocument();
+  });
+
+  it('attaches the isolated session to the worktree row that was clicked', async () => {
+    getProjectWorktreesMock.mockResolvedValueOnce([
+      { path: '/wt/c1', branch: 'refs/heads/feat/c1' },
+      { path: '/wt/feat-a', branch: 'refs/heads/feat-a' },
+    ]);
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat);
+
+    openPopover();
+
+    fireEvent.click(await screen.findByTestId('composer-worktree-attach-/wt/feat-a'));
+
+    await waitFor(() => {
+      expect(attachWorktreeMock).toHaveBeenCalledWith(31415, 'c1', '/wt/feat-a', 'feat-a');
+    });
   });
 });
 
@@ -276,6 +309,68 @@ describe('WorktreePopover — mid-session warning', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 7b. A turn in flight — every rebind restarts the CLI, so the popover explains
+//     itself and withholds all of them (the daemon refuses these with 409 too).
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — a turn in flight', () => {
+  it('shows the setup form disabled, and says when it will be available', async () => {
+    renderPopover(makeChat(), /* hasMessages= */ true, /* busy= */ true);
+
+    openPopover();
+
+    expect((await screen.findByTestId('composer-worktree-busy')).textContent).toBe(
+      'Available once the current response finishes — rebinding now would cut it off.',
+    );
+    expect(screen.getByTestId('composer-worktree-branch-name')).toBeDisabled();
+    expect(screen.getByTestId('composer-worktree-base-branch')).toBeDisabled();
+    expect(screen.getByTestId('composer-worktree-enable')).toBeDisabled();
+  });
+
+  it('lists the existing worktrees, disabled', async () => {
+    renderPopover(makeChat(), /* hasMessages= */ false, /* busy= */ true);
+
+    openPopover();
+    await screen.findByTestId('composer-worktree-busy');
+
+    fireEvent.click(screen.getByTestId('composer-worktree-tab-existing'));
+
+    const row = await screen.findByTestId('composer-worktree-attach-/wt/feat-a');
+    expect(row).toBeDisabled();
+
+    fireEvent.click(row);
+    expect(attachWorktreeMock).not.toHaveBeenCalled();
+  });
+
+  it('lists the move-to worktrees of an isolated session, disabled', async () => {
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat, /* hasMessages= */ true, /* busy= */ true);
+
+    openPopover();
+
+    expect(await screen.findByTestId('composer-worktree-active-info')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-worktree-busy')).toBeInTheDocument();
+    expect(await screen.findByTestId('composer-worktree-attach-/wt/feat-a')).toBeDisabled();
+  });
+
+  it('restores the setup form once the response finishes', async () => {
+    const { rerender } = renderPopover(makeChat(), /* hasMessages= */ false, /* busy= */ true);
+
+    openPopover();
+    await screen.findByTestId('composer-worktree-busy');
+
+    rerender(
+      <TooltipProvider>
+        <WorktreePopover chat={makeChat()} hasMessages={false} busy={false} />
+      </TooltipProvider>,
+    );
+
+    expect(await screen.findByTestId('composer-worktree-enable')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-busy')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 8. Cancel button closes the popover
 // ---------------------------------------------------------------------------
 
@@ -359,6 +454,46 @@ describe('WorktreePopover — isolated-state indicator', () => {
     const trigger = screen.getByTestId('composer-worktree-trigger');
     const dot = trigger.querySelector('span[aria-hidden]');
     expect(dot).toBeNull();
+  });
+
+  // An accepted worktree-switch offer rebinds the chat server-side; the daemon's
+  // chat.updated is the only thing that flips this control.
+  it('flips to the isolated state when the chat is rebound to a worktree', () => {
+    const { rerender } = renderPopover(makeChat());
+
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAttribute('aria-label', 'Isolate in worktree');
+
+    rerender(
+      <TooltipProvider>
+        <WorktreePopover
+          chat={makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' })}
+          hasMessages={false}
+          busy={false}
+        />
+      </TooltipProvider>,
+    );
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger).toHaveAttribute('aria-label', 'Worktree: alpha');
+    expect(trigger.className).toContain('border-mf-success');
+    expect(trigger.querySelector('span[aria-hidden]')).not.toBeNull();
+  });
+
+  // Moving between worktrees relabels the trigger, not just the isolated flag.
+  it('relabels the trigger when the chat moves to a different worktree', () => {
+    const { rerender } = renderPopover(makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' }));
+
+    rerender(
+      <TooltipProvider>
+        <WorktreePopover
+          chat={makeChat({ worktreePath: '/wt/beta', branchName: 'beta' })}
+          hasMessages={false}
+          busy={false}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAttribute('aria-label', 'Worktree: beta');
   });
 });
 

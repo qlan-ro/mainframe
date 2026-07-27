@@ -18,6 +18,7 @@ export * from './suggestion.js';
 export * from './setup-advisor.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
+export * from './worktree-offer.js';
 export * from './automation.js';
 export * from './automation-domain/index.js';
 export * from './smart-actions/index.js';

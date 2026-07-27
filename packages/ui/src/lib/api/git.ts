@@ -207,6 +207,18 @@ export const attachWorktree = (port: number, chatId: string, worktreePath: strin
     branchName,
   });
 
+/** Accept a raised worktree-switch offer: rebind the session and restart the agent there. */
+export const acceptWorktreeOffer = (port: number, chatId: string, worktreePath: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/accept-worktree-offer`, {
+    worktreePath,
+  });
+
+/** Decline a raised worktree-switch offer; the session stays where it is. */
+export const dismissWorktreeOffer = (port: number, chatId: string, worktreePath: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/dismiss-worktree-offer`, {
+    worktreePath,
+  });
+
 // ---------------------------------------------------------------------------
 // Branch diffs (Changes tab — "Branch" mode)
 // ---------------------------------------------------------------------------

@@ -130,6 +130,24 @@ impl Rig {
         wait_status(&self.engine, run_id, status).await
     }
 
+    /// The chat cancel rides a detached task, so it can land after the run is
+    /// already `Cancelled` — poll for it instead of reading it once.
+    pub async fn wait_chat_cancel(&self, chat_id: &str) {
+        for _ in 0..600 {
+            let told = self
+                .agent
+                .cancels
+                .lock()
+                .unwrap()
+                .contains(&chat_id.to_string());
+            if told {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        panic!("chat {chat_id} was never told to stop");
+    }
+
     pub async fn pending(&self) -> InteractionRecord {
         let pending = self.engine.list_pending_interactions().await.unwrap();
         assert_eq!(pending.len(), 1, "expected exactly one pending interaction");

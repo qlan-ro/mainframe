@@ -3,6 +3,7 @@ import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 import type { AutomationRunSummary, AutomationInteractionSummary } from './automation.js';
+import type { WorktreeSwitchOffer, WorktreeOfferOutcome } from './worktree-offer.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
@@ -77,6 +78,9 @@ export type DaemonEvent =
     }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }
+  | { type: 'worktree.offer.raised'; chatId: string; offer: WorktreeSwitchOffer }
+  | { type: 'worktree.offer.resolved'; chatId: string; worktreePath: string; outcome: WorktreeOfferOutcome }
+  | { type: 'worktree.offer.snapshot'; chatId: string; offers: WorktreeSwitchOffer[] }
   | { type: 'chat.trustRequired'; chatId: string; projectPath: string }
   | {
       type: 'tunnel:status';

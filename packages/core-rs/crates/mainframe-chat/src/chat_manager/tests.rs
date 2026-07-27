@@ -1364,3 +1364,107 @@ async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypasse
 
     assert!(matches!(err, TrustWorkspaceError::Write(msg) if msg == "disk full"));
 }
+
+// ── accept_worktree_offer gating ────────────────────────────────────────────
+
+#[tokio::test]
+async fn accept_worktree_offer_refuses_while_a_turn_is_in_flight() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+
+    let err = mgr
+        .accept_worktree_offer("c1", "/tmp/wt")
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, OfferError::ChatBusy));
+    assert_eq!(err.status_code(), 409);
+}
+
+/// Idle reaches the registry instead — `NotPending` proves the busy gate let it
+/// through, since nothing was ever offered here.
+#[tokio::test]
+async fn accept_worktree_offer_reaches_the_registry_when_the_chat_is_idle() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), false),
+        RecSession::new("c1", true, true),
+    );
+
+    let err = mgr
+        .accept_worktree_offer("c1", "/tmp/wt")
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, OfferError::NotPending));
+}
+
+// ── composer-driven rebinds (enable / attach / disable) ─────────────────────
+
+/// The composer's worktree control reaches the config manager directly, not
+/// through an offer, so each of its three rebinds needs the same busy gate.
+async fn working_manager(working: bool) -> ChatManager {
+    let mgr = ChatManager::new(StoreDeps::arc());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), working),
+        RecSession::new("c1", true, true),
+    );
+    mgr
+}
+
+#[tokio::test]
+async fn enable_worktree_refuses_while_a_turn_is_in_flight() {
+    let mgr = working_manager(true).await;
+
+    let err = mgr
+        .enable_worktree("c1", "main", "feat/x")
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ConfigError::ChatBusy));
+}
+
+#[tokio::test]
+async fn attach_worktree_refuses_while_a_turn_is_in_flight() {
+    let mgr = working_manager(true).await;
+
+    let err = mgr
+        .attach_worktree("c1", "/tmp/wt", Some("feat/x"))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ConfigError::ChatBusy));
+}
+
+#[tokio::test]
+async fn disable_worktree_refuses_while_a_turn_is_in_flight() {
+    let mgr = working_manager(true).await;
+
+    let err = mgr.disable_worktree("c1").await.unwrap_err();
+
+    assert!(matches!(err, ConfigError::ChatBusy));
+}
+
+#[tokio::test]
+async fn attach_worktree_rebinds_when_the_chat_is_idle() {
+    let mgr = working_manager(false).await;
+
+    mgr.attach_worktree("c1", "/tmp/wt", Some("feat/x"))
+        .await
+        .unwrap();
+
+    let chat = mgr.get_chat("c1").expect("chat");
+    assert_eq!(chat.worktree_path.as_deref(), Some("/tmp/wt"));
+    assert_eq!(chat.branch_name.as_deref(), Some("feat/x"));
+}

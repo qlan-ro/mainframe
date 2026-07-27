@@ -11,6 +11,7 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
 
+use crate::event_handler::compute_session_file_path;
 use crate::types::ActiveChat;
 
 /// Errors surfaced by config changes. The message strings cross the wire
@@ -19,6 +20,9 @@ use crate::types::ActiveChat;
 pub enum ConfigError {
     #[error("{0}")]
     Message(String),
+    /// Rebinding stops and restarts the CLI, which would cut a turn off mid-answer.
+    #[error("Finish or stop the current response before switching worktrees")]
+    ChatBusy,
     #[error(transparent)]
     Adapter(#[from] AdapterError),
 }
@@ -34,6 +38,7 @@ pub struct ChatFieldUpdate {
     pub plan_mode: Option<bool>,
     pub worktree_path: Option<Option<String>>,
     pub branch_name: Option<Option<String>>,
+    pub session_file_path: Option<String>,
 }
 
 /// Injected dependency surface — mirrors the TS `ConfigManagerDeps` object.
@@ -60,6 +65,28 @@ pub trait ConfigManagerDeps: Send + Sync {
     ) -> Option<BoxFuture<'a, ()>>;
     /// The in-flight spawn single-flight guard (`startingChats.get(chatId)`).
     fn take_starting_chat<'a>(&'a self, chat_id: &'a str) -> Option<BoxFuture<'a, ()>>;
+    /// Fired after a binding change persists — the offer registry's single
+    /// source of `resolved{accepted}`.
+    fn on_binding_changed(&self, _chat_id: &str, _worktree_path: Option<&str>) {}
+    /// Relocate a Claude session's transcript files between project dirs. A seam
+    /// only so tests can exercise the failure path without touching a real `$HOME`.
+    fn move_claude_session_files<'a>(
+        &'a self,
+        session_id: &'a str,
+        old_dir: &'a str,
+        new_dir: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        Box::pin(async move {
+            move_session_files(session_id, old_dir, new_dir)
+                .await
+                .map_err(|e| e.to_string())
+        })
+    }
+}
+
+/// The chat's current effective directory: its worktree when bound, else the project root.
+fn effective_dir<'a>(current_worktree: Option<&'a str>, project_path: &'a str) -> &'a str {
+    current_worktree.unwrap_or(project_path)
 }
 
 struct LiveChanges {
@@ -238,29 +265,38 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     }
 
     /// Persist a worktree path/branch change (`None` clears it) and broadcast it.
+    /// `session_file_path` is `Some` only when a transcript was just relocated —
+    /// the stored path points into the old project dir until it is rewritten.
     fn apply_worktree_update(
         &self,
         cell: &Arc<Mutex<ActiveChat>>,
         chat_id: &str,
         worktree_path: Option<String>,
         branch_name: Option<String>,
+        session_file_path: Option<String>,
     ) {
         {
             let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
             guard.chat.worktree_path = worktree_path.clone();
             guard.chat.branch_name = branch_name.clone();
+            if session_file_path.is_some() {
+                guard.chat.session_file_path = session_file_path.clone();
+            }
         }
         self.deps.chats_update(
             chat_id,
             &ChatFieldUpdate {
-                worktree_path: Some(worktree_path),
+                worktree_path: Some(worktree_path.clone()),
                 branch_name: Some(branch_name),
+                session_file_path,
                 ..Default::default()
             },
         );
         let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.deps
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.deps
+            .on_binding_changed(chat_id, worktree_path.as_deref());
     }
 
     pub async fn update_chat_config(
@@ -389,6 +425,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .await
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
+            let mut moved_transcript = None;
             if adapter == "claude" {
                 let old_dir = get_claude_project_dir(&project.path);
                 let new_dir = get_claude_project_dir(&info.worktree_path);
@@ -399,6 +436,8 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 )
                 .await
                 .map_err(|e| ConfigError::Message(e.to_string()))?;
+                moved_transcript =
+                    Some(compute_session_file_path(&info.worktree_path, &session_id));
             }
 
             self.apply_worktree_update(
@@ -406,6 +445,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 chat_id,
                 Some(info.worktree_path),
                 Some(info.branch_name),
+                moved_transcript,
             );
             self.deps.start_chat(chat_id).await;
             return Ok(());
@@ -427,29 +467,33 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             chat_id,
             Some(info.worktree_path),
             Some(info.branch_name),
+            None,
         );
         Ok(())
     }
 
+    /// Bind the chat to `worktree_path`, rebinding it from whatever it is on now.
+    /// `branch_name: None` persists a null branch (a detached worktree).
     pub async fn attach_worktree(
         &self,
         chat_id: &str,
         worktree_path: &str,
-        branch_name: &str,
+        branch_name: Option<&str>,
     ) -> Result<(), ConfigError> {
         let cell = self.require_active_chat(chat_id)?;
-        let (has_worktree, project_id, claude_session_id, adapter) = {
+        let (current_worktree, project_id, claude_session_id, adapter) = {
             let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
             (
-                guard.chat.worktree_path.is_some(),
+                guard.chat.worktree_path.clone(),
                 guard.chat.project_id.clone(),
                 guard.chat.claude_session_id.clone(),
                 guard.chat.adapter_id.clone(),
             )
         };
-        if has_worktree {
+        if current_worktree.as_deref() == Some(worktree_path) {
             return Ok(());
         }
+        let branch_name = branch_name.map(str::to_string);
 
         if let Some(session_id) = claude_session_id {
             // Mid-session path: stop, move session files to attached worktree, restart
@@ -460,23 +504,52 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
             self.deps.stop_chat(chat_id).await;
 
+            // Same blast radius as `disable_worktree`: the whole (project, path)
+            // launch manager, not just this chat's processes.
+            if let Some(old) = current_worktree.as_deref()
+                && let Some(fut) = self.deps.stop_launch_processes(&project_id, old)
+            {
+                fut.await;
+            }
+
+            let mut moved_transcript = None;
             if adapter == "claude" {
-                let old_dir = get_claude_project_dir(&project.path);
+                let old_dir = get_claude_project_dir(effective_dir(
+                    current_worktree.as_deref(),
+                    &project.path,
+                ));
                 let new_dir = get_claude_project_dir(worktree_path);
-                move_session_files(
-                    &session_id,
-                    &old_dir.to_string_lossy(),
-                    &new_dir.to_string_lossy(),
-                )
-                .await
-                .map_err(|e| ConfigError::Message(e.to_string()))?;
+                if let Err(err) = self
+                    .deps
+                    .move_claude_session_files(
+                        &session_id,
+                        &old_dir.to_string_lossy(),
+                        &new_dir.to_string_lossy(),
+                    )
+                    .await
+                {
+                    // The chat is already stopped at this point — leaving it that way
+                    // would strand the session with no running CLI and no new binding.
+                    tracing::error!(
+                        chat_id,
+                        worktree_path,
+                        error = %err,
+                        "failed to move session files; restarting the chat on its current binding"
+                    );
+                    self.deps.start_chat(chat_id).await;
+                    return Err(ConfigError::Message(
+                        "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
+                    ));
+                }
+                moved_transcript = Some(compute_session_file_path(worktree_path, &session_id));
             }
 
             self.apply_worktree_update(
                 &cell,
                 chat_id,
                 Some(worktree_path.to_string()),
-                Some(branch_name.to_string()),
+                branch_name,
+                moved_transcript,
             );
             self.deps.start_chat(chat_id).await;
             return Ok(());
@@ -488,7 +561,8 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             &cell,
             chat_id,
             Some(worktree_path.to_string()),
-            Some(branch_name.to_string()),
+            branch_name,
+            None,
         );
         Ok(())
     }
@@ -530,7 +604,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .await;
         }
 
-        self.apply_worktree_update(&cell, chat_id, None, None);
+        self.apply_worktree_update(&cell, chat_id, None, None, None);
         Ok(())
     }
 }
@@ -539,6 +613,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
+    use mainframe_types::chat::Chat;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct FakeDeps {
@@ -546,6 +621,12 @@ mod tests {
         updates: Mutex<Vec<ChatFieldUpdate>>,
         events: Mutex<Vec<DaemonEvent>>,
         apply_tuning_calls: AtomicUsize,
+        project: Option<Project>,
+        start_chat_calls: AtomicUsize,
+        stop_chat_calls: AtomicUsize,
+        stop_launch_calls: Mutex<Vec<(String, String)>>,
+        binding_changed: Mutex<Vec<Option<String>>>,
+        move_files_error: Option<String>,
     }
 
     impl FakeDeps {
@@ -555,6 +636,26 @@ mod tests {
                 updates: Mutex::new(Vec::new()),
                 events: Mutex::new(Vec::new()),
                 apply_tuning_calls: AtomicUsize::new(0),
+                project: None,
+                start_chat_calls: AtomicUsize::new(0),
+                stop_chat_calls: AtomicUsize::new(0),
+                stop_launch_calls: Mutex::new(Vec::new()),
+                binding_changed: Mutex::new(Vec::new()),
+                move_files_error: None,
+            }
+        }
+
+        fn with_project(cell: Arc<Mutex<ActiveChat>>, project: Project) -> Self {
+            Self {
+                project: Some(project),
+                ..Self::new(cell)
+            }
+        }
+
+        fn failing_move(cell: Arc<Mutex<ActiveChat>>, project: Project, error: &str) -> Self {
+            Self {
+                move_files_error: Some(error.to_string()),
+                ..Self::with_project(cell, project)
             }
         }
     }
@@ -567,7 +668,7 @@ mod tests {
             self.updates.lock().unwrap().push(updates.clone());
         }
         fn projects_get(&self, _project_id: &str) -> Option<Project> {
-            None
+            self.project.clone()
         }
         fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
             None
@@ -576,9 +677,11 @@ mod tests {
             self.events.lock().unwrap().push(event);
         }
         fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
+            self.start_chat_calls.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {})
         }
         fn stop_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
+            self.stop_chat_calls.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {})
         }
         fn apply_tuning<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
@@ -587,13 +690,36 @@ mod tests {
         }
         fn stop_launch_processes<'a>(
             &'a self,
-            _project_id: &'a str,
-            _project_path: &'a str,
+            project_id: &'a str,
+            project_path: &'a str,
         ) -> Option<BoxFuture<'a, ()>> {
-            None
+            self.stop_launch_calls
+                .lock()
+                .unwrap()
+                .push((project_id.to_string(), project_path.to_string()));
+            Some(Box::pin(async {}))
         }
         fn take_starting_chat<'a>(&'a self, _chat_id: &'a str) -> Option<BoxFuture<'a, ()>> {
             None
+        }
+        fn on_binding_changed(&self, _chat_id: &str, worktree_path: Option<&str>) {
+            self.binding_changed
+                .lock()
+                .unwrap()
+                .push(worktree_path.map(|s| s.to_string()));
+        }
+        fn move_claude_session_files<'a>(
+            &'a self,
+            _session_id: &'a str,
+            _old_dir: &'a str,
+            _new_dir: &'a str,
+        ) -> BoxFuture<'a, Result<(), String>> {
+            Box::pin(async move {
+                match &self.move_files_error {
+                    Some(err) => Err(err.clone()),
+                    None => Ok(()),
+                }
+            })
         }
     }
 
@@ -672,6 +798,229 @@ mod tests {
 
         assert!(manager.deps.updates.lock().unwrap().is_empty());
         assert!(manager.deps.events.lock().unwrap().is_empty());
+    }
+
+    fn worktreed_chat() -> Chat {
+        let mut chat = test_chat("c1");
+        chat.adapter_id = "codex".to_string();
+        chat.claude_session_id = Some("sess1".to_string());
+        chat.worktree_path = Some("/old/wt".to_string());
+        chat.branch_name = Some("old-branch".to_string());
+        chat
+    }
+
+    fn cell_with_chat(chat: Chat, session: Arc<FakeSession>) -> Arc<Mutex<ActiveChat>> {
+        Arc::new(Mutex::new(ActiveChat {
+            chat,
+            session: Some(session),
+            turn_started_at: None,
+        }))
+    }
+
+    fn test_project() -> Project {
+        Project {
+            id: "p1".to_string(),
+            name: "proj".to_string(),
+            path: "/proj".to_string(),
+            created_at: String::new(),
+            last_opened_at: String::new(),
+            parent_project_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn rebinds_a_worktreed_chat_to_a_different_worktree() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(worktreed_chat(), session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap();
+
+        let updates = manager.deps.updates.lock().unwrap();
+        assert_eq!(
+            updates.as_slice(),
+            &[ChatFieldUpdate {
+                worktree_path: Some(Some("/new/wt".to_string())),
+                branch_name: Some(Some("feat".to_string())),
+                ..Default::default()
+            }]
+        );
+        assert_eq!(
+            manager.deps.start_chat_calls.load(Ordering::SeqCst),
+            1,
+            "expected start_chat to be called once to restart the chat in the new worktree"
+        );
+    }
+
+    #[tokio::test]
+    async fn attaching_the_same_worktree_path_is_a_no_op() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(worktreed_chat(), session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/old/wt", Some("old-branch"))
+            .await
+            .unwrap();
+
+        assert_eq!(manager.deps.stop_chat_calls.load(Ordering::SeqCst), 0);
+        assert!(manager.deps.updates.lock().unwrap().is_empty());
+        assert!(manager.deps.events.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn rebinding_stops_launch_processes_for_the_old_worktree_path() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(worktreed_chat(), session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap();
+
+        let stop_launch_calls = manager.deps.stop_launch_calls.lock().unwrap();
+        assert_eq!(
+            stop_launch_calls.as_slice(),
+            &[("p1".to_string(), "/old/wt".to_string())]
+        );
+    }
+
+    fn claude_worktreed_chat() -> Chat {
+        let mut chat = worktreed_chat();
+        chat.adapter_id = "claude".to_string();
+        chat
+    }
+
+    #[tokio::test]
+    async fn repoints_the_stored_session_file_path_at_the_new_worktree() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(claude_worktreed_chat(), session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap();
+
+        let expected = dirs::home_dir()
+            .unwrap()
+            .join(".claude/projects/-new-wt/sess1.jsonl")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(
+            manager.deps.updates.lock().unwrap().as_slice(),
+            &[ChatFieldUpdate {
+                worktree_path: Some(Some("/new/wt".to_string())),
+                branch_name: Some(Some("feat".to_string())),
+                session_file_path: Some(expected.clone()),
+                ..Default::default()
+            }]
+        );
+        assert_eq!(
+            cell.lock().unwrap().chat.session_file_path,
+            Some(expected),
+            "the broadcast chat must carry the new path, not the emptied directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn restarts_the_chat_when_moving_session_files_fails() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(claude_worktreed_chat(), session);
+        let deps = FakeDeps::failing_move(
+            cell.clone(),
+            test_project(),
+            "No such file or directory (os error 2)",
+        );
+        let manager = ChatConfigManager::new(deps);
+
+        let err = manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Moving the session's history into the worktree failed. The session stayed where it was.",
+            "raw io text must not reach the user-facing toast"
+        );
+        assert_eq!(
+            manager.deps.start_chat_calls.load(Ordering::SeqCst),
+            1,
+            "expected the stopped chat to be restarted rather than stranded"
+        );
+    }
+
+    #[tokio::test]
+    async fn keeps_the_old_binding_when_moving_session_files_fails() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(claude_worktreed_chat(), session);
+        let deps = FakeDeps::failing_move(cell.clone(), test_project(), "boom");
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap_err();
+
+        assert!(manager.deps.updates.lock().unwrap().is_empty());
+        assert!(manager.deps.binding_changed.lock().unwrap().is_empty());
+        let chat = cell.lock().unwrap().chat.clone();
+        assert_eq!(chat.worktree_path.as_deref(), Some("/old/wt"));
+        assert_eq!(chat.branch_name.as_deref(), Some("old-branch"));
+    }
+
+    #[test]
+    fn effective_dir_is_the_worktree_when_bound_else_the_project_path() {
+        assert_eq!(effective_dir(Some("/wt"), "/proj"), "/wt");
+        assert_eq!(effective_dir(None, "/proj"), "/proj");
+    }
+
+    #[tokio::test]
+    async fn attaching_without_a_branch_name_persists_a_cleared_branch() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with(session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", None)
+            .await
+            .unwrap();
+
+        let updates = manager.deps.updates.lock().unwrap();
+        assert_eq!(
+            updates.as_slice(),
+            &[ChatFieldUpdate {
+                worktree_path: Some(Some("/new/wt".to_string())),
+                branch_name: Some(None),
+                ..Default::default()
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn attach_worktree_fires_on_binding_changed_exactly_once_with_the_new_path() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with(session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap();
+
+        let binding_changed = manager.deps.binding_changed.lock().unwrap();
+        assert_eq!(binding_changed.as_slice(), &[Some("/new/wt".to_string())]);
     }
 }
 

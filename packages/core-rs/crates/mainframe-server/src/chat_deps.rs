@@ -404,6 +404,20 @@ impl ChatManagerDeps for DaemonChatDeps {
             .unwrap_or_default()
     }
 
+    fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String> {
+        let id = chat_id.to_string();
+        self.db
+            .call_blocking(move |d| d.chats.get_dismissed_worktrees(&id))
+            .unwrap_or_default()
+    }
+
+    fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool {
+        let (id, path) = (chat_id.to_string(), worktree_path.to_string());
+        self.db
+            .call_blocking(move |d| d.chats.add_dismissed_worktree(&id, &path))
+            .unwrap_or(false)
+    }
+
     fn create_session(
         &self,
         adapter_id: &str,
