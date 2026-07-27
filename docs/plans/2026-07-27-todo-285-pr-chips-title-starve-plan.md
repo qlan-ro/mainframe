@@ -8,9 +8,41 @@
 
 ---
 
+## Status — revised 2026-07-27 after the first implement attempt
+
+**Tasks 1–8 are landed on the branch. Tasks 9–11 are all that remain, and they now ship as one group.**
+
+The first implement run failed on three groups — `new-component-tests` (T9), `existing-test-updates-and-regression` (T10), `verification-sweep` (T11) — for a scheduling reason, not a design one. The workflow journal (`wf_0ec2b012-f76`) shows T9 and T10 dispatched while the branch head was still `a2004e96` (the plan commit) with `node_modules` absent: both agents correctly refused to write tests against production code that did not exist, and T11 refused to sweep a tree whose test files were missing. The implementation groups then ran and completed. Nothing in this plan was found wrong by that run.
+
+Landed:
+
+| Task | Commit | |
+|---|---|---|
+| T1 bootstrap | — (no diff by design) | `node_modules` installed, `pnpm-lock.yaml` byte-identical |
+| T2 red-phase pure test | `5ad58aee` | `__tests__/row-pr-chips.test.ts`, 9 cases |
+| T3 `arrangeRowPrs` | `153f598b` | `row-pr-chips.ts` |
+| T4 layout contract | `f7aa0809` | `session-row-layout.ts` |
+| T5 chips + overflow | `c0c98584` | `SessionRowPrChips.tsx`, `SessionRowPrOverflow.tsx` |
+| T6 meta-icons rewire | `746571f1` | `SessionRowMetaIcons.tsx` |
+| T7 title floor + mount | `85d51c0e` | `SessionRow.tsx` |
+| T8 changeset | `97c9e46e` | `.changeset/session-row-pr-chip-cap.md` |
+
+Verified baseline at `97c9e46e` (re-measured for this revision, not taken on trust):
+
+- `pnpm --filter @qlan-ro/mainframe-ui typecheck` — clean.
+- `pnpm --filter @qlan-ro/mainframe-ui exec eslint src/features/sessions/sidebar` — **1 pre-existing warning**, `__tests__/resolve-project-session.test.ts:5:71` `no-explicit-any`, in a file this change never touches. T11's original `--max-warnings=0` would fail on it; T11 below is corrected.
+- `SessionRowMetaIcons.test.tsx` — 9 pass, 1 fails on the renamed testid, exactly the red state T10 owns.
+- `SessionRow.tsx` is **290** lines, not the 283 this plan predicted (still under 300, 10 lines of slack). `SessionRowInner` is **171** lines before *and* after T7 — the predicted net −1 did not materialise because the title `className` split across two lines.
+
+**Remaining scope = T9 + T10 + T11, dispatched as ONE group.** They are three tasks for one agent, in that order. Splitting them is what failed: T11 has a hard dependency on T9 and T10 landing first, and the schema the orchestrator consumes carries no dependency edge — only a `parallel_safe` flag. One group removes the hazard rather than restating it.
+
+Two commits, matching the two tasks that write files: one for T9's two new test files, one for T10's two edits and one new file. T11 writes nothing and commits nothing. The changeset already exists (`.changeset/session-row-pr-chip-cap.md`, `@qlan-ro/mainframe-ui: patch`) — do not add a second one.
+
+---
+
 ## Ground rules for every task
 
-- **Dependencies must be installed first, lockfile-neutral.** This worktree has no `node_modules` at all, so every `vitest`/`tsc`/`eslint`/`changeset` command below fails until Task 1 runs. `packages/mobile` is a submodule and is *not* checked out here (the directory is empty), so an unguarded `pnpm install` drops its importer from `pnpm-lock.yaml`. Task 1 installs and then proves the lockfile is untouched. No task in this plan adds a dependency — `@radix-ui/react-popover` is already installed and wrapped in `components/ui/popover.tsx`.
+- **Dependencies are installed (Task 1, done). Do not re-run `pnpm install`.** `packages/mobile` is a submodule and is *not* checked out here, so an unguarded install drops its importer from `pnpm-lock.yaml`. Task 1 already installed under a lockfile snapshot-and-restore and proved `git status --porcelain pnpm-lock.yaml` empty; `node_modules` is present now. If a command reports a missing module, re-read Task 1 and repeat its guarded sequence — never a bare `pnpm install`. No task in this plan adds a dependency — `@radix-ui/react-popover` is already installed and wrapped in `components/ui/popover.tsx`.
 - **Read the `mainframe-design-system` skill before writing any markup or class names.** Spacing integers are compressed (`p-2` = 4px); the arbitrary values in this plan (`min-w-[44px]`, `h-[17px]`, `gap-x-[6px]`) are literal px and unaffected. Every text node takes an explicit type rung.
 - **Test commands.** Single file only — `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` (large multi-suite runs hit cross-file `React.act` failures). Typecheck: `pnpm --filter @qlan-ro/mainframe-ui typecheck` (it includes test files).
 - **Code rules baked in:** ≤300 lines/file, ≤50/function; `data-testid` on every interactive element, kebab-case `<surface>-<element>`, keyed by PR number never by array index; no `@ts-ignore`; comments say *why*; no dead code left behind.
@@ -71,6 +103,8 @@ T1 (bootstrap) ─ T2 (pure test, red) ─ T3 (pure module) ─ T4 (layout contr
 
 T5 and T5b are two components in two files; they are written as one task (Task 5) because they share the arrangement contract.
 
+Everything left of `T9` is committed. **The only live edge now is `T9 → T10 → T11`, and all three belong to one agent** — see the Status section. Nothing on this branch runs in parallel any more, so the collision map below is history rather than a schedule; it is kept because it still tells you which task owns which file.
+
 ### File-collision map
 
 | File | Task |
@@ -94,7 +128,7 @@ No file is written by two tasks.
 
 ---
 
-## Task 1 — bootstrap the worktree's dependencies without touching the lockfile
+## Task 1 — bootstrap the worktree's dependencies without touching the lockfile  (DONE — no diff by design)
 
 **Files:** none committed. `node_modules/` is gitignored; `pnpm-lock.yaml` must end byte-identical.
 
@@ -115,7 +149,7 @@ From the worktree root, in order:
 
 ---
 
-## Task 2 — pure-logic tests for the chip cap (red phase)
+## Task 2 — pure-logic tests for the chip cap (red phase)  (DONE — `5ad58aee`)
 
 **File (new):** `packages/ui/src/features/sessions/sidebar/__tests__/row-pr-chips.test.ts`
 
@@ -137,7 +171,7 @@ Cases, one `it` each:
 
 ---
 
-## Task 3 — the pure cap/prioritise function
+## Task 3 — the pure cap/prioritise function  (DONE — `153f598b`)
 
 **File (new):** `packages/ui/src/features/sessions/sidebar/row-pr-chips.ts` (~40 lines)
 
@@ -166,7 +200,7 @@ export interface RowPrArrangement {
 
 ---
 
-## Task 4 — the row's title-vs-meta layout contract
+## Task 4 — the row's title-vs-meta layout contract  (DONE — `f7aa0809`)
 
 **File (new):** `packages/ui/src/features/sessions/sidebar/session-row-layout.ts` (~20 lines, no functions)
 
@@ -191,7 +225,7 @@ Both must be single literal strings (no template interpolation) so Tailwind's sc
 
 ---
 
-## Task 5 — inline PR chips and the PR overflow indicator
+## Task 5 — inline PR chips and the PR overflow indicator  (DONE — `c0c98584`)
 
 **File (new):** `packages/ui/src/features/sessions/sidebar/SessionRowPrChips.tsx` (~45 lines)
 **File (new):** `packages/ui/src/features/sessions/sidebar/SessionRowPrOverflow.tsx` (~85 lines)
@@ -266,7 +300,7 @@ Every text node carries an explicit type rung; `truncate` sits on a `min-w-0` fl
 
 ---
 
-## Task 6 — rewire `SessionRowMetaIcons` onto the cap and the cluster contract
+## Task 6 — rewire `SessionRowMetaIcons` onto the cap and the cluster contract  (DONE — `746571f1`)
 
 **File (edit):** `packages/ui/src/features/sessions/sidebar/SessionRowMetaIcons.tsx`
 
@@ -281,7 +315,7 @@ Every text node carries an explicit type rung; `truncate` sits on a `min-w-0` fl
 
 ---
 
-## Task 7 — apply the title floor and mount the indicator in `SessionRow`
+## Task 7 — apply the title floor and mount the indicator in `SessionRow`  (DONE — `85d51c0e`)
 
 **File (edit):** `packages/ui/src/features/sessions/sidebar/SessionRow.tsx`
 
@@ -298,7 +332,7 @@ Do not touch `SessionRowRename` (the rename input replaces the title and has its
 
 ---
 
-## Task 8 — changeset
+## Task 8 — changeset  (DONE — `97c9e46e`)
 
 **File (new):** `.changeset/<generated-name>.md`
 
@@ -314,12 +348,14 @@ Do not touch `SessionRowRename` (the rename input replaces the title and has its
 - `packages/ui/src/features/sessions/sidebar/__tests__/SessionRowPrChips.test.tsx`
 - `packages/ui/src/features/sessions/sidebar/__tests__/SessionRowPrOverflow.test.tsx`
 
-jsdom project. No mocking needed — both components take plain props and the global setup already stubs the pointer-capture API Radix needs (`src/__tests__/setup.ts`). Use `userEvent` and `@testing-library/react`, following `features/git/__tests__/BranchPopover.test.tsx` for the Radix-popover interaction shape.
+jsdom project. No mocking needed — both components take plain props, and `src/__tests__/setup.ts` already stubs what Radix needs in jsdom (`hasPointerCapture`/`setPointerCapture`/`releasePointerCapture` at lines 100–110, `scrollIntoView` at 81–87, `ResizeObserver`). All verified for this revision.
+
+**Follow `features/chat/composer/config-toolbar/__tests__/ProviderModelSelect.test.tsx`, not `BranchPopover.test.tsx`.** BranchPopover drives an `open` prop and never clicks a trigger, so it proves nothing about the shape used here. ProviderModelSelect is the exact precedent: it nests a `PopoverTrigger` inside a `TooltipTrigger` (what `Hint`-wraps-`PopoverTrigger` compiles to), opens it with `userEvent.click`, and its header records that Radix's portal renders inline under `document.body` in jsdom — so `screen.getByTestId` finds panel contents immediately after the click settles. `Hint` carries its own `TooltipProvider`, so no extra wrapper is needed.
 
 **`SessionRowPrChips.test.tsx`:**
 
 1. Empty `detectedPrs` → renders nothing (`container.firstChild` is null).
-2. One PR → one chip `sessions-row-meta-icon-pr-42` whose visible text is `#42`.
+2. One PR → one chip `sessions-row-meta-icon-pr-42` whose visible text is `#42`. Assert on `textContent`, not `toHaveTextContent` of a single node: the component renders `#{pr.number}` as two adjacent text nodes.
 3. Five PRs → exactly two chips: `container.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')` has length 2.
 4. Prioritisation: `[#1 mentioned, #2 created, #3 mentioned]` → `sessions-row-meta-icon-pr-2` and `sessions-row-meta-icon-pr-1` render, `sessions-row-meta-icon-pr-3` does not.
 5. Each chip's `href` is the PR's `url`.
@@ -353,22 +389,33 @@ jsdom project. No mocking needed — both components take plain props and the gl
 `SessionRow.test.tsx` is already 640 lines — over the 300-line limit before this plan touches it. It therefore gets the two-line testid rename and nothing else; the new regression goes in its own file (which also keeps the layout contract findable by name).
 
 In `SessionRowMetaIcons.test.tsx`:
-1. Update the two PR cases (lines 50–64) to the keyed id `sessions-row-meta-icon-pr-42`.
+1. Update the two cases under `describe('SessionRowMetaIcons — PR glyph')` to the keyed id `sessions-row-meta-icon-pr-42`. The first (`renders sessions-row-meta-icon-pr with text "#42"…`) is the one currently red; the second (`does not render a PR glyph when detectedPrs is empty`) must query the keyed id too, or it passes vacuously forever.
 2. Add: with 4 PRs, only 2 chips render inside `sessions-row-meta-icons`, and no `sessions-row-pr-overflow` is inside it (the indicator is a row-level sibling now — this pins decision 5 so nobody moves it back into the cluster).
 3. Add: the cluster root `sessions-row-meta-icons` carries the shared contract — assert its `className` equals the imported `SESSION_ROW_META_CLUSTER`, not a hand-copied string, and separately that it contains `min-w-0` and not `flex-shrink-0`.
 4. Update the file header comment to describe the cap.
 
 In `SessionRow.test.tsx`:
-5. Update the existing PR case (lines 628–638) to the keyed id `sessions-row-meta-icon-pr-<number>`. No other change.
+5. Update the case `renders sessions-row-meta-icon-pr with "#42" when a PR is detected`, under `describe('SessionRow — compact worktree/PR glyphs render inline')`, to the keyed id `sessions-row-meta-icon-pr-42`. No other change.
 
-In `SessionRow.meta-layout.test.tsx` (new, ~90 lines) — **the inflated-meta-cluster regression the brief requires.** Reuse the existing file's row-rendering helper by extracting nothing: copy the minimal `renderRow` setup it uses (the aui `ThreadListItemRuntimeProvider` harness) into this file; if that setup exceeds ~40 lines, extract it into `__tests__/render-session-row.tsx` and import it from both files instead of duplicating (the 3-duplications rule does not bite at 2, but a shared helper is cleaner if it is already that big).
+In `SessionRow.meta-layout.test.tsx` (new, ~130 lines) — **the inflated-meta-cluster regression the brief requires.**
+
+**Write a fresh minimal harness inside this file. Do NOT extract a shared one.** (Revised: the earlier "extract if it exceeds ~40 lines" instruction was a trap.) `SessionRow.test.tsx`'s harness is four `vi.mock` calls plus mutable module-level flags and spies — ~110 lines — and `vi.mock` is hoisted per *test file*; moving those calls into an imported helper makes registration order depend on module-evaluation timing rather than the transform, which is exactly the kind of silent breakage this plan is trying to remove. Two copies is also below the repo's extract-at-3 threshold.
+
+The harness this test needs is smaller than the one it would have copied, because nothing here clicks, renames, pins or archives — it renders once and inspects structure. Mock only the four modules `SessionRow` reaches for, with constant returns and no spies:
+
+- `@assistant-ui/react` — `ThreadListItemRuntimeProvider` (passthrough), `ThreadListItemPrimitive.Root` (a `<div>` forwarding `data-testid` and `data-active="false"`) and `.Trigger` (`asChild` passthrough), `useAssistantRuntime` (returns `threads.getItemById` → `{}`), `useThreadListItemRuntime` (`{}`), `useAuiState` (selector against `{ thread: { id: '' } }`).
+- `@/store/unread-store` — never unread.
+- `../../runtime/daemon-port-context` — `useDaemonPort: () => 31415`.
+- `@/lib/api/chats` — `pinChat: vi.fn()`.
+
+Then `const { SessionRow } = await import('../SessionRow')` after the mocks, and a local `makeItem()` fixture mirroring the one in `SessionRow.test.tsx`.
 
 6. Render a row whose `custom` carries 8 detected PRs (mixed sources), 5 tags, and a `worktreePath`, then assert:
    a. `sessions-row-title` still carries `SESSION_ROW_TITLE_FLOOR` and still carries `truncate`;
    b. it carries exactly one `min-w-` class — `expect(title.className.match(/min-w-\S+/g)).toHaveLength(1)` — guarding the two-min-width trap;
    c. exactly 2 PR chips render;
    d. `sessions-row-pr-overflow` renders with text `8` and is **not** a descendant of `sessions-row-meta-icons` (`expect(cluster.contains(indicator)).toBe(false)`);
-   e. exactly 3 tag dots render.
+   e. exactly 3 tag dots render — `colorOf` needs no wiring here, `SessionRow` defaults it to `DEFAULT_COLOR_OF` (the same reason `SessionRow.test.tsx`'s tag-dot cases pass without it).
    Name the test so its purpose survives: *"a bloated meta cluster cannot take the title's floor"*.
 7. Head the file with a comment pointing at `session-row-layout.ts` as the one place the contract is defined, so a future meta item is added inside the cluster rather than beside it.
 
@@ -385,9 +432,9 @@ No files written.
 
 1. `pnpm --filter @qlan-ro/mainframe-ui typecheck` — clean (it type-checks test files too).
 2. Every test file this plan added or edited, run individually (the T2, T9, T10 commands), plus `src/features/sessions/sidebar/__tests__/SessionRow.unread-store.test.tsx` and `src/features/sessions/sidebar/__tests__/SessionRowRename.test.tsx` — green.
-3. `pnpm --filter @qlan-ro/mainframe-ui exec eslint src/features/sessions/sidebar --max-warnings=0` — clean.
+3. `pnpm --filter @qlan-ro/mainframe-ui exec eslint src/features/sessions/sidebar` — **0 errors, and exactly the 1 pre-existing warning** (`__tests__/resolve-project-session.test.ts:5:71`, `no-explicit-any`, in a file this change never touches). Do **not** pass `--max-warnings=0`: the original instruction did, and it fails on that untouched baseline warning. Do not "fix" the warning either — it is out of scope, and silencing it would put an unrelated edit in this diff.
 4. Size limits, both checked explicitly:
-   - `wc -l` on the seven touched/added source files — every one under 300. Expected: `row-pr-chips.ts` ≈40, `session-row-layout.ts` ≈20, `SessionRowPrChips.tsx` ≈45, `SessionRowPrOverflow.tsx` ≈85, `SessionRowMetaIcons.tsx` ≈80, `SessionRow.tsx` 283, `SessionRow.meta-layout.test.tsx` ≈90.
+   - `wc -l` on the seven touched/added source files — every one under 300. Measured at `97c9e46e`: `row-pr-chips.ts` 34, `session-row-layout.ts` 21, `SessionRowPrChips.tsx` 41, `SessionRowPrOverflow.tsx` 68, `SessionRowMetaIcons.tsx` 81, `SessionRow.tsx` **290** (10 lines of slack — do not add to it). `SessionRow.meta-layout.test.tsx` ≈130.
    - Function length, measured not eyeballed. Prettier puts every top-level declaration's closing brace in column 0, so this reports the length of each one:
      ```sh
      for f in row-pr-chips.ts SessionRowPrChips.tsx SessionRowPrOverflow.tsx SessionRowMetaIcons.tsx; do
@@ -395,8 +442,12 @@ No files written.
          "packages/ui/src/features/sessions/sidebar/$f"
      done
      ```
-     It must print nothing. Run the same one-liner over `SessionRow.meta-layout.test.tsx`. `SessionRow.tsx` is excluded because its pre-existing `SessionRowInner` (171 lines) would report — see "Carried forward"; confirm separately that this plan's edit leaves that number one line *lower*, not higher.
-5. **Live visual check** (the only thing that can verify decisions 3 and 4, which jsdom cannot). Set up a reproducible fixture in the isolated dev data dir:
+     It must print nothing. Run the same one-liner over `SessionRow.meta-layout.test.tsx`. `SessionRow.tsx` is excluded because its pre-existing `SessionRowInner` would report — see "Carried forward". Confirm separately that this plan's edit leaves that number **not higher**: it is 171 lines on `main` and 171 lines at `97c9e46e`. (The original wording asked for "one line lower"; that prediction was wrong — removing the `@max-[260px]:hidden` wrapper saved a line, splitting the title `className` spent it.)
+5. **Live visual check** (the only thing that can verify decisions 3 and 4, which jsdom cannot).
+
+   **If the dev app cannot be launched from this environment, do not block and do not claim a pass.** Record it verbatim as a decision — *"decisions 3 and 4 (44px floor, wrap-and-clip yield) are unverified live; jsdom cannot measure layout"* — and hand it to the lane's QA stage, whose job is exactly this smoke test. Everything else in this sweep is machine-checkable and must still be green. A missing display is not a reason to fail a group whose code-level criteria all pass.
+
+   Set up a reproducible fixture in the isolated dev data dir:
    - Start the app isolated: `DAEMON_PORT=31500 MAINFRAME_DATA_DIR=~/.mainframe_dev pnpm tauri:dev` from `packages/app-tauri`, backgrounded to a log file. Never launch without both variables.
    - Pick a session id: `sqlite3 ~/.mainframe_dev/mainframe.db "SELECT id, title FROM chats ORDER BY updated_at DESC LIMIT 5;"`. If it returns no rows, the dev data dir is fresh — add a project in the app and send one message to create a session, then re-run it.
    - Snapshot every field the fixture overwrites, so the restore is exact:
@@ -428,6 +479,6 @@ Every acceptance-criteria box in the brief maps to a verification above:
 
 ## Carried forward, deliberately not done here
 
-- **`SessionRowInner` is 171 lines, over the 50-line function limit.** It was over before this plan and is one line shorter after. Decomposing a render function with six handlers and an aui runtime binding inside a chip-cap bugfix would swamp the fix's diff and put the row's behaviour at risk for no bug-related gain. It is a real violation and it wants its own change.
+- **`SessionRowInner` is 171 lines, over the 50-line function limit.** It was 171 before this plan and is 171 after — unchanged, measured, not estimated. Decomposing a render function with six handlers and an aui runtime binding inside a chip-cap bugfix would swamp the fix's diff and put the row's behaviour at risk for no bug-related gain. It is a real violation and it wants its own change.
 - **`SessionRow.test.tsx` is 640 lines**, over the file limit. This plan adds nothing to it (T10.5 is a two-line rename) and puts the new coverage in its own file. Splitting it is a separate change.
 - **The daemon appends detected PRs without bound** (`add_detected_prs` dedupes by URL but never caps or ages entries). The brief already puts this out of scope and asks for a follow-up todo; nothing here depends on it.
