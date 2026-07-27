@@ -2,6 +2,7 @@
 //! registered project and maps the result through the Setup Advisor rules
 //! dataset. Mirrors `routes/suggestions.rs`'s handler shape.
 
+use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +12,7 @@ use axum::extract::{Path as AxPath, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::get;
-use mainframe_types::setup_advisor::SetupAdvisorReport;
+use mainframe_types::setup_advisor::{ProjectFingerprint, SetupAdvisorReport};
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
@@ -37,7 +38,8 @@ async fn handle_automation_recommendations(ctx: &AppCtx, id: &str) -> Response {
         return fail(StatusCode::NOT_FOUND, "Project path not found");
     }
 
-    match build_report(&base_path, FINGERPRINT_BUDGET).await {
+    let scan = setup_advisor::fingerprint(Path::new(&base_path));
+    match build_report(scan, &base_path, FINGERPRINT_BUDGET).await {
         Some(report) => ok(report),
         None => fail(
             StatusCode::GATEWAY_TIMEOUT,
@@ -46,10 +48,14 @@ async fn handle_automation_recommendations(ctx: &AppCtx, id: &str) -> Response {
     }
 }
 
-/// Fingerprints `base_path` and maps the result through the rules dataset, or
-/// `None` when the scan outlasts `budget`.
-async fn build_report(base_path: &str, budget: Duration) -> Option<SetupAdvisorReport> {
-    let scan = setup_advisor::fingerprint(Path::new(base_path));
+/// Maps a fingerprint scan through the rules dataset, or `None` when the scan
+/// outlasts `budget`. Takes the scan as a future so a test can hand it one that
+/// never finishes — a real scan of a small project is too fast to time out.
+async fn build_report(
+    scan: impl Future<Output = ProjectFingerprint>,
+    base_path: &str,
+    budget: Duration,
+) -> Option<SetupAdvisorReport> {
     let fingerprint = match tokio::time::timeout(budget, scan).await {
         Ok(fingerprint) => fingerprint,
         Err(_) => {
@@ -88,9 +94,9 @@ mod tests {
 
     #[tokio::test]
     async fn a_scan_that_outlasts_its_budget_yields_no_report() {
-        let project = tempfile::tempdir().unwrap();
+        let never_finishes = std::future::pending::<ProjectFingerprint>();
 
-        let report = build_report(&project.path().to_string_lossy(), Duration::ZERO).await;
+        let report = build_report(never_finishes, "/tmp/slow-project", Duration::ZERO).await;
 
         assert!(report.is_none());
     }
@@ -104,7 +110,8 @@ mod tests {
         )
         .unwrap();
 
-        let report = build_report(&project.path().to_string_lossy(), FINGERPRINT_BUDGET)
+        let scan = setup_advisor::fingerprint(project.path());
+        let report = build_report(scan, &project.path().to_string_lossy(), FINGERPRINT_BUDGET)
             .await
             .expect("the scan of a one-file project fit in the budget");
 
