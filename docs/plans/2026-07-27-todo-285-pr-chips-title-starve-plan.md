@@ -98,7 +98,7 @@ Verified against the code at `5f7fdcaa`.
 
 ```
 T1 (bootstrap) ─ T2 (pure test, red) ─ T3 (pure module) ─ T4 (layout contract) ─┬─ T5 (chips) ──┬─ T6 (meta icons) ─ T7 (row) ─ T8 (changeset)
-                                                                                └─ T5b (overflow)┘                              └─ T9, T10 (tests) ─ T11 (sweep)
+                                                                                └─ T5b (overflow)┘                              └─ T9 (new tests) ─ T10 (existing tests) ─ T11 (sweep)
 ```
 
 T5 and T5b are two components in two files; they are written as one task (Task 5) because they share the arrangement contract.
@@ -117,7 +117,7 @@ Everything left of `T9` is committed. **The only live edge now is `T9 → T10 �
 | `packages/ui/src/features/sessions/sidebar/SessionRowPrOverflow.tsx` | T5 |
 | `packages/ui/src/features/sessions/sidebar/SessionRowMetaIcons.tsx` | T6 |
 | `packages/ui/src/features/sessions/sidebar/SessionRow.tsx` | T7 |
-| `.changeset/<name>.md` | T8 |
+| `.changeset/session-row-pr-chip-cap.md` | T8 |
 | `packages/ui/src/features/sessions/sidebar/__tests__/SessionRowPrChips.test.tsx` | T9 |
 | `packages/ui/src/features/sessions/sidebar/__tests__/SessionRowPrOverflow.test.tsx` | T9 |
 | `packages/ui/src/features/sessions/sidebar/__tests__/SessionRowMetaIcons.test.tsx` | T10 |
@@ -403,7 +403,7 @@ In `SessionRow.meta-layout.test.tsx` (new, ~130 lines) — **the inflated-meta-c
 
 The harness this test needs is smaller than the one it would have copied, because nothing here clicks, renames, pins or archives — it renders once and inspects structure. Mock only the four modules `SessionRow` reaches for, with constant returns and no spies:
 
-- `@assistant-ui/react` — `ThreadListItemRuntimeProvider` (passthrough), `ThreadListItemPrimitive.Root` (a `<div>` forwarding `data-testid` and `data-active="false"`) and `.Trigger` (`asChild` passthrough), `useAssistantRuntime` (returns `threads.getItemById` → `{}`), `useThreadListItemRuntime` (`{}`), `useAuiState` (selector against `{ thread: { id: '' } }`).
+- `@assistant-ui/react` — `ThreadListItemRuntimeProvider` (passthrough), `ThreadListItemPrimitive.Root` (a `<div>` forwarding `data-testid` and `data-active="false"`) and `.Trigger` (`asChild` passthrough), `useThreadListItemRuntime` (`{}`), `useAuiState` (selector against `{ thread: { id: '' } }`), and `useAssistantRuntime` returning **both** `threads.getState: () => ({ threadItems: { 'chat-1': {} } })` **and** `threads.getItemById: () => ({})`. Both are required: `SessionRowResolver` (`SessionRow.tsx:261-278`) reads `getState().threadItems` first and returns `null` if the fixture's id is absent, so a mock with only `getItemById` renders an empty row and every assertion below fails for the wrong reason. The key must match the fixture id (`chat-1`).
 - `@/store/unread-store` — never unread.
 - `../../runtime/daemon-port-context` — `useDaemonPort: () => 31415`.
 - `@/lib/api/chats` — `pinChat: vi.fn()`.
@@ -442,7 +442,11 @@ No files written.
          "packages/ui/src/features/sessions/sidebar/$f"
      done
      ```
-     It must print nothing. Run the same one-liner over `SessionRow.meta-layout.test.tsx`. `SessionRow.tsx` is excluded because its pre-existing `SessionRowInner` would report — see "Carried forward". Confirm separately that this plan's edit leaves that number **not higher**: it is 171 lines on `main` and 171 lines at `97c9e46e`. (The original wording asked for "one line lower"; that prediction was wrong — removing the `@max-[260px]:hidden` wrapper saved a line, splitting the title `className` spent it.)
+     It must print nothing. **Do not run that one-liner over a test file** — it keys on top-level `function`/`const` declarations closing at column 0, and a test file's bodies are `it('…', () => { … });` callbacks it never matches, so it would report "clean" without checking anything. For the three T9/T10 test files, measure the callbacks instead:
+     ```sh
+     awk '/^(it|test)\(|^  it\(/{s=NR} /^\}\);|^  \}\);/{if(s){if(NR-s+1>50) printf "%s:%d %d lines\n", FILENAME, s, NR-s+1; s=0}}' <file>
+     ```
+     It must print nothing for `SessionRowPrChips.test.tsx`, `SessionRowPrOverflow.test.tsx` and `SessionRow.meta-layout.test.tsx`. Also `wc -l` those three: each under 300. `SessionRowMetaIcons.test.tsx` gets the same treatment. `SessionRow.test.tsx` is exempt — it is 640 lines and grandfathered (see "Carried forward"); confirm only that T10.5's rename left its length unchanged. `SessionRow.tsx` is excluded from the source one-liner because its pre-existing `SessionRowInner` would report — see "Carried forward". Confirm separately that this plan's edit leaves that number **not higher**: it is 171 lines on `main` and 171 lines at `97c9e46e`. (The original wording asked for "one line lower"; that prediction was wrong — removing the `@max-[260px]:hidden` wrapper saved a line, splitting the title `className` spent it.)
 5. **Live visual check** (the only thing that can verify decisions 3 and 4, which jsdom cannot).
 
    **If the dev app cannot be launched from this environment, do not block and do not claim a pass.** Record it verbatim as a decision — *"decisions 3 and 4 (44px floor, wrap-and-clip yield) are unverified live; jsdom cannot measure layout"* — and hand it to the lane's QA stage, whose job is exactly this smoke test. Everything else in this sweep is machine-checkable and must still be green. A missing display is not a reason to fail a group whose code-level criteria all pass.
@@ -450,15 +454,20 @@ No files written.
    Set up a reproducible fixture in the isolated dev data dir:
    - Start the app isolated: `DAEMON_PORT=31500 MAINFRAME_DATA_DIR=~/.mainframe_dev pnpm tauri:dev` from `packages/app-tauri`, backgrounded to a log file. Never launch without both variables.
    - Pick a session id: `sqlite3 ~/.mainframe_dev/mainframe.db "SELECT id, title FROM chats ORDER BY updated_at DESC LIMIT 5;"`. If it returns no rows, the dev data dir is fresh — add a project in the app and send one message to create a session, then re-run it.
-   - Snapshot every field the fixture overwrites, so the restore is exact:
-     `sqlite3 ~/.mainframe_dev/mainframe.db "SELECT title, pinned, detected_prs FROM chats WHERE id='<id>';" > /tmp/mf-285-row-before.txt`
+   - Snapshot the row as an executable, correctly escaped `UPDATE` — a plain `SELECT` writes pipe-delimited text that cannot be replayed and corrupts on any title containing a `|`:
+     ```sh
+     sqlite3 ~/.mainframe_dev/mainframe.db \
+       "SELECT 'UPDATE chats SET title='||quote(title)||', pinned='||quote(pinned)||', detected_prs='||quote(detected_prs)||' WHERE id='||quote(id)||';' FROM chats WHERE id='<id>';" \
+       > /tmp/mf-285-restore.sql
+     ```
+     `quote()` is SQLite's own literal escaper, so the restore round-trips NULLs and embedded quotes exactly. Confirm the file is non-empty before touching the row.
    - Give it a long title and five PRs (the `detected_prs` column is a JSON array of `DetectedPr`):
      ```sh
      sqlite3 ~/.mainframe_dev/mainframe.db "UPDATE chats SET title='Refactor the session sidebar row layout contract', pinned=1, detected_prs='[{\"url\":\"https://github.com/o/r/pull/1\",\"owner\":\"o\",\"repo\":\"r\",\"number\":1,\"source\":\"created\"},{\"url\":\"https://github.com/o/r/pull/2\",\"owner\":\"o\",\"repo\":\"r\",\"number\":2,\"source\":\"mentioned\"},{\"url\":\"https://github.com/o/r/pull/3\",\"owner\":\"o\",\"repo\":\"r\",\"number\":3,\"source\":\"mentioned\"},{\"url\":\"https://github.com/o/r/pull/4\",\"owner\":\"o\",\"repo\":\"r\",\"number\":4,\"source\":\"created\"},{\"url\":\"https://github.com/o/r/pull/5\",\"owner\":\"o\",\"repo\":\"r\",\"number\":5,\"source\":\"mentioned\"}]' WHERE id='<id>';"
      ```
    - Reload the window, drag the sidebar to its 280px floor, and confirm on that row: the title shows a readable fragment ending in an ellipsis and never collapses to nothing; the row neither wraps nor overflows the panel; no glyph is half-clipped (a squeezed glyph disappears entirely); hovering the row — the actions replace the timestamp — keeps all of that true **and** the PR indicator stays visible and clickable; the indicator reads `5`; clicking it, and focusing it and pressing `Enter`, both open a panel listing all five PRs.
-   - Restore the row afterwards from `/tmp/mf-285-row-before.txt` — `title`, `pinned` and `detected_prs`, all three — or delete `~/.mainframe_dev` outright. Never touch `~/.mainframe`.
-6. `git diff --stat` shows only the files in the collision map plus the changeset — no `pnpm-lock.yaml`, no submodule pointer.
+   - Restore, in this order: stop the dev app (kill by port — `lsof -ti :31500` — never a name-fragment `pkill`), then `sqlite3 ~/.mainframe_dev/mainframe.db < /tmp/mf-285-restore.sql`, then re-select the row and confirm the three fields match the snapshot. **Do not delete `~/.mainframe_dev`** — it is shared dev state other lanes rely on, and the fixture is a three-field edit that the snapshot fully reverses. Never touch `~/.mainframe`.
+6. `git diff --name-only main...HEAD` lists exactly: the collision-map files, `.changeset/session-row-pr-chip-cap.md`, and `docs/plans/2026-07-27-todo-285-pr-chips-title-starve-plan.md` (tracked despite the ignore, see Ground rules). Nothing else — in particular no `pnpm-lock.yaml` and no submodule pointer. `git status --porcelain` is empty.
 
 ## Definition of done
 
