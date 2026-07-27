@@ -7,3 +7,5 @@ Fix "Could not switch worktree — No such file or directory (os error 2)" when 
 Worktree offers no longer go missing after a worktree is deleted and recreated at the same path. A chat now remembers each worktree it has already seen by identity rather than by path alone, and refreshes that record on every scan instead of freezing it when the chat starts. A worktree rebuilt in place is a different worktree, so it is offered again — even when the remove and the add run as a single command and the path never appears to have gone away.
 
 Switching worktrees mid-session no longer leaves the thread stuck on "Composing…" with a Stop button. The switch restarts the CLI, and the restart alone was being read as a turn in flight; since no turn was running, nothing ever arrived to clear it.
+
+Switching is now blocked while the agent is answering, rather than cutting the answer off. The offer stays on screen and says it becomes available once the response finishes.

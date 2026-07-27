@@ -1357,3 +1357,46 @@ async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypasse
 
     assert!(matches!(err, TrustWorkspaceError::Write(msg) if msg == "disk full"));
 }
+
+// ── accept_worktree_offer gating ────────────────────────────────────────────
+
+#[tokio::test]
+async fn accept_worktree_offer_refuses_while_a_turn_is_in_flight() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+
+    let err = mgr
+        .accept_worktree_offer("c1", "/tmp/wt")
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, OfferError::ChatBusy));
+    assert_eq!(err.status_code(), 409);
+}
+
+/// Idle reaches the registry instead — `NotPending` proves the busy gate let it
+/// through, since nothing was ever offered here.
+#[tokio::test]
+async fn accept_worktree_offer_reaches_the_registry_when_the_chat_is_idle() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), false),
+        RecSession::new("c1", true, true),
+    );
+
+    let err = mgr
+        .accept_worktree_offer("c1", "/tmp/wt")
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, OfferError::NotPending));
+}

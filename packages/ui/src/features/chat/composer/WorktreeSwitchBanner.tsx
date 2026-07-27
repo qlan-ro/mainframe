@@ -19,7 +19,9 @@ const SETTLED_LINGER_MS = 2000;
 
 const LIST_WARNING =
   "Switching restarts the agent in the chosen folder — a running process can't change directory. " +
-  'History carries over; a response in progress stops.';
+  'History carries over.';
+
+const BUSY_NOTE = 'Available once the current response finishes — restarting now would cut it off.';
 
 const PANEL_CLASS = 'rounded-lg border border-primary/40 bg-primary/10 p-3';
 
@@ -78,11 +80,13 @@ function OfferActions({
 function WorktreeOfferRow({
   offer,
   restartingPath,
+  busy,
   onAccept,
   onDismiss,
 }: {
   offer: WorktreeSwitchOffer;
   restartingPath: string | null;
+  busy: boolean;
   onAccept: (worktreePath: string) => void;
   onDismiss: (worktreePath: string) => void;
 }) {
@@ -102,7 +106,7 @@ function WorktreeOfferRow({
       ) : (
         <OfferActions
           worktreePath={offer.worktreePath}
-          disabled={restartingPath !== null}
+          disabled={busy || restartingPath !== null}
           onAccept={() => onAccept(offer.worktreePath)}
           onDismiss={() => onDismiss(offer.worktreePath)}
         />
@@ -113,7 +117,7 @@ function WorktreeOfferRow({
 
 export function WorktreeSwitchBanner() {
   const extras = useChatExtras();
-  const { offers, switching, current, accept, dismiss, clear } = useWorktreeOffer();
+  const { offers, switching, current, busy, accept, dismiss, clear } = useWorktreeOffer();
   const settled = switching?.phase === 'settled';
 
   useEffect(() => {
@@ -137,10 +141,7 @@ export function WorktreeSwitchBanner() {
     <div data-testid="worktree-switch-banner" className="flex flex-col gap-1.5 px-1 pb-1.5">
       {settled ? (
         <div className="rounded-lg border border-mf-success/40 bg-mf-success-tint p-3">
-          <div
-            data-testid="worktree-switch-status"
-            className="flex items-center gap-1.5 text-caption text-mf-success"
-          >
+          <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-caption text-mf-success">
             <Check className="size-3.5" aria-hidden />
             {`Session is now in ${settledPath} on ${branchLabel(settledPath, current.branchName)}.`}
           </div>
@@ -158,6 +159,7 @@ export function WorktreeSwitchBanner() {
         <SingleOfferPanel
           offer={offers[0]}
           restartingPath={restartingPath}
+          busy={busy}
           onAccept={onAccept}
           onDismiss={onDismiss}
         />
@@ -169,13 +171,14 @@ export function WorktreeSwitchBanner() {
             <GitBranch className="size-3.5 text-primary" aria-hidden />
             {`${offers.length} new worktrees — switch this session?`}
           </p>
-          <p className="text-caption text-muted-foreground">{LIST_WARNING}</p>
+          <p className="text-caption text-muted-foreground">{busy ? BUSY_NOTE : LIST_WARNING}</p>
           <div className="flex flex-col gap-1.5">
             {offers.map((offer) => (
               <WorktreeOfferRow
                 key={offer.worktreePath}
                 offer={offer}
                 restartingPath={restartingPath}
+                busy={busy}
                 onAccept={onAccept}
                 onDismiss={onDismiss}
               />
@@ -190,11 +193,13 @@ export function WorktreeSwitchBanner() {
 function SingleOfferPanel({
   offer,
   restartingPath,
+  busy,
   onAccept,
   onDismiss,
 }: {
   offer: WorktreeSwitchOffer;
   restartingPath: string | null;
+  busy: boolean;
   onAccept: (worktreePath: string) => void;
   onDismiss: (worktreePath: string) => void;
 }) {
@@ -213,12 +218,14 @@ function SingleOfferPanel({
         {`New worktree: ${label}`}
       </p>
       <p className="text-caption text-muted-foreground">
-        {`Created at ${offer.worktreePath}. Switch this session into it? The agent restarts in the new folder — ` +
-          "a running process can't change directory. History carries over; a response in progress stops."}
+        {busy
+          ? `Created at ${offer.worktreePath}. ${BUSY_NOTE}`
+          : `Created at ${offer.worktreePath}. Switch this session into it? The agent restarts in the new folder — ` +
+            "a running process can't change directory. History carries over."}
       </p>
       <OfferActions
         worktreePath={offer.worktreePath}
-        disabled={restartingPath !== null}
+        disabled={busy || restartingPath !== null}
         onAccept={() => onAccept(offer.worktreePath)}
         onDismiss={() => onDismiss(offer.worktreePath)}
       />

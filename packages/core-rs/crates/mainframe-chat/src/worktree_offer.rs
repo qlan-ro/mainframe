@@ -35,6 +35,8 @@ pub enum OfferError {
     NotPending,
     #[error("A worktree switch is already in progress")]
     SwitchInProgress,
+    #[error("Finish or stop the current response before switching worktrees")]
+    ChatBusy,
     #[error("Worktree no longer exists")]
     Vanished,
     #[error("{0}")]
@@ -44,7 +46,7 @@ pub enum OfferError {
 impl OfferError {
     pub fn status_code(&self) -> u16 {
         match self {
-            OfferError::SwitchInProgress => 409,
+            OfferError::SwitchInProgress | OfferError::ChatBusy => 409,
             _ => 400,
         }
     }

@@ -17,6 +17,7 @@ let __chatId: string;
 let __offers: WorktreeSwitchOffer[];
 let __switching: SwitchingState;
 let __current: CurrentBinding;
+let __busy: boolean;
 let __accept: Mock<(worktreePath: string) => Promise<void>>;
 let __dismiss: Mock<(worktreePath: string) => Promise<void>>;
 let __clear: Mock<() => void>;
@@ -27,6 +28,7 @@ vi.mock('../../runtime/use-chat-thread-runtime', () => ({
     offers: __offers,
     switching: __switching,
     current: __current,
+    busy: __busy,
     accept: __accept,
     dismiss: __dismiss,
     clear: __clear,
@@ -50,6 +52,7 @@ describe('WorktreeSwitchBanner', () => {
     __offers = [];
     __switching = null;
     __current = { worktreePath: null, branchName: null };
+    __busy = false;
     __accept = vi.fn(async () => {});
     __dismiss = vi.fn(async () => {});
     __clear = vi.fn();
@@ -80,7 +83,7 @@ describe('WorktreeSwitchBanner', () => {
     const banner = screen.getByTestId('worktree-switch-banner');
     expect(banner.textContent).toContain('New worktree: feat/x');
     expect(banner.textContent).toContain(
-      "Created at /tmp/wt/x. Switch this session into it? The agent restarts in the new folder — a running process can't change directory. History carries over; a response in progress stops.",
+      "Created at /tmp/wt/x. Switch this session into it? The agent restarts in the new folder — a running process can't change directory. History carries over.",
     );
 
     const accept = screen.getByTestId('worktree-switch-accept');
@@ -93,11 +96,7 @@ describe('WorktreeSwitchBanner', () => {
   });
 
   it('collapses three offers into one banner with a counted title and a single shared warning', () => {
-    __offers = [
-      offer('/tmp/wt/a', 'feat/a', 1),
-      offer('/tmp/wt/b', 'feat/b', 2),
-      offer('/tmp/wt/c', 'feat/c', 3),
-    ];
+    __offers = [offer('/tmp/wt/a', 'feat/a', 1), offer('/tmp/wt/b', 'feat/b', 2), offer('/tmp/wt/c', 'feat/c', 3)];
 
     render(<WorktreeSwitchBanner />);
 
@@ -107,7 +106,7 @@ describe('WorktreeSwitchBanner', () => {
     expect(banner.textContent).toContain('3 new worktrees — switch this session?');
 
     const warning =
-      "Switching restarts the agent in the chosen folder — a running process can't change directory. History carries over; a response in progress stops.";
+      "Switching restarts the agent in the chosen folder — a running process can't change directory. History carries over.";
     expect(banner.textContent).toContain(warning);
     expect(banner.textContent?.split(warning)).toHaveLength(2);
 
@@ -119,6 +118,35 @@ describe('WorktreeSwitchBanner', () => {
     expect(rows[0]!.textContent).toContain('feat/a');
     expect(rows[1]!.textContent).toContain('feat/b');
     expect(rows[2]!.textContent).toContain('feat/c');
+  });
+
+  describe('a turn in flight', () => {
+    it('blocks the single offer and says when it will be available', () => {
+      __offers = [offer('/tmp/wt/x', 'feat/x', 1)];
+      __busy = true;
+
+      render(<WorktreeSwitchBanner />);
+
+      expect(screen.getByTestId('worktree-switch-banner').textContent).toContain(
+        'Created at /tmp/wt/x. Available once the current response finishes — restarting now would cut it off.',
+      );
+      expect(screen.getByTestId('worktree-switch-accept')).toBeDisabled();
+      expect(screen.getByTestId('worktree-switch-dismiss')).not.toBeDisabled();
+    });
+
+    it('blocks every row of a multi-offer banner', () => {
+      __offers = [offer('/tmp/wt/a', 'feat/a', 1), offer('/tmp/wt/b', 'feat/b', 2)];
+      __busy = true;
+
+      render(<WorktreeSwitchBanner />);
+
+      expect(screen.getByTestId('worktree-switch-banner').textContent).toContain(
+        'Available once the current response finishes — restarting now would cut it off.',
+      );
+      const accepts = screen.getAllByTestId('worktree-switch-accept');
+      expect(accepts[0]).toBeDisabled();
+      expect(accepts[1]).toBeDisabled();
+    });
   });
 
   it('replaces the single offer with a restarting status while switching', () => {
@@ -135,11 +163,7 @@ describe('WorktreeSwitchBanner', () => {
   });
 
   it('shows the status on the accepted row only and disables the other rows accept buttons', () => {
-    __offers = [
-      offer('/tmp/wt/a', 'feat/a', 1),
-      offer('/tmp/wt/b', 'feat/b', 2),
-      offer('/tmp/wt/c', 'feat/c', 3),
-    ];
+    __offers = [offer('/tmp/wt/a', 'feat/a', 1), offer('/tmp/wt/b', 'feat/b', 2), offer('/tmp/wt/c', 'feat/c', 3)];
     __switching = { worktreePath: '/tmp/wt/b', phase: 'restarting' };
 
     render(<WorktreeSwitchBanner />);
@@ -168,9 +192,7 @@ describe('WorktreeSwitchBanner', () => {
 
     render(<WorktreeSwitchBanner />);
 
-    expect(screen.getByTestId('worktree-switch-status').textContent).toBe(
-      'Session is now in /tmp/wt/x on feat/x.',
-    );
+    expect(screen.getByTestId('worktree-switch-status').textContent).toBe('Session is now in /tmp/wt/x on feat/x.');
     expect(__clear).not.toHaveBeenCalled();
 
     act(() => {
@@ -217,11 +239,7 @@ describe('WorktreeSwitchBanner', () => {
     // case asserts click routing, not the settled timer.
     vi.useRealTimers();
     const user = userEvent.setup();
-    __offers = [
-      offer('/tmp/wt/a', 'feat/a', 1),
-      offer('/tmp/wt/b', 'feat/b', 2),
-      offer('/tmp/wt/c', 'feat/c', 3),
-    ];
+    __offers = [offer('/tmp/wt/a', 'feat/a', 1), offer('/tmp/wt/b', 'feat/b', 2), offer('/tmp/wt/c', 'feat/c', 3)];
 
     render(<WorktreeSwitchBanner />);
 

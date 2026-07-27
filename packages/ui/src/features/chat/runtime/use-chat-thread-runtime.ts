@@ -188,11 +188,15 @@ export function useChatQueuedMessages(): QueuedMessageRef[] {
 /**
  * Worktree-switch offers for this chat, oldest first, plus the in-flight switch,
  * the chat's live binding, and the three actions. Stable ref via useMemo([extras]).
+ *
+ * `busy` mirrors the daemon's refusal to rebind mid-turn: accepting restarts the
+ * CLI, which would cut the answer off. The offer keeps until the turn ends.
  */
 export function useWorktreeOffer(): {
   offers: WorktreeSwitchOffer[];
   switching: ChatThreadState['switching'];
   current: { worktreePath: string | null; branchName: string | null };
+  busy: boolean;
   accept: (worktreePath: string) => Promise<void>;
   dismiss: (worktreePath: string) => Promise<void>;
   clear: () => void;
@@ -204,6 +208,7 @@ export function useWorktreeOffer(): {
     return {
       offers,
       switching: extras?.state.switching ?? null,
+      busy: extras !== undefined && isRunningFromState(extras.state),
       current: {
         worktreePath: chat?.worktreePath ?? null,
         branchName: chat?.branchName ?? null,

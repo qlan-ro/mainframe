@@ -1103,6 +1103,13 @@ impl ChatManager {
         self.active_chats.get(chat_id).map(|e| e.value().clone())
     }
 
+    /// A turn is in flight. Reads the live cell, not the DB row — the row lags
+    /// behind by one write.
+    fn is_chat_working(&self, chat_id: &str) -> bool {
+        self.get_active(chat_id)
+            .is_some_and(|cell| is_working(&cell.lock().unwrap_or_else(|e| e.into_inner()).chat))
+    }
+
     /// On boot: reset orphaned `processState: 'working'` chats to idle.
     pub fn recover_stale_working_state(&self) {
         let count = self.deps.chats_reset_working_to_idle();
@@ -1666,6 +1673,11 @@ impl ChatManager {
         chat_id: &str,
         worktree_path: &str,
     ) -> Result<(), OfferError> {
+        // The rebind restarts the CLI, which would kill a turn mid-answer and
+        // lose whatever it had not written yet. The offer keeps.
+        if self.is_chat_working(chat_id) {
+            return Err(OfferError::ChatBusy);
+        }
         let offer = self.worktree_offers.claim_accept(chat_id, worktree_path)?;
 
         if tokio::fs::metadata(worktree_path).await.is_err() {
