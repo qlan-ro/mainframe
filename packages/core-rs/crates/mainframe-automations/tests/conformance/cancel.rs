@@ -25,14 +25,7 @@ async fn cancel_during_agent_wait_ignores_a_late_completion() {
 
     rig.engine.cancel_run(&run_id).await.unwrap();
     rig.wait(&run_id, RunStatus::Cancelled).await;
-    assert!(
-        rig.agent
-            .cancels
-            .lock()
-            .unwrap()
-            .contains(&"chat-1".to_string()),
-        "cancel told the chat to stop"
-    );
+    rig.wait_chat_cancel("chat-1").await;
 
     // The agent finishes late — the wait registration is already gone, so it
     // is dropped: the run stays cancelled and the notify step never runs.
