@@ -966,11 +966,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 }
 
 #[cfg(test)]
+mod title_logging_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
 
-    fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
+    pub(super) fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
         let mut c = test_chat(id);
         c.worktree_path = worktree.map(str::to_string);
         c.status = status;
@@ -1031,28 +1034,39 @@ mod tests {
     }
 
     // ── archiveChat (kills-tasks + releases-scope) ───────────────────────────
-    struct FakeDeps {
+    pub(super) struct FakeDeps {
         chat: Chat,
         siblings: Vec<Chat>,
         order: Mutex<Vec<String>>,
-        events: Mutex<Vec<DaemonEvent>>,
+        pub(super) events: Mutex<Vec<DaemonEvent>>,
         stop_calls: Mutex<Vec<(String, String)>>,
         tunnel_stop_calls: Mutex<Vec<(String, String)>>,
         /// `false` reproduces a scope that never ran a launch config, where
         /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it.
         has_launches: bool,
+        /// Titles the deps observed `chats_update` writing (only when
+        /// `patch.title.is_some()`, so unrelated lifecycle updates don't pollute
+        /// title-logging assertions).
+        pub(super) title_updates: Mutex<Vec<String>>,
+        /// When `true`, `settings_get("general", "titleGeneration.disabled")`
+        /// answers `Some("true")`.
+        disabled: bool,
     }
 
     impl FakeDeps {
         fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, true)
+            Self::build(chat, siblings, true, false)
         }
 
         fn launchless(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, false)
+            Self::build(chat, siblings, false, false)
         }
 
-        fn build(chat: Chat, siblings: Vec<Chat>, has_launches: bool) -> Arc<Self> {
+        pub(super) fn title_disabled(chat: Chat) -> Arc<Self> {
+            Self::build(chat, Vec::new(), true, true)
+        }
+
+        fn build(chat: Chat, siblings: Vec<Chat>, has_launches: bool, disabled: bool) -> Arc<Self> {
             Arc::new(Self {
                 chat,
                 siblings,
@@ -1061,6 +1075,8 @@ mod tests {
                 stop_calls: Mutex::new(Vec::new()),
                 tunnel_stop_calls: Mutex::new(Vec::new()),
                 has_launches,
+                title_updates: Mutex::new(Vec::new()),
+                disabled,
             })
         }
     }
@@ -1079,7 +1095,11 @@ mod tests {
         ) -> Chat {
             self.chat.clone()
         }
-        fn chats_update(&self, _chat_id: &str, _patch: &LifecycleChatUpdate) {}
+        fn chats_update(&self, _chat_id: &str, patch: &LifecycleChatUpdate) {
+            if let Some(title) = &patch.title {
+                self.title_updates.lock().unwrap().push(title.clone());
+            }
+        }
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
             let mut all = vec![self.chat.clone()];
             all.extend(self.siblings.clone());
@@ -1088,8 +1108,12 @@ mod tests {
         fn projects_get_path(&self, _project_id: &str) -> Option<String> {
             Some("/proj".to_string())
         }
-        fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-            None
+        fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
+            if self.disabled && ns == "general" && key == "titleGeneration.disabled" {
+                Some("true".to_string())
+            } else {
+                None
+            }
         }
         fn create_session(&self, _a: &str, _o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             None
@@ -1174,7 +1198,7 @@ mod tests {
         }
     }
 
-    fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
+    pub(super) fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
         ChatLifecycleManager::new(
             deps,
             Arc::new(DashMap::new()),
