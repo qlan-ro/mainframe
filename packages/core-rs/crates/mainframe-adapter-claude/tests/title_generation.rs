@@ -46,7 +46,7 @@ async fn chatty_stderr_is_truncated_at_the_character_cap() {
     let dir = tempdir().unwrap();
     let noisy = "é".repeat(64 * 1024 / "é".len());
     let script = format!(
-        "#!/bin/sh\nprintf 'HEAD-MARKER'\nprintf '{noisy}'\nprintf 'TAIL-MARKER'\nexit 1\n"
+        "#!/bin/sh\nprintf 'HEAD-MARKER' >&2\nprintf '{noisy}' >&2\nprintf 'TAIL-MARKER' >&2\nexit 1\n"
     );
     let binary = write_stub(dir.path(), "claude", &script);
 
