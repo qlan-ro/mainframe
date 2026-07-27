@@ -5,8 +5,10 @@
 //! therefore canonical, and the sync entry points in the parent module can
 //! compare the path a caller hands back verbatim.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::path::Path;
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 
 use mainframe_services::workspace::WorktreeEntry;
 use mainframe_types::events::DaemonEvent;
@@ -21,9 +23,10 @@ impl WorktreeOfferRegistry {
     /// re-activated chat never re-offers a worktree the user already lived with.
     pub async fn seed_baseline(&self, chat_id: &str, project_path: &str) {
         let listing = self.canonical_listing(project_path).await;
+        let seen = identities(&listing).await;
         let mut state = self.lock();
         let chat = state.entry(chat_id.to_string()).or_default();
-        chat.baseline = Some(listing.into_iter().map(|entry| entry.path).collect());
+        chat.baseline = Some(seen);
         chat.pending.clear();
     }
 
@@ -79,7 +82,8 @@ impl WorktreeOfferRegistry {
             .into_iter()
             .collect();
 
-        let Some((baseline, pending)) = self.baseline_and_pending(chat_id, &listing) else {
+        let seen = identities(&listing).await;
+        let Some((baseline, pending)) = self.baseline_and_pending(chat_id, &seen) else {
             return;
         };
         let outcome = scan(ScanInputs {
@@ -92,7 +96,7 @@ impl WorktreeOfferRegistry {
             pending: &pending,
         });
 
-        for event in self.apply(chat_id, outcome, &listing) {
+        for event in self.apply(chat_id, outcome, &seen) {
             self.deps.emit_event(event);
         }
     }
@@ -100,17 +104,28 @@ impl WorktreeOfferRegistry {
     /// `None` when the chat had no baseline yet — this scan seeds it instead of
     /// scanning, so a chat that predates the registry is not flooded with offers
     /// for worktrees that were already there.
+    ///
+    /// A remembered path drops out of the returned set when its identity no
+    /// longer matches: that path holds a different worktree now, so it is not
+    /// the one the chat already saw.
     fn baseline_and_pending(
         &self,
         chat_id: &str,
-        listing: &[WorktreeEntry],
+        seen: &Identities,
     ) -> Option<(HashSet<String>, BTreeSet<String>)> {
         let mut state = self.lock();
         let chat = state.entry(chat_id.to_string()).or_default();
         match &chat.baseline {
-            Some(baseline) => Some((baseline.clone(), chat.pending.keys().cloned().collect())),
+            Some(baseline) => {
+                let unchanged = baseline
+                    .iter()
+                    .filter(|(path, id)| is_same_worktree(**id, seen.get(*path).copied().flatten()))
+                    .map(|(path, _)| path.clone())
+                    .collect();
+                Some((unchanged, chat.pending.keys().cloned().collect()))
+            }
             None => {
-                chat.baseline = Some(listing.iter().map(|entry| entry.path.clone()).collect());
+                chat.baseline = Some(seen.clone());
                 None
             }
         }
@@ -119,12 +134,7 @@ impl WorktreeOfferRegistry {
     /// Applies the scan to the pending set and hands back the events to emit;
     /// the caller emits once the state lock is gone. Also re-baselines to the
     /// listing this scan saw.
-    fn apply(
-        &self,
-        chat_id: &str,
-        outcome: ScanOutcome,
-        listing: &[WorktreeEntry],
-    ) -> Vec<DaemonEvent> {
+    fn apply(&self, chat_id: &str, outcome: ScanOutcome, seen: &Identities) -> Vec<DaemonEvent> {
         let detected_at = (self.now)();
         let mut events = Vec::new();
         let mut state = self.lock();
@@ -153,13 +163,12 @@ impl WorktreeOfferRegistry {
                 ));
             }
         }
-        // "New" means new since the last worktree command, not since the chat
-        // activated: a path that is removed and recreated is a different
-        // worktree and deserves its own offer. Skipped on an empty listing —
-        // that means the git call failed, and re-baselining to nothing would
-        // make every worktree look new on the next scan.
-        if !listing.is_empty() {
-            chat.baseline = Some(listing.iter().map(|entry| entry.path.clone()).collect());
+        // Remember what this scan saw, so "already seen" tracks the last
+        // worktree command rather than chat activation. Skipped on an empty
+        // listing — that means the git call failed, and forgetting everything
+        // would make every worktree look new on the next scan.
+        if !seen.is_empty() {
+            chat.baseline = Some(seen.clone());
         }
         events
     }
@@ -183,6 +192,44 @@ impl WorktreeOfferRegistry {
             canonical.insert(canon(&path).await);
         }
         canonical
+    }
+}
+
+/// What each registered path held when a scan last looked at it. `None` for a
+/// path whose identity could not be read.
+pub(super) type Identities = HashMap<String, Option<u128>>;
+
+/// A linked worktree's `.git` is a one-line file git writes when the worktree is
+/// created and never touches again, so its mtime dates the worktree itself.
+/// Remove and recreate one at the same path and the mtime changes — which is how
+/// a rebuilt worktree is told apart from the one already seen, even when the
+/// path, branch, and commit all match. (The main checkout's `.git` is a
+/// directory whose mtime churns, but it is never offered anyway.)
+async fn identity(path: &str) -> Option<u128> {
+    let meta = tokio::fs::symlink_metadata(Path::new(path).join(".git"))
+        .await
+        .ok()?;
+    let modified = meta.modified().ok()?;
+    modified
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_nanos())
+}
+
+async fn identities(listing: &[WorktreeEntry]) -> Identities {
+    let mut seen = HashMap::with_capacity(listing.len());
+    for entry in listing {
+        seen.insert(entry.path.clone(), identity(&entry.path).await);
+    }
+    seen
+}
+
+/// Unreadable on either side means "assume unchanged": guessing the other way
+/// would re-offer a worktree the user has already lived with.
+fn is_same_worktree(seen: Option<u128>, current: Option<u128>) -> bool {
+    match (seen, current) {
+        (Some(seen), Some(current)) => seen == current,
+        _ => true,
     }
 }
 

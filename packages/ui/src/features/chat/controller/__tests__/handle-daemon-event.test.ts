@@ -169,6 +169,26 @@ describe('handleDaemonEvent — chat.compactDone', () => {
 });
 
 // ---------------------------------------------------------------------------
+// process.started
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — process.started', () => {
+  it('does not start a run — a spawned CLI is not a turn in flight', () => {
+    const result = handleDaemonEvent(
+      {
+        type: 'process.started',
+        chatId: CHAT_ID,
+        process: { id: 'proc-1' } as never,
+      },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // error
 // ---------------------------------------------------------------------------
 

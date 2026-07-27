@@ -10,7 +10,7 @@
  * State holds:
  *  - messagesById / messageOrder — the daemon's display list
  *  - loadState — REST seed status
- *  - runState — derived from daemon chat.updated / process.started events
+ *  - runState — derived from daemon chat.updated events + the optimistic send
  *  - interactions.permissions — from permission.requested / permission.resolved
  *  - interactions.queued — from message.queued.* events
  *  - pendingUserMessages — optimistic send, reconciled on echo

@@ -1,11 +1,12 @@
 //! Pending worktree switch offers, per chat.
 //!
-//! A chat records the worktrees registered when it activated (its baseline).
-//! Triggers from the session sink coalesce into a rescan of `git worktree list`;
-//! anything registered since the baseline that clears the eligibility gates
-//! becomes a pending offer broadcast to that chat's subscribers. Each scan
-//! re-baselines to the listing it saw, so the comparison is against the previous
-//! worktree command rather than against chat activation.
+//! A chat records the worktrees it has already seen — by path *and* identity, so
+//! a worktree rebuilt at a path it once knew still counts as new. Triggers from
+//! the session sink coalesce into a rescan of `git worktree list`; anything the
+//! chat has not seen that clears the eligibility gates becomes a pending offer
+//! broadcast to that chat's subscribers. Every scan updates the record, so the
+//! comparison is against the previous worktree command rather than against chat
+//! activation.
 //!
 //! Detection is main-thread-only: Claude diverts subagent tool blocks to
 //! `on_subagent_child` before the sink ever sees them, so a `git worktree add`
@@ -68,8 +69,9 @@ pub trait WorktreeOfferDeps: Send + Sync {
 
 #[derive(Default)]
 struct ChatOffers {
-    /// `None` until the chat's first scan, which seeds it defensively.
-    baseline: Option<HashSet<String>>,
+    /// The worktrees a scan has already seen, by path and identity. `None` until
+    /// the chat's first scan, which seeds it defensively.
+    baseline: Option<rescan::Identities>,
     pending: BTreeMap<String, WorktreeSwitchOffer>,
     rescanning: bool,
     rescan_queued: bool,

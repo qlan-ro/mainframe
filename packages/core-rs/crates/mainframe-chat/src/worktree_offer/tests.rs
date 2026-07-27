@@ -195,6 +195,25 @@ fn no_writes() -> Vec<(String, String)> {
     Vec::new()
 }
 
+/// Writes the `.git` link file `git worktree add` leaves behind, stamped at a
+/// chosen mtime — that stamp is the worktree's identity, so an explicit one
+/// keeps "rebuilt in place" independent of filesystem timestamp resolution.
+fn write_git_link(worktree: &std::path::Path, mtime_secs: u64) {
+    let link = worktree.join(".git");
+    std::fs::write(
+        &link,
+        format!("gitdir: /repo/.git/worktrees/{mtime_secs}\n"),
+    )
+    .unwrap();
+    let stamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(mtime_secs);
+    std::fs::File::options()
+        .write(true)
+        .open(&link)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(stamp))
+        .unwrap();
+}
+
 /// A real directory whose raw and canonical spellings differ on macOS
 /// (`/var/folders/…` → `/private/var/folders/…`). The equality assertion keeps
 /// the case meaningful on platforms where the two spellings coincide.
@@ -324,9 +343,9 @@ async fn reoffers_a_worktree_deleted_and_recreated_at_the_same_path_since_activa
     h.registry.seed_baseline(CHAT, PROJECT_PATH).await;
     h.deps.clear_events();
 
-    // `git worktree remove` is itself a trigger, and that scan drops the path
-    // from the baseline. (A delete and a recreate inside one scan interval are
-    // indistinguishable from no change — sampling, not a fixable gate.)
+    // `git worktree remove` is itself a trigger, and that scan drops the path.
+    // (The same thing done in a single command is covered by the identity check
+    // in `reoffers_a_worktree_rebuilt_in_place_without_ever_being_seen_absent`.)
     h.set_worktrees(Vec::new());
     h.rescan().await;
     assert_eq!(h.deps.events(), no_events());
@@ -338,6 +357,38 @@ async fn reoffers_a_worktree_deleted_and_recreated_at_the_same_path_since_activa
     assert_eq!(
         h.deps.events(),
         vec![raised(offer("/repo/.worktrees/a", Some("feat/a"), T2))]
+    );
+}
+
+/// `git worktree remove X && git worktree add X` is one tool call, so one scan:
+/// the path is never observed absent and the listing looks unchanged. Only the
+/// worktree's own identity distinguishes the rebuild.
+#[tokio::test]
+async fn reoffers_a_worktree_rebuilt_in_place_without_ever_being_seen_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = std::fs::canonicalize(dir.path())
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    write_git_link(dir.path(), 1_000);
+
+    let h = Harness::new();
+    h.set_worktrees(vec![entry(&path, Some("refs/heads/feat/a"))]);
+    h.registry.seed_baseline(CHAT, PROJECT_PATH).await;
+    h.deps.clear_events();
+
+    // Untouched: same worktree, no offer.
+    h.rescan().await;
+    assert_eq!(h.deps.events(), no_events());
+
+    // Rebuilt in place — same path, same branch, new worktree.
+    write_git_link(dir.path(), 2_000);
+    h.set_clock(T2);
+    h.rescan().await;
+
+    assert_eq!(
+        h.deps.events(),
+        vec![raised(offer(&path, Some("feat/a"), T2))]
     );
 }
 

@@ -50,9 +50,12 @@ export function handleDaemonEvent(
       return { kind: 'noop' };
     }
 
+    // A spawned CLI is not a turn in flight. Restarts that carry no turn — a
+    // worktree switch, a config change — would otherwise strand the thread on
+    // "running" forever, since no result event is ever coming. Real runs arrive
+    // as `chat.updated` with isRunning, plus the optimistic dispatch on send.
     case 'process.started':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'run.started' } };
+      return { kind: 'noop' };
 
     case 'permission.requested':
       if (event.chatId !== chatId) return { kind: 'noop' };
