@@ -2331,8 +2331,11 @@ mod tests;
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
 // notes: spawned. New defaulted ChatManagerDeps methods (chat_deps.rs must override):
-// notes: tracker_list_live, is_transcript_present, chats_clear_session/worktree,
-// notes: adapter_snapshot_models; generate_title gained an adapter_id arg (adapter-aware).
-// notes: Ported: chat-manager-background-activity (5, via direct enrich_chat) +
-// notes: chat-manager-degraded (3).
+// notes: is_transcript_present, chats_clear_session/worktree, adapter_snapshot_models;
+// notes: tracker_list_live is required, not defaulted (#273 — a silent default caused
+// notes: backgroundActivity to stay empty in production); generate_title gained an
+// notes: adapter_id arg (adapter-aware).
+// notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
+// notes: production wiring is covered by mainframe-server's chat_background_activity
+// notes: integration test (#273). Also chat-manager-degraded (3).
 // todos: 2
