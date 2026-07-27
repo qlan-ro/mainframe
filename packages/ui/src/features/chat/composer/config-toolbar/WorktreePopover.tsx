@@ -95,7 +95,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
   // Fetch on popover open (not mount). An isolated chat only lists worktrees to
   // move between, so it skips the branch fetch the New form would need.
   useEffect(() => {
-    if (!open || busy) return;
+    if (!open) return;
     let cancelled = false;
 
     setLoading(true);
@@ -124,7 +124,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
     return () => {
       cancelled = true;
     };
-  }, [open, busy, chat.worktreePath, chat.projectId, port]);
+  }, [open, chat.worktreePath, chat.projectId, port]);
 
   const handleEnable = useCallback(
     async (baseBranch: string, branchName: string) => {
@@ -223,15 +223,9 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
       >
         {isLocalDraft && draft != null && showIsolated ? (
           <WorktreeDraftPanel draft={draft} onCancel={handleDraftCancel} />
-        ) : busy ? (
-          <>
-            {isIsolated && <ActiveInfo chat={chat} />}
-            <div className={isIsolated ? 'mt-[6px]' : undefined}>
-              <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>
-            </div>
-          </>
         ) : isIsolated ? (
           <>
+            {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
             <ActiveInfo chat={chat} />
             <div className="mt-[6px]">
               <MenuLabel>Move to another worktree</MenuLabel>
@@ -242,7 +236,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
               ) : (
                 <WorktreeExistingTab
                   worktrees={otherWorktrees}
-                  submitting={submitting}
+                  disabled={submitting || busy}
                   onAttach={handleAttach}
                   error={apiError}
                 />
@@ -255,10 +249,14 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
           </div>
         ) : (
           <>
-            {hasMessages && (
-              <WorktreeNotice testId="composer-worktree-mid-session-warning">
-                Session will pause and resume in the worktree.
-              </WorktreeNotice>
+            {busy ? (
+              <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>
+            ) : (
+              hasMessages && (
+                <WorktreeNotice testId="composer-worktree-mid-session-warning">
+                  Session will pause and resume in the worktree.
+                </WorktreeNotice>
+              )
             )}
             <MenuLabel>Isolate session</MenuLabel>
             <WorktreeTabBar active={tab} onChange={setTab} />
@@ -268,6 +266,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
                   branches={branches}
                   currentBranch={currentBranch}
                   submitting={submitting}
+                  disabled={busy}
                   apiError={apiError}
                   onEnable={handleEnable}
                   onCancel={() => setOpen(false)}
@@ -275,7 +274,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
               ) : (
                 <WorktreeExistingTab
                   worktrees={worktrees}
-                  submitting={submitting}
+                  disabled={submitting || busy}
                   onAttach={handleAttach}
                   error={apiError}
                 />

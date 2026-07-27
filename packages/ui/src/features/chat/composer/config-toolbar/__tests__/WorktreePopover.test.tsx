@@ -314,7 +314,7 @@ describe('WorktreePopover — mid-session warning', () => {
 // ---------------------------------------------------------------------------
 
 describe('WorktreePopover — a turn in flight', () => {
-  it('withholds the setup form and says when it will be available', async () => {
+  it('shows the setup form disabled, and says when it will be available', async () => {
     renderPopover(makeChat(), /* hasMessages= */ true, /* busy= */ true);
 
     openPopover();
@@ -322,12 +322,27 @@ describe('WorktreePopover — a turn in flight', () => {
     expect((await screen.findByTestId('composer-worktree-busy')).textContent).toBe(
       'Available once the current response finishes — rebinding now would cut it off.',
     );
-    expect(screen.queryByTestId('composer-worktree-branch-name')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('composer-worktree-enable')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('composer-worktree-tab-existing')).not.toBeInTheDocument();
+    expect(screen.getByTestId('composer-worktree-branch-name')).toBeDisabled();
+    expect(screen.getByTestId('composer-worktree-base-branch')).toBeDisabled();
+    expect(screen.getByTestId('composer-worktree-enable')).toBeDisabled();
   });
 
-  it('keeps showing where an isolated session lives, without a move-to row', async () => {
+  it('lists the existing worktrees, disabled', async () => {
+    renderPopover(makeChat(), /* hasMessages= */ false, /* busy= */ true);
+
+    openPopover();
+    await screen.findByTestId('composer-worktree-busy');
+
+    fireEvent.click(screen.getByTestId('composer-worktree-tab-existing'));
+
+    const row = await screen.findByTestId('composer-worktree-attach-/wt/feat-a');
+    expect(row).toBeDisabled();
+
+    fireEvent.click(row);
+    expect(attachWorktreeMock).not.toHaveBeenCalled();
+  });
+
+  it('lists the move-to worktrees of an isolated session, disabled', async () => {
     const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
     renderPopover(chat, /* hasMessages= */ true, /* busy= */ true);
 
@@ -335,17 +350,7 @@ describe('WorktreePopover — a turn in flight', () => {
 
     expect(await screen.findByTestId('composer-worktree-active-info')).toBeInTheDocument();
     expect(screen.getByTestId('composer-worktree-busy')).toBeInTheDocument();
-    expect(screen.queryByTestId('composer-worktree-attach-/wt/feat-a')).not.toBeInTheDocument();
-  });
-
-  it('does not fetch branches or worktrees while blocked', async () => {
-    renderPopover(makeChat(), /* hasMessages= */ false, /* busy= */ true);
-
-    openPopover();
-
-    await screen.findByTestId('composer-worktree-busy');
-    expect(getGitBranchesMock).not.toHaveBeenCalled();
-    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('composer-worktree-attach-/wt/feat-a')).toBeDisabled();
   });
 
   it('restores the setup form once the response finishes', async () => {
