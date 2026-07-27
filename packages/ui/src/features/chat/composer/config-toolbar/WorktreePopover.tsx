@@ -225,10 +225,10 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
           <WorktreeDraftPanel draft={draft} onCancel={handleDraftCancel} />
         ) : isIsolated ? (
           <>
-            {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
             <ActiveInfo chat={chat} />
             <div className="mt-[6px]">
               <MenuLabel>Move to another worktree</MenuLabel>
+              {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
               {loading ? (
                 <div className="flex items-center justify-center py-[20px]">
                   <Loader2 size={14} className="animate-spin text-mf-text-3" />
