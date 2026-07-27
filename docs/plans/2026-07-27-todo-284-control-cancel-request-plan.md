@@ -29,9 +29,30 @@ the previously silent dispatcher fall-through log the unhandled type at debug.
 - The WS/REST contract is co-owned by the mobile submodule — changes must be
   **additive**. This plan adds no new client-bound message shape (see D1), so no
   Zod/schema surface changes.
-- `crates/mainframe-chat/src/event_handler.rs` is already 1956 lines. Do not grow
-  its test module; new tests go in `src/event_handler/<name>_tests.rs`, following
-  the existing `worktree_trigger_tests.rs` precedent.
+- **Line limits and the legacy-file exception.** Four files this plan edits are
+  already over the 300-line rule: `event_handler.rs` (1956), `events.rs` (1359),
+  `event_mapper.rs` (428), `permission_handler.rs` (349). This change does not
+  refactor them — that is separate work — so the rule applies as "no file crosses
+  300 lines *because of this change*, and every file already over it grows only by
+  dispatch or delegation." Budgets, enforced at review:
+
+  | File | Now | Added | Kind of addition |
+  |---|---|---|---|
+  | `mainframe-adapter-claude/src/events.rs` | 1359 | ≤ 25 impl + ≤ 40 test | one handler fn (≤15 lines) + one match arm + one log arm |
+  | `mainframe-chat/src/event_handler.rs` | 1956 | ≤ 45 | one sink method (≤ 30 lines) + one private promote helper (≤ 20) |
+  | `mainframe-chat/src/permission_handler.rs` | 349 | ≤ 12 | one early-return guard |
+  | `mainframe-adapter-codex/src/event_mapper.rs` | 428 | ≤ 4 | one delegating method |
+  | `mainframe-adapter-api/src/adapter.rs` | 260 | ≤ 8 | one defaulted trait method (stays < 300) |
+  | `mainframe-adapter-mock/src/dispatch.rs` | 77 | ≤ 2 | one match arm |
+  | `mainframe-chat/src/permission_manager.rs` | 153 | ≤ 60 | `CancelOutcome`, `cancel`, `was_cancelled`, `forget` (stays < 300) |
+
+  Every **new** file (all four test files) must land under 300 lines; split by
+  scenario if one grows past it. Every new or edited function stays ≤ 50 lines.
+- New tests never grow the oversized files' inline test modules: they go in
+  `src/<module>/<name>_tests.rs` submodules, following the existing
+  `event_handler/worktree_trigger_tests.rs` precedent. The one exception is
+  `events.rs`, whose adapter-level cancel tests belong beside the dispatcher's
+  existing `RecordingSink` harness (budgeted above).
 
 ## Verified facts this plan is built on
 
@@ -62,21 +83,49 @@ carrying a single `request_id`; interrupts reach the daemon through the separate
 **D3 — Keep the `VecDeque`; remove by positional scan.** Queues hold a handful of
 entries and their order is load-bearing.
 
-**D4 — Remember cancelled request ids per chat (bounded, 32) and drop any
+**D4 — Remember cancelled request ids per chat (bounded ring, 32) and drop any
 permission answer that names one.** The brief's acceptance criterion "no
 permission response is sent to the CLI for a cancelled request" is not met by UI
 removal alone: a click already in flight when the cancel lands would otherwise be
 forwarded — and when the cancel emptied the queue, `respond_to_permission`'s
 stale-response guard does not even fire (it is gated on `has_pending`), so the
-answer would take the no-session branch, `clear()` the chat's permission state and
-respawn the CLI. A small per-chat ring of cancelled ids closes that race. It is
-cleared with the rest of the chat's permission state.
+answer reaches `handle_normal_permission` and goes out to the CLI (or, with no
+spawned session, `clear()`s the chat's permission state and respawns).
+
+Two lifetime rules make the tombstones trustworthy:
+
+- **`clear()` does not erase them.** Interrupt (`lifecycle_manager.rs:507-510`)
+  and the no-session path (`permission_handler.rs:201-204`) both `clear()` the
+  queue; an interrupt must not un-cancel a withdrawn request. Tombstones die with
+  the chat instead, via a new `forget(chat_id)` called from the chat-delete site
+  (`lifecycle_manager.rs:643-647`), so nothing leaks past the chat's lifetime.
+- **The ring caps memory at 32 ids per chat.** Eviction can only lose a tombstone
+  after 32 further cancels on the same chat, which is orders of magnitude beyond
+  the milliseconds-wide window a racing click occupies.
+
+*Reviewer alternative, rejected:* make `respond_to_permission` proceed only when
+the answer matches the current front, dropping tombstones entirely. That is
+stricter but regresses a live recovery path: when the CLI has died and the queue
+is empty, the client's answer legitimately has no front to match, and
+`handle_no_session_permission` respawns the chat with it. The existing guard is
+gated on `has_pending` for exactly that reason. A front-match invariant would
+silently swallow those answers.
 
 **D5 — Daemon-restart resurrection stays out of scope.** The pending queue has
 never been persisted; after a daemon restart a *cold* message-cache load can
 re-synthesize a prompt from an unanswered `tool_use` — pre-existing behavior,
 identical for cancelled and never-answered calls, and orthogonal to this fix. The
 brief's criterion covers client resubscribe/reload, which reads the live queue.
+
+**D6 — Log lines are verified by review and by the consumed-surface row, not by
+a unit test.** The brief asks that the `_ => {}` fall-through log at debug. The
+workspace has no tracing-capture harness (`tracing-subscriber` is a dependency of
+`mainframe-runtime` only; there is no `tracing-test`), so asserting log output
+means adding a dev-dependency — a dependency decision outside this lane. What the
+tests *do* pin is behavior: the unknown-type arm still touches no sink callback
+(T3.3), and a cancel frame with a missing or empty `request_id` forwards nothing
+(T3.2). The logging itself is covered by the `CLAUDE-EVT-06` row update in T12,
+which is what a future changelog watcher actually reads.
 
 ## Task groups
 
@@ -117,10 +166,12 @@ order). Build `ControlRequest` values with a local helper.
    `Unknown`; the placeholder survives.
 6. `a_cancel_only_touches_the_named_chat` — same `request_id` enqueued on chat
    `a` and chat `b`; cancel on `a` → `b`'s queue is untouched.
-7. `a_cancelled_id_is_remembered_and_cleared_with_the_chat` — after a successful
-   cancel `was_cancelled(chat, id)` is true, `was_cancelled(other_chat, id)` is
-   false, and `clear(chat)` makes it false again.
-8. `cancelled_ids_are_bounded` — cancel 40 distinct ids on one chat; the oldest is
+7. `a_cancelled_id_is_remembered_per_chat` — after a successful cancel
+   `was_cancelled(chat, id)` is true and `was_cancelled(other_chat, id)` is false.
+8. `clearing_a_chat_does_not_un_cancel_a_request` — cancel `r1`, then
+   `clear(chat)` (what interrupt and the no-session path do); `was_cancelled`
+   stays true. Then `forget(chat)` makes it false, so nothing outlives the chat.
+9. `cancelled_ids_are_bounded` — cancel 40 distinct ids on one chat; the oldest is
    forgotten, the newest is remembered (cap 32).
 
 **Verify:** `cd packages/core-rs && cargo test -p mainframe-chat cancel_tests`
@@ -154,7 +205,15 @@ order). Build `ControlRequest` values with a local helper.
   under 50 lines — factor the ring-buffer push into a small private helper.
 - Add `pub fn was_cancelled(&self, chat_id: &str, request_id: &str) -> bool`
   (false for an empty id).
-- Extend `clear` to also `self.cancelled_requests.remove(chat_id)`.
+- Add `pub fn forget(&mut self, chat_id: &str)` — `clear(chat_id)` plus
+  `cancelled_requests.remove(chat_id)`. Leave `clear` itself untouched: an
+  interrupt must not un-cancel a withdrawn request (D4). Give `forget` a one-line
+  doc comment saying it is for chat teardown only.
+- Call it from the chat-delete path in
+  `packages/core-rs/crates/mainframe-chat/src/lifecycle_manager.rs:643-647`,
+  swapping that `clear(chat_id)` for `forget(chat_id)`. This is the only site
+  where the chat is gone for good; the interrupt site at `:507-510` keeps
+  `clear`.
 - Update the `// PORT STATUS` note: this is Rust-side behavior with no TS
   original — say so in one line.
 
@@ -173,8 +232,9 @@ order). Build `ControlRequest` values with a local helper.
    `{"type":"control_cancel_request"}` → `cancelled` empty (no empty-string
    forward).
 3. `an_unknown_event_type_touches_no_sink_callback` — feed
-   `{"type":"stream_event"}` → every recorder counter stays at zero (pins the
-   `_ => {}` arm as *drop*, now that it also logs).
+   `{"type":"stream_event"}` → every recorder counter stays at zero. This pins the
+   fall-through arm as a *drop*; the debug line it now writes is not asserted
+   (D6).
 
 **Verify:** `cargo test -p mainframe-adapter-claude cancel`.
 
@@ -200,12 +260,36 @@ order). Build `ControlRequest` values with a local helper.
   - replace the trailing `_ => {}` with a `tracing::debug!(session_id = %session.id, r#type = ?ty, "claude: unhandled event type")` arm.
   - update the `// PORT STATUS` notes block at the end of the file: the cancel arm
     is Rust-only (no TS original) and the fall-through now logs.
+- `packages/core-rs/crates/mainframe-adapter-claude/src/lib.rs:8` — the crate doc
+  comment claims unknown event types are "logged once per type." That was already
+  untrue (the arm was silent) and stays untrue after this change (it logs on every
+  occurrence). Reword to "logged at debug on every occurrence and skipped — never
+  a hard error." `docs/adapters/claude/CONSUMED-SURFACE.md` quotes this sentence
+  verbatim, so T12 must land the same wording.
 
 **Verify:** `cargo test -p mainframe-adapter-claude cancel` green; `cargo check`.
 
-### T5 (impl) — keep the delegating sinks honest
+### T5 (test + impl) — keep the delegating sinks honest
 
-**Files:**
+Because the trait method defaults to a no-op, a wrapper that forgets to forward
+still compiles: `cargo check` proves nothing here, so each delegation gets a test.
+
+**Test files** (neither file has a test module today — create
+`#[cfg(test)] mod tests` in each; both stay well under 300 lines):
+- `packages/core-rs/crates/mainframe-adapter-codex/src/event_mapper.rs` (428
+  lines; if the new module would push it past ~460, put it in
+  `event_mapper/parent_id_sink_tests.rs` instead) —
+  `parent_id_sink_forwards_a_permission_cancellation`: wrap a recording sink in
+  `ParentIdSink::new`, call `on_permission_cancelled("req_1")` on the wrapper,
+  assert the inner sink recorded `"req_1"`.
+- `packages/core-rs/crates/mainframe-adapter-mock/src/dispatch.rs` (77 lines) —
+  `dispatches_a_recorded_on_permission_cancelled`: build a `RecordedEvent` with
+  `method: "onPermissionCancelled"` and `args: vec![json!("req_1")]`, pass it to
+  `dispatch`, assert the sink recorded `"req_1"`. Add a second case asserting a
+  genuinely unknown method still returns `Ok(())` without touching the sink, so
+  the new arm cannot be confused with the catch-all warn.
+
+**Impl files:**
 - `packages/core-rs/crates/mainframe-adapter-codex/src/event_mapper.rs` — add
   `fn on_permission_cancelled(&self, request_id: &str) { self.inner.on_permission_cancelled(request_id); }`
   to `impl SessionSink for ParentIdSink`. `ParentIdSink` forwards every callback;
@@ -216,7 +300,9 @@ order). Build `ControlRequest` values with a local helper.
   so a recorded fixture can replay a cancel instead of hitting the
   "unknown recorded sink method" warn.
 
-**Verify:** `cargo check` from `packages/core-rs`.
+**Verify:** `cargo test -p mainframe-adapter-codex parent_id_sink_forwards` and
+`cargo test -p mainframe-adapter-mock on_permission_cancelled`, then `cargo check`
+from `packages/core-rs`.
 
 ### T6 (test) — sink-level cancel behavior and emitted events
 
@@ -241,9 +327,10 @@ in the test so queue state can be asserted directly; build the sink through
 2. `cancelling_the_last_request_resolves_it_and_promotes_nothing` — one request;
    cancel it → `PermissionResolved` + `ChatUpdated`, no `PermissionRequested`;
    `has_pending` false.
-3. `cancelling_a_queued_request_emits_nothing_and_keeps_the_front` — cancel `r2`
-   of `[r1, r2]` → no events emitted (the client was never told about `r2`);
-   front is still `r1`; `shift` no longer yields `r2`.
+3. `cancelling_a_queued_request_resolves_it_without_disturbing_the_front` —
+   cancel `r2` of `[r1, r2]` → the only emitted event is
+   `PermissionResolved { request_id: "r2" }` (no `PermissionRequested`, no
+   `ChatUpdated`); front is still `r1`; `shift` no longer yields `r2`.
 4. `cancelling_an_unknown_request_emits_nothing_and_leaves_the_queue` — cancel
    `"ghost"` → no events; queue unchanged.
 5. `a_cancelled_request_is_remembered_for_the_answer_guard` — after cancelling
@@ -263,9 +350,12 @@ fn on_permission_cancelled(&self, request_id: &str)
 - Call `self.permissions.lock()…cancel(&self.chat_id, request_id)` and release
   the lock before emitting (the crate's rule 4: no I/O under a lock).
 - `CancelOutcome::Unknown` → `debug!(chat_id, request_id, "permission cancel for an unknown or already-resolved request")` and return. This is an ordinary race, not an error.
-- `CancelOutcome::Queued` → `debug!` that a not-yet-presented request was
-  withdrawn, and return: the client was never told about it, so there is nothing
-  to remove client-side.
+- `CancelOutcome::Queued` → emit `DaemonEvent::PermissionResolved { chat_id, request_id }` and return. `permission.resolved` is the canonical
+  "this request is gone" signal, and a client that learned about the request some
+  other way (a `pending-permission` fetch, a mobile client, a future snapshot
+  event) must not be left holding it. On a client that never had it, the reducer's
+  delete-by-id is a no-op. Do not emit `PermissionRequested` or `ChatUpdated`:
+  the front did not move.
 - `CancelOutcome::Front { next }` → emit `DaemonEvent::PermissionResolved { chat_id, request_id }`; when `next` is `Some`, emit
   `DaemonEvent::PermissionRequested { chat_id, request, notify }` and, when
   `notify`, the same `PushOut` the answer path sends
@@ -296,7 +386,12 @@ through `start_chat` and through `PermissionManager::clear`.
    `Ok(())`, `start_chat` never called, and `r2` is still pending.
 2. `an_answer_for_a_live_request_still_reaches_the_no_session_path` — same setup
    without a cancel → `start_chat` called once (proves the guard is not
-   swallowing normal answers).
+   swallowing normal answers). This is the recovery path D4 protects: a client
+   answering after the CLI died must still respawn the chat.
+3. `an_answer_arriving_after_the_queue_was_cleared_is_still_dropped` — cancel
+   `r1`, then `clear(chat)` (what an interrupt does), then answer `r1` →
+   `Ok(())`, `start_chat` never called. Pins the D4 rule that `clear` does not
+   erase tombstones.
 
 **Verify:** `cargo test -p mainframe-chat cancelled_guard_tests`.
 
@@ -376,8 +471,17 @@ cross-file `React.act` failure); then
   request and never answers it. In the "What Mainframe's Adapter Should Rely On"
   list, drop `control_cancel_request` from the still-unhandled item 7, leaving
   `SandboxNetworkAccess`, mid-run bypass demotion, and the denial budget.
-- `docs/adapters/claude/CONSUMED-SURFACE.md` — add a row after `CLAUDE-CTRL-02`:
-  `CLAUDE-CTRL-05 | Inbound control_cancel_request | Top-level request_id; removes exactly that pending permission, promotes the next queued prompt, never answers the CLI | src/events.rs::handle_control_cancel_request_event, mainframe-chat/src/permission_manager.rs::cancel, mainframe-chat/src/event_handler.rs::on_permission_cancelled | src/events.rs::control_cancel_request_forwards_the_request_id_to_the_sink, mainframe-chat/src/permission_manager/cancel_tests.rs | — | A withdrawn prompt sticks in the UI forever (regression of #284)`.
+- `docs/adapters/claude/CONSUMED-SURFACE.md` — three edits, all required together
+  or the inventory contradicts the code it indexes:
+  1. Add a row after `CLAUDE-CTRL-02`:
+     `CLAUDE-CTRL-05 | Inbound control_cancel_request | Top-level request_id; removes exactly that pending permission, promotes the next queued prompt, never answers the CLI | src/events.rs::handle_control_cancel_request_event, mainframe-chat/src/permission_manager.rs::cancel, mainframe-chat/src/event_handler.rs::on_permission_cancelled | src/events.rs::control_cancel_request_forwards_the_request_id_to_the_sink, mainframe-chat/src/permission_manager/cancel_tests.rs, mainframe-chat/src/event_handler/permission_cancel_tests.rs | — | A withdrawn prompt sticks in the UI forever (regression of #284)`.
+  2. Header (`:4-6`): the quoted claim "unknown inbound event types are logged
+     **once per type** and skipped" must match the reworded `lib.rs:8` doc comment
+     from T4 — "logged at debug on every occurrence and skipped."
+  3. `CLAUDE-EVT-06` (`:24`): the consumer cell says `falls to _ => {}` and the
+     symptom cell says "silently-dropped." Rewrite both — the arm now logs at
+     debug per occurrence, so the symptom is a flooded debug log, not a silent
+     drop.
 - Leave `PROTOCOL_REVERSED.md`, `.claude/skills/claude-protocol-debugger/cli-binary-internals.md`,
   and `docs/research/2026-07-25-todo-241-…md` untouched: the first two describe CLI
   behavior, the third is a dated finding record.
@@ -403,5 +507,11 @@ prompt takes its place.
 - Every acceptance criterion in the brief maps to a named test above: front
   cancel (T6.1), non-front cancel (T1.2/T6.3), unknown id (T1.4/T6.4), per-chat
   scoping (T1.6/T11.2), no answer forwarded (T8.1), client non-front removal
-  (T10.1), fall-through logging (T4, pinned by T3.3).
-- Changeset present; no file over 300 lines, no function over 50.
+  (T10.1), delegation intact (T5). The one criterion with no automated
+  assertion is the fall-through debug log: implemented in T4, documented in T12,
+  verified by review (D6).
+- Changeset present. Every **new** file is under 300 lines and every new or
+  changed function under 50. The four pre-existing over-limit files
+  (`event_handler.rs`, `events.rs`, `event_mapper.rs`, `permission_handler.rs`)
+  stay within the per-file budgets in Constraints; reducing them is separate work
+  and is not attempted here.
