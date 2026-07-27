@@ -6,6 +6,10 @@ use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 
+/// Per-chat cap on remembered cancelled request ids (D4): far more than a racing
+/// in-flight answer could ever need to outlive.
+const CANCELLED_MEMORY: usize = 32;
+
 /// Per-chat FIFO of pending permission requests + the interrupted flag.
 ///
 /// CONCURRENCY.tsv (`permission-manager.ts`): `pendingPermissions` and
@@ -13,11 +17,6 @@ use mainframe_types::content::LeafContent;
 /// VecDeque<ControlRequest>` (front is active) and `ChatState.interrupted: bool`.
 /// The multi-`control_request`-per-turn FIFO is load-bearing (a chat can hold
 /// several queued permission prompts; the front is answered first).
-
-/// Per-chat cap on remembered cancelled request ids (D4): far more than a racing
-/// in-flight answer could ever need to outlive.
-const CANCELLED_MEMORY: usize = 32;
-
 #[derive(Default)]
 pub struct PermissionManager {
     pending_permissions: HashMap<String, VecDeque<ControlRequest>>,

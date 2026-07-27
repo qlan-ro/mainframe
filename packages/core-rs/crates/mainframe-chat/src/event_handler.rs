@@ -20,7 +20,7 @@ use tracing::{debug, warn};
 
 use crate::display_emitter::emit_display_delta;
 use crate::message_cache::MessageCache;
-use crate::permission_manager::PermissionManager;
+use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
@@ -310,6 +310,35 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let r = f(&mut v);
         msgs.set(&self.chat_id, v);
         Some(r)
+    }
+
+    /// Emits `PermissionRequested` (plus its push, when notify-worthy) for the
+    /// request now at the front of the queue, then a `ChatUpdated` — mirroring
+    /// what `on_permission` emits for a freshly enqueued front request.
+    fn promote_next(&self, next: Option<ControlRequest>) {
+        if let Some(next) = next {
+            let notify = self.deps.should_notify_permission(Some(&next.tool_name));
+            self.deps.emit_event(DaemonEvent::PermissionRequested {
+                chat_id: self.chat_id.clone(),
+                request: next.clone(),
+                notify,
+            });
+            if notify {
+                let tool = &next.tool_name;
+                self.deps.send_push(PushOut {
+                    chat_id: self.chat_id.clone(),
+                    title: "Permission Required".to_string(),
+                    body: format!("Agent wants to run: {tool}"),
+                    push_type: "permission".to_string(),
+                    priority: "high".to_string(),
+                });
+            }
+        }
+        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+            let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+            self.deps
+                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        }
     }
 }
 
@@ -604,6 +633,35 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     priority: "high".to_string(),
                 });
             }
+        }
+    }
+
+    fn on_permission_cancelled(&self, request_id: &str) {
+        let outcome = self
+            .permissions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .cancel(&self.chat_id, request_id);
+
+        let was_front = matches!(outcome, CancelOutcome::Front { .. });
+        let next = match outcome {
+            CancelOutcome::Unknown => {
+                debug!(
+                    chat_id = self.chat_id,
+                    request_id, "permission cancel for an unknown or already-resolved request"
+                );
+                return;
+            }
+            CancelOutcome::Queued => None,
+            CancelOutcome::Front { next } => next,
+        };
+
+        self.deps.emit_event(DaemonEvent::PermissionResolved {
+            chat_id: self.chat_id.clone(),
+            request_id: request_id.to_string(),
+        });
+        if was_front {
+            self.promote_next(next);
         }
     }
 
@@ -1181,6 +1239,9 @@ fn now_ms() -> i64 {
 
 #[cfg(test)]
 mod worktree_trigger_tests;
+
+#[cfg(test)]
+mod permission_cancel_tests;
 
 #[cfg(test)]
 mod tests {
