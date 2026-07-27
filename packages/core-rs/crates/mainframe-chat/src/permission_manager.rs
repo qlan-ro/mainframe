@@ -13,10 +13,27 @@ use mainframe_types::content::LeafContent;
 /// VecDeque<ControlRequest>` (front is active) and `ChatState.interrupted: bool`.
 /// The multi-`control_request`-per-turn FIFO is load-bearing (a chat can hold
 /// several queued permission prompts; the front is answered first).
+
+/// Per-chat cap on remembered cancelled request ids (D4): far more than a racing
+/// in-flight answer could ever need to outlive.
+const CANCELLED_MEMORY: usize = 32;
+
 #[derive(Default)]
 pub struct PermissionManager {
     pending_permissions: HashMap<String, VecDeque<ControlRequest>>,
     interrupted_chats: HashSet<String>,
+    cancelled_requests: HashMap<String, VecDeque<String>>,
+}
+
+/// Result of `PermissionManager::cancel`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CancelOutcome {
+    /// The active (front) request was removed; `next` is the promoted request.
+    Front { next: Option<ControlRequest> },
+    /// A request behind the front was removed; the front is unchanged.
+    Queued,
+    /// No request with that id is pending on this chat.
+    Unknown,
 }
 
 impl PermissionManager {
@@ -46,6 +63,62 @@ impl PermissionManager {
     pub fn clear(&mut self, chat_id: &str) {
         self.pending_permissions.remove(chat_id);
         self.interrupted_chats.remove(chat_id);
+    }
+
+    /// Remove a pending request by id (`control_cancel_request`). Never matches an
+    /// empty id, so a `restore_pending_permission` placeholder can't be cancelled.
+    pub fn cancel(&mut self, chat_id: &str, request_id: &str) -> CancelOutcome {
+        if request_id.is_empty() {
+            return CancelOutcome::Unknown;
+        }
+        let Some(queue) = self.pending_permissions.get_mut(chat_id) else {
+            return CancelOutcome::Unknown;
+        };
+        let Some(idx) = queue.iter().position(|r| r.request_id == request_id) else {
+            return CancelOutcome::Unknown;
+        };
+        queue.remove(idx);
+        if queue.is_empty() {
+            self.pending_permissions.remove(chat_id);
+        }
+        self.remember_cancelled(chat_id, request_id);
+
+        if idx == 0 {
+            CancelOutcome::Front {
+                next: self.get_pending(chat_id).cloned(),
+            }
+        } else {
+            CancelOutcome::Queued
+        }
+    }
+
+    fn remember_cancelled(&mut self, chat_id: &str, request_id: &str) {
+        let ring = self
+            .cancelled_requests
+            .entry(chat_id.to_string())
+            .or_default();
+        ring.push_back(request_id.to_string());
+        while ring.len() > CANCELLED_MEMORY {
+            ring.pop_front();
+        }
+    }
+
+    /// Whether `request_id` was cancelled on `chat_id` and is still remembered.
+    pub fn was_cancelled(&self, chat_id: &str, request_id: &str) -> bool {
+        if request_id.is_empty() {
+            return false;
+        }
+        self.cancelled_requests
+            .get(chat_id)
+            .is_some_and(|ring| ring.iter().any(|id| id == request_id))
+    }
+
+    /// Permanent per-chat teardown only (e.g. project removal): clears the pending
+    /// queue AND drops its cancelled-id tombstones. An interrupt or archive must
+    /// keep using `clear`, not this — see D4.
+    pub fn forget(&mut self, chat_id: &str) {
+        self.clear(chat_id);
+        self.cancelled_requests.remove(chat_id);
     }
 
     /// Enqueue a request; returns true when it becomes the active (front) request.
@@ -142,6 +215,9 @@ impl PermissionManager {
     }
 }
 
+#[cfg(test)]
+mod cancel_tests;
+
 // PORT STATUS: src/chat/permission-manager.ts (90 lines)
 // confidence: high
 // todos: 0
@@ -151,3 +227,6 @@ impl PermissionManager {
 // notes: chat branch returns None instead of building a throwaway array. TS block
 // notes: `type` checks map onto the untagged MessageContent (Leaf/Node) arms;
 // notes: ControlRequest gains `decision_reason: None` (field added in the Rust type).
+// notes: `cancel`/`was_cancelled`/`forget` (#284) are Rust-side additions with no TS
+// notes: original: `control_cancel_request` removal-by-id + a bounded (32) per-chat
+// notes: tombstone ring so a late in-flight answer for a withdrawn request is dropped.
