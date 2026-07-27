@@ -1054,7 +1054,7 @@ mod tests {
     }
 
     impl FakeDeps {
-        fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
+        pub(super) fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
             Self::build(chat, siblings, true, false)
         }
 
@@ -1066,7 +1066,12 @@ mod tests {
             Self::build(chat, Vec::new(), true, true)
         }
 
-        fn build(chat: Chat, siblings: Vec<Chat>, has_launches: bool, disabled: bool) -> Arc<Self> {
+        pub(super) fn build(
+            chat: Chat,
+            siblings: Vec<Chat>,
+            has_launches: bool,
+            disabled: bool,
+        ) -> Arc<Self> {
             Arc::new(Self {
                 chat,
                 siblings,
