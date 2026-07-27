@@ -255,10 +255,10 @@ pub trait ChatManagerDeps: Send + Sync {
     fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool;
     fn tracker_remove_chat(&self, chat_id: &str);
     /// `tracker.listLive(chatId)` — live (running) background tasks, for enrichChat's
-    /// backgroundActivity + widened working state. Default empty.
-    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
-        Vec::new()
-    }
+    /// backgroundActivity + widened working state. Required, not defaulted: an
+    /// implementation that silently inherited an empty default blanked
+    /// backgroundActivity for every chat (#273).
+    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask>;
     /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
     /// Required (not a no-op default): `continue-here` relies on it persisting.
     fn chats_clear_session(&self, chat_id: &str);

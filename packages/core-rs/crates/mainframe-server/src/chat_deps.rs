@@ -58,6 +58,7 @@ use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{
     AdapterModel, DetectedPr, DetectedPrSource, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
+use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, MessageContentNode, Project,
     ResolvedTuning, TodoItem,
@@ -664,6 +665,10 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn tracker_remove_chat(&self, chat_id: &str) {
         self.background_tasks.remove_chat(chat_id);
+    }
+
+    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask> {
+        self.background_tasks.list_live(chat_id)
     }
 }
 

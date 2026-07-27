@@ -5,6 +5,7 @@ use super::*;
 use crate::test_support::test_chat;
 use mainframe_adapter_api::{ContextFiles, ImageInput, SessionSink, StopBackgroundTaskResult};
 use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
+use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
@@ -278,6 +279,10 @@ impl ChatManagerDeps for StoreDeps {
         false
     }
     fn tracker_remove_chat(&self, _chat_id: &str) {}
+    /// Empty on purpose: mainframe-server's chat_background_activity test covers the wiring (#273).
+    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
+        Vec::new()
+    }
     fn is_transcript_present<'a>(
         &'a self,
         _adapter_id: &'a str,
