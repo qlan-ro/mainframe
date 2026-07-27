@@ -11,7 +11,7 @@ use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -751,23 +751,37 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub async fn do_generate_title(&self, chat_id: &str, content: &str) {
+        // The title task is spawned, so it can outlive the chat it was
+        // spawned for (#287): a bare unlogged return here was indistinguishable
+        // from every other silent title-generation outcome.
         let Some(cell) = self.get_active(chat_id) else {
+            debug!(
+                chat_id,
+                reason = "chat_not_active",
+                "title generation skipped"
+            );
             return;
         };
-        if self
-            .deps
-            .settings_get("general", "titleGeneration.disabled")
-            .as_deref()
-            == Some("true")
-        {
-            return;
-        }
         let adapter_id = cell
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .chat
             .adapter_id
             .clone();
+        if self
+            .deps
+            .settings_get("general", "titleGeneration.disabled")
+            .as_deref()
+            == Some("true")
+        {
+            debug!(
+                chat_id,
+                adapter_id = %adapter_id,
+                reason = "disabled_by_setting",
+                "title generation skipped"
+            );
+            return;
+        }
         let binary = self
             .deps
             .settings_get("provider", &format!("{adapter_id}.titleBinary"))
@@ -793,6 +807,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             );
             self.deps
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        } else {
+            debug!(
+                chat_id,
+                adapter_id = %adapter_id,
+                reason = "no_title",
+                "title generation produced no title"
+            );
         }
     }
 
