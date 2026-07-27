@@ -29,9 +29,10 @@ the previously silent dispatcher fall-through log the unhandled type at debug.
 - The WS/REST contract is co-owned by the mobile submodule — changes must be
   **additive**. This plan adds no new client-bound message shape (see D1), so no
   Zod/schema surface changes.
-- **Line limits and the legacy-file exception.** Four files this plan edits are
-  already over the 300-line rule: `event_handler.rs` (1956), `events.rs` (1359),
-  `event_mapper.rs` (428), `permission_handler.rs` (349). This change does not
+- **Line limits and the legacy-file exception.** Five files this plan edits are
+  already over the 300-line rule: `chat_manager.rs` (2338), `event_handler.rs`
+  (1956), `events.rs` (1359), `event_mapper.rs` (428), `permission_handler.rs`
+  (349). This change does not
   refactor them — that is separate work — so the rule applies as "no file crosses
   300 lines *because of this change*, and every file already over it grows only by
   dispatch or delegation." Budgets, enforced at review:
@@ -41,12 +42,17 @@ the previously silent dispatcher fall-through log the unhandled type at debug.
   | `mainframe-adapter-claude/src/events.rs` | 1359 | ≤ 25 impl + ≤ 40 test | one handler fn (≤15 lines) + one match arm + one log arm |
   | `mainframe-chat/src/event_handler.rs` | 1956 | ≤ 45 | one sink method (≤ 30 lines) + one private promote helper (≤ 20) |
   | `mainframe-chat/src/permission_handler.rs` | 349 | ≤ 12 | one early-return guard |
-  | `mainframe-adapter-codex/src/event_mapper.rs` | 428 | ≤ 4 | one delegating method |
+  | `mainframe-adapter-codex/src/event_mapper.rs` | 428 | ≤ 6 | one delegating method + a `mod` declaration; its tests live in a submodule |
   | `mainframe-adapter-api/src/adapter.rs` | 260 | ≤ 8 | one defaulted trait method (stays < 300) |
-  | `mainframe-adapter-mock/src/dispatch.rs` | 77 | ≤ 2 | one match arm |
+  | `mainframe-adapter-mock/src/dispatch.rs` | 77 | ≤ 2 impl + ≤ 45 test | one match arm + an inline test module (stays < 300) |
   | `mainframe-chat/src/permission_manager.rs` | 153 | ≤ 60 | `CancelOutcome`, `cancel`, `was_cancelled`, `forget` (stays < 300) |
+  | `mainframe-chat/src/chat_manager.rs` | 2338 | 0 net | one call swapped, `clear` → `forget` |
 
-  Every **new** file (all four test files) must land under 300 lines; split by
+  Every **new** file (the five test files: `permission_manager/cancel_tests.rs`,
+  `event_handler/permission_cancel_tests.rs`,
+  `permission_handler/cancelled_guard_tests.rs`,
+  `event_mapper/parent_id_sink_tests.rs`, and the UI
+  `chat-thread-state-permissions.test.ts`) must land under 300 lines; split by
   scenario if one grows past it. Every new or edited function stays ≤ 50 lines.
 - New tests never grow the oversized files' inline test modules: they go in
   `src/<module>/<name>_tests.rs` submodules, following the existing
@@ -94,11 +100,15 @@ spawned session, `clear()`s the chat's permission state and respawns).
 
 Two lifetime rules make the tombstones trustworthy:
 
-- **`clear()` does not erase them.** Interrupt (`lifecycle_manager.rs:507-510`)
-  and the no-session path (`permission_handler.rs:201-204`) both `clear()` the
-  queue; an interrupt must not un-cancel a withdrawn request. Tombstones die with
-  the chat instead, via a new `forget(chat_id)` called from the chat-delete site
-  (`lifecycle_manager.rs:643-647`), so nothing leaks past the chat's lifetime.
+- **`clear()` does not erase them.** Interrupt (`lifecycle_manager.rs:507-510`),
+  archive (`lifecycle_manager.rs:637-646`) and the no-session path
+  (`permission_handler.rs:201-204`) all `clear()` the queue; none of the three
+  means the request was answered, and an archived chat can be restored under the
+  same id (`chat_manager.rs:1324-1337`). Tombstones die only when the chat is
+  gone for good, via a new `forget(chat_id)` in the permanent-removal loop
+  (`chat_manager.rs::remove_project`, the `permissions…clear(&chat.id)` at
+  `:1769-1772`). That is the only permanent per-chat teardown in the daemon —
+  there is no per-chat hard delete — so nothing outlives its chat.
 - **The ring caps memory at 32 ids per chat.** Eviction can only lose a tombstone
   after 32 further cancels on the same chat, which is orders of magnitude beyond
   the milliseconds-wide window a racing click occupies.
@@ -169,8 +179,9 @@ order). Build `ControlRequest` values with a local helper.
 7. `a_cancelled_id_is_remembered_per_chat` — after a successful cancel
    `was_cancelled(chat, id)` is true and `was_cancelled(other_chat, id)` is false.
 8. `clearing_a_chat_does_not_un_cancel_a_request` — cancel `r1`, then
-   `clear(chat)` (what interrupt and the no-session path do); `was_cancelled`
-   stays true. Then `forget(chat)` makes it false, so nothing outlives the chat.
+   `clear(chat)` (what interrupt, archive and the no-session path do);
+   `was_cancelled` stays true. Then `forget(chat)` makes it false, so nothing
+   outlives the chat's permanent removal.
 9. `cancelled_ids_are_bounded` — cancel 40 distinct ids on one chat; the oldest is
    forgotten, the newest is remembered (cap 32).
 
@@ -206,14 +217,15 @@ order). Build `ControlRequest` values with a local helper.
 - Add `pub fn was_cancelled(&self, chat_id: &str, request_id: &str) -> bool`
   (false for an empty id).
 - Add `pub fn forget(&mut self, chat_id: &str)` — `clear(chat_id)` plus
-  `cancelled_requests.remove(chat_id)`. Leave `clear` itself untouched: an
-  interrupt must not un-cancel a withdrawn request (D4). Give `forget` a one-line
-  doc comment saying it is for chat teardown only.
-- Call it from the chat-delete path in
-  `packages/core-rs/crates/mainframe-chat/src/lifecycle_manager.rs:643-647`,
-  swapping that `clear(chat_id)` for `forget(chat_id)`. This is the only site
-  where the chat is gone for good; the interrupt site at `:507-510` keeps
-  `clear`.
+  `cancelled_requests.remove(chat_id)`. Leave `clear` itself untouched: neither
+  an interrupt nor an archive means the request was answered (D4). Give `forget`
+  a one-line doc comment saying it is for permanent chat teardown only.
+- Call it from the one permanent-removal site:
+  `packages/core-rs/crates/mainframe-chat/src/chat_manager.rs:1769-1772`
+  (`remove_project`'s per-chat loop), swapping that `clear(&chat.id)` for
+  `forget(&chat.id)`. The interrupt (`lifecycle_manager.rs:507-510`) and archive
+  (`lifecycle_manager.rs:642-645`) sites keep `clear` — an archived chat can come
+  back under the same id.
 - Update the `// PORT STATUS` note: this is Rust-side behavior with no TS
   original — say so in one line.
 
@@ -228,9 +240,11 @@ order). Build `ControlRequest` values with a local helper.
 1. `control_cancel_request_forwards_the_request_id_to_the_sink` — feed
    `{"type":"control_cancel_request","request_id":"req_7"}` →
    `sink.r().cancelled == ["req_7"]`, and `permissions` stays empty.
-2. `a_cancel_frame_without_a_request_id_forwards_nothing` — feed
-   `{"type":"control_cancel_request"}` → `cancelled` empty (no empty-string
-   forward).
+2. `a_cancel_frame_without_a_usable_request_id_forwards_nothing` — two cases in
+   one test: `{"type":"control_cancel_request"}` (field missing) and
+   `{"type":"control_cancel_request","request_id":""}` (empty string) → `cancelled`
+   stays empty for both. The empty case matters because an empty id would match
+   the restored placeholder if it ever reached `cancel`.
 3. `an_unknown_event_type_touches_no_sink_callback` — feed
    `{"type":"stream_event"}` → every recorder counter stays at zero. This pins the
    fall-through arm as a *drop*; the debug line it now writes is not asserted
@@ -274,15 +288,16 @@ order). Build `ControlRequest` values with a local helper.
 Because the trait method defaults to a no-op, a wrapper that forgets to forward
 still compiles: `cargo check` proves nothing here, so each delegation gets a test.
 
-**Test files** (neither file has a test module today — create
-`#[cfg(test)] mod tests` in each; both stay well under 300 lines):
-- `packages/core-rs/crates/mainframe-adapter-codex/src/event_mapper.rs` (428
-  lines; if the new module would push it past ~460, put it in
-  `event_mapper/parent_id_sink_tests.rs` instead) —
-  `parent_id_sink_forwards_a_permission_cancellation`: wrap a recording sink in
-  `ParentIdSink::new`, call `on_permission_cancelled("req_1")` on the wrapper,
-  assert the inner sink recorded `"req_1"`.
+**Test files** (neither crate has a test module for these files today):
+- create `packages/core-rs/crates/mainframe-adapter-codex/src/event_mapper/parent_id_sink_tests.rs`
+  and add `#[cfg(test)] mod parent_id_sink_tests;` to `event_mapper.rs` —
+  `event_mapper.rs` is already at 428 lines, so its tests go in the submodule, not
+  inline. Test `parent_id_sink_forwards_a_permission_cancellation`: wrap a
+  recording sink in `ParentIdSink::new`, call `on_permission_cancelled("req_1")`
+  on the wrapper, assert the inner sink recorded `"req_1"`.
 - `packages/core-rs/crates/mainframe-adapter-mock/src/dispatch.rs` (77 lines) —
+  add an inline `#[cfg(test)] mod tests` (budgeted at ≤45 lines, leaving the file
+  well under 300) —
   `dispatches_a_recorded_on_permission_cancelled`: build a `RecordedEvent` with
   `method: "onPermissionCancelled"` and `args: vec![json!("req_1")]`, pass it to
   `dispatch`, assert the sink recorded `"req_1"`. Add a second case asserting a
@@ -474,7 +489,7 @@ cross-file `React.act` failure); then
 - `docs/adapters/claude/CONSUMED-SURFACE.md` — three edits, all required together
   or the inventory contradicts the code it indexes:
   1. Add a row after `CLAUDE-CTRL-02`:
-     `CLAUDE-CTRL-05 | Inbound control_cancel_request | Top-level request_id; removes exactly that pending permission, promotes the next queued prompt, never answers the CLI | src/events.rs::handle_control_cancel_request_event, mainframe-chat/src/permission_manager.rs::cancel, mainframe-chat/src/event_handler.rs::on_permission_cancelled | src/events.rs::control_cancel_request_forwards_the_request_id_to_the_sink, mainframe-chat/src/permission_manager/cancel_tests.rs, mainframe-chat/src/event_handler/permission_cancel_tests.rs | — | A withdrawn prompt sticks in the UI forever (regression of #284)`.
+     `CLAUDE-CTRL-05 | Inbound control_cancel_request | Top-level request_id; removes exactly that pending permission and never answers the CLI; when the removed request was the active (front) one, the next queued prompt is promoted | src/events.rs::handle_control_cancel_request_event, mainframe-chat/src/permission_manager.rs::cancel, mainframe-chat/src/event_handler.rs::on_permission_cancelled | src/events.rs::control_cancel_request_forwards_the_request_id_to_the_sink, mainframe-chat/src/permission_manager/cancel_tests.rs, mainframe-chat/src/event_handler/permission_cancel_tests.rs | — | A withdrawn prompt sticks in the UI forever (regression of #284)`.
   2. Header (`:4-6`): the quoted claim "unknown inbound event types are logged
      **once per type** and skipped" must match the reworded `lib.rs:8` doc comment
      from T4 — "logged at debug on every occurrence and skipped."
@@ -511,7 +526,7 @@ prompt takes its place.
   assertion is the fall-through debug log: implemented in T4, documented in T12,
   verified by review (D6).
 - Changeset present. Every **new** file is under 300 lines and every new or
-  changed function under 50. The four pre-existing over-limit files
-  (`event_handler.rs`, `events.rs`, `event_mapper.rs`, `permission_handler.rs`)
-  stay within the per-file budgets in Constraints; reducing them is separate work
-  and is not attempted here.
+  changed function under 50. The five pre-existing over-limit files
+  (`chat_manager.rs`, `event_handler.rs`, `events.rs`, `event_mapper.rs`,
+  `permission_handler.rs`) stay within the per-file budgets in Constraints;
+  reducing them is separate work and is not attempted here.
