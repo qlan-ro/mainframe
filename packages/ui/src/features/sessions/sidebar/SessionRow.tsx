@@ -14,6 +14,10 @@
  * (worktree/branch, PR, tag pills, project, branch-safety warning) now lives
  * in a SessionMetaCard shown on hover, positioned from this row's rect
  * (useRowHoverCard).
+ *
+ * The title's minimum width and the meta cluster's yield behavior are defined
+ * together in session-row-layout.ts: a new meta glyph goes INSIDE the cluster,
+ * and only something that must stay clickable at 280px goes beside it.
  */
 import { memo, useRef, useState } from 'react';
 import {
@@ -34,6 +38,8 @@ import { pinChat } from '@/lib/api/chats';
 import { StatusDot } from './SessionRowStatus';
 import { RowHoverActions } from './SessionRowHoverActions';
 import { SessionRowMetaIcons } from './SessionRowMetaIcons';
+import { SessionRowPrOverflow } from './SessionRowPrOverflow';
+import { SESSION_ROW_TITLE_FLOOR } from './session-row-layout';
 import { SessionMetaCard } from './SessionMetaCard';
 import { useRowHoverCard } from './use-row-hover-card';
 import { SessionRowRename } from './SessionRowRename';
@@ -196,22 +202,22 @@ function SessionRowInner({
                 <span
                   data-testid="sessions-row-title"
                   className={[
-                    'min-w-0 flex-1 truncate text-body tracking-normal group-data-[active=true]:text-primary',
+                    SESSION_ROW_TITLE_FLOOR,
+                    'flex-1 truncate text-body tracking-normal group-data-[active=true]:text-primary',
                     isUnread ? 'font-bold text-foreground' : 'font-medium text-muted-foreground',
                   ].join(' ')}
                 >
                   {title}
                 </span>
               )}
-              <div className="@max-[260px]:hidden">
-                <SessionRowMetaIcons
-                  worktreePath={custom.worktreePath}
-                  worktreeMissing={custom.worktreeMissing}
-                  detectedPrs={custom.detectedPrs}
-                  tags={custom.tags}
-                  colorOf={colorOf}
-                />
-              </div>
+              <SessionRowMetaIcons
+                worktreePath={custom.worktreePath}
+                worktreeMissing={custom.worktreeMissing}
+                detectedPrs={custom.detectedPrs}
+                tags={custom.tags}
+                colorOf={colorOf}
+              />
+              <SessionRowPrOverflow detectedPrs={custom.detectedPrs} />
               <RelativeTime updatedAt={custom.updatedAt} />
               <RowHoverActions
                 pinned={custom.pinned}
