@@ -20,6 +20,9 @@ use crate::types::ActiveChat;
 pub enum ConfigError {
     #[error("{0}")]
     Message(String),
+    /// Rebinding stops and restarts the CLI, which would cut a turn off mid-answer.
+    #[error("Finish or stop the current response before switching worktrees")]
+    ChatBusy,
     #[error(transparent)]
     Adapter(#[from] AdapterError),
 }

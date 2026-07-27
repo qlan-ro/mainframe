@@ -1632,12 +1632,17 @@ impl ChatManager {
             .await
     }
 
+    /// Every worktree rebind below stops and restarts the CLI, so each refuses
+    /// while a turn is in flight rather than cutting the answer off.
     pub async fn enable_worktree(
         &self,
         chat_id: &str,
         base_branch: &str,
         branch_name: &str,
     ) -> Result<(), ConfigError> {
+        if self.is_chat_working(chat_id) {
+            return Err(ConfigError::ChatBusy);
+        }
         self.config
             .enable_worktree(chat_id, base_branch, branch_name)
             .await
@@ -1649,6 +1654,9 @@ impl ChatManager {
         worktree_path: &str,
         branch_name: Option<&str>,
     ) -> Result<(), ConfigError> {
+        if self.is_chat_working(chat_id) {
+            return Err(ConfigError::ChatBusy);
+        }
         self.config
             .attach_worktree(chat_id, worktree_path, branch_name)
             .await
@@ -1695,6 +1703,9 @@ impl ChatManager {
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {
+        if self.is_chat_working(chat_id) {
+            return Err(ConfigError::ChatBusy);
+        }
         self.config.disable_worktree(chat_id).await
     }
 

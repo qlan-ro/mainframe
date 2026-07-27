@@ -9,3 +9,5 @@ Worktree offers no longer go missing after a worktree is deleted and recreated a
 Switching worktrees mid-session no longer leaves the thread stuck on "Composing…" with a Stop button. The switch restarts the CLI, and the restart alone was being read as a turn in flight; since no turn was running, nothing ever arrived to clear it.
 
 Switching is now blocked while the agent is answering, rather than cutting the answer off. The offer stays on screen and says it becomes available once the response finishes.
+
+The composer's worktree control is blocked on the same terms. Isolating a session, moving it to another worktree, or dropping its worktree each restart the CLI, so all three now wait for the response to finish — the popover still opens and reports where the session lives, and the daemon refuses the request even if it arrives another way.

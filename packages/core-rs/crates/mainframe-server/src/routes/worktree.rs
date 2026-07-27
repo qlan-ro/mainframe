@@ -23,6 +23,7 @@ use mainframe_adapter_api::{AdapterSession, BoxFuture};
 use mainframe_background_tasks::kill::{
     KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
 };
+use mainframe_chat::config_manager::ConfigError;
 use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
 use crate::ctx::AppCtx;
@@ -81,6 +82,15 @@ fn validate_enable_fork(body: &Bytes) -> Result<(String, String), Response> {
     }
 }
 
+/// A rebind refused mid-turn is a conflict, not bad input — the same request
+/// succeeds once the response finishes.
+fn config_error_status(err: &ConfigError) -> StatusCode {
+    match err {
+        ConfigError::ChatBusy => StatusCode::CONFLICT,
+        _ => StatusCode::BAD_REQUEST,
+    }
+}
+
 async fn enable_worktree(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
@@ -98,7 +108,7 @@ async fn enable_worktree(
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "enable-worktree failed");
-            fail(StatusCode::BAD_REQUEST, err.to_string())
+            fail(config_error_status(&err), err.to_string())
         }
     }
 }
@@ -112,7 +122,7 @@ async fn disable_worktree(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "disable-worktree failed");
-            fail(StatusCode::BAD_REQUEST, err.to_string())
+            fail(config_error_status(&err), err.to_string())
         }
     }
 }
@@ -191,7 +201,7 @@ async fn attach_worktree(
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "attach-worktree failed");
-            fail(StatusCode::BAD_REQUEST, err.to_string())
+            fail(config_error_status(&err), err.to_string())
         }
     }
 }

@@ -80,10 +80,10 @@ function makeChat(overrides?: Partial<Chat>): Chat {
 // Render helper
 // ---------------------------------------------------------------------------
 
-function renderPopover(chat: Chat, hasMessages = false) {
+function renderPopover(chat: Chat, hasMessages = false, busy = false) {
   return render(
     <TooltipProvider>
-      <WorktreePopover chat={chat} hasMessages={hasMessages} />
+      <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} />
     </TooltipProvider>,
   );
 }
@@ -309,6 +309,63 @@ describe('WorktreePopover — mid-session warning', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 7b. A turn in flight — every rebind restarts the CLI, so the popover explains
+//     itself and withholds all of them (the daemon refuses these with 409 too).
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — a turn in flight', () => {
+  it('withholds the setup form and says when it will be available', async () => {
+    renderPopover(makeChat(), /* hasMessages= */ true, /* busy= */ true);
+
+    openPopover();
+
+    expect((await screen.findByTestId('composer-worktree-busy')).textContent).toBe(
+      'Available once the current response finishes — rebinding now would cut it off.',
+    );
+    expect(screen.queryByTestId('composer-worktree-branch-name')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-enable')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-tab-existing')).not.toBeInTheDocument();
+  });
+
+  it('keeps showing where an isolated session lives, without a move-to row', async () => {
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+    renderPopover(chat, /* hasMessages= */ true, /* busy= */ true);
+
+    openPopover();
+
+    expect(await screen.findByTestId('composer-worktree-active-info')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-worktree-busy')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-attach-/wt/feat-a')).not.toBeInTheDocument();
+  });
+
+  it('does not fetch branches or worktrees while blocked', async () => {
+    renderPopover(makeChat(), /* hasMessages= */ false, /* busy= */ true);
+
+    openPopover();
+
+    await screen.findByTestId('composer-worktree-busy');
+    expect(getGitBranchesMock).not.toHaveBeenCalled();
+    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
+  });
+
+  it('restores the setup form once the response finishes', async () => {
+    const { rerender } = renderPopover(makeChat(), /* hasMessages= */ false, /* busy= */ true);
+
+    openPopover();
+    await screen.findByTestId('composer-worktree-busy');
+
+    rerender(
+      <TooltipProvider>
+        <WorktreePopover chat={makeChat()} hasMessages={false} busy={false} />
+      </TooltipProvider>,
+    );
+
+    expect(await screen.findByTestId('composer-worktree-enable')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-worktree-busy')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 8. Cancel button closes the popover
 // ---------------------------------------------------------------------------
 
@@ -403,7 +460,11 @@ describe('WorktreePopover — isolated-state indicator', () => {
 
     rerender(
       <TooltipProvider>
-        <WorktreePopover chat={makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' })} hasMessages={false} />
+        <WorktreePopover
+          chat={makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' })}
+          hasMessages={false}
+          busy={false}
+        />
       </TooltipProvider>,
     );
 
@@ -419,7 +480,11 @@ describe('WorktreePopover — isolated-state indicator', () => {
 
     rerender(
       <TooltipProvider>
-        <WorktreePopover chat={makeChat({ worktreePath: '/wt/beta', branchName: 'beta' })} hasMessages={false} />
+        <WorktreePopover
+          chat={makeChat({ worktreePath: '/wt/beta', branchName: 'beta' })}
+          hasMessages={false}
+          busy={false}
+        />
       </TooltipProvider>,
     );
 
