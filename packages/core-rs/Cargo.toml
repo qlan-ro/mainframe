@@ -78,3 +78,11 @@ mainframe-server = { path = "crates/mainframe-server" }
 [workspace.lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
+
+# Full DWARF across 22 crates and every dep grew target/debug to 38 GB; line
+# tables keep backtraces readable for a fraction of the disk.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
