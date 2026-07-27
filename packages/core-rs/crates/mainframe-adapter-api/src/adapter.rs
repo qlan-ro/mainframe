@@ -71,6 +71,11 @@ pub trait SessionSink: Send + Sync {
     fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>);
     fn on_tool_result(&self, content: Vec<MessageContent>);
     fn on_permission(&self, request: ControlRequest);
+    /// The CLI withdrew a control request it already sent
+    /// (`control_cancel_request`). Implementations remove the named pending
+    /// permission and must never treat it as an answer. Default no-op: adapters
+    /// whose CLI has no cancel frame need not implement it.
+    fn on_permission_cancelled(&self, _request_id: &str) {}
     fn on_result(&self, data: SessionResult);
     fn on_exit(&self, code: Option<i32>);
     fn on_error(&self, error: AdapterError);
