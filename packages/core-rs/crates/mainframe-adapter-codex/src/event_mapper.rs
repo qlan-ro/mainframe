@@ -357,6 +357,9 @@ impl SessionSink for ParentIdSink {
     fn on_permission(&self, request: mainframe_adapter_api::ControlRequest) {
         self.inner.on_permission(request);
     }
+    fn on_permission_cancelled(&self, request_id: &str) {
+        self.inner.on_permission_cancelled(request_id);
+    }
     fn on_result(&self, data: SessionResult) {
         self.inner.on_result(data);
     }
@@ -403,6 +406,9 @@ impl SessionSink for ParentIdSink {
         self.inner.on_trust_required(project_path);
     }
 }
+
+#[cfg(test)]
+mod parent_id_sink_tests;
 
 // PORT STATUS: src/plugins/builtin/codex/event-mapper.ts (395 lines)
 // confidence: medium
