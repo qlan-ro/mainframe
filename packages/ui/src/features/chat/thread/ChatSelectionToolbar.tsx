@@ -41,7 +41,12 @@ export function ChatSelectionToolbar() {
 
   return (
     <SelectionToolbar.Root>
-      <SelectionToolbar.Action icon={QuoteIcon} label="Quote" data-testid="chat-selection-quote" onClick={handleQuote} />
+      <SelectionToolbar.Action
+        icon={QuoteIcon}
+        label="Quote"
+        data-testid="chat-selection-quote"
+        onClick={handleQuote}
+      />
       <SelectionToolbar.Action
         icon={MessageSquarePlusIcon}
         label="New session"

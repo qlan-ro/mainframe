@@ -17,12 +17,7 @@ import type { AutomationDefinition } from '@qlan-ro/mainframe-types';
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../../types/fixtures/automations');
 
 export type FixtureName =
-  | 'daily-health-log'
-  | 'daily-standup'
-  | 'pr-auto-review'
-  | 'morning-pr-sweep'
-  | 'ship-work'
-  | 'daily-feature-spike';
+  'daily-health-log' | 'daily-standup' | 'pr-auto-review' | 'morning-pr-sweep' | 'ship-work' | 'daily-feature-spike';
 
 interface FixtureFile {
   name: string;

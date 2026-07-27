@@ -47,9 +47,9 @@ use mainframe_background_tasks::reconcile::{
 };
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
 use mainframe_launch::{
-    BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, ResolveCloudflaredDeps,
-    TunnelManager, TunnelManagerOptions, TunnelStartOptions, default_sweep_deps,
-    resolve_cloudflared_path, sweep_stray_children,
+    BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, PortTunnelRegistry,
+    ResolveCloudflaredDeps, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
+    default_sweep_deps, resolve_cloudflared_path, sweep_stray_children,
 };
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::event_bus::PublicDaemonBus;
@@ -58,8 +58,8 @@ use mainframe_plugins::{EmitSink, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
-    RegistryLaunchStopper, build_app, build_automations_engine, build_chat_manager,
-    spawn_broadcast_pump,
+    RegistryLaunchStopper, RegistryScopeTunnelStopper, build_app, build_automations_engine,
+    build_chat_manager, spawn_broadcast_pump,
 };
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
@@ -183,6 +183,7 @@ async fn run_daemon() {
         )
         .with_resolved_path(resolved_path.as_str()),
     );
+    let port_tunnels = Arc::new(PortTunnelRegistry::new(Arc::clone(&tunnel_manager)));
     let launch_registry = Arc::new(
         LaunchRegistry::new(Arc::clone(&on_event), Some(Arc::clone(&tunnel_manager)))
             .with_child_registry(Arc::clone(&child_registry))
@@ -276,6 +277,10 @@ async fn run_daemon() {
         GitFactory,
         broadcast.clone(),
         Arc::new(RegistryLaunchStopper::new(Arc::clone(&launch_registry))),
+        Arc::new(RegistryScopeTunnelStopper::new(
+            Arc::clone(&port_tunnels),
+            db.clone(),
+        )),
         Arc::clone(&quota_manager),
         resolved_path.clone(),
     );
@@ -359,6 +364,7 @@ async fn run_daemon() {
         chat_manager: Some(Arc::clone(&chats)),
         launch_registry: Some(Arc::clone(&launch_registry)),
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),
+        port_tunnels: Some(Arc::clone(&port_tunnels)),
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
         automations: automations.clone(),

@@ -248,7 +248,10 @@ describe('validate — set-variable names', () => {
         { id: 'v2', kind: 'set_variable', name: 'notes', value: [] },
       ],
     };
-    const duplicate = { level: 'error', msg: 'Another value in this automation is already called $notes — rename one of them.' };
+    const duplicate = {
+      level: 'error',
+      msg: 'Another value in this automation is already called $notes — rename one of them.',
+    };
     expect(validate('Name', definition, NO_CATALOG)).toEqual([
       { stepId: 'v1', ...duplicate },
       { stepId: 'v2', ...duplicate },

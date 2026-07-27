@@ -13,8 +13,11 @@ pub mod launch_config;
 pub mod launch_manager;
 pub mod launch_process_state;
 pub mod launch_registry;
+pub mod port_tunnel_registry;
 pub mod process;
 pub mod resolve_cloudflared;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod tunnel_manager;
 
 pub use expand_variables::expand_variables;
@@ -22,6 +25,10 @@ pub use launch_config::parse_launch_config;
 pub use launch_manager::{LaunchError, LaunchManager, LaunchTimings, clean_env};
 pub use launch_process_state::{LaunchOutputEntry, LaunchProcessState};
 pub use launch_registry::LaunchRegistry;
+pub use port_tunnel_registry::{
+    PORT_TUNNEL_LABEL_PREFIX, PortTunnelEntryInfo, PortTunnelRegistry, PortTunnelScope,
+    port_tunnel_label,
+};
 pub use process::{
     ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind, NoopChildRegistry,
     SweepDeps, SweepResult, default_sweep_deps, sweep_stray_children,

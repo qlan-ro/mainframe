@@ -62,7 +62,6 @@ The per-area pointers below are where to look in step 1:
 
 ## Known gaps / phantom deps
 The **full deferred backlog (every un-built surface + open decision) lives in `docs/architecture/MIGRATION-TRACKER.md`** — cross-reference it, don't duplicate it here. The few that bite *inside this package* day-to-day:
-- **`zustand` is a phantom dep** — imported in 7+ `src/` files (store + sessions runtime + tags) but **not in `package.json`**; it only resolves via shamefully-hoist. **Declare it as a real dependency on merge** or a clean install / stricter hoisting breaks the build.
 - **Deprecated assistant-ui hooks still in use** — sessions use `useAssistantRuntime().threads` because `useThreadListRuntime` isn't publicly exported; `useThreadListItemRuntime`/`useThreadRuntime`/`useMessageRuntime` are on deprecated paths. Migrating to the `useAui`/`useAuiState` selectors is a tracked backlog item, **not yet actioned** — keep the exact pin (0.14.27) until then.
 - **Restored-permission "stream closed" gap** — replying to a *restored* permission whose CLI process died (daemon restart between question and answer) fails with "stream closed"; it **self-recovers on reload**, and plain reconnect with the CLI alive works. **PUSHED OUT to Post-V1 (2026-06-23)** — not a V1 blocker; see the tracker's *Pushed out — Post-V1* section.
 

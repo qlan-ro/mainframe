@@ -201,6 +201,11 @@ pub trait ChatManagerDeps: Send + Sync {
         project_id: &'a str,
         effective_path: &'a str,
     ) -> Option<BoxFuture<'a, ()>>;
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>>;
     fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
     fn resolve_tuning<'a>(
         &'a self,
@@ -545,6 +550,13 @@ impl LifecycleManagerDeps for LcDeps {
         effective_path: &'a str,
     ) -> Option<BoxFuture<'a, ()>> {
         self.deps.stop_launch_processes(project_id, effective_path)
+    }
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        self.deps.stop_scope_tunnels(project_id, effective_path)
     }
     fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         self.deps.scan_loaded_history(chat_id)

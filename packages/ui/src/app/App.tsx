@@ -17,6 +17,8 @@ import { installAdapterModelsSubscriber } from '@/store/adapters';
 import { seedAdaptersFor } from '@/store/adapters-seed';
 import { installProviderQuotaSubscriber } from '@/store/quota';
 import { seedQuota } from '@/store/quota-seed';
+import { installPortTunnelSubscriber } from '@/store/port-tunnels';
+import { seedPortTunnels } from '@/store/port-tunnels-seed';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
@@ -58,6 +60,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
     if (activePort <= 0) return;
     seedAdaptersFor(activePort);
     seedQuota(activePort);
+    seedPortTunnels(activePort);
   }, [activePort]);
 
   // Transparent reconnect (same-port daemon restart): reseed off the WS reconnect signal —
@@ -70,6 +73,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
         if (daemonWs.connected && activePort > 0) {
           seedAdaptersFor(activePort);
           seedQuota(activePort);
+          seedPortTunnels(activePort);
         }
       }),
     [activePort],
@@ -109,6 +113,11 @@ export function App() {
   // Always-on provider-quota subscriber (provider.quota.updated). Account-wide,
   // chatId-less — mounted once so a push is never missed by a late-mounting card.
   useEffect(() => installProviderQuotaSubscriber(), []);
+
+  // Always-on port-tunnel subscriber (tunnel:status, `port:*` labels). Chips
+  // mount and unmount with the messages that hold them, so the store — not a
+  // component — has to be the thing listening.
+  useEffect(() => installPortTunnelSubscriber(), []);
 
   return (
     <MfErrorBoundary>

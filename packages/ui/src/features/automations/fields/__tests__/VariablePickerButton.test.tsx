@@ -12,8 +12,20 @@ import type { TokenDescriptor } from '@qlan-ro/mainframe-types';
 import { VariablePickerButton } from '../VariablePickerButton';
 
 const SCOPE: TokenDescriptor[] = [
-  { ref: { stepId: 'trigger', output: 'result' }, label: 'Result', type: 'text', sourceKind: 'trigger', source: 'Trigger' },
-  { ref: { stepId: 'pick-feature', output: 'result' }, label: 'Result', type: 'text', sourceKind: 'agent', source: 'Ask agent' },
+  {
+    ref: { stepId: 'trigger', output: 'result' },
+    label: 'Result',
+    type: 'text',
+    sourceKind: 'trigger',
+    source: 'Trigger',
+  },
+  {
+    ref: { stepId: 'pick-feature', output: 'result' },
+    label: 'Result',
+    type: 'text',
+    sourceKind: 'agent',
+    source: 'Ask agent',
+  },
 ];
 
 function Field({ scope, initial = '' }: { scope: TokenDescriptor[]; initial?: string }) {

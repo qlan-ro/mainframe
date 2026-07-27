@@ -15,6 +15,12 @@ function renderSegment(quote: string | null, text: string): string {
 }
 
 export function serializeComposition(committed: Segment[], live: { quote: string | null; text: string }): string {
-  const rendered = [...committed.map((segment) => renderSegment(segment.quote, segment.text)), renderSegment(live.quote, live.text)];
-  return rendered.filter((block) => block !== '').join('\n\n').trim();
+  const rendered = [
+    ...committed.map((segment) => renderSegment(segment.quote, segment.text)),
+    renderSegment(live.quote, live.text),
+  ];
+  return rendered
+    .filter((block) => block !== '')
+    .join('\n\n')
+    .trim();
 }

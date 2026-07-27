@@ -262,9 +262,7 @@ describe('useTriggerField — combobox ARIA', () => {
 
     const listbox = screen.getByRole('listbox');
     expect(input.getAttribute('aria-controls')).toBe(listbox.id);
-    expect(input.getAttribute('aria-activedescendant')).toBe(
-      screen.getByTestId('composer-skill-item-query-db').id,
-    );
+    expect(input.getAttribute('aria-activedescendant')).toBe(screen.getByTestId('composer-skill-item-query-db').id);
   });
 
   it('follows the highlight to the next option', () => {
@@ -273,9 +271,7 @@ describe('useTriggerField — combobox ARIA', () => {
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
-    expect(input.getAttribute('aria-activedescendant')).toBe(
-      screen.getByTestId('composer-skill-item-quick-fix').id,
-    );
+    expect(input.getAttribute('aria-activedescendant')).toBe(screen.getByTestId('composer-skill-item-quick-fix').id);
   });
 
   it('exposes every row as an option', () => {

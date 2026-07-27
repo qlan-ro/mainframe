@@ -58,7 +58,7 @@ let __isRunning = false;
 // path — see use-submit-composition.ts) — non-empty by default so the
 // Enter-to-queue tests exercise a real submit, not a no-op guarded by emptiness.
 let __appendSpy = vi.fn();
-let __resetSpy = vi.fn();
+const __resetSpy = vi.fn();
 const __composerGetState = () => ({ text: 'queued message', attachments: [], runConfig: {} });
 
 // Stub ComposerPrimitive with passthrough primitives that forward the props
@@ -81,10 +81,7 @@ vi.mock('@assistant-ui/react', () => ({
   // the mutable cells above. Composer, SendOrCancelButton, and the placeholder
   // logic all call useAuiState with selectors over this same fake state object.
   useAuiState: (
-    selector: (s: {
-      thread: { isRunning: boolean; messages: unknown[] };
-      threadListItem: { id: string };
-    }) => unknown,
+    selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; threadListItem: { id: string } }) => unknown,
   ) => selector({ thread: { isRunning: __isRunning, messages: [] }, threadListItem: { id: THREAD_ID } }),
   // useAui returns thread()/composer() handles matching useSubmitComposition's
   // shape: thread().append is a spy so tests can assert on it; composer()

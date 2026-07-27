@@ -77,10 +77,7 @@ export interface MentionCache {
 }
 
 /** Cache key + fetch for a classified body. Null = nothing to fetch (empty fuzzy). */
-function fetchPlan(
-  deps: MentionCacheDeps,
-  c: Classified,
-): { key: string; run: () => Promise<TriggerItem[]> } | null {
+function fetchPlan(deps: MentionCacheDeps, c: Classified): { key: string; run: () => Promise<TriggerItem[]> } | null {
   if (c.mode === 'fuzzy') {
     if (c.query === '') return null; // bare `@` → no file fetch (agents only)
     return { key: `f:${c.query}`, run: () => deps.searchFiles(c.query).then((r) => r.map(fileItem)) };

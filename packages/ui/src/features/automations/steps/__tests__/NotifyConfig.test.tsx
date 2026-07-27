@@ -10,7 +10,12 @@ import userEvent from '@testing-library/user-event';
 import type { NotifyStep } from '../../contract';
 import { NotifyConfig, type NotifyConfigProps } from '../NotifyConfig';
 
-function Field(props: Omit<NotifyConfigProps, 'onChange' | 'step'> & { initial: NotifyStep; onChange?: NotifyConfigProps['onChange'] }) {
+function Field(
+  props: Omit<NotifyConfigProps, 'onChange' | 'step'> & {
+    initial: NotifyStep;
+    onChange?: NotifyConfigProps['onChange'];
+  },
+) {
   const { initial, onChange, ...rest } = props;
   const [step, setStep] = useState(initial);
   return (

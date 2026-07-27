@@ -151,7 +151,9 @@ describe('applyVariableRenames', () => {
 
 describe('applyStepsEdit', () => {
   const askAgent = (id: string, outputName?: string): AutomationStep =>
-    outputName === undefined ? { id, kind: 'ask_agent', prompt: [] } : { id, kind: 'ask_agent', prompt: [], outputName };
+    outputName === undefined
+      ? { id, kind: 'ask_agent', prompt: [] }
+      : { id, kind: 'ask_agent', prompt: [], outputName };
 
   function outputNameOf(result: AutomationDefinition, id: string): string | undefined {
     const step = result.steps.find((s) => s.id === id);

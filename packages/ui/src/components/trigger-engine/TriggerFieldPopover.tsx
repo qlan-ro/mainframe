@@ -61,7 +61,10 @@ export function TriggerFieldPopover({
   return (
     <div
       data-testid={testId}
-      className={cn('z-50 max-h-64 w-80 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-md', className)}
+      className={cn(
+        'z-50 max-h-64 w-80 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-md',
+        className,
+      )}
     >
       <div role="listbox" id={field.listboxId} aria-label={label}>
         {field.entries.map((entry, index) => (

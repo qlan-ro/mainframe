@@ -58,15 +58,17 @@ describe('insertDirective', () => {
 
   describe('appendSpace: false (directory drill-down)', () => {
     it('appends no space at the end of the input', () => {
-      expect(
-        insertDirective('@x/', '@', { query: 'x/', offset: 0 }, '@x/sub/', { appendSpace: false }),
-      ).toEqual({ text: '@x/sub/', cursor: 7 });
+      expect(insertDirective('@x/', '@', { query: 'x/', offset: 0 }, '@x/sub/', { appendSpace: false })).toEqual({
+        text: '@x/sub/',
+        cursor: 7,
+      });
     });
 
     it('leaves following text untouched mid-input', () => {
-      expect(
-        insertDirective('@x/ rest', '@', { query: 'x/', offset: 0 }, '@x/sub/', { appendSpace: false }),
-      ).toEqual({ text: '@x/sub/ rest', cursor: 7 });
+      expect(insertDirective('@x/ rest', '@', { query: 'x/', offset: 0 }, '@x/sub/', { appendSpace: false })).toEqual({
+        text: '@x/sub/ rest',
+        cursor: 7,
+      });
     });
 
     it('leaves the @dir/ token open for re-detection at the new cursor', () => {

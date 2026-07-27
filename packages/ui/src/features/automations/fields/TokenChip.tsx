@@ -13,7 +13,18 @@
  * `text-foreground` — never colored text on a colored fill.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Calendar, CircleDot, Clock, MessageCircle, Plug, Sparkles, TriangleAlert, Variable, X, Zap } from 'lucide-react';
+import {
+  Calendar,
+  CircleDot,
+  Clock,
+  MessageCircle,
+  Plug,
+  Sparkles,
+  TriangleAlert,
+  Variable,
+  X,
+  Zap,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TOKEN_STEP_BUILTIN } from '../contract';
 import type { TokenDescriptor, TokenSourceKind } from '../domain/tokens';

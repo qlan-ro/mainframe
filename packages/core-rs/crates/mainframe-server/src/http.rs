@@ -66,6 +66,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // (cloudflared), and the LSP language-status endpoint.
         .merge(routes::launch::router())
         .merge(routes::tunnel::router())
+        .merge(routes::tunnel_ports::router())
         .merge(routes::lsp_routes::router())
         // Automations v2 (T9.3). All behind auth EXCEPT the webhook ingress,
         // which middleware/auth.rs exempts by path (HMAC-verified instead).

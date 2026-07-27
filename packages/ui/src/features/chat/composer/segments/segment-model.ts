@@ -26,7 +26,10 @@ export function mintSegmentId(): string {
  * prose become one committed segment, then a fresh liveQuote is minted for
  * the newly appended quote. A blank quoteless live segment commits nothing.
  */
-export function appendQuote(composition: Composition, { quote, liveText }: { quote: string; liveText: string }): Composition {
+export function appendQuote(
+  composition: Composition,
+  { quote, liveText }: { quote: string; liveText: string },
+): Composition {
   const { committed, liveQuote } = composition;
   const shouldCommit = liveQuote != null || liveText.trim() !== '';
 

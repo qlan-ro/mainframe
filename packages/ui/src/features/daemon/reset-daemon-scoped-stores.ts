@@ -22,6 +22,7 @@ import { useSandboxStore } from '@/store/sandbox';
 import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
 import { resetQuota } from '@/store/quota';
+import { resetPortTunnels } from '@/store/port-tunnels';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { useSetupAdvisorStore } from '@/features/setup-advisor/use-setup-advisor-store';
 
@@ -56,6 +57,8 @@ export function resetDaemonScopedStores(): void {
   });
 
   resetQuota();
+
+  resetPortTunnels();
 
   useComposerSegments.setState({ byThread: {} });
 

@@ -104,7 +104,14 @@ describe('openNewThreadDraft — reset + switch + re-read ordering', () => {
 
     // Two pre-switch reads: rememberReturn's mainThreadId snapshot, then the
     // slot id resetNewThreadDraft clears — both must land before the switch.
-    expect(calls).toEqual(['getState', 'getState', 'reset:__LOCALID_1', 'switchToNewThread', 'getState', 'initialize:__LOCALID_2']);
+    expect(calls).toEqual([
+      'getState',
+      'getState',
+      'reset:__LOCALID_1',
+      'switchToNewThread',
+      'getState',
+      'initialize:__LOCALID_2',
+    ]);
   });
 
   it('a fake returning undefined before the switch and an id after still initializes the post-switch id', async () => {
