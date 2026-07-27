@@ -217,3 +217,34 @@ describe('handleDaemonEvent — error', () => {
     expect(result).toEqual({ kind: 'noop' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// permission.resolved — also the daemon's cancel-removal signal (todo #284):
+// a control_cancel_request from the CLI resolves the queue over this same
+// event, so the client needs exactly one routing path for both outcomes.
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — permission.resolved', () => {
+  it('permission.resolved maps to a removal for the matching chat', () => {
+    const result = handleDaemonEvent(
+      { type: 'permission.resolved', chatId: CHAT_ID, requestId: 'req-1' },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'permission.resolved', requestId: 'req-1' },
+    });
+  });
+
+  it('permission.resolved for another chat is a noop', () => {
+    const result = handleDaemonEvent(
+      { type: 'permission.resolved', chatId: OTHER_CHAT, requestId: 'req-1' },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});
