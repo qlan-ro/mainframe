@@ -259,6 +259,11 @@ pub trait ChatManagerDeps: Send + Sync {
     /// implementation that silently inherited an empty default blanked
     /// backgroundActivity for every chat (#273).
     fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask>;
+    /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
+    /// exit. Required, not defaulted: an implementation that silently inherited an
+    /// empty default left orphaned tasks Running forever, pinning `displayStatus:
+    /// working` and `backgroundActivity` with no recovery path (#273).
+    fn tracker_end_all_running(&self, chat_id: &str);
     /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
     /// Required (not a no-op default): `continue-here` relies on it persisting.
     fn chats_clear_session(&self, chat_id: &str);
@@ -480,6 +485,9 @@ impl EventHandlerDeps for EhDeps {
     }
     fn on_worktree_trigger(&self, chat_id: &str) {
         self.worktree_offers.on_trigger(chat_id);
+    }
+    fn tracker_end_all_running(&self, chat_id: &str) {
+        self.deps.tracker_end_all_running(chat_id);
     }
 }
 
@@ -2332,9 +2340,11 @@ mod tests;
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
 // notes: spawned. New defaulted ChatManagerDeps methods still silently unoverridden
 // notes: in chat_deps.rs (filed as #289 is_transcript_present, #290
-// notes: adapter_snapshot_models): tracker_list_live is required, not defaulted
-// notes: (#273 — a silent default caused backgroundActivity to stay empty in
-// notes: production); generate_title gained an adapter_id arg (adapter-aware).
+// notes: adapter_snapshot_models): tracker_list_live and tracker_end_all_running
+// notes: are required, not defaulted (#273 — a silent default caused
+// notes: backgroundActivity to stay empty, then let orphaned tasks stay Running
+// notes: forever, in production); generate_title gained an adapter_id arg
+// notes: (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity
 // notes: integration test (#273). Also chat-manager-degraded (3).

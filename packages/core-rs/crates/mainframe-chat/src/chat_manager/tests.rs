@@ -283,6 +283,8 @@ impl ChatManagerDeps for StoreDeps {
     fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
         Vec::new()
     }
+    /// Empty on purpose: chat_deps.rs's tracker_end_all_running_delegates_... test covers the wiring (#273).
+    fn tracker_end_all_running(&self, _chat_id: &str) {}
     fn is_transcript_present<'a>(
         &'a self,
         _adapter_id: &'a str,
