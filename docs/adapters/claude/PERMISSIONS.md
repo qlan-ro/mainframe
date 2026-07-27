@@ -243,16 +243,9 @@ Request shape (`entrypoints/sdk/controlSchemas.ts:107-122`):
 
 PermissionRequest hooks **race** the client prompt
 (`structuredIO.ts:577-638`); if a hook decides first the request is cancelled
-via `control_cancel_request` — Mainframe must tolerate cancellation of an
-in-flight prompt. Errors synthesize a deny.
-
-> **Adapter mismatch (flagged, not fixed).** Mainframe does not tolerate it.
-> `control_cancel_request` occurs ×37 in the 2.1.220 binary and **zero** times
-> anywhere in `packages/core-rs`; `events.rs::handle_event` (~`:390-422`)
-> routes only `system`/`assistant`/`user`/`control_request`/`control_response`/
-> `rate_limit_event`/`result` and drops the rest via `_ => {}`. A cancelled
-> prompt therefore stays pending in Mainframe's UI forever. See finding 8 in
-> the [research doc](../../research/2026-07-25-todo-241-claude-cli-reverse-engineer.md).
+via `control_cancel_request`. Mainframe removes the named request from the
+chat's pending queue and never sends an answer for it. Errors synthesize a
+deny.
 
 Response (`PermissionPromptToolResultSchema.ts`):
 
@@ -335,8 +328,7 @@ it constrains network access.
 5. `Edit(...)` covers Write/NotebookEdit; `Read(...)` covers all read tools.
    Absolute-path rules are `//abs/path/**`.
 6. Prefix allow rules never match compound commands; deny/ask rules do.
-7. Handle `SandboxNetworkAccess`, `control_cancel_request` on in-flight
-   prompts, mid-run bypass demotion, and the denial budget (3 consecutive /
-   20 total → turn aborts in headless mode).
+7. Handle `SandboxNetworkAccess`, mid-run bypass demotion, and the denial
+   budget (3 consecutive / 20 total → turn aborts in headless mode).
 8. `dontAsk` mode means zero permission traffic — asks become denies
    in-process.
