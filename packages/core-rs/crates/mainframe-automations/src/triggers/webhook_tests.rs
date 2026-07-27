@@ -150,15 +150,17 @@ async fn ensure_webhook_secret_provisions_once_under_the_reserved_label() {
     let dir = tempfile::tempdir().unwrap();
     let store = FileCredentialStore::load(dir.path().join("automation-credentials.json")).await;
 
-    ensure_webhook_secret(&store, "hook-1").await.unwrap();
+    let returned = ensure_webhook_secret(&store, "hook-1").await.unwrap();
     let first = store.get("webhook:hook-1").await.unwrap();
     assert_eq!(first.token.len(), 64, "32 random bytes, hex-encoded");
     assert!(first.token.bytes().all(|b| b.is_ascii_hexdigit()));
+    assert_eq!(
+        returned, first.token,
+        "the caller gets the very secret a sender must sign with"
+    );
 
     // Idempotent: an existing secret is left alone (rotation = explicit delete).
-    ensure_webhook_secret(&store, "hook-1").await.unwrap();
-    assert_eq!(
-        store.get("webhook:hook-1").await.unwrap().token,
-        first.token
-    );
+    let again = ensure_webhook_secret(&store, "hook-1").await.unwrap();
+    assert_eq!(store.get("webhook:hook-1").await.unwrap().token, again);
+    assert_eq!(again, first.token);
 }

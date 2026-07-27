@@ -36,6 +36,7 @@ pub enum SchedulePattern {
     Weekdays(WeekdaysSchedule),
     Weekly(WeeklySchedule),
     EveryNHours(EveryNHoursSchedule),
+    Once(OnceSchedule),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,6 +65,14 @@ pub struct WeeklySchedule {
 pub struct EveryNHoursSchedule {
     /// The picker offers only divisors of 24 (contract §1).
     pub n: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OnceSchedule {
+    /// Naive-local `YYYY-MM-DDTHH:MM` (the editor's `datetime-local` value),
+    /// NOT the seconds-bearing `scheduled_for_string` the sweep derives from it.
+    pub at: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +118,20 @@ pub struct WebhookTrigger {
     pub hook_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preset: Option<WebhookPreset>,
+    /// Server-computed; absent until the trigger is registered. Writes strip it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration: Option<WebhookRegistration>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WebhookRegistration {
+    pub hook_id: String,
+    /// The local ingest endpoint — reachable only from this machine.
+    pub url: String,
+    /// A present null means "registered, never delivered"; the absent
+    /// `registration` field is what means "not registered".
+    pub last_delivery_at: Option<String>,
 }
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port

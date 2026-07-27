@@ -74,4 +74,57 @@ describe('ImageLightbox', () => {
     expect(screen.queryByTestId('image-lightbox-prev')).toBeNull();
     expect(screen.queryByTestId('image-lightbox-counter')).toBeNull();
   });
+
+  it('clicking the image dismisses', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={1} onIndexChange={onIndexChange} />);
+    fireEvent.click(screen.getByTestId('image-lightbox-current'));
+    expect(onIndexChange).toHaveBeenCalledWith(null);
+  });
+
+  it('clicking the dimmed area beside the image dismisses', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={1} onIndexChange={onIndexChange} />);
+    fireEvent.click(screen.getByTestId('image-lightbox-dialog'));
+    expect(onIndexChange).toHaveBeenCalledWith(null);
+  });
+
+  it('clicking next navigates and does not dismiss', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={0} onIndexChange={onIndexChange} />);
+    fireEvent.click(screen.getByTestId('image-lightbox-next'));
+    expect(onIndexChange).toHaveBeenCalledWith(1);
+    expect(onIndexChange).not.toHaveBeenCalledWith(null);
+  });
+
+  it('clicking prev navigates and does not dismiss', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={0} onIndexChange={onIndexChange} />);
+    fireEvent.click(screen.getByTestId('image-lightbox-prev'));
+    expect(onIndexChange).toHaveBeenCalledWith(2);
+    expect(onIndexChange).not.toHaveBeenCalledWith(null);
+  });
+
+  it('clicking the counter does nothing', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={1} onIndexChange={onIndexChange} />);
+    fireEvent.click(screen.getByTestId('image-lightbox-counter'));
+    expect(onIndexChange).not.toHaveBeenCalled();
+  });
+
+  it('the close button still dismisses', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={1} onIndexChange={onIndexChange} />);
+    fireEvent.click(screen.getByTestId('dialog-close'));
+    expect(onIndexChange).toHaveBeenCalledWith(null);
+    expect(onIndexChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape still dismisses', () => {
+    const onIndexChange = vi.fn();
+    render(<ImageLightbox images={THREE} index={1} onIndexChange={onIndexChange} />);
+    fireEvent.keyDown(screen.getByTestId('image-lightbox-dialog'), { key: 'Escape' });
+    expect(onIndexChange).toHaveBeenCalledWith(null);
+    expect(onIndexChange).toHaveBeenCalledTimes(1);
+  });
 });

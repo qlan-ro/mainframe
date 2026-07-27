@@ -62,6 +62,56 @@ fn schedule_trigger_round_trips_every_pattern() {
 }
 
 #[test]
+fn once_schedule_carries_the_naive_local_timestamp_the_editor_types() {
+    let trigger: Trigger = roundtrip(json!({
+        "id": "t-once",
+        "kind": "schedule",
+        "schedule": {"type": "once", "at": "2026-08-14T09:00"},
+        "onMissed": "run_once"
+    }));
+    let Trigger::Schedule(schedule) = trigger else {
+        panic!("expected schedule")
+    };
+    let SchedulePattern::Once(once) = schedule.schedule else {
+        panic!("expected once")
+    };
+    assert_eq!(once.at, "2026-08-14T09:00");
+    assert!(
+        serde_json::from_value::<SchedulePattern>(json!({"type": "once", "at": "x", "n": 2}))
+            .is_err(),
+        "once takes `at` alone"
+    );
+}
+
+#[test]
+fn webhook_registration_is_server_computed_and_omitted_when_absent() {
+    let bare: Trigger = roundtrip(json!({"id": "w1", "kind": "webhook", "hookId": "h"}));
+    let Trigger::Webhook(hook) = bare else {
+        panic!("expected webhook")
+    };
+    assert_eq!(hook.registration, None);
+
+    // `lastDeliveryAt` stays a present null: the UI distinguishes "registered,
+    // never delivered" from "not registered", which is the absent field.
+    let registered: Trigger = roundtrip(json!({
+        "id": "w1",
+        "kind": "webhook",
+        "hookId": "h",
+        "registration": {
+            "hookId": "h",
+            "url": "http://127.0.0.1:31415/api/automation-webhooks/h",
+            "lastDeliveryAt": null
+        }
+    }));
+    let Trigger::Webhook(hook) = registered else {
+        panic!("expected webhook")
+    };
+    let registration = hook.registration.expect("registration must survive");
+    assert_eq!(registration.hook_id, "h");
+    assert_eq!(registration.last_delivery_at, None);
+}
+
+#[test]
 fn event_and_webhook_triggers_round_trip() {
     for event in [
         "session.finished",

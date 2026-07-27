@@ -4,16 +4,17 @@
  *
  * ts153 gave every step an editable free-text `title`; the contract only
  * carries one (`AskMeStep.title` — also its token-source display label), so
- * only `ask_me` renders an editable input here. The other three verbs show
- * their static `VERB_META` label as plain text — deliberate, contract-driven
+ * only `ask_me` renders an editable input here. Every other verb shows its
+ * static `VERB_META` label as plain text — deliberate, contract-driven
  * deviation, not an oversight.
  *
- * The "Set up" disclosure switches on `step.kind` to the matching Phase 4
- * config panel (AgentConfig/AskMeConfig/ActionConfig/NotifyConfig), all
- * keyed off this card's own `automations-step-config-<id>` testid as their
- * prefix.
+ * The "Set up" disclosure dispatches `step.kind` through `STEP_CONFIGS` to the
+ * matching config panel, all keyed off this card's own
+ * `automations-step-config-<id>` testid as their prefix. The map is exhaustive
+ * over `LeafStep['kind']`, so a new verb fails to compile until its pane is
+ * registered — the four-branch `&&` chain it replaced just rendered nothing.
  */
-import { useState } from 'react';
+import { createElement, useState, type FC } from 'react';
 import { GripVertical, Sliders, Trash2, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ActionCatalogEntry, AskMeStep, AutomationStep } from '../contract';
@@ -23,8 +24,35 @@ import { AgentConfig } from '../steps/AgentConfig';
 import { AskMeConfig } from '../steps/AskMeConfig';
 import { ActionConfig } from '../steps/ActionConfig';
 import { NotifyConfig } from '../steps/NotifyConfig';
+import { SetValueConfig } from '../steps/SetValueConfig';
 import { StepSummary, type LeafStep } from './StepSummary';
 import { VERB_META } from './verb-meta';
+
+interface StepConfigProps<K extends LeafStep['kind']> {
+  step: Extract<LeafStep, { kind: K }>;
+  onChange: (next: Extract<LeafStep, { kind: K }>) => void;
+  tokens: TokenDescriptor[];
+  catalog: ActionCatalogEntry[];
+  testId: string;
+}
+
+const STEP_CONFIGS: { [K in LeafStep['kind']]: FC<StepConfigProps<K>> } = {
+  ask_agent: AgentConfig,
+  ask_me: AskMeConfig,
+  run_action: ActionConfig,
+  set_variable: SetValueConfig,
+  notify: NotifyConfig,
+};
+
+/**
+ * Generic so `step`, `onChange` and the pane stay tied to one `kind` — no cast
+ * bridges them. `createElement`, not JSX: JSX resolves the element type through
+ * `LibraryManagedAttributes`, which collapses the deferred `STEP_CONFIGS[K]`
+ * into a union of all five panes and then rejects every prop set.
+ */
+function StepConfig<K extends LeafStep['kind']>({ kind, props }: { kind: K; props: StepConfigProps<K> }) {
+  return createElement<StepConfigProps<K>>(STEP_CONFIGS[kind], props);
+}
 
 export interface StepCardProps {
   step: LeafStep;
@@ -41,7 +69,9 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
   const meta = VERB_META[step.kind];
   const Icon = meta.icon;
   const myIssues = issues.filter((i) => i.stepId === step.id);
-  const bad = myIssues.length > 0;
+  // Only an error keeps the user from saving, so only an error gets the
+  // blocking red; a warning says "check this", not "you are stuck".
+  const bad = myIssues.some((i) => i.level === 'error');
 
   function patchTitle(title: string) {
     if (step.kind !== 'ask_me') return;
@@ -112,10 +142,23 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           <Trash2 size={12} aria-hidden />
         </button>
       </div>
-      {bad && (
-        <div className="flex flex-col gap-[4px] border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-[12px] pt-[7px] pb-[8px]">
+      {myIssues.length > 0 && (
+        <div
+          data-testid={`automations-step-issues-${step.id}`}
+          data-level={bad ? 'error' : 'warning'}
+          className={cn(
+            'flex flex-col gap-[4px] border-t-[0.5px] px-[12px] pt-[7px] pb-[8px]',
+            bad ? 'border-destructive/20 bg-destructive/[0.06]' : 'border-mf-warning/30 bg-mf-warning-tint',
+          )}
+        >
           {myIssues.map((issue, i) => (
-            <span key={i} className="flex items-start gap-1.5 text-caption font-semibold text-destructive">
+            <span
+              key={i}
+              className={cn(
+                'flex items-start gap-1.5 text-caption font-semibold',
+                issue.level === 'error' ? 'text-destructive' : 'text-mf-warning',
+              )}
+            >
               <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />
               {issue.msg}
             </span>
@@ -127,38 +170,10 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-testid={`automations-step-config-${step.id}`}
           className="border-t-[0.5px] border-border pt-[2px] pr-[12px] pb-[14px] pl-[46px]"
         >
-          {step.kind === 'ask_agent' && (
-            <AgentConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              tokens={tokens}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
-          {step.kind === 'ask_me' && (
-            <AskMeConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
-          {step.kind === 'run_action' && (
-            <ActionConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              tokens={tokens}
-              catalog={catalog}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
-          {step.kind === 'notify' && (
-            <NotifyConfig
-              step={step}
-              onChange={(next) => onChange(next)}
-              tokens={tokens}
-              testId={`automations-step-config-${step.id}`}
-            />
-          )}
+          <StepConfig
+            kind={step.kind}
+            props={{ step, onChange, tokens, catalog, testId: `automations-step-config-${step.id}` }}
+          />
         </div>
       )}
     </div>

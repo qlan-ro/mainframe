@@ -97,6 +97,36 @@ fn ask_agent_attachments_a9_round_trips_and_skips_when_absent() {
     );
 }
 
+/// The editor mints `outputName` on every producing step, and
+/// `deny_unknown_fields` would reject the whole save if the daemon didn't know
+/// the key.
+#[test]
+fn a_producing_step_round_trips_its_output_name() {
+    let step: Step = roundtrip(json!({
+        "id": "a2", "kind": "ask_agent", "prompt": ["go"], "outputName": "agent_result_2"
+    }));
+    let Step::AskAgent(agent) = step else {
+        panic!("expected ask_agent")
+    };
+    assert_eq!(agent.output_name.as_deref(), Some("agent_result_2"));
+
+    for raw in [
+        json!({"id": "f1", "kind": "ask_me", "title": "Pick", "fields": [], "outputName": "mood_2"}),
+        json!({"id": "r1", "kind": "run_action", "actionId": "github.list_prs", "params": {}, "outputName": "prs_2"}),
+    ] {
+        roundtrip::<Step>(raw);
+    }
+
+    let bare: Step = roundtrip(json!({"id": "plain", "kind": "ask_agent", "prompt": ["go"]}));
+    assert!(
+        serde_json::to_value(&bare)
+            .unwrap()
+            .get("outputName")
+            .is_none(),
+        "a step that never produced an output stays bare"
+    );
+}
+
 #[test]
 fn ask_me_step_uses_show_when_and_optional_required() {
     let step: Step = roundtrip(json!({
@@ -182,6 +212,29 @@ fn notify_if_and_repeat_round_trip_with_wire_names() {
         panic!("expected repeat")
     };
     assert_eq!(repeat_block.items.output, "prs");
+}
+
+#[test]
+fn set_variable_round_trips_and_answers_the_three_exhaustive_methods() {
+    let step: Step = roundtrip(json!({
+        "id": "set-headline",
+        "kind": "set_variable",
+        "name": "headline",
+        "value": ["Release ", {"token": {"stepId": "collect", "output": "version"}}]
+    }));
+    assert_eq!(step.id(), "set-headline");
+    assert_eq!(step.kind_name(), "set_variable");
+    assert!(!step.keep_going());
+    let Step::SetVariable(set) = step else {
+        panic!("expected set_variable")
+    };
+    assert_eq!(set.name, "headline");
+    assert_eq!(set.value.len(), 2);
+
+    let keeps_going: Step = roundtrip(json!({
+        "id": "s", "kind": "set_variable", "name": "n", "value": [], "keepGoing": true
+    }));
+    assert!(keeps_going.keep_going());
 }
 
 #[test]

@@ -1,0 +1,49 @@
+{
+  "name": "Release digest",
+  "description": "On release morning, collect what shipped, draft a line per merged PR, and post one digest.",
+  "scope": "project",
+  "definition": {
+    "triggers": [
+      {
+        "id": "trigger-release-morning",
+        "kind": "schedule",
+        "schedule": { "type": "once", "at": "2026-08-14T09:00" },
+        "onMissed": "run_once"
+      }
+    ],
+    "steps": [
+      {
+        "id": "collect-merged-work",
+        "kind": "ask_agent",
+        "prompt": ["List every PR merged since the last release tag, newest first, and name the release version."],
+        "expects": [
+          { "key": "merged", "type": "list" },
+          { "key": "version", "type": "text" }
+        ]
+      },
+      {
+        "id": "set-headline",
+        "kind": "set_variable",
+        "name": "headline",
+        "value": ["Release $version — shipped $today"]
+      },
+      {
+        "id": "repeat-merged",
+        "kind": "repeat",
+        "items": { "stepId": "collect-merged-work", "output": "merged" },
+        "steps": [
+          {
+            "id": "draft-line",
+            "kind": "ask_agent",
+            "prompt": ["Write one sentence for the release notes about $item.title."]
+          }
+        ]
+      },
+      {
+        "id": "notify-digest",
+        "kind": "notify",
+        "message": ["$headline\n\nMerged since the last release:\n$merged\n\nFull summary:\n$agent_result"]
+      }
+    ]
+  }
+}

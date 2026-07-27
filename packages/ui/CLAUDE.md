@@ -50,7 +50,8 @@ The per-area pointers below are where to look in step 1:
 
 ## Component layer & theme
 - **shadcn/ui**, not raw Radix. Build the `components/ui/` primitives once; features compose them.
-- Theme via `mainframe-theme.css` tokens. **Token traps:** never use the `/opacity` modifier on CSS-var colors; use only real `mf-*` token names.
+- Theme via the tokens in `src/styles/globals.css`. **Read the `mainframe-design-system` skill before writing markup or class names** — it carries the scales, the recipes, and the traps.
+- **Token trap:** use only `mf-*` names that `@theme inline` actually maps; a typo renders as nothing, with no error. The `/opacity` modifier *does* work here (Tailwind v4 compiles it to `color-mix`) — the old blanket prohibition was a v3 carryover from `packages/app-electron`. It only misleads on `accent`/`border`/`input`/`mf-chip`, which are already alpha.
 
 ## Conventions
 - **No file > 300 lines**, no function > 50. Decompose god-files on port (don't carry them).

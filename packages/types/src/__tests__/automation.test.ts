@@ -9,6 +9,9 @@ import {
   type AutomationDefinition,
   type AutomationCreateInput,
 } from '../automation.js';
+import { buildVariableNamespace } from '../automation-domain/variables.js';
+import { scopeAt } from '../automation-domain/token-scope.js';
+import { validate } from '../automation-domain/validate.js';
 import type { DaemonEvent } from '../events.js';
 import type { AutomationRunSummary, AutomationInteractionSummary } from '../automation.js';
 
@@ -134,6 +137,9 @@ void _events;
 // real parsing.
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'automations');
 
+/** The fixtures reference no catalog action, so scope/validation need no entries. */
+const NO_CATALOG: never[] = [];
+
 function loadFixture(name: string): AutomationCreateInput {
   const raw = readFileSync(join(FIXTURES_DIR, `${name}.json`), 'utf8');
   return JSON.parse(raw) as AutomationCreateInput;
@@ -146,6 +152,7 @@ const FIXTURE_NAMES = [
   'morning-pr-sweep',
   'ship-work',
   'daily-feature-spike',
+  'release-digest',
 ] as const;
 
 describe('canonical automation fixtures (contract §8)', () => {
@@ -164,6 +171,30 @@ describe('canonical automation fixtures (contract §8)', () => {
   it('ship-work is manual-only: empty triggers array, since "manual" is not a trigger kind', () => {
     const fixture = loadFixture('ship-work');
     expect(fixture.definition.triggers).toEqual([]);
+  });
+
+  // release-digest is the only fixture carrying the editor-era additions, so it
+  // is what the Rust conformance scenario (tests/conformance/release_digest.rs)
+  // drives end-to-end. A `$name` that stops resolving here would fail there as a
+  // literal `$name` in the agent's prompt, which is much harder to read.
+  it('release-digest carries a once trigger, a set_variable step, and $name refs that all resolve', () => {
+    const fixture = loadFixture('release-digest');
+    expect(fixture.definition.triggers[0]).toMatchObject({
+      kind: 'schedule',
+      schedule: { type: 'once', at: '2026-08-14T09:00' },
+    });
+
+    const setVariable = fixture.definition.steps.find((step) => step.kind === 'set_variable');
+    expect(setVariable).toMatchObject({ kind: 'set_variable', name: 'headline' });
+
+    expect(validate(fixture.name, fixture.definition, NO_CATALOG)).toEqual([]);
+  });
+
+  it('release-digest pins repeat isolation end-to-end: $agent_result after the block is the outer agent', () => {
+    const fixture = loadFixture('release-digest');
+    const namespace = buildVariableNamespace(scopeAt(fixture.definition, NO_CATALOG, 'notify-digest'));
+    expect(namespace.byName.get('agent_result')?.ref.stepId).toBe('collect-merged-work');
+    expect(namespace.byName.has('agent_result_2')).toBe(false);
   });
 
   it('daily-feature-spike alone carries all three amendments (A1 run_command chip, A2 expects, A3 is_one_of)', () => {

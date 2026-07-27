@@ -32,15 +32,19 @@ function newTrigger(kind: AutomationTrigger['kind']): AutomationTrigger {
   const id = crypto.randomUUID();
   if (kind === 'schedule') return { id, kind, schedule: { type: 'daily', at: '09:00' }, onMissed: 'skip' };
   if (kind === 'event') return { id, kind, event: 'session.finished' };
-  return { id, kind: 'webhook', hookId: `pending-${id}` };
+  // The hookId is the trigger's own path segment, not the trigger id — the
+  // daemon registers it verbatim, so it must not read as a placeholder.
+  return { id, kind: 'webhook', hookId: crypto.randomUUID() };
 }
 
 export interface WhenCardProps {
   triggers: AutomationTrigger[];
   onChange: (next: AutomationTrigger[]) => void;
+  /** The owning automation, absent until it is saved — the webhook card registers against it. */
+  automationId?: string;
 }
 
-export function WhenCard({ triggers, onChange }: WhenCardProps) {
+export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
   const [open, setOpen] = useState(false);
 
   function setAt(index: number, next: AutomationTrigger | null) {
@@ -62,6 +66,7 @@ export function WhenCard({ triggers, onChange }: WhenCardProps) {
           key={trigger.id}
           trigger={trigger}
           onChange={(next) => setAt(i, next)}
+          automationId={automationId}
           testId={`automations-trigger-${trigger.id}`}
         />
       ))}

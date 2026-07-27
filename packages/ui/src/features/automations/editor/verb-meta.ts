@@ -1,8 +1,8 @@
 /**
  * Verb/block metadata for the editor's Add-step menu and card chrome (ts153
  * wf2-base.jsx `WF2_VERB`, ported onto the exact contract step kinds). The
- * three verbs that PRODUCE tokens (`ask_agent`/`ask_me`/`run_action`) reuse
- * `sourceKindStyle` from `fields/TokenChip.tsx` so a step's card chrome and
+ * four verbs that PRODUCE tokens (`ask_agent`/`ask_me`/`run_action`/
+ * `set_variable`) reuse `sourceKindStyle` from `fields/TokenChip.tsx` so a step's card chrome and
  * its own chips never drift in color; `notify`/`if`/`repeat` get their own
  * entries. `if` reuses `--mf-accent-violet` (an exact hue match for the
  * prototype's If color); `repeat` deliberately reuses `item`'s green — the
@@ -13,7 +13,7 @@
  * design review.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles } from 'lucide-react';
+import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles, Variable } from 'lucide-react';
 import type { AutomationStep } from '../contract';
 import { sourceKindStyle } from '../fields/TokenChip';
 
@@ -41,6 +41,7 @@ const agentStyle = sourceKindStyle('agent');
 const askmeStyle = sourceKindStyle('askme');
 const actionStyle = sourceKindStyle('action');
 const itemStyle = sourceKindStyle('item');
+const variableStyle = sourceKindStyle('variable');
 
 export const VERB_META: Record<VerbKind, VerbMeta> = {
   ask_agent: {
@@ -67,6 +68,14 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     borderClass: actionStyle.borderClass,
     label: 'Run an action',
     hint: 'A deterministic call — no agent, no tokens spent',
+  },
+  set_variable: {
+    icon: Variable,
+    iconClass: variableStyle.iconClass,
+    tintClass: variableStyle.tintClass,
+    borderClass: variableStyle.borderClass,
+    label: 'Set value',
+    hint: 'Name a value once and reuse it as $name',
   },
   notify: {
     icon: Bell,
@@ -99,6 +108,6 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
 };
 
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
-  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'notify'] },
+  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify'] },
   { label: 'Add structure', kinds: ['if', 'repeat'] },
 ];

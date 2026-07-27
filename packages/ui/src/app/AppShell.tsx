@@ -12,6 +12,7 @@ import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
+import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
 import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SpotlightPalette } from '../features/palette/SpotlightPalette';
@@ -189,6 +190,7 @@ function RuntimeBody({ port }: { port: number }) {
           button (Phase 6); v1's WorkflowsModalHost is unmounted here but its
           tree stays on disk until Phase 7 deletes it. */}
       <AutomationsHost />
+      <SetupAdvisorHost />
       <GitConfirmDialog />
       <SettingsDialog port={port} />
       {showTour && <TutorialOverlay />}

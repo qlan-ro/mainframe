@@ -183,10 +183,12 @@ async fn notify_for_a_missing_run_fails_with_a_clear_error() {
         notifier.clone(),
     );
     let scope = crate::tokens::Scope::root(Arc::new(super::test_support::FakeClock));
+    let names = crate::tokens::NameMap::new();
     let ctx = VerbContext {
         run_id: "missing-run",
         step_ref: "done",
         scope: &scope,
+        names: &names,
     };
     let Step::Notify(step) = notify_step("done", vec![text("x")]) else {
         unreachable!()

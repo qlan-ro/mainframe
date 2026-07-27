@@ -108,11 +108,18 @@ export function buildReferenceForCm(filePath: string | undefined, line: number, 
 // writeToClipboard — thin async wrapper for the clipboard API
 // ---------------------------------------------------------------------------
 
-/** Write `text` to the clipboard. Logs a warning on failure — never throws. */
-export async function writeToClipboard(text: string): Promise<void> {
+/**
+ * Write `text` to the clipboard. Never throws; logs a warning and resolves
+ * `false` when the write is rejected — WKWebView refuses `writeText` whenever
+ * the document isn't focused, so callers that confirm with "Copied" must not
+ * treat "the promise settled" as "the text is on the clipboard".
+ */
+export async function writeToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
+    return true;
   } catch (err) {
     console.warn('[copy-reference] clipboard write failed', err);
+    return false;
   }
 }

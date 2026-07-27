@@ -6,24 +6,43 @@ use std::collections::{BTreeSet, HashMap};
 
 use serde::Serialize;
 
+use crate::tokens::variables::build_variable_namespace;
+
 use super::automation::AutomationDefinition;
+use super::comparators::{comparator_wire_name, comparators_for};
 use super::form::FormFieldType;
 use super::scope::{
-    TokenInfo, TokenType, builtin_tokens, comparator_wire_name, comparators_for, step_produces,
-    step_refs, trigger_tokens,
+    TokenInfo, TokenType, builtin_tokens, current_item_info, step_produces, step_refs,
+    trigger_tokens,
 };
 use super::step::Step;
 use super::token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TokenRef};
+use super::validate_variables::{
+    set_variable_name_issue, unresolved_variable_names, variable_names_clashing_with,
+};
+
+/// How much an issue costs the user. Only `Error` blocks a save; a `Warning` is
+/// reported and saved anyway.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ValidationLevel {
+    Error,
+    Warning,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationError {
     /// `None` for automation-level issues (serialized as `null`, Node parity).
     pub step_id: Option<String>,
+    pub level: ValidationLevel,
     pub message: String,
 }
 
-struct Ctx {
+struct Ctx<'a> {
+    /// Name clashes reach outside the walk's scope (a later sibling, the other
+    /// `if` arm), so the whole definition stays in hand.
+    definition: &'a AutomationDefinition,
     /// Every (stepId, output) produced anywhere in the definition, for
     /// distinguishing "comes later" from "no longer exists".
     all_produced: HashMap<(String, String), TokenInfo>,
@@ -32,22 +51,32 @@ struct Ctx {
     errors: Vec<ValidationError>,
 }
 
-impl Ctx {
+impl Ctx<'_> {
     fn push(&mut self, step_id: &str, message: String) {
+        self.push_at(ValidationLevel::Error, step_id, message);
+    }
+
+    fn push_at(&mut self, level: ValidationLevel, step_id: &str, message: String) {
         self.errors.push(ValidationError {
             step_id: Some(step_id.to_string()),
+            level,
             message,
         });
+    }
+}
+
+fn automation_error(message: &str) -> ValidationError {
+    ValidationError {
+        step_id: None,
+        level: ValidationLevel::Error,
+        message: message.to_string(),
     }
 }
 
 pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
     let mut errors = Vec::new();
     if definition.steps.is_empty() {
-        errors.push(ValidationError {
-            step_id: None,
-            message: "Add at least one step.".to_string(),
-        });
+        errors.push(automation_error("Add at least one step."));
     }
 
     let mut seen = BTreeSet::new();
@@ -57,6 +86,7 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
         if id.trim().is_empty() {
             errors.push(ValidationError {
                 step_id: Some(id.to_string()),
+                level: ValidationLevel::Error,
                 message: "Every step needs an id.".to_string(),
             });
         } else if !seen.insert(id.to_string()) {
@@ -66,6 +96,7 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
     for id in &duplicated {
         errors.push(ValidationError {
             step_id: Some(id.clone()),
+            level: ValidationLevel::Error,
             message: format!("Two steps share the id \"{id}\" — step ids must be unique."),
         });
     }
@@ -86,6 +117,7 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
     });
 
     let mut ctx = Ctx {
+        definition,
         all_produced,
         order,
         errors,
@@ -119,8 +151,20 @@ fn lookup<'a>(scope: &'a [TokenInfo], token_ref: &TokenRef) -> Option<&'a TokenI
 
 fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
     for step in steps {
+        let names = build_variable_namespace(scope);
         for token_ref in step_refs(step) {
             check_ref(step, token_ref, scope, ctx);
+        }
+        // A warning, not an error: the interpreter leaves an unresolved `$name`
+        // literal (tokens::substitute), so a prompt saying `cd $HOME && pnpm
+        // build` runs exactly as written. Blocking the save on it made a
+        // legitimate shell command unsaveable.
+        for name in unresolved_variable_names(step, &names) {
+            ctx.push_at(
+                ValidationLevel::Warning,
+                step.id(),
+                format!("This step uses ${name}, but no earlier step defines it."),
+            );
         }
         match step {
             Step::AskMe(s) => {
@@ -130,6 +174,13 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
             Step::RunAction(s) => {
                 if s.action_id.is_empty() {
                     ctx.push(step.id(), "Choose an action for this step.".to_string());
+                }
+                scope.extend(step_produces(step));
+            }
+            Step::SetVariable(s) => {
+                let claimed = variable_names_clashing_with(ctx.definition, step.id());
+                if let Some(message) = set_variable_name_issue(&s.name, &claimed) {
+                    ctx.push(step.id(), message);
                 }
                 scope.extend(step_produces(step));
             }
@@ -170,13 +221,7 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                     );
                 }
                 let mut inner_scope = scope.clone();
-                inner_scope.push(TokenInfo {
-                    step_id: TOKEN_STEP_CURRENT.to_string(),
-                    output: "item".to_string(),
-                    token_type: TokenType::Text,
-                    label: "Current item".to_string(),
-                    source: "Repeat".to_string(),
-                });
+                inner_scope.push(current_item_info());
                 walk(&s.steps, &mut inner_scope, ctx);
                 // Isolated: nothing produced inside leaks after the block.
             }
@@ -240,6 +285,7 @@ fn check_ref(step: &Step, token_ref: &TokenRef, scope: &[TokenInfo], ctx: &mut C
     };
     ctx.errors.push(ValidationError {
         step_id: Some(step.id().to_string()),
+        level: ValidationLevel::Error,
         message,
     });
 }

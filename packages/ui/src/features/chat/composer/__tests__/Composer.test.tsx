@@ -8,9 +8,11 @@
  *      ComposerPrimitive.Root → passthrough div
  *      ComposerPrimitive.AttachmentDropzone → passthrough div
  *      ComposerPrimitive.Input → textarea forwarding data-testid + disabled
- *      ComposerPrimitive.Send → button forwarding data-testid + disabled
  *      ComposerPrimitive.Cancel → button forwarding data-testid
- *      useAuiState → returns false (isRunning = false) so the Send button renders
+ *      useAuiState → returns false (isRunning = false)
+ *      useAui → thread().append + composer().{__internal_getRuntime,getState,reset},
+ *        the shape `useSubmitComposition` consumes (Send is now a plain
+ *        `<button type="submit">` inside `ComposerPrimitive.Root`, not a primitive)
  *  - Mock `./edit/composer-edit-context` to return { editing: null, cancelEdit: vi.fn() }
  *    (edit mode is inactive in all cases tested here).
  *  - Mock `./config-toolbar/ComposerToolbar` and `@/components/ui/assistant-ui/attachment`
@@ -31,6 +33,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, createEvent, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useComposerSegments } from '../segments/segment-store';
+
+const THREAD_ID = 'thread-1';
 
 // ---------------------------------------------------------------------------
 // Mocks (hoisted — vi.mock is hoisted to the top of the file by Vitest)
@@ -49,11 +54,12 @@ vi.mock('../../runtime/use-chat-thread-runtime', () => ({
 // `(s) => s.thread.isRunning` is applied. The stub invokes the selector against
 // a fake state object so the real selector path is exercised.
 let __isRunning = false;
-let __sendSpy = vi.fn();
-// Controls the value the `(s) => s.composer.quote` selector resolves to —
-// undefined (no quote pending) by default; tests set a QuoteInfo-shaped object
-// to exercise the "Add a message…" placeholder variant (finding 8.3).
-let __quote: { text: string } | undefined;
+// useSubmitComposition's imperative read (submit's __internal_getRuntime-first
+// path — see use-submit-composition.ts) — non-empty by default so the
+// Enter-to-queue tests exercise a real submit, not a no-op guarded by emptiness.
+let __appendSpy = vi.fn();
+const __resetSpy = vi.fn();
+const __composerGetState = () => ({ text: 'queued message', attachments: [], runConfig: {} });
 
 // Stub ComposerPrimitive with passthrough primitives that forward the props
 // our assertions depend on (data-testid, disabled, children).
@@ -66,9 +72,6 @@ vi.mock('@assistant-ui/react', () => ({
     Input: ({ children, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
       <textarea {...rest}>{children}</textarea>
     ),
-    Send: ({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...rest}>{children}</button>
-    ),
     Cancel: ({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button {...rest}>{children}</button>
     ),
@@ -78,13 +81,28 @@ vi.mock('@assistant-ui/react', () => ({
   // the mutable cells above. Composer, SendOrCancelButton, and the placeholder
   // logic all call useAuiState with selectors over this same fake state object.
   useAuiState: (
-    selector: (s: {
-      thread: { isRunning: boolean; messages: unknown[] };
-      composer: { quote: { text: string } | undefined };
-    }) => unknown,
-  ) => selector({ thread: { isRunning: __isRunning, messages: [] }, composer: { quote: __quote } }),
-  // useAui returns a composer handle; send() is a spy so tests can assert on it.
-  useAui: () => ({ composer: () => ({ send: __sendSpy }) }),
+    selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; threadListItem: { id: string } }) => unknown,
+  ) => selector({ thread: { isRunning: __isRunning, messages: [] }, threadListItem: { id: THREAD_ID } }),
+  // useAui returns thread()/composer() handles matching useSubmitComposition's
+  // shape: thread().append is a spy so tests can assert on it; composer()
+  // exposes __internal_getRuntime().getState() (the live read submit() prefers)
+  // and a no-op reset().
+  useAui: () => ({
+    thread: () => ({ append: __appendSpy }),
+    composer: () => ({
+      __internal_getRuntime: () => ({ getState: __composerGetState }),
+      getState: __composerGetState,
+      reset: __resetSpy,
+    }),
+  }),
+}));
+
+// ComposerSegments reads the real segment store directly; stub the component
+// itself so these tests (worktree guard, Enter-to-queue, highlight wiring)
+// don't also exercise its rendering — the placeholder-copy tests below drive
+// the store directly instead, since Composer computes hasLiveQuote itself.
+vi.mock('../segments/ComposerSegments', () => ({
+  ComposerSegments: () => null,
 }));
 
 // Edit context — editing is null so Composer renders the normal shell, not ComposerEditMode.
@@ -102,14 +120,6 @@ vi.mock('@/components/ui/assistant-ui/attachment', () => ({
   ComposerAttachments: () => null,
   ComposerAddAttachment: () => null,
   ComposerAddMention: () => null,
-}));
-
-// ComposerQuotePreview renders ComposerPrimitive.Quote/QuoteText/QuoteDismiss,
-// none of which the @assistant-ui/react stub above provides — they're irrelevant
-// to the worktree-guard + Enter-to-queue behaviors under test. Stub the quote
-// module to a no-op, matching the toolbar/attachment/triggers stubs.
-vi.mock('@/components/ui/assistant-ui/quote', () => ({
-  ComposerQuotePreview: () => null,
 }));
 
 // ComposerTriggers pulls in Unstable_TriggerPopover* primitives, useChatSkills,
@@ -152,7 +162,7 @@ describe('Composer — worktreeMissing=true disables input/send (banner replaced
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
-    __sendSpy = vi.fn();
+    __appendSpy = vi.fn();
   });
 
   it('does NOT render the old worktree-missing banner (the thread-level DegradedChatCard owns recovery)', () => {
@@ -181,7 +191,7 @@ describe('Composer — worktreeMissing=false has no banner and enabled input', (
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
-    __sendSpy = vi.fn();
+    __appendSpy = vi.fn();
   });
 
   it('does NOT render the worktree-missing banner', () => {
@@ -203,7 +213,7 @@ describe('Composer — chatConfig undefined (extras not available)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
-    __sendSpy = vi.fn();
+    __appendSpy = vi.fn();
   });
 
   it('renders without crashing and shows no banner when extras is undefined', () => {
@@ -221,17 +231,18 @@ describe('Composer — chatConfig undefined (extras not available)', () => {
 // ---------------------------------------------------------------------------
 //
 // When isRunning=true and worktreeMissing=false, pressing plain Enter on the
-// composer input must call aui.composer().send() exactly once (the daemon-backed
-// queue path) and prevent the default browser action.  Every other combination
-// must leave sendSpy uncalled so the native path handles the event.
+// composer input must call submit() → aui.thread().append() exactly once (the
+// daemon-backed queue path) and prevent the default browser action. Every
+// other combination must leave appendSpy uncalled so the native path handles
+// the event.
 
 describe('Composer — mid-run Enter-to-queue interception', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    __sendSpy = vi.fn();
+    __appendSpy = vi.fn();
   });
 
-  it('calls send() once and prevents default when isRunning=true and worktreeMissing=false', () => {
+  it('calls append() once and prevents default when isRunning=true and worktreeMissing=false', () => {
     __isRunning = true;
     __extrasReturn = { worktreeMissing: false };
     renderComposer();
@@ -242,10 +253,10 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
     fireEvent(input, event);
 
     expect(event.defaultPrevented).toBe(true);
-    expect(__sendSpy).toHaveBeenCalledTimes(1);
+    expect(__appendSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT call send() when Shift+Enter is pressed (isRunning=true)', () => {
+  it('does NOT call append() when Shift+Enter is pressed (isRunning=true)', () => {
     __isRunning = true;
     __extrasReturn = { worktreeMissing: false };
     renderComposer();
@@ -253,10 +264,10 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
     const input = screen.getByTestId('chat-composer-input');
     fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
 
-    expect(__sendSpy).not.toHaveBeenCalled();
+    expect(__appendSpy).not.toHaveBeenCalled();
   });
 
-  it('does NOT call send() when isRunning=false (idle — native path handles submit)', () => {
+  it('does NOT call append() when isRunning=false (idle — native path handles submit)', () => {
     __isRunning = false;
     __extrasReturn = { worktreeMissing: false };
     renderComposer();
@@ -264,10 +275,10 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
     const input = screen.getByTestId('chat-composer-input');
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(__sendSpy).not.toHaveBeenCalled();
+    expect(__appendSpy).not.toHaveBeenCalled();
   });
 
-  it('does NOT call send() when isRunning=true but worktreeMissing=true', () => {
+  it('does NOT call append() when isRunning=true but worktreeMissing=true', () => {
     __isRunning = true;
     __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
     renderComposer();
@@ -275,7 +286,7 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
     const input = screen.getByTestId('chat-composer-input');
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(__sendSpy).not.toHaveBeenCalled();
+    expect(__appendSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -292,7 +303,7 @@ describe('Composer — highlight overlay wired + input is text-transparent', () 
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
-    __sendSpy = vi.fn();
+    __appendSpy = vi.fn();
     __extrasReturn = { worktreeMissing: false };
   });
 
@@ -315,17 +326,20 @@ describe('Composer — highlight overlay wired + input is text-transparent', () 
 });
 
 // ---------------------------------------------------------------------------
-// Placeholder copy — "Reply to Mainframe…" default, "Add a message…" when a
-// quote is pending (finding 8.3: design 03-content.jsx:747).
+// Placeholder copy — "Reply to Mainframe…" default, "Add a message…" when the
+// live segment has a pending quote (finding 8.3: design 03-content.jsx:747).
+// The rule now reads the segment store's liveQuote, not the native
+// composer.quote (multi-quote composer, #280) — see ComposerSegments.test.tsx
+// for the committed-segment half of the same placeholder rule.
 // ---------------------------------------------------------------------------
 
 describe('Composer — placeholder copy switches on pending-quote state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
-    __sendSpy = vi.fn();
+    __appendSpy = vi.fn();
     __extrasReturn = { worktreeMissing: false };
-    __quote = undefined;
+    useComposerSegments.setState({ byThread: {} });
   });
 
   it('shows "Reply to Mainframe…" when no quote is pending', () => {
@@ -334,8 +348,10 @@ describe('Composer — placeholder copy switches on pending-quote state', () => 
     expect(input).toHaveAttribute('placeholder', 'Reply to Mainframe…');
   });
 
-  it('shows "Add a message…" when a quote is pending', () => {
-    __quote = { text: 'quoted snippet' };
+  it('shows "Add a message…" when the live segment has a pending quote', () => {
+    useComposerSegments.setState({
+      byThread: { [THREAD_ID]: { committed: [], liveQuote: { id: 'live1', text: 'quoted snippet' } } },
+    });
     renderComposer();
     const input = screen.getByTestId('chat-composer-input');
     expect(input).toHaveAttribute('placeholder', 'Add a message…');

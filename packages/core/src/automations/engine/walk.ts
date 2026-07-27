@@ -14,17 +14,18 @@ import type {
   NotifyStep,
   RepeatBlock,
   RunActionStep,
+  SetVariableStep,
 } from '@qlan-ro/mainframe-types';
 import type { AutomationCheckpoint, AutomationCheckpointStep } from '../store/types.js';
 import type { TokenContext } from '../tokens/substitute.js';
-import { resolveToken } from '../tokens/substitute.js';
+import { renderChipText, resolveToken } from '../tokens/substitute.js';
 import { evalConditions } from './comparators.js';
 import type { StepOutcome, VerbContext, VerbPorts, WalkResult } from './types.js';
 
 /** Contract §2: an unbounded Repeat rewrites the whole checkpoint JSON per advance() (O(N^2)); cap fan-out instead of discovering it in production. */
 export const MAX_REPEAT_ITEMS = 500;
 
-type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep;
+type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep;
 
 /** Decision 12: run_action can spawn commands/connectors/http; ask_agent has chat side effects. */
 const NON_IDEMPOTENT_KINDS = new Set<AutomationStep['kind']>(['run_action', 'ask_agent']);
@@ -185,6 +186,9 @@ async function dispatchVerb(step: LeafStep, ports: VerbPorts, ctx: VerbContext):
       return ports.runAction(step, ctx);
     case 'notify':
       return ports.notify(step, ctx);
+    // Pure and engine-internal: no port, and nothing to make idempotent.
+    case 'set_variable':
+      return { type: 'completed', outputs: { value: renderChipText(ctx.tokens, step.value) } };
   }
 }
 

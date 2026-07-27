@@ -28,6 +28,7 @@ import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { cn } from '@/lib/utils';
 import { ErrorDot } from '../shared';
 import { boundedMessageComponents } from '../../messages/bounded-messages';
+import { NestedTranscriptProvider } from '../../messages/nested-transcript-context';
 
 // ── Header sub-components ─────────────────────────────────────────────────────
 
@@ -105,9 +106,11 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
 function SubagentTranscript({ messages }: { messages: readonly import('@assistant-ui/react').ThreadMessage[] }) {
   return (
     <div className="ml-[12px] border-l-2 border-border pl-3.5">
-      <ReadonlyThreadProvider messages={messages}>
-        <ThreadPrimitive.Messages components={boundedMessageComponents} />
-      </ReadonlyThreadProvider>
+      <NestedTranscriptProvider>
+        <ReadonlyThreadProvider messages={messages}>
+          <ThreadPrimitive.Messages components={boundedMessageComponents} />
+        </ReadonlyThreadProvider>
+      </NestedTranscriptProvider>
     </div>
   );
 }

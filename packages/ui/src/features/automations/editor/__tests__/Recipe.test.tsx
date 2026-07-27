@@ -2,6 +2,7 @@
  * Recipe — the recursive step list with running scope accumulation (ts153
  * wf2-editor.jsx `WfRecipe`). TDD: test written first, implemented after.
  */
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -31,10 +32,12 @@ describe('Recipe — running scope accumulation', () => {
     render(<Recipe steps={steps} onChange={vi.fn()} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
 
     await user.click(screen.getByTestId('automations-step-setup-a'));
-    await user.click(screen.getByTestId('automations-step-config-a-prompt-picker'));
+    await user.click(screen.getByTestId('automations-step-config-a-prompt-var-picker'));
 
-    expect(screen.getByTestId('automations-step-config-a-prompt-picker-option-builtin-today')).toBeInTheDocument();
-    expect(screen.queryByTestId('automations-step-config-a-prompt-picker-option-a-result')).not.toBeInTheDocument();
+    expect(screen.getByTestId('automations-step-config-a-prompt-var-picker-option-today')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('automations-step-config-a-prompt-var-picker-option-agent_result'),
+    ).not.toBeInTheDocument();
   });
 
   it('a later step sees tokens produced by earlier siblings, an earlier step does not', async () => {
@@ -43,12 +46,14 @@ describe('Recipe — running scope accumulation', () => {
     render(<Recipe steps={steps} onChange={vi.fn()} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
 
     await user.click(screen.getByTestId('automations-step-setup-b'));
-    await user.click(screen.getByTestId('automations-step-config-b-prompt-picker'));
-    expect(screen.getByTestId('automations-step-config-b-prompt-picker-option-a-result')).toBeInTheDocument();
+    await user.click(screen.getByTestId('automations-step-config-b-prompt-var-picker'));
+    expect(screen.getByTestId('automations-step-config-b-prompt-var-picker-option-agent_result')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('automations-step-setup-a'));
-    await user.click(screen.getByTestId('automations-step-config-a-prompt-picker'));
-    expect(screen.queryByTestId('automations-step-config-a-prompt-picker-option-b-result')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('automations-step-config-a-prompt-var-picker'));
+    expect(
+      screen.queryByTestId('automations-step-config-a-prompt-var-picker-option-agent_result'),
+    ).not.toBeInTheDocument();
   });
 
   it('an If block leaks its branch outputs to later siblings, visible after the block', () => {
@@ -78,6 +83,53 @@ describe('Recipe — running scope accumulation', () => {
     // fallback, proving "after" received the accumulated scope.
     const afterCard = screen.getByTestId('automations-step-after');
     expect(afterCard).not.toHaveTextContent('Missing value');
+  });
+});
+
+describe('Recipe — a set_variable step feeds later steps', () => {
+  const steps: AutomationStep[] = [
+    { id: 'v1', kind: 'set_variable', name: 'headline', value: ['Release day'] },
+    { id: 'n1', kind: 'notify', message: [] },
+  ];
+
+  // Stateful host: the `$` trigger only stays open while the typed `$` is
+  // still in the field's value, which a `vi.fn()` onChange throws away.
+  function Host() {
+    const [current, setCurrent] = useState(steps);
+    return (
+      <Recipe steps={current} onChange={setCurrent} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />
+    );
+  }
+
+  it("lists the variable in a later step's $ popover", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+
+    await user.click(screen.getByTestId('automations-step-setup-n1'));
+    const field = screen.getByTestId('automations-step-config-n1-message');
+    fireEvent.change(field, { target: { value: '$', selectionStart: 1, selectionEnd: 1 } });
+
+    expect(screen.getByTestId('automations-step-config-n1-message-variable-item-headline')).toBeInTheDocument();
+  });
+
+  it("lists the variable in a later step's ⟨⟩ picker", async () => {
+    const user = userEvent.setup();
+    render(<Recipe steps={steps} onChange={vi.fn()} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
+
+    await user.click(screen.getByTestId('automations-step-setup-n1'));
+    await user.click(screen.getByTestId('automations-step-config-n1-message-var-picker'));
+
+    expect(screen.getByTestId('automations-step-config-n1-message-var-picker-option-headline')).toBeInTheDocument();
+  });
+
+  it('does not leak the variable into the step that defines it', async () => {
+    const user = userEvent.setup();
+    render(<Recipe steps={steps} onChange={vi.fn()} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
+
+    await user.click(screen.getByTestId('automations-step-setup-v1'));
+    await user.click(screen.getByTestId('automations-step-config-v1-value-var-picker'));
+
+    expect(screen.queryByTestId('automations-step-config-v1-value-var-picker-option-headline')).not.toBeInTheDocument();
   });
 });
 
@@ -130,6 +182,17 @@ describe('Recipe — adding a step', () => {
     expect(first).toMatchObject({ kind: 'notify', message: [] });
     expect(typeof first?.id).toBe('string');
     expect(first?.id.length).toBeGreaterThan(0);
+  });
+
+  it('offers "Set value" and appends a blank, contract-valid set_variable step', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Recipe steps={[]} onChange={onChange} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
+    await user.click(screen.getByTestId('root-add'));
+    expect(screen.getByText('Set value')).toBeInTheDocument();
+    await user.click(screen.getByTestId('root-add-verb-set_variable'));
+    const added = onChange.mock.calls[0]?.[0] as AutomationStep[];
+    expect(added[0]).toMatchObject({ kind: 'set_variable', name: '', value: [''] });
   });
 
   it('a fresh "if" step has no conditions and empty then/otherwise', async () => {

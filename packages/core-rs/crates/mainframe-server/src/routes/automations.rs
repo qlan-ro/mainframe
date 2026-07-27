@@ -60,6 +60,7 @@ pub(crate) fn engine_error(err: EngineError) -> Response {
             fail(StatusCode::NOT_FOUND, format!("{what} not found"))
         }
         EngineError::Store(err) => fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+        EngineError::Credential(err) => fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }
 
@@ -90,7 +91,7 @@ async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    match engine.get(&id).await {
+    match registration::get_with_registrations(engine, &id, ctx.port).await {
         Ok(Some(summary)) => ok(summary),
         Ok(None) => fail(StatusCode::NOT_FOUND, "automation not found"),
         Err(err) => engine_error(err),
@@ -233,6 +234,10 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
         .route("/api/automations/{id}/enabled", patch(set_enabled))
         .route(
+            "/api/automations/{id}/webhooks/{triggerId}/register",
+            post(registration::register),
+        )
+        .route(
             "/api/automations/{id}/runs",
             post(run_manually).get(list_runs),
         )
@@ -240,8 +245,12 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/automation-runs/{id}/cancel", post(cancel_run))
 }
 
+mod registration;
+
 #[cfg(test)]
 mod automations_tests;
+#[cfg(test)]
+mod registration_tests;
 
 // PORT STATUS: src/server/routes/automations.ts (9 endpoints, 177 lines)
 // confidence: high

@@ -1,0 +1,210 @@
+# Token reference
+
+Source of truth: `packages/ui/src/styles/globals.css`. `:root` (~line 23) and `.dark` (~216) define the
+values; three schemes (`[data-scheme="ocean"]`, `[data-scheme="velvet"]`) override them; `@theme inline`
+(~793) is what turns a variable into a Tailwind utility.
+
+## The mapping rule — a var is not a utility
+
+`--mf-foo` exists as a CSS variable. `bg-mf-foo` only works if `@theme inline` contains
+`--color-mf-foo: var(--mf-foo);`. **Grep before you use.** An unmapped name compiles to nothing and renders
+silently unstyled — no build error, no console warning.
+
+Deliberately unmapped (use as arbitrary values, never as a color utility):
+
+| Variable | Correct usage |
+|---|---|
+| `--mf-shadow-modal`, `-pop`, `-panel`, `-panel-soft`, `-panel-ambient`, `-panel-glass-ambient`, `-card`, `-card-hover`, `-picker`, `-rail-active`, `-user-card`, `-segment`, `-keycap`, `-edit-ring` | `shadow-[var(--mf-shadow-panel)]` |
+| `--mf-focus-ring` | applied globally by the `:focus-visible` rule; opt out with `data-noring` |
+| `--mf-find-tint`, `--mf-find-active` | `bg-[var(--mf-find-tint)]` |
+| `--mf-cm-*` (editor UI states) | CodeMirror theme objects, not classes |
+| `--mf-um-card`, `--mf-um-fade`, `--mf-checker-*`, `--mf-provider-*-avatar` | arbitrary values |
+
+## Type — 8 rungs
+
+| Class | Size | Leading | Use |
+|---|---|---|---|
+| `text-micro` | 10px | 1.3 | **ornament only — a deprecation target.** Nothing that must be read |
+| `text-caption` | 11px | 1.35 | secondary metadata, chips, footnotes |
+| `text-label` | 12px | 1.4 | form labels, chips, small buttons |
+| `text-body` | 13px | 1.5 | **baseline** — body copy, rows, menu items |
+| `text-heading` | 15px | 1.3 | dialog/section titles |
+| `text-title` | 17px | 1.25 | surface titles |
+| `text-display` | 22px | 1.2 | empty/welcome states |
+| `text-hero` | 28px | 1.15 | onboarding only |
+
+`body` itself is 13px — so an *unstyled* text node looks plausible and is still wrong.
+
+### Which rung for which role
+
+Settled by the typography audit (`docs/architecture/2026-07-11-typography-legibility-audit.md`, shipped as
+PR #452). The scale was being authored a rung low; the fix retuned `UI_SCALE_FACTORS` to
+`compact 0.92 / normal 1.0 / large 1.15`, so **normal is now true ×1.0 zoom and `body` really is 13px**.
+
+| Role | Rung |
+|---|---|
+| Primary content and anything the user acts on — session titles, menu items, picker values, button labels, inputs | `body` 13 |
+| Secondary supporting text — descriptions, tooltips, code/diff text, table cells, meta rows | `label` 12 |
+| Compact annotations — chips, badges, section headers, keycaps, timestamps | `caption` 11 |
+| Ornament | `micro` 10 |
+
+Tracking: `tracking-tight` (-0.02em) on headings. **`tracking-wide` is not a licence for uppercase
+eyebrows** — the `text-micro font-bold uppercase tracking-wide text-mf-text-3` stack was an app-wide
+antipattern the audit removed. A section header is `text-caption font-medium text-muted-foreground` in
+sentence case; if an uppercase eyebrow is genuinely wanted, the floor is 11px semibold in
+`muted-foreground`.
+
+### Weight
+
+There are no `--font-weight-*` tokens. What follows is **measured from shipped `packages/ui` markup**, not
+imported from the design prototype — the prototype specifies a stricter ladder (500 resting · 600 active ·
+700 titles · 800 brand) that the app does not actually follow. Match the app.
+
+| Rung | What ships | Take |
+|---|---|---|
+| `text-micro` | bold 10 · semibold 5 | residue of the removed eyebrow antipattern — don't copy it |
+| `text-caption` | medium 68 · semibold 60 | either; medium resting, semibold for emphasis |
+| `text-label` | semibold 58 · medium 46 | either; semibold slightly leads |
+| `text-body` | semibold 28 · medium 13 | **semibold** for row titles, medium for secondary |
+| `text-heading` | bold 17 · semibold 10 | **bold** — this is the dialog-title weight |
+| `text-title` | bold 9 · semibold 3 | bold |
+| `text-display` / `text-hero` | bold only | bold (not extrabold) |
+
+Practical rules that do hold: **`font-normal` is effectively unused** (3 sites) — muted text gets a muted
+*color*, not a lighter weight; **`font-extrabold` appears once**, on the brand mark; and weight rises with
+the rung, so anything `text-heading` and above is `font-bold`. Below that, medium/semibold is a live
+choice — copy the neighbouring component rather than deciding fresh.
+
+`cn()` is an `extendTailwindMerge` that registers these as a font-size group. Without it,
+`text-label text-muted-foreground` would collapse to just the color. Always compose classes through `cn()`.
+
+## Spacing — compressed integers
+
+`--spacing-1: 2px` · `2: 4px` · `3: 6px` · `4: 8px` · `5: 12px` · `6: 16px` · `7: 20px` · `8: 24px` ·
+`9: 32px` · `10: 40px` · `11: 48px` · `12: 64px`
+
+So `gap-2` = 4px and `p-4` = 8px — roughly **half** of stock Tailwind. Fractional steps (`p-1.5` = 6px,
+`py-2.5` = 10px) follow the default 4px base and are used freely. When porting a prototype measured in px,
+use an arbitrary value (`px-[7px]`) rather than guessing a step.
+
+## Radius
+
+| Class | px | What sits here |
+|---|---|---|
+| `rounded-xs` | 4 | badges, chips, keycaps |
+| `rounded-sm` | 6 | list rows, segmented controls, small icon buttons |
+| `rounded-md` | 8 | buttons, fields, cards, menus, popovers (`--radius` base) |
+| `rounded-lg` | 11 | panels, code blocks, composer surfaces |
+| `rounded-xl` | 13 | message bubbles, modals and dialogs |
+| `rounded-full` | 999 | pills and toggles (circles use `rounded-full` too) |
+
+Toolbar buttons and chips in shipped code often use `rounded-[6px]`/`rounded-[7px]` directly.
+Panel-level rounding is **not yours to pick** — see the window-style axis below.
+
+## Color — shadcn contract
+
+| Token | Meaning |
+|---|---|
+| `background` / `foreground` | content surface + primary text |
+| `card` / `card-foreground` | subtly raised card |
+| `popover` / `popover-foreground` | **menus, dropdowns, dialogs** |
+| `primary` / `primary-foreground` | brand accent (themed per mode+scheme) |
+| `secondary` | secondary/ghost button fill |
+| `muted` / `muted-foreground` | muted fill / **secondary text** |
+| `accent` / `accent-foreground` | **hover surface** — not the brand |
+| `destructive` | error / danger |
+| `border` / `input` / `ring` | hairlines · field borders · focus color |
+
+`accent`, `border`, `input`, and `mf-chip` are alpha colors (`rgba(0,0,0,0.04–0.08)`) — an `/opacity`
+modifier on them compounds toward invisible.
+
+## Color — `mf-*` extensions (all mapped to utilities)
+
+- **Surfaces:** `mf-window` (app backdrop), `mf-glass` (translucent panel, pair with `backdrop-blur-[40px]`),
+  `mf-content2`, `mf-raised`, `mf-tab-bar`, `mf-tab-active`, `mf-chip`, `mf-selection`, `mf-scrim`
+- **Text:** `mf-text-3` (tertiary), `mf-text-4` (quaternary/disabled)
+- **Semantic:** `mf-warning` + `mf-warning-tint`, `mf-success` + `mf-success-tint`, `mf-destructive-tint`,
+  `mf-border-hover`
+- **Surface identity:** `mf-surface-files` (violet), `mf-surface-run` (green)
+- **Tool families:** `mf-tool-read` / `-search` / `-bash` / `-web`, each with a `-tint`
+- **Directives:** `mf-directive-skill` + `-tint`, `mf-directive-command-tint`
+- **Diff:** `mf-diff-add-bg` / `-border` / `-text`, `mf-diff-del-*`
+- **Code + terminal:** `mf-code-bg/fg/kw/str/fn/type/num/cmt`, `mf-code-inline-fg`,
+  `mf-term-bg/fg/cmt/green/cyan/amber`
+- **Tasks:** `mf-task-type-{bug,enhancement,question,duplicate}`,
+  `mf-priority-{critical,high,medium}` + `mf-priority-{critical,high,medium,low}-dot`
+- **Automations:** `mf-auto-violet`, `mf-auto-kind-{question,loop,parallel,call}`
+- **User message:** `mf-um-ink`, `mf-um-edge`, `mf-um-dash`
+- **Viewer:** `mf-viewer-matte`, `mf-viewer-check-a/b`
+- **Accents:** `mf-accent-amber`, `mf-accent-violet`
+
+Task/tool/automation/diff hues are **design constants** — no per-scheme override. Everything else is
+redefined in `.dark` and in each scheme block, which is exactly why hardcoding a hex breaks five of six
+themes.
+
+## Motion
+
+`--ease-default` (cubic-bezier(.4,0,.2,1)) · `--ease-signature` (cubic-bezier(.22,1,.36,1)) · plus
+`--ease-in` / `-out` / `-bounce`. Chrome transitions run 120–200ms (`duration-[120ms]` on hovers,
+`duration-200` on dialogs). Only `--ease-default` and `--ease-signature` are mapped as utilities
+(`ease-default`, `ease-signature`).
+
+## Fonts
+
+`font-sans` = system stack (`-apple-system`/SF Pro Text). `font-mono` = SF Mono. Branch names, commands,
+paths, and code are always `font-mono`.
+
+## Icons — the compressed-scale trap
+
+Icons are `lucide-react` at the library's default stroke (explicit `strokeWidth` appears ~16 times total,
+and when it does it is *heavier*, 2.4–3, for emphasis glyphs — the prototype's 1.6px convention did not
+come across, so don't apply it).
+
+**Integer `size-N` on an SVG is a bug.** The spacing scale is compressed, so `size-3` renders **6px** and
+`size-4` renders **8px**, not 12 and 16. Use one of:
+
+- a fractional utility — `size-3.5` = 14px (these follow stock Tailwind's 4px base)
+- an explicit arbitrary value — `size-[12px]`
+- the lucide prop — `size={12}` (the most common form in this codebase, 164 uses at 12)
+
+Meaningful glyphs sit on a **12 / 14 / 16** grid: 12 inside chips and meta rows, 14 for default UI, 16 for
+headers and nav. Decorative dots are exempt. `button.tsx` guards the default with
+`[&_svg:not([class*='size-'])]:size-3.5`, which respects a child's own `size-*` — don't reintroduce a bare
+`[&_svg]:size-4`, which silently defeats overrides and was the original 8px-icon bug.
+
+## Ink tiers — contrast is enforced
+
+`src/styles/__tests__/contrast.test.ts` composites every ink token over its real backdrop across all six
+appearance blocks and asserts the WCAG floors. Changing a color token means keeping that test green.
+
+- `foreground` (≥13:1) and `muted-foreground` (4.8–7:1) are the two safe text inks.
+- `mf-text-3` was re-tinted to clear 4.5:1 — it is for **short metadata only**, not everyday secondary text.
+- **`mf-text-4` is ornament, not text.** Never on text, never on a meaning-bearing icon. It survives in
+  ~17 files, and the legitimate uses tell you the shape of the rule: input `placeholder:`, syntax-token
+  fallbacks, inactive tab-strip titles, path crumbs. Two *deliberate* non-text uses are load-bearing and
+  asserted by `components/ui/__tests__/choice-controls.test.tsx` — the unchecked `Checkbox` and
+  `RadioGroupItem` ring is `border-[1.5px] border-mf-text-4`, chosen over the fainter `border-border`
+  precisely so an empty control stays visible. A ring is not text; don't "fix" it.
+- **Never stack `opacity-*` on an ink token.** Pick the right tier instead; the stack was measured as low
+  as 1.3:1.
+- **Semantic hues are not text colors.** `mf-success` / `mf-warning` / task-type / priority / workflow hues
+  belong on the icon, the dot, or a tint background — the text beside them stays
+  `foreground` / `muted-foreground`.
+- **`text-white` only on true scrims.** On an accent fill use `text-primary-foreground`; two dark schemes
+  have light accents and hardcoded white breaks them. White-on-accent needs ≥12px medium/semibold, and
+  never a translucent `white/NN` capsule.
+
+## The fourth axis — window style
+
+Appearance is **mode × scheme × window style × ui scale**, not just mode × scheme. Window style
+(`unified` · `split` · `glass`, `data-window-style` on the shell root, default `glass`) is *structural*:
+it decides whether a panel is a floating rounded card, a full-bleed hairline-divided pane, or a frosted
+blur card — and the three disagree on radius, fill, shadow, and gutter.
+
+All of that geometry lives in **`lib/appearance/window-style.ts`** (`windowStyleGeometry(style)`) and is
+applied by `AppShell` / `SidebarShell` / `SurfaceHost`. A feature component that gives itself a panel
+radius, a window-colored fill, or a panel shadow will look correct in one style and wrong in the other
+two. Style the *inside* of your surface; let the shell own its outer edge.
+
+`uiScale` is applied as webview zoom, so it needs nothing from you — but it is the reason arbitrary px
+values should stay rare and small.

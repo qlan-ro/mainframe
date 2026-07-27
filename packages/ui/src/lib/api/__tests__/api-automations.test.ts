@@ -7,6 +7,7 @@ import {
   updateAutomation,
   deleteAutomation,
   setAutomationEnabled,
+  registerAutomationWebhook,
   startAutomationRun,
   listAutomationRuns,
   getAutomationRun,
@@ -179,6 +180,31 @@ describe('startAutomationRun', () => {
 
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/automations/auto-1/runs', { method: 'POST' });
     expect(result.id).toBe('run-1');
+  });
+});
+
+describe('registerAutomationWebhook', () => {
+  it('sends a bodyless POST to the register route, URI-encoding both ids', async () => {
+    const registration = {
+      hookId: 'hook-1',
+      url: 'http://127.0.0.1:31415/api/automation-webhooks/hook-1',
+      lastDeliveryAt: null,
+    };
+    mockFetchOk(registration);
+
+    const result = await registerAutomationWebhook('auto 1', 'trig 1');
+
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/automations/auto%201/webhooks/trig%201/register', {
+      method: 'POST',
+    });
+    expect(result).toEqual(registration);
+  });
+
+  it('throws when the trigger is unknown', async () => {
+    mockFetchHttpError(404, 'automation or webhook trigger not found');
+    await expect(registerAutomationWebhook('auto-1', 'nope')).rejects.toThrow(
+      'automation or webhook trigger not found',
+    );
   });
 });
 

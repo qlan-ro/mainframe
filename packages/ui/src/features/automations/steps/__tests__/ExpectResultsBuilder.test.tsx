@@ -44,7 +44,8 @@ describe('ExpectResultsBuilder', () => {
     const onChange = vi.fn();
     const expects: AutomationExpectedOutput[] = [{ key: 'scope', type: 'text' }];
     render(<ExpectResultsBuilder expects={expects} onChange={onChange} testId="automations-expects-a" />);
-    await user.selectOptions(screen.getByTestId('automations-expects-a-type-0'), 'choice');
+    await user.click(screen.getByTestId('automations-expects-a-type-0'));
+    await user.click(screen.getByTestId('automations-expects-a-type-0-option-choice'));
     expect(onChange).toHaveBeenCalledWith([{ key: 'scope', type: 'choice', options: [] }]);
   });
 

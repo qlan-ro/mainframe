@@ -3,6 +3,7 @@
 
 pub mod automation;
 pub(crate) mod catalog;
+pub(crate) mod comparators;
 pub mod condition;
 pub mod form;
 pub(crate) mod scope;
@@ -11,22 +12,23 @@ pub mod template;
 pub mod token;
 pub mod trigger;
 pub mod validate;
+pub(crate) mod validate_variables;
 
 pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScope};
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
 pub use step::{
     AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, IfBlock, NotifyStep, OutputAs,
-    RepeatBlock, RunActionStep, Step, WorktreeSpec, find_step_by_id,
+    RepeatBlock, RunActionStep, SetVariableStep, Step, WorktreeSpec, find_step_by_id,
 };
 pub use template::{ChipPart, ChipText, chip_tokens};
 pub use token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef};
 pub use trigger::{
-    AutomationEventName, DailySchedule, EventTrigger, EveryNHoursSchedule, OnMissed,
-    SchedulePattern, ScheduleTrigger, Trigger, WebhookPreset, WebhookTrigger, WeekdaysSchedule,
-    WeeklySchedule,
+    AutomationEventName, DailySchedule, EventTrigger, EveryNHoursSchedule, OnMissed, OnceSchedule,
+    SchedulePattern, ScheduleTrigger, Trigger, WebhookPreset, WebhookRegistration, WebhookTrigger,
+    WeekdaysSchedule, WeeklySchedule,
 };
-pub use validate::{ValidationError, validate};
+pub use validate::{ValidationError, ValidationLevel, validate};
 
 /// `skip_serializing_if` helper for wire-optional booleans that default false
 /// (`keepGoing`).
@@ -43,9 +45,12 @@ mod serde_trigger_tests;
 #[cfg(test)]
 mod validate_tests;
 
-/// T1.2 — the six canonical fixtures (contract §8, authored by Node Phase 0)
-/// must deserialize, and re-serialize to the exact same JSON. Rust loads them
-/// by relative path and never authors its own.
+#[cfg(test)]
+mod validate_variable_tests;
+
+/// T1.2 — the canonical fixtures (contract §8, authored by Node Phase 0) must
+/// deserialize, and re-serialize to the exact same JSON. Rust loads them by
+/// relative path and never authors its own.
 #[cfg(test)]
 mod fixture_tests {
     use std::path::PathBuf;
@@ -54,13 +59,14 @@ mod fixture_tests {
 
     use super::AutomationCreateInput;
 
-    pub(super) const FIXTURES: [&str; 6] = [
+    pub(super) const FIXTURES: [&str; 7] = [
         "daily-health-log",
         "daily-standup",
         "pr-auto-review",
         "morning-pr-sweep",
         "ship-work",
         "daily-feature-spike",
+        "release-digest",
     ];
 
     pub(super) fn load_fixture(name: &str) -> (Value, AutomationCreateInput) {
@@ -76,7 +82,7 @@ mod fixture_tests {
     }
 
     #[test]
-    fn all_six_fixtures_round_trip_losslessly() {
+    fn all_canonical_fixtures_round_trip_losslessly() {
         for name in FIXTURES {
             let (raw, parsed) = load_fixture(name);
             let back = serde_json::to_value(&parsed).unwrap();

@@ -34,13 +34,25 @@ interface AutomationStepBase {
   keepGoing?: boolean;
 }
 
+/**
+ * A producing step's stored variable name, minted once when the step first has
+ * an output and never recomputed (`automation-domain/output-name.ts`). Only its
+ * trailing `_2`/`_3` ordinal is read: a step produces several outputs, so the
+ * stored name pins the step's slot in the collision namespace and every output
+ * of that step carries the same ordinal. Optional for back-compat — a step
+ * without one falls back to position-ordered suffixing.
+ */
+interface ProducingStep extends AutomationStepBase {
+  outputName?: string;
+}
+
 export interface AutomationExpectedOutput {
   key: string;
   type: 'text' | 'number' | 'list' | 'choice';
   options?: string[];
 }
 
-export interface AskAgentStep extends AutomationStepBase {
+export interface AskAgentStep extends ProducingStep {
   kind: 'ask_agent';
   prompt: ChipText;
   adapterId?: string;
@@ -65,13 +77,13 @@ export interface AutomationFormField {
   showWhen?: { key: string; equals: string };
 }
 
-export interface AskMeStep extends AutomationStepBase {
+export interface AskMeStep extends ProducingStep {
   kind: 'ask_me';
   title: string;
   fields: AutomationFormField[];
 }
 
-export interface RunActionStep extends AutomationStepBase {
+export interface RunActionStep extends ProducingStep {
   kind: 'run_action';
   actionId: string;
   credential?: string;
@@ -86,16 +98,7 @@ export interface NotifyStep extends AutomationStepBase {
 
 /** A3 adds `is_one_of`; `contains` is polymorphic (text substring / list membership). */
 export type Comparator =
-  | 'is'
-  | 'is_not'
-  | 'contains'
-  | 'starts_with'
-  | 'eq'
-  | 'lt'
-  | 'gt'
-  | 'is_empty'
-  | 'not_empty'
-  | 'is_one_of';
+  'is' | 'is_not' | 'contains' | 'starts_with' | 'eq' | 'lt' | 'gt' | 'is_empty' | 'not_empty' | 'is_one_of';
 
 export interface ConditionRow {
   token: TokenRef;
@@ -117,13 +120,23 @@ export interface RepeatBlock extends AutomationStepBase {
   steps: AutomationStep[];
 }
 
-export type AutomationStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | IfBlock | RepeatBlock;
+/** Defines a named value downstream steps address as `$name` (automation-domain/variables.ts). */
+export interface SetVariableStep extends AutomationStepBase {
+  kind: 'set_variable';
+  name: string;
+  value: ChipText;
+}
+
+export type AutomationStep =
+  AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | IfBlock | RepeatBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }
   | { type: 'weekdays'; at: string }
   | { type: 'weekly'; days: number[]; at: string }
-  | { type: 'every_n_hours'; n: number };
+  | { type: 'every_n_hours'; n: number }
+  /** `at` is naive-local `YYYY-MM-DDTHH:MM` — the `datetime-local` input format, NOT the daemon's seconds-bearing `scheduled_for_string`. */
+  | { type: 'once'; at: string };
 
 export interface ScheduleTrigger {
   id: string;
@@ -151,11 +164,21 @@ export interface EventTrigger {
  */
 export type WebhookPreset = 'github_pr_opened' | 'github_pr_merged';
 
+/** Server-computed on read; the daemon ignores it on write. Mirrors the Rust `WebhookRegistration`. */
+export interface WebhookRegistration {
+  hookId: string;
+  /** The local ingest endpoint — reachable only from this machine. */
+  url: string;
+  /** A present `null` means "registered, never delivered"; an absent `registration` means "not registered". */
+  lastDeliveryAt: string | null;
+}
+
 export interface WebhookTrigger {
   id: string;
   kind: 'webhook';
   hookId: string;
   preset?: WebhookPreset;
+  registration?: WebhookRegistration;
 }
 
 export type AutomationTrigger = ScheduleTrigger | EventTrigger | WebhookTrigger;

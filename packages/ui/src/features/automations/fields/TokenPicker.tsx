@@ -12,10 +12,9 @@
  * existing native-tooltip spot (`LibraryRow`'s Run button) rather than
  * adding a second tooltip mechanism for one row.
  *
- * `small`/`label`/`align` mirror ts153's variant API: `ChipField` embeds an
- * icon-only, right-anchored picker (`small`, `label=""`, `align="end"`);
- * standalone callers (e.g. a "pick a result" row) get the default 24px
- * trigger with a visible label, left-anchored.
+ * Text fields reference values by name now, so the only callers left are the
+ * two structural pickers — an if-condition's left side and a repeat's list.
+ * Both want the same standalone trigger, which is why this has no variants.
  */
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -30,12 +29,6 @@ export interface TokenPickerProps {
   tokens: TokenDescriptor[];
   onInsert: (ref: TokenRef) => void;
   testId: string;
-  /** Compact 20px trigger for embedded use (e.g. inside `ChipField`); default is the standalone 24px size. */
-  small?: boolean;
-  /** Trigger label text — pass `''` for an icon-only trigger. */
-  label?: string;
-  /** Popover alignment relative to the trigger. */
-  align?: 'start' | 'end';
 }
 
 interface TokenGroup {
@@ -60,7 +53,7 @@ function tokenKey(ref: TokenRef): string {
   return `${ref.stepId}-${ref.output}`;
 }
 
-export function TokenPicker({ tokens, onInsert, testId, small, label = 'Insert', align = 'start' }: TokenPickerProps) {
+export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const hasTokens = tokens.length > 0;
@@ -100,17 +93,14 @@ export function TokenPicker({ tokens, onInsert, testId, small, label = 'Insert',
             type="button"
             data-testid={testId}
             disabled={!hasTokens}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-caption font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45',
-              small ? 'h-[20px]' : 'h-[24px]',
-            )}
+            className="inline-flex h-[24px] shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-caption font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
           >
             <span className="font-mono text-caption">⟨⟩</span>
-            {label}
+            Insert
           </button>
         </PopoverTrigger>
       </Hint>
-      <PopoverContent data-testid={`${testId}-menu`} align={align} className="max-h-80 w-64 overflow-y-auto p-1.5">
+      <PopoverContent data-testid={`${testId}-menu`} align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
         {groups.map((group) => (
           <div key={group.source} className="mb-[4px]">
             <div className="px-[8px] pb-[4px] pt-[5px] text-caption font-medium text-muted-foreground">

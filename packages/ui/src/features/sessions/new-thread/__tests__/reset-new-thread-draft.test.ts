@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runtime/draft-config';
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { markDraftDiscarded, isDraftDiscarded, useDiscardedDraftStore } from '../discarded-drafts';
+import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 const abandonCreateForLocal = vi.fn();
 vi.mock('../../runtime/new-thread-coordinator', () => ({
   abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
@@ -23,6 +24,7 @@ beforeEach(() => {
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
   useDiscardedDraftStore.setState({ ids: new Set() });
+  useComposerSegments.setState({ byThread: {} });
   abandonCreateForLocal.mockReset();
 });
 
@@ -67,5 +69,30 @@ describe('resetNewThreadDraft', () => {
     resetNewThreadDraft('__LOCALID_1');
 
     expect(isDraftDiscarded('__LOCALID_1')).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: composer segments are keyed by the SAME reused `__LOCALID_*`
+  // id. Quoting a file into a draft and then abandoning it (switch away, New
+  // again) used to bring the pill back on the reused slot — and
+  // serializeComposition would prepend that quote to a message sent in a
+  // DIFFERENT project.
+  // -------------------------------------------------------------------------
+  it("clears the reused slot's composer segments", () => {
+    useComposerSegments.getState().append('__LOCALID_1', { quote: 'src/a.ts:1-3', liveText: 'about this' });
+    expect(useComposerSegments.getState().byThread['__LOCALID_1']?.liveQuote).not.toBeNull();
+
+    resetNewThreadDraft('__LOCALID_1');
+
+    expect(useComposerSegments.getState().byThread['__LOCALID_1']).toEqual({ committed: [], liveQuote: null });
+  });
+
+  it("leaves another thread's segments untouched", () => {
+    useComposerSegments.getState().append('__LOCALID_1', { quote: 'Q1', liveText: '' });
+    useComposerSegments.getState().append('chat-42', { quote: 'Q2', liveText: '' });
+
+    resetNewThreadDraft('__LOCALID_1');
+
+    expect(useComposerSegments.getState().byThread['chat-42']?.liveQuote?.text).toBe('Q2');
   });
 });

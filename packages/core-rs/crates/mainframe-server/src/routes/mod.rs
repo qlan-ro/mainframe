@@ -32,6 +32,7 @@ pub mod projects;
 pub mod quota;
 pub mod search;
 pub mod settings;
+pub mod setup_advisor;
 pub mod skills;
 pub mod suggestions;
 pub mod tags;

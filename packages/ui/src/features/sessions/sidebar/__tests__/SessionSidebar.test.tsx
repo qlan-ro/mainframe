@@ -4,8 +4,8 @@
  * Strategy:
  *  - Mock @assistant-ui/react: useAssistantRuntime().threads returns a controlled
  *    thread list whose getState() yields the REAL ThreadListState shape
- *    (threadIds + threadItems), exercising the canonical threadListStateToSessionItems path;
- *    ThreadListPrimitive.New renders as a passthrough div.
+ *    (threadIds + threadItems), exercising the canonical threadListStateToSessionItems path.
+ *    switchToNewThread mints a `__LOCALID_*` slot like the real runtime does.
  *  - Mock ../use-projects so projects are controlled per test.
  *  - Mock @/store/session-filters so filterProjectId / selectedTags are controlled.
  *  - Mock @/store/unread-store so isUnread always returns false.
@@ -26,7 +26,6 @@
  *  7. data-testid="sessions-filter-pill-all" is present (ProjectFilterPillBar rendered).
  */
 import type React from 'react';
-import { cloneElement, isValidElement } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -48,15 +47,20 @@ let __selectedTags: Set<string> = new Set();
 const __selectedSynthetic: Set<SyntheticTag> = new Set();
 let __sortMode: 'recent' | 'name' | 'status' = 'recent';
 let __newThreadId: string | null = null;
+let __switchCounter = 0;
 const setFilterProjectIdSpy = vi.fn();
 const setSortModeSpy = vi.fn();
-// Spy injected by the ThreadListPrimitive.New `asChild` Slot — see the mock below.
-const newThreadClickSpy = vi.fn();
+const setTextSpy = vi.fn();
 // Shared across the module-scope useAssistantRuntime() mock so component code and
 // assertions see the SAME spy instance — a fresh vi.fn() per call would be
 // unobservable from the test.
 const switchToThreadSpy = vi.fn();
-const switchToNewThreadSpy = vi.fn();
+// Mirrors the real RemoteThreadList: switching MINTS a fresh `__LOCALID_*` slot.
+// A no-op spy would leave the stale id in place and hide the draft-reset bug.
+const switchToNewThreadSpy = vi.fn(async () => {
+  __switchCounter += 1;
+  __newThreadId = `__LOCALID_${__switchCounter}`;
+});
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
@@ -82,31 +86,18 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (
     selector: (s: { threads: { threadItems: unknown; mainThreadId: string; newThreadId: string | null } }) => unknown,
   ) => selector({ threads: { threadItems: __threads, mainThreadId: '', newThreadId: __newThreadId } }),
-  // Faithful `asChild` repro: the real primitive is a Radix Slot that clones its
-  // single child and injects onClick onto it — composing the caller's onClick
-  // BEFORE its own switchToNewThread (composeEventHandlers), then the switch itself
-  // (here newThreadClickSpy). A passthrough `<>{children}</>` would hide the
-  // prop-forwarding bug; dropping the caller onClick would hide the draft reset.
-  ThreadListPrimitive: {
-    New: ({
-      children,
-      asChild,
-      onClick,
-    }: {
-      children?: React.ReactNode;
-      asChild?: boolean;
-      onClick?: (e: unknown) => void;
-    }) => {
-      const composed = (e: unknown) => {
-        onClick?.(e);
-        newThreadClickSpy(e);
-      };
-      return asChild && isValidElement(children) ? (
-        cloneElement(children as React.ReactElement<Record<string, unknown>>, { onClick: composed })
-      ) : (
-        <>{children}</>
-      );
-    },
+  // useOpenNewThreadDraft prefills the composer through aui.composer().setText.
+  useAui: () => ({ composer: () => ({ setText: setTextSpy }) }),
+}));
+
+// The real one fetches provider settings over HTTP; this seeds the draft stores
+// exactly as it does, so the "New session" sequence stays observable.
+vi.mock('../../new-thread/initialize-draft', () => ({
+  initializeDraft: async ({ localId, projectId }: { localId: string; projectId: string }) => {
+    const snapshot = { projectId, adapterId: 'claude' };
+    setDraftConfig(localId, snapshot);
+    useNewThreadReady.getState().markReady(localId);
+    return snapshot;
   },
 }));
 
@@ -122,16 +113,23 @@ vi.mock('../../use-projects', () => ({
 // Mock @/store/session-filters
 // ---------------------------------------------------------------------------
 
-vi.mock('@/store/session-filters', () => ({
-  useSessionFilters: () => ({
+// Selector-aware: SessionSidebar calls useSessionFilters() bare, while
+// useOpenNewThreadDraft passes a selector. Ignoring the selector would hand the
+// draft sequence the whole state object as `filterProjectId`.
+vi.mock('@/store/session-filters', () => {
+  const state = () => ({
     filterProjectId: __filterProjectId,
     selectedTags: __selectedTags,
     selectedSynthetic: __selectedSynthetic,
     sortMode: __sortMode,
     setFilterProjectId: setFilterProjectIdSpy,
     setSortMode: setSortModeSpy,
-  }),
-}));
+  });
+  return {
+    useSessionFilters: (selector?: (s: ReturnType<typeof state>) => unknown) =>
+      selector ? selector(state()) : state(),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Mock @/store/unread-store
@@ -311,11 +309,12 @@ beforeEach(() => {
   __selectedTags = new Set();
   __sortMode = 'recent';
   __newThreadId = null;
+  __switchCounter = 0;
   setFilterProjectIdSpy.mockReset();
   setSortModeSpy.mockReset();
-  newThreadClickSpy.mockReset();
+  setTextSpy.mockReset();
   switchToThreadSpy.mockReset();
-  switchToNewThreadSpy.mockReset();
+  switchToNewThreadSpy.mockClear();
   useDraftConfigStore.setState({ drafts: new Map() });
   useNewThreadReady.setState({ readyIds: new Set() });
   useDraftReturnTarget.setState({ returnThreadId: null });
@@ -373,22 +372,20 @@ describe('SessionSidebar — Sessions group header is collapsible', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2b. Clicking the new-button fires the ThreadListPrimitive.New handler.
-//     The `Hint` tooltip wrapper must not sit between the asChild Slot and the
-//     button, or the injected onClick never reaches the DOM element.
-//
-//     NOTE (Task 9 wiring): the "+" is now SessionsNewButton (Task 8). In the
-//     "All" view (filterProjectId=null) it opens NewSessionPickerPopover instead
-//     of firing ThreadListPrimitive.New directly — that primitive only fires from
-//     the pill-active branch, so this test activates a project pill to keep
-//     exercising the same underlying primitive-composition behavior.
+// 2b. Clicking the new-button runs the openNewThreadDraft sequence.
+//     With a project pill active, SessionsNewButton skips the picker and opens
+//     the draft in that project directly — mint a slot, seed its config,
+//     remember the pre-switch session.
 // ---------------------------------------------------------------------------
 
-it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clicked with a project pill active', async () => {
+it('mints a draft slot and seeds it for the active project when sessions-new-button is clicked', async () => {
   __filterProjectId = 'p1';
   render(<SessionSidebar />);
   await userEvent.click(screen.getByTestId('sessions-new-button'));
-  expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
+
+  expect(switchToNewThreadSpy).toHaveBeenCalledTimes(1);
+  expect(getDraftConfig('__LOCALID_1')).toEqual({ projectId: 'p1', adapterId: 'claude' });
+  expect(useNewThreadReady.getState().isReady('__LOCALID_1')).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -396,10 +393,6 @@ it('invokes the ThreadListPrimitive.New onClick when sessions-new-button is clic
 //     aui reuses the same __LOCALID_* slot until a message is sent, so an
 //     abandoned draft (project seeded, never sent) must not leak into the next
 //     New — else the chat is created in the stale project / the picker is skipped.
-//
-//     NOTE (Task 9 wiring): same pill-active branch as 2b above — the reset in
-//     the "All" view only runs once a project is picked from the popover
-//     (covered by SessionsNewButton's own tests), not on the trigger click alone.
 // ---------------------------------------------------------------------------
 
 it('clears the draft-config and ready flag for the current newThreadId on click', async () => {
@@ -413,8 +406,8 @@ it('clears the draft-config and ready flag for the current newThreadId on click'
 
   expect(getDraftConfig('__LOCALID_reuse')).toBeUndefined();
   expect(useNewThreadReady.getState().isReady('__LOCALID_reuse')).toBe(false);
-  // The switch still fires — the reset composes BEFORE it, not instead of it.
-  expect(newThreadClickSpy).toHaveBeenCalledTimes(1);
+  // The switch still fires — the reset runs BEFORE it, not instead of it.
+  expect(switchToNewThreadSpy).toHaveBeenCalledTimes(1);
 });
 
 // ---------------------------------------------------------------------------

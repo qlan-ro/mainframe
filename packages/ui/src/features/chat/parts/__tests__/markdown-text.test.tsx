@@ -25,6 +25,7 @@ import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { markdownComponents, MARKDOWN_ROOT_CLASS } from '../markdown-text';
 import { CodeHeader } from '../CodeHeader';
 import { SyntaxHighlighter } from '../syntax-highlight';
+import { MessagePathContextMenu } from '@/features/chat/messages/MessagePathContextMenu';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -138,8 +139,7 @@ describe('fenced code block container', () => {
 
 const Li = markdownComponents.li as React.ComponentType<React.LiHTMLAttributes<HTMLLIElement> & { className?: string }>;
 const MdInput = (markdownComponents as Record<string, unknown>).input as
-  | React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>
-  | undefined;
+  React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>> | undefined;
 
 describe('markdownComponents task-list checkbox', () => {
   it('renders a checked-state checkbox with the custom checkbox class, not a bare native checkbox', () => {
@@ -298,18 +298,38 @@ describe('LinkWithPreview context-menu copy feedback', () => {
     fireEvent.contextMenu(screen.getByRole('link', { name: 'link text' }));
   }
 
+  /** Lets the clipboard promise settle so the copy feedback lands. */
+  async function flushCopy(): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
   it('renders "Copy link" before the item is selected', () => {
     openContextMenu();
     expect(screen.getByTestId('chat-link-copy').textContent).toContain('Copy link');
   });
 
-  it('writes the href to the clipboard and swaps the label to "Copied" when selected', () => {
+  it('writes the href to the clipboard and swaps the label to "Copied" when selected', async () => {
     openContextMenu();
 
     fireEvent.click(screen.getByTestId('chat-link-copy'));
+    await flushCopy();
 
     expect(writeText).toHaveBeenCalledWith('https://example.com');
     expect(screen.getByTestId('chat-link-copy').textContent).toContain('Copied');
+  });
+
+  it('reads "Copy failed" when the clipboard write is rejected', async () => {
+    writeText.mockRejectedValueOnce(new Error('document is not focused'));
+    openContextMenu();
+
+    fireEvent.click(screen.getByTestId('chat-link-copy'));
+    await flushCopy();
+
+    const item = screen.getByTestId('chat-link-copy');
+    expect(item.textContent).toContain('Copy failed');
+    expect(item.textContent).not.toContain('Copied');
   });
 
   it('keeps the menu open right after selecting Copy link (no immediate close)', () => {
@@ -320,14 +340,36 @@ describe('LinkWithPreview context-menu copy feedback', () => {
     expect(screen.queryByTestId('chat-link-copy')).not.toBeNull();
   });
 
-  it('closes the menu itself shortly after showing the "Copied" feedback', () => {
+  it('closes the menu itself shortly after showing the "Copied" feedback', async () => {
     openContextMenu();
 
     fireEvent.click(screen.getByTestId('chat-link-copy'));
+    await flushCopy();
     act(() => {
       vi.advanceTimersByTime(1000);
     });
 
     expect(screen.queryByTestId('chat-link-copy')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Link menu wins innermost (274-A8) — right-clicking a link inside a message
+// wrapped in MessagePathContextMenu must open only the link's own menu.
+// ---------------------------------------------------------------------------
+
+describe('LinkWithPreview inside MessagePathContextMenu — link menu wins innermost', () => {
+  it('right-clicking the link opens only the link menu, not the outer path menu', () => {
+    wrap(
+      <MessagePathContextMenu>
+        <A href="https://example.com">link text</A>
+      </MessagePathContextMenu>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole('link', { name: 'link text' }));
+
+    expect(screen.getByTestId('chat-link-copy')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-link-open')).toBeInTheDocument();
+    expect(screen.queryByTestId('tool-card-path-copy-absolute')).toBeNull();
   });
 });
