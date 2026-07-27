@@ -3,7 +3,9 @@
 //! A chat records the worktrees registered when it activated (its baseline).
 //! Triggers from the session sink coalesce into a rescan of `git worktree list`;
 //! anything registered since the baseline that clears the eligibility gates
-//! becomes a pending offer broadcast to that chat's subscribers.
+//! becomes a pending offer broadcast to that chat's subscribers. Each scan
+//! re-baselines to the listing it saw, so the comparison is against the previous
+//! worktree command rather than against chat activation.
 //!
 //! Detection is main-thread-only: Claude diverts subagent tool blocks to
 //! `on_subagent_child` before the sink ever sees them, so a `git worktree add`

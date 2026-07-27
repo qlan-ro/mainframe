@@ -317,6 +317,54 @@ async fn reseeding_the_baseline_drops_pending_and_reoffers_a_recreated_worktree(
 }
 
 #[tokio::test]
+async fn reoffers_a_worktree_deleted_and_recreated_at_the_same_path_since_activation() {
+    let h = Harness::new();
+    // Present at activation, so it starts out as old news.
+    h.set_worktrees(vec![entry("/repo/.worktrees/a", Some("refs/heads/feat/a"))]);
+    h.registry.seed_baseline(CHAT, PROJECT_PATH).await;
+    h.deps.clear_events();
+
+    // `git worktree remove` is itself a trigger, and that scan drops the path
+    // from the baseline. (A delete and a recreate inside one scan interval are
+    // indistinguishable from no change — sampling, not a fixable gate.)
+    h.set_worktrees(Vec::new());
+    h.rescan().await;
+    assert_eq!(h.deps.events(), no_events());
+
+    h.set_clock(T2);
+    h.set_worktrees(vec![entry("/repo/.worktrees/a", Some("refs/heads/feat/a"))]);
+    h.rescan().await;
+
+    assert_eq!(
+        h.deps.events(),
+        vec![raised(offer("/repo/.worktrees/a", Some("feat/a"), T2))]
+    );
+}
+
+#[tokio::test]
+async fn a_failed_git_listing_keeps_the_baseline_instead_of_flooding_the_next_scan() {
+    let h = Harness::new();
+    h.set_worktrees(vec![entry("/repo/.worktrees/a", Some("refs/heads/feat/a"))]);
+    h.registry.seed_baseline(CHAT, PROJECT_PATH).await;
+    h.deps.clear_events();
+
+    // git failed: an empty listing must not be read as "every worktree is gone".
+    h.deps.set_listing(Vec::new());
+    h.rescan().await;
+    assert_eq!(h.deps.events(), no_events());
+
+    h.set_clock(T2);
+    h.set_worktrees(vec![entry("/repo/.worktrees/a", Some("refs/heads/feat/a"))]);
+    h.rescan().await;
+
+    assert_eq!(
+        h.deps.events(),
+        no_events(),
+        "the pre-existing worktree is still old news; re-baselining to nothing would have offered it"
+    );
+}
+
+#[tokio::test]
 async fn expires_a_pending_offer_whose_worktree_vanished_from_the_listing() {
     let h = Harness::new();
     h.seed_empty_baseline().await;

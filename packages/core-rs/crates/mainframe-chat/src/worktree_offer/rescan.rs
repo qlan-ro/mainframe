@@ -92,7 +92,7 @@ impl WorktreeOfferRegistry {
             pending: &pending,
         });
 
-        for event in self.apply(chat_id, outcome) {
+        for event in self.apply(chat_id, outcome, &listing) {
             self.deps.emit_event(event);
         }
     }
@@ -117,8 +117,14 @@ impl WorktreeOfferRegistry {
     }
 
     /// Applies the scan to the pending set and hands back the events to emit;
-    /// the caller emits once the state lock is gone.
-    fn apply(&self, chat_id: &str, outcome: ScanOutcome) -> Vec<DaemonEvent> {
+    /// the caller emits once the state lock is gone. Also re-baselines to the
+    /// listing this scan saw.
+    fn apply(
+        &self,
+        chat_id: &str,
+        outcome: ScanOutcome,
+        listing: &[WorktreeEntry],
+    ) -> Vec<DaemonEvent> {
         let detected_at = (self.now)();
         let mut events = Vec::new();
         let mut state = self.lock();
@@ -146,6 +152,14 @@ impl WorktreeOfferRegistry {
                     WorktreeOfferOutcome::Expired,
                 ));
             }
+        }
+        // "New" means new since the last worktree command, not since the chat
+        // activated: a path that is removed and recreated is a different
+        // worktree and deserves its own offer. Skipped on an empty listing —
+        // that means the git call failed, and re-baselining to nothing would
+        // make every worktree look new on the next scan.
+        if !listing.is_empty() {
+            chat.baseline = Some(listing.iter().map(|entry| entry.path.clone()).collect());
         }
         events
     }

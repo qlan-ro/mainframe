@@ -11,7 +11,8 @@ use mainframe_services::workspace::{WorktreeEntry, short_branch};
 pub struct ScanInputs<'a> {
     /// The project's main checkout — registered, but never an offer.
     pub main_worktree_path: &'a str,
-    /// Worktrees registered when the chat activated; anything here is old news.
+    /// Worktrees the previous scan saw (the chat's activation listing until then);
+    /// anything here is old news.
     pub baseline: &'a HashSet<String>,
     /// `git worktree list` as it stands now; empty when the git call failed.
     pub current: &'a [WorktreeEntry],
