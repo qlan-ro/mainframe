@@ -1109,6 +1109,66 @@ mod scan_loaded_history_tests {
     use super::*;
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 
+    // Twin of `mainframe_chat::test_support::LogCapture` (D8): that helper is
+    // `mainframe-chat`-internal test scaffolding, and this crate has no
+    // dependency edge to reuse it from, so the routing-layer test carries its
+    // own copy.
+    struct ReasonVisitor(Option<String>);
+
+    impl tracing::field::Visit for ReasonVisitor {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            if field.name() == "reason" {
+                self.0 = Some(value.to_string());
+            }
+        }
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "reason" {
+                self.0 = Some(format!("{value:?}"));
+            }
+        }
+    }
+
+    type CapturedEvents = Arc<StdMutex<Vec<(tracing::Level, Option<String>)>>>;
+
+    struct LogCapture {
+        events: CapturedEvents,
+    }
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LogCapture {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _ctx: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            let mut visitor = ReasonVisitor(None);
+            event.record(&mut visitor);
+            self.events
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((*event.metadata().level(), visitor.0));
+        }
+    }
+
+    impl LogCapture {
+        fn install() -> (impl tracing::Subscriber, CapturedEvents) {
+            use tracing_subscriber::layer::SubscriberExt;
+            let events = Arc::new(StdMutex::new(Vec::new()));
+            let layer = LogCapture {
+                events: events.clone(),
+            };
+            (tracing_subscriber::registry().with(layer), events)
+        }
+
+        fn events_with_reason(events: &CapturedEvents) -> Vec<(tracing::Level, String)> {
+            events
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter_map(|(level, reason)| reason.clone().map(|r| (*level, r)))
+                .collect()
+        }
+    }
+
     fn text_msg(id: &str, r#type: ChatMessageType, text: &str) -> ChatMessage {
         ChatMessage {
             id: id.to_string(),
@@ -1316,6 +1376,22 @@ mod scan_loaded_history_tests {
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
         }
+    }
+
+    #[tokio::test]
+    async fn unknown_adapter_id_logs_and_returns_none() {
+        let deps = test_deps();
+        let (subscriber, events) = LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let result =
+            ChatManagerDeps::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
+
+        assert_eq!(result, None);
+        assert_eq!(
+            LogCapture::events_with_reason(&events),
+            vec![(tracing::Level::WARN, "unknown_adapter".to_string())]
+        );
     }
 
     #[test]
