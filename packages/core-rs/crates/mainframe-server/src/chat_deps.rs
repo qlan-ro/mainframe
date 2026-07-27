@@ -576,17 +576,24 @@ impl ChatManagerDeps for DaemonChatDeps {
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
         // Adapter-aware (#430): route to the owning adapter's `generateTitle`;
-        // adapters without a cheap one-shot title model return `None` and the
-        // caller keeps the deterministic truncated title.
-        let adapter = self.adapters.get(adapter_id);
+        // an unregistered adapter id and an adapter error are logged
+        // separately (#287) so an operator can tell the two apart.
+        let Some(adapter) = self.adapters.get(adapter_id) else {
+            tracing::warn!(
+                adapter_id,
+                reason = "unknown_adapter",
+                "title generation skipped"
+            );
+            return Box::pin(async { None });
+        };
         let content = content.to_string();
         let binary = binary.to_string();
+        let adapter_id = adapter_id.to_string();
         Box::pin(async move {
-            let adapter = adapter?;
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {
-                    tracing::warn!(%err, "title generation failed");
+                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
                     None
                 }
             }
