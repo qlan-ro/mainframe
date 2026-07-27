@@ -708,6 +708,7 @@ impl ConfigManagerDeps for CmDeps {
                 plan_mode: updates.plan_mode,
                 worktree_path: updates.worktree_path.clone(),
                 branch_name: updates.branch_name.clone(),
+                session_file_path: updates.session_file_path.clone(),
                 ..Default::default()
             },
         );

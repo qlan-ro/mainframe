@@ -11,6 +11,7 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
 
+use crate::event_handler::compute_session_file_path;
 use crate::types::ActiveChat;
 
 /// Errors surfaced by config changes. The message strings cross the wire
@@ -34,6 +35,7 @@ pub struct ChatFieldUpdate {
     pub plan_mode: Option<bool>,
     pub worktree_path: Option<Option<String>>,
     pub branch_name: Option<Option<String>>,
+    pub session_file_path: Option<String>,
 }
 
 /// Injected dependency surface — mirrors the TS `ConfigManagerDeps` object.
@@ -260,23 +262,30 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     }
 
     /// Persist a worktree path/branch change (`None` clears it) and broadcast it.
+    /// `session_file_path` is `Some` only when a transcript was just relocated —
+    /// the stored path points into the old project dir until it is rewritten.
     fn apply_worktree_update(
         &self,
         cell: &Arc<Mutex<ActiveChat>>,
         chat_id: &str,
         worktree_path: Option<String>,
         branch_name: Option<String>,
+        session_file_path: Option<String>,
     ) {
         {
             let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
             guard.chat.worktree_path = worktree_path.clone();
             guard.chat.branch_name = branch_name.clone();
+            if session_file_path.is_some() {
+                guard.chat.session_file_path = session_file_path.clone();
+            }
         }
         self.deps.chats_update(
             chat_id,
             &ChatFieldUpdate {
                 worktree_path: Some(worktree_path.clone()),
                 branch_name: Some(branch_name),
+                session_file_path,
                 ..Default::default()
             },
         );
@@ -413,6 +422,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .await
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
+            let mut moved_transcript = None;
             if adapter == "claude" {
                 let old_dir = get_claude_project_dir(&project.path);
                 let new_dir = get_claude_project_dir(&info.worktree_path);
@@ -423,6 +433,8 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 )
                 .await
                 .map_err(|e| ConfigError::Message(e.to_string()))?;
+                moved_transcript =
+                    Some(compute_session_file_path(&info.worktree_path, &session_id));
             }
 
             self.apply_worktree_update(
@@ -430,6 +442,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 chat_id,
                 Some(info.worktree_path),
                 Some(info.branch_name),
+                moved_transcript,
             );
             self.deps.start_chat(chat_id).await;
             return Ok(());
@@ -451,6 +464,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             chat_id,
             Some(info.worktree_path),
             Some(info.branch_name),
+            None,
         );
         Ok(())
     }
@@ -495,6 +509,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 fut.await;
             }
 
+            let mut moved_transcript = None;
             if adapter == "claude" {
                 let old_dir = get_claude_project_dir(effective_dir(
                     current_worktree.as_deref(),
@@ -523,6 +538,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                         "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
                     ));
                 }
+                moved_transcript = Some(compute_session_file_path(worktree_path, &session_id));
             }
 
             self.apply_worktree_update(
@@ -530,6 +546,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 chat_id,
                 Some(worktree_path.to_string()),
                 branch_name,
+                moved_transcript,
             );
             self.deps.start_chat(chat_id).await;
             return Ok(());
@@ -537,7 +554,13 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         // Pre-session path
         self.detach_session(&cell).await?;
-        self.apply_worktree_update(&cell, chat_id, Some(worktree_path.to_string()), branch_name);
+        self.apply_worktree_update(
+            &cell,
+            chat_id,
+            Some(worktree_path.to_string()),
+            branch_name,
+            None,
+        );
         Ok(())
     }
 
@@ -578,7 +601,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .await;
         }
 
-        self.apply_worktree_update(&cell, chat_id, None, None);
+        self.apply_worktree_update(&cell, chat_id, None, None, None);
         Ok(())
     }
 }
@@ -870,6 +893,39 @@ mod tests {
         let mut chat = worktreed_chat();
         chat.adapter_id = "claude".to_string();
         chat
+    }
+
+    #[tokio::test]
+    async fn repoints_the_stored_session_file_path_at_the_new_worktree() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with_chat(claude_worktreed_chat(), session);
+        let deps = FakeDeps::with_project(cell.clone(), test_project());
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .attach_worktree("c1", "/new/wt", Some("feat"))
+            .await
+            .unwrap();
+
+        let expected = dirs::home_dir()
+            .unwrap()
+            .join(".claude/projects/-new-wt/sess1.jsonl")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(
+            manager.deps.updates.lock().unwrap().as_slice(),
+            &[ChatFieldUpdate {
+                worktree_path: Some(Some("/new/wt".to_string())),
+                branch_name: Some(Some("feat".to_string())),
+                session_file_path: Some(expected.clone()),
+                ..Default::default()
+            }]
+        );
+        assert_eq!(
+            cell.lock().unwrap().chat.session_file_path,
+            Some(expected),
+            "the broadcast chat must carry the new path, not the emptied directory"
+        );
     }
 
     #[tokio::test]

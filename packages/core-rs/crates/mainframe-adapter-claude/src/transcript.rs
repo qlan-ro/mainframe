@@ -43,8 +43,10 @@ pub fn get_session_jsonl_path(session_id: &str, project_path: &str) -> SessionJs
 }
 
 /// Whether the CLI transcript for `sessionId` still exists on disk. Checks the
-/// stored `session_file_path` first (authoritative — survives worktree moves),
-/// then the path derived from the project path.
+/// stored `session_file_path` first, then the path derived from the project
+/// path. Both are needed: the stored path can lag a relocation (the CLI's own
+/// worktree tool moves the transcript without telling us), and the derived one
+/// misses a transcript that never lived at the canonical location.
 pub async fn is_claude_transcript_present(
     session_id: &str,
     project_path: &str,
