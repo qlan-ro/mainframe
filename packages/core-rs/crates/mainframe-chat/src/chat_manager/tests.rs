@@ -896,6 +896,403 @@ async fn sends_unknown_slash_command_with_args_as_plain_text() {
     assert!(session.send_command_calls.lock().unwrap().is_empty());
 }
 
+// ── command-first title (#257) ───────────────────────────────────────────────
+
+fn title_cmd_manager(title: Option<&str>) -> (ChatManager, Arc<StoreDeps>, Arc<RecSession>) {
+    let mut chat = test_chat("chat-1");
+    chat.title = title.map(str::to_string);
+    chat.process_state = Some(Some(ProcessState::Idle));
+    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("chat-1", false, true);
+    seed_active(&mgr, "chat-1", chat, session.clone());
+    (mgr, deps, session)
+}
+
+#[tokio::test]
+async fn provider_command_first_message_sets_the_fallback_title() {
+    let (mgr, deps, session) = title_cmd_manager(None);
+
+    mgr.send_message(
+        "chat-1",
+        "/compact",
+        None,
+        Some(CommandMeta {
+            name: "compact".to_string(),
+            source: "claude".to_string(),
+            args: None,
+        }),
+    )
+    .await
+    .unwrap();
+
+    let events = deps.events();
+    let added: Vec<&ChatMessage> = events
+        .iter()
+        .filter_map(|e| match e {
+            DaemonEvent::MessageAdded { message, .. } => Some(message),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        added.len(),
+        1,
+        "the user's message is still stored and emitted"
+    );
+    let msg = added[0];
+    assert_eq!(msg.r#type, ChatMessageType::User);
+    assert!(
+        msg.metadata.is_none(),
+        "a command send carries no transient metadata"
+    );
+    assert!(matches!(
+        msg.content.as_slice(),
+        [MessageContent::Leaf(LeafContent::Text { text, .. })] if text == "/compact"
+    ));
+
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, DaemonEvent::ContextUpdated { .. })),
+        "a command send runs no attachment or mentions check"
+    );
+
+    {
+        let cmds = session.send_command_calls.lock().unwrap();
+        assert_eq!(cmds.len(), 1);
+        assert_eq!(cmds[0].0, "compact");
+    }
+    assert!(session.send_message_calls.lock().unwrap().is_empty());
+
+    assert!(
+        deps.updates
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(id, p)| id == "chat-1" && p.process_state == Some(Some(ProcessState::Working))),
+        "the chat still transitions to working"
+    );
+
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("/compact".to_string())
+    );
+    assert!(events.iter().any(
+        |e| matches!(e, DaemonEvent::ChatUpdated { chat, .. } if chat.title == Some("/compact".to_string()))
+    ));
+}
+
+#[tokio::test]
+async fn mainframe_command_first_message_titles_from_typed_text_not_the_wrapper() {
+    let (mgr, deps, session) = title_cmd_manager(None);
+
+    mgr.send_message(
+        "chat-1",
+        "/greet Say hello to the team",
+        None,
+        Some(CommandMeta {
+            name: "greet".to_string(),
+            source: "mainframe".to_string(),
+            args: Some("Say hello".to_string()),
+        }),
+    )
+    .await
+    .unwrap();
+    settle().await;
+
+    let title = deps.chats_get("chat-1").unwrap().title;
+    assert_eq!(title.as_deref(), Some("/greet Say hello to the team"));
+    let title = title.unwrap();
+    assert!(!title.contains("<mainframe-command"));
+    assert!(!title.contains("<mainframe-command-response"));
+
+    let calls = deps.generate_title_calls.lock().unwrap().clone();
+    assert_eq!(calls, vec!["/greet Say hello to the team".to_string()]);
+    assert!(calls.iter().all(|c| !c.contains("<mainframe-command")));
+
+    let sent = session.send_message_calls.lock().unwrap();
+    assert!(sent[0].0.contains("<mainframe-command name=\"greet\""));
+}
+
+#[tokio::test]
+async fn command_first_message_generated_title_overwrites_the_fallback() {
+    let (mgr, deps, _session) = title_cmd_manager(None);
+    *deps.generated_title.lock().unwrap() = Some("Compact the session".to_string());
+
+    mgr.send_message(
+        "chat-1",
+        "/compact",
+        None,
+        Some(CommandMeta {
+            name: "compact".to_string(),
+            source: "claude".to_string(),
+            args: None,
+        }),
+    )
+    .await
+    .unwrap();
+    settle().await;
+
+    let mut titles: Vec<Option<String>> = deps
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            DaemonEvent::ChatUpdated { chat, .. } => Some(chat.title.clone()),
+            _ => None,
+        })
+        .collect();
+    titles.dedup();
+    assert_eq!(
+        titles,
+        vec![
+            Some("/compact".to_string()),
+            Some("Compact the session".to_string())
+        ]
+    );
+    assert_eq!(titles.first(), Some(&Some("/compact".to_string())));
+    assert_eq!(
+        titles.last(),
+        Some(&Some("Compact the session".to_string()))
+    );
+    assert!(!titles.iter().any(|t| t.is_none()));
+
+    assert_eq!(
+        titles_written(&deps),
+        vec!["/compact".to_string(), "Compact the session".to_string()]
+    );
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("Compact the session".to_string())
+    );
+}
+
+#[tokio::test]
+async fn command_into_an_already_titled_chat_leaves_the_title_untouched() {
+    let (mgr, deps, _session) = title_cmd_manager(Some("Test chat"));
+
+    mgr.send_message(
+        "chat-1",
+        "/compact",
+        None,
+        Some(CommandMeta {
+            name: "compact".to_string(),
+            source: "claude".to_string(),
+            args: None,
+        }),
+    )
+    .await
+    .unwrap();
+    settle().await;
+
+    assert!(
+        !deps
+            .updates
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(_, p)| p.title.is_some())
+    );
+    assert!(deps.events().iter().all(|e| match e {
+        DaemonEvent::ChatUpdated { chat, .. } => chat.title.as_deref() == Some("Test chat"),
+        _ => true,
+    }));
+    assert!(deps.generate_title_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn title_generation_is_not_awaited_by_a_command_send() {
+    let (mgr, deps, _session) = title_cmd_manager(None);
+    *deps.generated_title.lock().unwrap() = Some("Compacted session".to_string());
+    let gate = Arc::new(tokio::sync::Notify::new());
+    *deps.title_gate.lock().unwrap() = Some(gate.clone());
+
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        mgr.send_message(
+            "chat-1",
+            "/compact",
+            None,
+            Some(CommandMeta {
+                name: "compact".to_string(),
+                source: "claude".to_string(),
+                args: None,
+            }),
+        ),
+    )
+    .await
+    .expect("send must not await title generation")
+    .unwrap();
+
+    gate.notify_one();
+    settle().await;
+
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("Compacted session".to_string())
+    );
+}
+
+#[tokio::test]
+async fn plain_text_first_message_still_titles_in_the_same_event_order() {
+    let (mgr, deps, session) = title_cmd_manager(None);
+
+    mgr.send_message("chat-1", "Hello world", None, None)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("Hello world".to_string())
+    );
+
+    let updated: Vec<Chat> = deps
+        .events()
+        .into_iter()
+        .filter_map(|e| match e {
+            DaemonEvent::ChatUpdated { chat, .. } => Some(chat),
+            _ => None,
+        })
+        .collect();
+    let title_idx = updated
+        .iter()
+        .position(|c| c.title.as_deref().is_some_and(|t| !t.is_empty()))
+        .expect("a ChatUpdated carried the title");
+    let working_idx = updated
+        .iter()
+        .position(|c| c.process_state == Some(Some(ProcessState::Working)))
+        .expect("a ChatUpdated carried Working");
+    assert!(title_idx < working_idx);
+
+    assert_eq!(session.send_message_calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn command_first_fallback_survives_a_generation_that_returns_nothing() {
+    let (mgr, deps, _session) = title_cmd_manager(None);
+
+    mgr.send_message(
+        "chat-1",
+        "/compact",
+        None,
+        Some(CommandMeta {
+            name: "compact".to_string(),
+            source: "claude".to_string(),
+            args: None,
+        }),
+    )
+    .await
+    .unwrap();
+    settle().await;
+
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("/compact".to_string())
+    );
+    assert_eq!(deps.generate_title_calls.lock().unwrap().len(), 1);
+    assert_eq!(titles_written(&deps), vec!["/compact".to_string()]);
+}
+
+#[tokio::test]
+async fn plain_text_with_attachments_keeps_prefix_images_and_transient_metadata() {
+    let deps = StoreDeps::arc();
+    *deps.attachments.lock().unwrap() = Some(ProcessedAttachments {
+        images: vec![ImageInput {
+            media_type: "image/png".to_string(),
+            data: "AAA".to_string(),
+        }],
+        message_content: vec![MessageContent::Leaf(LeafContent::Text {
+            text: "[Image: shot.png]".to_string(),
+            parent_tool_use_id: None,
+        })],
+        text_prefix: vec!["prefix".to_string()],
+        attachment_previews: vec![serde_json::json!({ "id": "att-1" })],
+    });
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+
+    let ids = vec!["att-1".to_string()];
+    mgr.send_message("c1", "hello", Some(&ids), None)
+        .await
+        .unwrap();
+
+    let sent_uuid = {
+        let calls = session.send_message_calls.lock().unwrap();
+        assert_eq!(calls[0].0, "prefix\n\nhello");
+        calls[0].1.clone()
+    };
+    assert_eq!(session.images_calls.lock().unwrap()[0], 1);
+
+    let added: Vec<ChatMessage> = deps
+        .events()
+        .into_iter()
+        .filter_map(|e| match e {
+            DaemonEvent::MessageAdded { message, .. } => Some(message),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(added.len(), 1);
+    let msg = &added[0];
+    let texts: Vec<&str> = msg
+        .content
+        .iter()
+        .map(|c| match c {
+            MessageContent::Leaf(LeafContent::Text { text, .. }) => text.as_str(),
+            other => panic!("expected text content, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(texts, vec!["[Image: shot.png]", "hello"]);
+
+    let metadata = msg
+        .metadata
+        .as_ref()
+        .expect("queued message carries transient metadata");
+    assert_eq!(metadata.get("queued"), Some(&serde_json::json!(true)));
+    assert_eq!(
+        metadata.get("attachments"),
+        Some(&serde_json::json!([{ "id": "att-1" }]))
+    );
+    assert_eq!(
+        metadata
+            .get("uuid")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        sent_uuid
+    );
+
+    let context_updates = deps
+        .events()
+        .iter()
+        .filter(|e| matches!(e, DaemonEvent::ContextUpdated { .. }))
+        .count();
+    assert_eq!(context_updates, 1);
+}
+
+#[tokio::test]
+async fn mentions_in_plain_text_still_emit_context_updated() {
+    let deps = StoreDeps::arc();
+    *deps.mentions_found.lock().unwrap() = true;
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", false, true);
+    seed_active(&mgr, "c1", working_chat("c1", Some("t"), false), session);
+
+    mgr.send_message("c1", "look at @src/main.rs", None, None)
+        .await
+        .unwrap();
+
+    let context_updates = deps
+        .events()
+        .iter()
+        .filter(|e| matches!(e, DaemonEvent::ContextUpdated { .. }))
+        .count();
+    assert_eq!(context_updates, 1);
+}
+
 // ── remove-project-kills-tasks.test.ts ───────────────────────────────────────
 
 #[tokio::test]
