@@ -46,8 +46,11 @@ recorded as D10.
 - **Every file this plan touches is comfortably under the line limits.** Largest
   edited file: `LightboxSurface.tsx` (42 → ~48). Every new file lands well under
   300; every new function under 50.
-- **The worktree has no `node_modules`.** Run `pnpm install` from the worktree root
-  before the first task.
+- **The worktree has no `node_modules`.** `pnpm install` from the worktree root is a
+  **lane setup step, run once before wave 1** — it is not a precondition any group
+  satisfies for itself. Groups `clipboard-core-tests` and `copy-menu-shared-tests`
+  both start in wave 1 and both need the install; if each ran it, two installs would
+  hit the same workspace concurrently. No task below re-runs it.
 - **The implement stage needs no Rust and never runs `cargo`.** The one step that
   does — the D7 webview gate — is a **qa-stage** step, not an implement task
   (D14). Its cost is stated there: a cold `packages/app-tauri/src-tauri` build in
@@ -350,6 +353,26 @@ separately. Pick one and say which in the file header.)
 The async body of `write` still records its call synchronously, so the activation
 assertion holds.
 
+**jsdom has no object-URL API — stub it by assignment, not `vi.spyOn`.** Verified
+against this repo's jsdom (29.1.1): `URL.createObjectURL` and `URL.revokeObjectURL`
+are both `undefined`, unlike `toBlob`, which exists. `reencodeToPng` calls
+`createObjectURL` as its first statement, so without these stubs the JPEG re-encode
+case and all three re-encode-failure cases throw a `TypeError` before reaching the
+behavior they exist to pin — and the balance assertion below cannot be written as
+`vi.spyOn(URL, 'createObjectURL')`, which throws on a property that does not exist.
+Install by assignment and remove in teardown, since there is nothing to restore:
+
+```ts
+beforeEach(() => {
+  URL.createObjectURL = vi.fn(() => 'blob:test');
+  URL.revokeObjectURL = vi.fn();
+});
+afterEach(() => {
+  Reflect.deleteProperty(URL, 'createObjectURL');
+  Reflect.deleteProperty(URL, 'revokeObjectURL');
+});
+```
+
 Cases:
 - **PNG passthrough:** `writeImageToClipboard(bytes, 'image/png')` calls `write`
   once with a single `ClipboardItem`; the item's `image/png` value resolves to a
@@ -365,8 +388,9 @@ Cases:
   stubbed to a fake 2d context with a `drawImage` spy, and
   `HTMLCanvasElement.prototype.toBlob` stubbed to hand back a PNG blob:
   `writeImageToClipboard(bytes, 'image/jpeg')` still calls `write` synchronously,
-  and the item's value resolves to the re-encoded PNG blob. Assert
-  `URL.createObjectURL` / `URL.revokeObjectURL` are balanced.
+  and the item's value resolves to the re-encoded PNG blob. Assert the two object-URL
+  mocks installed above are balanced (`createObjectURL` and `revokeObjectURL` each
+  called once, with the revoke receiving `'blob:test'`).
 - **Re-encode failure:** a rejecting `decode()` rejects the promise
   `writeImageToClipboard` returned (via the adopting stub above), and the object URL
   is still revoked. Same for a `null` 2d context and for a `toBlob` that yields
@@ -472,8 +496,17 @@ saying so).
 No toast here: the component owns user-facing feedback so this module stays callable
 outside React.
 
-**Verify:** `vitest run src/lib/clipboard` all green, and
-`pnpm --filter @qlan-ro/mainframe-ui typecheck` passes.
+**Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard`
+all green — the clipboard suite alone, and nothing wider.
+
+**Do not run `pnpm --filter @qlan-ro/mainframe-ui typecheck` here.** That command is
+package-wide, and this group runs in the same worktree, concurrently, with group
+`copy-menu-shared`. With `noUnusedLocals: true` (`packages/ui/tsconfig.json:16`), any
+half-applied Task 9 state — `CopyPathItem` deleted before `lib/ui/CopyMenuItem.tsx`
+exists, or the now-unused `Check`/`Copy`/`AlertTriangle`/`CopyStatus`/`ContextMenuItem`
+imports not yet dropped from `MessagePathContextMenu.tsx` and `link-with-preview.tsx`
+— would fail this group on code it does not own and end the wave. Task 13 owns the
+package-wide typecheck, and by then both groups have landed.
 
 ---
 
@@ -589,8 +622,17 @@ Cases:
 2. **Supported webview + `https://…` source** — no `image-context-menu` after
    `fireEvent.contextMenu`, and the child still renders.
 3. **No `ClipboardItem` + data URI** — same: no menu, child renders.
-4. **Copy succeeds** — clicking `image-copy` calls `copyImageToClipboard` once with
-   the src; the item's text becomes `Copied`; `mfToast.error` is never called.
+4. **Copy succeeds, and the call is synchronous with the click** — this is the D4
+   user-activation rule at the component layer. Fire `fireEvent.click(image-copy)`,
+   then *immediately*, before any `await` or `waitFor`, assert `copyImageToClipboard`
+   has been called exactly once with the src. Task 11's `handleCopy` is an `async`
+   function; it satisfies D4 today only because the call precedes its first `await`,
+   and one inserted `await` — a permission check, a config read — would silently
+   break copy in WKWebView with every other assertion in this file still green.
+   `ImageContextMenu.tsx` is the file in this change most likely to be edited later,
+   so the rule is pinned at all three layers (Task 2, Task 3, and here). Only then
+   await the item's text becoming `Copied`, and assert `mfToast.error` was never
+   called.
 5. **Copy fails** — `copyImageToClipboard` resolves `{ ok: false, message: 'boom' }`;
    the item's text becomes `Copy failed`, `mfToast.error` is called once, and its
    options carry `description: 'boom'`.
@@ -684,9 +726,16 @@ stating that right-clicking an opened image offers Copy Image.
 **Verify:**
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck`
 - `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard src/lib/ui src/features/chat/parts src/features/chat/messages/__tests__/MessagePathContextMenu.test.tsx`
-- `git status` shows no stray files; no `@ts-ignore`, no `console.*` outside the
-  tagged warns in `copy-image.ts`, no file over 300 lines (`wc -l` on every touched
+- `git status` shows no stray files; no file over 300 lines (`wc -l` on every touched
   file).
+- **Hygiene is checked against added lines only** — `git diff main...HEAD | grep '^+'`
+  — not against whole files. No `@ts-ignore`, and no `console.*` beyond the tagged
+  warns this plan adds in `copy-image.ts`. One pre-existing tagged warn lives in a
+  file Task 9 modifies:
+  `packages/ui/src/features/chat/parts/link-with-preview.tsx:57`,
+  `console.warn('[link-with-preview] openExternal failed', href)`. It is the required
+  non-silent catch on the `openExternal` path, it is untouched by Task 9, and
+  removing it would be a regression. A whole-file grep would block on it.
 
 The implement stage ends here and is reported `unverified` (D14): the real
 clipboard write has not yet been exercised in a webview.
@@ -726,8 +775,32 @@ Appendix A as the fix.
    **FAIL** (`navigator.clipboard.write` rejects, the `osascript` errors with no
    `PNGf` on the pasteboard, or the dimensions differ) → capture the exact rejection,
    record it as the D7 outcome, and route back to the implementer to execute
-   Appendix A. Tasks 1-3 and 10-12 survive unchanged in that case; only
-   `write-image.ts` and the capability term of `image-source.ts` are replaced.
+   Appendix A. **Price that round-trip honestly before taking it**: the lane contract
+   allows exactly one qa→implement round-trip, and Appendix A is not a two-file swap.
+   Beyond the wholly new files it adds (the `HostBridge.clipboard` port, the Tauri
+   bridge call, the three adapters, the Rust command and its registration), it
+   rewrites work the primary path already produced:
+
+   | Rewritten | Why |
+   |---|---|
+   | `lib/clipboard/image-source.ts` | capability moves to `HostBridge.clipboard.canWriteImage`; `canCopyImage` becomes two-arg (A1/A4) |
+   | `lib/clipboard/write-image.ts` → `decode-image.ts` | deleted and replaced (A5) |
+   | `lib/clipboard/copy-image.ts` | gains a `host` parameter and a decode-failure message (A5) |
+   | `features/chat/parts/ImageContextMenu.tsx` | calls `canCopyImage(src, useHost())` (Task 11) |
+   | `src-tauri/tauri.conf.json` | the `connect-src` CSP token, app-wide blast radius (A2/D8) |
+   | `__tests__/image-source.test.ts` | the `imageClipboardSupported` cases go away and the `canCopyImage` truth table is re-derived two-arg |
+   | `__tests__/write-image.test.ts` → `decode-image.test.ts` | the whole file targets a module A5 deletes |
+   | `__tests__/copy-image.test.ts` | mocks `../decode-image`, not `../write-image`; host arg; decode-failure case |
+   | `__tests__/ImageContextMenu.test.tsx` | the `ClipboardItem` / `navigator.clipboard` global stubs no longer open the menu — the `FakeHostOverrides` extension in A4 does, which is why A4 calls it load-bearing |
+
+   Untouched by the fallback: Tasks 7-9 (the `useMenuCopyFeedback` generation token
+   and the `CopyMenuItem` extraction) and Task 12 (the `LightboxSurface` wrap).
+   Task 13 re-runs with the changeset widened to `@qlan-ro/mainframe-types` and
+   `@qlan-ro/mainframe-app-tauri`, and QA step 8 — the packaged-build smoke — becomes
+   mandatory rather than conditional. No fallback task graph is enumerated here on
+   purpose: the fallback is contingent, so the implementer sequences Appendix A's
+   sections (A2 first, then A1 → A3 → A4 → A5 → A6) when and only when this gate
+   fails.
    **BLOCKED** — if the shell cannot be driven (no interactive session, no macOS
    host, `tauri:dev` will not start): do **not** report PASS. Hand off to a human
    with these exact steps and the fixture, and mark the lane `blocked` with
@@ -772,11 +845,13 @@ Appendix A as the fix.
 
 ## Appendix A — fallback: host port + Rust clipboard command
 
-**Execute only if the QA gate (smoke step 3) fails.** Everything here is additive to
-Tasks 1-3 and 10-12; `write-image.ts` and the capability term of `image-source.ts`
-are replaced, `copy-image.ts` gains a `host` parameter, and `ImageContextMenu` calls
-`canCopyImage(src, useHost())`. Budget one cold `cargo` build (multi-GB
-`src-tauri/target` in this worktree, per the Disk Hygiene section of `CLAUDE.md`).
+**Execute only if the QA gate (smoke step 3) fails.** Much of this appendix is new
+code, but it also rewrites four source files and four test files the primary path
+already produced, changes the app's CSP, and makes the packaged-build QA step
+mandatory — the table under QA step 3's FAIL branch is the authoritative delta; read
+it before committing to this path. Budget one cold
+`cargo` build (multi-GB `src-tauri/target` in this worktree, per the Disk Hygiene
+section of `CLAUDE.md`).
 
 ### A1 — Host contract
 
