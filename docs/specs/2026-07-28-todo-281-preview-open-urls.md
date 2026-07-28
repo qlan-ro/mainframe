@@ -64,14 +64,26 @@ tunnel, scoped to the active chat:
 
 1. If the port is one the tunnel service refuses — below 1024, or the daemon's own port — the tab shows
    that specific reason and stops. No request is made.
-2. Otherwise the tab adopts an existing tunnel for that port, or requests one, and shows a pending state
-   naming the port and saying a tunnel is coming up. It never shows a blank webview while waiting.
-3. Pending ends when the tunnel is ready **and its hostname has been verified as resolvable**. The tab then
-   loads the tunnel origin carrying over the original URL's path, query, and fragment.
-4. A tunnel that reports an error, or that produces nothing within 60 seconds, puts the tab into a failure
-   state that shows the daemon's own error text and a **Retry**. The address bar stays live, so the user can
-   type a different URL out of the failure state.
-5. If the tunnel is stopped from somewhere else (the chat chip, settings) while a tab is using it, the tab
+2. Otherwise the tab adopts the tunnel that port already has, or requests one. Until it has a URL it shows a
+   pending state naming the port and saying a tunnel is coming up; it never shows a blank webview while
+   waiting.
+3. Pending ends at the first of these to arrive: the port already has a ready tunnel URL when the tab asks
+   for one — from the boot snapshot, the chat chip, or another tab; the tab's own start request returns a
+   URL; or the daemon reports that the tunnel's DNS check has finished. The tab then loads the tunnel origin
+   carrying over the original URL's path, query, and fragment.
+4. Adopting a tunnel never waits for an event. A tunnel the daemon already lists as ready has finished its
+   DNS check, so a second tab on the same port, a tab adopting the chip's tunnel, and a rehydrated tab after
+   a restart all load immediately. Only a tab that watched a tunnel come up from scratch waits, and it waits
+   for the DNS check to finish — which the daemon reports whether or not the name resolved, treating the URL
+   as usable either way.
+5. A tunnel that connected but whose DNS check has not finished still publishes a URL. A tab that loaded
+   such a URL early reloads once when the check finishes, so a resolution error clears without the user
+   acting.
+6. A tunnel that reports an error, or that produces no URL within 120 seconds, puts the tab into a failure
+   state that shows the daemon's own error text (or the stated timeout) and a **Retry**. The address bar
+   stays live, so the user can type a different URL out of the failure state. The failure is not terminal: a
+   URL that arrives afterwards loads and replaces the failure body.
+7. If the tunnel is stopped from somewhere else (the chat chip, settings) while a tab is using it, the tab
    says the tunnel was stopped and offers Retry. It does not silently re-request.
 
 A remote-daemon URL that is not loopback (a public site, a LAN host) loads directly, with no tunnel.
@@ -90,7 +102,9 @@ is still using that port, the tunnel is stopped; a tunnel the tab merely adopted
 needs, stays up.
 
 URL tabs survive an app restart. They rehydrate unmounted and load on first activation. A rehydrated tab
-resolves its tunnel from scratch — the stored value is the URL the user typed, never a tunnel URL.
+re-resolves its tunnel — the stored value is the URL the user typed, never a tunnel URL. When the daemon
+still holds a tunnel for that port, the tab adopts it and loads without a pending state; when the tunnel is
+gone, the tab requests one and shows pending like a fresh tab.
 
 ## Not Included
 
@@ -102,6 +116,8 @@ resolves its tunnel from scratch — the stored value is the URL the user typed,
   the user committed, not the last page it was on.
 - `deferred` — Refactoring the chat chip's browser opener to carry the original path onto the tunnel origin;
   the tab does this, the chip keeps its current behavior.
+- `deferred` — Wiring the Run surface's four file-backed guest kinds (code, diff, skill, viewer). They keep
+  rendering the `<kind>: <title>` placeholder they render today.
 - `declined` — Any daemon change. The tunnel start/stop/list endpoints, their validation, and their status
   events are consumed as they stand. No new route, no Rust daemon type, no envelope work.
 - `declined` — Changing how launch-config preview tabs derive their URL, or their run/stop/restart/console
@@ -125,9 +141,12 @@ resolves its tunnel from scratch — the stored value is the URL the user typed,
 - **Port the service refuses** — `http://localhost:22` on a remote daemon shows "Port must be 1024 or
   higher"-class text, not a generic failure. The check runs before any request; a rejection that still
   arrives from the daemon replaces it verbatim.
-- **Tunnel ready but DNS not yet propagated** — the daemon reports a usable URL up to ~30 s before its
-  hostname resolves. The tab stays pending through that window rather than loading a page that cannot
-  resolve.
+- **Tunnel ready but DNS not yet propagated** — the daemon publishes a usable URL on connect and finishes
+  its DNS check up to 45 s later. A tab that started the tunnel waits out that window in the pending state
+  rather than loading a name that cannot resolve; a tab that adopted an already-ready tunnel does not wait
+  at all; a tab that loaded a pre-check URL reloads once when the check finishes.
+- **Tunnel adopted mid-start** — a tab opened while another consumer's tunnel is connecting joins that
+  start rather than issuing a second one, and leaves pending on the same signal the first consumer does.
 - **Daemon switch with URL tabs open** — layout and tunnels are scoped per daemon; tabs re-resolve locality
   against the daemon that is now active.
 - **Scope released while a tunnel is up** — the tab is removed like any other; its exclusively-owned tunnel
@@ -144,8 +163,9 @@ resolves its tunnel from scratch — the stored value is the URL the user typed,
    input in the Run tab strip; committing `localhost:5173` creates a tab whose webview displays that page.
 2. With the Run surface empty, the Run picker offers **Open URL…**, and it produces the same inline input and
    the same tab.
-3. Selecting the URL kind never reaches the Run surface's fallback placeholder — the tab renders the real
-   view, and no rendered Run tab shows a `<kind>: <title>` placeholder for any kind in the union.
+3. A tab of the URL kind renders the real URL view; it never shows the Run surface's `<kind>: <title>`
+   fallback placeholder. The placeholder stays for the four file-backed guest kinds, which this work does
+   not wire.
 4. The chat localhost chip's open control shows a menu with **Open in Mainframe** listed above **Open in
    browser**. Choosing "Open in Mainframe" twice for the same URL yields exactly one Run tab, focused both
    times, and reveals the Run surface if it was hidden.
@@ -155,38 +175,44 @@ resolves its tunnel from scratch — the stored value is the URL the user typed,
 6. Committing input that does not normalize to an `http`/`https` URL — empty, `not a url`,
    `file:///etc/passwd`, `javascript://x` — leaves the entry in the address bar's invalid treatment and
    mounts no webview. A unit test covers each of these inputs against the normalizer.
-7. On a remote daemon, committing a loopback URL on an eligible port produces a tab showing a pending state
-   that names the port, then loads the tunnel origin with the original path, query, and fragment preserved.
-   The only tunnel calls made are the existing per-port start/stop endpoints; the diff adds no route and
-   changes no file under `packages/core-rs`.
-8. A tunnel that reports an error, or that produces no ready-and-resolvable URL within 60 s, leaves the tab
-   in a failure state containing the daemon's error text (or a stated timeout) plus a Retry control; the
-   webview area is never left blank without a state.
-9. On a remote daemon, a loopback URL on a port below 1024 or on the daemon's own port shows that specific
-   rejection text in the tab body and issues no tunnel start request.
-10. Inspect and region capture succeed on a non-localhost, non-tunnel `https` origin: an inspect click
+7. On a remote daemon, committing a loopback URL on an eligible port with no tunnel yet running produces a
+   tab showing a pending state that names the port, then loads the tunnel origin with the original path,
+   query, and fragment preserved. The only tunnel calls made are the existing per-port start/stop endpoints;
+   the diff adds no route and changes no file under `packages/core-rs`.
+8. A tab opened for a port the daemon already lists as ready — a second tab on that port, or one adopting
+   the chat chip's tunnel — loads without entering the pending state and without waiting for any tunnel
+   event.
+9. A tunnel that reports an error, or that produces no URL within 120 s, leaves the tab in a failure state
+   containing the daemon's error text (or a stated timeout) plus a Retry control; the webview area is never
+   left blank without a state. A URL that arrives after the failure body replaces it with the loaded page,
+   with no user action.
+10. On a remote daemon, a loopback URL on a port below 1024 or on the daemon's own port shows that specific
+    rejection text in the tab body and issues no tunnel start request.
+11. Inspect and region capture succeed on a non-localhost, non-tunnel `https` origin: an inspect click
     delivers an element result to chat and a region drag delivers a capture. A Rust unit test asserts the
     four bridge commands stay reachable and that the external-open scheme guard still rejects `file:`,
     `javascript:`, and `ssh:`.
-11. Closing a URL tab whose tunnel it exclusively started stops that tunnel (the port disappears from the
+12. Closing a URL tab whose tunnel it exclusively started stops that tunnel (the port disappears from the
     tunnel list). Closing one of two tabs sharing a port, or a tab that adopted a tunnel started by the chat
     chip, leaves the tunnel running.
-12. A URL tab created in one project or worktree does not appear in a session belonging to another, and is
+13. A URL tab created in one project or worktree does not appear in a session belonging to another, and is
     removed when its launch scope is released — the same assertions the existing scope tests make for
     preview tabs.
-13. After a restart, a URL tab is present with its URL and title intact and loads on first activation; a
-    persisted URL tab on a remote daemon returns to the pending state and re-requests its tunnel rather than
-    loading a stored tunnel URL. A sanitizer test asserts the URL kind survives serialization while preview,
-    console, and terminal are still stripped.
-14. Every interactive element added carries a `data-testid` in `<surface>-<element>` kebab-case, keyed by tab
+14. After a restart, a URL tab is present with its URL and title intact and loads on first activation, and
+    never loads a stored tunnel URL. On a remote daemon it re-resolves: with the tunnel still running it
+    adopts it from the daemon's tunnel list and loads with no pending state; with the tunnel gone it shows
+    pending and requests a new one. A sanitizer test asserts the URL kind survives serialization while
+    preview, console, and terminal are still stripped.
+15. Every interactive element added carries a `data-testid` in `<surface>-<element>` kebab-case, keyed by tab
     id: `run-tab-url-<tabId>`, `run-tab-url-entry`, `run-tab-url-entry-input`, `run-picker-open-url`, plus
     the chip's menu rows. No testid is keyed by array index.
-15. No webview label or tab id contains characters outside `[A-Za-z0-9_-]`; a test asserts a URL committed
+16. No webview label or tab id contains characters outside `[A-Za-z0-9_-]`; a test asserts a URL committed
     with a path and query produces a conforming tab id.
-16. URL normalization and validation, duplicate detection, tunnel-state resolution (including the
-    port-rejection and DNS-pending cases), tab-model transitions, and persistence sanitization are unit
-    tested outside React. No file exceeds 300 lines and no function exceeds 50.
-17. `pnpm --filter @qlan-ro/mainframe-ui typecheck` and the UI test suite pass; `cargo check` in
+17. URL normalization and validation, duplicate detection, tunnel-state resolution (including port
+    rejection, an already-ready tunnel, a pre-DNS-check URL, and the timeout), tab-model transitions, and
+    persistence sanitization are unit tested outside React. No file exceeds 300 lines and no function
+    exceeds 50.
+18. `pnpm --filter @qlan-ro/mainframe-ui typecheck` and the UI test suite pass; `cargo check` in
     `packages/app-tauri/src-tauri` passes; a changeset is present.
 
 ## Decisions
@@ -235,12 +261,20 @@ resolves its tunnel from scratch — the stored value is the URL the user typed,
   `reversible` — the chat chip has no ownership registry, so a tunnel that already existed when the tab
   asked for one is treated as adopted and never stopped by the tab. Errs toward leaving a tunnel up, which
   matches the chip's existing rule against optimistic teardown.
-- **D11. Hold the pending state until the tunnel's hostname is verified as resolvable, with a 60 s
-  watchdog.** `reversible` — the daemon publishes a usable URL on connect and verifies DNS 20–30 s later.
-  The chat chip hands the pre-DNS URL to the OS browser, where a reload costs nothing; an embedded webview
-  would show a hard resolution error for half a minute instead. The preview tab's 20 s watchdog is too short
-  for this path, hence 60 s. The client currently discards the daemon's DNS flag, so the port-tunnel store
-  must start carrying it — a renderer-side change with no effect on the chip.
+- **D11. Any ready tunnel ends pending; only a tab watching a start waits for the DNS check, under a 120 s
+  non-terminal watchdog.** `reversible` — the daemon publishes a usable URL on connect and finishes its DNS
+  check up to 45 s later, so an embedded webview that loads immediately can show a resolution error for half
+  a minute; the chat chip gets away with it because the OS browser makes a reload free. Waiting is therefore
+  right for a tab that started the tunnel and wrong for every other path: the registry returns an existing
+  tunnel with no status broadcast at all, and the REST snapshot the store seeds from carries no DNS field,
+  so a rule that waited for a DNS event would hang a second tab on the same port, a tab adopting the chip's
+  tunnel, and every rehydrated tab. A tunnel the daemon reports ready has already passed the DNS step, which
+  makes "ready" a sufficient exit. The one gap left — adopting a tunnel that connected seconds ago, before
+  its check finished — is covered by a single automatic reload when the check lands, so the store does start
+  carrying the daemon's DNS flag, now as a reload trigger rather than a gate. The watchdog is 120 s because
+  the daemon's own budget is 45 s to connect plus 45 s for DNS, and it is non-terminal: a late URL replaces
+  the failure body, matching the launch preview's watchdog, which renders a failure body but still mounts on
+  a late URL.
 - **D12. Carry the original path, query, and fragment onto the tunnel origin.** `reversible` — a tunnel maps
   a port, not a page; loading only the origin would silently drop the part of the URL the user cared about.
 - **D13. Reload reloads the currently displayed URL rather than re-deriving it from a port.** `reversible` —
