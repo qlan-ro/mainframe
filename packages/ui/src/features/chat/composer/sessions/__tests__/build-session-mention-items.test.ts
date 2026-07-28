@@ -8,12 +8,12 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { TranscriptResolution } from '@qlan-ro/mainframe-types';
-import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
+import type { SessionItem, SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { buildSessionMentionItems } from '../build-session-mention-items';
 
 const PROJECT = 'proj-1';
 
-function session(overrides: Partial<SessionItem> & { remoteId: string }): SessionItem {
+function session(overrides: { remoteId: string; title?: string; custom?: Partial<SessionCustom> }): SessionItem {
   return {
     id: overrides.remoteId,
     remoteId: overrides.remoteId,
