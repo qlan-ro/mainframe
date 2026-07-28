@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 
 const getSkills = vi.fn();
 const getAgents = vi.fn();
@@ -11,6 +11,8 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPor
 vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => useActiveIdentity() }));
 
 import { useSidebarSkills } from '../use-sidebar-skills';
+// Real store, not mocked — proves the hook subscribes to the actual shared signal.
+import { bumpSkillsRevalidation } from '@/features/skills/use-skills-revalidation';
 
 beforeEach(() => {
   getSkills.mockReset();
@@ -50,5 +52,22 @@ describe('useSidebarSkills', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(getSkills).toHaveBeenCalledWith(31415, 'codex', '/p');
     expect(getAgents).toHaveBeenCalledWith(31415, 'codex', '/p');
+  });
+
+  it('re-fetches skills and agents when the shared skills-revalidation nonce is bumped', async () => {
+    useActiveIdentity.mockReturnValue({ projectName: 'X', projectPath: '/p' });
+    getSkills.mockResolvedValue([{ id: 's1', name: 'one' }]);
+    getAgents.mockResolvedValue([{ id: 'a1', name: 'bot' }]);
+
+    renderHook(() => useSidebarSkills());
+
+    await waitFor(() => expect(getSkills).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      bumpSkillsRevalidation();
+    });
+
+    await waitFor(() => expect(getSkills).toHaveBeenCalledTimes(2));
+    expect(getSkills.mock.calls[1]).toEqual([31415, 'claude', '/p']);
   });
 });
