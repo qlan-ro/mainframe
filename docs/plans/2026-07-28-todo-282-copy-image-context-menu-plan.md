@@ -49,20 +49,26 @@ recorded as D10.
 - **The worktree has no `node_modules`, and nothing outside the task graph installs
   them.** The lane's only setup step creates the worktree and stamps the tracker, so
   the install needs an owner *inside* the graph: **Task 1 runs `pnpm install` from
-  the worktree root as its first step**, and group `copy-menu-shared-tests` carries
-  `depends_on: ['clipboard-core-tests']` so it can never start before that install
-  finishes. One install, one owner, never two at once in the same workspace. No other
-  task re-runs it. Serializing those two groups costs nothing: from wave 2 on the
-  graph is a chain anyway.
-- **Only Task 13 runs the package-wide typecheck.**
-  `pnpm --filter @qlan-ro/mainframe-ui typecheck` compiles the whole package,
-  test files included, so it cannot pass in a group that has just committed tests
-  against modules that do not exist yet — `clipboard-core-tests` and `menu-tests`
-  both do, and `copy-menu-shared-tests` runs concurrently with a group whose files
-  are mid-edit. **This overrides the generic "typecheck + affected tests green"
-  expectation for every group except `image-context-menu`.** Each group below states
-  its own exit contract; a group meets that contract and returns, and Task 13 runs
-  the single package-wide typecheck once every other group has landed.
+  the worktree root as its first step.** No other task re-runs it.
+- **The group graph is a pure chain; no two groups ever run at once.** Each group
+  names its predecessor in `depends_on`, including
+  `copy-menu-shared-tests → clipboard-lib`, which is a scheduling edge rather than a
+  code one. Two shared-worktree hazards force it. First, `pnpm install` must not run
+  twice at once in one workspace, and Task 1 owns the only install. Second, **every
+  group commits, and `.husky/pre-commit` runs `npx lint-staged`** — concurrent
+  commits in one worktree commingle each other's staged files, a failure this repo
+  has already paid for once. Serializing costs one wave: the only two groups that
+  could have overlapped were `clipboard-lib` and `copy-menu-shared-tests`.
+- **Which groups run the package-wide typecheck.**
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck` compiles the whole package, test
+  files included, so it cannot pass in a group that has just committed red tests
+  importing modules that do not exist yet: `clipboard-core-tests` (Tasks 1-3) and
+  `menu-tests` (Task 10) must **not** run it. **Every other group must.** Because
+  the graph is serialized, no other group's files are ever mid-edit, so
+  `clipboard-lib`, `copy-menu-shared-tests` and `copy-menu-shared` each compile the
+  package cleanly and a type error surfaces in the group that owns the file instead
+  of in the last wave. Each group below states its own exit contract, and Task 13
+  runs the final package-wide typecheck once everything has landed.
 - **The implement stage needs no Rust and never runs `cargo`.** The one step that
   does — the D7 webview gate — is a **qa-stage** step, not an implement task
   (D14). Its cost is stated there: a cold `packages/app-tauri/src-tauri` build in
@@ -226,6 +232,14 @@ for text (`writeToClipboard(text): Promise<boolean>` in
 widened only so the `DOMException` message can reach the toast description.
 `useMenuCopyFeedback.onCopySelect` consumes `result.ok` directly.
 
+The same reasoning deletes `classifyImageSource` and its `ImageSourceKind` union.
+`'remote'` and `'unsupported'` are never told apart in production — D5 makes both
+non-copyable — and the union's only consumer, `canCopyImage`, collapses the result
+to a boolean. It would exist solely to be asserted. `canCopyImage(src)` is therefore
+the data-URL regex test AND `imageClipboardSupported()`, and nothing else is
+exported. The source kinds do not go untested: they stay as rows of Task 1's truth
+table, which is where the gating rule belongs.
+
 **D12 — `CopyMenuItem` is extracted and all three copy menus migrate in this pass.**
 The item markup (`copied → Check` / `failed → AlertTriangle` / `idle → Copy`, plus
 the label ternary) already exists twice —
@@ -293,14 +307,14 @@ remote-fetch ruling the brief deferred. That is separate work.
 
 ```ts
 // packages/ui/src/lib/clipboard/image-source.ts
-export type ImageSourceKind = 'data-url' | 'remote' | 'unsupported';
-export function classifyImageSource(src: string): ImageSourceKind;
-export function decodeDataUrl(src: string): { mediaType: string; bytes: Uint8Array<ArrayBuffer> } | null;
+export interface DecodedDataUrl { mediaType: string; bytes: Uint8Array<ArrayBuffer> }
+export function decodeDataUrl(src: string): DecodedDataUrl | null;
 export function imageClipboardSupported(): boolean;
 export function canCopyImage(src: string): boolean;
 
 // packages/ui/src/lib/clipboard/write-image.ts
-export function writeImageToClipboard(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<void>;
+/** `src` is the original `data:image/*` URL; `decoded` is its payload. */
+export function writeImageToClipboard(src: string, decoded: DecodedDataUrl): Promise<void>;
 
 // packages/ui/src/lib/clipboard/copy-image.ts
 /** `message` is present only on failure, and only when a reason is worth showing. */
@@ -343,14 +357,14 @@ tests green"):
   named under *Verify* fails for exactly the stated reason.
 - **Do not run `pnpm --filter @qlan-ro/mainframe-ui typecheck`.** It is
   package-wide and would report `TS2307` on `../image-source`, `../write-image`
-  and `../copy-image` — modules this group is not allowed to create. Task 13 owns
-  the single package-wide typecheck (Constraints).
+  and `../copy-image` — modules this group is not allowed to create. `clipboard-lib`
+  runs the first passing package-wide typecheck, and Task 13 the last (Constraints).
 - **Do not create `image-source.ts`, `write-image.ts` or `copy-image.ts`, not even
   as empty stubs, to make the imports resolve.** Those three files belong to group
   `clipboard-lib`; touching them here breaks the no-shared-files assumption that
   `parallel_safe` rests on and hands `clipboard-lib` a file it did not write.
 
-### Task 1 — Install the workspace, then source classification and gating tests (RED)
+### Task 1 — Install the workspace, then decode and gating tests (RED)
 
 **First step, before anything else in this group:** run `pnpm install` from the
 worktree root. It is the only install in the whole graph (Constraints); every later
@@ -361,10 +375,6 @@ group so it cannot race the install.
 (node environment; no DOM).
 
 Cover, with hardcoded expectations (no logic mirrored from the implementation):
-- `classifyImageSource` → `'data-url'` for `data:image/png;base64,…` and
-  `data:image/jpeg;base64,…`; `'remote'` for `http://…` and `https://…`;
-  `'unsupported'` for `file:///…`, `blob:…`, `asset://…`, `''`, and a non-image
-  data URI (`data:text/plain;base64,…`).
 - `decodeDataUrl` → `{ mediaType: 'image/png', bytes }` for a known 1×1 PNG data
   URI, asserting the first eight bytes are the PNG signature
   (`137 80 78 71 13 10 26 10`) and the byte length matches the base64 payload;
@@ -373,9 +383,13 @@ Cover, with hardcoded expectations (no logic mirrored from the implementation):
 - `imageClipboardSupported` → `false` with no `ClipboardItem` global; `false` with
   `ClipboardItem` present but no `navigator.clipboard.write`; `true` with both.
   Install and remove the globals with `vi.stubGlobal` / `vi.unstubAllGlobals`.
-- `canCopyImage` truth table over `{data-url, remote} × {supported, unsupported}` —
-  only `data-url` + supported is `true`. This is the gate D11 makes authoritative,
-  so the table is the only place the gating rule is asserted.
+- `canCopyImage` truth table — the sources crossed with host support. Sources:
+  `data:image/png;base64,…` and `data:image/jpeg;base64,…` (copyable);
+  `http://…`, `https://…`, `file:///…`, `blob:…`, `asset://…`, `''`, and a non-image
+  data URI (`data:text/plain;base64,…`) (not copyable). Every source is `false` when
+  `imageClipboardSupported()` is `false`; only the two `data:image/*` rows are `true`
+  when it is. This is the gate D11 makes authoritative and the only place the source
+  kinds are asserted, since `classifyImageSource` no longer exists (D11).
 
 ### Task 2 — Clipboard write tests (RED)
 
@@ -408,48 +422,54 @@ separately. Pick one and say which in the file header.)
 The async body of `write` still records its call synchronously, so the activation
 assertion holds.
 
-**jsdom has no object-URL API — stub it by assignment, not `vi.spyOn`.** Verified
-against this repo's jsdom (29.1.1): `URL.createObjectURL` and `URL.revokeObjectURL`
-are both `undefined`, unlike `toBlob`, which exists. `reencodeToPng` calls
-`createObjectURL` as its first statement, so without these stubs the JPEG re-encode
-case and all three re-encode-failure cases throw a `TypeError` before reaching the
-behavior they exist to pin — and the balance assertion below cannot be written as
-`vi.spyOn(URL, 'createObjectURL')`, which throws on a property that does not exist.
-Install by assignment and remove in teardown, since there is nothing to restore:
+**No object-URL stubs are needed.** `reencodeToPng` assigns the source `data:` URL
+straight to `img.src` (Task 5), so nothing in this module calls
+`URL.createObjectURL` — which is just as well, since this repo's jsdom (29.1.1)
+defines neither `createObjectURL` nor `revokeObjectURL`, and `vi.spyOn` throws on a
+property that does not exist.
+
+**`decode()` has that same gap; `naturalWidth` does not.** Verified against this
+repo's jsdom: `HTMLImageElement.prototype.decode` is `undefined`, so install it by
+assignment and delete it in teardown, while `naturalWidth`/`naturalHeight` are real
+prototype accessors and take an ordinary getter spy. The `decode` stub is also where
+the JPEG case reads `this.src`, since the `<img>` is never in the document:
 
 ```ts
+let seenSrc = '';
 beforeEach(() => {
-  URL.createObjectURL = vi.fn(() => 'blob:test');
-  URL.revokeObjectURL = vi.fn();
+  HTMLImageElement.prototype.decode = vi.fn(function (this: HTMLImageElement) {
+    seenSrc = this.src;
+    return Promise.resolve();
+  });
+  vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(2);
+  vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(1);
 });
-afterEach(() => {
-  Reflect.deleteProperty(URL, 'createObjectURL');
-  Reflect.deleteProperty(URL, 'revokeObjectURL');
-});
+afterEach(() => Reflect.deleteProperty(HTMLImageElement.prototype, 'decode'));
 ```
 
+Every call passes the data URL and its decoded payload:
+`writeImageToClipboard(PNG_DATA_URI, { mediaType: 'image/png', bytes })`.
+
 Cases:
-- **PNG passthrough:** `writeImageToClipboard(bytes, 'image/png')` calls `write`
-  once with a single `ClipboardItem`; the item's `image/png` value resolves to a
-  `Blob` of `type === 'image/png'` and `size === bytes.length`; no canvas is
-  touched (spy on `document.createElement` or on the stubbed `getContext`).
+- **PNG passthrough:** calls `write` once with a single `ClipboardItem`; the item's
+  `image/png` value resolves to a `Blob` of `type === 'image/png'` and
+  `size === bytes.length`; no canvas is touched (spy on `document.createElement` or
+  on the stubbed `getContext`).
 - **Activation ordering:** `navigator.clipboard.write` has already been called
   **synchronously** when `writeImageToClipboard` returns — assert the spy's call
   count is 1 before awaiting the returned promise. This is the test that pins the
   user-activation requirement from D4; without it a later refactor to `async`
   silently breaks copy in WebKit.
-- **JPEG re-encode:** with `HTMLImageElement.prototype.decode` stubbed to resolve
-  (setting `naturalWidth`/`naturalHeight`), `HTMLCanvasElement.prototype.getContext`
-  stubbed to a fake 2d context with a `drawImage` spy, and
-  `HTMLCanvasElement.prototype.toBlob` stubbed to hand back a PNG blob:
-  `writeImageToClipboard(bytes, 'image/jpeg')` still calls `write` synchronously,
-  and the item's value resolves to the re-encoded PNG blob. Assert the two object-URL
-  mocks installed above are balanced (`createObjectURL` and `revokeObjectURL` each
-  called once, with the revoke receiving `'blob:test'`).
-- **Re-encode failure:** a rejecting `decode()` rejects the promise
-  `writeImageToClipboard` returned (via the adopting stub above), and the object URL
-  is still revoked. Same for a `null` 2d context and for a `toBlob` that yields
-  `null`.
+- **JPEG re-encode:** with the `decode`/`naturalWidth` stubs above,
+  `HTMLCanvasElement.prototype.getContext` stubbed to a fake 2d context with a
+  `drawImage` spy, and `HTMLCanvasElement.prototype.toBlob` stubbed to hand back a
+  PNG blob: `writeImageToClipboard(JPEG_DATA_URI, { mediaType: 'image/jpeg', bytes })`
+  still calls `write` synchronously, and the item's value resolves to the re-encoded
+  PNG blob. Also assert `seenSrc === JPEG_DATA_URI` — the `<img>` gets the original
+  data URL, which is what replaces the object-URL round trip.
+- **Re-encode failure:** a `decode` stub that rejects makes the promise
+  `writeImageToClipboard` returned reject too (via the adopting `write` stub above).
+  Same for a `null` 2d context and for a `toBlob` that yields `null`.
 
 ### Task 3 — Copy orchestration tests (RED)
 
@@ -459,8 +479,9 @@ Cases:
 `vi.mock('../write-image')` so no DOM is needed; use the real `image-source`. Per
 D11 there are no host/source-kind cases here — that gate is Task 1's truth table.
 Cases:
-- **Happy path** → `writeImageToClipboard` receives exactly the decoded bytes and
-  the media type from the data URI; the result is `{ ok: true }` with no `message`.
+- **Happy path** → `writeImageToClipboard` receives the src unchanged as its first
+  argument and, as its second, the decoded record whose `mediaType` and `bytes` come
+  from the data URI; the result is `{ ok: true }` with no `message`.
 - **Synchronous write** → `writeImageToClipboard` has been called once before the
   returned promise is awaited (the D4 activation rule, pinned at this layer too).
 - **Malformed base64 data URI** (`decodeDataUrl` returns `null`) →
@@ -482,21 +503,34 @@ the test; if any file passes, it is asserting nothing.
 
 ## Group 2 — `clipboard-lib` (core) · depends on: `clipboard-core-tests`
 
+**Exit contract for this group:**
+
+- **Done** = the three modules below exist and are committed, the whole
+  `src/lib/clipboard` suite is green (Task 6's *Verify*), and
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck` **passes**. This group owns the
+  three files Group 1's red tests import, so it is the first point at which the
+  package compiles again and the first place a type error in them can surface. Run
+  it here; do not defer it to Task 13.
+- Nothing else in the package is mid-edit: the graph is serialized (Constraints), so
+  a failure in this typecheck is this group's own.
+- **Touch nothing outside `packages/ui/src/lib/clipboard/`.** The test files stay as
+  Group 1 committed them; if one of them looks wrong, the implementation is wrong.
+
 ### Task 4 — `image-source.ts`
 
 **File:** `packages/ui/src/lib/clipboard/image-source.ts` — **new.**
 
-Pure, no DOM writes. `classifyImageSource` matches
-`^data:image\/[a-zA-Z0-9.+-]+;base64,` for `'data-url'` and `^https?:` for
-`'remote'`; everything else is `'unsupported'`. `decodeDataUrl` splits on the
+Pure, no DOM writes. Three exports and one module-level constant — the copyable-source
+regex, `/^data:image\/[a-zA-Z0-9.+-]+;base64,/`, which is not exported and has no
+classifier wrapped around it (D11). `decodeDataUrl` splits on the
 first `,`, verifies the prefix shape, `atob`s the payload inside a `try`
 (returning `null` on `InvalidCharacterError` — an `/* expected */`-commented catch,
 since a malformed URI is data, not a fault), and copies char codes into a
 `new Uint8Array(len)`, whose inferred type is already `Uint8Array<ArrayBuffer>` —
-declare the return that way and no copy is needed. `imageClipboardSupported` is the
-two-term global check from D6 — guard both terms so it is safe to call in a node
-test. `canCopyImage` is the conjunction of the kind check and
-`imageClipboardSupported()`.
+declare the return that way (as `DecodedDataUrl`) and no copy is needed.
+`imageClipboardSupported` is the two-term global check from D6 — guard both terms so
+it is safe to call in a node test. `canCopyImage(src)` is one line:
+`COPYABLE_SRC.test(src) && imageClipboardSupported()`.
 
 **Verify:** `vitest run src/lib/clipboard/__tests__/image-source.test.ts` green.
 
@@ -505,30 +539,35 @@ test. `canCopyImage` is the conjunction of the kind check and
 **File:** `packages/ui/src/lib/clipboard/write-image.ts` — **new.**
 
 ```ts
-export function writeImageToClipboard(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<void> {
+export function writeImageToClipboard(src: string, decoded: DecodedDataUrl): Promise<void> {
   const png =
-    mediaType === 'image/png'
-      ? Promise.resolve(new Blob([bytes], { type: 'image/png' }))
-      : reencodeToPng(bytes, mediaType);
+    decoded.mediaType === 'image/png'
+      ? Promise.resolve(new Blob([decoded.bytes], { type: 'image/png' }))
+      : reencodeToPng(src);
   return navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
 }
 ```
 
-The `Uint8Array<ArrayBuffer>` annotation is required for both `Blob` constructions
-to typecheck (Constraints). One comment, on the promise value: WebKit accepts only
-`image/png` on write, and takes a promise so the re-encode can finish after the user
-gesture. Private
-`reencodeToPng(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<Blob>`:
-1. `const url = URL.createObjectURL(new Blob([bytes], { type: mediaType }))` — blob
-   URLs are same-origin, so the canvas is never tainted.
-2. `const img = new Image(); img.src = url; await img.decode();` — `decode()` over
+The `Uint8Array<ArrayBuffer>` annotation on `DecodedDataUrl.bytes` is what lets the
+`Blob` construction typecheck (Constraints). One comment, on the promise value:
+WebKit accepts only `image/png` on write, and takes a promise so the re-encode can
+finish after the user gesture. Private `reencodeToPng(src: string): Promise<Blob>`:
+1. `const img = new Image(); img.src = src; await img.decode();` — `decode()` over
    `createImageBitmap`/`OffscreenCanvas` because every webview the shell ships on
    supports it.
-3. Draw onto a `document.createElement('canvas')` sized to
+2. Draw onto a `document.createElement('canvas')` sized to
    `naturalWidth × naturalHeight`; throw when either is `0` or `getContext('2d')`
    returns `null`.
-4. `canvas.toBlob(resolve, 'image/png')`, rejecting when it yields `null`.
-5. `URL.revokeObjectURL(url)` in a `finally`.
+3. `canvas.toBlob(resolve, 'image/png')`, rejecting when it yields `null`.
+
+**The re-encode loads the original `data:` URL directly; it does not rebuild a
+`Blob` and an object URL from the bytes it was just handed.** `src` is a
+`data:image/*` URL by construction — `canCopyImage` is the only gate and it admits
+nothing else (D5) — the shell's CSP already allows it
+(`img-src 'self' blob: data:` in `packages/app-tauri/src-tauri/tauri.conf.json:31`),
+and a `data:` URL does not taint the canvas, so `toBlob` succeeds. Reusing it drops
+an allocation, the `URL.createObjectURL`/`revokeObjectURL` pair and the `finally`
+that had to balance them, plus the jsdom stubs those forced on Task 2.
 
 Keep each function under 50 lines; if `reencodeToPng` crowds, split the canvas step
 into a second private helper in the same file.
@@ -540,9 +579,9 @@ into a second private helper in the same file.
 **File:** `packages/ui/src/lib/clipboard/copy-image.ts` — **new.**
 
 The exact ladder the Task 3 tests pin, and nothing more (D11 — no host or
-source-kind re-check): `decodeDataUrl(src)` → `writeImageToClipboard`, with
-`.then(onOk, onErr)` rather than `await` (D4's activation rule; carry one comment
-saying so).
+source-kind re-check): `decodeDataUrl(src)` → `writeImageToClipboard(src, decoded)`,
+with `.then(onOk, onErr)` rather than `await` (D4's activation rule; carry one
+comment saying so).
 
 - `decodeDataUrl` returns `null` → `console.warn('[copy-image] could not decode the image source')`,
   then `{ ok: false, message: 'That image could not be decoded.' }`.
@@ -555,32 +594,37 @@ saying so).
 No toast here: the component owns user-facing feedback so this module stays callable
 outside React.
 
-**Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard`
-all green — the clipboard suite alone, and nothing wider.
+**Verify (whole group):**
 
-**Do not run `pnpm --filter @qlan-ro/mainframe-ui typecheck` here.** That command is
-package-wide, and this group runs in the same worktree, concurrently, with group
-`copy-menu-shared`. With `noUnusedLocals: true` (`packages/ui/tsconfig.json:16`), any
-half-applied Task 9 state — `CopyPathItem` deleted before `lib/ui/CopyMenuItem.tsx`
-exists, or the now-unused `Check`/`Copy`/`AlertTriangle`/`CopyStatus`/`ContextMenuItem`
-imports not yet dropped from `MessagePathContextMenu.tsx` and `link-with-preview.tsx`
-— would fail this group on code it does not own and end the wave. Task 13 owns the
-package-wide typecheck, and by then both groups have landed.
+- `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard` all green —
+  the clipboard suite, and nothing wider.
+- `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes (the group's exit contract).
+  It is package-wide, which is the point: no other group is running, and these three
+  modules are what Group 1's tests could not resolve.
 
 ---
 
-## Group 3 — `copy-menu-shared-tests` (test) · depends on: `clipboard-core-tests`
+## Group 3 — `copy-menu-shared-tests` (test) · depends on: `clipboard-core-tests`, `clipboard-lib`
 
-The dependency is the **install**, not the code: this group shares no file with
-`clipboard-core-tests` and reads none of its output, but Task 1 owns the one
-`pnpm install` and two concurrent installs in one workspace is the race the
-Constraints rule out. Nothing here needs `lib/clipboard`.
+Both edges are **scheduling, not code**: this group shares no file with either and
+reads no output of either — nothing here needs `lib/clipboard`.
+`clipboard-core-tests` owns the graph's one `pnpm install` (Task 1).
+`clipboard-lib` is named because it and this group would otherwise be the graph's
+only concurrent pair, racing twice in one worktree: over that install, and over
+`.husky/pre-commit`'s `npx lint-staged`, which commingles the staged files of
+concurrent commits (Constraints).
 
-**Exit contract for this group:** done = the cases below are written and committed,
-cases 1-2 fail for the stated reason, case 3 and every pre-existing case in the file
-pass. Skip the package-wide typecheck (Constraints): this group runs concurrently
-with `clipboard-lib`, whose files are mid-edit, so a package-wide compile here fails
-on code this group does not own. Task 13 owns it.
+**Exit contract for this group:**
+
+- **Done** = the three cases below are written and committed, cases 1-2 fail for the
+  reason named under *Verify*, and case 3 plus every pre-existing case in the file
+  pass.
+- `pnpm --filter @qlan-ro/mainframe-ui typecheck` **passes** and is run here. Unlike
+  Groups 1 and 5, this group imports nothing that does not exist: the hook and its
+  harness are already in the tree, and the new cases are red on *behavior*, not on a
+  missing module.
+- **Do not touch `lib/ui/use-menu-copy-feedback.ts`** — the generation token is
+  Task 8's, in the next group.
 
 ### Task 7 — Stale-settlement tests for `useMenuCopyFeedback` (RED)
 
@@ -614,6 +658,18 @@ Do not touch `use-menu-copy-feedback.ts` — the generation token is Task 8's.
 ## Group 4 — `copy-menu-shared` (ui) · depends on: `copy-menu-shared-tests`
 
 Read the `mainframe-design-system` skill before touching `CopyMenuItem`'s markup.
+
+**Exit contract for this group:**
+
+- **Done** = Tasks 8 and 9 are committed, the two *Verify* runs below are green with
+  **no test file edited**, and `pnpm --filter @qlan-ro/mainframe-ui typecheck`
+  **passes**. This group deletes `CopyPathItem` and rewrites two shipped menus under
+  `noUnusedLocals: true` (`packages/ui/tsconfig.json:16`), so a stranded
+  `Check`/`Copy`/`AlertTriangle`/`CopyStatus`/`ContextMenuItem` import is a
+  compile error and this is the group that owns it. The graph is serialized, so
+  nothing else is mid-edit.
+- Migrating a menu's markup is behavior-preserving by definition here: if a shipped
+  suite needs an edit to stay green, the extraction drifted — fix the extraction.
 
 ### Task 8 — Generation token in `useMenuCopyFeedback`
 
@@ -681,7 +737,8 @@ here means the extraction changed something it should not have.
   the reason named under *Verify*.
 - **Do not run `pnpm --filter @qlan-ro/mainframe-ui typecheck`** — package-wide, and
   it would report `TS2307` on `../ImageContextMenu`, which this group must not
-  create. Task 13 owns the single package-wide typecheck (Constraints).
+  create. `image-context-menu` typechecks this file once it exists, and Task 13 runs
+  the final package-wide typecheck (Constraints).
 - **Do not create `ImageContextMenu.tsx`, not even as a stub, to make the import
   resolve, and do not edit `LightboxSurface.tsx`.** Both belong to group
   `image-context-menu`; writing them here breaks the no-shared-files assumption
@@ -734,14 +791,32 @@ Cases:
    appears. This covers the **user turn's attachment gallery** (`InlineImageThumbs`).
    Cases 6 and 7 are the two render paths this change covers, and they are the two
    the design gate named; the brief's third, markdown, is out per D15.
-8. **Menu dismissal does not dismiss the lightbox** — with the `ZoomableImage`
+8. **Nested inside `MessagePathContextMenu` — the composition that actually ships.**
+   Render
+   `<MessagePathContextMenu><ZoomableImage src={PNG_DATA_URI} /></MessagePathContextMenu>`
+   (`AssistantMessage.tsx:110` wraps every non-nested message's parts this way), open
+   the lightbox, `fireEvent.contextMenu` on `chat-image-zoom-image`, and assert
+   `image-context-menu` is in the DOM **and** `tool-card-path-copy-absolute` is not.
+   Seed `useActiveBasesStore` and stub `window.getSelection` the way
+   `messages/__tests__/MessagePathContextMenu.test.tsx` does — it renders the real
+   component with the real zustand store.
+
+   Case 6 renders `ZoomableImage` alone, so nothing there pins this. The lightbox is
+   a Dialog portal, but **React synthetic events propagate through portals along the
+   React tree**, so every right-click on the lightbox image also reaches
+   `MessagePathContextMenu.handleContextMenu`, which runs `setPath(null)` and
+   `suppressRadixTrigger`. Today only ordering keeps the two menus from both opening
+   (see Task 11), and ordering is exactly the kind of thing a later refactor breaks
+   silently — this repo already paid for nested triggers once in
+   `parts/link-with-preview.tsx:82-85`.
+9. **Menu dismissal does not dismiss the lightbox** — with the `ZoomableImage`
    dialog open and the menu open, press `Escape` once: the menu closes and
    `chat-image-zoom-dialog` is still in the DOM. Then assert a plain click on
    `chat-image-zoom-image` (no menu open) still closes the dialog, so the existing
    dismissal contract survives the `asChild` wrap.
-9. **Dismissing the menu with an outside pointer does not dismiss the lightbox** —
+10. **Dismissing the menu with an outside pointer does not dismiss the lightbox** —
    the interaction risk the design gate named, and the one QA step 6 would otherwise
-   own alone. Open the `ZoomableImage` dialog and the menu as in case 8, let the
+   own alone. Open the `ZoomableImage` dialog and the menu as in case 9, let the
    pending timers run once (the suite uses
    `vi.useFakeTimers({ shouldAdvanceTime: true })` like
    `MessagePathContextMenu.test.tsx`; Radix registers its document `pointerdown`
@@ -761,7 +836,7 @@ Cases:
    this case: keep it as a `it.skip` naming the jsdom limitation, record the
    downgrade as a decision in the lane result, and leave QA step 6 as the only
    coverage.
-10. **A copy that settles after the menu closed does not close the lightbox** (D13,
+11. **A copy that settles after the menu closed does not close the lightbox** (D13,
     the integration counterpart to Task 7). Open the `ZoomableImage` dialog and the
     menu, mock `copyImageToClipboard` to a **deferred** promise, click `image-copy`,
     press `Escape` to dismiss the menu only, then settle the deferred copy and
@@ -811,6 +886,21 @@ the shadcn `ContextMenu onOpenChange={handleOpenChange}` /
 `data-testid="image-context-menu"` goes on `ContextMenuContent` (D3). No separator
 and no reserved second group.
 
+**The trigger gets no `onContextMenu` guard, unlike `link-with-preview.tsx:82-85`.**
+State the reason in the file's header comment, because the absence is the surprising
+part. This trigger nests inside `MessagePathContextMenu` (`AssistantMessage.tsx:110`)
+and React carries the synthetic event through the Dialog portal to it, but the inner
+trigger runs first and Radix's own `onContextMenu` ends with
+`event.preventDefault()`; the outer trigger composes its handler with
+`composeEventHandlers(props.onContextMenu, …, { checkForDefaultPrevented: true })`,
+so the outer menu never opens. The outer's own `handleContextMenu` still runs, and
+both of its effects are inert here: `setPath(null)` is a no-op state write, and
+`suppressRadixTrigger` re-sets a flag already set. It cannot resolve a path either —
+it looks one up with `closest('[data-file-path]')`, which walks the **DOM**, and the
+lightbox image's DOM ancestry is the portal on `document.body`, not the message.
+`link-with-preview` needed `stopPropagation` because it is a real trigger inside the
+message's own DOM; this one is not. Task 10 case 8 is what keeps that true.
+
 **Verify:** cases 1-5 of Task 10 pass.
 
 ### Task 12 — Wrap the lightbox image
@@ -824,7 +914,7 @@ untouched: Radix's `asChild` slot composes the ref, so
 still works. Add nothing to the props interface — the surface already receives
 `src`.
 
-**Verify:** cases 6-10 of Task 10 pass;
+**Verify:** cases 6-11 of Task 10 pass;
 `vitest run src/features/chat/parts/__tests__/ZoomableImage.test.tsx src/features/chat/parts/__tests__/ImageLightbox.test.tsx`
 still green.
 
@@ -924,7 +1014,7 @@ Appendix A as the fix.
 5. Right-click transcript text, a code block, and the composer → unchanged.
 6. Close the menu with Escape and with an outside click → the lightbox stays open;
    clicking the image itself still closes the lightbox. The outside *click* is the
-   half Task 10 case 9 cannot reach — jsdom ignores the `pointer-events: none` Radix
+   half Task 10 case 10 cannot reach — jsdom ignores the `pointer-events: none` Radix
    puts on `body` — so this step is its only coverage; run it deliberately. Then
    click **Copy Image** and immediately press Escape; wait two seconds → the lightbox
    is still open (D13).
@@ -950,7 +1040,7 @@ Appendix A as the fix.
 - **Radix menu inside a Radix dialog.** Both portal to `document.body` at `z-50`;
   the menu mounts later so it stacks above. Escape ordering is layer-based, which is
   what makes D13's late-settlement bug possible; covered by Task 7, Task 10 cases
-  8-10, and QA step 6. Case 9 covers outside-pointer dismissal only as far as jsdom
+  9-11, and QA step 6. Case 10 covers outside-pointer dismissal only as far as jsdom
   allows — a real closing *click* is gated by `pointer-events: none`, which jsdom
   does not honor, so that half stays with QA step 6.
 - **`CopyMenuItem` touches two shipped menus.** The migration is behavior-preserving
@@ -1053,9 +1143,9 @@ Tests: `lib/host/__tests__/tauri-adapter.test.ts` gains one case (`clipboard.wri
 
 **File:** `packages/ui/src/lib/clipboard/decode-image.ts` — replaces `write-image.ts`.
 
-`decodeToRgba(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<{ rgba: Uint8Array<ArrayBuffer>; width: number; height: number }>`
-is A5's version of Task 5's `reencodeToPng`: same object-URL → `img.decode()` →
-canvas pipeline, ending at
+`decodeToRgba(src: string): Promise<{ rgba: Uint8Array<ArrayBuffer>; width: number; height: number }>`
+is A5's version of Task 5's `reencodeToPng`: the same `img.src = src` →
+`img.decode()` → canvas pipeline off the original data URL, ending at
 `{ rgba: new Uint8Array(imageData.data.buffer.slice(0)), width, height }` instead of
 `toBlob` — `buffer.slice(0)` yields a real `ArrayBuffer`, so the annotation holds
 without a further copy. Its test file (`__tests__/decode-image.test.ts`, jsdom
