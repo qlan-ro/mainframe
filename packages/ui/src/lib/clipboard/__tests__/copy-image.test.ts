@@ -21,6 +21,9 @@ describe('copyImageToClipboard', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // `restoreAllMocks` restores spies but leaves a vi.mock'ed module fn's call
+    // history, which the synchronous-call count below reads.
+    mockedWrite.mockReset();
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 

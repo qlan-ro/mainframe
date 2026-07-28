@@ -24,7 +24,7 @@ class FakeClipboardItem {
 
 async function copiedBlob(write: ReturnType<typeof vi.fn>): Promise<Blob> {
   const item = write.mock.calls[0]![0][0] as FakeClipboardItem;
-  return item.values['image/png'];
+  return item.values['image/png']!;
 }
 
 describe('writeImageToClipboard', () => {
