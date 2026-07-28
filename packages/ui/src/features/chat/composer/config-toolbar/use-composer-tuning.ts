@@ -111,7 +111,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   // Live run-state from the assistant-ui thread — stays accurate mid-run
   // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
-  const hasMessages = useAuiState((s: { thread: { messages: unknown[] } }) => s.thread.messages.length > 0);
+  const hasMessages = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length > 0);
 
   const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
 

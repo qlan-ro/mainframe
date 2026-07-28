@@ -103,6 +103,7 @@ interface RenderProps {
   adapter?: AdapterInfo | null;
   model?: AdapterModel | null;
   locked?: boolean;
+  disabled?: boolean;
   setAdapter?: (id: string) => void;
   setModel?: (id: string) => void;
 }
@@ -115,6 +116,7 @@ function renderSelect(props: RenderProps = {}) {
   const adapter = props.adapter !== undefined ? props.adapter : ADAPTER_CLAUDE;
   const model = props.model !== undefined ? props.model : SONNET;
   const locked = props.locked ?? false;
+  const disabled = props.disabled ?? false;
 
   render(
     <TooltipProvider>
@@ -124,6 +126,7 @@ function renderSelect(props: RenderProps = {}) {
         adapter={adapter}
         model={model}
         locked={locked}
+        disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
       />
