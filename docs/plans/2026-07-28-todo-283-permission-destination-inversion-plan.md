@@ -11,9 +11,9 @@ The Claude adapter rewrites every permission update the CLI hands back from `des
 damagingly a `setMode` update, which lands as the project's default permission mode. This plan removes the rewrite so
 each update is forwarded with the destination it declares, adds one narrow invariant on top (a mode change is never
 forwarded to a persisting destination, because making a mode the project default must be a deliberate act), pins the
-client-side "allow once emits no rule" invariant with a test, and clears the stale references — the flagged mismatch in
-`docs/adapters/claude/PERMISSIONS.md`, the consumed-surface row, and the same inverted helper still living in the
-orphaned Node daemon.
+client-side "allow once emits no rule" invariant with a test, and clears the stale references — the two port notes in
+`session.rs` itself that still document the promotion, the flagged mismatch in `docs/adapters/claude/PERMISSIONS.md`,
+the consumed-surface row, and the same inverted helper still living in the orphaned Node daemon.
 
 ## Findings that shape the plan (verified in this worktree)
 
@@ -70,6 +70,16 @@ orphaned Node daemon.
 - **D3 — The dispatch rule lives in a new module,** `crates/mainframe-adapter-claude/src/permission_updates.rs`, not in
   `session.rs` (1706 lines, already far past the 300-line rule). The module is small, pure, and unit-testable on its
   own; `session.rs` shrinks by ~80 lines.
+- **D3a — The new session-level tests also stay out of `session.rs`,** in a sibling test module
+  `src/session/permission_response_tests.rs` declared `#[cfg(test)] mod permission_response_tests;` after the existing
+  `mod tests` block. In-repo precedent: `crates/mainframe-chat/src/permission_manager.rs:232` declares
+  `mod cancel_tests;` with the body in `permission_manager/cancel_tests.rs`. Adding tests back into the file D3 is
+  shrinking would defeat the point.
+- **D3b — Two session-level tests, not five.** The wire tests pin what only the call site can pin: that
+  `respond_to_permission` runs updates through the dispatch function at all, and the serde spellings the CLI reads
+  (`"session"`, `"addRules"`, `"acceptEdits"`). Per-variant coverage belongs in `permission_updates.rs`, where it is a
+  pure function call with no serialization or session fixture around it. One verbatim-forward test and one downgrade
+  test cover both halves of the wiring.
 - **D4 — Fix `packages/core` too** (delete the TS promoter, delete its test) rather than leaving the inverted invariant
   green in CI. It is dead code, but it is *tested* dead code that documents the wrong behavior.
 - **D5 — Leave `docs/research/2026-07-25-todo-241-claude-cli-reverse-engineer.md` untouched.** It is a dated,
@@ -88,52 +98,61 @@ orphaned Node daemon.
 
 ## Tasks
 
-### Task 1 — (test, red) Pin the outbound destination for rule updates
+### Task 1 — (test, red) Stand up the sibling test module and pin a session-scoped rule
 
-**File:** `packages/core-rs/crates/mainframe-adapter-claude/src/session.rs` (inside `#[cfg(test)] mod tests`, after
-`stop_background_task_writes_stop_task_control_request`)
+**New file:** `packages/core-rs/crates/mainframe-adapter-claude/src/session/permission_response_tests.rs`
+**Edit:** `packages/core-rs/crates/mainframe-adapter-claude/src/session.rs` — two mechanical changes, no test bodies
+added to the file:
 
-Add a helper and two tests. Use the existing seam: `session()`, `spawned_with_stdin(&s)`, `read_json(&mut rx)`
-(`:1262-1393`). Build a `ControlResponse` (fields in
-`crates/mainframe-types/src/adapter.rs:196-212`) with `behavior: ControlBehavior::Allow`, `updated_input: None`, and
-`updated_permissions: Some(vec![...])`, call `s.respond_to_permission(resp).await`, and read
-`payload["response"]["response"]["updatedPermissions"]`.
+1. Declare the sibling module after the existing `mod tests` block closes (`:1681`) and before the `// PORT STATUS`
+   comment (`:1683`): `#[cfg(test)]` then `mod permission_response_tests;`.
+2. Widen three helpers inside `mod tests` from private to `pub(super)`: `session()` (`:1262`), `spawned_with_stdin()`
+   (`:1383`), `read_json()` (`:1390`). `pub(super)` on an item in `session::tests` makes it visible throughout
+   `session` **and its descendants**, which includes `session::permission_response_tests`; a plain private item would
+   not be, because the two test modules are siblings.
+
+The new file opens with `use super::*;` (the `cancel_tests.rs` shape) and `use super::tests::{read_json, session,
+spawned_with_stdin};`, then imports the payload types **explicitly** rather than through the glob:
+`use mainframe_types::adapter::{ControlBehavior, ControlDestination, ControlResponse, ControlRule, ControlUpdate,
+RuleBehavior};` and `use mainframe_types::settings::PermissionMode;`. (`ControlRule` and `RuleBehavior` are not in
+`session.rs`'s import list at all, and task 4 removes `ControlDestination` from it — leaning on the glob would make
+that removal cfg-dependent: unused under `cargo build`, used under `cargo test`. An explicit import shadows a glob
+import, so the overlap is legal.)
+
+Each test builds a `ControlResponse` (fields in `crates/mainframe-types/src/adapter.rs:196-212`) with
+`behavior: ControlBehavior::Allow`, `updated_input: None`, and `updated_permissions: Some(vec![...])`, calls
+`s.respond_to_permission(resp).await`, and reads `payload["response"]["response"]["updatedPermissions"][0]`.
 
 - `always_allow_forwards_a_session_scoped_rule_verbatim` — `ControlUpdate::AddRules { rules: [ControlRule { tool_name:
   "Edit", rule_content: Some("/tmp/**") }], behavior: RuleBehavior::Allow, destination: ControlDestination::Session }`
   → the emitted update's `destination` is `"session"` and `type` is `"addRules"`. **Fails today** (emits
-  `"localSettings"`).
-- `always_allow_forwards_a_local_settings_rule_unchanged` — the same update with
-  `destination: ControlDestination::LocalSettings` → emitted `destination` stays `"localSettings"`. **Passes today**;
-  it is the guard that the fix does not over-correct (AC 3).
+  `"localSettings"`). This is the only test that proves `respond_to_permission` routes updates through the dispatch
+  function at all; per-variant behavior is task 3's.
 
-**Verify:** `cd packages/core-rs && cargo test -p mainframe-adapter-claude --lib always_allow` — the first test fails
-with `localSettings != session`, the second passes. Record the failure output; do not fix it here.
+**Verify:** `cd packages/core-rs && cargo test -p mainframe-adapter-claude --lib
+always_allow_forwards_a_session_scoped_rule_verbatim` — fails with `localSettings != session`. Record the failure
+output; do not fix it here.
 
 ### Task 2 — (test, red) Pin that a mode update is never persisted
 
-**File:** same test module, same seam.
+**File:** the same new `src/session/permission_response_tests.rs`, same seam. One test:
 
-- `set_mode_update_is_forwarded_session_scoped` — `ControlUpdate::SetMode { mode: PermissionMode::AcceptEdits,
-  destination: ControlDestination::Session }` (the shape captured in
-  `packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23`) → emitted `destination` is `"session"`, `mode` is
-  `"acceptEdits"`. **Fails today.**
-- `set_mode_update_pointed_at_local_settings_is_downgraded` — the same update with
-  `destination: ControlDestination::LocalSettings` → emitted `destination` is `"session"`. **Fails today** (forwarded
-  as `localSettings`).
-- `always_allow_forwards_add_directories_verbatim` — `ControlUpdate::AddDirectories { directories: ["/tmp/x"],
-  destination: ControlDestination::Session }` → emitted `destination` is `"session"`. **Fails today.**
+- `set_mode_pointed_at_local_settings_is_forwarded_session_scoped` — `ControlUpdate::SetMode { mode:
+  PermissionMode::AcceptEdits, destination: ControlDestination::LocalSettings }` → emitted `destination` is
+  `"session"` and `mode` is `"acceptEdits"`. **Fails today** (forwarded as `localSettings`, i.e. the CLI writes an
+  `acceptEdits` default mode into the user's repo). The live CLI sends this update with `destination: "session"`
+  (`packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23`); pointing it at `localSettings` here is what makes the
+  test red today and keeps it meaningful after the fix — it is the guard, not the live path.
 
 `PermissionMode` lives in `crates/mainframe-types/src/settings.rs:23-28` (`Default | AcceptEdits | Yolo | Plan`,
-`rename_all = "camelCase"`), so the test module needs `use mainframe_types::settings::PermissionMode;` and the
-assertions use the serialized spelling `"acceptEdits"`.
+`rename_all = "camelCase"`), hence the serialized spelling `"acceptEdits"`.
 
-**Verify:** `cargo test -p mainframe-adapter-claude --lib set_mode_update` and `... --lib add_directories` — all three
-fail on the destination assertion. Commit tasks 1-2 together as the red phase.
+**Verify:** `cargo test -p mainframe-adapter-claude --lib permission_response_tests` — both tests fail on the
+destination assertion. Commit tasks 1-2 together as the red phase.
 
 ### Task 3 — (core) Add the dispatch module
 
-**New file:** `packages/core-rs/crates/mainframe-adapter-claude/src/permission_updates.rs` (~90 lines including tests)
+**New file:** `packages/core-rs/crates/mainframe-adapter-claude/src/permission_updates.rs` (~110 lines including tests)
 **Edit:** `packages/core-rs/crates/mainframe-adapter-claude/src/lib.rs` — add `pub mod permission_updates;` in
 alphabetical order (between `messages` and `plan_mode_handler`).
 
@@ -157,15 +176,21 @@ ControlDestination::Session }` and
 `tracing::warn!(?mode, ?destination, "setMode update pointed at a persisting destination; forwarding it session-scoped")`;
 every other arm returns the update unchanged (`_ => u`, so a new variant is forwarded verbatim by default).
 
-Inline `#[cfg(test)] mod tests` (unwrap/expect allowed here) — one test per behavior, asserting on the returned
-`ControlUpdate` values:
-- session-scoped `AddRules` unchanged;
-- `localSettings` `AddRules` unchanged;
-- `SetMode { Session }` unchanged;
-- `SetMode { LocalSettings }` → `Session`, mode preserved;
-- `SetMode { ProjectSettings }` → `Session`;
-- `AddDirectories`/`RemoveDirectories`/`RemoveRules` with any destination unchanged;
-- empty input → empty output.
+Inline `#[cfg(test)] mod tests` (unwrap/expect allowed here) — this module owns per-variant coverage, asserting on the
+returned `ControlUpdate` values:
+- `non_set_mode_updates_pass_through_unchanged` — one input `Vec` holding **all five** non-`SetMode` variants at
+  `crates/mainframe-types/src/adapter.rs:152-180` (`AddRules`, `ReplaceRules`, `RemoveRules`, `AddDirectories`,
+  `RemoveDirectories`), each with a different destination so both the session-scoped and the persisting cases are in
+  the same assertion (`Session`, `LocalSettings`, `ProjectSettings`, `Session`, `UserSettings`) →
+  `assert_eq!(keep_mode_changes_session_scoped(input.clone()), input)`. `ReplaceRules` was missing from the earlier
+  draft of this list; enumerating the variants in one case makes an added variant a compile error in the fixture
+  rather than a silent gap;
+- `set_mode_keeps_a_session_destination` — `SetMode { AcceptEdits, Session }` unchanged;
+- `set_mode_is_downgraded_from_every_persisting_destination` — `SetMode { AcceptEdits, d }` for each of
+  `UserSettings`, `ProjectSettings`, `LocalSettings` → `destination` becomes `Session`, `mode` preserved;
+- `set_mode_keeps_a_cli_arg_destination` — `SetMode { AcceptEdits, CliArg }` unchanged (`CliArg` is in-memory per
+  `PERMISSIONS.md:104-113`, so it must not trip the guard);
+- `empty_input_returns_empty_output`.
 
 **Verify:** `cargo test -p mainframe-adapter-claude --lib permission_updates` — all pass.
 
@@ -178,8 +203,14 @@ Inline `#[cfg(test)] mod tests` (unwrap/expect allowed here) — one test per be
    `crate::permission_updates::keep_mode_changes_session_scoped`.
 3. Drop `ControlDestination` from the `mainframe_types::adapter` import list at `:37` if it is now unused (compiler
    will say).
-4. Update the port note at `:1699-1700`: replace `+ promoteToLocalSettings` with a line stating that outbound
-   permission updates keep their declared destination and only `setMode` is forced session-scoped (#283).
+4. Update the module doc at `:16-20`: it still lists `respondToPermission (incl. ExitPlanMode/AskUserQuestion
+   special-casing + localSettings promotion)` among the behavior "copied verbatim from the TS source". Drop
+   `+ localSettings promotion` from that clause and, in the same sentence, note that outbound permission updates keep
+   their declared destination and only `setMode` is forced session-scoped (#283) — a deliberate divergence from the TS
+   source, which the rest of the paragraph claims there is none of.
+5. Update the port note at `:1699-1700` the same way: replace `+ promoteToLocalSettings` with the declared-destination
+   statement. This is also the last occurrence of the string `promoteToLocalSettings` under `packages/core-rs`, which
+   task 6 must not be left tripping over.
 
 **Verify:**
 ```
@@ -193,16 +224,17 @@ tools/verify-gate.sh
 
 **File:** `packages/ui/src/features/chat/gates/__tests__/build-control-response.test.ts`
 
-Add to the `buildPermissionResponse` describe, and extend the file header comment with the invariant:
+Add **one** test to the `buildPermissionResponse` describe, and extend the file header comment with the invariant:
 
 - `"kind='once' omits updatedPermissions even when the request carries suggestions (#283)"` — `entry({ suggestions:
-  [SUG] })` with `kind: 'once'` → result equals the deny/allow shape with `updatedInput` only, and
-  `expect(res).not.toHaveProperty('updatedPermissions')`. The existing `once` test uses `suggestions: []`, so it cannot
-  catch a builder that starts attaching them.
-- `"kind='always' forwards suggestions verbatim, destination included"` — `entry({ suggestions: [SUG] })` where `SUG`
-  has `destination: 'session'` → `res.updatedPermissions` is `[SUG]` and
-  `res.updatedPermissions?.[0]` still carries `destination: 'session'`. Pins that the client never rewrites the scope
-  either.
+  [SUG] })` with `kind: 'once'` → result equals the allow shape with `updatedInput` only, and
+  `expect(res).not.toHaveProperty('updatedPermissions')`. The existing `once` test (`:60-70`) uses `suggestions: []`,
+  so it cannot catch a builder that starts attaching them. This is the whole of AC 4's gap.
+
+**Do not add an `always`-forwards-verbatim test — it already exists.** `:72-82` calls
+`buildPermissionResponse(entry({ suggestions: [SUG] }), 'always')` and asserts `toEqual({ …, updatedPermissions:
+[SUG] })`, and the `SUG` fixture at `:26-31` already carries `destination: 'session'`, so the client-never-rewrites-
+the-scope invariant is pinned by an exact-equality assertion today.
 
 No source change: `build-control-response.ts` is correct as-is (finding 4).
 
@@ -228,8 +260,12 @@ choice in the changeset body.
 ```
 pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
 pnpm --filter @qlan-ro/mainframe-core exec vitest run
-grep -rn "promoteToLocalSettings" packages/   # no matches
+grep -rn "promoteToLocalSettings" packages/core/   # no matches
 ```
+
+The grep is scoped to `packages/core/` on purpose: the only other occurrence in the repo is the port note at
+`packages/core-rs/crates/mainframe-adapter-claude/src/session.rs:1700`, which task 4 owns. A repo-wide grep here would
+fail this task through another group's work and force an ordering edge that this task does not otherwise need.
 
 ### Task 7 — (core) Update the living adapter docs
 
@@ -239,17 +275,25 @@ grep -rn "promoteToLocalSettings" packages/   # no matches
   (`permission_updates::keep_mode_changes_session_scoped`), and a `setMode` update is always forwarded session-scoped.
   In the same paragraph, adjust the trailing guidance at `:290-291` ("rewrite the destination to `session` for an
   ephemeral grant") to state that Mainframe forwards suggestions verbatim, so an ephemeral grant is whatever the CLI
-  scoped as `session`. Keep the finding's link to the research doc as history.
-- `docs/adapters/claude/CONSUMED-SURFACE.md:31` (row `CLAUDE-CTRL-04`) — replace
-  "`session`→`localSettings` suggestion-destination rewrite across all six `ControlUpdate` variants" with
-  "declared destination forwarded verbatim; `setMode` forced to `session` (#283)", and update the code pointer from
-  `{respond_to_permission, promote_to_local_settings}` to
-  `src/session.rs::respond_to_permission` + `src/permission_updates.rs`.
+  scoped as `session`. Keep the finding's link to the research doc as history, but name the *new* function only — the
+  replacement must not carry `promote_to_local_settings` forward, or this task fails its own verification.
+- `docs/adapters/claude/CONSUMED-SURFACE.md:31` (row `CLAUDE-CTRL-04`) — three columns in one edit:
+  - *Behavior*: replace "`session`→`localSettings` suggestion-destination rewrite across all six `ControlUpdate`
+    variants" with "declared destination forwarded verbatim; `setMode` forced to `session` (#283)".
+  - *Code pointer*: replace `{respond_to_permission, promote_to_local_settings}` with
+    `src/session.rs::respond_to_permission` + `src/permission_updates.rs::keep_mode_changes_session_scoped`.
+  - *Tests*: the column currently reads `none`. Tasks 1-3 create exactly the tests it should name — fill it with
+    `src/session/permission_response_tests.rs` (outbound payload) +
+    `src/permission_updates.rs::tests` (per-variant dispatch). Leaving `none` behind a PR that adds the coverage is
+    the kind of stale row the checklist exists to prevent.
 
 `packages/e2e/scenarios/chat-interactive-cards.md:55,64` already describes verbatim forwarding — no edit; it becomes
 true end-to-end with this change.
 
-**Verify:** `grep -rn "promote_to_local_settings" docs/ packages/` returns only the dated research doc (D5).
+**Verify:** `grep -rn "promote_to_local_settings" docs/adapters/ packages/` returns no matches. A repo-wide
+`grep -rn "promote_to_local_settings" docs/` still returns three dated documents, all of them accepted history that
+this task must **not** edit (D5): `docs/research/2026-07-25-todo-241-claude-cli-reverse-engineer.md:127` (the finding
+that filed this todo), `docs/plans/2026-07-25-todo-239-changelog-watch-skill-plan.md:283`, and this plan.
 
 ### Task 8 — (core) Changeset
 
@@ -266,6 +310,30 @@ the old behavior are not migrated or removed** (out of scope per the brief) and 
 
 ---
 
+## Task groups
+
+`parallel_safe` is a file-collision flag; `depends_on` names groups whose *output* this group reads or verifies. The
+two are independent — `legacy-ts-cleanup` and `rust-core` share no files, yet the edge below is real.
+
+| Group | Tasks | Kind | Files | `parallel_safe` | `depends_on` |
+|---|---|---|---|---|---|
+| `rust-tests-red` | 1, 2 | test | `crates/mainframe-adapter-claude/src/session/permission_response_tests.rs`, `crates/mainframe-adapter-claude/src/session.rs` (module decl + 3 helper visibilities) | false (shares `session.rs` with `rust-core`) | — |
+| `rust-core` | 3, 4 | core | `crates/mainframe-adapter-claude/src/permission_updates.rs`, `.../src/lib.rs`, `.../src/session.rs` | false | `rust-tests-red` |
+| `ui-test` | 5 | ui | `packages/ui/src/features/chat/gates/__tests__/build-control-response.test.ts` | true | — |
+| `legacy-ts-cleanup` | 6 | core | `packages/core/src/plugins/builtin/claude/session.ts`, `packages/core/src/__tests__/ensure-persistent-rule.test.ts` | true | — |
+| `docs-and-changeset` | 7, 8 | core | `docs/adapters/claude/PERMISSIONS.md`, `docs/adapters/claude/CONSUMED-SURFACE.md`, `.changeset/<name>.md` | true | `rust-core`, `legacy-ts-cleanup` |
+
+Why those edges:
+
+- `rust-core` depends on `rust-tests-red` — it turns tasks 1-2 green, and TDD requires seeing them red first.
+- `legacy-ts-cleanup` depends on nothing **because its grep is scoped to `packages/core/`** (task 6). A repo-wide
+  `grep -rn "promoteToLocalSettings" packages/` would match the `session.rs:1700` port note that only task 4 removes,
+  so the group would fail its own verification whenever it ran before `rust-core`. Scoping the grep is preferred over
+  adding the edge: it keeps the group independent and the two are genuinely unrelated pieces of work.
+- `docs-and-changeset` depends on `rust-core` (task 7's verification greps for the symbol task 4 deletes, and its
+  code-pointer and Tests columns name modules tasks 1-3 create) **and** on `legacy-ts-cleanup` (task 8's changeset body
+  must state the "the `setMode` guard was not ported to `packages/core`" decision that task 6 produces).
+
 ## Final verification (before handing the branch on)
 
 ```
@@ -276,8 +344,10 @@ pnpm --filter @qlan-ro/mainframe-ui typecheck
 pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit && pnpm --filter @qlan-ro/mainframe-core exec vitest run
 ```
 
-Acceptance-criteria map: AC 1 → tasks 2, 3; AC 2 → tasks 1, 3, 4; AC 3 → tasks 1, 4; AC 4 → task 5; AC 5 → tasks 1-4;
-AC 6/7 → resolved as void-by-architecture above, with the added `warn` in task 3; AC 8 → final verification block.
+Acceptance-criteria map: AC 1 → tasks 2, 3; AC 2 → tasks 1, 3, 4; AC 3 → tasks 3, 4 (task 3's
+`non_set_mode_updates_pass_through_unchanged` covers the `localSettings` rule that must still persist); AC 4 → task 5
+plus the existing `always` test at `build-control-response.test.ts:72-82`; AC 5 → tasks 1-4; AC 6/7 → resolved as
+void-by-architecture above, with the added `warn` in task 3; AC 8 → final verification block.
 
 ## Risks
 
