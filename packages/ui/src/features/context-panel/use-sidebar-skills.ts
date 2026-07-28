@@ -16,11 +16,13 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
+import { useSkillsNonce } from '@/features/skills/use-skills-revalidation';
 
 export function useSidebarSkills(): { skills: Skill[]; agents: AgentConfig[]; loading: boolean } {
   const port = useDaemonPort();
   const { projectPath, adapterId } = useActiveIdentity();
   const adapter = adapterId ?? 'claude';
+  const nonce = useSkillsNonce();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export function useSidebarSkills(): { skills: Skill[]; agents: AgentConfig[]; lo
     return () => {
       cancelled = true;
     };
-  }, [port, projectPath, adapter]);
+  }, [port, projectPath, adapter, nonce]);
 
   return { skills, agents, loading };
 }
