@@ -1259,7 +1259,7 @@ mod tests {
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
     }
 
-    fn session() -> Arc<ClaudeSession> {
+    pub(super) fn session() -> Arc<ClaudeSession> {
         let s = Arc::new(ClaudeSession::new(
             SessionOptions {
                 project_path: "/tmp".to_string(),
@@ -1380,14 +1380,14 @@ mod tests {
     }
 
     /// Inject a child + a capturable stdin, returning the receiver of writes.
-    fn spawned_with_stdin(s: &ClaudeSession) -> mpsc::UnboundedReceiver<Vec<u8>> {
+    pub(super) fn spawned_with_stdin(s: &ClaudeSession) -> mpsc::UnboundedReceiver<Vec<u8>> {
         s.set_child_for_test(dummy_child());
         let (tx, rx) = mpsc::unbounded_channel();
         s.set_stdin_for_test(Some(tx));
         rx
     }
 
-    fn read_json(rx: &mut mpsc::UnboundedReceiver<Vec<u8>>) -> Value {
+    pub(super) fn read_json(rx: &mut mpsc::UnboundedReceiver<Vec<u8>>) -> Value {
         let bytes = rx.try_recv().expect("a write was captured");
         serde_json::from_slice(&bytes).unwrap()
     }
@@ -1679,6 +1679,9 @@ mod tests {
         pending.await.unwrap().unwrap();
     }
 }
+
+#[cfg(test)]
+mod permission_response_tests;
 
 // PORT STATUS: src/plugins/builtin/claude/session.ts (512 lines)
 // confidence: medium
