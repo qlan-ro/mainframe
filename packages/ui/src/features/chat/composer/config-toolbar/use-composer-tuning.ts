@@ -6,11 +6,8 @@
  * Three independent concerns:
  *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
  *                         catalog store, seeded/kept fresh at the app root (adapters-seed).
- *   useProviderDefaults — reads the requested adapter's ProviderConfig (a structural
- *                         TuningDefaults, D-D) live from the shared settings store —
- *                         the same store the Settings pane edits optimistically — so a
- *                         provider-default change reflects in the composer immediately.
- *                         Seeds the store via one fetch when it hasn't been loaded yet.
+ *   useProviderDefaults — re-exported from ./use-provider-defaults: the adapter's
+ *                         saved ProviderConfig, live from the shared settings store.
  *   useComposerTuning   — fetches the current chat, resolves the model, and
  *                         exposes setEffort/setFeature with optimistic updates.
  *
@@ -23,7 +20,7 @@
  * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type {
   AdapterInfo,
@@ -35,13 +32,12 @@ import type {
   ProviderConfig,
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
-import { getProviderSettings } from '@/lib/api/settings';
-import { useSettingsStore } from '@/store/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
+import { useProviderDefaults } from './use-provider-defaults';
 
 // ---------------------------------------------------------------------------
 // useAdapters — the shared store selector (seeded/kept fresh at the app root;
@@ -51,32 +47,8 @@ import { synthesizeDraftChat } from './synthesize-draft-chat';
 
 export { useAdapters } from '@/store/adapters';
 
-// ---------------------------------------------------------------------------
-// useProviderDefaults
-// ---------------------------------------------------------------------------
-
-/**
- * Returns this adapter's ProviderConfig (a structural TuningDefaults, D-D) live from
- * the shared settings store, or undefined while loading, on error, or when the adapter
- * has no saved config. The Settings pane writes the same store optimistically on every
- * edit, so provider-default changes reflect here without a reload. Seeds the store with
- * one fetch when nothing has loaded it yet (composer mounted, dialog never opened).
- */
-export function useProviderDefaults(adapterId: string | null): ProviderConfig | undefined {
-  const extras = useChatExtras();
-  const port = extras?.port;
-  const config = useSettingsStore((s) => (adapterId != null ? s.providers[adapterId] : undefined));
-
-  useEffect(() => {
-    if (port == null) return;
-    if (Object.keys(useSettingsStore.getState().providers).length > 0) return;
-    getProviderSettings(port)
-      .then((data) => useSettingsStore.getState().loadProviders(data))
-      .catch((err: unknown) => console.warn('[composer/useProviderDefaults] failed to load provider settings', err));
-  }, [port]);
-
-  return config;
-}
+// Re-exported so the existing importers keep their path (see ./use-provider-defaults).
+export { useProviderDefaults };
 
 // ---------------------------------------------------------------------------
 // useComposerTuning
