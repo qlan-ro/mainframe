@@ -136,11 +136,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
       style={{ visibility: visible ? 'visible' : 'hidden' }}
     >
       <PreviewToolbar
-        tabId={tabId}
-        port={port}
-        configName={config}
-        projectId={projectId}
-        daemonPort={daemonPort}
+        seedUrl={port !== null ? `http://localhost:${port}` : null}
         status={status}
         device={device}
         onDeviceChange={setDevice}
