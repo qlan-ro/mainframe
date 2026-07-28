@@ -3,8 +3,11 @@ import { daemonScopedKey } from '@/lib/daemon/daemon-scoped-storage';
 import type { LayoutStore, SessionWorkspace } from './layout';
 import type { RunState, RunTab } from './run-pane';
 
-/** File-backed tab kinds that are safe to persist (no live PTY/webview ref). */
-export const SAFE_RUN_TAB_KINDS: ReadonlySet<RunTab['kind']> = new Set(['code', 'diff', 'skill', 'viewer']);
+/**
+ * Tab kinds safe to persist: no live PTY/webview ref. `url` qualifies too —
+ * its whole identity is a string, so rehydrating it just re-navigates.
+ */
+export const SAFE_RUN_TAB_KINDS: ReadonlySet<RunTab['kind']> = new Set(['code', 'diff', 'skill', 'viewer', 'url']);
 
 /**
  * Keep only file-backed tabs; drop empty panes; null the run if nothing
