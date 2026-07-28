@@ -78,7 +78,7 @@ describe('groupByScope', () => {
     const skills = [b, a];
 
     const [group] = groupByScope(skills);
-    expect(group.skills.map((s: Skill) => s.id)).toEqual(['b', 'a']);
+    expect(group?.skills.map((s: Skill) => s.id)).toEqual(['b', 'a']);
   });
 
   it('returns no groups for an empty input', () => {
