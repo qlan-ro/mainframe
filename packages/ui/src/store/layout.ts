@@ -7,6 +7,7 @@ import {
   closeRunTab as closeRunTabReducer,
   moveTabToRun as moveTabToRunReducer,
   releaseRunScope as releaseRunScopeReducer,
+  retargetUrlTab as retargetUrlTabReducer,
   tabIdsForScope,
   tabIdsInPane,
   tabIdsInRun,
@@ -84,6 +85,8 @@ export interface LayoutStore {
    */
   addRunTab: (tab: RunTab, paneId?: string) => boolean;
   activateRunTab: (paneId: string, tabId: string) => void;
+  /** Point a URL tab at a newly committed URL. The tab's id — and its webview — survive. */
+  setUrlTabTarget: (tabId: string, url: string, title: string) => void;
   closeRunTab: (paneId: string, tabId: string) => void;
   closePane: (paneId: string) => void;
   /** Release a launch scope: dispose its terminals and drop its Run tabs. */
@@ -191,6 +194,13 @@ export const useLayoutStore = create<LayoutStore>()(
         const { layout, run } = get();
         if (!run) return;
         writeWorkspace({ layout, run: activateRunTabReducer(run, paneId, tabId) });
+      },
+
+      setUrlTabTarget(tabId, url, title) {
+        const { layout, run } = get();
+        if (!run) return;
+        const nextRun = retargetUrlTabReducer(run, tabId, url, title);
+        if (nextRun !== run) writeWorkspace({ layout, run: nextRun });
       },
 
       closeRunTab(paneId, tabId) {
