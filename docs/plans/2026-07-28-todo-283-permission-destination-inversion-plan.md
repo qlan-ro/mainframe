@@ -23,12 +23,16 @@ the consumed-surface row, and the same inverted helper still living in the orpha
    (`session.rs:967-969`, `:998-1027`); the **CLI** applies each update and persists the ones whose destination
    supports it. The wire payload is therefore the observable surface, and the tests assert on it.
 2. **The CLI encodes intent in `destination`, per suggestion kind.** `docs/adapters/claude/PERMISSIONS.md:104-113,
-   132-137, 283-291` (binary-verified against 2.1.220): Bash/shell suggestions arrive `localSettings`, file/directory
-   suggestions arrive `session`; `session` and `cliArg` are in-memory, `userSettings`/`projectSettings`/`localSettings`
-   persist. The promoter's comment ("the CLI's permission_suggestions always use destination:session") is false.
+   132-137, 283-291` (binary-verified against 2.1.220): the shell-rule helper hard-codes `localSettings`, the
+   file/directory helper defaults to `session`; `session` and `cliArg` are in-memory,
+   `userSettings`/`projectSettings`/`localSettings` persist. Which helper a given prompt draws from is the CLI's call
+   per command, so the destination on the wire — not the tool name — is the source of truth. The promoter's comment ("the CLI's permission_suggestions always use destination:session") is false.
 3. **The damaging case is captured in a real recording.**
-   `packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23` — a live `respondToPermission` carrying
-   `updatedPermissions: [{"type":"setMode","mode":"acceptEdits","destination":"session"}]`. Today the promoter turns
+   `packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23` — the live `respondToPermission` for the **Edit**
+   prompt at `:22`, carrying
+   `updatedPermissions: [{"type":"setMode","mode":"acceptEdits","destination":"session"}]`. The `setMode` update rides
+   on the Edit prompt's own `suggestions`, not on plan approval: `ExitPlanMode`'s prompt (`:14`) has
+   `"suggestions": []` and its response (`:15-16`) carries `executionMode` only. Today the promoter turns
    that into `localSettings`, i.e. the CLI writes an `acceptEdits` default mode into the user's repo. This is the
    brief's headline case, and it is reproducible from the fixture.
 4. **The client is already correct and must stay that way.**
@@ -140,8 +144,9 @@ output; do not fix it here.
 - `set_mode_pointed_at_local_settings_is_forwarded_session_scoped` — `ControlUpdate::SetMode { mode:
   PermissionMode::AcceptEdits, destination: ControlDestination::LocalSettings }` → emitted `destination` is
   `"session"` and `mode` is `"acceptEdits"`. **Fails today** (forwarded as `localSettings`, i.e. the CLI writes an
-  `acceptEdits` default mode into the user's repo). The live CLI sends this update with `destination: "session"`
-  (`packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23`); pointing it at `localSettings` here is what makes the
+  `acceptEdits` default mode into the user's repo). The live CLI sends this update with `destination: "session"`, on an
+  **Edit** prompt's suggestions (`packages/e2e/fixtures/recordings/plan-approval.0.ndjson:22-23`); pointing it at
+  `localSettings` here is what makes the
   test red today and keeps it meaningful after the fix — it is the guard, not the live path.
 
 `PermissionMode` lives in `crates/mainframe-types/src/settings.rs:23-28` (`Default | AcceptEdits | Yolo | Plan`,
@@ -406,10 +411,12 @@ void-by-architecture above, with the added `warn` in task 3; AC 8 → final veri
 
 ## Risks
 
-- **Behavior change users will feel.** After this, "Always allow" on a file edit or a directory grant lasts for the
-  session only, because that is the scope the CLI attaches to those suggestions; Bash grants still persist. That is
-  parity with the terminal CLI (`PERMISSIONS.md:132-137`), but it is a visible difference from today's (buggy)
-  stickiness, and the PR body must say so.
+- **Behavior change users will feel.** After this, "Always allow" lasts only as long as the scope the CLI attached to
+  that suggestion. File-edit and directory grants arrive `session`, so they last the session; a grant whose suggestion
+  declares `localSettings` — `PERMISSIONS.md:132-137` documents `shellRuleMatching.ts` hard-coding it for shell rules —
+  still persists. Which suggestions a given prompt carries is the CLI's call per command, so the split is not
+  "Bash persists, files don't": the destination on the wire decides. That is parity with the terminal CLI, but it is a
+  visible difference from today's (buggy) stickiness, and the PR body must say so.
 - **No automated test touches a real `.claude/settings.local.json`.** The tests assert the outbound payload; the file
   writes are the CLI's. That gap is closed by a **required** QA-stage deliverable, not by a note — see "Required QA
   deliverable" below. Do **not** try to close it with an automated live-CLI test: no such harness exists, `session.rs`
@@ -421,7 +428,7 @@ void-by-architecture above, with the added `warn` in task 3; AC 8 → final veri
 
 The automated tests stop at the outbound `control_response`. The only proof that the fix stops writes into a real
 `.claude/settings.local.json` is this manual pass. **The lane must not close without it**, and the QA result must
-record the two file snapshots (or their diff) as evidence.
+record the file snapshots (or their diffs) and the logged payloads as evidence.
 
 Do **not** replace it with an automated live-CLI test: `session.rs:1705-1706` records the standing decision that no
 unit test spawns a real `claude`, and the E2E suite drives the `mock-cli` adapter.
@@ -431,20 +438,55 @@ as a Mainframe project against a dev daemon (`MAINFRAME_DATA_DIR=~/.mainframe_de
 Claude session in it. Snapshot the baseline: `cp /tmp/mf-283-qa/.claude/settings.local.json /tmp/mf-283-before.json`
 (record "absent" if the file does not exist yet).
 
-**Case A — a Bash grant still persists.** Ask the agent to run a shell command it needs permission for (for example
-`ls -la`). On the permission card, choose **Always allow**. Expected: `.claude/settings.local.json` now exists and its
-`permissions.allow` array contains the Bash rule the card offered. This is the CLI honoring a `localSettings`
-destination, and it must keep working — a fix that silences this case has over-corrected.
+**Reading the destination off the wire.** Both cases below branch on the destination the CLI actually declared, not on
+the tool name. The adapter already logs the outbound payload at `info` (`session.rs:1017-1024`, message `writing
+permission response to stdin`), so the declared destination is readable per prompt:
 
-**Case B — an Edit grant and a plan approval persist nothing.** Snapshot again
-(`cp .../settings.local.json /tmp/mf-283-mid.json`), then, in the same session: (1) ask for a file edit and choose
-**Always allow** on the Edit prompt; (2) ask for a plan, then approve it (the `ExitPlanMode` path, which is what emits
-the `setMode` update — `packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23`). Expected:
-`diff /tmp/mf-283-mid.json /tmp/mf-283-qa/.claude/settings.local.json` is empty — the file is byte-identical — and it
-contains **no `defaultMode` key** at any nesting level (`grep -c defaultMode` → 0).
+```
+grep "writing permission response to stdin" ~/.mainframe_dev/logs/server.$(date +%F).log | tail -1
+```
+
+The `payload` field carries the `updatedPermissions` array the CLI receives; each entry's `destination` is the value
+that decides whether the CLI persists it.
+
+**Case A — a persisting grant still persists.** Ask the agent to run a shell command it needs permission for (for
+example `ls -la`). If the card shows **Always allow**, choose it, then read the logged payload.
+
+- If a suggestion declares a **persisting** destination (`userSettings`, `projectSettings`, `localSettings`):
+  `.claude/settings.local.json` (or the settings file that destination names) must gain the rule the card offered.
+  Losing it means the fix over-corrected.
+- If the CLI offered only **session-scoped** suggestions (`session`/`cliArg`), or the card showed no **Always allow**
+  at all, nothing may be written — record the logged suggestion list and mark **Case A not exercised**. This is a
+  legitimate outcome, not a failure: which suggestions a prompt carries is the CLI's call per command.
+  `PERMISSIONS.md:132-137` documents `shellRuleMatching.ts` hard-coding `localSettings` for shell-rule suggestions, but
+  no captured Bash prompt in this repo shows one — `packages/e2e/fixtures/recordings/stress-matrix.0.ndjson:17` is a
+  Bash `can_use_tool` whose only suggestion is `{setMode, acceptEdits, session}`, and `PermissionGate` renders "Always
+  allow" whenever `suggestions.length > 0`, so a session-only Bash card is reachable. The pass-through half of the
+  guarantee is covered regardless by task 3's `non_set_mode_updates_pass_through_unchanged`.
+
+**Case B — a `setMode` suggestion persists nothing.** This is the discriminating reproduction. Snapshot again
+(`cp .../settings.local.json /tmp/mf-283-mid.json`; if the file is still absent, record "absent" and read every
+"byte-identical" expectation below as "still absent"), then, in the same session, ask for a file edit and choose
+**Always allow** on the Edit/Write prompt. That card is the one whose suggestions carry the CLI's `setMode acceptEdits
+session` update — `packages/e2e/fixtures/recordings/plan-approval.0.ndjson:22` is the Edit `onPermission` carrying
+`suggestions: [{"type":"setMode","mode":"acceptEdits","destination":"session"}]` and `:23` is its response echoing that
+update as `updatedPermissions`. On `main` this is what the promoter rewrites to `localSettings`, so it is what mutates
+the file today. Expected after the fix: `diff /tmp/mf-283-mid.json /tmp/mf-283-qa/.claude/settings.local.json` is empty
+— the file is byte-identical — and it contains **no `defaultMode` key** at any nesting level (`grep -c defaultMode`
+→ 0).
+
+**Case B control (not the `setMode` case).** Ask for a plan and approve it. Expected: the file is still byte-identical.
+Plan approval never carries `updatedPermissions` at all — `buildPlanResponse`
+(`packages/ui/src/features/chat/gates/build-control-response.ts`) sets `executionMode` only, and
+`plan_mode_handler.rs:32-34` applies the approved mode through a separate `set_permission_mode` control request
+(`session_set_permission_mode`), a path that never reaches `keep_mode_changes_session_scoped`. In the recording,
+`ExitPlanMode`'s own prompt (`:14`) has `"suggestions": []` and its response (`:15-16`) carries `executionMode:
+"default"` and no `updatedPermissions`. This step proves the mode change does not leak to disk by a second route; it
+does **not** exercise the code under test, so it cannot substitute for the Edit prompt above.
 
 **Fail condition.** Any change to the file in case B, or a `defaultMode` key appearing at any point, fails QA and
-routes back to the implementer. Reverse-check the baseline too: on `main` (pre-fix), case B *does* mutate the file —
-if it does not, the QA environment is not exercising the adapter under test.
+routes back to the implementer. Reverse-check the baseline too: on `main` (pre-fix), the case B Edit grant *does*
+mutate the file — if it does not, the QA environment is not exercising the adapter under test. (The control step is
+expected to write nothing on `main` as well; only the Edit grant discriminates.)
 
 **Cleanup.** Delete `/tmp/mf-283-qa` and the snapshots.
