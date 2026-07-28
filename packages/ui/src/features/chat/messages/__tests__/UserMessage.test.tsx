@@ -467,7 +467,9 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
       content: [{ type: 'text', text: 'go' }],
       mainframe: { queued: true },
     });
-    __queuedFixture = [{ messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'go', timestamp: '2026-07-02T10:00:00.000Z' }];
+    __queuedFixture = [
+      { messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'go', timestamp: '2026-07-02T10:00:00.000Z' },
+    ];
     renderUserMessage();
     const shell = screen.getByTestId('chat-queued-message');
     expect(shell).toHaveAttribute('data-position', '1');
@@ -538,5 +540,78 @@ describe('UserMessage — PB: clear-context plan message', () => {
     renderUserMessage();
     expect(screen.getByText('Just a regular message')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-bubble')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — SR: session references (todo #240)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — SR: session reference lines and chips', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __skillsFixture = [];
+    __queuedFixture = [];
+  });
+
+  it('strips the reference lines from the rendered body', () => {
+    __messageFixture = makeFixture({
+      content: [
+        { type: 'text', text: 'Referenced session @session[Fix foo]: /repo/a\n\nlook at @session[Fix foo] please' },
+      ],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.queryByText(/Referenced session/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\/repo\/a/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('look at');
+  });
+
+  it('renders an @session token as a chip carrying the label only', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'compare with @session[Fix foo] now' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    const chip = screen.getByTestId('chat-message-session-chip-fix-foo');
+    expect(chip).toHaveTextContent('Fix foo');
+    expect(chip).not.toHaveTextContent('@session[');
+    expect(chip.tagName).toBe('SPAN');
+  });
+
+  it('strips reference lines from the command-path body too (D1)', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '/review\nReferenced session @session[Fix foo]: /repo/a\n\ndo it' }],
+      mainframe: {
+        command: {
+          name: 'review',
+          source: 'commands',
+          userText: '\nReferenced session @session[Fix foo]: /repo/a\n\ndo it',
+        },
+      },
+    });
+    renderUserMessage();
+    expect(screen.getByText('/review')).toBeInTheDocument();
+    expect(screen.queryByText(/Referenced session/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('do it');
+  });
+
+  it('chips an @session token that follows formatted markdown in the same paragraph', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '**check** this against @session[Fix foo] ok' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-message-session-chip-fix-foo')).toBeInTheDocument();
+  });
+
+  it('does not treat a slash word in a non-leading paragraph child as a command chip', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '**note** /not-a-command here' }],
+      mainframe: undefined,
+    });
+    const { container } = renderUserMessage();
+    expect(container.querySelector('[data-directive-type="command"]')).toBeNull();
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('/not-a-command here');
   });
 });
