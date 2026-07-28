@@ -70,7 +70,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
     projectId: effectiveProjectId,
     device,
   });
-  usePreviewGeometry({ handle, anchorRef, containerRef, active: visible, status });
+  usePreviewGeometry({ handle, anchorRef, containerRef, active: visible, mounted: handle !== null });
   // Hide the native webview only while a DOM overlay actually overlaps it (it
   // composites above the DOM, so popovers/dialogs/CMD-F would be clipped behind
   // it otherwise). Electron's <webview> stacks in the DOM so no hiding is needed

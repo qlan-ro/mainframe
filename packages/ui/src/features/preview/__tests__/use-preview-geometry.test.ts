@@ -39,7 +39,7 @@ function refs() {
 
 it('refits on window resize (position-only shifts never fire the ResizeObserver)', async () => {
   const { anchorRef, containerRef } = refs();
-  renderHook(() => usePreviewGeometry({ handle, anchorRef, containerRef, active: true, status: 'running' }));
+  renderHook(() => usePreviewGeometry({ handle, anchorRef, containerRef, active: true, mounted: true }));
   await act(async () => {
     await nextFrame();
   });
@@ -55,7 +55,7 @@ it('refits on window resize (position-only shifts never fire the ResizeObserver)
 it('removes the resize listener on unmount', async () => {
   const { anchorRef, containerRef } = refs();
   const { unmount } = renderHook(() =>
-    usePreviewGeometry({ handle, anchorRef, containerRef, active: true, status: 'running' }),
+    usePreviewGeometry({ handle, anchorRef, containerRef, active: true, mounted: true }),
   );
   await act(async () => {
     await nextFrame();
