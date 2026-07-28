@@ -9,11 +9,30 @@ Let a user reference another session from the composer without ever touching a s
 merges the current project's started sessions into the existing flat trigger list (agents → sessions →
 files), selecting one inserts the literal text `@session[<label>] ` into the textarea, and at send the app
 prepends one `Referenced session @session[<label>]: <absolute transcript path>` line per unique referenced
-label above the whole composition. Offerability is settled *before* a row is drawn, by one batched,
+label above the whole composition — except when the composition is a slash command, where the lines go
+*below* the command line so the leading `/` survives (decision D1). Offerability is settled *before* a row is drawn, by one batched,
 adapter-aware daemon read that answers resolved / unavailable / unknown per chat; only *resolved* sessions
 are offered. The rendered user message strips those reference lines before markdown parsing and turns each
 inline token into a chip at the existing inline-directive seam, so the optimistic echo, the confirmed echo,
 and a reload-replayed message all render identically from the body text alone.
+
+## Decisions
+
+**D1 — Reference lines move below the first line when the body is a slash command (deviates from AC 6 and
+spec decision 6, which say "prepended").** Slash-command and skill recognition requires the message body to
+*start* with `/`: the daemon's parser bails at
+`packages/core-rs/crates/mainframe-adapter-claude/src/messages/message_parsing.rs:126`
+(`if !text.starts_with('/') { return None; }`), and the Claude CLI applies the same precondition before it
+emits the `<command-name>` tags the daemon reads. Nothing intercepts the composition client-side —
+`use-submit-composition.ts` appends the serialized text verbatim — so unconditionally prepending
+`Referenced session …` at offset 0 would turn `/review @session[Foo]` into prose: the command never runs,
+no `SlashPill` renders, and nothing reports the failure. `prependSessionReferences` therefore keeps the
+first line in place when the body starts with `/` and inserts the reference block after it (D2/F7), and
+`stripReferenceLines` recognizes a reference block wherever it starts a block rather than only at offset 0
+(D2), so the rendered message hides the payload in both layouts. The agent still receives the same labeled
+absolute paths; only their position changes, and only for slash bodies. AC 5, 7, 9, 15, 16 and 19 are
+unaffected. The pre-existing quote path is untouched and still shadows a leading `/` — a quoted composition
+starts with `>`, so it never takes the slash branch and behaves exactly as it does today.
 
 ## Constraints carried from CLAUDE.md
 
@@ -69,6 +88,7 @@ export function composeReferenceLines(refs: readonly { label: string; path: stri
 export function parseReferenceLine(line: string): { label: string; path: string } | null;
 export function stripReferenceLines(text: string): string;
 export function collectSessionTokenLabels(text: string): string[];
+/** Places the reference block above the body — or below line 1 when the body is a slash command (D1). */
 export function prependSessionReferences(body: string, paths: ReadonlyMap<string, string>): string;
 ```
 
@@ -293,12 +313,22 @@ Cases (AC 5–7, 9, 24; edge cases 4–6, 15, 17, 18):
   - empty map → body returned **identical by reference-equality of content** (AC 16 byte-identical);
   - body starting with a quote block (`> quoted\n\nrest @session[Foo]`) → lines sit above the quote
     (AC 6, edge case 18);
-  - body that is only `@session[Foo]` → lines + blank line + the token (edge case 17).
+  - body that is only `@session[Foo]` → lines + blank line + the token (edge case 17);
+  - **slash body (decision D1)**: `'/review @session[Foo]'` → the result still starts with `/review`, the
+    reference line follows after one blank line, and the command line is unchanged char-for-char;
+  - slash body with more lines (`'/review @session[Foo]\nand this'`) → `/review …`, blank, reference line,
+    blank, `and this` — the text after the first newline is preserved verbatim;
+  - a body starting with `>` (quote) or any non-`/` character keeps the offset-0 prepend.
 - `stripReferenceLines`:
   - strips a leading run of N reference lines plus the single following blank line;
-  - leaves a reference-shaped line that is NOT at the top untouched;
+  - strips a reference run that starts a later block — specifically the D1 layout
+    (`'/review\n\nReferenced session @session[Foo]: /p\n\nrest'` → `'/review\n\nrest'`) — dropping the run
+    plus one adjacent blank line, so the surrounding paragraphs stay separated by exactly one blank line;
+  - leaves a reference-shaped line that does NOT start a block (preceded by a non-empty line) untouched;
   - is a no-op (returns the same string) for text with no reference lines;
-  - handles text that is *only* reference lines → `''`.
+  - handles text that is *only* reference lines → `''`;
+  - round-trips D1: `stripReferenceLines(prependSessionReferences('/review @session[Foo]', map))` ===
+    `'/review @session[Foo]'`.
 
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/session-references` fails
 with "cannot find module" / assertion errors, and the failures are recorded before Group D starts.
@@ -328,11 +358,25 @@ Depends on Group C.
 - `REFERENCE_LINE_RE = /^Referenced session @session\[([^\]\n]*)\]: (\S.*)$/`.
 - `composeReferenceLines(refs)`: `refs.map(r => \`Referenced session @session[${r.label}]: ${r.path}\`).join('\n')`.
 - `parseReferenceLine(line)`: exec `REFERENCE_LINE_RE`, return `{label, path}` or `null`.
-- `stripReferenceLines(text)`: split on `\n`, drop the leading run matching `REFERENCE_LINE_RE`, then drop
-  one immediately-following empty line, rejoin. Return `text` unchanged when nothing was dropped.
+- `stripReferenceLines(text)`: split on `\n` and remove every *block-initial* maximal run of lines matching
+  `REFERENCE_LINE_RE` — block-initial means the run starts at line 0 or is preceded by an empty line —
+  together with one adjacent empty line (the immediately-following one when present, otherwise the
+  immediately-preceding one), so two paragraphs that surrounded a run end up separated by exactly one blank
+  line. A matching line preceded by a non-empty line is left alone. Return `text` unchanged when nothing was
+  dropped. The block-initial anchor (rather than offset 0 only) is what makes decision D1's layout
+  strippable; doc-comment that in one line.
 - `collectSessionTokenLabels(text)`: `matchAll` + `Set` preserving first-appearance order.
 - `prependSessionReferences(body, paths)`: collect labels, keep those with a path, `composeReferenceLines`,
-  return `body` when the list is empty, else `lines + '\n\n' + body`.
+  return `body` when the list is empty. Otherwise place the block by decision D1:
+
+  ```ts
+  if (!body.startsWith('/')) return `${lines}\n\n${body}`;
+  const nl = body.indexOf('\n');
+  // D1: a leading `/` is the CLI's only slash-command signal — keep it on line 1.
+  return nl === -1 ? `${body}\n\n${lines}` : `${body.slice(0, nl)}\n\n${lines}\n${body.slice(nl)}`;
+  ```
+
+  `body.slice(nl)` starts with the original `\n`, so everything after the command line survives verbatim.
 
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/session-references` — all
 Group C tests green.
@@ -539,7 +583,9 @@ useSessionReferences.getState().clear(threadId);
 ```
 
 `useCanSubmit` is **not** changed — references never make an empty draft sendable. No daemon call is made
-here (AC 19: no additional resolution request during the send).
+here (AC 19: no additional resolution request during the send). Placement is the helper's business, not
+this file's: `prependSessionReferences` keeps a leading `/` on line 1 (decision D1), so composing
+`/review @session[Foo]` still reaches the CLI as a command.
 
 **F8. Clear on draft reset — `packages/ui/src/features/sessions/new-thread/reset-new-thread-draft.ts`.**
 
@@ -616,6 +662,12 @@ Depends on Group D.
   `parsePlanUserMessage`, the `QueuedUserTurn content=` prop, and the `<Markdown>` body. Because
   `UserMessage` renders both the optimistic and the confirmed message, this satisfies AC 13 with no
   second code path.
+- **Second strip point on the command path (decision D1).** Line ~201 sets
+  `userText: metaCmd.userText ?? cleanText`, and `metaCmd.userText` is the CLI's own post-command remainder,
+  which under D1 carries the reference block — it bypasses `cleanText` entirely. Change it to
+  `userText: stripReferenceLines(metaCmd.userText ?? cleanText)`; the call is idempotent, so the
+  `cleanText` fallback is unaffected. Without this the `SlashPill` bubble renders the raw
+  `Referenced session …: /abs/path` text.
 - New `SessionChip` component in this file (< 25 lines):
 
   ```tsx
@@ -724,6 +776,11 @@ harness):
 - Two tokens, same label → one line. Two tokens, different labels → two lines with the two paths.
 - Hand-typed `@session[Nonexistent]` → no line, no throw, `append` still called.
 - Multi-quote composition → lines above the first `>` block.
+- **Slash composition (decision D1):** a draft of `/review @session[Foo]` → the appended text still starts
+  with `/review` (assert `text.startsWith('/review')`, which is exactly the daemon's
+  `parse_raw_command` precondition), the reference line for `Foo` is present, and
+  `stripReferenceLines(appended)` returns the draft unchanged. Same assertion for `/review @session[Foo]`
+  followed by a second line of prose, with the second line preserved verbatim.
 - The reference store is cleared after a successful send, and `resolveSessionTranscripts` is never called
   during submit.
 
@@ -739,6 +796,9 @@ harness):
   reference line above) renders exactly one chip, contains no `<code>` element, and shows no raw
   `@session[` fragment (AC 12).
 - A "replayed" message (only the body text, no metadata) reproduces the chip (AC 14).
+- Command message (decision D1): `meta.command = { name: 'review', source: 'commands', userText:
+  'Referenced session @session[Foo]: /p\n\nlook at this' }` renders the `SlashPill` and `look at this`,
+  and `container.textContent` contains no `Referenced session` and no absolute path.
 - A message whose text matches neither shape renders byte-identically to the pre-change output — snapshot
   a plain-markdown message and a plain `@file` mention message (AC 16).
 - Chip test id slug: label `Foo Bar (2)` → `chat-message-session-chip-foo-bar-2`.
@@ -778,3 +838,7 @@ concrete default so the reviewer edits rather than invents:
   mock adapter grows a `locate_transcript` override — out of scope here, no E2E task in this plan.
 - **`@session` as a literal word.** `@session` without brackets still highlights as a plain file mention;
   that is the existing behavior and is not changed.
+- **No chip inside a command bubble (decision D1).** The `SlashPill` branch renders `slashProps.userText` as
+  a raw string, not through `createDirectiveText`, so a `@session[…]` token in a `/command` message shows as
+  literal text. The reference line is still stripped and still reaches the agent; only the chip chrome is
+  absent. Routing the command bubble through the directive renderer is a separate change.
