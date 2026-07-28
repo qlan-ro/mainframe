@@ -16,5 +16,5 @@ export interface SkillContent {
 export function parseSkillContent(raw: string): SkillContent {
   const match = FRONTMATTER.exec(raw);
   if (!match) return { frontmatter: null, body: raw };
-  return { frontmatter: match[1], body: raw.slice(match[0].length) };
+  return { frontmatter: match[1] ?? '', body: raw.slice(match[0].length) };
 }
