@@ -174,19 +174,28 @@ Two levels, and the difference matters.
 - **Per task:** the named test file(s), run individually
   (`pnpm --filter @qlan-ro/mainframe-ui exec vitest run <path>`) — never the whole suite. A red-phase task
   verifies that its file fails *for the stated reason*.
-- **Per implementation group, once, after every task in that group has landed:**
+- **Per dependency wave, once, after every group in that wave has landed:**
   `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
 
-Typecheck is a *group* gate, never a per-task one, and it never gates a red-phase test group.
-`packages/ui/tsconfig.json` sets `"include": ["src"]` and the tests live under `src/`, so `tsc --noEmit`
-compiles them too. Two consequences:
+Typecheck is a *wave* gate — never a per-task one, never a per-group one — and a wave made only of
+red-phase test groups skips it. `packages/ui/tsconfig.json` sets `"include": ["src"]` and the tests live
+under `src/`, so `tsc --noEmit` compiles every test file in the tree, not just the ones a group touched.
+Three consequences:
 
 - A task that widens a prop or a hook's return type leaves the stale call sites red until its sibling task
-  patches them — a legitimate mid-group state. Demanding a clean typecheck after each task makes the
-  group's own gate unreachable and the declared graph cyclic.
+  patches them — a legitimate mid-group state. Demanding a clean typecheck after each task makes the gate
+  unreachable and the declared graph cyclic.
+- Sibling implementation groups hit the same problem one level up. `tuning-decision-modules`,
+  `ui-prefs-suppression` and `confirm-dialog-suppress` run in one wave, and each compiles the other two
+  groups' red tests, so whichever lands first would fail a gate of its own on work it does not own. The
+  wave is the first point at which every red test in the tree has an implementation, so the wave owns the
+  gate.
 - A red-phase test group (Tasks 1, 3, 5, 7) is *supposed* to reference modules, actions and props that do
-  not exist yet. Its implementation group is what has to typecheck, and because `tsc` sees the whole `src`
-  tree, that one run covers the test files too.
+  not exist yet. The wave that implements them is what has to typecheck, and because `tsc` sees the whole
+  `src` tree, that one run covers the test files too.
+
+In practice the gate runs twice: at the end of the wave that lands Tasks 2, 4, 6 and 8, and at the end of
+the wave containing `composer-tuning-guard`. Task 18 runs it once more as the final check.
 
 ## Tasks
 
@@ -313,7 +322,7 @@ Also update the **existing** `useUiPrefs persistence` case: its
 **Verify:** cases 1-3 fail (`dismissTuningChangeWarning is not a function`) and case 4 fails on
 `dontWarnOnTuningChange` reading `undefined` rather than `false`; the updated whitelist assertion fails too.
 Case 5 is green from the start (see above). The `beforeEach` reset object referencing a key the store does
-not declare yet is a type error until Task 6 — expected, and why typecheck gates the implementation group,
+not declare yet is a type error until Task 6 — expected, and why typecheck gates the implementing wave,
 not this one.
 
 ### Task 6 — ui-prefs suppression flag
@@ -433,7 +442,7 @@ Implementation rules:
 - `cancel()`: clear the parked state and reset `suppressChecked`; never touch the preference; never call `apply`.
 - `pending` is the parked `change` (or `null`).
 
-**Verify:** behavior is covered by Task 16 (cases 1-4, 7-9, 11); the group typecheck gate covers the types.
+**Verify:** behavior is covered by Task 16 (cases 1-4, 7-9, 11); the wave typecheck gate covers the types.
 
 ### Task 11 — `TuningWarningDialog`
 
@@ -458,7 +467,7 @@ renders `ConfirmDialog` with `open`, the title/body/confirmLabel from the copy m
 `suppress={{ label: "Don't warn again", checked: suppressChecked, onChange: onSuppressChange }}`.
 Testids resolve to `composer-tuning-warning`, `-confirm`, `-cancel`, `-suppress`.
 
-**Verify:** covered by Task 16 (the dialog and its testids); the group typecheck gate covers the types.
+**Verify:** covered by Task 16 (the dialog and its testids); the wave typecheck gate covers the types.
 
 ### Task 12 — `RunningHint` (D5)
 
@@ -481,7 +490,7 @@ The span exists only while running, so enabled markup is byte-for-byte what it i
 interactive, so it carries no `data-testid`.
 
 **Verify:** covered by Task 17 (the disabled model picker renders the hint wrapper without breaking the
-existing enabled-path assertions); the group typecheck gate covers the types.
+existing enabled-path assertions); the wave typecheck gate covers the types.
 
 ### Task 13 — guard the live setters
 
@@ -509,7 +518,7 @@ existing enabled-path assertions); the group typecheck gate covers the types.
 (the file's `useAuiState` mock returns `false`, so `hasMessages` is false and every existing setter test
 still applies immediately). `wc -l use-composer-tuning.ts` — the projected landing size is ~255 after
 Task 9's extraction; if it reads **≥ 285**, execute R2's pre-specified extraction in this same task rather
-than trimming comments. Typecheck is the group gate (Task 14 patches the call site this task's widened
+than trimming comments. Typecheck is the wave gate (Task 14 patches the call site this task's widened
 `ComposerTuningHook` breaks).
 
 ### Task 14 — toolbar wiring
