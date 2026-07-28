@@ -22,6 +22,8 @@
  *  12. requestNoContent throws on HTTP error.
  *  13. request carries a body's per-item `errors[]` through as `details`.
  *  14. request tolerates a missing or malformed `errors[]` (empty `details`).
+ *  15. ApiRequestError carries the originating HTTP status, so a caller can
+ *      classify a rejection (e.g. 404 "unsupported") without re-matching prose.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ApiRequestError, request, requestEmpty, requestNoContent } from '../http';
@@ -144,6 +146,43 @@ describe('request — per-item error details', () => {
     mockFetch({ ok: false, status: 400, json: () => Promise.resolve({ error: 'nope' }) });
 
     await expect(request('POST', URL, {})).rejects.toBeInstanceOf(ApiRequestError);
+  });
+});
+
+describe('request — HTTP error extraction — ApiRequestError.status', () => {
+  it('carries status 404 alongside the JSON error body message', async () => {
+    mockFetch({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ error: 'Adapter not found or does not support skills' }),
+    });
+
+    await expect(request('GET', URL)).rejects.toMatchObject({
+      status: 404,
+      message: 'Adapter not found or does not support skills',
+    });
+  });
+
+  it('carries status 500 alongside the "HTTP 500" fallback message for a non-JSON body', async () => {
+    mockFetch({ ok: false, status: 500, json: () => Promise.reject(new Error('not json')) });
+
+    await expect(request('GET', URL)).rejects.toMatchObject({
+      status: 500,
+      message: 'HTTP 500',
+    });
+  });
+
+  it('leaves the existing per-item `details` behavior unchanged alongside `status`', async () => {
+    mockFetch({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'nope', errors: [{ stepId: 's1', message: 'bad' }] }),
+    });
+
+    await expect(request('POST', URL, {})).rejects.toMatchObject({
+      status: 400,
+      details: [{ stepId: 's1', message: 'bad' }],
+    });
   });
 });
 
