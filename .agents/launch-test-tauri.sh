@@ -10,18 +10,23 @@ cd "$PROJECT_ROOT"
 export DAEMON_PORT="${DAEMON_PORT:-31500}"
 export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
 VITE_PORT="${VITE_PORT:-5174}"
-LOG="/tmp/mf-tauri-dev-${DAEMON_PORT}.log"
 
-# Guard: never let the embedded daemon race the production port.
+# Never let the embedded daemon race the production port. A caller asking for
+# 31415 has almost always inherited it from an ambient env rather than meaning
+# it, so fall back instead of refusing — refusing turns a polluted shell into a
+# blocked QA run.
 if [ "$DAEMON_PORT" = "31415" ]; then
-  echo "REFUSED: DAEMON_PORT=31415 is the production daemon" >&2
-  exit 2
+  echo "WARNING: DAEMON_PORT=31415 is the production daemon — using 31500 instead" >&2
+  export DAEMON_PORT=31500
 fi
+
+LOG="/tmp/mf-tauri-dev-${DAEMON_PORT}.log"
 
 # Fresh-worktree provisioning (idempotent). --frozen-lockfile is load-bearing:
 # a plain install re-resolves the workspace, and in a worktree the
 # `packages/mobile` submodule isn't populated, so pnpm strips it from the
 # lockfile. Frozen installs fine without it and never writes the file.
+# The daemon sidecar is provisioned by `tauri:dev` itself, not here.
 pnpm install --frozen-lockfile
 cd packages/app-tauri
 
