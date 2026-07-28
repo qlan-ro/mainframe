@@ -30,6 +30,17 @@ struct StoreDeps {
     /// When `Some`, `write_workspace_trust` fails with this message instead of
     /// recording the call.
     fail_trust_write: Mutex<Option<String>>,
+    /// What `generate_title` returns.
+    generated_title: Mutex<Option<String>>,
+    /// The `content` of every `generate_title` call, in order.
+    generate_title_calls: Mutex<Vec<String>>,
+    /// When set, `generate_title` awaits `notified()` on it before returning.
+    title_gate: Mutex<Option<Arc<tokio::sync::Notify>>>,
+    /// When set, `process_attachments` returns a clone of it; `None` keeps
+    /// today's `ProcessedAttachments::default()`.
+    attachments: Mutex<Option<ProcessedAttachments>>,
+    /// What `extract_mentions_from_text` returns.
+    mentions_found: Mutex<bool>,
 }
 
 impl StoreDeps {
@@ -92,6 +103,9 @@ impl ChatManagerDeps for StoreDeps {
             }
             if let Some(tm) = patch.transcript_missing {
                 c.transcript_missing = Some(tm);
+            }
+            if let Some(title) = patch.title.clone() {
+                c.title = Some(title);
             }
         }
     }
@@ -188,7 +202,8 @@ impl ChatManagerDeps for StoreDeps {
         _chat_id: &'a str,
         _attachment_ids: &'a [String],
     ) -> BoxFuture<'a, ProcessedAttachments> {
-        Box::pin(async { ProcessedAttachments::default() })
+        let p = self.attachments.lock().unwrap().clone().unwrap_or_default();
+        Box::pin(async move { p })
     }
     fn kill_tasks_for_chat<'a>(
         &'a self,
@@ -255,10 +270,21 @@ impl ChatManagerDeps for StoreDeps {
     fn generate_title<'a>(
         &'a self,
         _adapter_id: &'a str,
-        _content: &'a str,
+        content: &'a str,
         _binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
-        Box::pin(async { None })
+        self.generate_title_calls
+            .lock()
+            .unwrap()
+            .push(content.to_string());
+        let gate = self.title_gate.lock().unwrap().clone();
+        let result = self.generated_title.lock().unwrap().clone();
+        Box::pin(async move {
+            if let Some(gate) = gate {
+                gate.notified().await;
+            }
+            result
+        })
     }
     fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
         Box::pin(async { false })
@@ -276,7 +302,7 @@ impl ChatManagerDeps for StoreDeps {
         false
     }
     fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
-        false
+        *self.mentions_found.lock().unwrap()
     }
     fn tracker_remove_chat(&self, _chat_id: &str) {}
     /// Empty on purpose: mainframe-server's chat_background_activity test covers the wiring (#273).
@@ -321,6 +347,8 @@ struct RecSession {
     cancel_calls: Mutex<Vec<String>>,
     order: Arc<Mutex<Vec<String>>>,
     kills: AtomicUsize,
+    /// `images.len()` from every `send_message` call, in order.
+    images_calls: Mutex<Vec<usize>>,
 }
 
 impl RecSession {
@@ -334,6 +362,7 @@ impl RecSession {
             cancel_calls: Mutex::new(Vec::new()),
             order: Arc::new(Mutex::new(Vec::new())),
             kills: AtomicUsize::new(0),
+            images_calls: Mutex::new(Vec::new()),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -346,6 +375,7 @@ impl RecSession {
             cancel_calls: Mutex::new(Vec::new()),
             order,
             kills: AtomicUsize::new(0),
+            images_calls: Mutex::new(Vec::new()),
         })
     }
 }
@@ -391,9 +421,10 @@ impl AdapterSession for RecSession {
     fn send_message(
         &self,
         message: String,
-        _images: Vec<ImageInput>,
+        images: Vec<ImageInput>,
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.images_calls.lock().unwrap().push(images.len());
         self.send_message_calls
             .lock()
             .unwrap()
@@ -468,6 +499,25 @@ fn seed_active(mgr: &ChatManager, chat_id: &str, chat: Chat, session: Arc<dyn Ad
             turn_started_at: None,
         })),
     );
+}
+
+/// Yields long enough for a `tokio::spawn`ed title-generation task to run to
+/// completion on the current-thread test runtime.
+async fn settle() {
+    for _ in 0..50 {
+        tokio::task::yield_now().await;
+    }
+}
+
+/// Every `title` present in `deps.updates` — the store-patch log, not the
+/// event stream. Assertions about broadcasts must read `deps.events()` instead.
+fn titles_written(deps: &StoreDeps) -> Vec<String> {
+    deps.updates
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|(_, patch)| patch.title.clone())
+        .collect()
 }
 
 fn working_chat(id: &str, title: Option<&str>, working: bool) -> Chat {
