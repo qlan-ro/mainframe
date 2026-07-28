@@ -12,6 +12,7 @@
  *  7. quota store clears byId (a daemon switch never shows the previous daemon's quota)
  *  8. Integration: switchTo invokes the reset (useUnreadStore is empty after a switch)
  *  9. composer-segments store resets byThread to {} (a seeded segment composition is gone)
+ *  10. skills-revalidation nonce strictly increases (bumped, not zeroed — D7)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -74,6 +75,7 @@ import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
 import { useQuotaStore, applyProviderQuota } from '@/store/quota';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
+import { useSkillsRevalidation } from '@/features/skills/use-skills-revalidation';
 import { resetDaemonScopedStores } from '../reset-daemon-scoped-stores';
 
 // ---------------------------------------------------------------------------
@@ -190,6 +192,16 @@ describe('resetDaemonScopedStores — composer-segments', () => {
     expect(useComposerSegments.getState().byThread['thread-a']).toBeDefined();
     resetDaemonScopedStores();
     expect(useComposerSegments.getState().byThread).toEqual({});
+  });
+});
+
+describe('resetDaemonScopedStores — skills revalidation', () => {
+  it('strictly increases the skills-revalidation nonce (bumped, not zeroed — D7)', () => {
+    const before = useSkillsRevalidation.getState().nonce;
+
+    resetDaemonScopedStores();
+
+    expect(useSkillsRevalidation.getState().nonce).toBeGreaterThan(before);
   });
 });
 
