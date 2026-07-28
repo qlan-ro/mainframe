@@ -29,9 +29,11 @@ emits the `<command-name>` tags the daemon reads. Nothing intercepts the composi
 no `SlashPill` renders, and nothing reports the failure. `prependSessionReferences` therefore keeps the
 first line in place when the body starts with `/` and inserts the reference block after it (D2/F7), and
 `stripReferenceLines` recognizes a reference block wherever it starts a block rather than only at offset 0
-(D2), so the rendered message hides the payload in both layouts. The agent still receives the same labeled
-absolute paths; only their position changes, and only for slash bodies. AC 5, 7, 9, 15, 16 and 19 are
-unaffected. The pre-existing quote path is untouched and still shadows a leading `/` — a quoted composition
+(D2), so the rendered message hides the payload in both layouts. The block sits one blank line below the
+command line and one plain line break above the rest of the draft (`…command\n\n<lines>\n<rest>`): with a
+single adjacent empty line, strip removes exactly what prepend added, so every layout round-trips byte for
+byte (C2, H4). The agent still receives the same labeled absolute paths; only their position changes, and
+only for slash bodies. AC 5, 7, 9, 15, 16 and 19 are unaffected. The pre-existing quote path is untouched and still shadows a leading `/` — a quoted composition
 starts with `>`, so it never takes the slash branch and behaves exactly as it does today.
 
 ## Constraints carried from CLAUDE.md
@@ -316,8 +318,11 @@ Cases (AC 5–7, 9, 24; edge cases 4–6, 15, 17, 18):
   - body that is only `@session[Foo]` → lines + blank line + the token (edge case 17);
   - **slash body (decision D1)**: `'/review @session[Foo]'` → the result still starts with `/review`, the
     reference line follows after one blank line, and the command line is unchanged char-for-char;
-  - slash body with more lines (`'/review @session[Foo]\nand this'`) → `/review …`, blank, reference line,
-    blank, `and this` — the text after the first newline is preserved verbatim;
+  - slash body with more lines (`'/review @session[Foo]\nand this'`) → exactly
+    `'/review @session[Foo]\n\nReferenced session @session[Foo]: /p\nand this'`: command line, blank line,
+    reference line, then the rest of the draft on the next line with **no** blank line between. The single
+    line break there is what lets `stripReferenceLines` round-trip the result byte-identically (it drops the
+    preceding blank); the text after the first newline is preserved verbatim;
   - a body starting with `>` (quote) or any non-`/` character keeps the offset-0 prepend.
 - `stripReferenceLines`:
   - strips a leading run of N reference lines plus the single following blank line;
@@ -328,7 +333,9 @@ Cases (AC 5–7, 9, 24; edge cases 4–6, 15, 17, 18):
   - is a no-op (returns the same string) for text with no reference lines;
   - handles text that is *only* reference lines → `''`;
   - round-trips D1: `stripReferenceLines(prependSessionReferences('/review @session[Foo]', map))` ===
-    `'/review @session[Foo]'`.
+    `'/review @session[Foo]'`, and the multi-line case
+    `stripReferenceLines(prependSessionReferences('/review @session[Foo]\nand this', map))` ===
+    `'/review @session[Foo]\nand this'` — byte-identical, no blank line introduced.
 
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/session-references` fails
 with "cannot find module" / assertion errors, and the failures are recorded before Group D starts.
@@ -373,10 +380,16 @@ Depends on Group C.
   if (!body.startsWith('/')) return `${lines}\n\n${body}`;
   const nl = body.indexOf('\n');
   // D1: a leading `/` is the CLI's only slash-command signal — keep it on line 1.
-  return nl === -1 ? `${body}\n\n${lines}` : `${body.slice(0, nl)}\n\n${lines}\n${body.slice(nl)}`;
+  return nl === -1 ? `${body}\n\n${lines}` : `${body.slice(0, nl)}\n\n${lines}${body.slice(nl)}`;
   ```
 
   `body.slice(nl)` starts with the original `\n`, so everything after the command line survives verbatim.
+  Note the multi-line branch adds **no** newline of its own before `body.slice(nl)`: the reference block is
+  separated from the command line by a blank line and from the remaining draft by a plain line break. That
+  asymmetry is deliberate — it is what leaves `stripReferenceLines` exactly one adjacent empty line (the
+  preceding one) to drop, so every layout this function produces round-trips byte-identically (C2). Adding a
+  second `\n` here would make strip either leave a stray blank line or collapse both, and collapsing both
+  contradicts C2's `'/review\n\nReferenced …\n\nrest'` → `'/review\n\nrest'` case.
 
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/session-references` — all
 Group C tests green.
@@ -779,8 +792,11 @@ harness):
 - **Slash composition (decision D1):** a draft of `/review @session[Foo]` → the appended text still starts
   with `/review` (assert `text.startsWith('/review')`, which is exactly the daemon's
   `parse_raw_command` precondition), the reference line for `Foo` is present, and
-  `stripReferenceLines(appended)` returns the draft unchanged. Same assertion for `/review @session[Foo]`
-  followed by a second line of prose, with the second line preserved verbatim.
+  `stripReferenceLines(appended)` === the draft, byte for byte.
+- Same three assertions for the multi-line draft `'/review @session[Foo]\nand this'`, whose appended text is
+  `'/review @session[Foo]\n\nReferenced session @session[Foo]: /p\nand this'` (D2's multi-line branch) and
+  therefore also strips back byte-identically — no blank line is introduced between the command line and
+  `and this`.
 - The reference store is cleared after a successful send, and `resolveSessionTranscripts` is never called
   during submit.
 
