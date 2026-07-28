@@ -17,6 +17,7 @@ import {
 import { useTabsStore } from './tabs';
 import { useActiveBasesStore } from './active-bases-store';
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
+import { releaseUrlTunnels } from './url-tunnel-cleanup';
 import { layoutPersistOptions, prunePersistedSessions } from './layout-persist';
 import {
   isSurfaceFloor,
@@ -126,9 +127,10 @@ export const useLayoutStore = create<LayoutStore>()(
         if (isSurfaceFloor(layout, surface)) return;
         const isActive = layout.top.includes(surface) || layout.bottom === surface;
         const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
-        // Toggling Run off kills any live PTYs before discarding the panes.
+        // Toggling Run off kills any live PTYs and releases URL tabs' tunnels before discarding the panes.
         if (surface === 'run' && isActive) {
           killAndDisposeCachedTerminals(tabIdsInRun(run, 'terminal'));
+          releaseUrlTunnels(tabIdsInRun(run, 'url'));
         }
         writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
       },
@@ -196,6 +198,7 @@ export const useLayoutStore = create<LayoutStore>()(
         if (!run) return;
         const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
         if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
+        if (tab?.kind === 'url') releaseUrlTunnels([tabId]);
         // Preview destruction is handled by the PreviewInstance lifecycle hook's
         // cleanup effect when the component unmounts after the tab is removed.
         const nextRun = closeRunTabReducer(run, paneId, tabId);
@@ -206,6 +209,7 @@ export const useLayoutStore = create<LayoutStore>()(
         const { layout, run } = get();
         if (!run) return;
         killAndDisposeCachedTerminals(tabIdsInPane(run, paneId, 'terminal'));
+        releaseUrlTunnels(tabIdsInPane(run, paneId, 'url'));
         // Preview destruction is handled by the PreviewInstance lifecycle hook's
         // cleanup effect when components unmount after the pane is removed.
         const nextRun = closePaneReducer(run, paneId);
@@ -216,6 +220,7 @@ export const useLayoutStore = create<LayoutStore>()(
         const { layout, run } = get();
         if (!run) return;
         killAndDisposeCachedTerminals(tabIdsForScope(run, scopeKey, 'terminal'));
+        releaseUrlTunnels(tabIdsForScope(run, scopeKey, 'url'));
         // Preview/console bodies tear down via their unmount cleanup once the
         // tabs are removed (PreviewInstance destroys its webview).
         const nextRun = releaseRunScopeReducer(run, scopeKey);
