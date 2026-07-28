@@ -43,53 +43,60 @@ interface ParkedChange {
   originChatId: string | null;
 }
 
-export function useTuningWarning(ctx: TuningWarningContext): TuningWarningHook {
-  const suppressed = useUiPrefs((s) => s.dontWarnOnTuningChange);
+function useParkedChange(chatId: string | null) {
   const [parked, setParked] = useState<ParkedChange | null>(null);
   const [suppressChecked, setSuppressChecked] = useState(false);
+
+  const park = useCallback((next: ParkedChange) => {
+    setSuppressChecked(false);
+    setParked(next);
+  }, []);
+
+  const drop = useCallback(() => {
+    setParked(null);
+    setSuppressChecked(false);
+  }, []);
+
+  useEffect(() => {
+    if (parked != null && parked.originChatId !== chatId) drop();
+  }, [parked, chatId, drop]);
+
+  return { parked, park, drop, suppressChecked, setSuppressChecked };
+}
+
+export function useTuningWarning(ctx: TuningWarningContext): TuningWarningHook {
+  const suppressed = useUiPrefs((s) => s.dontWarnOnTuningChange);
+  const { parked, park, drop, suppressChecked, setSuppressChecked } = useParkedChange(ctx.chat?.id ?? null);
 
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
   const suppressedRef = useRef(suppressed);
   suppressedRef.current = suppressed;
 
-  const chatId = ctx.chat?.id ?? null;
-
-  useEffect(() => {
-    if (parked != null && parked.originChatId !== chatId) {
-      setParked(null);
-      setSuppressChecked(false);
-    }
-  }, [parked, chatId]);
-
-  const guard = useCallback((request: TuningChangeRequest, apply: () => void) => {
-    const live = ctxRef.current;
-    const change = resolveTuningChange(live, request);
-    if (
-      change == null ||
-      !shouldWarnTuningChange({ change, hasMessages: live.hasMessages, suppressed: suppressedRef.current })
-    ) {
-      apply();
-      return;
-    }
-    setSuppressChecked(false);
-    setParked({ change, apply, originChatId: live.chat?.id ?? null });
-  }, []);
+  const guard = useCallback(
+    (request: TuningChangeRequest, apply: () => void) => {
+      const live = ctxRef.current;
+      const change = resolveTuningChange(live, request);
+      if (
+        change == null ||
+        !shouldWarnTuningChange({ change, hasMessages: live.hasMessages, suppressed: suppressedRef.current })
+      ) {
+        apply();
+        return;
+      }
+      park({ change, apply, originChatId: live.chat?.id ?? null });
+    },
+    [park],
+  );
 
   const confirm = useCallback(() => {
     if (parked == null) return;
-    setParked(null);
-    setSuppressChecked(false);
+    drop();
     if (parked.originChatId !== (ctxRef.current.chat?.id ?? null)) return;
     // The preference commits here only, so checking the box then cancelling writes nothing.
     if (suppressChecked) useUiPrefs.getState().dismissTuningChangeWarning();
     parked.apply();
-  }, [parked, suppressChecked]);
-
-  const cancel = useCallback(() => {
-    setParked(null);
-    setSuppressChecked(false);
-  }, []);
+  }, [parked, suppressChecked, drop]);
 
   return {
     pending: parked?.change ?? null,
@@ -97,6 +104,6 @@ export function useTuningWarning(ctx: TuningWarningContext): TuningWarningHook {
     setSuppressChecked,
     guard,
     confirm,
-    cancel,
+    cancel: drop,
   };
 }

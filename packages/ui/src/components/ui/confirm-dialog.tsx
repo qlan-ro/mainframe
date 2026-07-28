@@ -22,6 +22,22 @@ export interface ConfirmDialogProps {
   testid?: string;
 }
 
+function SuppressRow({ suppress, testid }: { suppress: ConfirmDialogSuppress; testid: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Checkbox
+        id={`${testid}-suppress`}
+        data-testid={`${testid}-suppress`}
+        checked={suppress.checked}
+        onCheckedChange={(value) => suppress.onChange(value === true)}
+      />
+      <Label htmlFor={`${testid}-suppress`} className="cursor-pointer text-caption text-muted-foreground">
+        {suppress.label}
+      </Label>
+    </div>
+  );
+}
+
 export function ConfirmDialog({
   open,
   title,
@@ -47,19 +63,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {body && <p className="text-body text-muted-foreground">{body}</p>}
-        {suppress && (
-          <div className="flex items-center gap-2 pt-1">
-            <Checkbox
-              id={`${testid}-suppress`}
-              data-testid={`${testid}-suppress`}
-              checked={suppress.checked}
-              onCheckedChange={(value) => suppress.onChange(value === true)}
-            />
-            <Label htmlFor={`${testid}-suppress`} className="cursor-pointer text-caption text-muted-foreground">
-              {suppress.label}
-            </Label>
-          </div>
-        )}
+        {suppress && <SuppressRow suppress={suppress} testid={testid} />}
         <DialogFooter className="gap-2">
           <Button data-testid={`${testid}-cancel`} variant="ghost" onClick={onCancel}>
             {cancelLabel}
