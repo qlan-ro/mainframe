@@ -71,7 +71,7 @@ the mainframe wrapper envelope can never reach a title. No client changes: the e
 - **No new size violations.** `chat_manager.rs` is 2351 lines and `send_message` is 295
   (lines 1789–2083); both already break the repo limits. Group B moves the whole dispatch
   half of the send path into `chat_manager/send.rs`, so the parent file **shrinks**
-  (2351 → ~2155) and the new file lands at ~260, under 300. Every function this plan
+  (2351 → ~2155) and the new file lands at ~275, under 300. Every function this plan
   creates is under 50 lines — including `send_plain_text`, which reaches ~30 by
   extracting the tail's three existing seams (see B2).
 - Two pre-existing violations survive, deferred to **todo #292** (filed alongside this
@@ -381,8 +381,10 @@ plain-text tail through code no existing test reaches, and B2's only claimed gua
 test 6. Write them first anyway: a guard added after the move guards nothing.
 
 8. `plain_text_with_attachments_keeps_prefix_images_and_transient_metadata` — covers
-   `prepare_outgoing` (B2.2) and the attachment half of `store_user_message` (B2.1),
-   including the `std::mem::take` that is the one non-verbatim edit in the move.
+   `prepare_outgoing` (B2.2) and the attachment half of `store_user_message` (B2.1). It is
+   the only guard over three of the move's four non-verbatim edits — the
+   `ProcessedAttachments` destructure (B2.2), `attachment_previews.to_vec()` (B2.3) and
+   the dropped `images.clone()` (B2.6); A2.1 guards the fourth (see Risks).
 
    Setup: `deps = StoreDeps::arc()`, then install a non-default fixture —
    `text_prefix: vec!["prefix".into()]`,
@@ -404,7 +406,7 @@ test 6. Write them first anyway: a guard added after the move guards nothing.
      without `images_calls` a dropped image is unobservable;
    - the `MessageAdded` event's `message.content` is exactly
      `["[Image: shot.png]", "hello"]` in that order — the processed nodes precede the
-     typed text, which is what `std::mem::take(&mut processed.message_content)` must
+     typed text, which is what `prepare_outgoing`'s `mut message_content` binding must
      preserve;
    - that message's `metadata` is `Some` and carries all three keys: `queued == true`,
      `attachments` an array of one element equal to `{"id":"att-1"}`, and `uuid` equal
@@ -462,10 +464,12 @@ Files: `packages/core-rs/crates/mainframe-chat/src/chat_manager/send.rs` (new),
 
 1. Create `chat_manager/send.rs` with a module doc comment ("the dispatch half of
    `send_message`: command vs plain text, and the first-message titling both share"),
-   `use super::*;`, and a single `impl ChatManager { … }` block. `use super::*;` is what
+   `use super::*;`, one private `struct Outgoing` (declared in B2.2), and a single
+   `impl ChatManager { … }` block. `use super::*;` is what
    `chat_manager/tests.rs` already does; it pulls in the parent's private `use` bindings
-   (`Arc`, `Mutex`, `HashMap`, `DaemonEvent`, `LeafContent`, `derive_title_from_message`,
-   …) and the parent's private types (`ActiveChat`, `ChatUpdate`, `ProcessedAttachments`,
+   (`Arc`, `Mutex`, `HashMap`, `DaemonEvent`, `LeafContent`, `ImageInput`
+   (`chat_manager.rs:15`, named by `Outgoing`), `derive_title_from_message`, …) and the
+   parent's private types (`ActiveChat`, `ChatUpdate`, `ProcessedAttachments`,
    `CommandMeta`, `SendError`). Add no other `use` — a duplicate import under
    `-D warnings` fails CI.
 2. Declare it in `chat_manager.rs` as `mod send;` on its own line after the final `use`
@@ -533,23 +537,52 @@ All of these live in `send.rs`.
    it, for the queued ref. Those three equivalences are what A2.1's guard assertions 1–2
    pin; if either goes red here, the collapse or the suppression is what broke. ~39 lines.
 
-2. **`prepare_outgoing`** — lines 1923–1942.
+2. **`prepare_outgoing`** — lines 1923–1942, returning a struct declared alongside it in
+   `send.rs`:
 
    ```rust
+   /// Everything the plain-text tail needs from attachment processing, with the
+   /// typed text already folded in.
+   struct Outgoing {
+       images: Vec<ImageInput>,
+       attachment_previews: Vec<serde_json::Value>,
+       message_content: Vec<MessageContent>,
+       text: String,
+   }
+
    async fn prepare_outgoing(
        &self,
        chat_id: &str,
        content: &str,
        attachment_ids: Option<&[String]>,
-   ) -> (ProcessedAttachments, Vec<MessageContent>, String)
+   ) -> Outgoing
    ```
 
-   One mechanical change to the moved code: `let mut processed = …` and
-   `let mut message_content = std::mem::take(&mut processed.message_content);` — moving
-   the field out wholesale (`processed.message_content`, line 1927) would partially move
-   a value the helper still returns. Nothing reads `processed.message_content` after this
-   point; the later reads are `.attachment_previews` (1959) and `.images` (2053).
-   Returns `(processed, message_content, outgoing_content)`. ~29 lines.
+   `Outgoing` is private to `send.rs` and needs no visibility marker: only
+   `send_plain_text` reads it. Every field is read, so nothing trips `dead_code` under
+   `-D warnings`.
+
+   The helper consumes `ProcessedAttachments` by destructuring it on arrival, so no
+   half-emptied value ever escapes:
+
+   ```rust
+   let ProcessedAttachments {
+       images,
+       mut message_content,
+       text_prefix,
+       attachment_previews,
+   } = match attachment_ids {
+       Some(ids) if !ids.is_empty() => self.deps.process_attachments(chat_id, ids).await,
+       _ => ProcessedAttachments::default(),
+   };
+   ```
+
+   Line 1927's `let mut message_content = processed.message_content;` disappears into the
+   `mut message_content` binding above; lines 1928–1942 then move verbatim with
+   `processed.text_prefix` reading as the bare `text_prefix` binding, and the function
+   ends with `Outgoing { images, attachment_previews, message_content, text }` (the
+   moved code's `outgoing_content` is the `text` field). ~37 lines for the function,
+   plus 8 for the struct and its doc comment.
 
 3. **`queued_message_metadata`** — lines 1944–1969, the replay-ack/queued decision and
    the transient metadata it drives.
@@ -563,9 +596,19 @@ All of these live in `send.rs`.
    ) -> (HashMap<String, serde_json::Value>, Option<String>)
    ```
 
-   Verbatim except that line 1959's `processed.attachment_previews` becomes the
-   `attachment_previews` parameter. Returns `(transient_metadata, message_uuid)`.
-   ~35 lines.
+   Verbatim except for the two reads of `processed.attachment_previews`, which become the
+   parameter. Line 1956's guard is a straight substitution: `is_empty()` works on a
+   slice. Line 1959 is **not**. It currently reads
+   `serde_json::Value::Array(processed.attachment_previews.clone())`, and against a
+   `&[serde_json::Value]` the `.clone()` clones the reference and yields another
+   `&[serde_json::Value]`, which `Value::Array` — it wants an owned `Vec<Value>` —
+   rejects; clippy also flags it as `clone_on_copy` under CI's `-D warnings`. Write it as
+
+   ```rust
+   serde_json::Value::Array(attachment_previews.to_vec()),
+   ```
+
+   Returns `(transient_metadata, message_uuid)`. ~35 lines.
 
 4. **`record_queued_ref`** — the body of `if let Some(uuid) = message_uuid` (lines
    2059–2080), unchanged including its `info!`.
@@ -621,12 +664,20 @@ All of these live in `send.rs`.
    ) -> Result<(), SendError>
    ```
 
-   In order: `prepare_outgoing` → `queued_message_metadata` → `store_user_message` → the
-   mentions check (2000–2005, verbatim) → `self.assign_initial_title(post, chat_id, content);`
-   in place of the title block (2007–2043) → `set_working` + the `ChatUpdated` emit
-   (2045–2048, verbatim) → `session.send_message(outgoing_content, processed.images.clone(), message_uuid.clone()).await?`
+   In order: `let outgoing = self.prepare_outgoing(chat_id, content, attachment_ids).await;`
+   → `queued_message_metadata(post, session, &outgoing.attachment_previews)` →
+   `store_user_message(chat_id, outgoing.message_content, transient_metadata, attachment_ids)`
+   → the mentions check (2000–2005, verbatim) →
+   `self.assign_initial_title(post, chat_id, content);` in place of the title block
+   (2007–2043) → `set_working` + the `ChatUpdated` emit (2045–2048, verbatim) →
+   `session.send_message(outgoing.text, outgoing.images, message_uuid.clone()).await?`
    → `if let Some(uuid) = message_uuid { self.record_queued_ref(…); }` → `Ok(())`. The
    event order is byte-for-byte what it was. ~30 lines.
+
+   Each field moves out of `outgoing` exactly once, so the partial moves are fine and no
+   `.clone()` is owed: line 2053's `processed.images.clone()` becomes `outgoing.images`.
+   The clone is already redundant today — nothing reads `processed` after line 2053 —
+   and it stays redundant here, where `outgoing` is a local about to drop.
 
 7. `send_message` (staying in `chat_manager.rs`) keeps its signature and its preamble
    (lines 1789–1879) and ends with the dispatch:
@@ -649,13 +700,16 @@ Verify:
 - Sizes, measured after `cargo fmt` and stated in the commit body. Every new function is
   under 50 and the new file is under 300:
   `assign_initial_title` ~40, `dispatch_command` ~37, `send_plain_text` ~30,
-  `store_user_message` ~39, `prepare_outgoing` ~29, `queued_message_metadata` ~35,
-  `record_queued_ref` ~32; `send.rs` ~260; `chat_manager.rs` 2351 → ~2155;
+  `store_user_message` ~39, `prepare_outgoing` ~37, `queued_message_metadata` ~35,
+  `record_queued_ref` ~32; plus the 8-line `struct Outgoing`. `send.rs` ~275;
+  `chat_manager.rs` 2351 → ~2155;
   `send_message` 295 → ~98. The two survivors — the parent file over 300 and
   `send_message` over 50 — are the pre-existing violations deferred to **#292** per
   Constraints. If `send.rs` overshoots 300, move items 1–4 (the four plain-text assembly
   helpers, which no other module names) into a sibling `chat_manager/send_parts.rs` with
-  the same `mod` + `use super::*;` shape; do not solve it by re-inlining a helper.
+  the same `mod` + `use super::*;` shape; `struct Outgoing` travels with
+  `prepare_outgoing`, and both it and its four fields then need `pub(super)`, since
+  `send_plain_text` stays behind and reads them. Do not solve it by re-inlining a helper.
 
 Commit as `fix(chat): title a session whose first message is a slash command (#257)`.
 
@@ -713,7 +767,7 @@ C depends on nothing.
 | Chat-manager-level, transport-independent regression tests | Group A (calls `send_message` directly) |
 | Generation still off the send path | A2.5, B1 |
 | Functions under 50 | B1 + B2 — every function this plan creates; `send_message`'s remaining 91-line preamble and `chat_manager.rs`'s length deferred to #292 |
-| Files under 300 | B1 (`send.rs` ~260; `chat_manager.rs` 2351 → ~2155, still over, deferred to #292) |
+| Files under 300 | B1 (`send.rs` ~275; `chat_manager.rs` 2351 → ~2155, still over, deferred to #292) |
 | Project rules: tests, no `console.*`/`println!`, no sync I/O, changeset | C1, verification steps |
 
 Not owed here: new logging (#287), Codex title support (#275b), backfilling existing
@@ -754,7 +808,7 @@ untouched).
     returns `ProcessedAttachments::default()` and no existing test passes
     `attachment_ids`, so the whole of `prepare_outgoing` (B2.2) is unreachable in the
     fake: the `text_prefix.join` / `format!("{prefix}\n\n{content}")` composition, the
-    `std::mem::take` this plan flags as its one non-verbatim edit, and the `images`
+    `ProcessedAttachments` destructure, and the `images`
     handoff — which `RecSession::send_message` (`tests.rs:391-401`) could not observe
     anyway, since it records only `(message, uuid)`. The `attachments` transient-metadata
     branch and the attachment `ContextUpdated` inside `store_user_message` (B2.1) are
@@ -772,8 +826,21 @@ untouched).
 
   Reviewing the move is easier than the line count suggests: `git diff -M
   --find-copies-harder` renders most of `send.rs` as a move.
-- **Two mechanical changes hide inside the "verbatim" moves.** `prepare_outgoing` needs
-  `std::mem::take` for `message_content` (B2.2) and `store_user_message` reaches the
-  command path's `None` metadata through an empty `HashMap` (B2.1). Both are called out
-  in the task; neither changes an emission. They are the two places to look first if a
-  pre-existing test goes red.
+- **Four mechanical changes hide inside the "verbatim" moves.** B2's safety argument is
+  that each helper carries an existing contiguous range with no reordering, so this list
+  has to be exhaustive: it is the diff reviewer's checklist, and the first place to look
+  if a pre-existing test goes red. None of the four changes an emission.
+  1. **B2.1** — the command path reaches its `None` metadata through an empty `HashMap`,
+     collapsed back by the moved code's existing `if transient_metadata.is_empty()`.
+     Guarded by A2.1's assertion 1.
+  2. **B2.2** — `ProcessedAttachments` is destructured on arrival rather than read
+     field-by-field, so line 1927's `let mut message_content = processed.message_content;`
+     becomes the `mut message_content` binding and `processed.text_prefix` becomes
+     `text_prefix`. Guarded by A2.8's content-order and prefix assertions.
+  3. **B2.3** — line 1959 becomes
+     `serde_json::Value::Array(attachment_previews.to_vec())`; the original `.clone()`
+     cannot survive the `&[serde_json::Value]` parameter. Guarded by A2.8's `attachments`
+     metadata assertion.
+  4. **B2.6** — line 2053's `processed.images.clone()` becomes `outgoing.images`. The
+     clone is redundant in today's code too (nothing reads `processed` after it). Guarded
+     by A2.8's `images_calls` assertion.
