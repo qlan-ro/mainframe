@@ -76,10 +76,23 @@ the mainframe wrapper envelope can never reach a title. No client changes: the e
   extracting the tail's three existing seams (see B2).
 - Two pre-existing violations survive, deferred to **todo #292** (filed alongside this
   plan): `chat_manager.rs` stays over 300, and `send_message` keeps its 91-line preamble
-  (295 → ~98). Decomposing that preamble would mean moving `send_message` itself into
-  `send.rs` — pushing that file past 300 — and would turn a mechanical move into a
-  rewrite of the crate's busiest entry point. Shrinking a 295-line function to ~98 while
-  minting nothing new over 50 is this pass's share of the debt.
+  (295 → ~98). **The reason is diff scope, not impossibility.** The preamble has three
+  contiguous seams, each under 50 lines, each extractable into a helper that **stays in
+  `chat_manager.rs`** (shrinking the parent further and leaving `send.rs` untouched), and
+  each the same mechanical contiguous-range move B2 performs seven times:
+  the `worktree_missing` guard (1796–1823), the `transcript_missing` + "continue here"
+  reset (1825–1845), and the wait-interrupt / ensure-spawned / resolve-session block
+  (1847–1873). They are out of scope here for two reasons, both about this PR's diff and
+  neither about feasibility: the bug is not in the preamble, and one of the three seams
+  has no test to move against — nothing in `chat_manager/tests.rs` sets
+  `worktree_missing`, so extracting seam 1 would repeat exactly the unguarded-move
+  problem A2.8/A2.9 exist to prevent, and would owe a guard test for behavior unrelated
+  to #257. (Seam 2 is already guarded by
+  `send_message_with_the_flag_clears_the_dead_session_identity`, `tests.rs:1168-1187`;
+  seam 3 by all 14 existing `send_message` tests.) #292 inherits that seam map, so it is
+  planned against what is true rather than against a constraint that does not exist.
+  Shrinking a 295-line function to ~98 while minting nothing new over 50 is this pass's
+  share of the debt.
 - The child-module split is the cheap one, not the expensive one. Moving an inherent
   `impl ChatManager` block into `chat_manager/send.rs` changes **no import anywhere in
   the crate and no call site at all** — `ChatManager::send_message`'s path is identical,
@@ -96,8 +109,10 @@ All of Group A lands in
 `packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs` and must be committed
 before Group B exists. Five of the nine new tests are red-phase tests for the bug and
 must be observed **failing**; four (A2.4, A2.6, A2.8, A2.9) are guards that pin behavior
-B2 must not change and are green on both sides of the move. Group A is the only group
-that touches a test file, which is what lets B2 forbid test edits outright.
+B2 must not change and are green on both sides of the move. A2.1 is both: it fails in the
+red phase on its title assertion, and the assertions written above that one guard the
+command branch's store/emit through the move. Group A is the only group that touches a
+test file, which is what lets B2 forbid test edits outright.
 
 #### Task 1 — A1. Teach the fakes to observe titles, attachments, mentions, and images
 
@@ -148,8 +163,9 @@ reachable before B2 may claim a behavioral guard.
    `images.len()` from `send_message` (line 389), renaming its `_images` parameter to
    `images`. `RecSession` is not `Default`: initialize the field in **both**
    constructors, `new` (line 326) and `with_order` (line 338). Do not widen the
-   existing `send_message_calls` tuple — 15 call sites read `.0`/`.1` and this plan
-   edits no existing assertion.
+   existing `send_message_calls` tuple — five existing tests read it positionally
+   (`.0`/`.1`, at `tests.rs:504`, `776-778`, `821`, `833`, `845`) and this plan edits no
+   existing assertion.
 6. Add two test-module helpers next to `seed_active` (line 462):
    - `async fn settle()` — `for _ in 0..50 { tokio::task::yield_now().await; }`, so the
      spawned title task runs to completion on the current-thread test runtime.
@@ -181,11 +197,50 @@ the stored row and on `updates`.
 
 Tests:
 
-1. `provider_command_first_message_sets_the_fallback_title` — send `"/compact"` with
-   `CommandMeta { name: "compact", source: "claude", args: None }`. Assert:
-   `deps.chats_get("chat-1").unwrap().title == Some("/compact")`; a `ChatUpdated`
-   event exists whose `chat.title` is `Some("/compact")`; `send_command` was still
-   called once with `"compact"`; a `process_state: Working` update was still written.
+1. `provider_command_first_message_sets_the_fallback_title` — `title_cmd_manager(None)`,
+   send `"/compact"` with `CommandMeta { name: "compact", source: "claude", args: None }`.
+
+   This test carries two jobs: it is the red-phase test for the provider shape **and the
+   only move guard over B2.1's absorption of the command branch's user-message store and
+   emit (`chat_manager.rs:1881-1902`)**. All seven existing command-routing tests
+   (`tests.rs:717-847`) assert only `send_command_calls`, `send_message_calls` or the
+   `process_state` update — none of them touches `MessageAdded`, the message type, the
+   content nodes, the `None` metadata, or `emit_display`. Three non-obvious equivalences
+   ride on that move: `Some(empty_map)` must collapse back to `None` metadata,
+   `attachment_ids: None` must suppress the attachment `ContextUpdated`, and the single
+   `LeafContent::Text` node must survive. The todo freezes all of it ("the user's message
+   is still stored and emitted"), so the same gap A2.8/A2.9 close for the plain-text tail
+   has to be closed here for the command half.
+
+   **Write the guard assertions first and the title assertions last**, in this order:
+
+   1. `deps.events()` holds exactly one `MessageAdded`; its `message.r#type` is
+      `ChatMessageType::User` (the field is `r#type`, not `message_type` —
+      `mainframe-types/src/chat.rs:248`); its metadata is absent and its content is the
+      one text node:
+
+      ```rust
+      assert!(msg.metadata.is_none(), "a command send carries no transient metadata");
+      assert!(matches!(
+          msg.content.as_slice(),
+          [MessageContent::Leaf(LeafContent::Text { text, .. })] if text == "/compact"
+      ));
+      ```
+
+   2. `deps.events()` holds no `ContextUpdated` at all — the command path passes no
+      attachment ids and runs no mentions check.
+   3. `send_command` was called once with `"compact"`, and `send_message_calls` is empty.
+   4. a `process_state: Working` update was written to `deps.updates`.
+   5. **then** the bug itself: `deps.chats_get("chat-1").unwrap().title ==
+      Some("/compact")`, and a `ChatUpdated` event carries `chat.title ==
+      Some("/compact")`.
+
+   The order is load-bearing, because Rust stops at the first failing assertion. In the
+   red phase this test must fail on assertion 5 — which is precisely what proves 1–4
+   already held before B2 and must still hold after it, the same before-and-after
+   standard A2.8 and A2.9 meet by passing outright. A red phase that fails on 1–4
+   instead means the fake or the assertion is wrong, not the production code; fix that
+   before starting Group B.
 2. `mainframe_command_first_message_titles_from_typed_text_not_the_wrapper` — send
    `"/greet Say hello to the team"` with
    `CommandMeta { name: "greet", source: "mainframe", args: Some("Say hello") }`, then
@@ -269,8 +324,21 @@ Tests:
    `deps.chats_get("chat-1").unwrap().title == Some("Compacted session".to_string())` —
    generation did run, just not on the send path.
 6. `plain_text_first_message_still_titles_in_the_same_event_order` — regression guard,
-   expected **green** before and after Group B. Untitled chat, send `"Hello world"`,
-   no command. Assert the stored title is `"Hello world"`, and that in `deps.events()`
+   expected **green** before and after Group B. Build it with `title_cmd_manager(None)`
+   and send `"Hello world"` with no command.
+
+   **Use that builder, not the `StoreDeps::arc()` + `seed_active` idiom of the
+   neighbouring send tests (`tests.rs:486-497`).** `StoreDeps::chats_get` reads
+   `self.store` (`tests.rs:71`), not the active cell, so against the empty store that
+   idiom creates, the stored-title assertion's `.unwrap()` panics — and the cheapest way
+   out of that panic is to weaken the assertion to read `deps.updates`, which is exactly
+   the persisted-vs-broadcast conflation this test exists to catch (see the
+   `titles_written` note above). `title_cmd_manager` seeds both the store and the active
+   cell, and its `RecSession::new("chat-1", false, true)` leaves `supports_replay_ack`
+   false, so `is_queued` is false — which is what the `send_message_calls.len() == 1`
+   assertion below needs.
+
+   Assert the stored title is `Some("Hello world")`, and that in `deps.events()`
 
    ```rust
    let title_idx = updated
@@ -435,9 +503,10 @@ Relocating 37 lines inside a 295-line function is not enough: the mid-body
 `assign_initial_title` call sites 120 lines apart. Decompose instead, so `send_message`
 reads as preamble plus a visible two-way dispatch and each call site sits at the top of
 its helper. Every function below is under 50 lines; each moves an existing contiguous
-range with no reordering, so the behavioral guard is the 15 existing `send_message`
-tests plus A2.6, A2.8 and A2.9 — the last two being what make that guard reach the
-attachment, prefix, image and mention branches at all (see Risks).
+range with no reordering, so the behavioral guard is the 14 existing `send_message`
+tests plus A2.1, A2.6, A2.8 and A2.9 — A2.8/A2.9 being what make that guard reach the
+attachment, prefix, image and mention branches at all, and A2.1 what makes it reach the
+command branch's store/emit (see Risks).
 
 All of these live in `send.rs`.
 
@@ -461,7 +530,8 @@ All of these live in `send.rs`.
    `if transient_metadata.is_empty()` turns back into the `None` metadata it passed
    before), and `None` attachment ids (so the `ContextUpdated` branch is skipped, as
    before). The command path discards the returned message; only `send_plain_text` needs
-   it, for the queued ref. ~39 lines.
+   it, for the queued ref. Those three equivalences are what A2.1's guard assertions 1–2
+   pin; if either goes red here, the collapse or the suppression is what broke. ~39 lines.
 
 2. **`prepare_outgoing`** — lines 1923–1942.
 
@@ -572,7 +642,7 @@ All of these live in `send.rs`.
 Verify:
 
 - `cd packages/core-rs && cargo test -p mainframe-chat` — the whole crate green,
-  including all seven Group A tests and the 15 pre-existing `send_message` tests. **No
+  including all nine Group A tests and the 14 pre-existing `send_message` tests. **No
   test file may be edited in this task.** If one needs editing, the move was not verbatim.
 - `cargo clippy --all-targets -- -D warnings` — clean (this is the CI invocation).
 - `cargo fmt --check`.
@@ -639,7 +709,7 @@ C depends on nothing.
 | Already-titled chat is a no-op | A2.4 |
 | Fallback retained when generation cannot run | A2.7 |
 | Plain text unchanged, same event order | A2.6, B2.6 (`send_plain_text`); A2.8/A2.9 pin the attachment, prefix, image and mention branches the move otherwise carries untested |
-| Message still stored/emitted, command still dispatched, chat still working | A2.1 |
+| Message still stored/emitted, command still dispatched, chat still working | A2.1 (guard assertions 1–4: the `MessageAdded`, its `None` metadata, the absent `ContextUpdated`, `send_command`, `Working`) |
 | Chat-manager-level, transport-independent regression tests | Group A (calls `send_message` directly) |
 | Generation still off the send path | A2.5, B1 |
 | Functions under 50 | B1 + B2 — every function this plan creates; `send_message`'s remaining 91-line preamble and `chat_manager.rs`'s length deferred to #292 |
@@ -673,6 +743,13 @@ untouched).
     `chat_manager/tests.rs:486-604` drives `is_queued`, the `uuid` metadata,
     `MessageQueued`, and `record_queued_ref`. Plain-text first-message titling and its
     event order — A2.6.
+  - **Not covered before Group A: the command branch's own store/emit
+    (`chat_manager.rs:1881-1902`).** B2.1 folds it into `store_user_message`, and the
+    seven command-routing tests (`tests.rs:717-847`) assert only `send_command_calls`,
+    `send_message_calls` and the `process_state` update — never `MessageAdded`, the
+    message type, the content nodes, the `None` metadata, or `emit_display`. So the
+    `Some(empty_map)` → `None` metadata collapse, the suppressed attachment
+    `ContextUpdated`, and the single `LeafContent::Text` node would all move unobserved.
   - **Not covered before Group A.** `StoreDeps::process_attachments` (`tests.rs:186-191`)
     returns `ProcessedAttachments::default()` and no existing test passes
     `attachment_ids`, so the whole of `prepare_outgoing` (B2.2) is unreachable in the
@@ -685,10 +762,13 @@ untouched).
     hardcodes `false`, so the mentions `ContextUpdated` that B2.6 moves "verbatim
     (2000-2005)" is untested too.
   - **The fix, in Group A.** A1 gives the fakes `attachments`, `mentions_found` and
-    `RecSession::images_calls`; A2.8 and A2.9 exercise every branch listed above. Both
-    are green before and after B2 — they are move guards, not red-phase tests — and both
-    land in the Group A commit, which keeps B2's "no test file may be edited" invariant
-    intact. Group A owns `tests.rs`; Group B never touches it.
+    `RecSession::images_calls`; A2.8 and A2.9 exercise every plain-text branch listed
+    above, and A2.1's guard assertions 1–4 cover the command branch's store/emit. A2.8
+    and A2.9 are green before and after B2 — they are move guards, not red-phase tests.
+    A2.1 is red before B2 on its title assertion only, which is why its guard assertions
+    are written above that one: they are evaluated and must pass in the red phase too.
+    All of it lands in the Group A commit, which keeps B2's "no test file may be edited"
+    invariant intact. Group A owns `tests.rs`; Group B never touches it.
 
   Reviewing the move is easier than the line count suggests: `git diff -M
   --find-copies-harder` renders most of `send.rs` as a move.
