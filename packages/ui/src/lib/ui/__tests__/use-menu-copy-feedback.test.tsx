@@ -171,4 +171,75 @@ describe('useMenuCopyFeedback', () => {
     );
     expect(escapeCalls).toHaveLength(0);
   });
+
+  it('ignores a successful settle that lands after the menu was already closed', async () => {
+    const dispatchSpy = vi.spyOn(document, 'dispatchEvent');
+    let settle: ((value: boolean) => void) | undefined;
+    const pending: Run = () => new Promise<boolean>((resolve) => (settle = resolve));
+    render(<Harness runA={pending} runB={ok} />);
+
+    fireEvent.click(screen.getByTestId('item-a'));
+    await flush();
+    fireEvent.click(screen.getByTestId('close-menu'));
+
+    dispatchSpy.mockClear();
+    await act(async () => {
+      settle?.(true);
+    });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const escapeCalls = dispatchSpy.mock.calls.filter(
+      ([event]) => event instanceof KeyboardEvent && event.key === 'Escape',
+    );
+    expect(escapeCalls).toHaveLength(0);
+    expect(screen.getByTestId('item-a').textContent).toBe('Copy A');
+  });
+
+  it('ignores a failed settle that lands after the menu was already closed', async () => {
+    const dispatchSpy = vi.spyOn(document, 'dispatchEvent');
+    let settle: ((value: boolean) => void) | undefined;
+    const pending: Run = () => new Promise<boolean>((resolve) => (settle = resolve));
+    render(<Harness runA={pending} runB={ok} />);
+
+    fireEvent.click(screen.getByTestId('item-a'));
+    await flush();
+    fireEvent.click(screen.getByTestId('close-menu'));
+
+    dispatchSpy.mockClear();
+    await act(async () => {
+      settle?.(false);
+    });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const escapeCalls = dispatchSpy.mock.calls.filter(
+      ([event]) => event instanceof KeyboardEvent && event.key === 'Escape',
+    );
+    expect(escapeCalls).toHaveLength(0);
+    expect(screen.getByTestId('item-a').textContent).toBe('Copy A');
+  });
+
+  it('still reports a copy started after the menu was closed', async () => {
+    const dispatchSpy = vi.spyOn(document, 'dispatchEvent');
+    render(<Harness runA={ok} runB={ok} />);
+
+    fireEvent.click(screen.getByTestId('close-menu'));
+    dispatchSpy.mockClear();
+
+    fireEvent.click(screen.getByTestId('item-a'));
+    await flush();
+
+    expect(screen.getByTestId('item-a').textContent).toBe('Copied');
+
+    act(() => {
+      vi.advanceTimersByTime(900);
+    });
+    const escapeCalls = dispatchSpy.mock.calls.filter(
+      ([event]) => event instanceof KeyboardEvent && event.key === 'Escape' && event.bubbles,
+    );
+    expect(escapeCalls).toHaveLength(1);
+  });
 });
