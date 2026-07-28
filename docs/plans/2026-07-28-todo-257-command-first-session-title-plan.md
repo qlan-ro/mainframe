@@ -236,14 +236,26 @@ Tests:
    no command. Assert the stored title is `"Hello world"`, and that in `deps.events()`
 
    ```rust
-   let title_idx = updated.iter().position(|c| c.title.as_deref().is_some_and(|t| !t.is_empty()));
+   let title_idx = updated
+       .iter()
+       .position(|c| c.title.as_deref().is_some_and(|t| !t.is_empty()))
+       .expect("a ChatUpdated carried the title");
    let working_idx = updated
        .iter()
-       .position(|c| c.process_state == Some(Some(ProcessState::Working)));
+       .position(|c| c.process_state == Some(Some(ProcessState::Working)))
+       .expect("a ChatUpdated carried Working");
    assert!(title_idx < working_idx);
    ```
 
    where `updated` is the chats carried by the `ChatUpdated` events in order.
+   **Both `.expect()`s are mandatory — never compare the raw `Option<usize>`s.** Rust orders
+   `None < Some(_)`, so `Some(x) < None` is false but `None < Some(y)` is true: an
+   implementation that persists the title through `deps.chats_update` but drops the
+   in-memory `guard.chat.title` write and the `ChatUpdated` emit would leave `title_idx` at
+   `None`, pass the raw comparison, and still pass the companion `stored title ==
+   "Hello world"` check. Persisted but never broadcast is exactly the failure todo #257 is
+   about — the phone only learns a title from the event — so the guard has to fail loudly
+   when no event carries one.
    **`position()` — first match — is load-bearing here.** Once the chat is titled every
    subsequent `ChatUpdated` carries *both* a title and a `process_state`, including the
    post-`set_working` one, so "the index of the `ChatUpdated` carrying a title" is only
