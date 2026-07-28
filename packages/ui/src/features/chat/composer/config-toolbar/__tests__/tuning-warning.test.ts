@@ -109,13 +109,25 @@ describe('resolveTuningChange', () => {
   it('resolves an inherited effort from providerDefaults.defaultEffort when the chat has no override', () => {
     const ctx = makeCtx({
       chat: makeChat({ effort: null }),
-      model: SONNET,
+      model: { ...SONNET, supportedEfforts: ['low', 'high', 'max'] },
       providerDefaults: { defaultEffort: 'low' },
     });
 
     const change = resolveTuningChange(ctx, { kind: 'effort', to: 'max' });
 
     expect(change).toMatchObject({ kind: 'effort', from: 'low' });
+  });
+
+  it('clamps an inherited effort the model does not support, matching what the picker displays', () => {
+    const ctx = makeCtx({
+      chat: makeChat({ effort: null }),
+      model: SONNET, // supports high + max only
+      providerDefaults: { defaultEffort: 'low' },
+    });
+
+    const change = resolveTuningChange(ctx, { kind: 'effort', to: 'max' });
+
+    expect(change).toMatchObject({ kind: 'effort', from: 'high', fromLabel: 'High' });
   });
 
   it('resolves a boolean feature change with the labeled feature name', () => {
