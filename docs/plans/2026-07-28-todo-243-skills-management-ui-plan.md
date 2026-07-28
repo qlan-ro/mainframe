@@ -34,6 +34,13 @@ From `CLAUDE.md` (root) and `packages/ui/CLAUDE.md`:
 | Command-derived entries are `.claude/commands/<group>/<cmd>.md` — deleting one would `remove_dir_all` the whole group | `skills.rs:233-284` (scan) + `:408-413` (delete) |
 | Skill ids are `claude:<scope>:[<plugin>:]<name>` — they contain `:` | `skills.rs:204-208` |
 | `deleteSkill` client wrapper does **not** exist; only `getSkills` does | `packages/ui/src/lib/api/skills.ts` (10 lines, one export) |
+| `ApiRequestError` carries `message` + `details` but **not** the HTTP status, although `extractError` has `res.status` in both of its return paths | `packages/ui/src/lib/api/http.ts:51-58` (class), `:77-87` (`extractError`) |
+| `apiBase(port)` **ignores** its `port` argument and returns the active daemon's `baseUrl` | `packages/ui/src/lib/api/http.ts:11-13` |
+| `DialogHeader` is `flex flex-col gap-1.5` — a sibling appended next to `DialogTitle` stacks *below* it, it does not sit beside it | `packages/ui/src/components/ui/dialog.tsx:71-72` |
+| `DialogTitle` inside the advisor header is already `flex items-center gap-2` and holds the icon, the title, and the truncating project name | `packages/ui/src/features/setup-advisor/SetupAdvisorHost.tsx:75-81` |
+| `ConfirmDialog` has exactly one consumer, mounted at app root behind the `use-git-confirm` bridge; `body` is `string \| undefined` rendered as a single `<p>` | `packages/ui/src/components/ui/confirm-dialog.tsx:4-14,38`, `packages/ui/src/app/AppShell.tsx:194`, `packages/ui/src/features/git/GitConfirmDialog.tsx` |
+| Three different `CHIP_BASE` class strings already exist, all module-private | `layout/MainToolbar.tsx:36`, `features/sessions/filter/TagFilterBar.tsx:43`, `features/automations/steps/agent/ChipButton.tsx:14` |
+| Nothing in the repo references `skills-lock.json` (`grep -rn 'skills-lock'` over the worktree, excluding `node_modules`/`target`, returns nothing) | absence of evidence — the reason D1 no longer plans against it |
 | Three independent skill fetchers, each a mount effect, no shared store | `features/skills/use-chat-skills.tsx:60-103`, `features/context-panel/use-sidebar-skills.ts:28-62`, (new) section hook |
 | The advisor nav store is a bare open/close flag | `features/setup-advisor/use-setup-advisor.ts` |
 | **Trap:** the toolbar wires `onClick={openSetupAdvisor}` — the click event becomes the first argument | `layout/MainToolbar.tsx:239-243` |
@@ -45,20 +52,24 @@ From `CLAUDE.md` (root) and `packages/ui/CLAUDE.md`:
 
 Each deviates from, or resolves an ambiguity in, the brief. All are recorded in the lane result.
 
-- **D1 — `npx skills` CLI detection is implemented as `skills-lock.json` detection, not process probing.** The brief's 2026-07-27 addendum asks the section to "use the `npx skills` CLI where it is available. Detect it." **The app has no way to run a process from the renderer**: `packages/app-tauri/src-tauri/src/lib.rs:97-133` registers no shell/exec command, and the acceptance criteria forbid new daemon endpoints. The only observable, endpoint-free evidence that the skills CLI manages this project is its lockfile. So: read `skills-lock.json` at the project root through the existing `GET /api/projects/:id/files` route (`lib/api/files.ts` `getProjectFile`). **Present** → each skill whose directory name matches a lockfile key shows a `via skills CLI · <source>` source line in its row and inspect view, and the delete confirmation adds a line stating the entry stays in `skills-lock.json` and `npx skills install` would restore it — information the daemon routes do not carry. **Absent or unreadable** → the section works unchanged on the daemon routes and shows one dismissible suggestion row. **This is a resolution of an unbuildable literal requirement, not the requirement itself — flag it to the user.** A true "is the CLI installed" probe needs either a Tauri exec command or a daemon capability route; both are out of scope here.
+- **D1 — `npx skills` CLI detection is not implemented at all; the section ships only the always-safe half, a static dismissible suggestion row.** The brief's 2026-07-27 addendum asks the section to "use the `npx skills` CLI where it is available. Detect it." **The app has no way to run a process from the renderer**: `packages/app-tauri/src-tauri/src/lib.rs:97-133` registers no shell/exec command, and the acceptance criteria forbid new daemon endpoints. An earlier draft of this plan proposed detecting the CLI by reading a `skills-lock.json` at the project root, but **that contract is uncited**: nothing in this repo references such a file, and the plan had no evidence for its name, its location, its shape, or the assumption that its keys equal skill directory names. Planning file parsing against an unverified external format is how a section ships a feature that silently never activates. So detection is cut: no lockfile read, no `via skills CLI` source line, no lockfile clause in the delete confirmation. What ships is `SkillsCliSuggestion` (T33) — one dismissible row naming the install command, correct whether or not the CLI is present. **Real detection stays blocked on the R1 user ruling**: it needs either a Tauri exec command, a daemon capability route, or a citation for the lockfile contract, and all three are out of scope here.
 - **D2 — new testids use the `setup-advisor-*` / `skills-section-*` prefixes**, not `automation-recommender-*`. The old prefix is a legacy name for the recommendations body; the AC only requires that existing testids not change, and they do not.
 - **D3 — the report still fetches on the open rising edge even when a caller opens straight onto `Skills`.** Keeps `SetupAdvisorHost`'s existing effect and all of its tests unchanged; the cost is one report fetch the user may not look at, which the advisor already pays on every open.
 - **D4 — scope handling is grouping, not a filter control.** The AC reads "filter/group by scope"; grouped `SectionHeader` blocks satisfy it with one less control, and the design direction names `section-header.tsx` for exactly this.
 - **D5 — the inspect view renders raw content in a `<pre>`, no markdown renderer, no `React.lazy`.** The design says lazy-load *if* it pulls a heavy renderer in; not pulling one in is strictly better and keeps the file small.
-- **D6 — "adapter has no skills support" is detected by matching the daemon's exact error string.** `ApiRequestError` carries no HTTP status, and the daemon's 404 body is a fixed constant. The match is pinned to a named constant with a comment pointing at `routes/skills.rs:24`, and a test asserts the two strings agree.
-- **D7 — the revalidation nonce is bumped by `resetDaemonScopedStores`, not reset to 0.** A monotonic counter reset to 0 can *suppress* a refetch (a consumer holding `1` would see `0` and not necessarily re-run in dep order); bumping always forces one. This is how the new store "joins the daemon-scoped reset" per the brief.
+- **D6 — "adapter has no skills support" is detected by HTTP status, not by matching the daemon's error string.** `routes/skills.rs` returns `404` for exactly one reason — `NOT_SUPPORTED` — so `err.status === 404` is as precise as the string match and survives a message reword. The three-line boundary fix (`readonly status` on `ApiRequestError`, set from `res.status` in both `extractError` paths) lives inside `packages/ui`; the alternative was a cross-repo string constant that no test could meaningfully guard, since a test comparing a UI literal to itself cannot fail for the reason it claims to.
+- **D7 — the revalidation nonce is bumped by `resetDaemonScopedStores`, not reset to 0.** Two reasons, both mechanical: setting `0` when the nonce is already `0` writes no new value, so the effect dep never changes and no refetch happens — the common case, since most sessions never bump. And `apiBase()` ignores its `port` argument (`packages/ui/src/lib/api/http.ts:11-13`), so switching daemons can leave `[port, adapterId, projectPath]` byte-identical while the base URL underneath changes; the bump is then the only thing that forces the refetch. This is how the new store "joins the daemon-scoped reset" per the brief.
+- **D9 — the delete confirmation is a `ConfirmDialog` nested inside the advisor's Radix `Dialog`, deliberately, and not routed through the app-root outlet.** The codebase's one existing consumer sits at app root behind the `use-git-confirm` bridge (`AppShell.tsx:194`), so this is new ground. Nesting is chosen because the confirmation is owned by, and meaningless outside, the section that raises it; the bridge exists for git actions fired from many surfaces, and copying it would add a store and an outlet for one call site. Radix dismisses only the topmost layer, so the advisor should survive the inner dialog — T25 asserts that after both confirm and cancel rather than assuming it (R4).
+- **D10 — `SkillsSection` holds the selected `Skill` object, not a selected id it re-derives from the list.** Re-deriving breaks on any refetch that empties the list first (the `use-sidebar-skills.ts:35-38` clear-before-fetch pattern this hook copies): a failed delete raised from the inspect view bumps the nonce, the list goes empty mid-flight, and `skills.find(...)` returns `undefined` under a view that is still mounted. Holding the object makes the inspect view independent of fetch state. The cost is that a skill deleted elsewhere stays readable until Back — acceptable for a read-only view over content the user just had open.
 - **D8 — the delete affordance is gated by scope and backing file only, not by adapter id.** The delete route is Claude-only, but the brief puts the list/delete adapter-gating difference explicitly out of scope, and gating the button on `adapterId === 'claude'` would silently remove it under `mock-cli`.
 
 ## Architecture
 
 ```
 packages/ui/src/
+  lib/api/http.ts                                    (M) ApiRequestError.status
   lib/api/skills.ts                                  (M) + deleteSkill
+  components/ui/chip-classes.ts                      (N) shared chip class string
   features/skills/
     use-skills-revalidation.ts                       (N) shared invalidation nonce
     use-chat-skills.tsx                              (M) subscribe nonce
@@ -78,12 +89,13 @@ packages/ui/src/
       SkillRow.tsx                                   (N) one row
       SkillInspect.tsx                               (N) inspect view
       SkillsCliSuggestion.tsx                        (N) dismissible install row
-      use-skills-section.ts                          (N) list fetch + unsupported/error state
-      use-skills-cli.ts                              (N) skills-lock.json probe
+      use-skills-section.ts                          (N) list fetch + delete + discriminated status
       skill-filters.ts                               (N) pure: search, grouping, deletability
       skill-content.ts                               (N) pure: frontmatter/body split
-  layout/MainToolbar.tsx                             (M) fix openSheet call site
+  layout/MainToolbar.tsx                             (M) fix openSheet call site, import chip class
 ```
+
+Task numbers are stable identifiers, not an ordering: T29 was cut (D1) and T35–T37 were added by the review round, each placed inside the group it belongs to. Every reference in this document resolves; no task was renumbered.
 
 Data flow: `SetupAdvisorHost` owns nav (`useSetupAdvisor`) and identity (`useActiveIdentity`), renders `SetupAdvisorHeader` + one of two bodies. `SkillsSection` is self-contained — it reads its own identity and port, so it can be rendered and tested standalone without the host.
 
@@ -120,7 +132,14 @@ File: `packages/ui/src/features/daemon/__tests__/reset-daemon-scoped-stores.test
 Add: capture `useSkillsRevalidation.getState().nonce`, call `resetDaemonScopedStores()`, assert the nonce strictly increased (D7 — bumped, not zeroed).
 Verify: `… vitest run src/features/daemon/__tests__/reset-daemon-scoped-stores.test.ts` — new case fails.
 
-### Group B — implementation: delete wrapper + revalidation seam
+**T35. Test that `ApiRequestError` carries the HTTP status.**
+File: `packages/ui/src/lib/api/__tests__/http-envelope.test.ts` (extend).
+Add a `describe('ApiRequestError.status')` covering: a `404` whose JSON body is `{error: 'Adapter not found or does not support skills'}` rejects with `status === 404` and that message; a `500` with a non-JSON body rejects with `status === 500` and the `HTTP 500` fallback message (the second `extractError` return path); the existing `details` behavior is unchanged. Do not assert anything about the `{success:false}` envelope path — it throws a bare `Error` by design and keeps doing so.
+Verify: `… vitest run src/lib/api/__tests__/http-envelope.test.ts` — the new cases fail (`status` is not a property).
+
+### Group B — implementation: delete wrapper, revalidation seam, two boundary fixes
+
+Also lands `ApiRequestError.status` (T36) and the shared chip class (T37). Both are consumed by Group F and one of them edits `MainToolbar.tsx`, which Group D also edits — hence `parallel_safe: no` on both groups and the ordering edge B → D.
 
 **T6. Add `deleteSkill`.**
 File: `packages/ui/src/lib/api/skills.ts`.
@@ -153,10 +172,22 @@ Verify: T3 passes; the file's whole suite green.
 
 **T10. Bump on daemon switch.**
 File: `packages/ui/src/features/daemon/reset-daemon-scoped-stores.ts`.
-Add `bumpSkillsRevalidation()` to `resetDaemonScopedStores`, with a one-line comment stating it is bumped rather than zeroed (D7).
+Add `bumpSkillsRevalidation()` to `resetDaemonScopedStores`, with a one-line comment giving the accurate reason it is bumped rather than zeroed (D7): *"Bumped, not zeroed — zeroing an already-0 nonce changes no dep, and `apiBase()` ignores `port`, so a daemon switch can leave every other dep identical."* Do not write the earlier draft's claim about consumers "not re-running in dep order"; `Object.is` dep comparison re-runs on any changed value, including `1 → 0`.
 Verify: T5 passes.
 
+**T36. Give `ApiRequestError` its HTTP status.**
+File: `packages/ui/src/lib/api/http.ts`.
+Add `readonly status: number` to the class, take it as the last constructor parameter (`status = 0`), and pass `res.status` from both `extractError` return paths (`:82` and `:86`). `status: 0` means "not from an HTTP response" and covers the two existing test-only constructions in `features/automations/editor/__tests__/`, which stay valid unchanged. Extend the class doc comment with one sentence on why the status is kept: callers classify a rejection by status, not by re-matching the daemon's prose (D6).
+Verify: T35 passes; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/api/__tests__/http-envelope.test.ts src/features/automations/editor/__tests__/save-issues.test.ts` green.
+
+**T37. Extract the shared chip class string.**
+Files: `packages/ui/src/components/ui/chip-classes.ts` (new), `packages/ui/src/layout/MainToolbar.tsx`.
+`SkillRow` (T30) needs MainToolbar's chip recipe verbatim, which would make it the **fourth** divergent `CHIP_BASE` in the package (`MainToolbar.tsx:36`, `TagFilterBar.tsx:43`, `ChipButton.tsx:14`) — the case the project's "extract shared helpers at 3+ duplications" rule names. Move MainToolbar's string into `chip-classes.ts` as `export const CHIP_BASE`, delete the local const, and import it at both of MainToolbar's use sites (`:183`, `:202`). Do **not** touch `TagFilterBar` or `ChipButton`: their `CHIP_BASE` constants are different recipes (different height, radius, typography), and collapsing them is a visual change this todo has no mandate for. The new file is a class-string module — no React, no JSX.
+Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/layout/__tests__/MainToolbar.test.tsx` green; `grep -c 'CHIP_BASE =' packages/ui/src/layout/MainToolbar.tsx` is `0`.
+
 ### Group C — red tests: section nav + entry points
+
+Runs **after** Group F: T12 does `vi.mock('../skills/SkillsSection')`, and an unresolvable mock path errors the whole file, so a red run against a missing module would prove nothing about section routing.
 
 **T11. Test the nav store's section dimension.**
 File: `packages/ui/src/features/setup-advisor/__tests__/use-setup-advisor.test.ts` (new).
@@ -166,6 +197,7 @@ Verify: `… vitest run src/features/setup-advisor/__tests__/use-setup-advisor.t
 **T12. Test the host's section routing.**
 File: `packages/ui/src/features/setup-advisor/__tests__/SetupAdvisorHost.section.test.tsx` (new).
 Mock `@/lib/api/setup-advisor`, `@/features/sessions/use-active-identity`, `../SetupAdvisorSheet`, and `../skills/SkillsSection` (stub) — same style as the existing `SetupAdvisorHost.test.tsx`. Cover: opening via `openSheet()` renders the recommendations stub and not the skills stub; clicking `setup-advisor-section-skills` swaps bodies and keeps the dialog open; `openSheet('skills')` lands on the skills body directly; `aria-pressed` tracks the active segment; the report fetch still fires exactly once on the open rising edge **regardless of section** (D3); `automation-recommender-sheet` is still the `DialogContent` testid.
+Add a **layout** case, because testid presence and `aria-pressed` cannot catch a switcher that stacks below the title instead of sitting beside it: assert `setup-advisor-header-row` exists, that its `className` contains both `flex` and `items-center` (it must not be the `flex-col` `DialogHeader`), and that it is the common parent of the dialog title and the switcher — `const row = screen.getByTestId('setup-advisor-header-row')` then `expect(row).toContainElement(screen.getByTestId('setup-advisor-section-skills'))` and the same for the title node.
 Verify: fails (host does not render a switcher).
 
 **T13. Test the toolbar entry point.**
@@ -178,7 +210,7 @@ File: `packages/ui/src/features/context-panel/__tests__/SkillsList.test.tsx` (ex
 Add: `sidebar-skills-manage` renders in both the populated and empty states; clicking it sets the nav store to `{open: true, section: 'skills'}`; the list still renders no delete affordance (`queryAllByTestId(/^sidebar-skill-delete/)` is empty).
 Verify: fails.
 
-### Group D — implementation: advisor shell (runs last; imports `SkillsSection` from Group F)
+### Group D — implementation: advisor shell (runs last; imports `SkillsSection` from Group F, shares `MainToolbar.tsx` with Group B)
 
 **T15. Add the section dimension to the nav store.**
 File: `packages/ui/src/features/setup-advisor/use-setup-advisor.ts`.
@@ -190,13 +222,25 @@ Verify: T11 passes.
 
 **T16. Build the header segmented control.**
 File: `packages/ui/src/features/setup-advisor/SectionSwitcher.tsx` (new).
-Props `{ section: AdvisorSection; onSelect: (s: AdvisorSection) => void }`. Copy the enclosed-track recipe from `features/tasks/TasksBoard.tsx:93-115`: outer `flex items-center gap-0.5 rounded-[6px] bg-muted p-0.5`; each button `px-2 py-1 rounded text-label transition-colors` with `aria-pressed`, active `bg-background text-foreground shadow-sm`, inactive `text-muted-foreground hover:text-foreground`. Testids `setup-advisor-section-recommendations` and `setup-advisor-section-skills`. No icons — the two labels are the whole control. Read the `mainframe-design-system` skill first.
+Props `{ section: AdvisorSection; onSelect: (s: AdvisorSection) => void; className?: string }` — `className` is required for T17 to push the control right (`cn('flex items-center gap-0.5 …', className)` on the root); without it T17's `<SectionSwitcher className="ml-auto" />` is a typecheck error. Copy the enclosed-track recipe from `features/tasks/TasksBoard.tsx:93-115`: outer `flex items-center gap-0.5 rounded-[6px] bg-muted p-0.5`; each button `px-2 py-1 rounded text-label transition-colors` with `aria-pressed`, active `bg-background text-foreground shadow-sm`, inactive `text-muted-foreground hover:text-foreground`. Testids `setup-advisor-section-recommendations` and `setup-advisor-section-skills`. No icons — the two labels are the whole control. Read the `mainframe-design-system` skill first.
 Verify: covered by T12; file under 60 lines.
 
 **T17. Extract the dialog header.**
 File: `packages/ui/src/features/setup-advisor/SetupAdvisorHeader.tsx` (new).
-Moves the existing `DialogHeader`/`DialogTitle` block out of `SetupAdvisorHost.tsx:75-81` verbatim — `ScanSearch` icon, "Setup Advisor", the truncated project name — and appends `<SectionSwitcher … className="ml-auto" />` inside the same header row. Keep `className="shrink-0 border-b border-border px-4 py-3 pr-9"` unchanged (the `pr-9` clears the dialog's close button). Props: `{ projectName, section, onSelectSection }`.
-Verify: T12's "existing chrome unchanged" assertions pass.
+Moves the existing `DialogHeader`/`DialogTitle` block out of `SetupAdvisorHost.tsx:74-81` — `ScanSearch` icon, "Setup Advisor", the truncated project name, and the `pr-9` comment — and puts the switcher **beside** the title. `DialogHeader` is `flex flex-col gap-1.5` (`components/ui/dialog.tsx:71-72`), so a `SectionSwitcher` appended as a sibling of `DialogTitle` would stack *below* it and `ml-auto` would do nothing. Name the row instead:
+
+```tsx
+<DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-9">
+  {/* pr-9 clears the dialog's built-in close button (26px at right-3). */}
+  <div data-testid="setup-advisor-header-row" className="flex items-center gap-2">
+    <DialogTitle className="flex min-w-0 items-center gap-2 text-heading font-bold">…</DialogTitle>
+    <SectionSwitcher className="ml-auto shrink-0" section={section} onSelect={onSelectSection} />
+  </div>
+</DialogHeader>
+```
+
+The `DialogHeader` className stays exactly `shrink-0 border-b border-border px-4 py-3 pr-9`; `min-w-0` on the title is what keeps the project name truncating now that it shares a row. Props: `{ projectName, section, onSelectSection }`.
+Verify: T12's layout case and its "existing chrome unchanged" assertions pass.
 
 **T18. Route the host by section.**
 File: `packages/ui/src/features/setup-advisor/SetupAdvisorHost.tsx`.
@@ -219,7 +263,7 @@ Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean; `pnpm --filter @q
 
 ### Group E — red tests: skills section
 
-These tests mock `@/lib/api/skills` wholesale with a factory (`{ getSkills, deleteSkill }`), so they do not require Group B's source to exist. They must be observed failing before Group F.
+These tests mock `@/lib/api/skills` wholesale with a factory (`{ getSkills, deleteSkill }`), so they never hit the network. They do, however, import the **real** `use-skills-revalidation` store (T7) and `ApiRequestError`'s `status` (T36) to assert the refetch and the 404 classification, so this group runs **after** Group B, not beside it. They must still be observed failing before Group F.
 
 **T22. Test the pure filters.**
 File: `packages/ui/src/features/setup-advisor/skills/__tests__/skill-filters.test.ts` (new).
@@ -239,25 +283,28 @@ Verify: fails.
 
 **T24. Test the list hook.**
 File: `packages/ui/src/features/setup-advisor/skills/__tests__/use-skills-section.test.tsx` (new).
-Mock `@/lib/api/skills`, `@/features/sessions/use-active-identity`, `@/features/sessions/runtime/daemon-port-context`. Cover: no `projectPath` → no fetch, `skills: []`, not loading; a missing `adapterId` falls back to `'claude'`; a present `adapterId` is used verbatim; a rejection whose message equals `Adapter not found or does not support skills` yields `unsupported: true` and `error: null` (D6); any other rejection yields `error` set and `unsupported: false`; `bumpSkillsRevalidation()` triggers a refetch; a project switch clears the previous list before the new response lands (no cross-project flash); a late response from a superseded fetch is ignored.
-Add one assertion pinning D6: the module's exported `UNSUPPORTED_ERROR` constant equals the literal string in `routes/skills.rs:24`.
+Mock `@/lib/api/skills`, `@/features/sessions/use-active-identity`, `@/features/sessions/runtime/daemon-port-context`. Use the **real** `use-skills-revalidation` store. Cover the state machine: no `projectPath` → no fetch and `status: 'empty'`; a missing `adapterId` falls back to `'claude'`; a present `adapterId` is used verbatim; an in-flight fetch is `status: 'loading'`; a resolved empty array is `status: 'empty'`, a non-empty one `status: 'ready'` carrying the skills; a rejection with `status === 404` yields `status: 'unsupported'` (D6); a rejection with any other status, or a non-`ApiRequestError`, yields `status: 'error'` with the message; `bumpSkillsRevalidation()` triggers a refetch; a project switch clears the previous list before the new response lands (no cross-project flash); a late response from a superseded fetch is ignored.
+Then cover `remove(skillId)`: it calls `deleteSkill(port, adapterId, skillId, projectPath)`; on success it resolves and the nonce strictly increases (assert the real store); on rejection it **rejects with the daemon's message** and the nonce still strictly increases (refetch, not optimistic removal).
+Do **not** assert that any exported constant equals a hardcoded copy of itself — the earlier draft's `UNSUPPORTED_ERROR` check could not fail for the reason it claimed to guard.
 Verify: fails.
 
 **T25. Test the section component.**
 File: `packages/ui/src/features/setup-advisor/skills/__tests__/SkillsSection.test.tsx` (new).
-Mock `../use-skills-section`, `../use-skills-cli`, `@/lib/api/skills`, `@/lib/toast`. Cover, one `it` each:
+Mock `../use-skills-section` (returning a `{state, reload, remove}` fixture) and `@/lib/toast`. The component no longer imports `@/lib/api/skills`, so nothing else needs mocking. Cover, one `it` each:
 - **list** — one row per skill, testid `skills-section-row-<skill.id>`; scope group headers `skills-section-group-project` / `-global` / `-plugin` in that order.
 - **search** — typing in `skills-section-search` narrows by name and by description; a no-match query shows `skills-section-no-results`, distinct from the empty state.
-- **empty** — zero skills renders `skills-section-empty` with "No skills for this project yet" and no error styling.
-- **unsupported** — `unsupported: true` renders `skills-section-unsupported` ("This adapter has no skills") and no list, no error.
-- **error** — `error` set renders `skills-section-error` with a `skills-section-retry` button that calls `reload`.
+- **empty** — `status: 'empty'` renders `skills-section-empty` with "No skills for this project yet" and no error styling.
+- **unsupported** — `status: 'unsupported'` renders `skills-section-unsupported` ("This adapter has no skills") and no list, no error.
+- **error** — `status: 'error'` renders `skills-section-error` with a `skills-section-retry` button that calls `reload`.
 - **inspect** — clicking a row opens `skills-section-inspect` showing displayName, description, scope, and the raw body; a plugin-scoped skill additionally shows its `pluginName`; `skills-section-inspect-back` returns to the list.
 - **delete affordance gating** — `skills-section-delete-<id>` is present for a project-scope SKILL.md skill, present for a global one, and **absent** (not disabled) for plugin-scoped and command-derived entries.
-- **delete confirm** — clicking delete opens `skills-delete-confirm`; its body contains the skill's display name and its on-disk directory; cancel closes it and calls nothing.
-- **delete success** — confirming calls `deleteSkill(port, adapterId, skill.id, projectPath)`, then bumps the revalidation nonce (assert via the real store's value), closes the inspect view if the deleted skill was open, and fires `mfToast.success`.
-- **delete failure** — a rejecting `deleteSkill` fires `mfToast.error` with the daemon message, still bumps the nonce (refetch, not optimistic removal), and leaves the row rendered.
-- **CLI suggestion** — `cliAvailable: false` renders `skills-section-cli-suggestion` with a `skills-section-cli-copy` and a `skills-section-cli-dismiss` that removes the row; `cliAvailable: true` renders no suggestion and stamps `skills-section-row-<id>` for a lockfile-managed skill with its source.
+- **delete confirm** — clicking delete opens `skills-delete-confirm`; its body is one sentence containing the skill's display name and its on-disk directory; cancel closes it and calls `remove` zero times.
+- **delete success** — confirming calls `remove(skill.id)`, fires `mfToast.success`, and closes the inspect view when the deleted skill was the open one.
+- **delete failure from the inspect view** — open skill A, delete, `remove` rejects with `Operation failed` (the guaranteed `mock-cli` path, R3): `mfToast.error` fires with that message, the confirm closes, and **the inspect view is still rendered showing A's fields** even when the hook fixture's next render returns `status: 'loading'` with no skills. This is the D10 regression guard — a component that re-derived the selection from the list would render undefined fields or throw here.
+- **advisor survives the nested confirm** (D9) — after confirming, and again after cancelling, `automation-recommender-sheet` is still mounted and the section is still rendered. Render the section inside a stub `Dialog` to reproduce the nesting.
+- **CLI suggestion** — `skills-section-cli-suggestion` renders by default with a `skills-section-cli-copy` and a `skills-section-cli-dismiss`; dismissing removes the row and it stays gone across a re-render. No lockfile, no `available` flag (D1).
 - **testid stability** — two skills whose array order is swapped keep their id-keyed testids.
+If the file passes 300 lines, split the delete and confirm cases into `SkillsSection.delete.test.tsx` rather than letting it grow.
 Verify: fails (component missing).
 
 ### Group F — implementation: skills section
@@ -275,23 +322,29 @@ Verify: T23 passes.
 **T28. List hook.**
 File: `packages/ui/src/features/setup-advisor/skills/use-skills-section.ts` (new).
 ```ts
-export const UNSUPPORTED_ERROR = 'Adapter not found or does not support skills'; // routes/skills.rs:24
+export type SkillsSectionState =
+  | { status: 'loading' }
+  | { status: 'unsupported' }
+  | { status: 'error'; message: string }
+  | { status: 'empty' }
+  | { status: 'ready'; skills: Skill[] };
+
 export function useSkillsSection(): {
-  skills: Skill[]; loading: boolean; error: string | null; unsupported: boolean; reload: () => void;
-  adapterId: string; projectPath?: string; projectId?: string; port: number;
-}
+  state: SkillsSectionState;
+  reload: () => void;
+  remove: (skillId: string) => Promise<void>;
+};
 ```
-Reads `useDaemonPort()` + `useActiveIdentity()`; adapter falls back to `'claude'`. Effect keyed on `[port, adapterId, projectPath, nonce, reloadSeq]`, with the `cancelled` flag and the clear-before-fetch pattern already used by `use-sidebar-skills.ts:35-38`. Classify a rejection by comparing `err.message` to `UNSUPPORTED_ERROR`. `reload()` bumps a local seq. Catch logs via `console.warn('[skills-section] …')`, matching the sibling hooks' desktop convention.
+One discriminated `status` instead of three independent booleans: `{loading, error, unsupported}` permits combinations that cannot happen (an error *and* unsupported) and forces the component into a six-way boolean chain. The hook also owns the delete, so identity never leaves it — `remove` is why `adapterId`, `projectPath`, `projectId` and `port` are **not** returned and why the component does not import `@/lib/api/skills` at all.
+
+Reads `useDaemonPort()` + `useActiveIdentity()`; adapter falls back to `'claude'`. Effect keyed on `[port, adapterId, projectPath, nonce, reloadSeq]`, with the `cancelled` flag and the clear-before-fetch pattern already used by `use-sidebar-skills.ts:35-38`. Classify a rejection as `'unsupported'` when `err instanceof ApiRequestError && err.status === 404` (D6, T36) — `routes/skills.rs` returns 404 for exactly one reason; anything else is `'error'` with `err.message`. `reload()` bumps a local seq. `remove(id)` calls `deleteSkill(port, adapterId, id, projectPath)`, bumps the revalidation nonce in a `finally`, and re-throws on failure so the caller can toast the daemon's message. Catch logs via `console.warn('[skills-section] …')`, matching the sibling hooks' desktop convention.
 Verify: T24 passes.
 
-**T29. Skills-CLI probe.**
-File: `packages/ui/src/features/setup-advisor/skills/use-skills-cli.ts` (new).
-`useSkillsCli(port, projectId)` → `{ available: boolean; entries: Record<string, {source: string}> }`. Reads `skills-lock.json` via `getProjectFile(port, projectId, 'skills-lock.json')`, `JSON.parse` inside a try/catch, and defensively reads `.skills` as an object of `{source}`. Any failure (missing file, bad JSON, wrong shape) → `{available: false, entries: {}}` with a `console.warn` only for a genuine parse failure — a missing file is expected and silent with an `/* expected */` comment. Header comment records D1 in one sentence.
-Verify: covered through T25's CLI cases; `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean.
+**T29 — cut.** This was the `skills-lock.json` probe (`use-skills-cli.ts`). Removed with D1: the lockfile contract is uncited, so the section ships no CLI detection and T33's suggestion row is unconditional. Nothing references T29; the number is retired, not reused.
 
 **T30. Row component.**
 File: `packages/ui/src/features/setup-advisor/skills/SkillRow.tsx` (new).
-Props `{ skill, lockSource?: string, onOpen, onDelete? }`. Layout per the design direction: name · `invocationName` in `font-mono text-caption text-mf-text-3` · scope chip (the `CHIP_BASE` recipe from `layout/MainToolbar.tsx:36-37` — it is module-private there, so restate the class string locally rather than exporting it) · `pluginName` when `scope === 'plugin'` · `via skills CLI · <lockSource>` when present. Testids `skills-section-row-<skill.id>` and `skills-section-delete-<skill.id>`; the delete button renders only when `onDelete` is provided. Read the `mainframe-design-system` skill before writing classes.
+Props `{ skill, onOpen, onDelete? }`. Layout per the design direction: name · `invocationName` in `font-mono text-caption text-mf-text-3` · scope chip · `pluginName` when `scope === 'plugin'`. The scope chip imports `CHIP_BASE` from `@/components/ui/chip-classes` (T37) — do **not** restate the class string locally; that would be the fourth copy in the package. Testids `skills-section-row-<skill.id>` and `skills-section-delete-<skill.id>`; the delete button renders only when `onDelete` is provided. Read the `mainframe-design-system` skill before writing classes.
 Verify: T25's list/gating cases pass.
 
 **T31. Grouped list.**
@@ -301,27 +354,50 @@ Verify: T25's grouping case passes.
 
 **T32. Inspect view.**
 File: `packages/ui/src/features/setup-advisor/skills/SkillInspect.tsx` (new).
-Props `{ skill, lockSource?, onBack, onDelete? }`. Header: back button (`skills-section-inspect-back`), displayName, scope chip, `pluginName` when plugin-scoped, `filePath`. Body: `parseSkillContent(skill.content)` — frontmatter in a lightly separated block above the body, both in `<pre className="whitespace-pre-wrap …">` (D5). Root testid `skills-section-inspect`. No edit affordance anywhere.
+Props `{ skill, onBack, onDelete? }`. Header: back button (`skills-section-inspect-back`), displayName, scope chip, `pluginName` when plugin-scoped, `filePath`. Body: `parseSkillContent(skill.content)` — frontmatter in a lightly separated block above the body, both in `<pre className="whitespace-pre-wrap …">` (D5). Root testid `skills-section-inspect`. No edit affordance anywhere.
 Verify: T25's inspect case passes.
 
 **T33. CLI suggestion row.**
 File: `packages/ui/src/features/setup-advisor/skills/SkillsCliSuggestion.tsx` (new).
-One `text-caption text-muted-foreground` row at the top of the section: "Add skills from the registry with the skills CLI." + the command `npx skills add <owner>/<repo> --skill <name> -a claude-code` + a copy button (`skills-section-cli-copy`, reusing `copyCommand` from `../copy-command`) + a dismiss button (`skills-section-cli-dismiss`). Never blocks, never errors.
+One `text-caption text-muted-foreground` row at the top of the section: "Add skills from the registry with the skills CLI." + the command `npx skills add <owner>/<repo> --skill <name> -a claude-code` + a copy button (`skills-section-cli-copy`, reusing `copyCommand` from `../copy-command`) + a dismiss button (`skills-section-cli-dismiss`). Renders unconditionally until dismissed — there is no availability flag to gate it on (D1). Never blocks, never errors.
 Verify: T25's CLI cases pass.
 
 **T34. Section orchestrator.**
 File: `packages/ui/src/features/setup-advisor/skills/SkillsSection.tsx` (new).
-Composes T28–T33. Local state: `query`, `selectedId`, `pendingDeleteId`, `cliDismissed`. Renders, in order: the CLI suggestion (when `!available && !cliDismissed`), the search `Input` (`components/ui/input.tsx`, testid `skills-section-search`), then one of loading / `skills-section-unsupported` / `skills-section-error` + retry / `skills-section-empty` / `skills-section-no-results` / the list, or the inspect view when a skill is selected. Body height comes from the dialog's flex column — `flex-1 min-h-0 overflow-y-auto`, never a magic `max-h`.
-Delete handler (keep under 50 lines; extract if it grows):
+Composes T28 and T30–T33. Local state: `query`, `selected: Skill | null`, `pendingDelete: Skill | null`, `cliDismissed`.
+
+**Selection holds the `Skill` object, never an id re-derived from the list (D10).** `state.skills` is empty during every in-flight refetch (clear-before-fetch), including the one a *failed* delete triggers, so a `skills.find(s => s.id === selectedId)` under a mounted inspect view resolves to `undefined` and renders undefined fields or throws. The inspect view reads `selected` directly and is therefore independent of `state`.
+
+Renders, in order: the CLI suggestion (when `!cliDismissed`), the search `Input` (`components/ui/input.tsx`, testid `skills-section-search`), then — when `selected` is null — one branch of `state.status`: `'loading'` / `'unsupported'` / `'error'` + retry / `'empty'` / `'ready'` (with `skills-section-no-results` when the query filters everything out); when `selected` is set, the inspect view instead. Body height comes from the dialog's flex column — `flex-1 min-h-0 overflow-y-auto`, never a magic `max-h`.
+
+Delete handler (keep under 50 lines; extract if it grows) — the nonce bump lives in the hook's `remove`, not here:
 ```
-confirm → deleteSkill(port, adapterId, skill.id, projectPath)
-  success → mfToast.success(`Deleted ${displayName}`); clear selection if it was the deleted skill
-  failure → mfToast.error('Could not delete skill', { description: err.message })
-  finally → bumpSkillsRevalidation(); clear pendingDeleteId
+confirm → try { await remove(skill.id) }
+  success → mfToast.success(`Deleted ${skill.displayName}`); if (selected?.id === skill.id) setSelected(null)
+  failure → mfToast.error('Could not delete skill', { description: err.message })   // selection untouched
+  finally → setPendingDelete(null)
 ```
-Confirmation uses `components/ui/confirm-dialog.tsx` with `destructive`, `testid="skills-delete-confirm"`, title naming the skill, body stating that `<skillDirectory(skill)>` will be removed from disk, plus (when lockfile-managed) that the entry remains in `skills-lock.json`.
+Confirmation uses `components/ui/confirm-dialog.tsx` with `destructive`, `testid="skills-delete-confirm"`, title naming the skill, and a **single-sentence** `body` — `ConfirmDialog.body` is `string | undefined` rendered as one `<p>`, and with D1's lockfile clause gone one sentence is enough: `` `Deletes ${skillDirectory(skill)} from disk. This cannot be undone.` ``. Do not change the shared primitive.
+This nests a `Dialog` inside the advisor's `Dialog` — deliberate, see D9; T25 asserts the advisor survives both outcomes.
 Toasts come from `mfToast` in `@/lib/toast`, **not** sonner directly.
 Verify: `… vitest run src/features/setup-advisor/skills/__tests__/SkillsSection.test.tsx` green; `wc -l` on every new file under 300.
+
+---
+
+## Task groups
+
+`parallel_safe` is a file-collision flag only; `depends_on` names the groups whose output this group reads, imports, or verifies. Two groups that share no files can still have a hard order.
+
+| Group | Kind | Tasks | `parallel_safe` | `depends_on` | Why the edges exist |
+|---|---|---|---|---|---|
+| `api-seam-tests` | test | T1–T5, T35 | yes | — | Red phase; touches only its own test files. |
+| `api-revalidation-impl` | ui | T6–T10, T36, T37 | **no** | `api-seam-tests` | Shares `layout/MainToolbar.tsx` with `advisor-shell-impl` (T37 moves `CHIP_BASE` out; T19 fixes the click handler). Turns its own red tests green. |
+| `skills-section-tests` | test | T22–T25 | yes | `api-revalidation-impl` | T24 asserts a real `bumpSkillsRevalidation()` refetch and a `404` classification — both need T7 and T36 to exist, or the file cannot even import. |
+| `skills-section-impl` | ui | T26–T28, T30–T34 | yes | `skills-section-tests`, `api-revalidation-impl` | Consumes `deleteSkill` (T6), the nonce (T7), `ApiRequestError.status` (T36) and `chip-classes.ts` (T37). |
+| `advisor-shell-tests` | test | T11–T14 | yes | `skills-section-impl` | T12 does `vi.mock('../skills/SkillsSection')`; an unresolvable mock path errors the whole file, so a red run against a missing module proves nothing about section routing. |
+| `advisor-shell-impl` | ui | T15–T21 | **no** | `advisor-shell-tests`, `skills-section-impl`, `api-revalidation-impl` | Renders `SkillsSection`, shares `MainToolbar.tsx` with `api-revalidation-impl`. Runs last and carries the changeset (T21). |
+
+T29 is cut (D1); T35–T37 were added by the review round and sit in the groups above.
 
 ---
 
@@ -330,8 +406,10 @@ Verify: `… vitest run src/features/setup-advisor/skills/__tests__/SkillsSectio
 1. `pnpm --filter @qlan-ro/mainframe-ui typecheck` — clean (typecheck includes test files).
 2. `pnpm --filter @qlan-ro/mainframe-ui test` — green.
 3. `git diff --stat main...HEAD -- packages/ui/src/features/setup-advisor/SetupAdvisorSheet.tsx packages/ui/src/features/setup-advisor/CategoryTabs.tsx packages/ui/src/features/setup-advisor/RecommendationRow.tsx packages/ui/src/features/setup-advisor/EvidenceDisclosure.tsx packages/ui/src/features/setup-advisor/use-setup-advisor-store.ts` — **empty**. The recommendations body, its category strip, its rows, and its data store are untouched.
-4. `grep -rn 'automation-recommender-' packages/ui/src --include=*.tsx | wc -l` — the six existing occurrences still present, unchanged.
-5. `find packages/ui/src/features/setup-advisor -name '*.tsx' -o -name '*.ts' | xargs wc -l | awk '$1 > 300'` — no output.
+4. The two `automation-recommender-*` testids that live in **modified** files are still there (check 3 covers the other four source files by diffing them whole, so a package-wide `grep | wc -l` is the wrong instrument — the count is 39 across 10 files today and T12/T13 raise it on purpose):
+   - `grep -c 'automation-recommender-sheet' packages/ui/src/features/setup-advisor/SetupAdvisorHost.tsx` → `1`
+   - `grep -c 'automation-recommender-open' packages/ui/src/layout/MainToolbar.tsx` → `1`
+5. `find packages/ui/src/features/setup-advisor \( -name '*.tsx' -o -name '*.ts' \) -not -path '*/__tests__/*' | xargs wc -l | awk '$1 > 300 && $2 != "total"'` — no output. Scoped to non-test sources and with the `wc` `total` line excluded: unscoped, the check fires on the `total` (1786) and on two pre-existing test files (`__tests__/SetupAdvisorSheet.test.tsx` 394, `__tests__/use-setup-advisor-store.test.ts` 314) that this todo does not touch. New test files still keep to the limit by splitting (T25).
 6. `pnpm changeset` file present.
 
 ## Acceptance-criteria trace
@@ -342,17 +420,19 @@ Verify: `… vitest run src/features/setup-advisor/skills/__tests__/SkillsSectio
 | All current advisor behavior + testids preserved | T12, T18, cross-cutting checks 3–4 |
 | List / group by scope / search, incl. a pre-send draft with a project | T22, T24, T25, T26, T28, T31 |
 | Inspect shows name, description, scope/source, body; no create or edit | T23, T25, T27, T32 |
-| Delete behind a naming confirmation; all three surfaces refresh | T1–T10, T25, T34 |
+| Delete behind a naming confirmation; all three surfaces refresh | T1–T10, T24, T25, T34 |
 | Plugin-scoped and command-derived entries have no delete affordance | T22, T25, T26, T30 |
-| Failed delete gives visible feedback and refetches (no optimistic removal) | T25, T34 |
+| Failed delete gives visible feedback and refetches (no optimistic removal) | T24, T25, T34 |
 | Sidebar tab stays read-only and links into the section | T14, T20 |
-| No-skills adapter / unknown adapter resolve to a defined state | T24, T25, T28 |
+| No-skills adapter / unknown adapter resolve to a defined state | T24, T25, T28, T35, T36 |
 | Stable id-keyed testids; component tests cover every flow | T22–T25, T30–T34 |
 | No new or changed daemon endpoints | Nothing under `packages/core-rs` is touched by any task |
 | Files < 300 lines, functions < 50 | Cross-cutting check 5; the decomposition in T16/T17 and T30–T34 |
+| No duplicated chip recipe (3+ duplications rule) | T37 |
 
 ## Risks
 
-- **R1 — the `npx skills` addendum is only partially satisfiable.** See D1. If the user wants a real installed-CLI probe, it needs a Tauri exec command or a daemon capability route, both of which the acceptance criteria currently forbid. Surface this before implementation.
-- **R2 — the unsupported-adapter check is a string match.** `ApiRequestError` drops the HTTP status, so D6 pins the daemon's constant by value. If the daemon reworks that message the section degrades to a generic error, not a crash. A follow-up could add `status` to `ApiRequestError`; out of scope here.
-- **R3 — `mock-cli` can list but not delete** (`routes/skills.rs:64` vs `:165`). Under a mock-adapter session the delete affordance appears and the request returns HTTP 500 `Operation failed`, which the UI surfaces as a toast. Per D8 and the brief this is accepted, not fixed.
+- **R1 — the `npx skills` addendum is not satisfiable as written, and this plan no longer pretends otherwise.** See D1: detection is cut, only the static suggestion row ships. A real probe needs a Tauri exec command, a daemon capability route, or a cited lockfile contract — all three out of scope under the current acceptance criteria. **Surface this to the user before implementation**; if they supply the `skills-lock.json` contract (name, location, shape), detection comes back as its own task with that citation in the ground-truth table.
+- **R2 — resolved, not carried.** The unsupported-adapter check is an HTTP-status check, not a string match: T36 adds `status` to `ApiRequestError` (three lines inside `packages/ui`) and T28 classifies on `404`. A daemon message reword no longer degrades the section.
+- **R3 — `mock-cli` can list but not delete** (`routes/skills.rs:64` vs `:165`). Under a mock-adapter session the delete affordance appears and the request returns HTTP 500 `Operation failed`, which the UI surfaces as a toast. Per D8 and the brief this is accepted, not fixed — and it is the guaranteed path that T25's inspect-survives-failed-delete case exercises.
+- **R4 — the delete confirmation is the codebase's first nested `Dialog`** (D9). Radix dismisses only the topmost layer, so the advisor should stay open, but "should" is not evidence: T25 asserts it after both confirm and cancel. If those assertions fail, the fix is to route the confirmation through an app-root outlet the way `GitConfirmDialog` does, which adds a bridge store and a mount in `AppShell` — budget for that before assuming a one-line fix.
