@@ -12,6 +12,7 @@ import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
 import { Hint } from '@/components/ui/hint';
+import { CHIP_BASE } from '@/components/ui/chip-classes';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -32,9 +33,6 @@ interface MainToolbarProps {
 
 const ICON_BTN =
   'inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
-
-const CHIP_BASE =
-  'inline-flex h-[22px] min-w-0 max-w-[230px] items-center gap-[5px] rounded-[6px] border-[0.5px] border-solid px-[6px] font-mono text-label font-normal';
 
 /**
  * Worktree vs main-repo chip styling — mirrors the Workspace Surfaces artboard

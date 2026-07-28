@@ -96,7 +96,7 @@ a non-forwarding component inside an `asChild` clone drops the ref Popper needs,
 ICON_BTN  = h-[24px] w-[28px] rounded-[6px] border-none bg-transparent
             text-muted-foreground transition-[background] duration-[120ms] hover:bg-accent
 CHIP_BASE = h-[22px] max-w-[230px] gap-[5px] rounded-[6px] border-[0.5px] px-[6px]
-            font-mono text-label font-normal
+            font-mono text-label font-normal   ← lives in components/ui/chip-classes.ts
 ```
 
 Toolbar height is 40px; groups are separated by `<span className="mx-[4px] h-[16px] w-px bg-border" />`.
