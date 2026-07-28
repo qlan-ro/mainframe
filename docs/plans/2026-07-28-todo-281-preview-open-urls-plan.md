@@ -267,15 +267,21 @@ Table-drive `resolveUrlTabTarget(input)` over the contract in Task 11. Required 
 - remote + entry ready + `watching: true` + `dnsVerified: false` + `startUrl: null` → `pending`;
 - same, plus `dnsVerified: true` → `tunnelled`;
 - same, plus `startUrl` set → `tunnelled` (the tab's own POST answered);
-- remote + eligible port + **`entry === undefined`** + `startUrl` set → `tunnelled` composed from
-  `startUrl`, whether `everHadEntry` is `true` or `false` — the daemon returns an existing tunnel's
-  URL with no broadcast, so the store may never gain an entry (fact 14);
+- remote + eligible port + **`entry === undefined`** + `everHadEntry: false` + `startUrl` set →
+  `tunnelled` composed from `startUrl` — the daemon returns an existing tunnel's URL with no
+  broadcast, so the store may never gain an entry (fact 14);
 - remote + entry `{ state: 'error', error: 'boom' }` → `{ kind: 'failed', error: 'boom' }`;
 - error entry with no message → `failed` with `'Tunnel failed to start'`;
 - `timedOut: true` while still pending → `failed` with the stated timeout text;
 - **non-terminal failure:** `timedOut: true` **and** a ready+gate-open entry → `tunnelled` (AC9's
   "a URL that arrives after the failure body replaces it");
 - entry `undefined` with `everHadEntry: true` and `startUrl: null` → `{ kind: 'stopped', port }` (D14);
+- entry `undefined` with `everHadEntry: true` and **`startUrl` set** → `{ kind: 'stopped', port }` as
+  well. This is the canonical §7 case, so it is not an edge row: the tab POSTed, the entry went
+  `ready`, the page loaded, and the user then pressed Stop on the chat chip — the `stopped` WS event
+  runs `clearEntry(port)` (verified in `store/port-tunnels.ts`) while `startUrl` still holds the now
+  dead tunnel URL. `everHadEntry` outranks `startUrl` so the tab reports the stop and offers Retry
+  instead of re-mounting a 502 page (D14, AC9);
 - **the four post-Retry inputs** (the states Task 18's `retry` produces, PD1) each resolve to
   `pending`, so the start effect can fire again: `{ entry: undefined, everHadEntry: false,
   startUrl: null, timedOut: false }` after a rejected start; the same after an externally stopped
@@ -298,7 +304,12 @@ Against the pure reducers in Task 12:
 - two tabs on one port, the starter released while the other remains → `stop` is empty;
 - both released together → `stop` lists the port once, not twice;
 - releasing an unknown tab id is a no-op and returns the same state reference;
-- `clearConsumers` empties the registry and returns no ports to stop.
+- `clearConsumers` empties the registry and returns no ports to stop;
+- `addConsumer` re-registering a tab on the **same** port with `started: false` keeps `started: true`
+  (Retry never demotes an owner);
+- `addConsumer` re-registering a tab on a **different** port takes the new `started` verbatim, both
+  `true → false` and `false → true`, so a retarget cannot carry ownership onto a tunnel the tab
+  merely adopted (D10, AC12).
 
 **Verify:** fails — the module does not exist.
 
@@ -449,10 +460,18 @@ helper to stay under 50 lines per function):
 2. `classifyLocalhostUrl(url) === null` → `direct`.
 3. `daemonPort === null` → `pending`.
 4. `portRejectionReason(...) !== null` → `rejected`.
-5. `entry === undefined` → `startUrl !== null ? tunnelled(composeTunnelUrl(startUrl, url))`, else
-   `everHadEntry ? stopped : pending`. The `startUrl` branch exists because a start POST that adopts a
-   tunnel the daemon already holds returns its URL and broadcasts nothing (fact 14) — without it a tab
-   whose entry Retry just cleared would wait for an event that never arrives.
+5. `entry === undefined` → `everHadEntry ? stopped : (startUrl !== null ? tunnelled(composeTunnelUrl(startUrl, url)) : pending)`.
+   The two branches answer two different histories, and **`everHadEntry` must be tested first**:
+   - `everHadEntry === true` means an entry for this port existed during this attempt and is now gone,
+     which happens only when the daemon broadcast `stopped` and the store ran `clearEntry(port)`. The
+     tunnel is dead no matter what this tab's own POST once returned, so the tab reports `stopped` and
+     offers Retry (D14, spec behaviour §7). Testing `startUrl` first would swallow this: every tab that
+     ever reached `pending` issues a start (the effect has no `entry === undefined` guard, Task 18), so
+     nearly every tab holds a non-null `startUrl` and would keep mounting the dead tunnel URL forever.
+   - `everHadEntry === false` with a `startUrl` means the POST answered from a tunnel the daemon
+     already held: it returns that URL and broadcasts nothing (fact 14), so no entry will ever appear.
+     Without this branch a tab whose entry Retry just cleared — the attempt reset sets `everHadEntry`
+     back to `false` — would wait for an event that never arrives.
 6. `entry.state === 'error'` → `failed` with `entry.error ?? 'Tunnel failed to start'`.
 7. `entry.state === 'ready' && (entry.url ?? startUrl)` and the gate is open
    (`!watching || startUrl !== null || entry.dnsVerified === true`) → `tunnelled` with
@@ -519,8 +538,17 @@ because the release path runs outside React and there is no module-level accesso
 `registerUrlTunnelConsumer(tabId, rec)`, `releaseUrlTunnelConsumers(tabIds)` (calls
 `stopPortTunnel(daemonHttpPort, port)` for each stop entry, `.catch` logged with a
 `[url-tab]` tag — never a silent catch), and `clearUrlTunnelConsumers()`.
-Registration is idempotent per tab id: re-registering the same tab replaces its record and must not
-flip `started` from `true` to `false`.
+Registration is idempotent per tab id, and the rule is **keyed by port**:
+- re-registering a tab on the port it already holds replaces the record but must not flip `started`
+  from `true` to `false` — an owner stays an owner across a Retry (D10);
+- re-registering it on a **different** port (the address-bar retarget, Task 33) takes the new
+  `started` value verbatim, in both directions. The old port's ownership says nothing about the new
+  one, and carrying `true` across would let the tab stop a tunnel on the new port that it only
+  adopted. Implement it as: preserve the old `started` only when `rec.port === existing.port`.
+
+The retarget drops the tab out of the old port's consumer set without stopping that port's tunnel.
+That is D10's err-toward-leaving-it-up rule applied to a live tunnel a user may still be using from
+the chat chip; a retarget is not a close.
 
 `store/url-tunnel-cleanup.ts` — a one-import shim over `features/url-tab/tunnel-consumers`, mirroring
 `store/terminal-cleanup.ts`, so `layout.ts` never imports a feature store and no import cycle forms.
@@ -711,12 +739,13 @@ daemon's own port, for eligibility), `useActiveIdentity().chatId`, and
 `usePortTunnel(port)` for the classified loopback port (skip the subscription entirely when the URL
 is not loopback or the daemon is local).
 
-**Every piece of state below is per *attempt*.** `attempt` is a counter the tab bumps on Retry; the
-hook holds the flags in one object replaced wholesale, and a `useEffect` on `[attempt, port]` resets
-them. Keying on `attempt` — not on `target.kind === 'pending'` or on `entry === undefined` — is what
-makes Retry work in all four states it is reachable from (PD1).
+**Every piece of resolver state below is per *attempt*.** `attempt` is a counter the tab bumps on
+Retry; the hook holds the flags in one object replaced wholesale, and a `useEffect` on
+`[attempt, port]` resets them. Keying on `attempt` — not on `target.kind === 'pending'` or on
+`entry === undefined` — is what makes Retry work in all four states it is reachable from (PD1). The
+one exception is `ownedRef`, which is per *port*.
 
-State it owns, all feeding `resolveUrlTabTarget`:
+State it owns — everything but `ownedRef` feeds `resolveUrlTabTarget`:
 - `watchingRef` — set `true` on the first render of the attempt at which an entry is absent or
   `starting` **and** a start is needed; never set `false` within the attempt.
 - `startUrl` — the URL this tab's own `startPortTunnel` POST resolved with, `null` until it does.
@@ -725,6 +754,11 @@ State it owns, all feeding `resolveUrlTabTarget`:
   `pending`, cleared when it leaves `pending`.
 - `startedForAttemptRef` — the attempt number whose start POST has been issued, so the effect fires
   once per attempt rather than once per tab.
+- `ownedRef` — the ownership observation that feeds the consumer registration, **not** the resolver:
+  `true` once the start effect has fired at a moment when `entry === undefined`. The reset effect
+  clears it only when `port` changes, never on an attempt bump, so a Retry cannot demote an owner
+  (D10) and Task 12's same-port idempotency rule agrees with it. A port change resets it to the value
+  observed on the new port, which is why Task 12 drops the preserve rule across ports.
 
 Effects:
 - **Start request.** When the target is `pending`, `daemonPort !== null`, `chatId` is present, and
@@ -736,15 +770,22 @@ Effects:
   another consumer's start joins it and a POST on a live tunnel returns its URL, in neither case
   spawning a second cloudflared (fact 14). Adopting mid-start therefore still holds (spec "Tunnel
   adopted mid-start"), and the tab gains a URL source for the case where the daemon has a tunnel but
-  will never broadcast about it again.
+  will never broadcast about it again. In the same statement that stamps `startedForAttemptRef`,
+  record `ownedRef.current ||= entry === undefined` — an observation taken as the POST goes out, not a
+  gate on sending it.
 - **DNS reload trigger.** When `entry.dnsVerified` transitions to `true` while the target is already
   `tunnelled` **and** the tab loaded before verification, fire the caller-provided reload once
   (expose it as a `reloadNonce` counter in the return so `UrlTabInstance` can re-navigate). Exactly
   once per transition (D11 / spec step 5).
-- **Consumer registration.** Call `registerUrlTunnelConsumer(tabId, { port, started: watchingRef.current && startedByThisTab, daemonHttpPort })`
-  whenever the port or the started flag changes. `started` is `true` only when this tab issued the
-  POST itself — a tab that merely joined another consumer's start counts as adopted (D10's
-  err-toward-leaving-it-up rule).
+- **Consumer registration.** Call `registerUrlTunnelConsumer(tabId, { port, started: ownedRef.current, daemonHttpPort })`
+  whenever the port or `ownedRef.current` changes. `started` is `true` only when this tab's start
+  effect fired at a moment when **no entry existed for the port** — the tab observed itself creating
+  the tunnel. Issuing the POST is not enough on its own: in the spec's "Tunnel adopted mid-start" case
+  the chip has already put a `starting` entry in the store, the tab's POST joins that in-flight start
+  (fact 14), and registering `started: true` there would make `releaseConsumers` kill the chip's
+  tunnel on tab close while the chip still shows its badge and Stop control — the exact inversion of
+  AC12. The daemon cannot disambiguate for us: `POST /api/tunnel/ports/start` answers `{ url, port }`
+  for a create, a join, and an adopt alike, and D5 declines any daemon change.
 - **`retry`** — the only way out of `failed` and `stopped`, and it never runs automatically (D14):
   ```ts
   function retry() {
@@ -765,9 +806,9 @@ Effects:
   `rejected` is the one failure body with **no** Retry — the port is ineligible, and retrying it would
   re-issue a request the client already knows the daemon refuses (AC10).
 
-  Retry does not clear the consumer registration's `started` flag: a tab that has ever issued a start
-  POST for the port stays an owner (D10), and Task 12's registration is idempotent and never flips
-  `started` back to `false`.
+  Retry does not clear the consumer registration's `started` flag: `ownedRef` survives an attempt
+  bump, so a tab that has ever been observed creating this port's tunnel stays its owner (D10), and
+  Task 12's same-port registration never flips `started` back to `false`.
 
 Keep the file under 300 lines and each effect under 50; extract the watchdog into a small local hook
 if it grows.
@@ -971,6 +1012,11 @@ Two more `UrlTabInstance` cases, both regressions this plan's review caught:
   `failed`, and again with a tab whose `url` is `''` (`invalid`), `preview-url-input` is **not**
   `disabled`; committing `localhost:5173` in it calls the mocked `setUrlTabTarget` once with the
   normalized URL and never calls `host.preview.mount` with the old value (spec §6, D9, AC14).
+- **Adopting mid-start registers as an adopter.** With a `{ state: 'starting' }` entry already in
+  `usePortTunnelsStore` for the port (the chat chip's start), mounting the tab still issues its
+  `startPortTunnel` POST but registers with `started: false` — assert through the mocked
+  `registerUrlTunnelConsumer`, then unmount the tab and assert `stopPortTunnel` was never called
+  (D10, AC12). With no entry present at mount, the same tab registers `started: true`.
 - **Retry re-requests.** With the target `failed` from an `{ state: 'error' }` entry, clicking
   `url-tab-retry` clears the entry from `usePortTunnelsStore` and issues exactly one
   `startPortTunnel` call (mock `lib/api/tunnel-ports`); with the target `stopped` (entry gone after
