@@ -188,10 +188,13 @@ gone, the tab requests one and shows pending like a fresh tab.
    with no user action.
 10. On a remote daemon, a loopback URL on a port below 1024 or on the daemon's own port shows that specific
     rejection text in the tab body and issues no tunnel start request.
-11. Inspect and region capture succeed on a non-localhost, non-tunnel `https` origin: an inspect click
-    delivers an element result to chat and a region drag delivers a capture. A Rust unit test asserts the
-    four bridge commands stay reachable and that the external-open scheme guard still rejects `file:`,
-    `javascript:`, and `ssh:`.
+11. Inspect and region capture succeed on both origins the old allowlist excluded: a loopback origin on a
+    non-default port (`http://localhost:5173/`) and a non-localhost, non-tunnel `https` origin. On each, an
+    inspect click delivers an element result to chat and a region drag delivers a capture. A Rust unit test
+    asserts that the capability's remote-origin patterns match `http://localhost:5173/path`,
+    `http://192.168.1.5:3000/a?b=1`, `https://example.com:8443/a`, and `https://example.com/x`, that they
+    match neither `file:///etc/passwd` nor `ssh://host`, that the four bridge commands stay granted, and that
+    the external-open scheme guard still rejects `file:`, `javascript:`, and `ssh:`.
 12. Closing a URL tab whose tunnel it exclusively started stops that tunnel (the port disappears from the
     tunnel list). Closing one of two tabs sharing a port, or a tab that adopted a tunnel started by the chat
     chip, leaves the tunnel running.
@@ -219,14 +222,24 @@ gone, the tab requests one and shows pending like a fresh tab.
 
 **Hard to reverse**
 
-- **D1. Widen the preview bridge's remote-origin allowlist to all `http`/`https` origins.** `hard-to-reverse`
-  — ruled at the design gate on 2026-07-28, superseding the brief's "do not widen" recommendation. Every
-  child webview is already built with an injected bridge and no URL check; only the capability's `remote.urls`
-  list decides which origins may call back. One allowlist keeps every control identical on every URL and
-  removes a degraded state that would have to be designed, explained, and tested. Accepted and recorded so it
-  is not rediscovered as a bug: a hostile page can fabricate an inspect payload that reaches the agent's
-  context, and can raise OS-browser windows limited to `http`/`https` by the unchanged scheme guard. The
-  capability's description must be rewritten — its current text justifies the narrow scope.
+- **D1. Widen the preview bridge's remote-origin allowlist to every `http`/`https` origin on every port —
+  the pattern form is `http://*:*` and `https://*:*`, not `http://*` and `https://*`.** `hard-to-reverse` —
+  the widening was ruled at the design gate on 2026-07-28, superseding the brief's "do not widen"
+  recommendation; the pattern form is this spec's ruling, made under the verification that direction asked
+  for. Every child webview is already built with an injected bridge and no URL check; only the capability's
+  remote-origin list decides which origins may call back. One allowlist keeps every control identical on
+  every URL and removes a degraded state that would have to be designed, explained, and tested. The port
+  wildcard is not cosmetic: Tauri's matcher fills in a missing search, hash, and path with `*` but leaves the
+  port component empty, and an empty port matches only the scheme's default port. `http://*` therefore
+  matches `http://example.com/x` but not `http://localhost:5173/` or `http://192.168.1.5:3000/a?b=1`, and
+  `https://*` does not match `https://example.com:8443/a` — shipping those patterns would take inspect,
+  region capture, and navigation tracking away from every ported dev server, including the launch-config
+  preview tabs that have them today. `http://*:*` and `https://*:*` match all of those and still leave
+  `file://`, `ssh://`, and every other scheme unmatched, because the scheme component stays literal.
+  Accepted and recorded so it is not rediscovered as a bug: a hostile page can fabricate an inspect payload
+  that reaches the agent's context, and can raise OS-browser windows limited to `http`/`https` by the
+  unchanged scheme guard. The capability's description must be rewritten — its current text justifies the
+  narrow scope.
 - **D2. Restrict URL normalization to `http` and `https`.** `hard-to-reverse` in the sense that it removes
   capability users may have relied on: the shared normalizer accepts any parseable scheme today, so the
   existing preview address bar can point a child webview at `file://`. Both the new entry and the existing
