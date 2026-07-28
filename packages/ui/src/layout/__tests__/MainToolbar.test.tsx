@@ -474,4 +474,26 @@ describe('MainToolbar — Setup Advisor button', () => {
 
     expect(useSetupAdvisor.getState().open).toBe(true);
   });
+
+  it('does not forward the click event as the section argument', () => {
+    // onClick={openSetupAdvisor} passes the MouseEvent as openSheet's first
+    // argument; openSheet must still land on 'recommendations', not treat the
+    // event as a section name.
+    mockGetGitBranch.mockResolvedValue({ branch: null });
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        projectId="p1"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('automation-recommender-open'));
+
+    expect(useSetupAdvisor.getState().section).toBe('recommendations');
+  });
 });
