@@ -38,6 +38,41 @@ describe('layout-persist', () => {
     ).toBeNull();
   });
 
+  it('keeps a url tab with its url and title intact, while still dropping preview/console/terminal', () => {
+    const r = {
+      dir: 'v' as const,
+      flex: [1, 1],
+      panes: [
+        {
+          id: 'p1',
+          active: 'u1',
+          tabs: [
+            { id: 't1', kind: 'terminal', title: 'bash' },
+            { id: 'pv', kind: 'preview', title: 'web', config: 'dev' },
+            { id: 'cs', kind: 'console', title: 'proc', config: 'dev' },
+            { id: 'u1', kind: 'url', title: 'localhost:5173', url: 'http://localhost:5173/' },
+          ],
+        },
+      ],
+    } as unknown as RunState;
+    const out = sanitizeRun(r)!;
+    expect(out.panes[0]!.tabs).toEqual([
+      { id: 'u1', kind: 'url', title: 'localhost:5173', url: 'http://localhost:5173/' },
+    ]);
+  });
+
+  it('keeps a pane containing only a url tab, instead of dropping it', () => {
+    const r = {
+      dir: 'v' as const,
+      flex: [1, 1],
+      panes: [{ id: 'p1', active: 'u1', tabs: [{ id: 'u1', kind: 'url', title: 'x', url: 'http://x/' }] }],
+    } as unknown as RunState;
+    const out = sanitizeRun(r);
+    expect(out).not.toBeNull();
+    expect(out!.panes).toHaveLength(1);
+    expect(out!.panes[0]!.tabs[0]!.kind).toBe('url');
+  });
+
   it('serializeSessions sanitizes run and skips __LOCALID_ drafts', () => {
     const sessions = new Map<string, SessionWorkspace>([
       ['chat-1', { layout, run: run([{ id: 't1', kind: 'terminal', title: 'bash' }]) }],
