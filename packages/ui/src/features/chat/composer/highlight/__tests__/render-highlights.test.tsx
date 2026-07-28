@@ -49,4 +49,19 @@ describe('renderHighlights', () => {
     const c = html(input);
     expect(c.textContent).toBe(input);
   });
+
+  it('tints an @session token with its own class, distinct from mention and skill', () => {
+    const c = html('look at @session[Fix foo handling] now');
+    const span = c.querySelector('span.text-mf-directive-session');
+    expect(span?.textContent).toBe('@session[Fix foo handling]');
+    expect(c.querySelector('span.text-primary')).toBeNull();
+    expect(c.querySelector('span.text-mf-directive-skill')).toBeNull();
+  });
+
+  it('preserves textContent char-for-char with a session token present', () => {
+    // AC 3/4: the overlay must match the textarea exactly, brackets and all.
+    const input = '/review @src/app.ts and @session[Fix foo handling (2)] please';
+    const c = html(input);
+    expect(c.textContent).toBe(input);
+  });
 });

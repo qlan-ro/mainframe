@@ -9,6 +9,7 @@
  *    margin, border, or font-size changes that could drift the caret.
  *  - Mention types: 'command' | 'mention' | 'file' → text-primary
  *                   'skill'                          → text-mf-directive-skill
+ *                   'session'                        → text-mf-directive-session
  */
 import type { ReactNode } from 'react';
 import { mainframeUserFormatter } from '@/features/chat/messages/user-directives';
@@ -18,6 +19,7 @@ const colorClass: Record<string, string> = {
   mention: 'text-primary',
   file: 'text-primary',
   skill: 'text-mf-directive-skill',
+  session: 'text-mf-directive-session',
 };
 
 /**
