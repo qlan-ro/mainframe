@@ -74,6 +74,8 @@ impl EventHandlerDeps for TriggerDeps {
             .unwrap_or_else(|e| e.into_inner())
             .push(chat_id.to_string());
     }
+    /// Empty on purpose: this suite exercises worktree triggers, not on_exit.
+    fn tracker_end_all_running(&self, _chat_id: &str) {}
 }
 
 fn cell() -> Arc<Mutex<ActiveChat>> {

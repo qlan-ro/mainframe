@@ -92,9 +92,10 @@ pub trait EventHandlerDeps: Send + Sync {
     fn send_push(&self, _msg: PushOut) {}
 
     /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
-    /// end (the CLI owns them; none can report completion after it dies). Default
-    /// no-op mirrors the TS optional `tracker?`.
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
+    /// end (the CLI owns them; none can report completion after it dies). Required,
+    /// not defaulted: a silently-inherited no-op left orphaned tasks Running forever
+    /// in production, the same defaulted-trait bug class as #273.
+    fn tracker_end_all_running(&self, chat_id: &str);
 
     /// `onProviderQuota(adapterId, quota)` — an account-wide provider-plan quota
     /// escalation pushed from a session event (Codex `account/rateLimits/updated`,
@@ -1343,6 +1344,8 @@ mod tests {
                 q.ingest(adapter_id, quota, IngestMode::Push);
             }
         }
+        /// Empty on purpose: BgDeps below covers on_exit's tracker_end_all_running wiring.
+        fn tracker_end_all_running(&self, _chat_id: &str) {}
     }
 
     fn umsg(id: &str, meta: Option<HashMap<String, serde_json::Value>>) -> ChatMessage {
@@ -2008,8 +2011,9 @@ mod tests {
 // notes: parent assistant usage (or None); codex sends this turn's raw input usage
 // notes: to mirror the TS `undefined→usage` fallback. onContextUsage persists
 // notes: lastContextTotal/MaxTokens +
-// notes: broadcasts chat.updated ungated. onExit calls tracker_end_all_running (new
-// notes: defaulted deps method) BEFORE clearing processState. onMessage drain-turn
+// notes: broadcasts chat.updated ungated. onExit calls tracker_end_all_running
+// notes: (required deps method, wired through DaemonChatDeps — #273) BEFORE
+// notes: clearing processState. onMessage drain-turn
 // notes: re-entry flips a non-working processState back to working + emits chat.updated
 // notes: (snapshot-under-lock, emit-after-drop per CONCURRENCY.tsv rule 3).
 // notes: Ported: session-path (3), move-on-process (3), turn-timing (2),
