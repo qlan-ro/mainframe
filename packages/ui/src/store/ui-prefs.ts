@@ -32,6 +32,8 @@ interface UiPrefsState {
   bottomPanelHeight: number;
   /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
   rightClickHintDismissed: boolean;
+  /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
+  dontWarnOnTuningChange: boolean;
   /** Per-section collapse state for the left sidebar's four root sections.
    *  Absent keys read as expanded (false) — see isSidebarSectionCollapsed. */
   collapsedSidebarSections: Partial<Record<SidebarSection, boolean>>;
@@ -41,6 +43,7 @@ interface UiPrefsState {
   setBottomPanelTab: (tab: BottomPanelTab) => void;
   setBottomPanelHeight: (height: number) => void;
   dismissRightClickHint: () => void;
+  dismissTuningChangeWarning: () => void;
   toggleSidebarSection: (section: SidebarSection) => void;
 }
 
@@ -61,6 +64,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       bottomPanelTab: 'context',
       bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
       rightClickHintDismissed: false,
+      dontWarnOnTuningChange: false,
       collapsedSidebarSections: {},
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
@@ -69,6 +73,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       setBottomPanelHeight: (height) =>
         set({ bottomPanelHeight: clampBottomPanelHeight(height, BOTTOM_PANEL_MAX_FALLBACK) }),
       dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
+      dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
       toggleSidebarSection: (section) =>
         set((s) => ({
           collapsedSidebarSections: {
@@ -87,6 +92,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         bottomPanelTab: s.bottomPanelTab,
         bottomPanelHeight: s.bottomPanelHeight,
         rightClickHintDismissed: s.rightClickHintDismissed,
+        dontWarnOnTuningChange: s.dontWarnOnTuningChange,
         collapsedSidebarSections: s.collapsedSidebarSections,
       }),
     },
