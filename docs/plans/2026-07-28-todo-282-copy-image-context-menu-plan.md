@@ -46,11 +46,23 @@ recorded as D10.
 - **Every file this plan touches is comfortably under the line limits.** Largest
   edited file: `LightboxSurface.tsx` (42 → ~48). Every new file lands well under
   300; every new function under 50.
-- **The worktree has no `node_modules`.** `pnpm install` from the worktree root is a
-  **lane setup step, run once before wave 1** — it is not a precondition any group
-  satisfies for itself. Groups `clipboard-core-tests` and `copy-menu-shared-tests`
-  both start in wave 1 and both need the install; if each ran it, two installs would
-  hit the same workspace concurrently. No task below re-runs it.
+- **The worktree has no `node_modules`, and nothing outside the task graph installs
+  them.** The lane's only setup step creates the worktree and stamps the tracker, so
+  the install needs an owner *inside* the graph: **Task 1 runs `pnpm install` from
+  the worktree root as its first step**, and group `copy-menu-shared-tests` carries
+  `depends_on: ['clipboard-core-tests']` so it can never start before that install
+  finishes. One install, one owner, never two at once in the same workspace. No other
+  task re-runs it. Serializing those two groups costs nothing: from wave 2 on the
+  graph is a chain anyway.
+- **Only Task 13 runs the package-wide typecheck.**
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck` compiles the whole package,
+  test files included, so it cannot pass in a group that has just committed tests
+  against modules that do not exist yet — `clipboard-core-tests` and `menu-tests`
+  both do, and `copy-menu-shared-tests` runs concurrently with a group whose files
+  are mid-edit. **This overrides the generic "typecheck + affected tests green"
+  expectation for every group except `image-context-menu`.** Each group below states
+  its own exit contract; a group meets that contract and returns, and Task 13 runs
+  the single package-wide typecheck once every other group has landed.
 - **The implement stage needs no Rust and never runs `cargo`.** The one step that
   does — the D7 webview gate — is a **qa-stage** step, not an implement task
   (D14). Its cost is stated there: a cold `packages/app-tauri/src-tauri` build in
@@ -253,6 +265,30 @@ machine-checkable pasteboard assertion and an explicit blocked path. This also k
 the implement stage free of `cargo`: the gate's cold `src-tauri` build is a
 multi-GB, qa-stage cost (Disk Hygiene), swept afterwards.
 
+**D15 — Markdown images get no menu; the design gate's "satisfied by construction"
+is wrong on the facts, and the gap is moot here.** The brief required "both the
+attachment-image and markdown-image render paths"; the gate waved markdown through
+on the grounds that both open through `LightboxSurface`. They do not.
+`features/chat/parts/markdown-text.tsx` maps no `img` component — its component map
+(lines 107-160) covers headings, `p`, `a`, lists, tables, `code` and the fenced-block
+slots — and `UserMessage`'s map overrides only `p` on top of it
+(`features/chat/messages/UserMessage.tsx:91`). A markdown image therefore renders as
+react-markdown's bare `<img>`, never reaching `ZoomableImage` or `LightboxSurface`,
+so it gets no menu and no test asserts one.
+
+Moot in practice, because a markdown image here can only be `http(s)`:
+`urlTransform` (`features/chat/parts/markdown-url-transform.ts:26`) admits a fixed
+app-protocol list and otherwise defers to react-markdown's `defaultUrlTransform`,
+which returns `''` for every protocol outside `https?|ircs?|mailto|xmpp` —
+`data:` included (`react-markdown@10.1.0/lib/index.js:421`). So a markdown
+`data:image/…` renders with an empty `src`, and a markdown `http(s)` image is exactly
+the source D5 leaves unsupported. Every image the menu could serve arrives as an
+attachment or an image part instead.
+
+Same shape as D1's `AttachmentPreviewDialog` gap, and recorded rather than buried:
+covering markdown would need an `img` entry in the markdown component map *and* the
+remote-fetch ruling the brief deferred. That is separate work.
+
 ## Interfaces this change adds
 
 ```ts
@@ -300,7 +336,26 @@ All three files are **red-phase**: the modules they import do not exist yet, and
 Group `clipboard-lib` implements against them. Say so in each file's header comment
 so a reader is not confused by a failing run.
 
-### Task 1 — Source classification and gating tests (RED)
+**Exit contract for this group** (it overrides the generic "typecheck + affected
+tests green"):
+
+- **Done** = the three test files below are written and committed, and the run
+  named under *Verify* fails for exactly the stated reason.
+- **Do not run `pnpm --filter @qlan-ro/mainframe-ui typecheck`.** It is
+  package-wide and would report `TS2307` on `../image-source`, `../write-image`
+  and `../copy-image` — modules this group is not allowed to create. Task 13 owns
+  the single package-wide typecheck (Constraints).
+- **Do not create `image-source.ts`, `write-image.ts` or `copy-image.ts`, not even
+  as empty stubs, to make the imports resolve.** Those three files belong to group
+  `clipboard-lib`; touching them here breaks the no-shared-files assumption that
+  `parallel_safe` rests on and hands `clipboard-lib` a file it did not write.
+
+### Task 1 — Install the workspace, then source classification and gating tests (RED)
+
+**First step, before anything else in this group:** run `pnpm install` from the
+worktree root. It is the only install in the whole graph (Constraints); every later
+group inherits `node_modules` from it, and `copy-menu-shared-tests` depends on this
+group so it cannot race the install.
 
 **File:** `packages/ui/src/lib/clipboard/__tests__/image-source.test.ts` — **new**
 (node environment; no DOM).
@@ -416,8 +471,12 @@ Cases:
 - **A non-`Error` rejection** (`Promise.reject('nope')`) still produces a non-empty
   `message`.
 
-**Verify (whole group):** all three files fail on missing modules; no other suite
-changes. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard`.
+**Verify (whole group):** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard`
+reports all three files as failed **suites**, each with a
+`Failed to resolve import "../image-source"` / `"../write-image"` / `"../copy-image"`
+error — the modules do not exist yet. That, and nothing else, is the expected red.
+No other suite in the package changes. If a file fails for any other reason, fix
+the test; if any file passes, it is asserting nothing.
 
 ---
 
@@ -510,7 +569,18 @@ package-wide typecheck, and by then both groups have landed.
 
 ---
 
-## Group 3 — `copy-menu-shared-tests` (test) · depends on: nothing
+## Group 3 — `copy-menu-shared-tests` (test) · depends on: `clipboard-core-tests`
+
+The dependency is the **install**, not the code: this group shares no file with
+`clipboard-core-tests` and reads none of its output, but Task 1 owns the one
+`pnpm install` and two concurrent installs in one workspace is the race the
+Constraints rule out. Nothing here needs `lib/clipboard`.
+
+**Exit contract for this group:** done = the cases below are written and committed,
+cases 1-2 fail for the stated reason, case 3 and every pre-existing case in the file
+pass. Skip the package-wide typecheck (Constraints): this group runs concurrently
+with `clipboard-lib`, whose files are mid-edit, so a package-wide compile here fails
+on code this group does not own. Task 13 owns it.
 
 ### Task 7 — Stale-settlement tests for `useMenuCopyFeedback` (RED)
 
@@ -532,8 +602,12 @@ Red against Task 8's generation token. Three cases:
    click `item-a` and settle `true`; `item-a` reads `Copied` and exactly one Escape
    fires. This is the guard against a token that permanently poisons the hook.
 
-**Verify:** cases 1-2 fail (an Escape is dispatched), case 3 passes; every existing
-case in the file still passes.
+**Verify:** `vitest run src/lib/ui/__tests__/use-menu-copy-feedback.test.tsx` — cases
+1 and 2 fail on the Escape assertion (`keydown` was dispatched on `document`, because
+today's hook re-arms `closeMenu` from the settlement), case 3 passes, and every
+case that was already in the file still passes. The suite compiles: the hook it
+imports already exists, so unlike Groups 1 and 5 there is no missing-module red here.
+Do not touch `use-menu-copy-feedback.ts` — the generation token is Task 8's.
 
 ---
 
@@ -601,6 +675,18 @@ here means the extraction changed something it should not have.
 
 ## Group 5 — `menu-tests` (test) · depends on: `clipboard-lib`, `copy-menu-shared`
 
+**Exit contract for this group:**
+
+- **Done** = the one test file below is written and committed and fails for exactly
+  the reason named under *Verify*.
+- **Do not run `pnpm --filter @qlan-ro/mainframe-ui typecheck`** — package-wide, and
+  it would report `TS2307` on `../ImageContextMenu`, which this group must not
+  create. Task 13 owns the single package-wide typecheck (Constraints).
+- **Do not create `ImageContextMenu.tsx`, not even as a stub, to make the import
+  resolve, and do not edit `LightboxSurface.tsx`.** Both belong to group
+  `image-context-menu`; writing them here breaks the no-shared-files assumption
+  `parallel_safe` rests on.
+
 ### Task 10 — `ImageContextMenu` behavior + both render paths (RED)
 
 **File:** `packages/ui/src/features/chat/parts/__tests__/ImageContextMenu.test.tsx` — **new.**
@@ -636,28 +722,56 @@ Cases:
 5. **Copy fails** — `copyImageToClipboard` resolves `{ ok: false, message: 'boom' }`;
    the item's text becomes `Copy failed`, `mfToast.error` is called once, and its
    options carry `description: 'boom'`.
-6. **Assistant-image path** — render `<ZoomableImage src={PNG_DATA_URI} />`, click
+6. **Assistant image-part path** — render `<ZoomableImage src={PNG_DATA_URI} />`, click
    `chat-image-zoom-trigger`, await `chat-image-zoom-dialog`, then
    `fireEvent.contextMenu` on `chat-image-zoom-image` → `image-context-menu`
-   appears. (Satisfies "the assistant/attachment render path gets the menu".)
+   appears. This covers the assistant turn's **image part** (`AssistantMessage`), not
+   a markdown image — markdown images never reach `LightboxSurface` and get no menu
+   (D15).
 7. **User-gallery path** — render
    `<ImageLightbox images={[{ src: PNG_DATA_URI }]} index={0} onIndexChange={vi.fn()} />`,
    `fireEvent.contextMenu` on `image-lightbox-current` → `image-context-menu`
-   appears. (Satisfies the second required render path.)
+   appears. This covers the **user turn's attachment gallery** (`InlineImageThumbs`).
+   Cases 6 and 7 are the two render paths this change covers, and they are the two
+   the design gate named; the brief's third, markdown, is out per D15.
 8. **Menu dismissal does not dismiss the lightbox** — with the `ZoomableImage`
    dialog open and the menu open, press `Escape` once: the menu closes and
    `chat-image-zoom-dialog` is still in the DOM. Then assert a plain click on
    `chat-image-zoom-image` (no menu open) still closes the dialog, so the existing
    dismissal contract survives the `asChild` wrap.
-9. **A copy that settles after the menu closed does not close the lightbox** (D13,
-   the integration counterpart to Task 7). Open the `ZoomableImage` dialog and the
-   menu, mock `copyImageToClipboard` to a **deferred** promise, click `image-copy`,
-   press `Escape` to dismiss the menu only, then settle the deferred copy and
-   `advanceTimersByTime(1000)`. Assert `chat-image-zoom-dialog` is **still** in the
-   DOM. Without Task 8's token this test fails by closing the image.
+9. **Dismissing the menu with an outside pointer does not dismiss the lightbox** —
+   the interaction risk the design gate named, and the one QA step 6 would otherwise
+   own alone. Open the `ZoomableImage` dialog and the menu as in case 8, let the
+   pending timers run once (the suite uses
+   `vi.useFakeTimers({ shouldAdvanceTime: true })` like
+   `MessagePathContextMenu.test.tsx`; Radix registers its document `pointerdown`
+   listener inside a `setTimeout(0)`, so the listener is not armed on the tick the
+   menu opens), then `fireEvent.pointerDown(document.body)`. Assert the menu is gone
+   and `chat-image-zoom-dialog` is **still** in the DOM.
 
-**Verify:** the file fails on the missing `../ImageContextMenu` module; the three
-existing part tests (`ZoomableImage.test.tsx`, `ImageLightbox.test.tsx`,
+   **Fire `pointerDown` only — do not follow it with a `click`.** In a browser,
+   Radix's modal `DismissableLayer` sets `pointer-events: none` on `body` while the
+   menu is open, so the closing click never reaches the dialog. jsdom does no
+   hit-testing and ignores that style, so a synthetic `click` on the lightbox box
+   would reach `LightboxSurface.handleClick`
+   (`event.target === event.currentTarget`) and close the image for a reason that
+   cannot happen in the shell. The full click sequence stays with QA step 6, in a
+   real webview. If the pointerdown path still proves undrivable in jsdom (the
+   listener does not close the menu after two flush attempts), do not silently drop
+   this case: keep it as a `it.skip` naming the jsdom limitation, record the
+   downgrade as a decision in the lane result, and leave QA step 6 as the only
+   coverage.
+10. **A copy that settles after the menu closed does not close the lightbox** (D13,
+    the integration counterpart to Task 7). Open the `ZoomableImage` dialog and the
+    menu, mock `copyImageToClipboard` to a **deferred** promise, click `image-copy`,
+    press `Escape` to dismiss the menu only, then settle the deferred copy and
+    `advanceTimersByTime(1000)`. Assert `chat-image-zoom-dialog` is **still** in the
+    DOM. Without Task 8's token this test fails by closing the image.
+
+**Verify:** `vitest run src/features/chat/parts/__tests__/ImageContextMenu.test.tsx`
+fails as a **suite**, with `Failed to resolve import "../ImageContextMenu"` — that
+one error is the whole expected red; no case should fail for any other reason. The
+three existing part tests (`ZoomableImage.test.tsx`, `ImageLightbox.test.tsx`,
 `markdown-text.test.tsx`) still pass untouched — jsdom has no `ClipboardItem`, so
 they render exactly as before.
 
@@ -710,7 +824,7 @@ untouched: Radix's `asChild` slot composes the ref, so
 still works. Add nothing to the props interface — the surface already receives
 `src`.
 
-**Verify:** cases 6-9 of Task 10 pass;
+**Verify:** cases 6-10 of Task 10 pass;
 `vitest run src/features/chat/parts/__tests__/ZoomableImage.test.tsx src/features/chat/parts/__tests__/ImageLightbox.test.tsx`
 still green.
 
@@ -809,8 +923,11 @@ Appendix A as the fix.
 4. Right-click the *thumbnail* (not the opened image) → no menu (webview default).
 5. Right-click transcript text, a code block, and the composer → unchanged.
 6. Close the menu with Escape and with an outside click → the lightbox stays open;
-   clicking the image itself still closes the lightbox. Then click **Copy Image**
-   and immediately press Escape; wait two seconds → the lightbox is still open (D13).
+   clicking the image itself still closes the lightbox. The outside *click* is the
+   half Task 10 case 9 cannot reach — jsdom ignores the `pointer-events: none` Radix
+   puts on `body` — so this step is its only coverage; run it deliberately. Then
+   click **Copy Image** and immediately press Escape; wait two seconds → the lightbox
+   is still open (D13).
 7. Browser mode (`vite` without Tauri, in Chromium) → the menu appears and the copy
    works (D6); no console error.
 8. **Only if Appendix A was executed:** run steps 2-3 against a packaged build
@@ -833,7 +950,9 @@ Appendix A as the fix.
 - **Radix menu inside a Radix dialog.** Both portal to `document.body` at `z-50`;
   the menu mounts later so it stacks above. Escape ordering is layer-based, which is
   what makes D13's late-settlement bug possible; covered by Task 7, Task 10 cases
-  8-9, and QA step 6.
+  8-10, and QA step 6. Case 9 covers outside-pointer dismissal only as far as jsdom
+  allows — a real closing *click* is gated by `pointer-events: none`, which jsdom
+  does not honor, so that half stays with QA step 6.
 - **`CopyMenuItem` touches two shipped menus.** The migration is behavior-preserving
   and pinned by their existing suites, which must pass **unedited** (Task 9). Any
   needed test edit is a signal the extraction drifted.
