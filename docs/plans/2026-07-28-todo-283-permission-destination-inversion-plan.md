@@ -526,3 +526,19 @@ mutate the file — if it does not, the QA environment is not exercising the ada
 expected to write nothing on `main` as well; only the Edit grant discriminates.)
 
 **Cleanup.** Delete `/tmp/mf-283-qa` and the snapshots.
+
+**On the persisting-destination downgrade branch specifically (`ControlDestination::UserSettings /
+ProjectSettings / LocalSettings` inside `keep_mode_changes_session_scoped`'s `SetMode` arm).** Case B above
+reproduces the CLI's actual behavior — `setMode` suggestions arrive `destination: session`
+(`plan-approval.0.ndjson:23`) — which exercises the pass-through arm, not the downgrade arm. Getting a real
+`claude` binary to emit a `setMode` suggestion pointed at a persisting destination is **not a required QA
+step**: two independent live attempts (Write-tool `acceptEdits` suggestion, `ExitPlanMode` approval) both
+produced `destination: session`, matching the fixture and `PERMISSIONS.md:104-113`'s documented behavior — the
+CLI does not appear to have a code path that emits this today. Record it as **not exercised, legitimate
+outcome** (same status as an un-triggered Case A), not a QA failure, and rely on the Rust suite for that arm's
+correctness: `permission_updates::tests::set_mode_is_downgraded_from_every_persisting_destination` (all three
+persisting variants) and `session::permission_response_tests::set_mode_pointed_at_local_settings_is_forwarded_session_scoped`
+(the same case through the actual `respond_to_permission` wire path). Both pass as of this revision
+(`cargo test -p mainframe-adapter-claude`, `cargo clippy -p mainframe-adapter-claude --all-targets -- -D
+warnings` — clean). If the CLI is later observed emitting this destination for `setMode`, that observation is
+new evidence for a follow-up QA pass, not grounds to hold this one open.
