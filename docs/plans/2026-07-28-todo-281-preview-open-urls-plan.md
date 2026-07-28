@@ -75,6 +75,23 @@ Each was read in the worktree; do not re-derive them.
     Radix primitives is covered with no new wiring.
 12. Existing call sites of the `terminalIds*` helpers: `store/layout.ts` (×3),
     `lib/daemon/dispose-daemon-session.ts` (×1), plus three test files.
+13. `store/layout.ts` is **317 lines today** — already over the 300-line cap before this work adds a
+    line to it. Task 32 decomposes it first; every later task that edits it lands on the smaller file.
+14. The daemon's `PortTunnelRegistry::start` is **single-flight and idempotent per port**
+    (`plan_start`, `packages/core-rs/crates/mainframe-launch/src/port_tunnel_registry.rs`): a second
+    POST while an entry is `Starting` joins the in-flight start (`StartAction::Wait`), and one on a
+    live `Ready` entry returns the existing URL (`StartAction::Existing`) **without spawning anything
+    and without broadcasting a `tunnel:status` event**. Two consequences the plan relies on: a client
+    guard against issuing a second start is not what prevents a duplicate tunnel, and a client that
+    waits only for WS events can wait forever for a tunnel the daemon already holds. The start POST's
+    own `{ url }` response (`lib/api/tunnel-ports.ts` `startPortTunnel`) is therefore a first-class
+    URL source, not just a signal.
+15. `classifyLocalhostUrl('')` returns `null` (`new URL('')` throws), and `isTunnelEligiblePort` is
+    never reached for it — so an empty or unparseable stored URL cannot be expressed by any
+    tunnel-shaped target. Task 11 gives it its own `invalid` variant instead.
+16. `store/port-tunnels.ts`'s `clearEntry(port)` is module-private, and `UrlChip`'s `badgeFor(undefined, false)`
+    renders **no badge** while `canStop` is `false` — so removing a non-`ready` entry returns every chip
+    on that port to its pre-tunnel appearance rather than to a wrong one.
 
 ## New and changed files
 
@@ -94,6 +111,7 @@ Each was read in the worktree; do not re-derive them.
 | `layout/RunUrlEntry.tsx` | the inline URL entry, shared by the strip and the picker |
 | `store/url-tunnel-cleanup.ts` | layout-facing release helper (mirrors `terminal-cleanup.ts`) |
 | `store/url-tab-intent-subscriber.ts` | the `open-url-tab` intent boundary |
+| `store/layout-placement.ts` | the layout types + pure placement helpers lifted out of `layout.ts` (Task 32) |
 
 **Changed:** `store/run-pane.ts`, `store/layout.ts`, `store/layout-persist.ts`, `store/port-tunnels.ts`,
 `store/surface-intents.ts`, `lib/daemon/dispose-daemon-session.ts`,
@@ -102,6 +120,44 @@ Each was read in the worktree; do not re-derive them.
 `features/chat/smart-actions/UrlChip.tsx`,
 `packages/app-tauri/src-tauri/capabilities/preview.json`,
 `packages/app-tauri/src-tauri/src/preview/bridge_plugin.rs`.
+
+## Execution groups
+
+The names below are the ones the lane schedules. `parallel_safe` is a file-collision flag only;
+`depends_on` names the groups whose output this one reads or verifies.
+
+| Group | Tasks | Kind | parallel_safe | depends_on |
+|---|---|---|---|---|
+| `test-pure-red` | 1–6 | test | yes | — |
+| `core` | 7–13, 32, 33 | core | yes | `test-pure-red` |
+| `rust` | 14, 15 | core | yes | — |
+| `ui-tab` | 16–21 | ui | yes | `core` |
+| `ui-entrypoints` | 22–26 | ui | yes | `core` |
+| `test-ui` | 27–31 | test | yes | `core`, `rust`, `ui-tab`, `ui-entrypoints` |
+
+`test-ui` depends on `rust` because Task 31's sweep runs `cargo check` and asserts the diff's package
+boundaries — it verifies the widened capability, so running it before Task 14/15 would record a green
+sweep that never saw them.
+
+## Plan-level decisions
+
+- **PD1. Retry re-drives the start POST and resets every per-attempt flag, keyed on an attempt nonce.**
+  The daemon is the single-flight point (fact 14), so the earlier `entry === undefined` guard bought no
+  safety and made Retry inert in three of its four reachable states. Task 18 owns the trace.
+- **PD2. Retry may clear a non-`ready` port-tunnel entry; a `ready` entry is never cleared.** A shared
+  `error` or `starting` entry is a stale local marker, and dropping it returns the chat chip to its
+  pre-tunnel appearance (fact 16). Dropping a `ready` entry would take a live tunnel's URL away from
+  the chip, which `reportPortTunnelError` already refuses to do.
+- **PD3. Committing a URL in a URL tab's address bar rewrites the tab's `url` through the layout store
+  (Task 33), keeping the tab id.** The id is the webview label's source and the tunnel-consumer key;
+  minting a new one would remount the webview and orphan the registration. The typed URL is the tab's
+  identity for dedup, persistence, and re-resolution (D9, AC14).
+- **PD4. The address bar reflects in-page navigation but only Enter changes the tab's identity.** A
+  tunnelled tab therefore displays the tunnel origin once loaded — honest browser behaviour — while
+  what persists and re-seeds is always `tab.url`, never a tunnel URL (AC14, and the spec's deferred
+  "preserving in-page navigation across a restart").
+- **PD5. AC17's 300-line cap is honoured on `store/layout.ts` by decomposing it (Task 32), not by
+  scoping the rule to new files.** It is 317 lines today (fact 13) and this work adds to it.
 
 ---
 
@@ -142,6 +198,15 @@ the pre-existing cases still pass.
 - `tabIdsInRun(run, 'url')` / `tabIdsInPane(run, paneId, 'url')` / `tabIdsForScope(run, scope, 'url')`
   return only URL tab ids, and the same functions with `'terminal'` return the terminal ids.
 
+Same file, against the new `retargetUrlTab(run, tabId, url, title)` reducer (Task 8 item 5):
+- retargeting a URL tab to a new URL updates that tab's `url` and `title` **in place** and keeps its
+  `id` (PD3);
+- retargeting to the URL it already holds returns the same `RunState` reference;
+- when another URL tab **in the same scope** already holds the target URL, the source tab is left
+  untouched and the holder is activated in its own pane (D8's dedup, applied to a retarget);
+- a tab in a different scope holding that URL does not block the retarget;
+- an unknown `tabId`, or a tab whose `kind` is not `'url'`, returns the same reference.
+
 `url-tab-id.test.ts` asserts:
 - `urlTabId('http://localhost:5173/a/b?q=1#frag')` matches `/^[A-Za-z0-9_-]+$/`;
 - two calls for the same URL produce different ids (uniqueness);
@@ -172,15 +237,24 @@ Assert:
 - `applyPortTunnelSnapshot` marks a `state: 'ready'` entry `dnsVerified: true` (fact 8) and leaves a
   `starting` entry without the flag.
 
+Same file, against the new `clearPortTunnelEntry(port)` export (Task 10, PD2):
+- clearing an `error` entry removes the key, bumps `generation`, and returns `true`;
+- clearing a `starting` entry does the same;
+- clearing a `ready` entry is a **no-op**: the entry keeps its `state`, `url`, and `dnsVerified`, the
+  function returns `false`, and `generation` is unchanged;
+- clearing a port with no entry returns `false` and leaves the state reference untouched.
+
 Keep the existing "treats dns_verified as ready" expectations working.
 
-**Verify:** the new assertions fail — the field does not exist.
+**Verify:** the new assertions fail — neither the field nor the export exists.
 
 ### Task 5 — Tunnel-state resolution (AC7, AC8, AC9, AC10, D11–D14)
 
 **File (new):** `packages/ui/src/features/url-tab/__tests__/resolve-url-target.test.ts`.
 
 Table-drive `resolveUrlTabTarget(input)` over the contract in Task 11. Required cases:
+- `url: ''`, `url: '   '`, `url: 'not a url'` → `{ kind: 'invalid', url }` on **both** a local and a
+  remote daemon (the variant is resolved ahead of the locality check, fact 15);
 - local daemon, any URL → `{ kind: 'direct', url }` (including a loopback URL);
 - remote daemon, non-loopback URL (`https://example.com/x`, `http://192.168.1.5:3000/`) → `direct`;
 - remote + loopback + `daemonPort === null` → `pending`;
@@ -190,15 +264,23 @@ Table-drive `resolveUrlTabTarget(input)` over the contract in Task 11. Required 
 - remote + entry `{ state: 'starting' }` → `pending`;
 - remote + entry ready with url + `watching: false` (adopting) → `tunnelled`, **regardless of
   `dnsVerified`** (AC8);
-- remote + entry ready + `watching: true` + `dnsVerified: false` + `startResolved: false` → `pending`;
+- remote + entry ready + `watching: true` + `dnsVerified: false` + `startUrl: null` → `pending`;
 - same, plus `dnsVerified: true` → `tunnelled`;
-- same, plus `startResolved: true` → `tunnelled`;
+- same, plus `startUrl` set → `tunnelled` (the tab's own POST answered);
+- remote + eligible port + **`entry === undefined`** + `startUrl` set → `tunnelled` composed from
+  `startUrl`, whether `everHadEntry` is `true` or `false` — the daemon returns an existing tunnel's
+  URL with no broadcast, so the store may never gain an entry (fact 14);
 - remote + entry `{ state: 'error', error: 'boom' }` → `{ kind: 'failed', error: 'boom' }`;
 - error entry with no message → `failed` with `'Tunnel failed to start'`;
 - `timedOut: true` while still pending → `failed` with the stated timeout text;
 - **non-terminal failure:** `timedOut: true` **and** a ready+gate-open entry → `tunnelled` (AC9's
   "a URL that arrives after the failure body replaces it");
-- entry `undefined` with `everHadEntry: true` → `{ kind: 'stopped', port }` (D14);
+- entry `undefined` with `everHadEntry: true` and `startUrl: null` → `{ kind: 'stopped', port }` (D14);
+- **the four post-Retry inputs** (the states Task 18's `retry` produces, PD1) each resolve to
+  `pending`, so the start effect can fire again: `{ entry: undefined, everHadEntry: false,
+  startUrl: null, timedOut: false }` after a rejected start; the same after an externally stopped
+  tunnel; the same after a 120 s timeout whose `starting` entry was cleared; and
+  `{ entry: undefined, everHadEntry: false, timedOut: false }` after a timeout that never had an entry;
 - `composeTunnelUrl('https://x.trycloudflare.com', 'http://localhost:5173/a/b?q=1#f')` →
   `'https://x.trycloudflare.com/a/b?q=1#f'` (D12), and an origin-only original URL →
   `'https://x.trycloudflare.com/'`.
@@ -238,7 +320,7 @@ could point a child webview at `file://`).
 
 ### Task 8 — `url` tab kind, dedup, kind-parameterized id helpers
 
-**File:** `packages/ui/src/store/run-pane.ts` (currently 207 lines; stays well under 300).
+**File:** `packages/ui/src/store/run-pane.ts` (207 lines today; ~245 after this task, still under 300).
 
 1. Add `'url'` to `RunTabKind`.
 2. Add `url?: string` to `RunTab` with a doc line: normalized committed URL for a `url` tab; the
@@ -252,7 +334,17 @@ could point a child webview at `file://`).
    `tabIdsInRun(run, kind)` / `tabIdsInPane(run, paneId, kind)` / `tabIdsForScope(run, scopeKey, kind)`
    (`kind: RunTabKind`). Three near-identical pairs would otherwise exist — the hygiene rule
    requires the extraction.
-5. Update the call sites (fact 12): `store/layout.ts` ×3 (`'terminal'` argument),
+5. Add the pure retarget reducer used by the address bar (PD3):
+   ```ts
+   export function retargetUrlTab(run: RunState, tabId: string, url: string, title: string): RunState;
+   ```
+   It finds the tab across every pane; returns `run` unchanged when the id is unknown, the tab's
+   `kind` is not `'url'`, or its `url` already equals `url`. When another `url` tab **in the same
+   `scopeKey`** already holds `url`, it activates that tab in its own pane and leaves the source tab
+   alone (D8). Otherwise it replaces the tab's `url` and `title` in place, keeping the `id` — the id
+   is the webview label's source and the tunnel-consumer key. The caller supplies `title` so
+   `run-pane.ts` stays free of feature imports.
+6. Update the call sites (fact 12): `store/layout.ts` ×3 (`'terminal'` argument),
    `lib/daemon/dispose-daemon-session.ts` ×1, and mechanically rename in
    `store/__tests__/run-pane-terminal.test.ts`, `store/__tests__/run-pane-release-scope.test.ts`,
    and the `vi.mock('../../../store/run-pane', …)` factory in
@@ -284,6 +376,19 @@ existing `true` if one is already recorded, so a late duplicate `ready` cannot u
 `applyPortTunnelSnapshot`, set `dnsVerified: true` for `state === 'ready'` entries.
 `reportPortTunnelError`'s never-downgrade-a-ready-tunnel rule is unchanged.
 
+Also export the module-private `clearEntry` as a guarded public function (PD2), because Task 18's
+`retry` has no other way to drop the stale entry that pins a URL tab in `failed`:
+```ts
+/** Drops a non-live entry so a consumer can retry. Refuses a `ready` entry. Returns whether it cleared. */
+export function clearPortTunnelEntry(port: number): boolean;
+```
+It returns `false` without touching state when the entry is `ready` or absent, and otherwise removes
+the key and bumps `generation` exactly as `clearEntry` does. Document the shared-badge consequence in
+the doc comment: every `UrlChip` on that port re-renders with no badge and no Stop control (fact 16),
+which is the chip's pre-tunnel appearance — the cleared entry was a stale failure or a start the
+daemon has since abandoned, and the next `tunnel:status` event repopulates it. A `ready` entry is
+refused for the same reason `reportPortTunnelError` refuses to downgrade one.
+
 **Verify:** `vitest run src/store/__tests__/port-tunnels.test.ts` green.
 
 ### Task 11 — Pure tunnel-state resolution + tab identity
@@ -308,7 +413,8 @@ export type UrlTabTarget =
   | { kind: 'pending'; port: number }
   | { kind: 'rejected'; port: number; reason: string }
   | { kind: 'failed'; error: string }
-  | { kind: 'stopped'; port: number };
+  | { kind: 'stopped'; port: number }
+  | { kind: 'invalid'; url: string };
 
 export interface UrlTabTunnelInput {
   url: string;                 // normalized, user-committed
@@ -316,7 +422,7 @@ export interface UrlTabTunnelInput {
   daemonPort: number | null;   // the DAEMON's own port from the tunnel snapshot, not the HTTP client port
   entry: PortTunnelEntry | undefined;
   watching: boolean;           // this tab attached while the tunnel was absent or starting
-  startResolved: boolean;      // this tab's own POST /tunnel/ports/start returned a url
+  startUrl: string | null;     // the url this tab's own POST /tunnel/ports/start returned
   timedOut: boolean;           // the 120s watchdog fired
   everHadEntry: boolean;       // an entry existed for this port and then disappeared
 }
@@ -334,23 +440,54 @@ otherwise `null`.
 
 `resolveUrlTabTarget` evaluates in this exact order (split the tail into a `resolveEntryTarget`
 helper to stay under 50 lines per function):
+0. `normalizePreviewUrl(url) === null` → `{ kind: 'invalid', url }`. This runs **ahead of the locality
+   check** because no other variant can express an unusable URL: `classifyLocalhostUrl('')` returns
+   `null`, which would otherwise fall out of step 2 as `direct` with an empty `url` and hand
+   `WebviewUrl::External(Url::parse(""))` to the Tauri shell (fact 15). Callers normalize before
+   creating a tab, so the only live source is corrupt persisted state (Task 21).
 1. `isLocal` → `direct`.
 2. `classifyLocalhostUrl(url) === null` → `direct`.
 3. `daemonPort === null` → `pending`.
 4. `portRejectionReason(...) !== null` → `rejected`.
-5. `entry === undefined` → `everHadEntry ? stopped : pending`.
+5. `entry === undefined` → `startUrl !== null ? tunnelled(composeTunnelUrl(startUrl, url))`, else
+   `everHadEntry ? stopped : pending`. The `startUrl` branch exists because a start POST that adopts a
+   tunnel the daemon already holds returns its URL and broadcasts nothing (fact 14) — without it a tab
+   whose entry Retry just cleared would wait for an event that never arrives.
 6. `entry.state === 'error'` → `failed` with `entry.error ?? 'Tunnel failed to start'`.
-7. `entry.state === 'ready' && entry.url` and the gate is open
-   (`!watching || startResolved || entry.dnsVerified === true`) → `tunnelled` with
-   `composeTunnelUrl(entry.url, url)`.
+7. `entry.state === 'ready' && (entry.url ?? startUrl)` and the gate is open
+   (`!watching || startUrl !== null || entry.dnsVerified === true`) → `tunnelled` with
+   `composeTunnelUrl(entry.url ?? startUrl, url)`.
 8. anything else → `timedOut ? failed('The tunnel did not produce a URL within 120 seconds') : pending`.
 
-Step 7 preceding step 8 is what makes the failure non-terminal (AC9).
+Step 5's `startUrl` branch and step 7 preceding step 8 are what make the failure non-terminal (AC9).
 
 `composeTunnelUrl` takes the origin of `tunnelOrigin` and appends `pathname + search + hash` of
 `originalUrl` (D12); on a parse failure it returns `tunnelOrigin` unchanged.
 
 **Verify:** `vitest run src/features/url-tab/__tests__/resolve-url-target.test.ts src/features/url-tab/__tests__/url-tab-id.test.ts` green.
+
+### Task 32 — Decompose `store/layout.ts` before it grows (AC17, PD5)
+
+**Order:** runs **before** Task 12 and Task 33, which both add lines to `layout.ts`.
+**Files:** `packages/ui/src/store/layout-placement.ts` (new), `packages/ui/src/store/layout.ts`.
+
+`layout.ts` is 317 lines today (fact 13) — already over the cap this plan's final sweep enforces.
+Move, with no behaviour change, the layout value types and the pure placement helpers into
+`store/layout-placement.ts`: the `SurfaceId`, `RepositionTarget`, and `WorkspaceLayout` types, plus
+`insertTop`, `placeInLayout`, `removeSurface`, `repositionInLayout`, `layoutCanSplit`,
+`litSurfaceCount`, and `isSurfaceFloor` (`layout.ts:22–123`). They touch no store state, which is why
+this is the seam rather than the mutators — the four Run-tab mutators all close over `get()` and
+`writeWorkspace`, so lifting them would mean inventing an injection shape for a line count this
+extraction already buys.
+
+`layout.ts` imports what it uses and **re-exports the public surface unchanged** so no call site moves:
+`export type { SurfaceId, RepositionTarget, WorkspaceLayout } from './layout-placement';` and
+`export { isSurfaceFloor, layoutCanSplit, litSurfaceCount } from './layout-placement';` (a `export type`
+form is required — the package is `verbatimModuleSyntax`). Fourteen files import these from
+`@/store/layout`; none of them changes.
+
+**Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/store/__tests__/layout.test.ts src/layout/__tests__/use-surface-drag.test.ts` green with no edits to either file;
+`pnpm --filter @qlan-ro/mainframe-ui typecheck`; `wc -l packages/ui/src/store/layout.ts` reports under 250.
 
 ### Task 12 — Tunnel ownership registry + layout release wiring (D10, AC12)
 
@@ -401,6 +538,35 @@ only requires re-resolution. Record that reason in a one-line comment.
 **Verify:** `vitest run src/features/url-tab/__tests__/url-tunnel-ownership.test.ts` green;
 `vitest run src/store/__tests__/layout.test.ts src/store/__tests__/layout.terminal-cleanup.test.ts src/store/__tests__/layout-release-scope.test.ts`
 still green.
+
+### Task 33 — `setUrlTabTarget`, the address bar's write path (D9, PD3)
+
+**Files:** `packages/ui/src/store/layout.ts`,
+`packages/ui/src/store/__tests__/url-tab-retarget.test.ts` (new).
+
+Add one action to `LayoutStore`:
+```ts
+/** Point a URL tab at a newly committed URL. The tab's id — and its webview — survive. */
+setUrlTabTarget: (tabId: string, url: string, title: string) => void;
+```
+It reads `run`, returns early when `run` is `null`, calls `retargetUrlTab` (Task 8 item 5), and
+`writeWorkspace`s only when the reducer returned a different reference. It does not touch `layout` —
+the tab already exists, so there is nothing to reveal. Keep it under 10 lines; Task 32 has already
+made room.
+
+This is the only way a URL tab's identity changes after creation. `UrlTabInstance` (Task 20) calls it
+from the address bar's commit handler; the changed `tab.url` flows back down as a new `url` prop,
+which re-drives `useUrlTabTunnel` and `useWebviewMount` — so a URL typed while the tab sits in
+`failed`, `stopped`, `pending`, `rejected`, or `invalid` re-runs tunnel resolution and dedup instead of
+being lost (spec behaviour §6, AC14).
+
+`url-tab-retarget.test.ts` drives the store, not the reducer: committing a new URL on a URL tab
+updates `run` and persists through `writeWorkspace`; committing the URL a sibling tab in the same
+scope already holds activates that sibling and leaves the source tab's `url` alone; committing on a
+`terminal` tab id is a no-op.
+
+**Verify:** `vitest run src/store/__tests__/url-tab-retarget.test.ts` green;
+`vitest run src/store/__tests__/layout.test.ts` still green.
 
 ### Task 13 — Changeset
 
@@ -504,12 +670,23 @@ reanchor-on-element-change, destroy-on-null-url, and destroy-on-unmount.
 `currentUrl` from `seedUrl` and re-seeds when `seedUrl` changes. The `onNavigate` reflection is
 unchanged. Callers that had a port pass `` port !== null ? `http://localhost:${port}` : null ``.
 
-`PreviewUrlBar` props become `{ handle, seedUrl, enabled }` (`enabled` replaces `isRunning`, whose
-name no longer fits a tab with no process). `handleReload` navigates to `currentUrl` and no-ops when
-it is empty — it must not re-derive `http://localhost:${port}` (D13). `handleOpenBrowser` uses
-`currentUrl` only. The four testids (`preview-url-reload`, `preview-url-input`,
-`preview-url-open-browser`, `preview-url-clear-cache`) are unchanged — the URL tab reuses this
-component and inherits them.
+`PreviewUrlBar` props become `{ handle, seedUrl, enabled, onCommitUrl? }`:
+
+- `enabled` replaces `isRunning`, whose name no longer fits a tab with no process, and it now gates
+  **only** the text input and the status dot. The three icon buttons gate on
+  `const canAct = enabled && handle !== null` — for a preview tab that is today's behaviour plus a
+  handle check the actions already no-op'd on, and for a URL tab it is what lets the input stay live
+  while nothing is mounted.
+- `onCommitUrl?: (url: string) => void`. When it is supplied, Enter normalizes with
+  `normalizePreviewUrl` and calls `onCommitUrl(normalized)` **instead of** `navigateTo` — the owner
+  re-drives the mount, so there is exactly one navigation and no race between an optimistic navigate
+  and a changed `seedUrl`. Invalid input keeps the existing invalid treatment and calls nothing. When
+  `onCommitUrl` is absent (the preview tab) the current `navigateTo(draft)` path is untouched.
+
+`handleReload` navigates to `currentUrl` and no-ops when it is empty — it must not re-derive
+`http://localhost:${port}` (D13). `handleOpenBrowser` uses `currentUrl` only. The four testids
+(`preview-url-reload`, `preview-url-input`, `preview-url-open-browser`, `preview-url-clear-cache`) are
+unchanged — the URL tab reuses this component and inherits them.
 
 `PreviewToolbar` passes `seedUrl` through and keeps its own `port` prop only for the pieces that
 still need it. `PreviewInstance` supplies the seed.
@@ -517,7 +694,9 @@ still need it. `PreviewInstance` supplies the seed.
 **Files also touched:** `packages/ui/src/features/preview/__tests__/use-preview-address.test.ts`
 and `PreviewUrlBar.test.tsx` and `PreviewToolbar.test.tsx` — update to the new props; add a case
 asserting reload navigates to the **navigated-to** URL, not `localhost:<port>`, after an
-`onNavigate` event.
+`onNavigate` event; add two `onCommitUrl` cases — with a `null` handle and `enabled` true, Enter on
+valid input calls `onCommitUrl` once and `handle.navigate` never, and Enter on `file:///etc/passwd`
+calls neither and shows the invalid treatment.
 
 **Verify:** `vitest run src/features/preview/__tests__/use-preview-address.test.ts src/features/preview/__tests__/PreviewUrlBar.test.tsx src/features/preview/__tests__/PreviewToolbar.test.tsx` green.
 
@@ -525,28 +704,39 @@ asserting reload navigates to the **navigated-to** URL, not `localhost:<port>`, 
 
 **File (new):** `packages/ui/src/features/url-tab/use-url-tab-tunnel.ts`.
 
-`useUrlTabTunnel({ tabId, url }): { target: UrlTabTarget; retry: () => void }`.
+`useUrlTabTunnel({ tabId, url }): { target: UrlTabTarget; retry: () => void; reloadNonce: number }`.
 
 Reads `useDaemonIsLocal()`, `useDaemonPort()` (HTTP client port), `useTunnelDaemonPort()` (the
 daemon's own port, for eligibility), `useActiveIdentity().chatId`, and
 `usePortTunnel(port)` for the classified loopback port (skip the subscription entirely when the URL
 is not loopback or the daemon is local).
 
+**Every piece of state below is per *attempt*.** `attempt` is a counter the tab bumps on Retry; the
+hook holds the flags in one object replaced wholesale, and a `useEffect` on `[attempt, port]` resets
+them. Keying on `attempt` — not on `target.kind === 'pending'` or on `entry === undefined` — is what
+makes Retry work in all four states it is reachable from (PD1).
+
 State it owns, all feeding `resolveUrlTabTarget`:
-- `watchingRef` — set `true` on the first render at which an entry is absent or `starting` **and** a
-  start is needed; never set `false` afterwards for the life of the tab.
-- `startResolved` — set when this tab's `startPortTunnel` POST resolves.
-- `everHadEntry` — set once an entry has been seen; drives the `stopped` state (D14).
+- `watchingRef` — set `true` on the first render of the attempt at which an entry is absent or
+  `starting` **and** a start is needed; never set `false` within the attempt.
+- `startUrl` — the URL this tab's own `startPortTunnel` POST resolved with, `null` until it does.
+- `everHadEntry` — set once an entry has been seen during this attempt; drives the `stopped` state (D14).
 - `timedOut` — a 120 s (`URL_TAB_TUNNEL_TIMEOUT_MS`) watchdog started when the target first becomes
   `pending`, cleared when it leaves `pending`.
+- `startedForAttemptRef` — the attempt number whose start POST has been issued, so the effect fires
+  once per attempt rather than once per tab.
 
 Effects:
-- **Start request.** When the target is `pending`, `entry === undefined`, `daemonPort !== null`,
-  `chatId` is present, and no request is in flight for this tab, POST
-  `startPortTunnel(httpPort, { port, chatId })`; on rejection call `reportPortTunnelError(port, message)`
-  (which is the single funnel for both the POST rejection and the WS error, so the toast is not
-  doubled). Never issue a second start while an entry exists — an entry in `starting` means another
-  consumer's start is in flight and this tab joins it (spec "Tunnel adopted mid-start").
+- **Start request.** When the target is `pending`, `daemonPort !== null`, `chatId` is present, and
+  `startedForAttemptRef.current !== attempt`, stamp the ref and POST
+  `startPortTunnel(httpPort, { port, chatId })`; on resolve store the returned `url` in `startUrl`; on
+  rejection call `reportPortTunnelError(port, message)` (which is the single funnel for both the POST
+  rejection and the WS error, so the toast is not doubled). There is deliberately **no
+  `entry === undefined` guard**: the daemon's registry is the single-flight point — a POST during
+  another consumer's start joins it and a POST on a live tunnel returns its URL, in neither case
+  spawning a second cloudflared (fact 14). Adopting mid-start therefore still holds (spec "Tunnel
+  adopted mid-start"), and the tab gains a URL source for the case where the daemon has a tunnel but
+  will never broadcast about it again.
 - **DNS reload trigger.** When `entry.dnsVerified` transitions to `true` while the target is already
   `tunnelled` **and** the tab loaded before verification, fire the caller-provided reload once
   (expose it as a `reloadNonce` counter in the return so `UrlTabInstance` can re-navigate). Exactly
@@ -555,11 +745,36 @@ Effects:
   whenever the port or the started flag changes. `started` is `true` only when this tab issued the
   POST itself — a tab that merely joined another consumer's start counts as adopted (D10's
   err-toward-leaving-it-up rule).
-- **`retry`** resets `timedOut`, `startResolved`, and the in-flight flag so the start effect runs
-  again. It never runs automatically (D14).
+- **`retry`** — the only way out of `failed` and `stopped`, and it never runs automatically (D14):
+  ```ts
+  function retry() {
+    clearPortTunnelEntry(port);   // no-op on a ready entry (PD2)
+    setAttempt((n) => n + 1);     // resets watching / startUrl / everHadEntry / timedOut / startedForAttempt
+  }
+  ```
+  Trace, because the previous shape was inert in three of these four (spec behaviour §6 and §7, AC9,
+  D14):
+
+  | How the tab got there | State before Retry | After `retry()` |
+  |---|---|---|
+  | Start POST rejected | `{ state: 'error' }` entry → `failed` | entry cleared, `everHadEntry` false → `pending` → start fires |
+  | Tunnel stopped from the chip | no entry, `everHadEntry` true → `stopped` | `everHadEntry` false → `pending` → start fires |
+  | 120 s timeout, entry stuck `starting` | `starting` entry → `failed` | entry cleared, `timedOut` false → `pending` → start fires; the daemon joins its own in-flight start or answers with the live URL, which lands in `startUrl` |
+  | 120 s timeout, no entry | no entry → `failed` | `timedOut` false → `pending` → start fires |
+
+  `rejected` is the one failure body with **no** Retry — the port is ineligible, and retrying it would
+  re-issue a request the client already knows the daemon refuses (AC10).
+
+  Retry does not clear the consumer registration's `started` flag: a tab that has ever issued a start
+  POST for the port stays an owner (D10), and Task 12's registration is idempotent and never flips
+  `started` back to `false`.
 
 Keep the file under 300 lines and each effect under 50; extract the watchdog into a small local hook
 if it grows.
+
+**Verify:** covered behaviourally by Task 27's `UrlTabInstance` retry cases and by the post-Retry
+resolver rows in Task 5; there is no separate hook test (the hook is React-bound glue over pure logic
+that is already table-driven).
 
 ### Task 19 — `UrlTabBodyState`
 
@@ -574,6 +789,9 @@ Props `{ target, device, inspectActive, anchorRef, onRetry }`. Renders, per `tar
 - `failed` → the error text plus a **Retry** button, testids `url-tab-body-failed` and
   `url-tab-retry`.
 - `stopped` → "The tunnel for port N was stopped" plus the same Retry. testid `url-tab-body-stopped`.
+- `invalid` → "This tab's saved address can't be opened" plus the raw stored value, no Retry —
+  retrying resolves nothing; the address bar above is the way out (Task 20 keeps it live). testid
+  `url-tab-body-invalid`.
 
 Use `mainframe-design-system` tokens; mirror `PreviewBodyState`'s classes rather than inventing new
 ones. Never render a blank body — every `UrlTabTarget` variant has a branch (AC9).
@@ -585,12 +803,24 @@ ones. Never render a blank body — every `UrlTabTarget` variant has a branch (A
 
 `UrlTabToolbar` renders `PreviewUrlBar` + `PreviewDeviceToggle` + `PreviewCaptureCluster` and **no**
 `PreviewRunControl` and no console drawer (AC5) — the controls are absent, not disabled. testid
-`url-tab-toolbar`. `enabled` is `handle !== null`.
+`url-tab-toolbar`.
+
+It passes `enabled={true}` unconditionally — **not** `handle !== null`. A URL tab's address bar is the
+tab's escape hatch: the spec requires it live in `failed` and `stopped` ("the user can type a
+different URL out of the failure state", §6) and it is the only exit from `invalid`, and in none of
+those states is a webview mounted. The three icon buttons still dim on their own `handle` check inside
+`PreviewUrlBar` (Task 17). It also passes `seedUrl={url}` — the tab's committed URL, never the tunnel
+URL — and `onCommitUrl`.
 
 `UrlTabInstance({ tabId, url, visible, scopeKey, projectId })` mirrors `PreviewInstance` minus the
 launch plumbing:
 - `const { target, retry, reloadNonce } = useUrlTabTunnel({ tabId, url })`;
-- `const loadUrl = target.kind === 'direct' || target.kind === 'tunnelled' ? target.url : null`;
+- `const loadUrl = target.kind === 'direct' || target.kind === 'tunnelled' ? target.url : null` — the
+  other five kinds, `invalid` included, mount nothing;
+- `onCommitUrl` = `(next) => useLayoutStore.getState().setUrlTabTarget(tabId, next, urlTabTitle(next))`
+  behind a `useLayoutStore((s) => s.setUrlTabTarget)` selector (no `getState()` reach-through). The
+  store rewrites `tab.url`, the new value arrives as the `url` prop, and `useUrlTabTunnel` +
+  `useWebviewMount` re-resolve from it — one path for a URL typed in any state (PD3);
 - `const handle = useWebviewMount({ url: loadUrl, anchorRef, containerRef, projectId, device })`;
 - `usePreviewGeometry({ handle, anchorRef, containerRef, active: visible, status: loadUrl ? 'running' : null })`
   — pass the shape the hook already expects; if its `status` parameter is launch-specific, widen it to
@@ -610,9 +840,11 @@ decomposition should be needed.
 
 `RunTabBody` gains a `tab.kind === 'url'` arm **above** the file-guest fallback, rendering
 `<UrlTabInstance tabId={tab.id} url={tab.url ?? ''} visible={active} scopeKey={tabScope ?? undefined} projectId={projectId} />`.
-A URL tab with no `url` (corrupt persisted state) renders the `rejected`-style body via an empty
-normalized URL rather than falling through to the placeholder (AC3). The `<kind>: <title>`
-placeholder must remain reachable for `code`/`diff`/`skill`/`viewer`.
+A URL tab with no `url` (corrupt persisted state) passes `''` down and lands on the resolver's
+`invalid` variant (Task 11 step 0), which renders `url-tab-body-invalid` with a live address bar —
+it never falls through to the placeholder (AC3) and never reaches `host.preview.mount` with an
+unparseable URL. The `<kind>: <title>` placeholder must remain reachable for
+`code`/`diff`/`skill`/`viewer`.
 
 `RunTabPill.tabGlyph` gains a `Globe` (lucide) for `'url'`, coloured `text-mf-surface-run` when
 active like the other Run-owned kinds (spec: "a globe glyph, distinct from the preview eye"). The
@@ -715,22 +947,34 @@ to open the menu before asserting the browser-open behaviour).
 
 ---
 
-## Group F — `test` (behavioural coverage of the built UI)
+## Group F — `test-ui` (behavioural coverage of the built UI)
 
 All files here are **new**; the tasks above own every pre-existing test file they had to touch.
+This group runs after `core`, `rust`, `ui-tab`, and `ui-entrypoints` — Task 31 verifies all four.
 
 ### Task 27 — URL tab body and instance
 
 **Files (new):** `packages/ui/src/features/url-tab/__tests__/UrlTabBodyState.test.tsx`,
 `packages/ui/src/features/url-tab/__tests__/UrlTabInstance.test.tsx`.
 
-`UrlTabBodyState`: one case per `UrlTabTarget` variant asserting the right testid renders and that
-`rejected` shows the daemon text with **no** Retry while `failed` and `stopped` show Retry.
+`UrlTabBodyState`: one case per `UrlTabTarget` variant — all seven — asserting the right testid
+renders and that `rejected` and `invalid` show their text with **no** Retry while `failed` and
+`stopped` show Retry.
 
 `UrlTabInstance` (fake host adapter, `lib/host/fake-adapter.ts`): mounts the webview for a `direct`
 target; renders **no** run/stop/restart control and no console drawer, and does render the address
 bar, reload, open-in-browser, clear-cache, device toggle, inspect, and region-capture controls
 (AC5); the root testid is `url-tab-instance-<tabId>`.
+
+Two more `UrlTabInstance` cases, both regressions this plan's review caught:
+- **The bar stays live with nothing mounted.** With the tunnel store seeded so the target resolves to
+  `failed`, and again with a tab whose `url` is `''` (`invalid`), `preview-url-input` is **not**
+  `disabled`; committing `localhost:5173` in it calls the mocked `setUrlTabTarget` once with the
+  normalized URL and never calls `host.preview.mount` with the old value (spec §6, D9, AC14).
+- **Retry re-requests.** With the target `failed` from an `{ state: 'error' }` entry, clicking
+  `url-tab-retry` clears the entry from `usePortTunnelsStore` and issues exactly one
+  `startPortTunnel` call (mock `lib/api/tunnel-ports`); with the target `stopped` (entry gone after
+  one was seen), clicking it likewise issues one start (PD1, spec §7).
 
 ### Task 28 — Run surface renders the kind and scopes it
 
@@ -768,7 +1012,8 @@ calls the pre-existing opener.
 
 ### Task 31 — Full verification sweep (AC18)
 
-Run and record:
+This task verifies the `rust` group's output as well as the TypeScript groups' — that is why `test-ui`
+carries `rust` in `depends_on`. Run and record:
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck`
 - `pnpm --filter @qlan-ro/mainframe-ui test` (full suite; if the known cross-file `React.act` batch
   failure appears, re-run the affected files individually and note it — do not "fix" it here)
@@ -778,7 +1023,9 @@ Run and record:
   `packages/core-rs`")
 - confirm every new interactive element carries a testid in the AC15 list and none is keyed by array
   index
-- confirm no file added or modified exceeds 300 lines and no function exceeds 50 (AC17)
+- confirm no file added or modified exceeds 300 lines and no function exceeds 50 (AC17) — run it as
+  `git diff --name-only main...HEAD -- '*.ts' '*.tsx' | xargs wc -l | sort -n`, and note that
+  `store/layout.ts` entered this work at 317 lines and leaves it under 250 via Task 32
 
 ---
 
@@ -795,8 +1042,11 @@ Run `pnpm tauri:dev` from `packages/app-tauri` with an isolated `MAINFRAME_DATA_
    is made (AC10, checkable in the daemon log); an eligible port shows pending, then loads the tunnel
    origin **with the original path and query** (AC7); a second tab on that port loads with no pending
    (AC8).
-4. Quit and relaunch: the tab is back with its title, loads on activation, and the address bar shows
-   the typed URL, never a tunnel URL (AC14).
+4. Quit and relaunch: the tab is back with its title, loads on activation, and the address bar seeds
+   with the typed URL — the stored value is never a tunnel URL (AC14). On a tunnelled tab the bar then
+   follows the page to the tunnel origin once it loads (PD4); what persists is still `tab.url`.
+5. In a tab left in the failure state, type a different URL into the address bar and press Enter: it
+   loads, the tab's title follows, and the new URL survives a relaunch (spec §6, D9).
 
 ## Risks
 
@@ -809,3 +1059,8 @@ Run `pnpm tauri:dev` from `packages/app-tauri` with an isolated `MAINFRAME_DATA_
 - **The DNS gate depends on the daemon's `ready`-means-verified semantics** for the REST snapshot
   (fact 8). If that ever changes, an adopting tab could load an unresolvable name — the single
   automatic reload on `dns_verified` (Task 18) is the safety net, not the gate.
+- **Retry mutates shared state.** `clearPortTunnelEntry` (PD2) is keyed by port, so one tab's Retry
+  drops the badge every `UrlChip` on that port was showing. The guard is that it refuses a `ready`
+  entry, so only a stale `error` or an abandoned `starting` is ever removed, and the next
+  `tunnel:status` event restores the truth. If this proves confusing in use, the narrower fix is a
+  per-consumer failure marker rather than re-narrowing Retry.
