@@ -33,9 +33,19 @@ is decided by data already in hand, not by a check deferred to selection time. W
 project qualifies, no session rows appear and the popover behaves exactly as it does today.
 
 **Reference label.** Sessions are identified throughout this feature by a *reference label*: the
-session's displayed title (the same fallback title the sidebar shows when a session has none), with `]`
-and newline characters removed. Titles are not unique, so when the offerable set holds more than one
-session with the same title, the app appends ` (2)`, ` (3)`, … in list order — most recently updated
+session's displayed title (the same fallback title the sidebar shows when a session has none), reduced to
+a markdown-inert character set — letters, digits, spaces, `…`, and the punctuation `, ; ! ? ' " ( ) -`.
+Every other character is replaced with a space, runs of whitespace collapse to one space, and the result
+is trimmed. That removes every character markdown gives meaning to — `` ` `` `* _ [ ] < > ~ \ & # |` — and
+`. : / @`, the characters GFM needs to autolink a bare URL or an email address. The label is built once,
+against that character set, so a single rule covers the picker row, the inserted token, the reference
+line, and the chip. Sanitizing rather than escaping is deliberate: the token, the reference line, and the
+chip must stay byte-identical to each other, and a backslash-escaped label would not. If sanitizing leaves
+nothing — a title of only punctuation or emoji — the label falls back to the sidebar's untitled display
+title.
+
+Labels are not unique, so when the offerable set holds more than one session with the same label, the app
+appends ` (2)`, ` (3)`, … in list order — most recently updated
 first, chat id as the tiebreak — so that every offered row has a distinct label and the same session
 keeps the same label for the same list. If the label the app is about to insert is already used in the
 draft by a *different* session, it takes the next free suffix instead. The label is what the picker row
@@ -146,23 +156,33 @@ location. Only *resolved* chats are offered.
 8. **Referenced session archived, renamed, or deleted after send** — the chip still renders from the
    label carried in the token. The stored path may be stale; the chip makes no claim about it.
 9. **Token inside a formatted paragraph** — `see **this** @session[Foo]` renders the chip, not raw text.
-10. **Title containing `]` or a newline** — those characters are removed when the label is built, so the
-    token and the reference line always parse.
-11. **Empty title** — a session with no title is offered under the same fallback display title the
-    sidebar shows; the token is never `@session[]`.
-12. **Long label** — the sent-message chip truncates; the composer token does not truncate, because it is
+10. **Title containing markdown syntax** — backticks, `*`, `_`, `[`, `]`, `<`, `~~`, `#`, `|`, a bare URL,
+    or an email address. This is a common class, not a corner: a title is the user's first message
+    collapsed and truncated to 50 characters, or an LLM-written line. All of it is replaced when the label
+    is built, so the token, the reference line, and the chip carry an inert label. Without that, a session
+    titled ``Why does `useEffect` fire twice`` would insert ``@session[Why does `useEffect` fire twice]``,
+    markdown would split the backtick pair into a code node, and the sent message would show the raw
+    fragments ``@session[Why does `` and `` fire twice]`` instead of a chip. Newlines cannot reach a title,
+    and the same rule removes them regardless.
+11. **Title that sanitizes to nothing, or no title at all** — a session with no title, or one whose title
+    is only punctuation or emoji, is offered under the same fallback display title the sidebar shows; the
+    token is never `@session[]`.
+12. **Two different titles sanitizing to the same label** — ``Fix `foo` handling`` and `Fix *foo*
+    handling` both reduce to `Fix foo handling`, so the second takes the ` (2)` suffix, exactly as two
+    identical titles do.
+13. **Long label** — the sent-message chip truncates; the composer token does not truncate, because it is
     raw text.
-13. **Caret placed back inside an inserted token** — the popover may reopen with the bracket text as its
+14. **Caret placed back inside an inserted token** — the popover may reopen with the bracket text as its
     query, exactly as it would inside any other mention token. No matches, no special handling.
-14. **A user types the reference-line shape by hand** — it is stripped from the rendered message like a
+15. **A user types the reference-line shape by hand** — it is stripped from the rendered message like a
     real one. Accepted: the shape is specific enough that accidental collisions are not a practical
     concern.
-15. **`@session[…]` must not be eaten by the plain-mention highlighter** — the session shape is
+16. **`@session[…]` must not be eaten by the plain-mention highlighter** — the session shape is
     recognized before the bare `@word` mention shape, in both the composer overlay and the message
     renderer, so `@session` never highlights as a file mention.
-16. **Reference lines with an empty typed body** — a message that is only references sends and renders as
+17. **Reference lines with an empty typed body** — a message that is only references sends and renders as
     chips with no prose.
-17. **Multi-quote composition** — reference lines go above the entire composed message, before the first
+18. **Multi-quote composition** — reference lines go above the entire composed message, before the first
     quote block, regardless of which segment held the token.
 
 ## Acceptance criteria
@@ -182,8 +202,9 @@ location. Only *resolved* chats are offered.
    no chat id.
 6. The reference lines appear at the top of the body, followed by a blank line, ahead of any quote block.
 7. Two tokens carrying the same label produce exactly one reference line.
-8. With two same-titled offerable sessions, the picker lists them with distinct labels (`<title>` and
-   `<title> (2)`), and referencing both produces two reference lines whose paths are each session's own
+8. With two offerable sessions whose labels are equal — identical titles, or titles that differ only in
+   characters sanitization removes — the picker lists them with distinct labels (`<label>` and
+   `<label> (2)`), and referencing both produces two reference lines whose paths are each session's own
    transcript path.
 9. A hand-typed `@session[Nonexistent]` token produces no reference line, does not throw, and does not
    prevent the send.
@@ -191,42 +212,48 @@ location. Only *resolved* chats are offered.
     nothing else, and the reference lines are absent from the rendered text.
 11. A message whose paragraph mixes markdown formatting with a session token (`see **this**
     @session[Foo]`) renders the bold text and the chip; no raw `@session[…]` text appears.
-12. The chip is present in the optimistic local echo and in the daemon's confirmed echo with identical
+12. A session titled ``Why does `useEffect` fire twice`` is offered with the label `Why does useEffect
+    fire twice`; the inserted token, the reference line, and the rendered chip all carry that same string;
+    and the sent message renders one chip with no `<code>` element and no raw `@session[` fragment in its
+    text. The same holds for a title containing `*`, `_`, `[`, `<`, `~~`, `www.example.com`, and
+    `name@example.com`.
+13. The chip is present in the optimistic local echo and in the daemon's confirmed echo with identical
     output — no path-then-chip flip and no flicker at reconcile.
-13. Reloading the app and reopening the session reconstructs the chips from the replayed message text,
+14. Reloading the app and reopening the session reconstructs the chips from the replayed message text,
     including after the referenced session has been archived or deleted.
-14. Sending a message with one or more references leaves exactly one user message in the transcript: one
+15. Sending a message with one or more references leaves exactly one user message in the transcript: one
     confirmed server message clears exactly one pending, with no duplicate or orphaned user message.
-15. A user message whose text matches neither the reference-line shape nor the token shape renders
+16. A user message whose text matches neither the reference-line shape nor the token shape renders
     byte-identically to how it renders today.
-16. The picker does not offer: the active session, archived sessions, sessions in another project,
+17. The picker does not offer: the active session, archived sessions, sessions in another project,
     sessions that have never started, sessions whose transcript resolution returned unavailable, or
     sessions whose transcript resolution returned unknown.
-17. No offered session ever resolves to a Claude-shaped path when its adapter is not Claude.
-18. Deleting a referenced session's transcript after the picker's read and before the send still sends the
+18. No offered session ever resolves to a Claude-shaped path when its adapter is not Claude.
+19. Deleting a referenced session's transcript after the picker's read and before the send still sends the
     message with its reference line intact, shows no error in the UI, and issues no additional resolution
     request during the send.
-19. The transcript-resolution route validates its input with Zod-equivalent schema validation, returns the
+20. The transcript-resolution route validates its input with Zod-equivalent schema validation, returns the
     standard `ok`/`fail` envelope, accepts a set of chat ids in one request, and returns per chat one of
     resolved (with an absolute path), unavailable (with a reason), or unknown.
-20. Rust daemon tests cover the resolution route for: a Claude session whose transcript is present, a
+21. Rust daemon tests cover the resolution route for: a Claude session whose transcript is present, a
     session whose transcript file is missing, a chat that has never started, a non-Claude adapter that
     resolves, and an adapter that returns unknown.
-21. File, directory, and agent mention behavior is unchanged, including directory drill-down and the
+22. File, directory, and agent mention behavior is unchanged, including directory drill-down and the
     trailing-space insertion behavior — the existing trigger-engine and mention-adapter tests pass
     unmodified, and rows for those kinds render no glyph.
-22. The picker row carries `data-testid="composer-mention-session-<chatId>"`, produced by a per-item
+23. The picker row carries `data-testid="composer-mention-session-<chatId>"`, produced by a per-item
     test-id hook on the trigger configuration rather than the trigger-wide prefix. The sent-message chip
     carries `data-testid="chat-message-session-chip-<labelSlug>"`, where `labelSlug` is the reference
     label lowercased with each run of non-alphanumeric characters replaced by `-` and leading and
     trailing `-` trimmed.
-23. Unit tests cover: picker search, merge ordering, each exclusion rule, and label disambiguation; the
-    reference-line format round-trip (compose → parse → same label and path); send-time de-duplication;
-    and the rendered chip on an optimistic message, a replayed message, and a markdown-formatted
-    paragraph.
-24. `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes and the changed UI test files pass; `cargo
+24. Unit tests cover: picker search, merge ordering, each exclusion rule, and label disambiguation; label
+    sanitization for a title carrying backticks, `*`, `[`, `<`, `~~`, a bare URL, and an email address,
+    plus a title that sanitizes to empty; the reference-line format round-trip (compose → parse → same
+    label and path); send-time de-duplication; and the rendered chip on an optimistic message, a replayed
+    message, a markdown-formatted paragraph, and a message referencing a markdown-syntax title.
+25. `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes and the changed UI test files pass; `cargo
     test` passes in `packages/core-rs`.
-25. The picker row and its glyph, the composer token tint, and the sent-message chip go through the design
+26. The picker row and its glyph, the composer token tint, and the sent-message chip go through the design
     gate (`needs-ui`) before the PR is marked ready.
 
 ## Decisions
@@ -239,8 +266,8 @@ location. Only *resolved* chats are offered.
 2. **Reference-line literal is `Referenced session @session[<label>]: <absolute path>`, one per line,
    prepended above the whole composition.** `hard-to-reverse` — Once messages ship with this shape, old
    messages only render as chips if the parser keeps recognizing it. Reusing the token form inside the
-   line means one sanitization rule (`]` and newlines stripped) covers both, and pairs each line to its
-   token unambiguously.
+   line means one sanitization rule (decision 20) covers both, and pairs each line to its token
+   unambiguously.
 3. **The sent-message chip is derived at render time from the body text.** `hard-to-reverse` — The only
    mechanism that survives reload: replayed history is rebuilt from the CLI's own transcript and carries
    the message text and nothing else, so a structured per-message field could not reproduce the chip.
@@ -320,3 +347,17 @@ location. Only *resolved* chats are offered.
     restated here.** `reversible` — Class names and token names are implementation; the behavior they
     encode (distinct token tint, session glyph, chip truncation, chip inline in the prose flow) is
     specified above.
+20. **The reference label is sanitized to a markdown-inert character set when it is built — not escaped,
+    and not merely stripped of `]` and newlines.** `hard-to-reverse` — Labels are baked into shipped
+    message bodies, and by decision 4 the chip is produced *after* markdown parsing, where the formatter
+    sees each string child of a paragraph in isolation. Any markdown-active character in the label splits
+    the token across mdast nodes before the formatter runs, and the message shows raw fragments instead of
+    a chip. The class is common, not exotic: titles are the user's first message collapsed and truncated
+    to 50 characters (`packages/core-rs/crates/mainframe-chat/src/title_generator.rs:5-18`) or an LLM
+    line, and `packages/ui/src/features/chat/messages/UserMessage.tsx:33` renders with `remark-gfm`, so
+    backticks, `*`, `[`, `<`, `~~`, bare `www.` URLs, and email addresses all form nodes. Escaping was
+    rejected: the label is matched literally in three places (token, reference line, chip), and a
+    backslash-escaped label stops round-tripping byte-identically between them. `.`, `:`, `/`, and `@` are
+    excluded to kill GFM autolink literals; `…` is kept because the fallback title's truncation marker
+    uses it. Sanitization can map two distinct titles onto one label, which the existing numeric suffix
+    already handles.
