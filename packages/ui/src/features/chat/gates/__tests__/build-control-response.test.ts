@@ -7,8 +7,9 @@
  *    functions under test.
  *
  * Behaviors covered:
- *  - buildPermissionResponse: deny, once (no updatedPermissions), always (with
- *    updatedPermissions from entry.request.suggestions).
+ *  - buildPermissionResponse: deny, once (no updatedPermissions, even when the
+ *    request carries suggestions — #283), always (with updatedPermissions from
+ *    entry.request.suggestions).
  *  - buildAskUserQuestionResponse: with answers (spreads original input,
  *    appends answers key), without answers (behavior:'deny', no updatedInput).
  *  - buildPlanResponse: approve+yolo+clearContext, approve+default (no
@@ -59,6 +60,18 @@ describe('buildPermissionResponse', () => {
 
   it("kind='once' returns behavior:'allow' with updatedInput from entry.request.input, no updatedPermissions key", () => {
     const res = buildPermissionResponse(entry(), 'once');
+    expect(res).toEqual({
+      requestId: 'r1',
+      toolUseId: 'tu1',
+      toolName: 'Bash',
+      behavior: 'allow',
+      updatedInput: { cmd: 'ls' },
+    });
+    expect(res).not.toHaveProperty('updatedPermissions');
+  });
+
+  it("kind='once' omits updatedPermissions even when the request carries suggestions (#283)", () => {
+    const res = buildPermissionResponse(entry({ suggestions: [SUG] }), 'once');
     expect(res).toEqual({
       requestId: 'r1',
       toolUseId: 'tu1',
