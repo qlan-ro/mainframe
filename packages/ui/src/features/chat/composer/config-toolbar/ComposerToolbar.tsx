@@ -12,7 +12,6 @@
  * Wired into Composer.tsx via the `data-testid="chat-composer-toolbar"` slot.
  */
 
-import { useAuiState } from '@assistant-ui/react';
 import { useAdapters, useComposerTuning } from './use-composer-tuning';
 import { ProviderModelSelect } from './ProviderModelSelect';
 import { PermissionSelect } from './PermissionSelect';
@@ -20,6 +19,7 @@ import { PlanModeToggle } from './PlanModeToggle';
 import { EffortPicker } from './EffortPicker';
 import { FeaturesPopover } from './FeaturesPopover';
 import { WorktreePopover } from './WorktreePopover';
+import { TuningWarningDialog } from './TuningWarningDialog';
 
 export function ComposerToolbar() {
   const adapters = useAdapters();
@@ -35,11 +35,12 @@ export function ComposerToolbar() {
     setEffort,
     setFeature,
     disabled,
+    // The agent is locked once the thread has any messages — switching mid-thread
+    // would orphan the CLI session (mirrors desktop's hasMessages guard).
+    hasMessages,
+    contextTokens,
+    tuningWarning,
   } = useComposerTuning(adapters);
-
-  // The agent is locked once the thread has any messages — switching mid-thread
-  // would orphan the CLI session (mirrors desktop's hasMessages guard).
-  const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
 
   // All controls need a resolved chat; nothing to render while loading.
   if (!chat) return null;
@@ -52,6 +53,7 @@ export function ComposerToolbar() {
         adapter={adapter}
         model={model}
         locked={hasMessages}
+        disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
       />
@@ -76,6 +78,14 @@ export function ComposerToolbar() {
         />
       )}
       <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />
+      <TuningWarningDialog
+        pending={tuningWarning.pending}
+        contextTokens={contextTokens}
+        suppressChecked={tuningWarning.suppressChecked}
+        onSuppressChange={tuningWarning.setSuppressChecked}
+        onConfirm={tuningWarning.confirm}
+        onCancel={tuningWarning.cancel}
+      />
     </>
   );
 }
