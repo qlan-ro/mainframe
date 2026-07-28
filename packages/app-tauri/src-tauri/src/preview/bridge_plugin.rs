@@ -78,6 +78,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 #[cfg(test)]
 mod tests {
     use super::super::bridge::BRIDGE_JS;
+    use super::is_allowed_external_scheme;
 
     /// BRIDGE_JS runs in remote-origin child webviews, where Tauri's ACL only
     /// allows the plugin-prefixed commands granted by capabilities/preview.json.
@@ -123,13 +124,14 @@ mod tests {
             .iter()
             .filter_map(|u| u.as_str())
             .collect();
+        assert_eq!(urls.len(), 2, "remote.urls must carry exactly two patterns");
         assert!(
-            urls.contains(&"http://localhost:*"),
-            "localhost missing from remote urls"
+            urls.contains(&"http://*:*"),
+            "http://*:* missing from remote urls"
         );
         assert!(
-            urls.contains(&"http://127.0.0.1:*"),
-            "127.0.0.1 missing from remote urls"
+            urls.contains(&"https://*:*"),
+            "https://*:* missing from remote urls"
         );
         let perms: Vec<&str> = cap["permissions"]
             .as_array()
@@ -144,6 +146,54 @@ mod tests {
             "preview-bridge:allow-open-external",
         ] {
             assert!(perms.contains(&p), "missing permission {p}");
+        }
+    }
+
+    /// The widened patterns must actually span every http(s) host, port, and
+    /// path — not just the default port a bare `http://*` would silently
+    /// restrict to (spec D1).
+    #[test]
+    fn preview_capability_patterns_match_every_http_origin() {
+        use tauri::utils::acl::RemoteUrlPattern;
+        use tauri::Url;
+
+        let patterns: Vec<RemoteUrlPattern> = ["http://*:*", "https://*:*"]
+            .iter()
+            .map(|p| p.parse().expect("pattern must parse"))
+            .collect();
+        let matches = |raw: &str| {
+            let url = Url::parse(raw).expect("test URL must parse");
+            patterns.iter().any(|p| p.test(&url))
+        };
+
+        for allowed in [
+            "http://localhost:5173/path",
+            "http://192.168.1.5:3000/a?b=1",
+            "https://example.com:8443/a",
+            "https://example.com/x",
+        ] {
+            assert!(matches(allowed), "expected a pattern to match {allowed}");
+        }
+        for disallowed in ["file:///etc/passwd", "ssh://host"] {
+            assert!(
+                !matches(disallowed),
+                "no pattern should match {disallowed}"
+            );
+        }
+    }
+
+    /// The widened remote allowlist must not be mistaken for a widened
+    /// opener: `open_external` keeps rejecting non-http(s) schemes.
+    #[test]
+    fn external_open_scheme_guard_still_rejects_dangerous_schemes() {
+        for dangerous in ["file:///etc/passwd", "javascript:alert(1)", "ssh://host"] {
+            assert!(
+                !is_allowed_external_scheme(dangerous),
+                "expected rejected: {dangerous}"
+            );
+        }
+        for safe in ["http://x", "https://x"] {
+            assert!(is_allowed_external_scheme(safe), "expected allowed: {safe}");
         }
     }
 }
