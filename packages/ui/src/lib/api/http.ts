@@ -48,14 +48,20 @@ export interface ApiErrorDetail {
  * than a request (automations' `engine_error`) send `errors[]` alongside the
  * joined `error` string; a bare `Error` would drop it and the caller could
  * only ever show one flat sentence.
+ *
+ * `status` is the originating HTTP status, so a caller classifies a rejection
+ * by status rather than by re-matching the daemon's prose, which a reword would
+ * silently break. `0` means the error was constructed outside an HTTP response.
  */
 export class ApiRequestError extends Error {
   readonly details: ApiErrorDetail[];
+  readonly status: number;
 
-  constructor(message: string, details: ApiErrorDetail[] = []) {
+  constructor(message: string, details: ApiErrorDetail[] = [], status = 0) {
     super(message);
     this.name = 'ApiRequestError';
     this.details = details;
+    this.status = status;
   }
 }
 
@@ -79,11 +85,11 @@ async function extractError(res: Response): Promise<ApiRequestError> {
         : typeof data.message === 'string'
           ? data.message
           : `HTTP ${res.status}`;
-    return new ApiRequestError(text, errorDetails(data.errors));
+    return new ApiRequestError(text, errorDetails(data.errors), res.status);
   } catch {
     /* not JSON */
   }
-  return new ApiRequestError(`HTTP ${res.status}`);
+  return new ApiRequestError(`HTTP ${res.status}`, [], res.status);
 }
 
 /** Fetch, unwrap the `ApiResponse<T>` envelope, and return `data`. Throws on HTTP or API error. */
