@@ -170,11 +170,41 @@ use mainframe_types::adapter::{ControlDestination, ControlUpdate};   // same pat
 pub fn keep_mode_changes_session_scoped(updates: Vec<ControlUpdate>) -> Vec<ControlUpdate> { ... }
 ```
 
-Implementation: `into_iter().map(...)`; match only `ControlUpdate::SetMode { mode, destination }` where `destination`
-is one of `UserSettings | ProjectSettings | LocalSettings`, emit `SetMode { mode, destination:
-ControlDestination::Session }` and
-`tracing::warn!(?mode, ?destination, "setMode update pointed at a persisting destination; forwarding it session-scoped")`;
-every other arm returns the update unchanged (`_ => u`, so a new variant is forwarded verbatim by default).
+Implementation: `into_iter().map(...)` with **two nested matches**, each failing in the direction that is safe for it.
+
+```rust
+match u {
+    ControlUpdate::SetMode { mode, destination } => match destination {
+        // In-memory destinations (PERMISSIONS.md:104-113): nothing is persisted, so the update stands.
+        ControlDestination::Session | ControlDestination::CliArg => {
+            ControlUpdate::SetMode { mode, destination }
+        }
+        ControlDestination::UserSettings
+        | ControlDestination::ProjectSettings
+        | ControlDestination::LocalSettings => {
+            tracing::warn!(
+                ?mode, ?destination,
+                "setMode update pointed at a persisting destination; forwarding it session-scoped"
+            );
+            ControlUpdate::SetMode { mode, destination: ControlDestination::Session }
+        }
+    },
+    // An update kind this adapter does not special-case is forwarded verbatim — the fix's thesis.
+    _ => u,
+}
+```
+
+The two wildcards are deliberately asymmetric:
+
+- **Inner match — exhaustive over `ControlDestination`, no `_`.** The enum has five variants today
+  (`crates/mainframe-types/src/adapter.rs:120-126`). A wildcard here would be fail-open on exactly the axis this todo
+  is about: a sixth variant added upstream would carry a `setMode` straight to a persisting destination with every test
+  below still green. Listing all five makes that addition a compile error, forcing whoever adds it to classify the new
+  destination as persisting or in-memory. Do not collapse the two arms into `d if is_persisting(d)`; a guard reopens
+  the hole.
+- **Outer match — keeps `_ => u`.** Forwarding an unrecognized update *kind* untouched is the fix itself: the update
+  reaches the CLI with the destination the CLI chose. Adding a variant upstream cannot escalate scope through this
+  function, so a compile error here would buy nothing.
 
 Inline `#[cfg(test)] mod tests` (unwrap/expect allowed here) — this module owns per-variant coverage, asserting on the
 returned `ControlUpdate` values:
@@ -183,8 +213,9 @@ returned `ControlUpdate` values:
   `RemoveDirectories`), each with a different destination so both the session-scoped and the persisting cases are in
   the same assertion (`Session`, `LocalSettings`, `ProjectSettings`, `Session`, `UserSettings`) →
   `assert_eq!(keep_mode_changes_session_scoped(input.clone()), input)`. `ReplaceRules` was missing from the earlier
-  draft of this list; enumerating the variants in one case makes an added variant a compile error in the fixture
-  rather than a silent gap;
+  draft of this list. This fixture is coverage, nothing more: a `Vec` literal of struct-variant values still compiles
+  when a variant is added to the enum, so it forces no future author's hand. The only compile-time guarantee in this
+  module is the exhaustive destination match above;
 - `set_mode_keeps_a_session_destination` — `SetMode { AcceptEdits, Session }` unchanged;
 - `set_mode_is_downgraded_from_every_persisting_destination` — `SetMode { AcceptEdits, d }` for each of
   `UserSettings`, `ProjectSettings`, `LocalSettings` → `destination` becomes `Session`, `mode` preserved;
@@ -201,8 +232,13 @@ returned `ControlUpdate` values:
 1. Delete `promote_to_local_settings` and `promote_one` with their doc comment (`:209-290`).
 2. `:967-969` → `serde_json::to_value(keep_mode_changes_session_scoped(up)).unwrap_or(Value::Null)`; import
    `crate::permission_updates::keep_mode_changes_session_scoped`.
-3. Drop `ControlDestination` from the `mainframe_types::adapter` import list at `:37` if it is now unused (compiler
-   will say).
+3. Drop **both `ControlDestination` and `ControlUpdate`** from the `mainframe_types::adapter` import list at `:37-38`.
+   Verified in this worktree: `promote_to_local_settings`/`promote_one` (`:212-281`) are the only users of either name
+   in `session.rs`, so step 1 leaves both unused, and the crate gate is
+   `cargo clippy --all-targets -- -D warnings` — an unused import is a hard failure, not a warning. The removal is safe
+   under `cargo test` too, because task 1's sibling test module imports the payload types explicitly rather than
+   through `use super::*`. Leave the other names on those two lines (`AdapterProcess`, `AdapterProcessStatus`,
+   `ControlBehavior`, `ControlResponse`, `MessageUsage`, `SessionOptions`, `SessionSpawnOptions`) in place.
 4. Update the module doc at `:16-20`: it still lists `respondToPermission (incl. ExitPlanMode/AskUserQuestion
    special-casing + localSettings promotion)` among the behavior "copied verbatim from the TS source". Drop
    `+ localSettings promotion` from that clause and, in the same sentence, note that outbound permission updates keep
@@ -315,13 +351,32 @@ the old behavior are not migrated or removed** (out of scope per the brief) and 
 `parallel_safe` is a file-collision flag; `depends_on` names groups whose *output* this group reads or verifies. The
 two are independent — `legacy-ts-cleanup` and `rust-core` share no files, yet the edge below is real.
 
+**This table is the executed graph.** The group names, `kind` values, and `depends_on` edges below are the ones the
+lane must run; the JSON block after it is the same graph, transcribed, and any divergence between the two is a bug in
+this plan, not a scheduling choice.
+
 | Group | Tasks | Kind | Files | `parallel_safe` | `depends_on` |
 |---|---|---|---|---|---|
 | `rust-tests-red` | 1, 2 | test | `crates/mainframe-adapter-claude/src/session/permission_response_tests.rs`, `crates/mainframe-adapter-claude/src/session.rs` (module decl + 3 helper visibilities) | false (shares `session.rs` with `rust-core`) | — |
 | `rust-core` | 3, 4 | core | `crates/mainframe-adapter-claude/src/permission_updates.rs`, `.../src/lib.rs`, `.../src/session.rs` | false | `rust-tests-red` |
-| `ui-test` | 5 | ui | `packages/ui/src/features/chat/gates/__tests__/build-control-response.test.ts` | true | — |
+| `ui-regression-test` | 5 | test | `packages/ui/src/features/chat/gates/__tests__/build-control-response.test.ts` | true | — |
 | `legacy-ts-cleanup` | 6 | core | `packages/core/src/plugins/builtin/claude/session.ts`, `packages/core/src/__tests__/ensure-persistent-rule.test.ts` | true | — |
 | `docs-and-changeset` | 7, 8 | core | `docs/adapters/claude/PERMISSIONS.md`, `docs/adapters/claude/CONSUMED-SURFACE.md`, `.changeset/<name>.md` | true | `rust-core`, `legacy-ts-cleanup` |
+
+`ui-regression-test` is `kind: test` rather than `ui`: task 5 adds one assertion to an existing unit test of a pure
+builder function and changes no markup, so it needs the test-authoring lens, not the design-system one (the design gate
+already ruled the UI unchanged).
+
+```json
+[
+  {"name": "rust-tests-red", "tasks": [1, 2], "kind": "test", "parallel_safe": false, "depends_on": []},
+  {"name": "rust-core", "tasks": [3, 4], "kind": "core", "parallel_safe": false, "depends_on": ["rust-tests-red"]},
+  {"name": "ui-regression-test", "tasks": [5], "kind": "test", "parallel_safe": true, "depends_on": []},
+  {"name": "legacy-ts-cleanup", "tasks": [6], "kind": "core", "parallel_safe": true, "depends_on": []},
+  {"name": "docs-and-changeset", "tasks": [7, 8], "kind": "core", "parallel_safe": true,
+   "depends_on": ["rust-core", "legacy-ts-cleanup"]}
+]
+```
 
 Why those edges:
 
@@ -355,8 +410,41 @@ void-by-architecture above, with the added `warn` in task 3; AC 8 → final veri
   session only, because that is the scope the CLI attaches to those suggestions; Bash grants still persist. That is
   parity with the terminal CLI (`PERMISSIONS.md:132-137`), but it is a visible difference from today's (buggy)
   stickiness, and the PR body must say so.
-- **No live-CLI verification in this lane.** The tests assert the outbound payload, not the CLI's resulting file writes.
-  A manual QA pass — answer "Always allow" on a Bash prompt and confirm the rule appears in
-  `.claude/settings.local.json`, then answer one on an Edit prompt and confirm nothing is written — is worth doing at
-  the QA stage.
+- **No automated test touches a real `.claude/settings.local.json`.** The tests assert the outbound payload; the file
+  writes are the CLI's. That gap is closed by a **required** QA-stage deliverable, not by a note — see "Required QA
+  deliverable" below. Do **not** try to close it with an automated live-CLI test: no such harness exists, `session.rs`
+  records the standing decision that no unit test spawns a real `claude` (`:1705-1706`), and the E2E suite drives the
+  `mock-cli` adapter.
 - **Previously promoted entries stay.** Explicitly out of scope; the changeset and PR body must say so.
+
+## Required QA deliverable
+
+The automated tests stop at the outbound `control_response`. The only proof that the fix stops writes into a real
+`.claude/settings.local.json` is this manual pass. **The lane must not close without it**, and the QA result must
+record the two file snapshots (or their diff) as evidence.
+
+Do **not** replace it with an automated live-CLI test: `session.rs:1705-1706` records the standing decision that no
+unit test spawns a real `claude`, and the E2E suite drives the `mock-cli` adapter.
+
+**Setup.** Create a disposable git repo outside this worktree (`git init /tmp/mf-283-qa`, one committed file), open it
+as a Mainframe project against a dev daemon (`MAINFRAME_DATA_DIR=~/.mainframe_dev DAEMON_PORT=31500`), and start a
+Claude session in it. Snapshot the baseline: `cp /tmp/mf-283-qa/.claude/settings.local.json /tmp/mf-283-before.json`
+(record "absent" if the file does not exist yet).
+
+**Case A — a Bash grant still persists.** Ask the agent to run a shell command it needs permission for (for example
+`ls -la`). On the permission card, choose **Always allow**. Expected: `.claude/settings.local.json` now exists and its
+`permissions.allow` array contains the Bash rule the card offered. This is the CLI honoring a `localSettings`
+destination, and it must keep working — a fix that silences this case has over-corrected.
+
+**Case B — an Edit grant and a plan approval persist nothing.** Snapshot again
+(`cp .../settings.local.json /tmp/mf-283-mid.json`), then, in the same session: (1) ask for a file edit and choose
+**Always allow** on the Edit prompt; (2) ask for a plan, then approve it (the `ExitPlanMode` path, which is what emits
+the `setMode` update — `packages/e2e/fixtures/recordings/plan-approval.0.ndjson:23`). Expected:
+`diff /tmp/mf-283-mid.json /tmp/mf-283-qa/.claude/settings.local.json` is empty — the file is byte-identical — and it
+contains **no `defaultMode` key** at any nesting level (`grep -c defaultMode` → 0).
+
+**Fail condition.** Any change to the file in case B, or a `defaultMode` key appearing at any point, fails QA and
+routes back to the implementer. Reverse-check the baseline too: on `main` (pre-fix), case B *does* mutate the file —
+if it does not, the QA environment is not exercising the adapter under test.
+
+**Cleanup.** Delete `/tmp/mf-283-qa` and the snapshots.
