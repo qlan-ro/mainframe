@@ -34,6 +34,8 @@ Read before planning; every path below exists on the branch.
 | CLI-reported usage lives at `extras.state.contextUsage` (`{percentage,totalTokens,maxTokens} | null`) | `packages/ui/src/features/chat/controller/chat-thread-state.ts:82` |
 | Effective (inherited) current values come from `displayEffort` / `effectiveFeature`; label maps are `EFFORT_META` / `FEATURE_LABELS` | `packages/ui/src/lib/model-tuning.ts` |
 | Radix DropdownMenu **and** Popover both open under `userEvent.click` in this suite — the pointer-capture stubs are in the global setup | `packages/ui/src/__tests__/setup.ts:100-112`; `SessionsMoreMenu.test.tsx`, `ProviderModelSelect.test.tsx` |
+| A thread switch does **not** remount the composer — every link in the chain is rendered unkeyed, so switching flips the assistant-ui runtime's `mainThreadId` and React reconciles the same instances | `layout/SurfaceHost.tsx:27` → `features/sessions/new-thread/ChatSurface.tsx:135-142` → `features/chat/thread/ChatThread.tsx:124` |
+| `packages/ui/tsconfig.json` has `"include": ["src"]`, so `tsc --noEmit` typechecks the test files too | `packages/ui/tsconfig.json` |
 | `.test.ts` runs in the **node** project; DOM-touching logic tests opt in with `// @vitest-environment jsdom` | `packages/ui/vitest.config.ts` |
 | No token formatter exists anywhere in `packages/ui` | grepped `formatTokens`, `contextUsage` consumers |
 
@@ -60,6 +62,27 @@ Read before planning; every path below exists on the branch.
   zustand's default shallow merge fills the missing key from the initial state. `partialize` gains the key.
 - **D7 — the suppression preference commits on confirm only.** Checking the box and then cancelling writes
   nothing, so the checkbox is never a trapdoor.
+- **D8 — four pre-existing functions over the 50-line limit are grandfathered; the gate covers new code.**
+  Every function this plan touches in an existing file already violates the repo's 50-line rule, measured on
+  the branch:
+
+  | Function | Lines | This plan adds |
+  |---|---|---|
+  | `useComposerTuning` (`use-composer-tuning.ts:109-264`) | ~155 | Task 13: a `hasMessages` selector, the warning-hook call, three guard wrappers |
+  | `ProviderModelSelect` (`ProviderModelSelect.tsx:125-221`) | ~96 | Task 15: a `disabled` prop and a `RunningHint` wrapper |
+  | `EffortPicker` (`EffortPicker.tsx:32-96`) | ~64 | Task 15: a `RunningHint` wrapper |
+  | `FeaturesPopover` (`FeaturesPopover.tsx:57-114`) | ~57 | Task 15: a `RunningHint` wrapper |
+
+  D1 only lifts `useProviderDefaults` *out of the file*; it does not shorten `useComposerTuning`'s own body.
+  Bringing all four under 50 means decomposing three popover components and a 155-line hook — a refactor
+  several times the size of this todo, on code no acceptance criterion asks us to change, with no test
+  coverage of the intermediate states. Splitting a hook that returns seven memoized setters into
+  sub-50-line pieces also produces artificial seams, not better code.
+
+  So: the four keep their existing size, and **Task 18's gate is narrowed to functions this plan creates**
+  (all of which are small by construction) plus the unchanged 300-lines-per-file rule, which does bind and
+  is enforced on every touched file. This is a scope call, not a licence — an operator who wants the
+  decomposition should schedule it as its own todo, where it can be reviewed on its own merits.
 
 ## Out of scope (restated so no task drifts)
 
@@ -71,7 +94,8 @@ and the Settings > Providers pane; `packages/mobile`; any new route or WS messag
 
 ## Architecture
 
-Five new files, seven edited, all in `packages/ui`.
+Six new source files, seven edited, all in `packages/ui` — plus four new and four edited test files.
+(`use-tuning-setters.ts` is a seventh new source file only if R2's measured trigger fires.)
 
 ```
 features/chat/composer/config-toolbar/
@@ -88,12 +112,23 @@ features/chat/composer/config-toolbar/
   FeaturesPopover.tsx        EDIT RunningHint
 components/ui/confirm-dialog.tsx  EDIT optional `suppress` checkbox row
 store/ui-prefs.ts                 EDIT dontWarnOnTuningChange + dismissTuningChangeWarning
+
+tests
+  config-toolbar/__tests__/tuning-warning.test.ts                  NEW  T1
+  config-toolbar/__tests__/tuning-warning-copy.test.ts             NEW  T3
+  components/ui/__tests__/confirm-dialog.test.tsx                  NEW  T7
+  config-toolbar/__tests__/ComposerToolbar.tuning-warning.test.tsx NEW  T16
+  store/__tests__/ui-prefs.test.ts                                 EDIT T5
+  config-toolbar/__tests__/ComposerToolbar.test.tsx                EDIT T14 (widen the hook mocks)
+  config-toolbar/__tests__/ProviderModelSelect.test.tsx            EDIT T15 (`disabled` in renderSelect) + T17 (cases)
+  composer/__tests__/composer-states.test.tsx                      EDIT T15 (`disabled={false}`)
 ```
 
 Data flow: control → `setEffort/setFeature/setModel` → (draft? patchDraftConfig, unchanged) →
 `tuningWarning.guard(request, apply)` → `resolveTuningChange` + `shouldWarnTuningChange` → either
-`apply()` now, or park `{change, apply}` in state → `TuningWarningDialog` → confirm runs the *same*
-`apply` closure (one PATCH, identical payload) / cancel drops it.
+`apply()` now, or park `{change, apply, originChatId}` in state → `TuningWarningDialog` → confirm re-checks
+the origin chat, then runs the *same* `apply` closure (one PATCH, identical payload) / cancel drops it /
+a thread switch drops it.
 
 ### Contracts the tasks must implement exactly
 
@@ -132,10 +167,28 @@ export function describeTuningChange(
 
 ---
 
-## Tasks
+## Verification gates — read before the tasks
 
-Each task lists its files and its own verification. Run single test files
-(`pnpm --filter @qlan-ro/mainframe-ui exec vitest run <path>`) — never the whole suite.
+Two levels, and the difference matters.
+
+- **Per task:** the named test file(s), run individually
+  (`pnpm --filter @qlan-ro/mainframe-ui exec vitest run <path>`) — never the whole suite. A red-phase task
+  verifies that its file fails *for the stated reason*.
+- **Per implementation group, once, after every task in that group has landed:**
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
+
+Typecheck is a *group* gate, never a per-task one, and it never gates a red-phase test group.
+`packages/ui/tsconfig.json` sets `"include": ["src"]` and the tests live under `src/`, so `tsc --noEmit`
+compiles them too. Two consequences:
+
+- A task that widens a prop or a hook's return type leaves the stale call sites red until its sibling task
+  patches them — a legitimate mid-group state. Demanding a clean typecheck after each task makes the
+  group's own gate unreachable and the declared graph cyclic.
+- A red-phase test group (Tasks 1, 3, 5, 7) is *supposed* to reference modules, actions and props that do
+  not exist yet. Its implementation group is what has to typecheck, and because `tsc` sees the whole `src`
+  tree, that one run covers the test files too.
+
+## Tasks
 
 ### Task 1 — RED: pure decision tests
 
@@ -224,14 +277,44 @@ Add `dontWarnOnTuningChange: false` to the `beforeEach` reset object, then add a
 1. the documented default is `false` (extend the existing defaults assertion).
 2. `dismissTuningChangeWarning()` sets it to `true`.
 3. after `dismissTuningChangeWarning()`, `JSON.parse(localStorage.getItem('mf:ui-prefs')!).state.dontWarnOnTuningChange === true` — the flag is persisted, not just in memory.
-4. rehydration from a payload written *before* this key existed leaves it `false` (write a `mf:ui-prefs`
-   value whose `state` omits the key, then assert the store still reads `false` — proves no migration is needed).
+
+**Rehydration cases — write the payload, then actually re-hydrate.** The `beforeEach` at
+`ui-prefs.test.ts:15-27` does `localStorage.clear()` then `useUiPrefs.setState({…defaults})`, and zustand's
+persist middleware hydrates once at module import. Writing a `mf:ui-prefs` payload afterwards and reading
+`useUiPrefs.getState()` only re-reads what `beforeEach` just wrote — the assertion cannot fail, and
+acceptance criterion (f) ("survives a reload") would ship unverified. Nor is
+`useUiPrefs.persist.rehydrate()` on the already-imported store enough for case 4: zustand's default merge is
+`{...current, ...persisted}`, so a payload missing the key leaves whatever `beforeEach` set, not the
+declared default. Reproduce boot instead — fresh module, fresh initial state, hydrate from storage:
+
+```ts
+async function reloadStore() {
+  vi.resetModules();
+  const mod = await import('../ui-prefs');
+  await mod.useUiPrefs.persist.rehydrate();
+  return mod.useUiPrefs;
+}
+```
+
+4. **Legacy payload, key absent.** `localStorage.setItem('mf:ui-prefs', JSON.stringify({state: {bottomPanelTab: 'skills'}, version: 1}))`,
+   then `const fresh = await reloadStore()`. Assert **both**: `fresh.getState().bottomPanelTab === 'skills'`
+   (proves hydration ran, so the next assertion is not vacuous) and
+   `fresh.getState().dontWarnOnTuningChange === false` — the declared default fills a key the payload
+   predates, which is exactly D6's claim and the reason no `version` bump is needed.
+5. **Persisted `true` survives a reload.** Same payload plus `dontWarnOnTuningChange: true`, then
+   `reloadStore()` → `true`. This one is green even before Task 6 (the merge spreads unknown persisted keys
+   through), so it is not a red case; it is the standing guard for criterion (f), and together with case 3
+   it closes the round trip — the write path puts the flag in storage, the read path honors it after a reload.
 
 Also update the **existing** `useUiPrefs persistence` case: its
 `expect(Object.keys(parsed.state).sort()).toEqual([...])` pins the whitelist literally, so add
 `'dontWarnOnTuningChange'` to that array. Skipping this turns Task 6 into a red test in an unrelated case.
 
-**Verify:** cases 1-3 fail (`dismissTuningChangeWarning is not a function`).
+**Verify:** cases 1-3 fail (`dismissTuningChangeWarning is not a function`) and case 4 fails on
+`dontWarnOnTuningChange` reading `undefined` rather than `false`; the updated whitelist assertion fails too.
+Case 5 is green from the start (see above). The `beforeEach` reset object referencing a key the store does
+not declare yet is a type error until Task 6 — expected, and why typecheck gates the implementation group,
+not this one.
 
 ### Task 6 — ui-prefs suppression flag
 
@@ -304,8 +387,7 @@ with `export { useProviderDefaults } from './use-provider-defaults';`, keep `exp
 `useProviderDefaults` paragraph to a one-line pointer.
 
 **Verify:** `vitest run src/features/chat/composer/config-toolbar/__tests__/use-composer-tuning.test.ts`
-green with **no test edits** (the re-export keeps the existing import path working);
-`pnpm --filter @qlan-ro/mainframe-ui typecheck` clean.
+green with **no test edits** (the re-export keeps the existing import path working).
 
 ### Task 10 — `useTuningWarning` hook
 
@@ -331,14 +413,27 @@ Implementation rules:
   on every render.
 - `guard(request, apply)`: `const change = resolveTuningChange(ctx, request)`; if `change == null` or
   `!shouldWarnTuningChange({change, hasMessages: ctx.hasMessages, suppressed})` → call `apply()` and return.
-  Otherwise `setSuppressChecked(false)` and park `{ change, apply }` in state (store the pair inside an
-  object so React never mistakes the closure for a state updater).
-- `confirm()`: read the parked pair; if `suppressChecked` call `useUiPrefs.getState().dismissTuningChangeWarning()`;
-  clear the parked state; then run `apply()` (D7 — the preference commits only here).
+  Otherwise `setSuppressChecked(false)` and park `{ change, apply, originChatId: ctx.chat.id }` in state
+  (store the triple inside an object so React never mistakes the closure for a state updater).
+- **Origin-chat guard (R3).** The parked `apply` closure captured `port` and `patchChatId` at guard time,
+  and `ComposerToolbar` is **not** remounted on a thread switch (verified: `layout/SurfaceHost.tsx:27` →
+  `ChatSurface` → `thread/ChatThread.tsx:124` → `Composer` are all rendered unkeyed; switching threads runs
+  through the assistant-ui runtime's `mainThreadId`, not a remount). Without a guard the dialog survives
+  the switch and confirming PATCHes chat A while the UI shows chat B. Two defenses, both required:
+  - an effect keyed on the live chat id drops the parked change when it no longer matches:
+    `useEffect(() => { const live = ctx.chat?.id ?? null; setParked((p) => (p != null && p.originChatId !== live ? null : p)); setSuppressChecked(false); }, [ctx.chat?.id])` — write it so the `setSuppressChecked(false)`
+    runs only on an actual drop, not on every id render;
+  - `confirm()` re-checks `parked.originChatId === ctxRef.current.chat?.id` and, on a mismatch, clears the
+    parked state and returns **without** calling `apply` and **without** writing the preference.
+  The effect alone would be enough in React's ordering, but the `confirm()` check keeps the invariant
+  readable at the only site that can issue a write.
+- `confirm()`: read the parked triple; run the origin-chat check above; if `suppressChecked` call
+  `useUiPrefs.getState().dismissTuningChangeWarning()`; clear the parked state; then run `apply()`
+  (D7 — the preference commits only here).
 - `cancel()`: clear the parked state and reset `suppressChecked`; never touch the preference; never call `apply`.
 - `pending` is the parked `change` (or `null`).
 
-**Verify:** typecheck clean; behavior is covered by Tasks 15-16.
+**Verify:** behavior is covered by Task 16 (cases 1-4, 7-9, 11); the group typecheck gate covers the types.
 
 ### Task 11 — `TuningWarningDialog`
 
@@ -363,7 +458,7 @@ renders `ConfirmDialog` with `open`, the title/body/confirmLabel from the copy m
 `suppress={{ label: "Don't warn again", checked: suppressChecked, onChange: onSuppressChange }}`.
 Testids resolve to `composer-tuning-warning`, `-confirm`, `-cancel`, `-suppress`.
 
-**Verify:** typecheck clean; covered by Task 15.
+**Verify:** covered by Task 16 (the dialog and its testids); the group typecheck gate covers the types.
 
 ### Task 12 — `RunningHint` (D5)
 
@@ -385,7 +480,8 @@ export function RunningHint({ active, children }: { active: boolean; children: R
 The span exists only while running, so enabled markup is byte-for-byte what it is today. It is not
 interactive, so it carries no `data-testid`.
 
-**Verify:** typecheck clean; covered by Task 16.
+**Verify:** covered by Task 17 (the disabled model picker renders the hint wrapper without breaking the
+existing enabled-path assertions); the group typecheck gate covers the types.
 
 ### Task 13 — guard the live setters
 
@@ -411,7 +507,10 @@ interactive, so it carries no `data-testid`.
 
 **Verify:** `vitest run …/__tests__/use-composer-tuning.test.ts` green **without changing the assertions**
 (the file's `useAuiState` mock returns `false`, so `hasMessages` is false and every existing setter test
-still applies immediately); file under 300 lines; typecheck clean.
+still applies immediately). `wc -l use-composer-tuning.ts` — the projected landing size is ~255 after
+Task 9's extraction; if it reads **≥ 285**, execute R2's pre-specified extraction in this same task rather
+than trimming comments. Typecheck is the group gate (Task 14 patches the call site this task's widened
+`ComposerTuningHook` breaks).
 
 ### Task 14 — toolbar wiring
 
@@ -433,7 +532,7 @@ Add `hasMessages: false`, `contextTokens: null` and a stub `tuningWarning`
 to **both** `useComposerTuning` mock return objects, so the file typechecks against the widened hook type.
 Keep the existing assertion unchanged.
 
-**Verify:** `vitest run …/__tests__/ComposerToolbar.test.tsx` green; typecheck clean (it covers tests).
+**Verify:** `vitest run …/__tests__/ComposerToolbar.test.tsx` green.
 
 ### Task 15 — mid-turn inertness for the model picker
 
@@ -448,13 +547,21 @@ its footer copy untouched — the provider lock and the running lock are differe
 `<Popover>` in `<RunningHint active={disabled}>` (the `disabled` **prop**, i.e. the running flag, not
 `isDisabled`, so the Ultracode lock keeps its own "Effort locked by Ultracode" tooltip).
 
-**File (edit):** `packages/ui/src/features/chat/composer/__tests__/composer-states.test.tsx` — its
-`openPopover` helper renders `ProviderModelSelect` directly (line ~162), so the new required prop breaks
-the typecheck until it passes `disabled={false}`. Add exactly that, change nothing else: both footer
-assertions must keep passing untouched.
+`ProviderModelSelect` has exactly **two** stale call sites outside `ComposerToolbar.tsx`, and this task
+fixes **both** — leaving either one for a later task would strand the group's typecheck gate:
 
-**Verify:** `vitest run src/features/chat/composer/__tests__/composer-states.test.tsx` green;
-typecheck clean.
+**File (edit):** `packages/ui/src/features/chat/composer/__tests__/composer-states.test.tsx` — its
+`openPopover` helper renders `ProviderModelSelect` directly (line ~162). Add `disabled={false}` to that
+render, change nothing else: both footer assertions must keep passing untouched.
+
+**File (edit):** `packages/ui/src/features/chat/composer/config-toolbar/__tests__/ProviderModelSelect.test.tsx` —
+its `renderSelect` helper renders the component at line ~121. Add `disabled?: boolean` to the local
+`RenderProps` interface (line ~99), `const disabled = props.disabled ?? false;` beside the other prop
+defaults, and `disabled={disabled}` to the render call. No existing case passes the prop, so every one of
+them keeps its current behavior; Task 17 is what starts exercising it.
+
+**Verify:** `vitest run src/features/chat/composer/__tests__/composer-states.test.tsx` and
+`vitest run …/config-toolbar/__tests__/ProviderModelSelect.test.tsx` both green with no assertion changes.
 
 ### Task 16 — integration tests: confirm applies, cancel does not
 
@@ -466,8 +573,9 @@ real dialog inside a `TooltipProvider`. Mock only the edges:
 - `@assistant-ui/react` → `useAuiState: (selector) => selector(fakeAuiState)` where `fakeAuiState` is a
   mutable module-level `{ thread: { isRunning: false, messages: [...] } }`. A selector-executing stub is
   mandatory: the tree reads `isRunning` and `messages.length` through the same hook.
-- `../../../runtime/use-chat-thread-runtime` → `useChatExtras` returning
-  `{ state: { chatId, chatConfig, contextUsage }, port }`.
+- `../../../runtime/use-chat-thread-runtime` → `useChatExtras` reading a **mutable module-level**
+  `{ state: { chatId, chatConfig, contextUsage }, port }` (same shape as `fakeAuiState`). `chatConfig.id`
+  must be the chat id, not a placeholder — case 11 swaps the whole object to a second chat and re-renders.
 - `@/lib/api/chats` → `setChatTuning` / `setChatConfig` spies.
 - `@/lib/api/settings` → `getProviderSettings` resolving `{}`.
 - `@/lib/api/git`, `@/lib/api/adapters`, `@/features/sessions/runtime/daemon-port-context`,
@@ -505,6 +613,12 @@ Cases — assert against literal testids and payloads:
 10. **Body carries the context size.** With `contextUsage: {percentage: 5, totalTokens: 48_000, maxTokens: 1_000_000}`
     the dialog body contains `(~48k tokens)`; with `contextUsage: null` the body contains
     `re-sends the conversation as new input` and no `(`.
+11. **Thread switch drops the pending change (R3).** Open the model dialog on chat A (`chatId: 'chat-a'`,
+    `chatConfig: {…, id: 'chat-a'}`). Then mutate the `useChatExtras` fake to chat B
+    (`chatId: 'chat-b'`, `chatConfig: {…, id: 'chat-b'}`) and `rerender(<ComposerToolbar />)` inside `act`
+    — do **not** unmount, since the real tree does not remount on a thread switch. Assert
+    `composer-tuning-warning` is gone and `setChatConfig` was never called. Then pick a model on chat B and
+    confirm → exactly one `setChatConfig` call, with `'chat-b'`, never `'chat-a'`.
 
 **Verify:** `vitest run …/__tests__/ComposerToolbar.tuning-warning.test.tsx` green.
 
@@ -512,11 +626,13 @@ Cases — assert against literal testids and payloads:
 
 **File (edit):** `packages/ui/src/features/chat/composer/config-toolbar/__tests__/ProviderModelSelect.test.tsx`
 
-Existing cases pass `disabled={false}`. Add:
-1. `disabled` → the `composer-model-select` trigger has the `disabled` attribute.
-2. `disabled` → clicking the trigger does not open the popover
+Task 15 already taught `renderSelect` the `disabled` prop (defaulting to `false`), so this task adds
+only cases:
+1. `renderSelect({ disabled: true })` → the `composer-model-select` trigger has the `disabled` attribute.
+2. `renderSelect({ disabled: true })` → clicking the trigger does not open the popover
    (`queryByTestId('composer-provider-model-popover')` stays null) and `setModel` is never called.
-3. `disabled={false}` → the trigger is not disabled and the popover still opens (regression guard).
+3. `renderSelect({})` (the default `disabled: false`) → the trigger is not disabled and the popover still
+   opens (regression guard).
 
 **Verify:** `vitest run …/__tests__/ProviderModelSelect.test.tsx` green.
 
@@ -532,7 +648,11 @@ with a 'Don't warn again' option."
   `tuning-warning.test.ts`, `tuning-warning-copy.test.ts`, `ui-prefs.test.ts`, `confirm-dialog.test.tsx`,
   `dialog.test.tsx`, `use-composer-tuning.test.ts`, `ComposerToolbar.test.tsx`,
   `ComposerToolbar.tuning-warning.test.tsx`, `ProviderModelSelect.test.tsx`, `composer-states.test.tsx`
-- `wc -l` on every touched file: all under 300; no function over 50 lines.
+- `wc -l` on every touched file: all under 300 — this one binds without exception.
+- every function **this plan creates** under 50 lines: `resolveTuningChange`, `shouldWarnTuningChange`,
+  `formatApproxTokens`, `describeTuningChange`, `useTuningWarning`, `TuningWarningDialog`, `RunningHint`
+  (plus `useTuningSetters` if R2 fired). The four pre-existing over-limit functions listed in D8 are
+  grandfathered; confirm they gained only the lines D8 names, and nothing else.
 
 ---
 
@@ -552,15 +672,33 @@ with a 'Don't warn again' option."
 | Unit tests for the pure decision; component tests for confirm/cancel on model and effort | T1/T3, T16 |
 | No new daemon route or WS message | Nothing in this plan touches `packages/core-rs` or `lib/api` |
 | Design-system compliance, reuse the confirm-dialog recipe | T8, T11 (no new primitive, compressed spacing) |
-| Files < 300 lines, functions < 50, typecheck, changeset | T9 (D1), T18 |
+| Files < 300 lines, typecheck, changeset | T9 (D1), R2's measured trigger in T13, T18 |
+| Functions < 50 | T18, narrowed to newly created functions per D8 (four pre-existing violations grandfathered) |
+| A parked change never PATCHes the chat the user left (not a brief criterion — a defect R3 exposed) | T10's origin-chat guard + T16 case 11 |
 
 ## Risks
 
 - **R1 — `useAuiState` mocking.** Any new test that renders the real toolbar must stub `useAuiState` as a
   selector-executing function; the older files' `mockReturnValue(false)` shortcut would make
   `messages.length` throw. Task 16 states this explicitly.
-- **R2 — file-size pressure on `use-composer-tuning.ts`.** D1 buys ~28 lines of headroom before the guard
-  wiring lands. If the file still approaches 300, extract the three tuning setters into a
-  `use-tuning-setters.ts` rather than trimming comments.
-- **R3 — the parked `apply` closure captures `port` / `patchChatId` at guard time.** That is intended: the
-  user confirms the change they saw. A thread switch unmounts `ComposerToolbar` and drops the dialog with it.
+- **R2 — file-size pressure on `use-composer-tuning.ts`.** The file is 264 lines today. D1 removes ~27
+  (`useProviderDefaults`, its doc block, its now-dead imports, minus the re-export line); Task 13 adds ~20.
+  Projected landing size ~255 — under 300, but with only ~45 lines of headroom, so Task 13 measures it
+  rather than assuming. **Trigger: `wc -l` ≥ 285.** The response is pre-specified, so it is never a
+  judgment call at implementation time: move the three guarded setters into a new `use-tuning-setters.ts`
+  exporting
+  `useTuningSetters({draftMode, chatId, patchChatId, port, patchConfig, guard}) → {setEffort, setFeature, setModel}`.
+  `patchConfig`, `setAdapter`, `setPlanMode` and `setPermissionMode` stay in `use-composer-tuning.ts` —
+  `patchConfig` is shared, and the other three are outside the warning's remit (Task 13 step 4).
+  `__tests__/use-composer-tuning.test.ts` imports only `useComposerTuning` and `useProviderDefaults`
+  (line 73) and drives the setters through the hook, so the move needs no test edits. Never trim comments
+  to fit.
+- **R3 — the parked `apply` closure captures `port` / `patchChatId` at guard time, and a thread switch does
+  NOT unmount the toolbar.** Capturing at guard time is intended — the user confirms the change they saw.
+  What is *not* safe is assuming the dialog dies with the thread: `layout/SurfaceHost.tsx:27` renders
+  `<ChatSurface>` unkeyed, `ChatSurface` renders `<ChatThread>` unkeyed, and `thread/ChatThread.tsx:124`
+  renders `<Composer>` unkeyed. Thread switching flips the assistant-ui runtime's `mainThreadId`; React
+  reconciles the same component instances, so `useTuningWarning`'s parked state survives. Open the dialog on
+  chat A, switch to chat B, confirm → the `apply` closure would PATCH chat A's `patchChatId` while the UI
+  shows chat B. Task 10's origin-chat guard drops the pending change on the switch; Task 16 case 11 is the
+  regression test. Any future refactor that moves the parked state must carry the origin id with it.
