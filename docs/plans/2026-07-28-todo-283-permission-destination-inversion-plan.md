@@ -288,8 +288,16 @@ pnpm --filter @qlan-ro/mainframe-ui typecheck
 ### Task 6 — (core) Remove the same inversion from the orphaned Node daemon
 
 **Files:**
-- `packages/core/src/plugins/builtin/claude/session.ts` — delete `promoteToLocalSettings` and its doc comment
-  (`:100-108`); at `:444-446` assign `innerResponse.updatedPermissions = response.updatedPermissions;` directly.
+- `packages/core/src/plugins/builtin/claude/session.ts` — three edits:
+  1. Delete `promoteToLocalSettings` and its doc comment (`:100-108`).
+  2. At `:444-446` assign `innerResponse.updatedPermissions = response.updatedPermissions;` directly.
+  3. Drop `ControlUpdate` from the `@qlan-ro/mainframe-types` type-import list at `:13`. Verified in this worktree:
+     `ControlUpdate` occurs in this file only at `:13` and `:106` (the promoter's signature), so step 1 strands the
+     import. Unlike the Rust side, nothing in this task's verification catches it on its own —
+     `@typescript-eslint/no-unused-vars` is `'warn'` (`eslint.config.mjs:9`), `eslint --fix` cannot remove an unused
+     import, and neither `tsc --noEmit` nor `vitest run` reports one — so the dead import would ship green against the
+     repo's "remove dead code" / "No leftovers" rules. The grep in the verify block below is the check that catches it.
+     Leave the other names on that list in place.
 - `packages/core/src/__tests__/ensure-persistent-rule.test.ts` — delete the file (all five cases assert the inverted
   behavior; the package is superseded and no equivalent behavior remains to test).
 
@@ -302,6 +310,7 @@ choice in the changeset body.
 pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
 pnpm --filter @qlan-ro/mainframe-core exec vitest run
 grep -rn "promoteToLocalSettings" packages/core/   # no matches
+grep -n "ControlUpdate" packages/core/src/plugins/builtin/claude/session.ts   # no matches
 ```
 
 The grep is scoped to `packages/core/` on purpose: the only other occurrence in the repo is the port note at
