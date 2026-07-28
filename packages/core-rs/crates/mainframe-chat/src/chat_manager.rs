@@ -44,7 +44,7 @@ use crate::lifecycle_manager::{
 use crate::message_cache::MessageCache;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
 use crate::permission_manager::PermissionManager;
-use crate::title_generator::derive_title_from_message;
+use crate::title_generator::{derive_title_from_message, strip_reference_lines};
 use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
 use crate::worktree_offer::{OfferError, WorktreeOfferDeps, WorktreeOfferRegistry};

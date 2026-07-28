@@ -1167,6 +1167,28 @@ async fn plain_text_first_message_still_titles_in_the_same_event_order() {
 }
 
 #[tokio::test]
+async fn plain_text_first_message_with_a_session_reference_titles_from_the_visible_text() {
+    let (mgr, deps, _session) = title_cmd_manager(None);
+    let content = "Referenced session @session[Fix login bug]: /tmp/fix-login-bug.jsonl\n\nwhat did they change?";
+
+    mgr.send_message("chat-1", content, None, None)
+        .await
+        .unwrap();
+    settle().await;
+
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("what did they change?".to_string()),
+        "the fallback title must not leak the raw reference preamble"
+    );
+    assert_eq!(
+        deps.generate_title_calls.lock().unwrap().clone(),
+        vec!["what did they change?".to_string()],
+        "the LLM title call must not see the raw reference preamble either"
+    );
+}
+
+#[tokio::test]
 async fn command_first_fallback_survives_a_generation_that_returns_nothing() {
     let (mgr, deps, _session) = title_cmd_manager(None);
 

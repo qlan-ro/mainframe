@@ -25,7 +25,11 @@ impl ChatManager {
             .unwrap_or_default()
             .is_empty();
         if title_empty {
-            let title = derive_title_from_message(content);
+            // Both title paths must see the reader's text, not the raw
+            // `Referenced session @session[...]: <path>` preamble the composer
+            // prepends to the wire body (#240).
+            let visible_content = strip_reference_lines(content);
+            let title = derive_title_from_message(&visible_content);
             {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
                 guard.chat.title = Some(title.clone());
@@ -46,10 +50,9 @@ impl ChatManager {
             // matching Node's stream ordering.
             let lifecycle = self.lifecycle.clone();
             let chat_id_owned = chat_id.to_string();
-            let content_owned = content.to_string();
             tokio::spawn(async move {
                 lifecycle
-                    .do_generate_title(&chat_id_owned, &content_owned)
+                    .do_generate_title(&chat_id_owned, &visible_content)
                     .await;
             });
         }
