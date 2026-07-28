@@ -14,7 +14,7 @@
  *   4. `../chat/runtime/use-chat-thread-runtime` → stub useChatExtras
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +47,8 @@ import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
 import { useChatExtras } from '../../chat/runtime/use-chat-thread-runtime';
 import { setDraftConfig, useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
+// Real store, not mocked — proves the provider subscribes to the actual shared signal.
+import { bumpSkillsRevalidation } from '../use-skills-revalidation';
 import type { Skill, Project, AgentConfig } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -412,5 +414,30 @@ describe('useChatAgents', () => {
     });
 
     warnSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Shared skills-revalidation nonce — re-fetches after a bump (no daemon
+//    broadcast on skill delete, so the composer trigger must subscribe too).
+// ---------------------------------------------------------------------------
+
+describe('useChatSkills — revalidation nonce bump', () => {
+  it('re-fetches skills and agents when the shared skills-revalidation nonce is bumped', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
+
+    renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      bumpSkillsRevalidation();
+    });
+
+    await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(getSkills)).toHaveBeenLastCalledWith(PORT, ADAPTER_ID, PROJECT_PATH);
   });
 });
