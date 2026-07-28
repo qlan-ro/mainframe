@@ -17,18 +17,19 @@
  * `reportProjectId` at the prop boundary below.
  */
 import { useEffect, useRef } from 'react';
-import { ScanSearch } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';
 import { selectCopiedCount, useSetupAdvisorStore } from './use-setup-advisor-store';
+import { SetupAdvisorHeader } from './SetupAdvisorHeader';
 import { SetupAdvisorSheet } from './SetupAdvisorSheet';
+import { SkillsSection } from './skills/SkillsSection';
 
 /** Module-scoped so a project with no copy history hands the sheet a stable prop. */
 const EMPTY_COPIED: ReadonlySet<string> = new Set();
 
 export function SetupAdvisorHost() {
-  const { open, closeSheet } = useSetupAdvisor();
+  const { open, section, setSection, closeSheet } = useSetupAdvisor();
   const { projectId, projectName } = useActiveIdentity();
   const { report, reportProjectId, loading, error, copiedByProject, load, clearForProjectSwitch, markCopied } =
     useSetupAdvisorStore();
@@ -71,23 +72,20 @@ export function SetupAdvisorHost() {
         data-testid="automation-recommender-sheet"
         className="flex max-h-[85vh] w-full max-w-[640px] flex-col gap-0 p-0"
       >
-        {/* pr-9 clears the dialog's built-in close button (26px at right-3). */}
-        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-9">
-          <DialogTitle className="flex items-center gap-2 text-heading font-bold">
-            <ScanSearch size={14} className="shrink-0 text-primary" aria-hidden />
-            Setup Advisor
-            <span className="min-w-0 truncate text-body font-normal text-muted-foreground">{projectName}</span>
-          </DialogTitle>
-        </DialogHeader>
-        <SetupAdvisorSheet
-          report={reportForProject}
-          loading={loading}
-          error={error}
-          copiedIds={copiedIds}
-          copiedCount={copiedCount}
-          onCopy={(recId) => markCopied(projectId, recId)}
-          onRetry={() => void load(projectId)}
-        />
+        <SetupAdvisorHeader projectName={projectName} section={section} onSelectSection={setSection} />
+        {section === 'skills' ? (
+          <SkillsSection />
+        ) : (
+          <SetupAdvisorSheet
+            report={reportForProject}
+            loading={loading}
+            error={error}
+            copiedIds={copiedIds}
+            copiedCount={copiedCount}
+            onCopy={(recId) => markCopied(projectId, recId)}
+            onRetry={() => void load(projectId)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

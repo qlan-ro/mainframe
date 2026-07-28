@@ -12,7 +12,7 @@
  * project-switch behavior in full; this file only adds section routing.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import type { SetupAdvisorReport } from '@qlan-ro/mainframe-types';
 
 vi.mock('@/lib/api/setup-advisor', () => ({
@@ -79,7 +79,7 @@ beforeEach(() => {
 describe('SetupAdvisorHost — section routing', () => {
   it('opens on the recommendations body and does not render the skills body', () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
 
     expect(screen.getByTestId('setup-advisor-sheet-stub')).toBeTruthy();
     expect(screen.queryByTestId('skills-section-stub')).toBeNull();
@@ -87,7 +87,7 @@ describe('SetupAdvisorHost — section routing', () => {
 
   it('swaps to the skills body when the skills segment is clicked, keeping the dialog open', () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
 
     fireEvent.click(screen.getByTestId('setup-advisor-section-skills'));
 
@@ -98,7 +98,7 @@ describe('SetupAdvisorHost — section routing', () => {
 
   it('lands on the skills body directly when opened via openSheet("skills")', () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet('skills');
+    act(() => useSetupAdvisor.getState().openSheet('skills'));
 
     expect(screen.getByTestId('skills-section-stub')).toBeTruthy();
     expect(screen.queryByTestId('setup-advisor-sheet-stub')).toBeNull();
@@ -106,7 +106,7 @@ describe('SetupAdvisorHost — section routing', () => {
 
   it('tracks the active segment via aria-pressed', () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
 
     const recommendationsSeg = screen.getByTestId('setup-advisor-section-recommendations');
     const skillsSeg = screen.getByTestId('setup-advisor-section-skills');
@@ -121,14 +121,14 @@ describe('SetupAdvisorHost — section routing', () => {
 
   it('fetches the report exactly once on the open rising edge regardless of section', async () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet('skills');
+    act(() => useSetupAdvisor.getState().openSheet('skills'));
 
     await waitFor(() => expect(setupAdvisorApi.getAutomationRecommendations).toHaveBeenCalledTimes(1));
   });
 
   it('still exposes automation-recommender-sheet as the DialogContent testid', () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
 
     expect(screen.getByTestId('automation-recommender-sheet')).toBeTruthy();
   });
@@ -137,7 +137,7 @@ describe('SetupAdvisorHost — section routing', () => {
 describe('SetupAdvisorHost — header layout', () => {
   it('renders the switcher beside the title inside a flex row, not stacked below it', () => {
     render(<SetupAdvisorHost />);
-    useSetupAdvisor.getState().openSheet();
+    act(() => useSetupAdvisor.getState().openSheet());
 
     const row = screen.getByTestId('setup-advisor-header-row');
     expect(row.className).toContain('flex');
