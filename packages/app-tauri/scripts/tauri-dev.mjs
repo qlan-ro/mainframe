@@ -1,5 +1,6 @@
 /**
- * `tauri dev` wrapper — threads VITE_PORT into Tauri's devUrl.
+ * `tauri dev` wrapper — provisions the daemon sidecar, then threads VITE_PORT
+ * into Tauri's devUrl.
  *
  * tauri.conf.json's `build.devUrl` is static (http://localhost:5174), but the dev
  * launch configs (and per-worktree port allocation) may run the ui Vite on a
@@ -9,6 +10,40 @@
  * static config. The dev overlay file (withGlobalTauri) is still merged first.
  */
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * `externalBin` is resolved by src-tauri's build script, so a checkout that has
+ * never provisioned the sidecar fails `tauri dev` at a build.rs panic ("resource
+ * path binaries/mainframe-daemon-<triple> doesn't exist") — which reads as a Rust
+ * compile error rather than a missing artifact. Every fresh worktree is in that
+ * state, so provision on absence.
+ *
+ * The cargo build this triggers is not extra work: dev resolves the daemon from
+ * packages/core-rs/target/{release,debug} (resolve_rust_daemon_bin), so a fresh
+ * worktree needs that build to reach Connected either way. On absence only,
+ * though — dev never runs this copy, so refreshing it each launch would buy
+ * nothing. Run `pnpm bundle` to refresh it deliberately.
+ */
+function provisionSidecarIfMissing() {
+  const triple = execFileSync('rustc', ['-vV'], { encoding: 'utf8' })
+    .split('\n')
+    .find((l) => l.startsWith('host:'))
+    ?.slice('host:'.length)
+    .trim();
+  if (!triple) throw new Error('could not read the host triple from `rustc -vV`');
+
+  if (existsSync(join(here, '..', 'src-tauri', 'binaries', `mainframe-daemon-${triple}`))) return;
+
+  console.log(`[tauri:dev] no daemon sidecar for ${triple} — provisioning (first build is slow)…`);
+  execFileSync('node', [join(here, 'provision-rust-daemon.mjs')], { stdio: 'inherit' });
+}
+
+provisionSidecarIfMissing();
 
 const port = process.env.VITE_PORT ?? '5174';
 const devUrl = `http://localhost:${port}`;

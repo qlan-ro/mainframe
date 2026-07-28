@@ -18,12 +18,13 @@ pick one per run (user's ask → diff paths → default).
 - Engine: `tauri-mcp` (the WKWebView has no CDP). Dev builds compile the
   bridge in (`pnpm tauri:dev` → `cargo tauri dev --features mcp-bridge`).
 - Launch: `script: .agents/launch-test-tauri.sh` — run it EXACTLY ONCE. It
-  owns fresh-worktree provisioning (provision:node / bundle:daemon), the
-  isolated env (`DAEMON_PORT=31500`, `MAINFRAME_DATA_DIR=~/.mainframe_dev`;
-  refuses 31415), the background `tauri:dev` (first run compiles Rust, up to
-  10 min), and the readiness wait. It blocks until ready and prints `READY` +
-  facts (ports, APP_URL, LOG), or exits 1 with the log tail — do not
-  re-launch on failure, read the printed tail.
+  owns the workspace install, the isolated env (`DAEMON_PORT=31500`,
+  `MAINFRAME_DATA_DIR=~/.mainframe_dev`; an inherited 31415 falls back to
+  31500 with a warning), the background `tauri:dev` (first run compiles Rust
+  and provisions the daemon sidecar, up to 10 min), and the readiness wait. It
+  blocks until ready and prints `READY` + facts (ports, APP_URL, LOG), or
+  exits 1 with the log tail — do not re-launch on failure, read the printed
+  tail.
 - After READY: confirm the app appears in the bridge's `list_devices`.
 - Diff paths: `packages/app-tauri/`, `packages/ui/`.
 - Bridge quirks (verified 2026-07-09): selector-based tools
