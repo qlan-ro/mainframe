@@ -90,21 +90,36 @@ the mainframe wrapper envelope can never reach a title. No client changes: the e
 
 ## Tasks
 
-### Group A — red-phase tests (`chat_manager/tests.rs`)
+### Group A — red-phase tests and B2 move guards (`chat_manager/tests.rs`)
 
 All of Group A lands in
-`packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs` and must be
-committed and observed **failing** before Group B exists.
+`packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs` and must be committed
+before Group B exists. Five of the nine new tests are red-phase tests for the bug and
+must be observed **failing**; four (A2.4, A2.6, A2.8, A2.9) are guards that pin behavior
+B2 must not change and are green on both sides of the move. Group A is the only group
+that touches a test file, which is what lets B2 forbid test edits outright.
 
-#### Task 1 — A1. Teach the `StoreDeps` fake to observe titles
+#### Task 1 — A1. Teach the fakes to observe titles, attachments, mentions, and images
 
 File: `packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs`
 
-1. Add three fields to `struct StoreDeps` (line 17):
+The first three fields serve the #257 title tests. The last two exist because the fake
+is currently blind to most of what Group B moves: `process_attachments` (line 186)
+returns `ProcessedAttachments::default()` and `extract_mentions_from_text` (line 278)
+hardcodes `false`, so the attachment, prefix, image and mention branches of the
+plain-text tail are unreachable in every existing test. Tests 8 and 9 need them
+reachable before B2 may claim a behavioral guard.
+
+1. Add five fields to `struct StoreDeps` (line 17). All are `Default`-friendly, so
+   `StoreDeps::default()` keeps today's behavior for every existing test:
    - `generated_title: Mutex<Option<String>>` — what `generate_title` returns.
    - `generate_title_calls: Mutex<Vec<String>>` — the `content` of each call.
    - `title_gate: Mutex<Option<Arc<tokio::sync::Notify>>>` — when set,
      `generate_title` awaits `notified()` before returning.
+   - `attachments: Mutex<Option<ProcessedAttachments>>` — when set,
+     `process_attachments` returns a clone of it (`ProcessedAttachments` is `Clone`,
+     `chat_manager.rs:55`); `None` keeps today's `::default()`.
+   - `mentions_found: Mutex<bool>` — what `extract_mentions_from_text` returns.
 2. In `impl ChatManagerDeps for StoreDeps`, extend `chats_update` (line 84) to apply
    `patch.title` to the stored chat, alongside the existing `process_state` and
    `transcript_missing` handling. Without this the store never reflects a title and
@@ -113,7 +128,29 @@ File: `packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs`
    one is installed, then returns `self.generated_title.lock().unwrap().clone()`.
    Clone the gate `Arc` out of the mutex **before** awaiting — never hold a
    `std::sync::MutexGuard` across an `.await`.
-4. Add two test-module helpers next to `seed_active` (line 462):
+4. Replace `process_attachments` (line 186) with
+
+   ```rust
+   fn process_attachments<'a>(
+       &'a self,
+       _chat_id: &'a str,
+       _attachment_ids: &'a [String],
+   ) -> BoxFuture<'a, ProcessedAttachments> {
+       let p = self.attachments.lock().unwrap().clone().unwrap_or_default();
+       Box::pin(async move { p })
+   }
+   ```
+
+   Clone out of the mutex **before** the async block, for the same reason as step 3.
+   Replace `extract_mentions_from_text` (line 278) with
+   `*self.mentions_found.lock().unwrap()`.
+5. Add `images_calls: Mutex<Vec<usize>>` to `struct RecSession` (line 315) and push
+   `images.len()` from `send_message` (line 389), renaming its `_images` parameter to
+   `images`. `RecSession` is not `Default`: initialize the field in **both**
+   constructors, `new` (line 326) and `with_order` (line 338). Do not widen the
+   existing `send_message_calls` tuple — 15 call sites read `.0`/`.1` and this plan
+   edits no existing assertion.
+6. Add two test-module helpers next to `seed_active` (line 462):
    - `async fn settle()` — `for _ in 0..50 { tokio::task::yield_now().await; }`, so the
      spawned title task runs to completion on the current-thread test runtime.
    - `fn titles_written(deps: &StoreDeps) -> Vec<String>` — every `title` present in
@@ -270,13 +307,62 @@ Tests:
    with an empty title). Tests 1 and 2 cannot cover this: they assert the row without
    `settle()`, so the spawned task has not necessarily run and retention is untested.
 
+Tests 8 and 9 are not about titling. They exist because B2 moves roughly a third of the
+plain-text tail through code no existing test reaches, and B2's only claimed guard is
+"the existing tests stay green". Expect both **green before and after Group B**, like
+test 6. Write them first anyway: a guard added after the move guards nothing.
+
+8. `plain_text_with_attachments_keeps_prefix_images_and_transient_metadata` — covers
+   `prepare_outgoing` (B2.2) and the attachment half of `store_user_message` (B2.1),
+   including the `std::mem::take` that is the one non-verbatim edit in the move.
+
+   Setup: `deps = StoreDeps::arc()`, then install a non-default fixture —
+   `text_prefix: vec!["prefix".into()]`,
+   `message_content: vec![MessageContent::Leaf(LeafContent::Text { text: "[Image: shot.png]".into(), parent_tool_use_id: None })]`,
+   `images: vec![ImageInput { media_type: "image/png".into(), data: "AAA".into() }]`,
+   `attachment_previews: vec![serde_json::json!({ "id": "att-1" })]`. Seed
+   `working_chat("c1", Some("t"), true)` with `RecSession::new("c1", true, true)`, so
+   the chat is already titled (no title work in play) and the replay-ack + `Working`
+   combination takes the queued branch. Send
+   `mgr.send_message("c1", "hello", Some(&ids), None)` where
+   `let ids = vec!["att-1".to_string()];`.
+
+   Assert:
+   - `session.send_message_calls.lock().unwrap()[0].0 == "prefix\n\nhello"` — the
+     `text_prefix.join("\n")` + `format!("{prefix}\n\n{content}")` composition
+     (`chat_manager.rs:1934-1942`) survived the move;
+   - `session.images_calls.lock().unwrap()[0] == 1` — the image reached
+     `session.send_message`. `send_message_calls` records only `(message, uuid)`, so
+     without `images_calls` a dropped image is unobservable;
+   - the `MessageAdded` event's `message.content` is exactly
+     `["[Image: shot.png]", "hello"]` in that order — the processed nodes precede the
+     typed text, which is what `std::mem::take(&mut processed.message_content)` must
+     preserve;
+   - that message's `metadata` is `Some` and carries all three keys: `queued == true`,
+     `attachments` an array of one element equal to `{"id":"att-1"}`, and `uuid` equal
+     to `send_message_calls[0].1`;
+   - `deps.events()` contains exactly one `ContextUpdated` — the attachment one
+     (`chat_manager.rs:1990-1995`). `mentions_found` is `false` here and the preamble
+     emits none, so the count is unambiguous.
+9. `mentions_in_plain_text_still_emit_context_updated` — covers the mentions
+   `ContextUpdated` (`chat_manager.rs:2000-2005`), which B2.6 moves "verbatim" into
+   `send_plain_text` and which no existing test reaches.
+
+   Set `*deps.mentions_found.lock().unwrap() = true`, seed
+   `working_chat("c1", Some("t"), false)` with `RecSession::new("c1", false, true)`,
+   send `"look at @src/main.rs"` with no attachments. Assert `deps.events()` contains
+   exactly one `ContextUpdated`, and that flipping the flag is what produces it — a
+   companion run is unnecessary, because test 8's fixture already pins the count at one
+   with `mentions_found` false and attachments present.
+
 Verify: `cd packages/core-rs && cargo test -p mainframe-chat` — **no name filter.**
 Cargo filters by substring against the full test path (`chat_manager::tests::<name>`),
-and three of the seven names carry no shared token: tests 4, 5 and 6 do not contain
+and five of the nine names carry no shared token: tests 4, 5, 6, 8 and 9 do not contain
 `command_first`. A filtered run would silently drop test 5 — the off-the-send-path guard
 whose red state is the load-bearing evidence for this stage.
 
-Expected: exactly five failures, and every other test in the crate green.
+Expected: exactly five failures out of the nine new tests, and every other test in the
+crate green.
 
 - fail: `provider_command_first_message_sets_the_fallback_title`
 - fail: `mainframe_command_first_message_titles_from_typed_text_not_the_wrapper`
@@ -286,9 +372,14 @@ Expected: exactly five failures, and every other test in the crate green.
 - pass: `command_into_an_already_titled_chat_leaves_the_title_untouched` (today the
   command path writes no title at all, so "the title is untouched" already holds)
 - pass: `plain_text_first_message_still_titles_in_the_same_event_order`
+- pass: `plain_text_with_attachments_keeps_prefix_images_and_transient_metadata` (a
+  B2 move guard, green on both sides of the move by construction)
+- pass: `mentions_in_plain_text_still_emit_context_updated` (same)
 
 Paste cargo's `failures:` list verbatim into the commit body. A sixth failure, or a
-different set, means a test asserts something other than this bug.
+different set, means a test asserts something other than this bug. In particular, a
+red test 8 or 9 means the new fake fields changed existing behavior rather than
+exposing it — fix the fake, not the assertion.
 Commit as `test(chat): red command-first title tests (#257)`.
 
 ### Group B — lift the title work out and split the send path so both shapes reach it
@@ -344,8 +435,9 @@ Relocating 37 lines inside a 295-line function is not enough: the mid-body
 `assign_initial_title` call sites 120 lines apart. Decompose instead, so `send_message`
 reads as preamble plus a visible two-way dispatch and each call site sits at the top of
 its helper. Every function below is under 50 lines; each moves an existing contiguous
-range with no reordering, so the behavioral guard is the 15 existing `send_message` tests
-plus A2.6.
+range with no reordering, so the behavioral guard is the 15 existing `send_message`
+tests plus A2.6, A2.8 and A2.9 — the last two being what make that guard reach the
+attachment, prefix, image and mention branches at all (see Risks).
 
 All of these live in `send.rs`.
 
@@ -546,7 +638,7 @@ C depends on nothing.
 | Both command sources covered | A2.1 (provider), A2.2 (mainframe) |
 | Already-titled chat is a no-op | A2.4 |
 | Fallback retained when generation cannot run | A2.7 |
-| Plain text unchanged, same event order | A2.6, B2.6 (`send_plain_text`) |
+| Plain text unchanged, same event order | A2.6, B2.6 (`send_plain_text`); A2.8/A2.9 pin the attachment, prefix, image and mention branches the move otherwise carries untested |
 | Message still stored/emitted, command still dispatched, chat still working | A2.1 |
 | Chat-manager-level, transport-independent regression tests | Group A (calls `send_message` directly) |
 | Generation still off the send path | A2.5, B1 |
@@ -570,13 +662,36 @@ untouched).
 - **Empty `content` with attachments only.** `derive_title_from_message("")` returns
   `""`, so a chat can still end up with an empty-string title. Pre-existing on the
   plain-text path, unchanged here, and outside the todo's scope.
-- **B2 moves 200 lines into a new file.** Splitting `send_message` is a larger diff than
-  the bug fix itself. It is mechanical — the bodies move verbatim, `post` and `session`
-  become borrowed parameters — but the guard is behavioral, not visual: the 15 existing
-  `send_message` call sites in `chat_manager/tests.rs` plus A2.6's event-order assertion
-  must stay green with no test edits. If any needs editing, the move was not verbatim.
-  Reviewing it is easier than the line count suggests: `git diff -M --find-copies-harder`
-  renders most of `send.rs` as a move.
+- **B2 moves 200 lines into a new file, and the test suite does not cover all of it.**
+  Splitting `send_message` is a larger diff than the bug fix itself. It is mechanical —
+  the bodies move verbatim, `post` and `session` become borrowed parameters — and the
+  intended guard is behavioral, not visual: the 15 existing `send_message` call sites in
+  `chat_manager/tests.rs` must stay green with no test edits. But that guard is uneven,
+  and Group A has to close the gap before B2 may lean on it. What the suite covers as it
+  stands today:
+  - **Covered.** The queued/replay-ack path and the queued-ref bookkeeping —
+    `chat_manager/tests.rs:486-604` drives `is_queued`, the `uuid` metadata,
+    `MessageQueued`, and `record_queued_ref`. Plain-text first-message titling and its
+    event order — A2.6.
+  - **Not covered before Group A.** `StoreDeps::process_attachments` (`tests.rs:186-191`)
+    returns `ProcessedAttachments::default()` and no existing test passes
+    `attachment_ids`, so the whole of `prepare_outgoing` (B2.2) is unreachable in the
+    fake: the `text_prefix.join` / `format!("{prefix}\n\n{content}")` composition, the
+    `std::mem::take` this plan flags as its one non-verbatim edit, and the `images`
+    handoff — which `RecSession::send_message` (`tests.rs:391-401`) could not observe
+    anyway, since it records only `(message, uuid)`. The `attachments` transient-metadata
+    branch and the attachment `ContextUpdated` inside `store_user_message` (B2.1) are
+    equally unreachable, and `StoreDeps::extract_mentions_from_text` (`tests.rs:280-282`)
+    hardcodes `false`, so the mentions `ContextUpdated` that B2.6 moves "verbatim
+    (2000-2005)" is untested too.
+  - **The fix, in Group A.** A1 gives the fakes `attachments`, `mentions_found` and
+    `RecSession::images_calls`; A2.8 and A2.9 exercise every branch listed above. Both
+    are green before and after B2 — they are move guards, not red-phase tests — and both
+    land in the Group A commit, which keeps B2's "no test file may be edited" invariant
+    intact. Group A owns `tests.rs`; Group B never touches it.
+
+  Reviewing the move is easier than the line count suggests: `git diff -M
+  --find-copies-harder` renders most of `send.rs` as a move.
 - **Two mechanical changes hide inside the "verbatim" moves.** `prepare_outgoing` needs
   `std::mem::take` for `message_content` (B2.2) and `store_user_message` reaches the
   command path's `None` metadata through an empty `HashMap` (B2.1). Both are called out
