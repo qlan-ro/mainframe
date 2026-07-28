@@ -95,7 +95,8 @@ the consumed-surface row, and the same inverted helper still living in the orpha
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, and `tools/verify-gate.sh` all gate
   `packages/core-rs` (`.github/workflows/rust-port.yml`). No `unwrap()`/`expect()` outside `#[cfg(test)]`.
 - No silent catches; log via `tracing`.
-- A changeset is mandatory before commit.
+- A changeset is mandatory before commit, and it must bump `@qlan-ro/mainframe-core` — the release pipeline reads the
+  version from `packages/core/package.json` and drops any package section filed under a different version (task 8).
 - Run Rust tests scoped (`-p mainframe-adapter-claude`); a cold `cargo` build in a worktree grows its own target dir.
 
 ---
@@ -347,16 +348,42 @@ that filed this todo), `docs/plans/2026-07-25-todo-239-changelog-watch-skill-pla
 
 ### Task 8 — (core) Changeset
 
-**File:** `.changeset/<name>.md` via `pnpm changeset` — **patch** on `@qlan-ro/mainframe-app-tauri`, the package that
-ships the Rust daemon this fix lives in. (Not an empty changeset: the behavior users see changes. The `--empty`
-convention in `.changeset/automations-v2-rust-engine.md` applies to Rust work that shipped behind a flag; this does
-not.) Body: the adapter no
-longer rewrites permission-update destinations; a session-scoped grant stays in the session and a mode change is never
-persisted as the project default. State plainly that **entries already written into `.claude/settings.local.json` by
-the old behavior are not migrated or removed** (out of scope per the brief) and that users who see an unexpected
-`defaultMode` or rule there can delete it by hand.
+**File:** `.changeset/<name>.md`, written by hand (the `pnpm changeset` prompt is interactive) with exactly this
+frontmatter:
 
-**Verify:** `ls .changeset/*.md` shows the new file; `git status` shows it staged with the rest.
+```
+---
+'@qlan-ro/mainframe-core': patch
+'@qlan-ro/mainframe-app-tauri': patch
+---
+```
+
+`@qlan-ro/mainframe-core` is required, and it is the half that does the work. `.github/workflows/prepare-release.yml:29`
+reads the release version from `packages/core/package.json`, and its consolidation step (`:50-99`) pulls each package's
+CHANGELOG section by matching the literal header `## <that version>`, skipping any section whose header differs. The two
+packages are versioned independently and have already diverged — core is `2.0.0-rc.13`, app-tauri is `2.0.0-rc.15` — and
+`.changeset/config.json` links only types+core, so an app-tauri-only bump would file this entry under `## 2.0.0-rc.16`
+while the consolidator looks for `## 2.0.0-rc.14`. The sentence the brief requires — that entries already written into
+`.claude/settings.local.json` are not migrated — would never reach the released CHANGELOG. If it were the cycle's only
+changeset, core would not move at all and `prepare-release.yml:36-37` would fail on an existing tag.
+
+Do not "correct" this to app-tauri alone to match the neighboring Rust-daemon changesets
+(`rust-tunnel-sigpipe-drain.md`, `rust-daemon-port-gaps.md`, `rust-launch-group-kill-separator.md`) — those are the
+files this failure mode already swallowed. The precedent to follow is `.changeset/codex-history-unknown-item-types.md`
+and `.changeset/codex-quota-boot-warmup.md`: user-visible Rust-daemon fixes filed under core. App-tauri rides along for
+shipped-binary attribution; because its header will not match, the entry still surfaces exactly once, via core. This PR
+also edits `packages/core` source in task 6, so the core bump is honest on its own terms.
+
+Not an empty changeset: the behavior users see changes. The `--empty` convention in
+`.changeset/automations-v2-rust-engine.md` covers Rust work that shipped behind a flag; this does not.
+
+Body: the adapter no longer rewrites permission-update destinations; a session-scoped grant stays in the session and a
+mode change is never persisted as the project default. State plainly that **entries already written into
+`.claude/settings.local.json` by the old behavior are not migrated or removed** (out of scope per the brief) and that
+users who see an unexpected `defaultMode` or rule there can delete it by hand.
+
+**Verify:** `head -5 .changeset/<name>.md` shows both packages at `patch`, with `@qlan-ro/mainframe-core` present;
+`git status` shows the file staged with the rest.
 
 ---
 
