@@ -5,28 +5,29 @@
 
 ## Goal
 
-An image the user opens in the chat transcript has no context menu, so there is no
-way to get the bitmap onto the system clipboard — text copies fine, binary image
-data does not. This change wraps the one `<img>` inside `LightboxSurface` — the
-choke point both zoom paths already route through (`ZoomableImage` for assistant
-images, `ImageLightbox` for the user-turn gallery, task and session attachment
-grids, and the file `ImageViewer`) — in a shadcn `ContextMenu` carrying a single
-**Copy Image** item. Clicking it writes the image to the system clipboard through
-the webview's own async Clipboard API (`navigator.clipboard.write` with a
-`ClipboardItem`), the same API the transcript already uses to copy text, so pasting
-into Preview or Slack yields the image, not a URL. No IPC, no Rust, no host port.
-The menu mounts only when the source is copyable (`data:image/*`) *and* the webview
-advertises image-clipboard support; otherwise `ImageContextMenu` renders its
+An image the user opens has no context menu, so there is no way to get the bitmap
+onto the system clipboard — text copies fine, binary image data does not. This
+change wraps the one `<img>` inside `LightboxSurface` — the choke point both zoom
+paths route through (`ZoomableImage`, `ImageLightbox`) — in a shadcn `ContextMenu`
+carrying a single **Copy Image** item. Clicking it writes the image to the system
+clipboard through the webview's own async Clipboard API (`navigator.clipboard.write`
+with a `ClipboardItem`), the same API the transcript already uses to copy text, so
+pasting into Preview or Slack yields the image, not a URL. No IPC, no Rust, no host
+port. The menu mounts only when the source is copyable (`data:image/*`) *and* the
+webview advertises image-clipboard support; otherwise `ImageContextMenu` renders its
 children bare and right-click falls through exactly as it does today. The item
-reports its own outcome inline (Copy → Copied / Copy failed) through the shared
-`useMenuCopyFeedback` hook, and a failure additionally raises an `mfToast` carrying
-the reason.
+reports its own outcome inline (Copy Image → Copied / Copy failed) through the
+shared `useMenuCopyFeedback` hook, and a failure additionally raises an `mfToast`
+carrying the reason. Because `LightboxSurface` is shared, the menu also reaches the
+file viewer and the task/session attachment grids — an accepted scope expansion,
+recorded as D10.
 
 ## Constraints
 
 - **`CLAUDE.md`:** max 300 lines/file, 50 lines/function; `data-testid` on every
   interactive element (`<surface>-<element>` kebab-case); tests required for new
-  core logic; no silent catches; changeset required before commit.
+  core logic; no silent catches; extract shared helpers at 3+ duplications;
+  changeset required before commit.
 - **`packages/ui/CLAUDE.md`:** shadcn primitives, never raw Radix; read the
   `mainframe-design-system` skill before writing markup or class names; pure logic
   lives outside React.
@@ -36,14 +37,23 @@ the reason.
   jsdom, `*.test.ts` in node. A `.test.ts` that touches DOM APIs must carry a
   `// @vitest-environment jsdom` pragma — `write-image.test.ts` needs it, the other
   two do not.
+- **TypeScript is 6.0.3** (root `package.json`, `packages/ui/package.json`). Its
+  `lib.dom.d.ts` declares `BlobPart → BufferSource → ArrayBufferView<ArrayBuffer>`,
+  so a bare `Uint8Array` (i.e. `Uint8Array<ArrayBufferLike>`) is **not** assignable
+  to a `Blob` constructor argument. Every byte-carrying signature in this plan is
+  therefore declared `Uint8Array<ArrayBuffer>`. Verified by compiling both forms
+  with the repo's own `tsc`: the annotated form is clean, the bare form is `TS2322`.
 - **Every file this plan touches is comfortably under the line limits.** Largest
   edited file: `LightboxSurface.tsx` (42 → ~48). Every new file lands well under
   300; every new function under 50.
 - **The worktree has no `node_modules`.** Run `pnpm install` from the worktree root
   before the first task.
-- **No Rust and no cold `cargo` build** on the primary path. Appendix A (the
-  fallback) is the only thing that would need one; do not pay for it before Task 13
-  says it is needed.
+- **The implement stage needs no Rust and never runs `cargo`.** The one step that
+  does — the D7 webview gate — is a **qa-stage** step, not an implement task
+  (D14). Its cost is stated there: a cold `packages/app-tauri/src-tauri` build in
+  this worktree, multi-GB per the Disk Hygiene section of `CLAUDE.md`, followed by
+  a sweep. Appendix A (the fallback) is the only thing that adds Rust *source*, and
+  it runs only if that gate fails.
 
 ## Decisions
 
@@ -62,14 +72,23 @@ work.
 "disabled item with a reason". A one-item menu whose only item is dead is worse
 than no menu; right-click falls through to the webview default.
 
-**D3 — Testids: `chat-image-context-menu` on the menu *content*, `chat-image-copy`
-on the item.** The design direction put the first one on the trigger, but the
-trigger is the `<img>`, which already carries `imageTestId`
-(`chat-image-zoom-image` / `image-lightbox-current`) that existing tests assert on;
-one element cannot hold two testids. Neither id is keyed by a message/attachment
-id because the lightbox renders exactly one image at a time — there is no list and
-no index to disambiguate, and threading an id through three call sites to satisfy
-the letter of the rule buys nothing.
+**D3 — Testids are surface-neutral: `image-context-menu` on the menu *content*,
+`image-copy` on the item.** Two departures from the design direction, both forced:
+
+1. *Not `chat-*`.* `LightboxSurface` is reached from four non-chat call sites
+   (D10), so a `chat-` prefix would put `chat-image-copy` on the file viewer, the
+   tasks panel, and the context panel — against the `<surface>-<element>` rule and
+   misleading for every future e2e selector. The neutral pair matches
+   `ImageLightbox`'s own `image-lightbox-*` ids. Renaming after merge would churn
+   spec files, so it is done now.
+2. *Not on the trigger.* The direction put the first id on the trigger, but the
+   trigger is the `<img>`, which already carries `imageTestId`
+   (`chat-image-zoom-image` / `image-lightbox-current`) that existing tests assert
+   on; one element cannot hold two testids.
+
+Neither id is keyed by a message/attachment id because the lightbox renders exactly
+one image at a time — there is no list and no index to disambiguate, and threading
+an id through three call sites to satisfy the letter of the rule buys nothing.
 
 **D4 — The webview writes the clipboard; nothing crosses the IPC boundary.**
 *(Replaces the earlier "renderer decodes to RGBA, Rust writes" decision.)* Three
@@ -91,8 +110,9 @@ origin is a secure context, which is the only precondition WebKit puts on
 `ClipboardItem`. WebKit has shipped `ClipboardItem` writes for `image/png` since
 Safari 13.4, and the shipped app is macOS-only today
 (`.github/workflows/release.yml`, `build-app-tauri` matrix). This decision is not
-taken on faith: **Task 13 is a hard gate** that verifies a real paste in the shell
-before the change can ship, and Appendix A specifies the fallback in full.
+taken on faith: **the QA-stage webview gate** (see *QA smoke*, step 3) verifies a
+real paste in the shell before the change can ship, and Appendix A specifies the
+fallback in full.
 
 **D5 — Supported sources are `data:image/*` only, normalized to PNG.** Every image
 the transcript renders today is a data URI: `convert-message.ts` builds
@@ -102,7 +122,7 @@ unsupported per the brief's "do not fetch on right-click" ruling; `file://` and
 asset-protocol sources are unsupported because nothing in the transcript produces
 them. WebKit accepts only `image/png` on write, so a `data:image/jpeg` (or webp,
 or gif) source is re-encoded to PNG through a canvas before the write — see
-Task 9.
+Task 5.
 
 **D6 — No `HostBridge.clipboard` port; capability is a runtime feature detection.**
 The brief asked for a host-adapter capability, which made sense when the write had
@@ -117,12 +137,13 @@ there; Firefox does not expose `ClipboardItem` writes by default, so it gets no
 menu. jsdom has neither, so every existing transcript test renders exactly as
 before.
 
-**D7 — Task 13 is a gate, not a QA step.** The webview path is the whole change; if
-WKWebView refuses the write, four of this plan's files are dead. So the plan is
-ordered so the *cheap* path is built and proven in the running shell (Task 13)
+**D7 — The webview write is gated by a real paste before the change ships.** The
+webview path is the whole change; if WKWebView refuses the write, four of this
+plan's files are dead. So the *cheap* path is built and proven in the running shell
 before any Rust exists, and Appendix A — the host port plus the Rust command — is
-executed only if that gate fails. The gate's outcome is recorded as a decision in
-the lane result either way.
+executed only if that gate fails. The gate lives in the qa stage (D14) and is
+specified as QA smoke step 3, with a machine-checkable pasteboard assertion. Its
+outcome is recorded as a decision in the lane result either way.
 
 **D8 — If Appendix A is taken, it keeps the raw-body invoke and fixes the CSP; it
 does not switch to plain typed args.** Recorded here because it is the reason the
@@ -149,12 +170,85 @@ transcript already has two copy context menus — `MessagePathContextMenu` and
 `LinkWithPreview` — and the hook exists precisely "so the message path menu doesn't
 paste the mechanism a second time". A third idiom (silent success, toast-only
 failure) would make three copy menus in one surface behave three ways, so the image
-menu adopts the hook: the item reads Copy → **Copied** / **Copy failed** and the
-menu self-closes after ~900 ms. The failure toast is kept on top of the inline
+menu adopts the hook: the item reads Copy Image → **Copied** / **Copy failed** and
+the menu self-closes after ~900 ms. The failure toast is kept on top of the inline
 state because it is the only place the *reason* fits. This also fixes the icon:
 the design direction wrote `<Copy size={13} className="text-muted-foreground" />`,
 but every ContextMenu copy item in the repo uses `className="mr-2 size-3.5"` with
-no colour override; the image menu matches its neighbours.
+no colour override; the image menu matches its neighbours. Reusing the hook forces
+two follow-on decisions, D12 and D13.
+
+**D10 — Scope: the menu reaches every `LightboxSurface` caller, not only the
+transcript.** The brief scoped the menu to "images inside the transcript" and the
+design gate named the two chat paths. `LightboxSurface` is shared, so wrapping it
+also puts the menu on:
+
+| Call site | Route |
+|---|---|
+| `features/chat/messages/AssistantMessage.tsx` | `ZoomableImage` |
+| `features/chat/messages/InlineImageThumbs.tsx` | `ImageLightbox` |
+| `features/viewers/ImageViewer.tsx:151` | `ZoomableImage` |
+| `features/tasks/TaskAttachments.tsx:224` | `ImageLightbox` |
+| `features/context-panel/SessionAttachmentsGrid.tsx:85` | `ImageLightbox` |
+
+**Accepted, not worked around.** All five render the same `data:image/*` sources
+(`ImageViewer`'s own header documents its `src` as `data:image/...;base64,...`), so
+the behavior is identical everywhere and the action is correct on each. Narrowing
+it back to chat would mean a prop threaded through three call sites to *disable* a
+working feature. The scope note the gate cared about is the *thumbnail* boundary —
+still honored: no thumbnail anywhere gets a menu. Consequence for D3: the testids
+must be surface-neutral.
+
+**D11 — One gate, one result shape.** `canCopyImage(src)` is the single
+authoritative gate; `copyImageToClipboard` does not re-check the host or the source
+kind. The earlier `CopyImageResult` union carried `reason: 'unsupported-host' |
+'unsupported-source' | 'write-failed'`, but `ImageContextMenu` is the only caller
+and it mounts the item only when `canCopyImage` is true, so the first two variants
+were unreachable in production and existed only to be asserted. The module now
+returns `{ ok: boolean; message?: string }` — the shape this codebase already uses
+for text (`writeToClipboard(text): Promise<boolean>` in
+`lib/editor/copy-reference.ts:117`, which logs a tagged warn and resolves false),
+widened only so the `DOMException` message can reach the toast description.
+`useMenuCopyFeedback.onCopySelect` consumes `result.ok` directly.
+
+**D12 — `CopyMenuItem` is extracted and all three copy menus migrate in this pass.**
+The item markup (`copied → Check` / `failed → AlertTriangle` / `idle → Copy`, plus
+the label ternary) already exists twice —
+`features/chat/messages/MessagePathContextMenu.tsx:39-58` (`CopyPathItem`) and
+`features/chat/parts/link-with-preview.tsx:90-95`. The image menu would be the
+third, which `CLAUDE.md` ("extract shared helpers at 3+ duplications") forbids. It
+moves to `lib/ui/CopyMenuItem.tsx`, beside `use-menu-copy-feedback.ts`, which
+already owns `CopyStatus`. `link-with-preview.tsx` migrates in the same pass rather
+than being left as a fourth copy: leaving it is exactly the leftover `CLAUDE.md`
+rules out, and its item is structurally identical (only the label differs).
+
+**D13 — `useMenuCopyFeedback` gains a generation token; the stray-Escape race is
+fixed in the hook, not worked around in `ImageContextMenu`.** The hook's
+`onCopySelect` re-arms `setTimeout(closeMenu, delayMs)` inside `run().then(...)`
+with no invalidation (`lib/ui/use-menu-copy-feedback.ts:56-61`), while
+`handleOpenChange(false)` clears only the timer that exists at that instant
+(lines 38-43); `closeMenu` dispatches a document-level Escape keydown (line 34).
+Radix's `DismissableLayer` gates Escape on `index === layers.size - 1`, so with the
+menu open the menu absorbs it — which is why the hook's two existing consumers
+never saw this. Inside a Dialog it bites: if the user dismisses the menu after
+clicking Copy Image but before the copy settles (the JPEG canvas re-encode, or a
+slow rejected write on an unfocused WKWebView document), the late settlement
+schedules an Escape that fires with the menu unmounted, the lightbox Dialog is then
+the highest layer, and **the image closes by itself ~900 ms later**. Fix: capture a
+generation counter at select time, bump it in `handleOpenChange(false)`, and drop
+settlements whose generation is stale. Fixing it in the hook costs three lines and
+protects the two existing consumers from the same bug the day either of them is
+nested in a dialog.
+
+**D14 — The webview gate belongs to the qa stage; the implement stage completes
+`unverified`.** The gate is a human-driven shell run: `pnpm tauri:dev`, right-click,
+Copy Image, paste. The lane contract's implement exit criteria are groups done +
+typecheck/tests + commits, with no slot for a manual gate, and the qa stage's
+"failures route back to the implementer once" is precisely the Appendix A escape
+hatch. So there is no implement task group for it — it is QA smoke step 3, with a
+machine-checkable pasteboard assertion and an explicit blocked path. This also keeps
+the implement stage free of `cargo`: the gate's cold `src-tauri` build is a
+multi-GB, qa-stage cost (Disk Hygiene), swept afterwards.
 
 ## Interfaces this change adds
 
@@ -162,26 +256,38 @@ no colour override; the image menu matches its neighbours.
 // packages/ui/src/lib/clipboard/image-source.ts
 export type ImageSourceKind = 'data-url' | 'remote' | 'unsupported';
 export function classifyImageSource(src: string): ImageSourceKind;
-export function decodeDataUrl(src: string): { mediaType: string; bytes: Uint8Array } | null;
+export function decodeDataUrl(src: string): { mediaType: string; bytes: Uint8Array<ArrayBuffer> } | null;
 export function imageClipboardSupported(): boolean;
 export function canCopyImage(src: string): boolean;
 
 // packages/ui/src/lib/clipboard/write-image.ts
-export function writeImageToClipboard(bytes: Uint8Array, mediaType: string): Promise<void>;
+export function writeImageToClipboard(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<void>;
 
 // packages/ui/src/lib/clipboard/copy-image.ts
-export type CopyImageResult =
-  | { ok: true }
-  | { ok: false; reason: 'unsupported-host' | 'unsupported-source' | 'write-failed'; message: string };
-export function copyImageToClipboard(src: string): Promise<CopyImageResult>;
+/** `message` is present only on failure, and only when a reason is worth showing. */
+export interface CopyImageOutcome { ok: boolean; message?: string }
+/** Assumes `canCopyImage(src)` — the single gate (D11). */
+export function copyImageToClipboard(src: string): Promise<CopyImageOutcome>;
+
+// packages/ui/src/lib/ui/CopyMenuItem.tsx
+export function CopyMenuItem(props: {
+  testId: string;
+  label: string;
+  status: CopyStatus;
+  onSelect: (event: Event) => void;
+}): React.ReactElement;
 ```
 
-`copyImageToClipboard` is **not** an `async` function. WebKit requires
-`navigator.clipboard.write` to run under the user activation of the click that
-triggered it, and an `await` before the call ends that activation. Everything up to
-the write is synchronous; the re-encode for non-PNG sources rides inside the
-`ClipboardItem` value as a promise, which is the form WebKit documents for exactly
-this case.
+`Uint8Array<ArrayBuffer>`, not `Uint8Array`, is load-bearing — see Constraints.
+`new Uint8Array(len)` already produces that type, so no defensive copy is needed
+anywhere.
+
+`copyImageToClipboard` and `writeImageToClipboard` are **not** `async` functions.
+WebKit requires `navigator.clipboard.write` to run under the user activation of the
+click that triggered it, and an `await` before the call ends that activation.
+Everything up to the write is synchronous; the re-encode for non-PNG sources rides
+inside the `ClipboardItem` value as a promise, which is the form WebKit documents
+for exactly this case.
 
 ---
 
@@ -210,15 +316,41 @@ Cover, with hardcoded expectations (no logic mirrored from the implementation):
   `ClipboardItem` present but no `navigator.clipboard.write`; `true` with both.
   Install and remove the globals with `vi.stubGlobal` / `vi.unstubAllGlobals`.
 - `canCopyImage` truth table over `{data-url, remote} × {supported, unsupported}` —
-  only `data-url` + supported is `true`.
+  only `data-url` + supported is `true`. This is the gate D11 makes authoritative,
+  so the table is the only place the gating rule is asserted.
 
 ### Task 2 — Clipboard write tests (RED)
 
 **File:** `packages/ui/src/lib/clipboard/__tests__/write-image.test.ts` — **new.**
 First line: `// @vitest-environment jsdom` (see Constraints).
 
-Stub `ClipboardItem` with a class that records its constructor argument, and
-`navigator.clipboard.write` with a spy. Cases:
+**Stub shape is prescribed, not left to the implementer.** `ClipboardItem` is a
+class that stores its constructor argument; `navigator.clipboard.write` **adopts**
+the item's `image/png` value rather than ignoring it:
+
+```ts
+class FakeClipboardItem {
+  constructor(readonly values: Record<string, Blob | Promise<Blob>>) {}
+}
+const write = vi.fn(async (items: FakeClipboardItem[]): Promise<void> => {
+  await items[0]!.values['image/png'];
+});
+```
+
+That mirrors WebKit, which rejects `write()` when a value promise rejects. A plain
+spy would orphan the rejection inside the fake item: the promise
+`writeImageToClipboard` returns would never adopt it, the "a rejecting decode()
+rejects the returned promise" case would fail, and the rejection would surface as an
+unhandled rejection. **Do not repair that by awaiting the blob before calling
+`write`** — that destroys the synchronous-write property the activation-ordering
+case below exists to protect. (The equivalent alternative, if the adopting stub
+proves awkward: assert rejection on the *stored* value and assert invocation
+separately. Pick one and say which in the file header.)
+
+The async body of `write` still records its call synchronously, so the activation
+assertion holds.
+
+Cases:
 - **PNG passthrough:** `writeImageToClipboard(bytes, 'image/png')` calls `write`
   once with a single `ClipboardItem`; the item's `image/png` value resolves to a
   `Blob` of `type === 'image/png'` and `size === bytes.length`; no canvas is
@@ -235,27 +367,29 @@ Stub `ClipboardItem` with a class that records its constructor argument, and
   `writeImageToClipboard(bytes, 'image/jpeg')` still calls `write` synchronously,
   and the item's value resolves to the re-encoded PNG blob. Assert
   `URL.createObjectURL` / `URL.revokeObjectURL` are balanced.
-- **Re-encode failure:** a rejecting `decode()` rejects the returned promise, and
-  the object URL is still revoked. Same for a `null` 2d context and for a `toBlob`
-  that yields `null`.
+- **Re-encode failure:** a rejecting `decode()` rejects the promise
+  `writeImageToClipboard` returned (via the adopting stub above), and the object URL
+  is still revoked. Same for a `null` 2d context and for a `toBlob` that yields
+  `null`.
 
 ### Task 3 — Copy orchestration tests (RED)
 
 **File:** `packages/ui/src/lib/clipboard/__tests__/copy-image.test.ts` — **new**
 (node environment).
 
-`vi.mock('../write-image')` so no DOM is needed; use the real `image-source`.
+`vi.mock('../write-image')` so no DOM is needed; use the real `image-source`. Per
+D11 there are no host/source-kind cases here — that gate is Task 1's truth table.
 Cases:
-- No `ClipboardItem` global → `{ ok: false, reason: 'unsupported-host' }`, and
-  `writeImageToClipboard` is never called.
-- `https://…` source with support present → `{ ok: false, reason:
-  'unsupported-source' }`, nothing called.
-- Happy path → `writeImageToClipboard` receives exactly the decoded bytes and the
-  media type from the data URI; result is `{ ok: true }`.
-- `writeImageToClipboard` rejects → `{ ok: false, reason: 'write-failed' }` with a
-  non-empty `message` taken from the error, and one tagged `console.warn` (spy on
-  it — the no-silent-catch rule).
-- A non-`Error` rejection (`Promise.reject('nope')`) still produces a non-empty
+- **Happy path** → `writeImageToClipboard` receives exactly the decoded bytes and
+  the media type from the data URI; the result is `{ ok: true }` with no `message`.
+- **Synchronous write** → `writeImageToClipboard` has been called once before the
+  returned promise is awaited (the D4 activation rule, pinned at this layer too).
+- **Malformed base64 data URI** (`decodeDataUrl` returns `null`) →
+  `{ ok: false }` with a non-empty `message`; `writeImageToClipboard` is never
+  called; one tagged `console.warn` (spy on it — the no-silent-catch rule).
+- **`writeImageToClipboard` rejects with `new Error('boom')`** →
+  `{ ok: false, message: 'boom' }` and one tagged `console.warn`.
+- **A non-`Error` rejection** (`Promise.reject('nope')`) still produces a non-empty
   `message`.
 
 **Verify (whole group):** all three files fail on missing modules; no other suite
@@ -275,9 +409,11 @@ Pure, no DOM writes. `classifyImageSource` matches
 first `,`, verifies the prefix shape, `atob`s the payload inside a `try`
 (returning `null` on `InvalidCharacterError` — an `/* expected */`-commented catch,
 since a malformed URI is data, not a fault), and copies char codes into a
-`Uint8Array`. `imageClipboardSupported` is the two-term global check from D6 —
-guard both terms so it is safe to call in a node test. `canCopyImage` is the
-conjunction of the kind check and `imageClipboardSupported()`.
+`new Uint8Array(len)`, whose inferred type is already `Uint8Array<ArrayBuffer>` —
+declare the return that way and no copy is needed. `imageClipboardSupported` is the
+two-term global check from D6 — guard both terms so it is safe to call in a node
+test. `canCopyImage` is the conjunction of the kind check and
+`imageClipboardSupported()`.
 
 **Verify:** `vitest run src/lib/clipboard/__tests__/image-source.test.ts` green.
 
@@ -286,7 +422,7 @@ conjunction of the kind check and `imageClipboardSupported()`.
 **File:** `packages/ui/src/lib/clipboard/write-image.ts` — **new.**
 
 ```ts
-export function writeImageToClipboard(bytes: Uint8Array, mediaType: string): Promise<void> {
+export function writeImageToClipboard(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<void> {
   const png =
     mediaType === 'image/png'
       ? Promise.resolve(new Blob([bytes], { type: 'image/png' }))
@@ -295,9 +431,11 @@ export function writeImageToClipboard(bytes: Uint8Array, mediaType: string): Pro
 }
 ```
 
-One comment, on the promise value: WebKit accepts only `image/png` on write, and
-takes a promise so the re-encode can finish after the user gesture. Private
-`reencodeToPng(bytes, mediaType): Promise<Blob>`:
+The `Uint8Array<ArrayBuffer>` annotation is required for both `Blob` constructions
+to typecheck (Constraints). One comment, on the promise value: WebKit accepts only
+`image/png` on write, and takes a promise so the re-encode can finish after the user
+gesture. Private
+`reencodeToPng(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<Blob>`:
 1. `const url = URL.createObjectURL(new Blob([bytes], { type: mediaType }))` — blob
    URLs are same-origin, so the canvas is never tainted.
 2. `const img = new Image(); img.src = url; await img.decode();` — `decode()` over
@@ -318,23 +456,119 @@ into a second private helper in the same file.
 
 **File:** `packages/ui/src/lib/clipboard/copy-image.ts` — **new.**
 
-The exact ladder the Task 3 tests pin: `imageClipboardSupported()` →
-`decodeDataUrl` → `writeImageToClipboard`, with `.then(onOk, onErr)` rather than
-`await` (D4's activation rule; carry one comment saying so). The error branch calls
-`console.warn('[copy-image] clipboard write failed', err)` — the tagged-warn idiom
-`lib/editor/copy-reference.ts` already uses in this package — before returning
-`{ ok: false, reason: 'write-failed', message }`, where `message` is the error's
-message or a fixed fallback for a non-`Error` throw. No toast here: the component
-owns user-facing feedback so this module stays callable outside React.
+The exact ladder the Task 3 tests pin, and nothing more (D11 — no host or
+source-kind re-check): `decodeDataUrl(src)` → `writeImageToClipboard`, with
+`.then(onOk, onErr)` rather than `await` (D4's activation rule; carry one comment
+saying so).
+
+- `decodeDataUrl` returns `null` → `console.warn('[copy-image] could not decode the image source')`,
+  then `{ ok: false, message: 'That image could not be decoded.' }`.
+- write rejects → `console.warn('[copy-image] clipboard write failed', err)` — the
+  tagged-warn idiom `lib/editor/copy-reference.ts` already uses in this package —
+  then `{ ok: false, message }`, where `message` is `err.message` when it is a
+  non-empty `Error` message and `'The clipboard refused the image.'` otherwise.
+- success → `{ ok: true }`.
+
+No toast here: the component owns user-facing feedback so this module stays callable
+outside React.
 
 **Verify:** `vitest run src/lib/clipboard` all green, and
 `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes.
 
 ---
 
-## Group 3 — `menu-tests` (test) · depends on: `clipboard-lib`
+## Group 3 — `copy-menu-shared-tests` (test) · depends on: nothing
 
-### Task 7 — `ImageContextMenu` behavior + both render paths (RED)
+### Task 7 — Stale-settlement tests for `useMenuCopyFeedback` (RED)
+
+**File:** `packages/ui/src/lib/ui/__tests__/use-menu-copy-feedback.test.tsx` —
+**modified** (the suite exists; append cases to the existing `describe`). Its
+`Harness` already exposes a deferred `run`, an `item-a` button, and a `close-menu`
+button that calls `handleOpenChange(false)`, and the file already runs on fake
+timers — reuse all of it, add no new harness.
+
+Red against Task 8's generation token. Three cases:
+1. **Close before a successful settle** — click `item-a` with a deferred run, click
+   `close-menu`, then settle `true` and `advanceTimersByTime(1000)`. Assert **no**
+   Escape keydown was dispatched on `document` and `item-a` still reads `Copy A`.
+   (Today the settlement re-arms the timer and one Escape fires — this is the bug
+   D13 describes.)
+2. **Close before a failed settle** — same, settling `false`. Same assertions; the
+   failure path re-arms the same timer.
+3. **A copy started *after* a close still reports** — click `close-menu` first, then
+   click `item-a` and settle `true`; `item-a` reads `Copied` and exactly one Escape
+   fires. This is the guard against a token that permanently poisons the hook.
+
+**Verify:** cases 1-2 fail (an Escape is dispatched), case 3 passes; every existing
+case in the file still passes.
+
+---
+
+## Group 4 — `copy-menu-shared` (ui) · depends on: `copy-menu-shared-tests`
+
+Read the `mainframe-design-system` skill before touching `CopyMenuItem`'s markup.
+
+### Task 8 — Generation token in `useMenuCopyFeedback`
+
+**File:** `packages/ui/src/lib/ui/use-menu-copy-feedback.ts`
+
+Add `const generationRef = useRef(0);`. `handleOpenChange(false)` increments it
+before clearing the timer and resetting `settled`. `onCopySelect` captures
+`const generation = generationRef.current` **outside** the `.then`, and the `.then`
+returns early when `generation !== generationRef.current`, alongside the existing
+`!mountedRef.current` guard. Extend the file's header comment by one sentence
+saying why (a settlement that lands after the menu closed must not dispatch an
+Escape — inside a Dialog the Dialog would eat it; D13). No API change: the three
+returned members keep their signatures.
+
+**Verify:** the whole `lib/ui/__tests__/use-menu-copy-feedback.test.tsx` suite is
+green, including Task 7's three new cases.
+
+### Task 9 — Extract `CopyMenuItem` and migrate both existing menus
+
+**Files:**
+- `packages/ui/src/lib/ui/CopyMenuItem.tsx` — **new.**
+- `packages/ui/src/features/chat/messages/MessagePathContextMenu.tsx` — modified.
+- `packages/ui/src/features/chat/parts/link-with-preview.tsx` — modified.
+
+`CopyMenuItem` is `MessagePathContextMenu`'s current `CopyPathItem` moved verbatim
+— same props, same icons, same class names, same label ternary — and re-exported
+from `lib/ui/`, beside the hook that owns `CopyStatus` (D12):
+
+```tsx
+export function CopyMenuItem({ testId, label, status, onSelect }: CopyMenuItemProps) {
+  return (
+    <ContextMenuItem data-testid={testId} onSelect={onSelect}>
+      {status === 'copied' && <Check className="mr-2 size-3.5 text-mf-success" />}
+      {status === 'failed' && <AlertTriangle className="mr-2 size-3.5 text-destructive" />}
+      {status === 'idle' && <Copy className="mr-2 size-3.5" />}
+      {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : label}
+    </ContextMenuItem>
+  );
+}
+```
+
+Then:
+- `MessagePathContextMenu` deletes its local `CopyPathItem` and imports
+  `CopyMenuItem`; both call sites keep their testids and labels
+  (`Copy Absolute Path` / `Copy Relative Path`) unchanged.
+- `link-with-preview.tsx` replaces its inlined copy item (lines 90-95) with `<CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />`.
+  Keep the label string exactly `Copy link` —
+  `features/chat/parts/__tests__/markdown-text.test.tsx:308-340` asserts it, along
+  with `Copied` and the delayed close. Its second item (`chat-link-open`) is not a
+  copy item and stays inline. Drop the now-unused `Check`/`Copy`/`AlertTriangle`
+  imports from both files.
+
+**Verify:**
+`vitest run src/features/chat/messages/__tests__/MessagePathContextMenu.test.tsx src/features/chat/parts/__tests__/markdown-text.test.tsx`
+green with no test edits — the migration is behavior-preserving, so a test change
+here means the extraction changed something it should not have.
+
+---
+
+## Group 5 — `menu-tests` (test) · depends on: `clipboard-lib`, `copy-menu-shared`
+
+### Task 10 — `ImageContextMenu` behavior + both render paths (RED)
 
 **File:** `packages/ui/src/features/chat/parts/__tests__/ImageContextMenu.test.tsx` — **new.**
 
@@ -351,30 +585,34 @@ real 1×1 PNG data URI constant for the copyable source.
 
 Cases:
 1. **Supported webview + data URI** — right-clicking the wrapped child opens
-   `chat-image-context-menu` containing `chat-image-copy` with the text
-   `Copy Image`.
-2. **Supported webview + `https://…` source** — no `chat-image-context-menu` after
+   `image-context-menu` containing `image-copy` with the text `Copy Image`.
+2. **Supported webview + `https://…` source** — no `image-context-menu` after
    `fireEvent.contextMenu`, and the child still renders.
 3. **No `ClipboardItem` + data URI** — same: no menu, child renders.
-4. **Copy succeeds** — clicking `chat-image-copy` calls `copyImageToClipboard` once
-   with the src; the item's text becomes `Copied`; `mfToast.error` is never called.
-5. **Copy fails** — `copyImageToClipboard` resolves
-   `{ ok: false, reason: 'write-failed', message: 'boom' }`; the item's text becomes
-   `Copy failed`, `mfToast.error` is called once, and its options carry
-   `description: 'boom'`.
+4. **Copy succeeds** — clicking `image-copy` calls `copyImageToClipboard` once with
+   the src; the item's text becomes `Copied`; `mfToast.error` is never called.
+5. **Copy fails** — `copyImageToClipboard` resolves `{ ok: false, message: 'boom' }`;
+   the item's text becomes `Copy failed`, `mfToast.error` is called once, and its
+   options carry `description: 'boom'`.
 6. **Assistant-image path** — render `<ZoomableImage src={PNG_DATA_URI} />`, click
    `chat-image-zoom-trigger`, await `chat-image-zoom-dialog`, then
-   `fireEvent.contextMenu` on `chat-image-zoom-image` → `chat-image-context-menu`
+   `fireEvent.contextMenu` on `chat-image-zoom-image` → `image-context-menu`
    appears. (Satisfies "the assistant/attachment render path gets the menu".)
 7. **User-gallery path** — render
    `<ImageLightbox images={[{ src: PNG_DATA_URI }]} index={0} onIndexChange={vi.fn()} />`,
-   `fireEvent.contextMenu` on `image-lightbox-current` → `chat-image-context-menu`
+   `fireEvent.contextMenu` on `image-lightbox-current` → `image-context-menu`
    appears. (Satisfies the second required render path.)
 8. **Menu dismissal does not dismiss the lightbox** — with the `ZoomableImage`
    dialog open and the menu open, press `Escape` once: the menu closes and
    `chat-image-zoom-dialog` is still in the DOM. Then assert a plain click on
    `chat-image-zoom-image` (no menu open) still closes the dialog, so the existing
    dismissal contract survives the `asChild` wrap.
+9. **A copy that settles after the menu closed does not close the lightbox** (D13,
+   the integration counterpart to Task 7). Open the `ZoomableImage` dialog and the
+   menu, mock `copyImageToClipboard` to a **deferred** promise, click `image-copy`,
+   press `Escape` to dismiss the menu only, then settle the deferred copy and
+   `advanceTimersByTime(1000)`. Assert `chat-image-zoom-dialog` is **still** in the
+   DOM. Without Task 8's token this test fails by closing the image.
 
 **Verify:** the file fails on the missing `../ImageContextMenu` module; the three
 existing part tests (`ZoomableImage.test.tsx`, `ImageLightbox.test.tsx`,
@@ -383,11 +621,11 @@ they render exactly as before.
 
 ---
 
-## Group 4 — `image-context-menu` (ui) · depends on: `menu-tests`, `clipboard-lib`
+## Group 6 — `image-context-menu` (ui) · depends on: `menu-tests`, `clipboard-lib`, `copy-menu-shared`
 
 Read the `mainframe-design-system` skill before writing any markup here.
 
-### Task 8 — `ImageContextMenu.tsx`
+### Task 11 — `ImageContextMenu.tsx`
 
 **File:** `packages/ui/src/features/chat/parts/ImageContextMenu.tsx` — **new.**
 
@@ -398,28 +636,28 @@ interface ImageContextMenuProps { src: string; children: ReactNode }
 `useMenuCopyFeedback()` first (hooks before the early return), then
 `if (!canCopyImage(src)) return <>{children}</>;` — D2's "no menu at all". Otherwise
 the shadcn `ContextMenu onOpenChange={handleOpenChange}` /
-`ContextMenuTrigger asChild` / `ContextMenuContent className="w-44"` with one item,
-mirroring `MessagePathContextMenu`'s `CopyPathItem` markup (D9):
+`ContextMenuTrigger asChild` / `ContextMenuContent className="w-44"` holding one
+`CopyMenuItem` (D12):
 
 ```tsx
-<ContextMenuItem data-testid="chat-image-copy" onSelect={onCopySelect('chat-image-copy', handleCopy)}>
-  {status === 'copied' && <Check className="mr-2 size-3.5 text-mf-success" />}
-  {status === 'failed' && <AlertTriangle className="mr-2 size-3.5 text-destructive" />}
-  {status === 'idle' && <Copy className="mr-2 size-3.5" />}
-  {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : 'Copy Image'}
-</ContextMenuItem>
+<CopyMenuItem
+  testId="image-copy"
+  label="Copy Image"
+  status={statusFor('image-copy')}
+  onSelect={onCopySelect('image-copy', handleCopy)}
+/>
 ```
 
 `handleCopy` is the `() => Promise<boolean>` the hook expects: it awaits
 `copyImageToClipboard(src)`, fires
 `mfToast.error('Could not copy the image', { description: result.message })` when
 `!result.ok` (`mfToast`, never `sonner` directly), and returns `result.ok`.
-`data-testid="chat-image-context-menu"` goes on `ContextMenuContent` (D3). No
-separator and no reserved second group.
+`data-testid="image-context-menu"` goes on `ContextMenuContent` (D3). No separator
+and no reserved second group.
 
-**Verify:** cases 1–5 of Task 7 pass.
+**Verify:** cases 1-5 of Task 10 pass.
 
-### Task 9 — Wrap the lightbox image
+### Task 12 — Wrap the lightbox image
 
 **File:** `packages/ui/src/features/chat/parts/LightboxSurface.tsx`
 
@@ -430,11 +668,11 @@ untouched: Radix's `asChild` slot composes the ref, so
 still works. Add nothing to the props interface — the surface already receives
 `src`.
 
-**Verify:** cases 6–8 of Task 7 pass;
+**Verify:** cases 6-9 of Task 10 pass;
 `vitest run src/features/chat/parts/__tests__/ZoomableImage.test.tsx src/features/chat/parts/__tests__/ImageLightbox.test.tsx`
 still green.
 
-### Task 10 — Changeset and full verification
+### Task 13 — Changeset and full verification
 
 **File:** `.changeset/<generated>.md` — **new.**
 
@@ -445,53 +683,64 @@ stating that right-clicking an opened image offers Copy Image.
 
 **Verify:**
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck`
-- `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard src/features/chat/parts`
-- `git status` shows no stray files; no `@ts-ignore`, no `console.*` outside the one
-  tagged warn in `copy-image.ts`, no file over 300 lines (`wc -l` on every touched
+- `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard src/lib/ui src/features/chat/parts src/features/chat/messages/__tests__/MessagePathContextMenu.test.tsx`
+- `git status` shows no stray files; no `@ts-ignore`, no `console.*` outside the
+  tagged warns in `copy-image.ts`, no file over 300 lines (`wc -l` on every touched
   file).
 
+The implement stage ends here and is reported `unverified` (D14): the real
+clipboard write has not yet been exercised in a webview.
+
 ---
 
-## Group 5 — `webview-clipboard-gate` (qa) · depends on: `image-context-menu`
+## QA smoke (the qa stage owns these; step 3 is the D7 gate)
 
-### Task 11 — Prove the write in the running shell
-
-This is the gate D7 describes, not a nice-to-have. Do it before considering the
-lane's implement stage complete, and record the outcome as a decision in the lane
-result.
+Steps 1-2 and 4-7 are ordinary smoke. **Step 3 is the gate**: if it fails, the
+change does not ship on this path and QA routes back to the implementer once, with
+Appendix A as the fix.
 
 1. `pnpm tauri:dev` from `packages/app-tauri` with an isolated `MAINFRAME_DATA_DIR`
-   and `DAEMON_PORT` (per the memory note on production takeover). The Rust build
-   is cold in this worktree but the Rust *sources* are untouched, so nothing here
-   depends on Appendix A.
-2. Open a PNG image in the transcript, right-click, click **Copy Image**, and paste
-   into Preview (⌘N). The bitmap must appear with correct colours and dimensions.
-3. Repeat with a JPEG-sourced image if one is reachable (the re-encode path).
-
-**PASS** → the plan is complete; Appendix A is not executed and stays in this file
-as the recorded alternative.
-**FAIL** (`navigator.clipboard.write` rejects, or the paste yields nothing) →
-capture the exact rejection, record it as the D7 outcome, and execute Appendix A.
-Tasks 1–3 and 7–9 survive unchanged in that case; only `write-image.ts` and the
-capability term of `image-source.ts` are replaced.
-
----
-
-## QA smoke (for the qa stage, not this plan's tasks)
-
-1. `pnpm tauri:dev` with an isolated `MAINFRAME_DATA_DIR` and `DAEMON_PORT`.
-2. Send a screenshot to a session, open the resulting image in the transcript,
-   right-click it → menu appears at the pointer, not clipped by the lightbox box.
-3. Click **Copy Image** → the item reads **Copied** and the menu closes on its own;
-   paste into Preview → the bitmap appears, correct colours and dimensions, no alpha
-   inversion.
+   and `DAEMON_PORT` (per the memory note on production takeover). **Cost:** the
+   Rust build is cold in this worktree, and per the Disk Hygiene section of
+   `CLAUDE.md` every `.worktrees/*` checkout that runs `cargo` grows its own
+   multi-GB `target/`. The Rust *sources* are untouched, so this buys nothing but
+   the shell. After the gate, run `cargo sweep --installed && cargo sweep --time 14`
+   in `packages/app-tauri/src-tauri/target`, or `cargo clean --profile dev`, before
+   leaving the worktree.
+2. Send a screenshot to a session, open the resulting image, right-click it → menu
+   appears at the pointer, not clipped by the lightbox box.
+3. **Gate.** Click **Copy Image** → the item reads **Copied** and the menu closes on
+   its own. Then assert the *native pasteboard*, not a screenshot:
+   ```bash
+   osascript -e 'set f to (open for access POSIX file "/tmp/mf282.png" with write permission)' \
+             -e 'set eof f to 0' \
+             -e 'write (the clipboard as «class PNGf») to f' \
+             -e 'close access f'
+   sips -g pixelWidth -g pixelHeight /tmp/mf282.png
+   ```
+   **PASS** = the `osascript` succeeds (the pasteboard actually holds `PNGf`, so the
+   write landed as an image and not as text or a URL) **and** `sips` reports exactly
+   the source image's known pixel dimensions. Use a fixture whose dimensions you
+   recorded before the copy. Repeat with a JPEG-sourced image if one is reachable
+   (the re-encode path).
+   **FAIL** (`navigator.clipboard.write` rejects, the `osascript` errors with no
+   `PNGf` on the pasteboard, or the dimensions differ) → capture the exact rejection,
+   record it as the D7 outcome, and route back to the implementer to execute
+   Appendix A. Tasks 1-3 and 10-12 survive unchanged in that case; only
+   `write-image.ts` and the capability term of `image-source.ts` are replaced.
+   **BLOCKED** — if the shell cannot be driven (no interactive session, no macOS
+   host, `tauri:dev` will not start): do **not** report PASS. Hand off to a human
+   with these exact steps and the fixture, and mark the lane `blocked` with
+   `blocked_reason: "D7 webview clipboard gate needs an interactive macOS shell"`.
+   An unverified PASS is the one outcome this gate exists to prevent.
 4. Right-click the *thumbnail* (not the opened image) → no menu (webview default).
 5. Right-click transcript text, a code block, and the composer → unchanged.
 6. Close the menu with Escape and with an outside click → the lightbox stays open;
-   clicking the image itself still closes the lightbox.
+   clicking the image itself still closes the lightbox. Then click **Copy Image**
+   and immediately press Escape; wait two seconds → the lightbox is still open (D13).
 7. Browser mode (`vite` without Tauri, in Chromium) → the menu appears and the copy
    works (D6); no console error.
-8. **Only if Appendix A was executed:** run steps 2–3 against a packaged build
+8. **Only if Appendix A was executed:** run steps 2-3 against a packaged build
    (`scripts/build-release-local.sh --tauri`), not `tauri:dev`. The dev server
    serves no CSP header, so the IPC transport differs from the shipped app and a
    dev-only smoke cannot see the failure D8 describes. Also re-smoke the terminal,
@@ -501,24 +750,31 @@ capability term of `image-source.ts` are replaced.
 ## Risks
 
 - **`navigator.clipboard.write` in WKWebView is the load-bearing assumption.**
-  Mitigated by Task 11 (a hard gate before ship) and by Appendix A being specified
-  in full rather than discovered later. Evidence for it is in D4.
+  Mitigated by the QA gate (step 3, before ship) and by Appendix A being specified
+  in full rather than discovered later. Evidence for it is in D4. The cost of a
+  FAIL is one round-trip to the implementer, not a redesign.
 - **Non-PNG sources ride the canvas re-encode**, whose promise is resolved after the
   user gesture. WebKit documents promise values for exactly this reason, but if it
   refuses, PNG (every screenshot, the dominant case) still works and the JPEG case
   surfaces as an honest "Copy failed" toast rather than a corrupt clipboard entry.
 - **Radix menu inside a Radix dialog.** Both portal to `document.body` at `z-50`;
-  the menu mounts later so it stacks above. Covered by Task 7 case 8 and QA step 6.
+  the menu mounts later so it stacks above. Escape ordering is layer-based, which is
+  what makes D13's late-settlement bug possible; covered by Task 7, Task 10 cases
+  8-9, and QA step 6.
+- **`CopyMenuItem` touches two shipped menus.** The migration is behavior-preserving
+  and pinned by their existing suites, which must pass **unedited** (Task 9). Any
+  needed test edit is a signal the extraction drifted.
 - **jsdom cannot decode or write images**, so `write-image.ts` is only covered
-  against stubbed DOM APIs. The real write is proven by Task 11, not by unit tests.
+  against stubbed DOM APIs. The real write is proven by QA step 3, not by unit
+  tests.
 
 ---
 
 ## Appendix A — fallback: host port + Rust clipboard command
 
-**Execute only if Task 11 fails.** Everything here is additive to Tasks 1–3 and
-7–9; `write-image.ts` and the capability term of `image-source.ts` are replaced,
-`copy-image.ts` gains a `host` parameter, and `ImageContextMenu` calls
+**Execute only if the QA gate (smoke step 3) fails.** Everything here is additive to
+Tasks 1-3 and 10-12; `write-image.ts` and the capability term of `image-source.ts`
+are replaced, `copy-image.ts` gains a `host` parameter, and `ImageContextMenu` calls
 `canCopyImage(src, useHost())`. Budget one cold `cargo` build (multi-GB
 `src-tauri/target` in this worktree, per the Disk Hygiene section of `CLAUDE.md`).
 
@@ -532,9 +788,12 @@ clipboard: {
    *  rendering clipboard affordances — never probe by calling and catching. */
   readonly canWriteImage: boolean;
   /** rgba is width*height*4 bytes, row-major, non-premultiplied. */
-  writeImage(rgba: Uint8Array, width: number, height: number): Promise<void>;
+  writeImage(rgba: Uint8Array<ArrayBuffer>, width: number, height: number): Promise<void>;
 };
 ```
+
+`Uint8Array<ArrayBuffer>` for the same reason as the primary path (Constraints) —
+the renderer builds this array from `ImageData` and hands it straight to `fetch`.
 
 Placed after `shell` and before `notify`. No Zod schema in `host-contract.ts` —
 those schemas exist for the Electron `ipcMain` handlers, and the Electron adapter
@@ -565,7 +824,11 @@ image-copy PR), and QA step 8 becomes mandatory.
 **File:** `packages/ui/src/lib/tauri/bridge.ts`
 
 ```ts
-export async function clipboardWriteImage(rgba: Uint8Array, width: number, height: number): Promise<void> {
+export async function clipboardWriteImage(
+  rgba: Uint8Array<ArrayBuffer>,
+  width: number,
+  height: number,
+): Promise<void> {
   if (!IS_TAURI) throw new Error('clipboard.writeImage is not available outside the Tauri webview');
   await invoke<void>('clipboard_write_image', rgba, {
     headers: { 'x-image-width': String(width), 'x-image-height': String(height) },
@@ -588,7 +851,7 @@ as `{ headers: HeadersInit }`, so this is the supported raw-body form.
 
 - `packages/ui/src/lib/host/tauri-adapter.ts` — `clipboard = { canWriteImage: true, writeImage: (rgba, w, h) => bridge.clipboardWriteImage(rgba, w, h) };`
 - `packages/ui/src/lib/host/electron-adapter.ts` — `canWriteImage: false`; `writeImage` returns a rejected promise naming the host (mirror the file's existing not-supported style).
-- `packages/ui/src/lib/host/fake-adapter.ts` — `canWriteImage` reads `this.overrides.clipboard?.canWriteImage ?? false`; `writeImage` delegates to the override when set, otherwise `notSupported('clipboard.writeImage')`. Extend `FakeHostOverrides` with `clipboard?: { canWriteImage?: boolean; writeImage?: (rgba: Uint8Array, width: number, height: number) => Promise<void> }` — load-bearing, since without it no jsdom test can reach the menu.
+- `packages/ui/src/lib/host/fake-adapter.ts` — `canWriteImage` reads `this.overrides.clipboard?.canWriteImage ?? false`; `writeImage` delegates to the override when set, otherwise `notSupported('clipboard.writeImage')`. Extend `FakeHostOverrides` with `clipboard?: { canWriteImage?: boolean; writeImage?: (rgba: Uint8Array<ArrayBuffer>, width: number, height: number) => Promise<void> }` — load-bearing, since without it no jsdom test can reach the menu.
 
 Tests: `lib/host/__tests__/tauri-adapter.test.ts` gains one case (`clipboard.writeImage(rgba, 2, 1)` invokes `'clipboard_write_image'` with a `Uint8Array` of `byteLength === 8` and the two headers); `lib/host/__tests__/fake-adapter.test.ts` gains two (default rejects; override receives the arguments).
 
@@ -596,13 +859,14 @@ Tests: `lib/host/__tests__/tauri-adapter.test.ts` gains one case (`clipboard.wri
 
 **File:** `packages/ui/src/lib/clipboard/decode-image.ts` — replaces `write-image.ts`.
 
-`decodeToRgba(bytes, mediaType): Promise<{ rgba: Uint8Array; width: number; height: number }>`
+`decodeToRgba(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<{ rgba: Uint8Array<ArrayBuffer>; width: number; height: number }>`
 is A5's version of Task 5's `reencodeToPng`: same object-URL → `img.decode()` →
 canvas pipeline, ending at
 `{ rgba: new Uint8Array(imageData.data.buffer.slice(0)), width, height }` instead of
-`toBlob`. Its test file (`__tests__/decode-image.test.ts`, jsdom pragma) mirrors
-Task 2 with `getImageData` in place of `toBlob`. `copy-image.ts` gains a
-`decode-failed` reason between the source gate and the write.
+`toBlob` — `buffer.slice(0)` yields a real `ArrayBuffer`, so the annotation holds
+without a further copy. Its test file (`__tests__/decode-image.test.ts`, jsdom
+pragma) mirrors Task 2 with `getImageData` in place of `toBlob`. `copy-image.ts`
+gains a decode-failure message between the source gate and the write.
 
 ### A6 — Rust command
 
