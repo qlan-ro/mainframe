@@ -24,6 +24,7 @@ import { getAgents } from '@/lib/api/agents';
 import { useChatExtras } from '../chat/runtime/use-chat-thread-runtime';
 import { useDraftConfig } from '../sessions/runtime/draft-config';
 import { resolveDraftChatContext } from '../chat/composer/triggers/resolve-draft-chat-context';
+import { useSkillsNonce } from './use-skills-revalidation';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -52,6 +53,7 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
   // so the `/` skills and `@` agents pickers populate before the first send.
   const draft = useDraftConfig(chatId != null && chatConfig == null ? chatId : null);
   const { adapterId, projectId } = resolveDraftChatContext(chatId, chatConfig, draft);
+  const nonce = useSkillsNonce();
 
   const [skills, setSkills] = useState<Skill[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
@@ -100,7 +102,7 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [port, adapterId, projectId]);
+  }, [port, adapterId, projectId, nonce]);
 
   return <Ctx.Provider value={{ skills, agents, loading }}>{children}</Ctx.Provider>;
 }
