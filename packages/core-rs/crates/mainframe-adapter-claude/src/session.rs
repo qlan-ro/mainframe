@@ -14,9 +14,11 @@
 //!
 //! The spawn argv, stdin `control_request` envelopes, the user `sendMessage`
 //! envelope, `respondToPermission` (incl. ExitPlanMode/AskUserQuestion
-//! special-casing + localSettings promotion), SIGTERM→SIGKILL(3s), and
-//! interrupt (protocol interrupt + per-task stop_task + 10s SIGINT fallback) are
-//! copied verbatim from the TS source and its tests.
+//! special-casing), SIGTERM→SIGKILL(3s), and interrupt (protocol interrupt +
+//! per-task stop_task + 10s SIGINT fallback) are copied verbatim from the TS
+//! source and its tests. One deliberate divergence: outbound permission
+//! updates keep the destination the CLI declared instead of being rewritten,
+//! and a `setMode` update is always forced session-scoped (#283).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, AtomicU8, AtomicU32, Ordering};
@@ -34,8 +36,8 @@ use mainframe_adapter_api::{
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
-    AdapterProcess, AdapterProcessStatus, ControlBehavior, ControlDestination, ControlResponse,
-    ControlUpdate, MessageUsage, SessionOptions, SessionSpawnOptions,
+    AdapterProcess, AdapterProcessStatus, ControlBehavior, ControlResponse, MessageUsage,
+    SessionOptions, SessionSpawnOptions,
 };
 use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
@@ -204,89 +206,6 @@ pub struct ClaudeSessionState {
     pub skill_path_cache: HashMap<String, String>,
     pub task_v2_events: Vec<Value>,
     pub task_events: ClaudeTaskEvents,
-}
-
-/// The CLI's permission_suggestions always use destination:"session". Promote
-/// every session-scoped suggestion to localSettings (mirrors the terminal CLI's
-/// "Always Allow"): the CLI then persists the rule AND updates in-memory state.
-pub fn promote_to_local_settings(updates: Vec<ControlUpdate>) -> Vec<ControlUpdate> {
-    updates.into_iter().map(promote_one).collect()
-}
-
-fn promote_one(u: ControlUpdate) -> ControlUpdate {
-    let session = ControlDestination::Session;
-    let local = ControlDestination::LocalSettings;
-    match u {
-        ControlUpdate::AddRules {
-            rules,
-            behavior,
-            destination,
-        } => ControlUpdate::AddRules {
-            rules,
-            behavior,
-            destination: if destination == session {
-                local
-            } else {
-                destination
-            },
-        },
-        ControlUpdate::ReplaceRules {
-            rules,
-            behavior,
-            destination,
-        } => ControlUpdate::ReplaceRules {
-            rules,
-            behavior,
-            destination: if destination == session {
-                local
-            } else {
-                destination
-            },
-        },
-        ControlUpdate::RemoveRules {
-            rules,
-            behavior,
-            destination,
-        } => ControlUpdate::RemoveRules {
-            rules,
-            behavior,
-            destination: if destination == session {
-                local
-            } else {
-                destination
-            },
-        },
-        ControlUpdate::SetMode { mode, destination } => ControlUpdate::SetMode {
-            mode,
-            destination: if destination == session {
-                local
-            } else {
-                destination
-            },
-        },
-        ControlUpdate::AddDirectories {
-            directories,
-            destination,
-        } => ControlUpdate::AddDirectories {
-            directories,
-            destination: if destination == session {
-                local
-            } else {
-                destination
-            },
-        },
-        ControlUpdate::RemoveDirectories {
-            directories,
-            destination,
-        } => ControlUpdate::RemoveDirectories {
-            directories,
-            destination: if destination == session {
-                local
-            } else {
-                destination
-            },
-        },
-    }
 }
 
 /// set_model/apply_flag_settings/stop_task signal success/failure via the OUTER
@@ -965,8 +884,10 @@ impl ClaudeSession {
                 inner["updatedInput"] = serde_json::to_value(ui).unwrap_or(Value::Null);
             }
             if let Some(up) = response.updated_permissions.clone() {
-                inner["updatedPermissions"] =
-                    serde_json::to_value(promote_to_local_settings(up)).unwrap_or(Value::Null);
+                inner["updatedPermissions"] = serde_json::to_value(
+                    crate::permission_updates::keep_mode_changes_session_scoped(up),
+                )
+                .unwrap_or(Value::Null);
             }
         } else {
             if tool_name == Some("ExitPlanMode") {
@@ -1700,8 +1621,9 @@ mod permission_response_tests;
 // notes: SIGTERM/SIGKILL/SIGINT shell out to `kill -<SIG> <pid>` (no libc/nix in
 // notes: the allowlist; house style from background-tasks::kill). spawn argv,
 // notes: stdin control_request envelopes, sendMessage/respondToPermission (incl.
-// notes: ExitPlanMode/AskUserQuestion + promoteToLocalSettings), interrupt (10s
-// notes: SIGINT fallback), kill (SIGTERM→SIGKILL 3s) copied verbatim. Tests
+// notes: ExitPlanMode/AskUserQuestion; outbound permission updates keep their
+// notes: declared destination, setMode forced session-scoped, #283), interrupt
+// notes: (10s SIGINT fallback), kill (SIGTERM→SIGKILL 3s) copied verbatim. Tests
 // notes: ported: session-spawn-args (against build_args), control-requests
 // notes: (ClaudeAdapter block), kill-awaits-close, stop-background-task — with a
 // notes: capturable mpsc stdin + a ChildHandle test double (tx.is_closed() ≈
