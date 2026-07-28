@@ -24,6 +24,7 @@ vi.mock('@/lib/api/tunnel-ports', () => ({ listPortTunnels: (port: number) => li
 import {
   applyPortTunnelEvent,
   applyPortTunnelSnapshot,
+  clearPortTunnelEntry,
   installPortTunnelSubscriber,
   portTunnelGeneration,
   reportPortTunnelError,
@@ -58,20 +59,20 @@ describe('applyPortTunnelEvent — state mapping', () => {
 
   it('records a ready tunnel with its url', () => {
     applyPortTunnelEvent(tunnelEvent({ state: 'ready', label: 'port:5173', url: 'https://a.trycloudflare.com' }));
-    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com' } });
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: false } });
   });
 
   it('treats dns_verified as ready', () => {
     applyPortTunnelEvent(
       tunnelEvent({ state: 'dns_verified', label: 'port:5173', url: 'https://a.trycloudflare.com', dnsVerified: true }),
     );
-    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com' } });
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: true } });
   });
 
   it('keeps the known url when a dns_verified event carries none', () => {
     applyPortTunnelEvent(tunnelEvent({ state: 'ready', label: 'port:5173', url: 'https://a.trycloudflare.com' }));
     applyPortTunnelEvent(tunnelEvent({ state: 'dns_verified', label: 'port:5173' }));
-    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com' } });
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: true } });
   });
 
   it('records an error with the daemon’s message', () => {
@@ -95,8 +96,68 @@ describe('applyPortTunnelEvent — state mapping', () => {
     applyPortTunnelEvent(tunnelEvent({ state: 'ready', label: 'port:8080', url: 'https://b.trycloudflare.com' }));
     expect(entries()).toEqual({
       5173: { state: 'starting' },
-      8080: { state: 'ready', url: 'https://b.trycloudflare.com' },
+      8080: { state: 'ready', url: 'https://b.trycloudflare.com', dnsVerified: false },
     });
+  });
+});
+
+describe('applyPortTunnelEvent — dnsVerified flag (D11)', () => {
+  it('a dns_verified event with no prior ready still yields dnsVerified: true', () => {
+    applyPortTunnelEvent(
+      tunnelEvent({ state: 'dns_verified', label: 'port:5173', url: 'https://a.trycloudflare.com' }),
+    );
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: true } });
+  });
+
+  it('a late duplicate ready event cannot un-verify an already-verified tunnel', () => {
+    applyPortTunnelEvent(tunnelEvent({ state: 'ready', label: 'port:5173', url: 'https://a.trycloudflare.com' }));
+    applyPortTunnelEvent(tunnelEvent({ state: 'dns_verified', label: 'port:5173' }));
+    applyPortTunnelEvent(tunnelEvent({ state: 'ready', label: 'port:5173', url: 'https://a.trycloudflare.com' }));
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: true } });
+  });
+});
+
+describe('applyPortTunnelSnapshot — dnsVerified flag (D11, fact 8)', () => {
+  it('marks a ready entry dnsVerified: true', () => {
+    applyPortTunnelSnapshot([{ port: 5173, state: 'ready', url: 'https://a.trycloudflare.com' }]);
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: true } });
+  });
+
+  it('leaves a starting entry without the flag', () => {
+    applyPortTunnelSnapshot([{ port: 5173, state: 'starting' }]);
+    expect(entries()).toEqual({ 5173: { state: 'starting' } });
+  });
+});
+
+describe('clearPortTunnelEntry (PD2)', () => {
+  it('clears an error entry, bumps generation, and returns true', () => {
+    applyPortTunnelEvent(tunnelEvent({ state: 'error', label: 'port:5173', error: 'boom' }));
+    const before = portTunnelGeneration();
+    expect(clearPortTunnelEntry(5173)).toBe(true);
+    expect(entries()).toEqual({});
+    expect(portTunnelGeneration()).toBe(before + 1);
+  });
+
+  it('clears a starting entry, bumps generation, and returns true', () => {
+    applyPortTunnelEvent(tunnelEvent({ state: 'starting', label: 'port:5173' }));
+    const before = portTunnelGeneration();
+    expect(clearPortTunnelEntry(5173)).toBe(true);
+    expect(entries()).toEqual({});
+    expect(portTunnelGeneration()).toBe(before + 1);
+  });
+
+  it('is a no-op on a ready entry: state/url/dnsVerified survive, returns false, generation unchanged', () => {
+    applyPortTunnelEvent(tunnelEvent({ state: 'ready', label: 'port:5173', url: 'https://a.trycloudflare.com' }));
+    const before = portTunnelGeneration();
+    expect(clearPortTunnelEntry(5173)).toBe(false);
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: false } });
+    expect(portTunnelGeneration()).toBe(before);
+  });
+
+  it('returns false and leaves the state reference untouched for a port with no entry', () => {
+    const before = usePortTunnelsStore.getState();
+    expect(clearPortTunnelEntry(5173)).toBe(false);
+    expect(usePortTunnelsStore.getState()).toBe(before);
   });
 });
 
@@ -162,7 +223,7 @@ describe('reportPortTunnelError', () => {
 
     reportPortTunnelError(5173, 'edge reconnect');
 
-    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com' } });
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: false } });
     expect(toastError).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(
       '[port-tunnels] ignoring an error for the live tunnel on port 5173: edge reconnect',
@@ -176,7 +237,7 @@ describe('reportPortTunnelError', () => {
 
     applyPortTunnelEvent(tunnelEvent({ state: 'error', label: 'port:5173', error: 'edge reconnect' }));
 
-    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com' } });
+    expect(entries()).toEqual({ 5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: false } });
     expect(toastError).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -203,7 +264,7 @@ describe('seedPortTunnels', () => {
 
     expect(listPortTunnels).toHaveBeenCalledWith(31415);
     expect(entries()).toEqual({
-      5173: { state: 'ready', url: 'https://a.trycloudflare.com' },
+      5173: { state: 'ready', url: 'https://a.trycloudflare.com', dnsVerified: true },
       8080: { state: 'starting' },
     });
   });
@@ -242,7 +303,7 @@ describe('seedPortTunnels', () => {
     await Promise.resolve();
 
     expect(usePortTunnelsStore.getState().daemonPort).toBe(31500);
-    expect(entries()).toEqual({ 8080: { state: 'ready', url: 'https://second.trycloudflare.com' } });
+    expect(entries()).toEqual({ 8080: { state: 'ready', url: 'https://second.trycloudflare.com', dnsVerified: true } });
   });
 
   it('warns and leaves the store alone when the fetch fails', async () => {
