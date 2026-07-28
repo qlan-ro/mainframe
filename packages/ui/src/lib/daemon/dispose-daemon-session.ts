@@ -2,7 +2,7 @@ import { daemonWs } from './ws-client';
 import { chatControllerRegistry } from '../../features/sessions/runtime/chat-controller-registry';
 import { killAndDisposeCachedTerminals } from '../../store/terminal-cleanup';
 import { useLayoutStore } from '../../store/layout';
-import { terminalIdsInRun } from '../../store/run-pane';
+import { tabIdsInRun } from '../../store/run-pane';
 import { resetAdapters } from '../../store/adapters';
 import { invalidateSeedFetches } from '../../store/adapters-seed';
 
@@ -28,7 +28,7 @@ export function disposeDaemonSession(): void {
 
   try {
     const { run } = useLayoutStore.getState();
-    killAndDisposeCachedTerminals(terminalIdsInRun(run));
+    killAndDisposeCachedTerminals(tabIdsInRun(run, 'terminal'));
   } catch (err) {
     console.warn('[disposeDaemonSession] killAndDisposeCachedTerminals failed', err);
   }

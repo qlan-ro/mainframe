@@ -7,9 +7,9 @@ import {
   closeRunTab as closeRunTabReducer,
   moveTabToRun as moveTabToRunReducer,
   releaseRunScope as releaseRunScopeReducer,
-  terminalIdsForScope,
-  terminalIdsInPane,
-  terminalIdsInRun,
+  tabIdsForScope,
+  tabIdsInPane,
+  tabIdsInRun,
   type RunDropEdge,
   type RunState,
   type RunTab,
@@ -213,7 +213,7 @@ export const useLayoutStore = create<LayoutStore>()(
         const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
         // Toggling Run off kills any live PTYs before discarding the panes.
         if (surface === 'run' && isActive) {
-          killAndDisposeCachedTerminals(terminalIdsInRun(run));
+          killAndDisposeCachedTerminals(tabIdsInRun(run, 'terminal'));
         }
         writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
       },
@@ -290,7 +290,7 @@ export const useLayoutStore = create<LayoutStore>()(
       closePane(paneId) {
         const { layout, run } = get();
         if (!run) return;
-        killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
+        killAndDisposeCachedTerminals(tabIdsInPane(run, paneId, 'terminal'));
         // Preview destruction is handled by the PreviewInstance lifecycle hook's
         // cleanup effect when components unmount after the pane is removed.
         const nextRun = closePaneReducer(run, paneId);
@@ -300,7 +300,7 @@ export const useLayoutStore = create<LayoutStore>()(
       releaseRunScope(scopeKey) {
         const { layout, run } = get();
         if (!run) return;
-        killAndDisposeCachedTerminals(terminalIdsForScope(run, scopeKey));
+        killAndDisposeCachedTerminals(tabIdsForScope(run, scopeKey, 'terminal'));
         // Preview/console bodies tear down via their unmount cleanup once the
         // tabs are removed (PreviewInstance destroys its webview).
         const nextRun = releaseRunScopeReducer(run, scopeKey);
