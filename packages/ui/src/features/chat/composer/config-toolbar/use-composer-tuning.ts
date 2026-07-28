@@ -18,6 +18,9 @@
  * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
  * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
  * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
+ *
+ * setEffort/setFeature/setModel route their live path through the mid-session
+ * warning gate (see ./use-tuning-warning), so no control can bypass it.
  */
 
 import { useCallback, useRef } from 'react';
@@ -38,6 +41,7 @@ import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initial
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 import { useProviderDefaults } from './use-provider-defaults';
+import { useTuningWarning, type TuningWarningHook } from './use-tuning-warning';
 
 // ---------------------------------------------------------------------------
 // useAdapters — the shared store selector (seeded/kept fresh at the app root;
@@ -66,6 +70,11 @@ export interface ComposerTuningHook {
   setPlanMode: (on: boolean) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
   disabled: boolean;
+  /** True once the thread has any message — the trigger for the mid-session warning. */
+  hasMessages: boolean;
+  /** CLI-reported conversation size, null until the first usage report. */
+  contextTokens: number | null;
+  tuningWarning: TuningWarningHook;
 }
 
 /**
@@ -102,6 +111,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   // Live run-state from the assistant-ui thread — stays accurate mid-run
   // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
+  const hasMessages = useAuiState((s: { thread: { messages: unknown[] } }) => s.thread.messages.length > 0);
 
   const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
 
@@ -124,6 +134,17 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     );
   })();
 
+  const contextTokens = extras?.state.contextUsage?.totalTokens ?? null;
+  const tuningWarning = useTuningWarning({
+    chat,
+    adapter,
+    model,
+    providerDefaults,
+    hasMessages,
+    contextTokens,
+  });
+  const guard = tuningWarning.guard;
+
   const setEffort = useCallback(
     (effort: EffortLevel) => {
       if (draftMode && chatId) {
@@ -131,12 +152,14 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         return;
       }
       if (port == null || !patchChatId) return;
-      const tuning: SessionTuning = { effort };
-      setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
-        console.warn('[composer/useComposerTuning] setEffort failed', { err }),
-      );
+      guard({ kind: 'effort', to: effort }, () => {
+        const tuning: SessionTuning = { effort };
+        setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
+          console.warn('[composer/useComposerTuning] setEffort failed', { err }),
+        );
+      });
     },
-    [draftMode, chatId, patchChatId, port],
+    [draftMode, chatId, patchChatId, port, guard],
   );
 
   const setFeature = useCallback(
@@ -146,13 +169,15 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         return;
       }
       if (port == null || !patchChatId) return;
-      // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
-      const patch: SessionTuning = { [key]: on };
-      setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
-        console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
-      );
+      guard({ kind: 'feature', key, to: on }, () => {
+        // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
+        const patch: SessionTuning = { [key]: on };
+        setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
+          console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
+        );
+      });
     },
-    [draftMode, chatId, patchChatId, port],
+    [draftMode, chatId, patchChatId, port, guard],
   );
 
   // adapter / model / permission / plan all go through PATCH /config (or the draft).
@@ -172,9 +197,9 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         patchDraftConfig(chatId, { model: m });
         return;
       }
-      patchConfig({ model: m }, 'setModel');
+      guard({ kind: 'model', to: m }, () => patchConfig({ model: m }, 'setModel'));
     },
-    [draftMode, chatId, patchConfig],
+    [draftMode, chatId, patchConfig, guard],
   );
   const setAdapter = useCallback(
     (id: string) => {
@@ -232,5 +257,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setPlanMode,
     setPermissionMode,
     disabled: isRunning,
+    hasMessages,
+    contextTokens,
+    tuningWarning,
   };
 }
