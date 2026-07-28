@@ -204,13 +204,16 @@ transcript.** The brief scoped the menu to "images inside the transcript" and th
 design gate named the two chat paths. `LightboxSurface` is shared, so wrapping it
 also puts the menu on:
 
-| Call site | Route |
-|---|---|
-| `features/chat/messages/AssistantMessage.tsx` | `ZoomableImage` |
-| `features/chat/messages/InlineImageThumbs.tsx` | `ImageLightbox` |
-| `features/viewers/ImageViewer.tsx:151` | `ZoomableImage` |
-| `features/tasks/TaskAttachments.tsx:224` | `ImageLightbox` |
-| `features/context-panel/SessionAttachmentsGrid.tsx:85` | `ImageLightbox` |
+| Call site | Route | Verified by |
+|---|---|---|
+| `features/chat/messages/AssistantMessage.tsx` | `ZoomableImage` | Task 10 case 6 |
+| `features/chat/messages/InlineImageThumbs.tsx` | `ImageLightbox` | Task 10 case 7 |
+| `features/viewers/ImageViewer.tsx:151` | `ZoomableImage` | the same `ZoomableImage` Task 10 case 6 drives; `viewers/__tests__/ImageViewer.test.tsx` mocks it, so that suite is a regression guard, not menu coverage |
+| `features/tasks/TaskAttachments.tsx:224` | `ImageLightbox` | QA step 4 only — no unit suite exists |
+| `features/context-panel/SessionAttachmentsGrid.tsx:85` | `ImageLightbox` | `context-panel/__tests__/SessionAttachmentsGrid.test.tsx` (renders the real `ImageLightbox`) |
+
+Scope that a decision accepts has to be scope the verification reaches, so the last
+three rows are what Task 13's vitest invocation and QA step 4 now name explicitly.
 
 **Accepted, not worked around.** All five render the same `data:image/*` sources
 (`ImageViewer`'s own header documents its `src` as `data:image/...;base64,...`), so
@@ -239,6 +242,23 @@ to a boolean. It would exist solely to be asserted. `canCopyImage(src)` is there
 the data-URL regex test AND `imageClipboardSupported()`, and nothing else is
 exported. The source kinds do not go untested: they stay as rows of Task 1's truth
 table, which is where the gating rule belongs.
+
+The same call, applied once more: **`writeImageToClipboard` takes `src` alone.** The
+earlier `writeImageToClipboard(src, decoded)` carried the same image twice and used
+each half on a different branch — `decoded.bytes` only when the media type is
+`image/png`, `src` only on the canvas re-encode — while `copy-image.ts` called
+`decodeDataUrl(src)` unconditionally. Every JPEG, webp or gif copy therefore paid a
+full base64 → `Uint8Array` decode that the write discarded and re-derived from `src`
+through the canvas. The tell was the doc comment: a signature needed prose to say
+which of two representations of one image was the real one. So `write-image.ts` reads
+the media type off the `data:` prefix and calls `decodeDataUrl` only on the PNG
+branch, throwing when it returns `null`. That throw still precedes
+`navigator.clipboard.write`, so the "never touch the clipboard with a malformed
+source" property survives and the message still reaches the toast — `copy-image.ts`
+wraps the call in a `try` and maps a synchronous throw through the same failure path
+as a rejection. `DecodedDataUrl` leaves the cross-module contract: it is now
+`decodeDataUrl`'s return type, read once inside `write-image.ts`, and nothing else
+passes it around.
 
 **D12 — `CopyMenuItem` is extracted and all three copy menus migrate in this pass.**
 The item markup (`copied → Check` / `failed → AlertTriangle` / `idle → Copy`, plus
@@ -313,8 +333,8 @@ export function imageClipboardSupported(): boolean;
 export function canCopyImage(src: string): boolean;
 
 // packages/ui/src/lib/clipboard/write-image.ts
-/** `src` is the original `data:image/*` URL; `decoded` is its payload. */
-export function writeImageToClipboard(src: string, decoded: DecodedDataUrl): Promise<void>;
+/** Throws (synchronously, before any clipboard call) when `src` cannot be decoded. */
+export function writeImageToClipboard(src: string): Promise<void>;
 
 // packages/ui/src/lib/clipboard/copy-image.ts
 /** `message` is present only on failure, and only when a reason is worth showing. */
@@ -447,14 +467,16 @@ beforeEach(() => {
 afterEach(() => Reflect.deleteProperty(HTMLImageElement.prototype, 'decode'));
 ```
 
-Every call passes the data URL and its decoded payload:
-`writeImageToClipboard(PNG_DATA_URI, { mediaType: 'image/png', bytes })`.
+Every call passes the data URL and nothing else: `writeImageToClipboard(PNG_DATA_URI)`.
+The module decodes on the PNG branch itself (D11), so this suite uses the real
+`image-source` — do not mock it.
 
 Cases:
 - **PNG passthrough:** calls `write` once with a single `ClipboardItem`; the item's
-  `image/png` value resolves to a `Blob` of `type === 'image/png'` and
-  `size === bytes.length`; no canvas is touched (spy on `document.createElement` or
-  on the stubbed `getContext`).
+  `image/png` value resolves to a `Blob` of `type === 'image/png'` and a `size`
+  equal to the fixture's known decoded byte length (hardcode it; do not recompute it
+  with `atob`); no canvas is touched (spy on `document.createElement` or on the
+  stubbed `getContext`).
 - **Activation ordering:** `navigator.clipboard.write` has already been called
   **synchronously** when `writeImageToClipboard` returns — assert the spy's call
   count is 1 before awaiting the returned promise. This is the test that pins the
@@ -463,30 +485,42 @@ Cases:
 - **JPEG re-encode:** with the `decode`/`naturalWidth` stubs above,
   `HTMLCanvasElement.prototype.getContext` stubbed to a fake 2d context with a
   `drawImage` spy, and `HTMLCanvasElement.prototype.toBlob` stubbed to hand back a
-  PNG blob: `writeImageToClipboard(JPEG_DATA_URI, { mediaType: 'image/jpeg', bytes })`
-  still calls `write` synchronously, and the item's value resolves to the re-encoded
-  PNG blob. Also assert `seenSrc === JPEG_DATA_URI` — the `<img>` gets the original
-  data URL, which is what replaces the object-URL round trip.
+  PNG blob: `writeImageToClipboard(JPEG_DATA_URI)` still calls `write`
+  synchronously, and the item's value resolves to the re-encoded PNG blob. Also
+  assert `seenSrc === JPEG_DATA_URI` — the `<img>` gets the original data URL, which
+  is what replaces the object-URL round trip. **And assert no decode happened on
+  this path:** the non-PNG branch never touches `decodeDataUrl` (D11) — spy on
+  `atob` and assert it was not called.
 - **Re-encode failure:** a `decode` stub that rejects makes the promise
   `writeImageToClipboard` returned reject too (via the adopting `write` stub above).
   Same for a `null` 2d context and for a `toBlob` that yields `null`.
+- **Malformed base64 PNG source** (`data:image/png;base64,!!!`, which `decodeDataUrl`
+  cannot decode): `expect(() => writeImageToClipboard(BAD_PNG_DATA_URI)).toThrow()`
+  with a non-empty message, **and `navigator.clipboard.write` was never called.**
+  This is the "never touch the clipboard with a malformed source" property; it moved
+  here from Task 3 with the decode (D11). The throw is synchronous, so assert it with
+  `toThrow`, not `rejects`.
 
 ### Task 3 — Copy orchestration tests (RED)
 
 **File:** `packages/ui/src/lib/clipboard/__tests__/copy-image.test.ts` — **new**
 (node environment).
 
-`vi.mock('../write-image')` so no DOM is needed; use the real `image-source`. Per
-D11 there are no host/source-kind cases here — that gate is Task 1's truth table.
-Cases:
-- **Happy path** → `writeImageToClipboard` receives the src unchanged as its first
-  argument and, as its second, the decoded record whose `mediaType` and `bytes` come
-  from the data URI; the result is `{ ok: true }` with no `message`.
+`vi.mock('../write-image')` is the **only** mock this file needs and no DOM is
+required: after D11, `copy-image.ts` imports nothing but `writeImageToClipboard` —
+the source gate is `canCopyImage`'s (Task 1's truth table) and the decode is
+`write-image`'s. Per D11 there are no host/source-kind cases here either. Cases:
+- **Happy path** → `writeImageToClipboard` receives the src unchanged as its **only**
+  argument (`toHaveBeenCalledWith(PNG_DATA_URI)`); the result is `{ ok: true }` with
+  no `message`.
 - **Synchronous write** → `writeImageToClipboard` has been called once before the
   returned promise is awaited (the D4 activation rule, pinned at this layer too).
-- **Malformed base64 data URI** (`decodeDataUrl` returns `null`) →
-  `{ ok: false }` with a non-empty `message`; `writeImageToClipboard` is never
-  called; one tagged `console.warn` (spy on it — the no-silent-catch rule).
+- **`writeImageToClipboard` throws synchronously** (`new Error('bad source')` — the
+  decode failure it raises before touching the clipboard) → `copyImageToClipboard`
+  resolves `{ ok: false, message: 'bad source' }` rather than propagating the throw,
+  and logs one tagged `console.warn` (spy on it — the no-silent-catch rule). This is
+  what pins the `try` around the call; without it a malformed source throws out of
+  the menu's `handleCopy`.
 - **`writeImageToClipboard` rejects with `new Error('boom')`** →
   `{ ok: false, message: 'boom' }` and one tagged `console.warn`.
 - **A non-`Error` rejection** (`Promise.reject('nope')`) still produces a non-empty
@@ -539,14 +573,28 @@ it is safe to call in a node test. `canCopyImage(src)` is one line:
 **File:** `packages/ui/src/lib/clipboard/write-image.ts` — **new.**
 
 ```ts
-export function writeImageToClipboard(src: string, decoded: DecodedDataUrl): Promise<void> {
-  const png =
-    decoded.mediaType === 'image/png'
-      ? Promise.resolve(new Blob([decoded.bytes], { type: 'image/png' }))
-      : reencodeToPng(src);
+export function writeImageToClipboard(src: string): Promise<void> {
+  const png = src.startsWith('data:image/png;base64,')
+    ? Promise.resolve(pngBlobFromDataUrl(src))
+    : reencodeToPng(src);
   return navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
 }
+
+function pngBlobFromDataUrl(src: string): Blob {
+  const decoded = decodeDataUrl(src);
+  if (!decoded) throw new Error('That image could not be decoded.');
+  return new Blob([decoded.bytes], { type: 'image/png' });
+}
 ```
+
+**Only the PNG branch decodes** (D11), and `decodeDataUrl` is imported from
+`./image-source` — it stays there, node-tested by Task 1. The media type comes off
+the `data:` prefix, which `canCopyImage`'s regex
+(`/^data:image\/[a-zA-Z0-9.+-]+;base64,/`) already guarantees is present, so a PNG
+source is exactly `data:image/png;base64,…`; every other source goes to the canvas,
+which reads `src` and never needs the bytes. The `throw` is synchronous and precedes
+`navigator.clipboard.write`, so a malformed source never reaches the clipboard, and
+its message is what `copy-image.ts` puts in the toast.
 
 The `Uint8Array<ArrayBuffer>` annotation on `DecodedDataUrl.bytes` is what lets the
 `Blob` construction typecheck (Constraints). One comment, on the promise value:
@@ -579,17 +627,31 @@ into a second private helper in the same file.
 **File:** `packages/ui/src/lib/clipboard/copy-image.ts` — **new.**
 
 The exact ladder the Task 3 tests pin, and nothing more (D11 — no host or
-source-kind re-check): `decodeDataUrl(src)` → `writeImageToClipboard(src, decoded)`,
-with `.then(onOk, onErr)` rather than `await` (D4's activation rule; carry one
-comment saying so).
+source-kind re-check, and no decode: this module imports only
+`writeImageToClipboard`). One call, wrapped in a `try`, with `.then(onOk, onErr)`
+rather than `await` (D4's activation rule; carry one comment saying so):
 
-- `decodeDataUrl` returns `null` → `console.warn('[copy-image] could not decode the image source')`,
-  then `{ ok: false, message: 'That image could not be decoded.' }`.
-- write rejects → `console.warn('[copy-image] clipboard write failed', err)` — the
-  tagged-warn idiom `lib/editor/copy-reference.ts` already uses in this package —
-  then `{ ok: false, message }`, where `message` is `err.message` when it is a
-  non-empty `Error` message and `'The clipboard refused the image.'` otherwise.
+```ts
+export function copyImageToClipboard(src: string): Promise<CopyImageOutcome> {
+  try {
+    return writeImageToClipboard(src).then(() => ({ ok: true }), onErr);
+  } catch (err) {
+    return Promise.resolve(onErr(err));
+  }
+}
+```
+
+- `writeImageToClipboard` throws (the decode failure it raises before touching the
+  clipboard) or its promise rejects → both land in one private
+  `onErr(err: unknown): CopyImageOutcome`, which logs
+  `console.warn('[copy-image] copy failed', err)` — the tagged-warn idiom
+  `lib/editor/copy-reference.ts` already uses in this package — and returns
+  `{ ok: false, message }`, where `message` is `err.message` when it is a non-empty
+  `Error` message and `'The clipboard refused the image.'` otherwise.
 - success → `{ ok: true }`.
+
+The `catch` exists because the throw is synchronous: `.then(onOk, onErr)` cannot see
+it, and an uncaught throw would escape `handleCopy` in `ImageContextMenu`.
 
 No toast here: the component owns user-facing feedback so this module stays callable
 outside React.
@@ -929,7 +991,29 @@ stating that right-clicking an opened image offers Copy Image.
 
 **Verify:**
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck`
-- `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/clipboard src/lib/ui src/features/chat/parts src/features/chat/messages/__tests__/MessagePathContextMenu.test.tsx`
+- ```
+  pnpm --filter @qlan-ro/mainframe-ui exec vitest run \
+    src/lib/clipboard src/lib/ui src/features/chat/parts \
+    src/features/chat/messages/__tests__/MessagePathContextMenu.test.tsx \
+    src/features/viewers/__tests__/ImageViewer.test.tsx \
+    src/features/context-panel/__tests__/SessionAttachmentsGrid.test.tsx
+  ```
+  **The last two files are the non-chat `LightboxSurface` callers D10 accepts**, and
+  they were missing from this run while D10 claimed the scope. Task 12 rewraps a
+  component all five call sites share, so the run has to reach past `features/chat`:
+  - `SessionAttachmentsGrid.test.tsx:39-46` renders the real `ImageLightbox` and
+    asserts `image-lightbox-dialog` after a thumb click, so it executes the rewrapped
+    `LightboxSurface` — this is the one suite outside chat that actually exercises
+    Task 12.
+  - `ImageViewer.test.tsx:30-44` **mocks `@/features/chat/parts/ZoomableImage`** with
+    a bare `<img>`, so it never reaches `LightboxSurface`. It runs here as the
+    regression guard on the viewer's own render path and on the day that mock is
+    dropped — not as coverage of the menu. Do not "fix" it by unmocking; that pulls
+    the Radix dialog into a viewer suite for no gain.
+  - **`TaskAttachments` has no unit suite at all** — the two files that name it mock
+    it away, so no vitest invocation can reach `TaskAttachments.tsx:224`. **QA smoke
+    step 4 is its only coverage**, which is where the file:line evidence lives. This
+    change writes no new suite for it.
 - `git status` shows no stray files; no file over 300 lines (`wc -l` on every touched
   file).
 - **Hygiene is checked against added lines only** — `git diff main...HEAD | grep '^+'`
@@ -1011,6 +1095,15 @@ Appendix A as the fix.
    `blocked_reason: "D7 webview clipboard gate needs an interactive macOS shell"`.
    An unverified PASS is the one outcome this gate exists to prevent.
 4. Right-click the *thumbnail* (not the opened image) → no menu (webview default).
+   Then open an image attachment from a **task** (Tasks panel → a task carrying an
+   image → the attachment opens in `ImageLightbox`) and right-click it → the menu
+   appears and Copy Image works. **This is the only coverage `TaskAttachments` gets.**
+   It has no unit suite: the two files that name it,
+   `features/tasks/__tests__/TaskEditModal.test.tsx:42-44` and
+   `features/tasks/__tests__/TasksSidebarSection.test.tsx:70-72`, both mock it away,
+   so no vitest run in Task 13 reaches `TaskAttachments.tsx:224`. If no task with an
+   image attachment is reachable, attach one first rather than skipping the step —
+   this is one of the three non-chat call sites D10 accepts.
 5. Right-click transcript text, a code block, and the composer → unchanged.
 6. Close the menu with Escape and with an outside click → the lightbox stays open;
    clicking the image itself still closes the lightbox. The outside *click* is the
