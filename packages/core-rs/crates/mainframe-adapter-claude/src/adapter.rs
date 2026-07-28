@@ -16,11 +16,12 @@ use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, EffortLevel, SessionOptions};
 use mainframe_types::display::ToolCategories;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::is_claude_transcript_present;
+use crate::transcript::{is_claude_transcript_present, locate_claude_transcript};
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -477,6 +478,20 @@ impl Adapter for ClaudeAdapter {
                 )
                 .await,
             ))
+        })
+    }
+
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        Box::pin(async move {
+            Ok(
+                locate_claude_transcript(&session_id, &project_path, session_file_path.as_deref())
+                    .await,
+            )
         })
     }
 
