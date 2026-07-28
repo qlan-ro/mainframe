@@ -58,6 +58,7 @@ use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{
     AdapterModel, DetectedPr, DetectedPrSource, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
+use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, MessageContentNode, Project,
     ResolvedTuning, TodoItem,
@@ -665,6 +666,14 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn tracker_remove_chat(&self, chat_id: &str) {
         self.background_tasks.remove_chat(chat_id);
     }
+
+    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask> {
+        self.background_tasks.list_live(chat_id)
+    }
+
+    fn tracker_end_all_running(&self, chat_id: &str) {
+        self.background_tasks.end_all_running(chat_id);
+    }
 }
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
@@ -1101,9 +1110,10 @@ mod scan_loaded_history_tests {
     use std::sync::Mutex as StdMutex;
 
     use mainframe_adapter_api::{AdapterError, ContextFiles, ImageInput, SessionSink};
-    use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+    use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
     use mainframe_db::DatabaseManager;
     use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
+    use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
     use mainframe_types::context::MentionKind;
 
     use super::*;
@@ -1316,6 +1326,28 @@ mod scan_loaded_history_tests {
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
         }
+    }
+
+    #[test]
+    fn tracker_end_all_running_delegates_to_the_background_task_tracker() {
+        let deps = test_deps();
+        deps.background_tasks.start(
+            "c-live",
+            TaskSeed {
+                id: "a-1".to_string(),
+                kind: BackgroundWorkKind::Agent,
+                tool_name: BackgroundTaskToolName::Monitor,
+                tool_use_id: "tu-a-1".to_string(),
+                command: "cmd".to_string(),
+                description: "reviewer".to_string(),
+            },
+            "/tmp/mf-273-a-1.log".to_string(),
+        );
+        assert_eq!(deps.background_tasks.list_live("c-live").len(), 1);
+
+        deps.tracker_end_all_running("c-live");
+
+        assert!(deps.background_tasks.list_live("c-live").is_empty());
     }
 
     #[test]
