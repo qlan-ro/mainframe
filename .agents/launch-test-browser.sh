@@ -4,13 +4,22 @@
 # native shell surfaces). Blocks until ready; prints READY + facts. Bring-up is
 # 1-2 minutes on a warm worktree, several more if the daemon compiles cold.
 # Engine: playwright-cli fresh browser at APP_URL.
+#   MF_TARGET  checkout to act on (default: this script's checkout)
+#   MF_MODE    prepare = build only, no launch; up = build then launch
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+PROJECT_ROOT="${MF_TARGET:-$(cd "$(dirname "$0")/.." && pwd -P)}"
+MODE="${MF_MODE:-up}"
 cd "$PROJECT_ROOT"
 
-# 1. Isolated ports + install + types build.
-bash scripts/setup-ports.sh
+# 1. Isolated ports + install + types build. setup-ports.sh regenerates .env on
+# every call, so only run it when absent — re-allocating mid-worktree would
+# orphan a run already listening on the old ports.
+if [ ! -f .env ]; then
+  bash scripts/setup-ports.sh
+else
+  pnpm install --frozen-lockfile
+fi
 
 # 2. Load the isolated ports.
 set -a
@@ -28,6 +37,13 @@ UI_LOG="/tmp/mf-ui-${DAEMON_PORT}.log"
 # seconds. `cargo sweep`/`cargo clean --profile dev` reclaim it afterwards.
 echo "Building mainframe-daemon (cold builds take several minutes)…"
 cargo build --manifest-path packages/core-rs/Cargo.toml -p mainframe-daemon
+
+if [ "$MODE" = prepare ]; then
+  echo "PREPARED"
+  echo "DAEMON_PORT=$DAEMON_PORT"
+  echo "VITE_PORT=$VITE_PORT"
+  exit 0
+fi
 
 DAEMON_PORT="$DAEMON_PORT" \
 MAINFRAME_DATA_DIR="$MAINFRAME_DATA_DIR" \

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Kill stale test-worktree dev processes. Protected: production daemon on 31415.
-# Run ONCE per fleet (orchestrator) or once before a single-branch launch.
+# Reached only via `test-env.sh reset` — an explicit, ONCE-per-fleet operation.
+# `up` must never call it: the sweep is range-wide, so with several lanes in
+# flight whichever one launched second used to kill the others' apps mid-run.
+# Scoped teardown of a single run is `test-env.sh down`.
 #
 # Targets are found by PORT, not by process name: name matching stopped matching
 # anything when the Node daemon was retired, so this script kept reporting
