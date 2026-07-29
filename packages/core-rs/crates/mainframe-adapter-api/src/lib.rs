@@ -27,12 +27,14 @@ use tokio::sync::Notify;
 pub mod adapter;
 pub mod plan_mode_actions;
 pub mod resolve_executable;
+pub mod title;
 
 pub use adapter::{
     Adapter, AdapterSession, ContextFiles, ImageInput, LoadedSkill, SessionSink,
     StopBackgroundTaskResult,
 };
 pub use plan_mode_actions::{PlanActionContext, PlanChatUpdate, PlanModeActionHandler};
+pub use title::finalize_title;
 // The control envelopes are DATA (they live in mainframe-types); re-exported here
 // so adapter consumers get them from the contract crate (crate-map §2.6).
 pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
