@@ -68,10 +68,14 @@ export function useUrlTabTunnel({
 
   const [attempt, setAttempt] = useState(0);
   const [flags, setFlags] = useState<AttemptFlags>(FRESH);
-  const [owned, setOwned] = useState(false);
+  // The port this tab owns, or null. Keyed by port rather than a plain boolean
+  // so a retarget is correct on the very first render after `port` changes:
+  // `ownedPort === port` reads as false against the *new* port before any
+  // effect runs, with no reset effect needed and no window for a stale
+  // `started: true` write to land on the port being adopted (D10, AC12).
+  const [ownedPort, setOwnedPort] = useState<number | null>(null);
   const attemptRef = useRef(0);
   const startedForAttemptRef = useRef<number | null>(null);
-  const ownedRef = useRef(false);
 
   // Declared first so a Retry's reset lands before the effects that read it.
   useEffect(() => {
@@ -79,12 +83,6 @@ export function useUrlTabTunnel({
     startedForAttemptRef.current = null;
     setFlags(FRESH);
   }, [attempt, port]);
-
-  // Ownership is per port, not per attempt: a Retry must not demote an owner.
-  useEffect(() => {
-    ownedRef.current = false;
-    setOwned(false);
-  }, [port]);
 
   const target = useMemo(
     () => resolveUrlTabTarget({ url, isLocal, daemonPort, entry, ...flags }),
@@ -114,10 +112,7 @@ export function useUrlTabTunnel({
     // registry is the single-flight point, so a start that joins another
     // consumer's in-flight start spawns no second cloudflared — but this tab
     // only owns the tunnel it saw come into existence (AC12).
-    if (entry === undefined) {
-      ownedRef.current = true;
-      setOwned(true);
-    }
+    if (entry === undefined) setOwnedPort(port);
     setFlags((f) => ({ ...f, watching: true }));
 
     const at = attempt;
@@ -130,8 +125,8 @@ export function useUrlTabTunnel({
 
   useEffect(() => {
     if (!active || port === null) return;
-    registerUrlTunnelConsumer(tabId, { port, started: owned, daemonHttpPort: httpPort });
-  }, [active, tabId, port, owned, httpPort]);
+    registerUrlTunnelConsumer(tabId, { port, started: ownedPort === port, daemonHttpPort: httpPort });
+  }, [active, tabId, port, ownedPort, httpPort]);
 
   const [reloadNonce, setReloadNonce] = useState(0);
   const loadedBeforeDnsRef = useRef(false);
