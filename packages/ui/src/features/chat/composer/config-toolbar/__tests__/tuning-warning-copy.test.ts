@@ -1,13 +1,10 @@
 /**
- * RED-phase tests for the tuning-warning dialog copy (todo #288).
+ * Tests for the tuning-warning dialog copy (todo #288).
  *
  * `formatApproxTokens` renders a rough, non-committal token count for the dialog body.
  * `describeTuningChange` composes the title/body/confirm-label triple the dialog
- * renders, hedging the billing claim (the brief: describe the mechanism, never a
- * dollar figure or a cache-hit guarantee).
- *
- * The module (`../tuning-warning-copy`) does not exist yet, so this file must fail to
- * resolve; see Task 4 in the plan for the implementation that turns it green.
+ * renders. It must name the usage or cost the re-sent tokens land on, while staying
+ * hedged: never a dollar figure, never a cache-hit guarantee.
  */
 import { describe, it, expect } from 'vitest';
 import type { TuningChange } from '../tuning-warning';
@@ -26,20 +23,8 @@ describe('formatApproxTokens', () => {
 });
 
 describe('describeTuningChange', () => {
-  const MODEL_CHANGE: TuningChange = {
-    kind: 'model',
-    from: 'sonnet',
-    to: 'opus',
-    fromLabel: 'Sonnet 4.5',
-    toLabel: 'Opus 5',
-  };
-  const EFFORT_CHANGE: TuningChange = {
-    kind: 'effort',
-    from: 'high',
-    to: 'max',
-    fromLabel: 'High',
-    toLabel: 'Maximum',
-  };
+  const MODEL_CHANGE: TuningChange = { kind: 'model', from: 'sonnet', to: 'opus' };
+  const EFFORT_CHANGE: TuningChange = { kind: 'effort', from: 'high', to: 'max' };
   const FEATURE_ON: TuningChange = {
     kind: 'feature',
     key: 'ultracode',
@@ -55,46 +40,50 @@ describe('describeTuningChange', () => {
     featureLabel: 'Ultracode',
   };
 
-  it('describes a model change with the known context size', () => {
-    const result = describeTuningChange(MODEL_CHANGE, 48_000);
+  const BODY =
+    'Changing model or reasoning effort will invalidate cached context, so your next message ' +
+    're-sends the conversation as new input, contributing to your usage or cost.';
+  const BODY_48K =
+    'Changing model or reasoning effort will invalidate cached context, so your next message ' +
+    're-sends the conversation (~48k tokens) as new input, contributing to your usage or cost.';
 
-    expect(result.title).toBe('Change model for this session?');
-    expect(result.body).toBe(
-      "Sonnet 4.5 → Opus 5. The session's cached context is discarded, so your next message re-sends the conversation (~48k tokens) as new input.",
-    );
-    expect(result.confirmLabel).toBe('Change model');
+  it('quotes the context size when it is known', () => {
+    expect(describeTuningChange(MODEL_CHANGE, 48_000).body).toBe(BODY_48K);
   });
 
   it('drops the parenthetical cleanly when the context size is unknown', () => {
     const result = describeTuningChange(MODEL_CHANGE, null);
 
-    expect(result.body).toBe(
-      "Sonnet 4.5 → Opus 5. The session's cached context is discarded, so your next message re-sends the conversation as new input.",
-    );
+    expect(result.body).toBe(BODY);
     expect(result.body).not.toContain('(');
     expect(result.body.toLowerCase()).not.toContain('unknown');
   });
 
-  it('describes an effort change', () => {
-    const result = describeTuningChange(EFFORT_CHANGE, null);
-
-    expect(result.title).toBe('Change effort for this session?');
-    expect(result.body.startsWith('High → Maximum.')).toBe(true);
-    expect(result.confirmLabel).toBe('Change effort');
+  // The body is deliberately identical for every kind: the title names what is
+  // changing, so the sentence never restates the before/after pair.
+  it.each([
+    { label: 'model', change: MODEL_CHANGE },
+    { label: 'effort', change: EFFORT_CHANGE },
+    { label: 'feature on', change: FEATURE_ON },
+    { label: 'feature off', change: FEATURE_OFF },
+  ])('uses the same body for a $label change', ({ change }) => {
+    expect(describeTuningChange(change, null).body).toBe(BODY);
   });
 
-  it('describes a feature turning on', () => {
-    const result = describeTuningChange(FEATURE_ON, null);
+  it.each([
+    { label: 'model', change: MODEL_CHANGE, title: 'Change model for this session?', confirm: 'Change model' },
+    { label: 'effort', change: EFFORT_CHANGE, title: 'Change effort for this session?', confirm: 'Change effort' },
+    {
+      label: 'feature',
+      change: FEATURE_ON,
+      title: 'Change Ultracode for this session?',
+      confirm: 'Change Ultracode',
+    },
+  ])('names the $label in the title and the confirm button', ({ change, title, confirm }) => {
+    const result = describeTuningChange(change, null);
 
-    expect(result.title).toBe('Change Ultracode for this session?');
-    expect(result.body.startsWith('Off → On.')).toBe(true);
-    expect(result.confirmLabel).toBe('Change Ultracode');
-  });
-
-  it('describes a feature turning off', () => {
-    const result = describeTuningChange(FEATURE_OFF, null);
-
-    expect(result.body.startsWith('On → Off.')).toBe(true);
+    expect(result.title).toBe(title);
+    expect(result.confirmLabel).toBe(confirm);
   });
 
   it.each([
@@ -102,11 +91,11 @@ describe('describeTuningChange', () => {
     { label: 'effort', change: EFFORT_CHANGE, tokens: null },
     { label: 'feature on', change: FEATURE_ON, tokens: null },
     { label: 'feature off', change: FEATURE_OFF, tokens: null },
-  ])('never claims a dollar cost or a cache-hit guarantee ($label)', ({ change, tokens }) => {
+  ])('names the usage or cost without claiming a price or a cache-hit guarantee ($label)', ({ change, tokens }) => {
     const { body } = describeTuningChange(change, tokens);
 
+    expect(body).toContain('contributing to your usage or cost');
     expect(body).not.toContain('$');
-    expect(body.toLowerCase()).not.toContain('cost');
     expect(body.toLowerCase()).not.toContain('bill');
     expect(body.toLowerCase()).not.toContain('cache hit');
     expect(body.toLowerCase()).not.toContain('cache-hit');

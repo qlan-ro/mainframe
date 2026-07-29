@@ -1,10 +1,10 @@
 /**
  * Copy for the mid-session tuning-change confirm dialog (todo #288).
  *
- * One sentence names the change and the mechanism. It stays hedged on purpose: the
- * re-billing claim is upstream API behavior this repo does not measure, so the copy
- * describes what happens to the cached context and never promises a charge, a token
- * count, or a cache-hit outcome.
+ * The body is one fixed sentence for every change kind — model, effort, and feature
+ * all invalidate the same cache, and the title already names what is changing.
+ * "Usage or cost" covers both ways a plan pays for the re-sent tokens; "contributing
+ * to" is the hedge, since the re-billing is upstream behavior this repo cannot measure.
  */
 import type { TuningChange } from './tuning-warning';
 
@@ -25,13 +25,6 @@ function subject(change: TuningChange): string {
   return change.kind === 'feature' ? change.featureLabel : change.kind;
 }
 
-function transition(change: TuningChange): string {
-  if (change.kind === 'feature') {
-    return `${change.from ? 'On' : 'Off'} → ${change.to ? 'On' : 'Off'}`;
-  }
-  return `${change.fromLabel} → ${change.toLabel}`;
-}
-
 export function describeTuningChange(change: TuningChange, contextTokens: number | null): TuningWarningCopy {
   const noun = subject(change);
   const approx = formatApproxTokens(contextTokens);
@@ -40,8 +33,9 @@ export function describeTuningChange(change: TuningChange, contextTokens: number
   return {
     title: `Change ${noun} for this session?`,
     body:
-      `${transition(change)}. The session's cached context is discarded, ` +
-      `so your next message re-sends the conversation${size} as new input.`,
+      `Changing model or reasoning effort will invalidate cached context, ` +
+      `so your next message re-sends the conversation${size} as new input, ` +
+      `contributing to your usage or cost.`,
     confirmLabel: `Change ${noun}`,
   };
 }

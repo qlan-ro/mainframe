@@ -135,14 +135,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   })();
 
   const contextTokens = extras?.state.contextUsage?.totalTokens ?? null;
-  const tuningWarning = useTuningWarning({
-    chat,
-    adapter,
-    model,
-    providerDefaults,
-    hasMessages,
-    contextTokens,
-  });
+  const tuningWarning = useTuningWarning({ chat, model, providerDefaults, hasMessages, contextTokens });
   const guard = tuningWarning.guard;
 
   const setEffort = useCallback(

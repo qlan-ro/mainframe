@@ -1,14 +1,10 @@
 /**
- * RED-phase tests for the pure tuning-warning decision module (todo #288).
+ * Tests for the pure tuning-warning decision module (todo #288).
  *
- * `resolveTuningChange` turns a raw control request into a described before/after
- * change (or null when there's no chat to change); `shouldWarnTuningChange` decides
- * whether that change should surface the confirm dialog. Neither function touches
- * React, the daemon, or persisted state — every case here is a plain object in, a
- * plain value out.
- *
- * The module (`../tuning-warning`) does not exist yet, so this file must fail to
- * resolve; see Task 2 in the plan for the implementation that turns it green.
+ * `resolveTuningChange` turns a raw control request into a before/after pair (or null
+ * when there's no chat to change); `shouldWarnTuningChange` decides whether that pair
+ * should surface the confirm dialog. Neither function touches React, the daemon, or
+ * persisted state — every case here is a plain object in, a plain value out.
  */
 import { describe, it, expect } from 'vitest';
 import type { AdapterInfo, Chat } from '@qlan-ro/mainframe-types';
@@ -54,7 +50,6 @@ function makeChat(overrides?: Partial<Chat>): Chat {
 function makeCtx(overrides?: Partial<TuningWarningContext>): TuningWarningContext {
   return {
     chat: makeChat(),
-    adapter: ADAPTER,
     model: SONNET,
     providerDefaults: undefined,
     hasMessages: true,
@@ -73,29 +68,16 @@ describe('resolveTuningChange', () => {
 
     const change = resolveTuningChange(ctx, { kind: 'model', to: 'opus' });
 
-    expect(change).toEqual({
-      kind: 'model',
-      from: 'sonnet',
-      to: 'opus',
-      fromLabel: 'Sonnet 4.5',
-      toLabel: 'Opus 5',
-    });
+    expect(change).toEqual({ kind: 'model', from: 'sonnet', to: 'opus' });
   });
 
-  it('falls back to the raw id for toLabel when the target model is not in the catalog', () => {
-    const ctx = makeCtx({ model: SONNET });
-
-    const change = resolveTuningChange(ctx, { kind: 'model', to: 'not-in-catalog' });
-
-    expect(change).toMatchObject({ kind: 'model', to: 'not-in-catalog', toLabel: 'not-in-catalog' });
-  });
-
-  it("resolves from:null and fromLabel:'Current model' when neither chat.model nor the resolved model is known", () => {
+  // from:null is what makes an undescribable change still warn (see shouldWarnTuningChange).
+  it('resolves from:null when neither chat.model nor the resolved model is known', () => {
     const ctx = makeCtx({ model: null, chat: makeChat({ model: undefined }) });
 
     const change = resolveTuningChange(ctx, { kind: 'model', to: 'opus' });
 
-    expect(change).toMatchObject({ kind: 'model', from: null, fromLabel: 'Current model' });
+    expect(change).toEqual({ kind: 'model', from: null, to: 'opus' });
   });
 
   it("resolves an effort change using the effective (displayed) effort as 'from'", () => {
@@ -103,7 +85,7 @@ describe('resolveTuningChange', () => {
 
     const change = resolveTuningChange(ctx, { kind: 'effort', to: 'max' });
 
-    expect(change).toMatchObject({ kind: 'effort', from: 'high', fromLabel: 'High', toLabel: 'Maximum' });
+    expect(change).toEqual({ kind: 'effort', from: 'high', to: 'max' });
   });
 
   it('resolves an inherited effort from providerDefaults.defaultEffort when the chat has no override', () => {
@@ -127,7 +109,7 @@ describe('resolveTuningChange', () => {
 
     const change = resolveTuningChange(ctx, { kind: 'effort', to: 'max' });
 
-    expect(change).toMatchObject({ kind: 'effort', from: 'high', fromLabel: 'High' });
+    expect(change).toEqual({ kind: 'effort', from: 'high', to: 'max' });
   });
 
   it('resolves a boolean feature change with the labeled feature name', () => {
@@ -149,14 +131,8 @@ describe('resolveTuningChange', () => {
 // shouldWarnTuningChange
 // ---------------------------------------------------------------------------
 
-const MODEL_CHANGE: TuningChange = {
-  kind: 'model',
-  from: 'sonnet',
-  to: 'opus',
-  fromLabel: 'Sonnet 4.5',
-  toLabel: 'Opus 5',
-};
-const EFFORT_CHANGE: TuningChange = { kind: 'effort', from: 'high', to: 'max', fromLabel: 'High', toLabel: 'Maximum' };
+const MODEL_CHANGE: TuningChange = { kind: 'model', from: 'sonnet', to: 'opus' };
+const EFFORT_CHANGE: TuningChange = { kind: 'effort', from: 'high', to: 'max' };
 const FEATURE_CHANGE: TuningChange = {
   kind: 'feature',
   key: 'ultracode',
@@ -165,20 +141,8 @@ const FEATURE_CHANGE: TuningChange = {
   featureLabel: 'Ultracode',
 };
 
-const NOOP_MODEL_CHANGE: TuningChange = {
-  kind: 'model',
-  from: 'sonnet',
-  to: 'sonnet',
-  fromLabel: 'Sonnet 4.5',
-  toLabel: 'Sonnet 4.5',
-};
-const NOOP_EFFORT_CHANGE: TuningChange = {
-  kind: 'effort',
-  from: 'high',
-  to: 'high',
-  fromLabel: 'High',
-  toLabel: 'High',
-};
+const NOOP_MODEL_CHANGE: TuningChange = { kind: 'model', from: 'sonnet', to: 'sonnet' };
+const NOOP_EFFORT_CHANGE: TuningChange = { kind: 'effort', from: 'high', to: 'high' };
 const NOOP_FEATURE_CHANGE: TuningChange = {
   kind: 'feature',
   key: 'ultracode',
@@ -187,13 +151,7 @@ const NOOP_FEATURE_CHANGE: TuningChange = {
   featureLabel: 'Ultracode',
 };
 
-const NULL_FROM_MODEL_CHANGE: TuningChange = {
-  kind: 'model',
-  from: null,
-  to: 'opus',
-  fromLabel: 'Current model',
-  toLabel: 'Opus 5',
-};
+const NULL_FROM_MODEL_CHANGE: TuningChange = { kind: 'model', from: null, to: 'opus' };
 
 describe('shouldWarnTuningChange', () => {
   it.each([
