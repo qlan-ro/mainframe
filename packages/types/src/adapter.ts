@@ -255,6 +255,8 @@ export interface AdapterModel {
   resolvedModel?: string;
   contextWindow?: number;
   isDefault?: boolean;
+  /** Older-but-still-active model Mainframe offers beyond the CLI's own picker. */
+  isOlder?: boolean;
   /** Dynamic, per-model. Empty/absent → model has no effort control. */
   supportedEfforts?: EffortLevel[];
   defaultEffort?: EffortLevel;
