@@ -53,33 +53,14 @@ export interface TunnelAttemptArgs {
 export function useTunnelAttempt(args: TunnelAttemptArgs): TunnelAttempt {
   const { url, isLocal, daemonPort, httpPort, chatId, port, entry, active, note } = args;
   const [attempt, setAttempt] = useState(0);
-  const [flags, setFlags] = useState<AttemptFlags>(FRESH);
-
-  // Declared first so a Retry's or a retarget's reset lands before the effects
-  // that read the flags.
-  useEffect(() => {
-    setFlags(FRESH);
-  }, [attempt, port]);
+  const { flags, onIssued, onStartUrl, onTimedOut } = useAttemptFlags(attempt, port, entry);
 
   const target = useMemo(
     () => resolveUrlTabTarget({ url, isLocal, daemonPort, entry, ...flags }),
     [url, isLocal, daemonPort, entry, flags],
   );
-
-  useEffect(() => {
-    if (entry !== undefined) setFlags((f) => (f.everHadEntry ? f : { ...f, everHadEntry: true }));
-  }, [entry]);
-
   const isPending = active && target.kind === 'pending';
-
-  useEffect(() => {
-    if (!isPending) return;
-    const timer = setTimeout(() => setFlags((f) => ({ ...f, timedOut: true })), URL_TAB_TUNNEL_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [isPending, attempt]);
-
-  const onIssued = useCallback(() => setFlags((f) => (f.watching ? f : { ...f, watching: true })), []);
-  const onStartUrl = useCallback((startUrl: string) => setFlags((f) => ({ ...f, startUrl })), []);
+  useTunnelWatchdog(isPending, attempt, onTimedOut);
 
   useStartRequest({
     enabled: isPending,
@@ -103,6 +84,47 @@ export function useTunnelAttempt(args: TunnelAttemptArgs): TunnelAttempt {
   }, [port, httpPort, note]);
 
   return { target, retry };
+}
+
+interface AttemptFlagsBinding {
+  flags: AttemptFlags;
+  onIssued: () => void;
+  onStartUrl: (startUrl: string) => void;
+  onTimedOut: () => void;
+}
+
+/** Owns the per-attempt flags and the two resets that keep them attached to the right attempt. */
+function useAttemptFlags(
+  attempt: number,
+  port: number | null,
+  entry: PortTunnelEntry | undefined,
+): AttemptFlagsBinding {
+  const [flags, setFlags] = useState<AttemptFlags>(FRESH);
+
+  // Declared first so a Retry's or a retarget's reset lands before the effects
+  // that read the flags.
+  useEffect(() => {
+    setFlags(FRESH);
+  }, [attempt, port]);
+
+  useEffect(() => {
+    if (entry !== undefined) setFlags((f) => (f.everHadEntry ? f : { ...f, everHadEntry: true }));
+  }, [entry]);
+
+  const onIssued = useCallback(() => setFlags((f) => (f.watching ? f : { ...f, watching: true })), []);
+  const onStartUrl = useCallback((startUrl: string) => setFlags((f) => ({ ...f, startUrl })), []);
+  const onTimedOut = useCallback(() => setFlags((f) => ({ ...f, timedOut: true })), []);
+
+  return { flags, onIssued, onStartUrl, onTimedOut };
+}
+
+/** The 120s watchdog (D11): fires once per attempt while the tunnel is pending. */
+function useTunnelWatchdog(active: boolean, attempt: number, onTimeout: () => void): void {
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(onTimeout, URL_TAB_TUNNEL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [active, attempt, onTimeout]);
 }
 
 interface StartRequestArgs {
