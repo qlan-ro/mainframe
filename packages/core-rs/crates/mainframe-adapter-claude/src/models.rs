@@ -11,19 +11,24 @@ use mainframe_types::adapter::{AdapterModel, EffortLevel};
 pub const DEFAULT_CONTEXT_WINDOW: i64 = 200_000;
 pub const EXTENDED_CONTEXT_WINDOW: i64 = 1_000_000;
 
-const OPUS_EFFORTS: &[EffortLevel] = &[
+// Effort ladders, named for the rung they reach. The CLI gates them with three
+// capability flags — `effort` (low/medium/high), `max_effort`, `xhigh_effort` —
+// so read a model's ladder off that registry, never off its family: Sonnet 5
+// carries `xhigh_effort` and Opus 4.6 does not.
+const EFFORTS_TO_XHIGH: &[EffortLevel] = &[
     EffortLevel::Low,
     EffortLevel::Medium,
     EffortLevel::High,
     EffortLevel::Xhigh,
     EffortLevel::Max,
 ];
-const SONNET_EFFORTS: &[EffortLevel] = &[
+const EFFORTS_TO_MAX: &[EffortLevel] = &[
     EffortLevel::Low,
     EffortLevel::Medium,
     EffortLevel::High,
     EffortLevel::Max,
 ];
+const EFFORTS_TO_HIGH: &[EffortLevel] = &[EffortLevel::Low, EffortLevel::Medium, EffortLevel::High];
 
 struct ModelSpec {
     id: &'static str,
@@ -45,7 +50,7 @@ const CURRENT_MODELS: &[ModelSpec] = &[
         label: "Default - Opus 5",
         description: Some("Opus 5 with 1M context"),
         context_window: EXTENDED_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        efforts: EFFORTS_TO_XHIGH,
         fast: true,
         adaptive: true,
     },
@@ -54,7 +59,7 @@ const CURRENT_MODELS: &[ModelSpec] = &[
         label: "Opus 5",
         description: None,
         context_window: EXTENDED_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        efforts: EFFORTS_TO_XHIGH,
         fast: true,
         adaptive: true,
     },
@@ -63,7 +68,7 @@ const CURRENT_MODELS: &[ModelSpec] = &[
         label: "Fable 5",
         description: None,
         context_window: EXTENDED_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        efforts: EFFORTS_TO_XHIGH,
         fast: false,
         adaptive: true,
     },
@@ -74,7 +79,7 @@ const CURRENT_MODELS: &[ModelSpec] = &[
         label: "Sonnet 5",
         description: None,
         context_window: EXTENDED_CONTEXT_WINDOW,
-        efforts: SONNET_EFFORTS,
+        efforts: EFFORTS_TO_XHIGH,
         fast: false,
         adaptive: true,
     },
@@ -92,15 +97,16 @@ const CURRENT_MODELS: &[ModelSpec] = &[
 /// Models the API still serves that the CLI's picker hides. Checked against
 /// <https://platform.claude.com/docs/en/about-claude/model-deprecations> on
 /// 2026-07-29 — a retired id must never appear here, the API answers it with a
-/// 404. The 4.x family keeps the 200k window: the CLI only grants those models
-/// 1M through its explicit `[1m]` picker variants.
+/// 404. Windows and effort ladders come from the CLI's own model registry
+/// (v2.1.220): Opus 4.8 and 4.7 are `native_1m`, everything below them is 200k
+/// unless asked for with the `[1m]` suffix.
 const OLDER_MODELS: &[ModelSpec] = &[
     ModelSpec {
         id: "claude-opus-4-8",
         label: "Opus 4.8",
         description: None,
-        context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        context_window: EXTENDED_CONTEXT_WINDOW,
+        efforts: EFFORTS_TO_XHIGH,
         fast: true,
         adaptive: true,
     },
@@ -108,8 +114,8 @@ const OLDER_MODELS: &[ModelSpec] = &[
         id: "claude-opus-4-7",
         label: "Opus 4.7",
         description: None,
-        context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        context_window: EXTENDED_CONTEXT_WINDOW,
+        efforts: EFFORTS_TO_XHIGH,
         fast: true,
         adaptive: true,
     },
@@ -118,7 +124,7 @@ const OLDER_MODELS: &[ModelSpec] = &[
         label: "Opus 4.6",
         description: None,
         context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        efforts: EFFORTS_TO_MAX,
         fast: false,
         adaptive: true,
     },
@@ -127,7 +133,7 @@ const OLDER_MODELS: &[ModelSpec] = &[
         label: "Sonnet 4.6",
         description: None,
         context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: SONNET_EFFORTS,
+        efforts: EFFORTS_TO_MAX,
         fast: false,
         adaptive: true,
     },
@@ -136,7 +142,7 @@ const OLDER_MODELS: &[ModelSpec] = &[
         label: "Opus 4.5",
         description: None,
         context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        efforts: EFFORTS_TO_HIGH,
         fast: false,
         adaptive: false,
     },
@@ -145,7 +151,7 @@ const OLDER_MODELS: &[ModelSpec] = &[
         label: "Sonnet 4.5",
         description: None,
         context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: SONNET_EFFORTS,
+        efforts: &[],
         fast: false,
         adaptive: false,
     },
@@ -154,7 +160,7 @@ const OLDER_MODELS: &[ModelSpec] = &[
         label: "Opus 4.1",
         description: Some("Retires August 5, 2026"),
         context_window: DEFAULT_CONTEXT_WINDOW,
-        efforts: OPUS_EFFORTS,
+        efforts: &[],
         fast: false,
         adaptive: false,
     },
@@ -482,6 +488,44 @@ mod tests {
         let opus5 = catalog.iter().find(|m| m.id == "claude-opus-5").unwrap();
         assert_eq!(opus5.is_older, None);
         assert_eq!(opus5.context_window, Some(EXTENDED_CONTEXT_WINDOW));
+    }
+
+    /// Pinned to the CLI's own model registry (v2.1.220): `context.window` /
+    /// `context.native_1m` and the `effort` / `max_effort` / `xhigh_effort`
+    /// capability flags. Family names don't predict either — Sonnet 5 reaches
+    /// xhigh, Opus 4.6 doesn't, and Opus 4.8/4.7 are natively 1M.
+    #[test]
+    fn model_windows_and_effort_ladders_match_the_cli_registry() {
+        let catalog = claude_models();
+        let spec = |id: &str| catalog.iter().find(|m| m.id == id).unwrap().clone();
+        let top = |id: &str| spec(id).supported_efforts.map(|e| e.len());
+
+        assert_eq!(
+            spec("claude-opus-4-8").context_window,
+            Some(EXTENDED_CONTEXT_WINDOW)
+        );
+        assert_eq!(
+            spec("claude-opus-4-7").context_window,
+            Some(EXTENDED_CONTEXT_WINDOW)
+        );
+        assert_eq!(
+            spec("claude-opus-4-6").context_window,
+            Some(DEFAULT_CONTEXT_WINDOW)
+        );
+
+        assert_eq!(spec("claude-sonnet-5").supports_ultracode, Some(true));
+        assert_eq!(spec("claude-opus-4-6").supports_ultracode, None);
+        assert_eq!(top("claude-opus-4-6"), Some(4));
+        assert_eq!(top("claude-opus-4-5-20251101"), Some(3));
+        assert_eq!(top("claude-sonnet-4-5-20250929"), None);
+        assert_eq!(top("claude-opus-4-1-20250805"), None);
+
+        for id in ["claude-opus-5", "claude-opus-4-8", "claude-opus-4-7"] {
+            assert_eq!(spec(id).supports_fast, Some(true), "{id}");
+        }
+        for id in ["claude-fable-5", "claude-sonnet-5", "claude-opus-4-6"] {
+            assert_eq!(spec(id).supports_fast, None, "{id}");
+        }
     }
 
     #[test]

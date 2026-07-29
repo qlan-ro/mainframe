@@ -79,7 +79,6 @@ impl EventHandlerDeps for CancelDeps {
     fn notify_session_error(&self) -> bool {
         false
     }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
 }
 
 fn cell() -> Arc<Mutex<ActiveChat>> {
