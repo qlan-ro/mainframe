@@ -26,6 +26,7 @@ pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
         context_window: None,
         is_default: None,
         is_older: None,
+        group: None,
         supported_efforts: None,
         default_effort: None,
         supports_fast: None,

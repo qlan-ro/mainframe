@@ -540,3 +540,119 @@ describe('ProviderModelSelect — older models group', () => {
     expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Models reached through a separate endpoint sit in their own labelled group
+// ---------------------------------------------------------------------------
+
+const PROXY_SOL: AdapterModel = {
+  id: 'cliproxy/gpt-5.6-sol',
+  label: 'gpt-5.6-sol',
+  description: 'openai',
+  group: 'CLIProxyAPI',
+};
+
+const PROXY_KIMI: AdapterModel = {
+  id: 'cliproxy/kimi-k3',
+  label: 'kimi-k3',
+  description: 'moonshot',
+  group: 'CLIProxyAPI',
+};
+
+const ADAPTER_CLAUDE_WITH_PROXY: AdapterInfo = {
+  ...ADAPTER_CLAUDE,
+  models: [SONNET, HAIKU, OPUS_41, PROXY_SOL, PROXY_KIMI],
+};
+
+describe('ProviderModelSelect — endpoint model group', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders one header per group, labelled with the group name', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_PROXY],
+      adapter: ADAPTER_CLAUDE_WITH_PROXY,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.getByTestId('composer-model-group-header-cliproxyapi').textContent).toBe('CLIProxyAPI');
+    expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3')).toBeInTheDocument();
+  });
+
+  it('places the group after both the current and the older rows', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_PROXY],
+      adapter: ADAPTER_CLAUDE_WITH_PROXY,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    const opus = screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805');
+    const groupHeader = screen.getByTestId('composer-model-group-header-cliproxyapi');
+    expect(opus.compareDocumentPosition(groupHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps grouped models out of the "Older models" section', async () => {
+    renderSelect({
+      adapters: [{ ...ADAPTER_CLAUDE, models: [SONNET, PROXY_SOL] }],
+      adapter: { ...ADAPTER_CLAUDE, models: [SONNET, PROXY_SOL] },
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-model-older-header')).toBeNull();
+    expect(screen.getByTestId('composer-model-group-header-cliproxyapi')).toBeInTheDocument();
+  });
+
+  it('omits every group header when no model carries a group', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-model-group-header-cliproxyapi')).toBeNull();
+  });
+
+  it('selects a grouped model by its namespaced id', async () => {
+    const setModel = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_PROXY],
+      adapter: ADAPTER_CLAUDE_WITH_PROXY,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+      setModel,
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3'));
+
+    expect(setModel).toHaveBeenCalledExactlyOnceWith('cliproxy/kimi-k3');
+  });
+
+  it('still shows the stored endpoint model when the endpoint has gone away', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE],
+      adapter: ADAPTER_CLAUDE,
+      model: null,
+      chat: makeChat({ adapterId: 'claude', model: 'cliproxy/gpt-5.6-sol' }),
+    });
+
+    expect(screen.getByTestId('composer-model-select').textContent).toContain('cliproxy/gpt-5.6-sol');
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-model-group-header-cliproxyapi')).toBeNull();
+  });
+});

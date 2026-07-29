@@ -15,6 +15,7 @@
 
 pub mod adapter;
 pub mod assistant_event;
+pub mod cliproxy;
 pub mod constants;
 pub mod context_files;
 pub mod events;

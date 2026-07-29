@@ -1240,6 +1240,7 @@ dependencies = [
  "mainframe-services",
  "mainframe-types",
  "nanoid",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",

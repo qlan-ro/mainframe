@@ -24,6 +24,9 @@ export interface ProviderConfig {
   defaultAdaptiveThinking?: 'true' | 'false';
   personality?: 'none' | 'friendly' | 'pragmatic';
   reasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none';
+  /** Model the CLI uses for its own background calls on a CLIProxyAPI session,
+   *  whose catalog has no Haiku to fall back on. Empty = pick from the catalog. */
+  cliproxySmallFastModel?: string;
 }
 
 /**

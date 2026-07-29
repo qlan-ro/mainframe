@@ -943,6 +943,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let system_prompt = self
             .deps
             .settings_get("provider", &format!("{}.systemPrompt", chat.adapter_id));
+        let small_fast_model = self.deps.settings_get(
+            "provider",
+            &format!("{}.cliproxySmallFastModel", chat.adapter_id),
+        );
         let tuning = self.deps.resolve_tuning(chat_id).await;
         let process = session
             .spawn(
@@ -953,6 +957,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     executable_path,
                     system_prompt,
                     tuning,
+                    small_fast_model,
                 }),
                 Some(sink),
             )
