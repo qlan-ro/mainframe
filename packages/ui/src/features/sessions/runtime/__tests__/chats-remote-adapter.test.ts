@@ -62,6 +62,10 @@ vi.mock('../chat-controller-registry', () => ({
       fakeControllers.set(id, created);
       return created;
     },
+    adopt: (controller: FakeController, remoteId: string) => {
+      controller.setRemoteId(remoteId);
+      fakeControllers.set(remoteId, controller);
+    },
   },
 }));
 
@@ -334,5 +338,17 @@ describe('chats-remote-adapter — initialize is idempotent with onNew', () => {
 
     const ctrl = fakeControllers.get('__LOCALID_z');
     expect(ctrl?.setRemoteIdCalls).toEqual(['chat-77']);
+  });
+
+  // #275: adopting (not just stamping) is what keeps the first user message
+  // visible — the session router switches onto the canonical remote item, and
+  // that lookup must land on the SAME controller that holds the optimistic send.
+  it('adopts the controller under the remote id so the first-send handoff reuses it', async () => {
+    mockCreateForLocal.mockResolvedValueOnce({ remoteId: 'chat-77' });
+
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.initialize('__LOCALID_z');
+
+    expect(fakeControllers.get('chat-77')).toBe(fakeControllers.get('__LOCALID_z'));
   });
 });

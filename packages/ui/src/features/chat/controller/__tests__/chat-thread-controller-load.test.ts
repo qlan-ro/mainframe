@@ -147,3 +147,55 @@ describe('ChatThreadController.load — getChatMessages resolves', () => {
     expect(ctrl.getState().loadState.type).toBe('ready');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 4. Seed once (#275) — a second mount must not re-seed
+//
+// An adopted controller is mounted twice across the first-send handoff (the
+// draft item, then the canonical remote item). The daemon stores the user
+// message only AFTER spawning the CLI, so the second mount's REST read can
+// legitimately return an empty transcript — and history.loaded is a wholesale
+// replace. Re-seeding there wipes the live transcript; refresh() forces.
+// ---------------------------------------------------------------------------
+
+describe('ChatThreadController.load — seeds once per controller', () => {
+  it('does not re-fetch on a second load() after the first settled ready', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
+    ctrl.subscribeLive();
+
+    await ctrl.load();
+    expect(getChatMessages).toHaveBeenCalledTimes(1);
+
+    await ctrl.load();
+
+    expect(getChatMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it('refresh() still re-fetches after a ready load', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
+    ctrl.subscribeLive();
+
+    await ctrl.load();
+    await ctrl.refresh();
+
+    expect(getChatMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries after a failed load — an error state is not a seed', async () => {
+    vi.mocked(getChatMessages).mockRejectedValueOnce(new Error('transient'));
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false });
+
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
+    ctrl.subscribeLive();
+
+    await ctrl.load();
+    await ctrl.load();
+
+    expect(getChatMessages).toHaveBeenCalledTimes(2);
+    expect(ctrl.getState().loadState.type).toBe('ready');
+  });
+});
