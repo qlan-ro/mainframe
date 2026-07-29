@@ -157,3 +157,26 @@ describe('UrlTabInstance — Retry pressed while the entry is ready never re-ado
     expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
   });
 });
+
+describe('UrlTabInstance — a session-switch unmount does not lose this tab’s claim (review-fix finding 1/3)', () => {
+  it('remounts against an already-ready port, still owns the claim, and stops the tunnel on release', async () => {
+    const { unmount } = renderTab('http://localhost:5173/');
+
+    act(() => {
+      setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true });
+    });
+    expect(screen.getByTestId('url-tab-body-loaded')).toBeInTheDocument();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+
+    // A session switch unmounts the tab without ever releasing it — the port
+    // entry stays `ready`, so no new start is issued on remount.
+    unmount();
+
+    renderTab('http://localhost:5173/');
+    expect(screen.getByTestId('url-tab-body-loaded')).toBeInTheDocument();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+
+    releaseUrlTunnelConsumers(['t1']);
+    expect(stopPortTunnel).toHaveBeenCalledWith(31415, 5173);
+  });
+});

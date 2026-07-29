@@ -186,7 +186,14 @@ mod tests {
     /// opener: `open_external` keeps rejecting non-http(s) schemes.
     #[test]
     fn external_open_scheme_guard_still_rejects_dangerous_schemes() {
-        for dangerous in ["file:///etc/passwd", "javascript:alert(1)", "ssh://host"] {
+        for dangerous in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "ssh://host",
+            "vscode://open",
+            "slack://chan",
+            "jetbrains://x",
+        ] {
             assert!(
                 !is_allowed_external_scheme(dangerous),
                 "expected rejected: {dangerous}"

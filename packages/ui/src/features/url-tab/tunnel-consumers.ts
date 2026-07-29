@@ -5,6 +5,7 @@
  * releasing an owner actually needs: stopping the tunnel on the daemon.
  */
 import { stopPortTunnel } from '@/lib/api/tunnel-ports';
+import { clearStoredClaims, dropStoredClaims } from './tunnel-claim-registry';
 import {
   addConsumer,
   clearConsumers,
@@ -42,10 +43,12 @@ export function registerUrlTunnelConsumer(tabId: string, rec: ConsumerRecord): v
 export function releaseUrlTunnelConsumers(tabIds: string[]): void {
   const { next, stop } = releaseConsumers(state, tabIds);
   state = next;
+  dropStoredClaims(tabIds);
   stopTunnels(stop);
 }
 
 /** Daemon-switch cleanup: drop the registry without stopping anything (wrong-daemon risk). */
 export function clearUrlTunnelConsumers(): void {
   state = clearConsumers(state);
+  clearStoredClaims();
 }

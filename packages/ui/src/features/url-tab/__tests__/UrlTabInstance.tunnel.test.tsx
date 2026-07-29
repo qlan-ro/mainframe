@@ -14,6 +14,7 @@ import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { usePortTunnelsStore } from '@/store/port-tunnels';
 import { startPortTunnel } from '@/lib/api/tunnel-ports';
 import { registerUrlTunnelConsumer } from '@/features/url-tab/tunnel-consumers';
+import { clearStoredClaims } from '@/features/url-tab/tunnel-claim-registry';
 import { installFakeHost, seedStores, setPortEntry, renderTab as renderUrlTab } from './url-tab-tunnel-harness';
 
 vi.mock('@/features/sessions/use-active-identity', () => ({
@@ -53,6 +54,10 @@ function renderTab(url = URL) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // `tunnel-consumers` is mocked wholesale above, so its own `clearUrlTunnelConsumers`
+  // never reaches the real claim registry every case here re-seeds under 't1' —
+  // clear it directly or a claim a prior case earned leaks into the next one.
+  clearStoredClaims();
   ({ fakeHost, fakeHandle } = installFakeHost());
   seedStores();
 

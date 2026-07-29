@@ -51,7 +51,7 @@ export function useUrlTabTunnel({ tabId, url, active }: UrlTabTunnelArgs): UrlTa
 
   // Declared before the attempt so its `rebind` and `daemon-state` effects are
   // registered — and so run — ahead of the same commit's `start-issued`.
-  const { owns, note } = useTunnelClaim({ httpPort, port });
+  const { owns, note } = useTunnelClaim({ tabId, httpPort, port });
   const { target, retry } = useTunnelAttempt({
     url,
     isLocal,

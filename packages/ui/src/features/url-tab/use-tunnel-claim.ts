@@ -16,10 +16,19 @@
  * `port` and `attempt` it is *acting on*, so a promise callback that lands late
  * carries its issue-time identity instead of the current render's — which is
  * what makes a stale attempt's rejection harmless.
+ *
+ * The reducer's state is seeded from — and written back to — the module-level
+ * `tunnel-claim-registry` keyed by `tabId` (review-fix findings 1+3): a plain
+ * `useReducer(claimReducer, null)` forgets the claim on every unmount, while the
+ * consumer registry it feeds survives one, so a session-switch remount against
+ * an already-`ready` port (nothing pending, no new `start-issued`) would
+ * rehydrate to "owns nothing" and downgrade a real `started: true` to `false`,
+ * leaking the tunnel this tab exclusively started.
  */
 import { useEffect, useReducer } from 'react';
 import { usePortTunnelsStore, type PortTunnelEntry } from '@/store/port-tunnels';
 import { claimOwns, claimReducer, entryDaemonState, type ClaimSignal } from './tunnel-claim';
+import { getStoredClaim, setStoredClaim } from './tunnel-claim-registry';
 
 export interface TunnelClaimBinding {
   /** This tab may stop the tunnel currently on `port`. */
@@ -27,8 +36,20 @@ export interface TunnelClaimBinding {
   note: (signal: ClaimSignal) => void;
 }
 
-export function useTunnelClaim({ httpPort, port }: { httpPort: number; port: number | null }): TunnelClaimBinding {
-  const [claim, note] = useReducer(claimReducer, null);
+export function useTunnelClaim({
+  tabId,
+  httpPort,
+  port,
+}: {
+  tabId: string;
+  httpPort: number;
+  port: number | null;
+}): TunnelClaimBinding {
+  const [claim, note] = useReducer(claimReducer, tabId, getStoredClaim);
+
+  useEffect(() => {
+    setStoredClaim(tabId, claim);
+  }, [tabId, claim]);
 
   useEffect(() => {
     note({ type: 'rebind', httpPort, port });
