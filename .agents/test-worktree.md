@@ -17,14 +17,17 @@ pick one per run (user's ask → diff paths → default).
   spawns the daemon itself.
 - Engine: `tauri-mcp` (the WKWebView has no CDP). Dev builds compile the
   bridge in (`pnpm tauri:dev` → `cargo tauri dev --features mcp-bridge`).
-- Launch: `script: .agents/launch-test-tauri.sh` — run it EXACTLY ONCE. It
-  owns the workspace install, the isolated env (`DAEMON_PORT=31500`,
-  `MAINFRAME_DATA_DIR=~/.mainframe_dev`; an inherited 31415 falls back to
-  31500 with a warning), the background `tauri:dev` (first run compiles Rust
-  and provisions the daemon sidecar, up to 10 min), and the readiness wait. It
-  blocks until ready and prints `READY` + facts (ports, APP_URL, LOG), or
-  exits 1 with the log tail — do not re-launch on failure, read the printed
-  tail.
+- Launch: `script: .agents/launch-test-tauri.sh` — run it EXACTLY ONCE, via
+  `test-env.sh up tauri`. It owns the workspace install, the isolated env from
+  the generated `.env` (which overrides an inherited `DAEMON_PORT`, so a shell
+  polluted with the production 31415 no longer blocks the run), sidecar
+  provisioning, the background `tauri:dev`, and the readiness wait. It blocks
+  until ready and prints `READY` + facts (ports, APP_URL, LOG), or exits 1 with
+  the log tail — do not re-launch on failure, read the printed tail. A cold
+  worktree compiles the daemon *and* the native shell here; the wait allows for
+  that and fails fast if `tauri:dev` dies, so a long silence is a build, not a
+  hang. Run `test-env.sh prepare tauri` ahead of time to pay that cost outside
+  the run.
 - After READY: confirm the app appears in the bridge's `list_devices`.
 - Diff paths: `packages/app-tauri/`, `packages/ui/`.
 - Bridge quirks (verified 2026-07-09): selector-based tools
@@ -78,9 +81,10 @@ Limits for multi-branch runs (consumed by the skill's Fleet Mode):
   but they DO share `~/.mainframe_dev`; scenarios that assert on global DB
   state (project/chat counts) belong in sequential runs.
 - **Process kills in a fleet:** the Cleanup section below kills ANY listener in
-  the test port ranges — including live test runs — so it runs exactly once
-  (orchestrator, before any env exists). Per-branch teardown uses the Stop /
-  Restart section, which is scoped to that worktree's own `.env` ports and is
+  the test port ranges — including live test runs — so it is reachable only as
+  `test-env.sh reset` and runs exactly once (orchestrator, before any env
+  exists). `up` never calls it. Per-branch teardown uses the Stop / Restart
+  section, which is scoped to that worktree's own `.env` ports and is
   parallel-safe.
 - Protected port `31415` applies to every run, always.
 
@@ -94,11 +98,12 @@ Verify any candidate PID does not hold `31415` before sending SIGKILL.
 
 ## Environment
 
-`.env` is **generated** by `scripts/setup-ports.sh` (invoked from
-`launch-test-browser.sh`), not hand-written. It always holds isolated free
-ports — the `31415`/`5173` defaults below are the *production* values and are
-deliberately never used for a test worktree. The tauri target doesn't
-generate `.env`; it sets its own isolated ports directly (see Target: tauri).
+`.env` is **generated** by `scripts/setup-ports.sh` (invoked from both launch
+scripts on first use), not hand-written. It always holds isolated free ports —
+the `31415`/`5173` defaults below are the *production* values and are
+deliberately never used for a test worktree. Both targets read the same `.env`,
+so the facts a run prints, the ports it listens on, and the ports `down` tears
+down are always the same set.
 
 | Variable | Used by | Source | Isolated range / value |
 |---|---|---|---|
@@ -115,13 +120,15 @@ Production defaults (never used here): `DAEMON_PORT=31415`, `VITE_PORT=5173`,
 ## Cleanup (Kill Stale Dev Processes)
 
 ```
-script: .agents/cleanup-test.sh
+script: .agents/test-env.sh reset
 ```
 
-Run the script exactly as-is — it kills stale `run dev` wrappers and CDP
-9222 while skipping anything on the protected port 31415, retries once, and
-exits nonzero if processes survive. Fleet runs execute it exactly once
-(orchestrator), never per-branch.
+Run it exactly as-is — it kills stale `run dev` wrappers and CDP 9222 while
+skipping anything on the protected port 31415, retries once, and exits nonzero
+if processes survive. It sweeps the whole test port range, so it takes every
+other checkout's live run with it: fleet runs execute it exactly once
+(orchestrator, before any env exists), never per-branch, and `up` never calls
+it.
 
 **Never use `pkill -f "mainframe"` unfiltered** — it can hit the production app. The commands above specifically target `run dev` processes and skip anything on port 31415.
 
@@ -209,11 +216,11 @@ Rules learned from live runs (2026-07-09 fleet):
 ## Stop / Restart
 
 ```
-script: .agents/stop-test.sh [port ...]
+script: .agents/test-env.sh down [port ...]
 ```
 
-Port-scoped, parallel-safe teardown of one run — defaults to this checkout's
-`.env` ports (plus port `9222`, a harmless no-op check now that nothing binds
+Port-scoped, parallel-safe teardown of one run — defaults to the target
+checkout's `.env` ports (plus port `9222`, a harmless no-op check now that nothing binds
 it); pass explicit ports to override. Refuses the protected port 31415;
 exits nonzero if a port stays held. Always kills the full port set for
 exactly this run — never kill a single port and expect the rest of the run
