@@ -9,7 +9,9 @@
  * messages the WHOLE row locks (switching agents mid-thread would orphan the CLI
  * session — mirrors the desktop invariant). Bottom section: the active provider's
  * models, each with its description and a `· default` marker; the older-but-still-active
- * models the CLI's own picker hides (`isOlder`) follow under their own label.
+ * models the CLI's own picker hides (`isOlder`) follow under their own label, then any
+ * models the adapter reaches through a separate endpoint (`group`, e.g. CLIProxyAPI)
+ * under theirs.
  *
  * No assistant-ui ModelContext: that targets the AI-SDK transport, which is inert
  * under our external-store runtime. Selection writes through our setAdapter/setModel
@@ -19,7 +21,7 @@
  * Built on shadcn Popover (not raw Radix). Real mf-* tokens; never the /opacity modifier.
  */
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Check, ChevronDown, Lock } from 'lucide-react';
 import type { AdapterInfo, AdapterModel, Chat } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -58,6 +60,22 @@ function modelRows(adapter: AdapterInfo | null, storedId: string | null | undefi
     return [{ id: storedId, label: storedId }, ...catalog];
   }
   return catalog;
+}
+
+/** Labelled sections below the adapter's own models, in first-seen order. */
+function modelGroups(rows: AdapterModel[]): [string, AdapterModel[]][] {
+  const groups = new Map<string, AdapterModel[]>();
+  for (const m of rows) {
+    if (!m.group) continue;
+    const bucket = groups.get(m.group);
+    if (bucket) bucket.push(m);
+    else groups.set(m.group, [m]);
+  }
+  return [...groups];
+}
+
+function groupSlug(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
 interface ProviderPillProps {
@@ -138,8 +156,10 @@ export function ProviderModelSelect({
   const active = adapter ?? adapters.find((a) => a.installed) ?? adapters[0] ?? null;
   const currentModelId = model?.id ?? chat.model ?? '';
   const rows = modelRows(active, chat.model);
-  const current = rows.filter((m) => !m.isOlder);
-  const older = rows.filter((m) => m.isOlder);
+  const native = rows.filter((m) => !m.group);
+  const current = native.filter((m) => !m.isOlder);
+  const older = native.filter((m) => m.isOlder);
+  const groups = modelGroups(rows);
   const triggerLabel = rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
   const activeId = chat.adapterId ?? active?.id ?? '';
 
@@ -223,6 +243,16 @@ export function ProviderModelSelect({
               ))}
             </>
           )}
+          {groups.map(([label, models]) => (
+            <Fragment key={label}>
+              <div data-testid={`composer-model-group-header-${groupSlug(label)}`}>
+                <MenuLabel>{label}</MenuLabel>
+              </div>
+              {models.map((m) => (
+                <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
+              ))}
+            </Fragment>
+          ))}
         </div>
 
         <p data-testid="composer-provider-footer" className="px-[8px] pt-2 text-caption text-muted-foreground">

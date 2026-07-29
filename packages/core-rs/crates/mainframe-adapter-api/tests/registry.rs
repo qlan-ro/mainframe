@@ -33,6 +33,7 @@ fn model(id: &str, label: &str) -> AdapterModel {
         context_window: None,
         is_default: None,
         is_older: None,
+        group: None,
         supported_efforts: None,
         default_effort: None,
         supports_fast: None,

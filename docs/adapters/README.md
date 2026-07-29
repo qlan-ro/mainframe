@@ -18,8 +18,9 @@ ID | Surface | Upstream artifact | Mainframe consumer (file::symbol) | Coverage 
 ```
 
 - **ID** — `<TOOL>-<CAT>-<NN>`, `TOOL ∈ {CLAUDE, CODEX}`,
-  `CAT ∈ {FLAG, EVT, CTRL, RPC, ITEM, FILE, PROBE, IO}` (`IO` = stdio
-  transport and log-line conventions), `NN` zero-padded. IDs are permanent —
+  `CAT ∈ {FLAG, EVT, CTRL, RPC, ITEM, FILE, PROBE, IO, ENV}` (`IO` = stdio
+  transport and log-line conventions, `ENV` = environment variables the child
+  process is spawned with), `NN` zero-padded. IDs are permanent —
   never renumbered. A surface Mainframe stops consuming is marked `retired`
   in place, so IDs cited by old reports and todos stay resolvable.
 - **Mainframe consumer** cites `path::symbol`, never line numbers — line

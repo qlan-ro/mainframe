@@ -308,6 +308,7 @@ impl AdapterSession for CodexSession {
                 executable_path: None,
                 system_prompt: None,
                 tuning: None,
+                small_fast_model: None,
             });
             let sink = sink.unwrap_or_else(null_sink);
             *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
