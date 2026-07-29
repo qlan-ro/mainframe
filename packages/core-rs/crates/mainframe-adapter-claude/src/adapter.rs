@@ -1,10 +1,8 @@
 //! Ported from `packages/core/src/plugins/builtin/claude/adapter.ts`.
 //!
-//! This file ports the pure catalog surface — the static `CLAUDE_MODELS` fallback
-//! and `enrich_with_context_window`. The `ClaudeAdapter` struct itself (the
-//! `Adapter` trait impl) is deferred: it constructs `ClaudeSession`, calls into
-//! `skills`/`external_sessions`, holds a `BackgroundTaskTracker`, and returns
-//! `ToolCategories` — none of which have landed yet (see the trailer).
+//! The `ClaudeAdapter` struct (the `Adapter` trait impl). The catalog surface it
+//! serves — the static fallback list, the older-model merge and
+//! `enrich_with_context_window` — lives in [`crate::models`].
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -14,10 +12,11 @@ use mainframe_adapter_api::{
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
-use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, EffortLevel, SessionOptions};
+use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::display::ToolCategories;
 use mainframe_types::transcript::TranscriptLocation;
 
+use crate::models::{claude_models, enrich_with_context_window, merge_older_models};
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
@@ -26,236 +25,6 @@ use crate::transcript::{is_claude_transcript_present, locate_claude_transcript};
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
 const CLAUDE_ADAPTER_NAME: &str = "Claude Code";
-
-const DEFAULT_CONTEXT_WINDOW: i64 = 200_000;
-const EXTENDED_CONTEXT_WINDOW: i64 = 1_000_000;
-
-fn m(id: &str, label: &str, context_window: i64) -> AdapterModel {
-    AdapterModel {
-        id: id.to_string(),
-        label: label.to_string(),
-        description: None,
-        resolved_model: None,
-        context_window: Some(context_window),
-        is_default: None,
-        supported_efforts: None,
-        default_effort: None,
-        supports_fast: None,
-        supports_ultracode: None,
-        supports_adaptive_thinking: None,
-        supports_personality: None,
-    }
-}
-
-fn efforts(levels: &[EffortLevel]) -> Option<Vec<EffortLevel>> {
-    Some(levels.to_vec())
-}
-
-/// The CLI accepts "default" as an alias that resolves to the user's tier default
-/// at spawn time; the probe replaces this with the live catalog. Static fallback
-/// (`getFallbackModels`).
-pub fn claude_models() -> Vec<AdapterModel> {
-    use EffortLevel::{High, Low, Max, Medium, Xhigh};
-    let mut models = Vec::new();
-
-    let mut default = m("default", "Default - Opus 4.8", EXTENDED_CONTEXT_WINDOW);
-    default.description = Some("Opus 4.8 with 1M context".to_string());
-    default.supported_efforts = efforts(&[Low, Medium, High, Xhigh, Max]);
-    default.supports_fast = Some(true);
-    default.supports_ultracode = Some(true);
-    default.supports_adaptive_thinking = Some(true);
-    default.is_default = Some(true);
-    models.push(default);
-
-    let mut opus46 = m("claude-opus-4-6", "Opus 4.6", DEFAULT_CONTEXT_WINDOW);
-    opus46.supported_efforts = efforts(&[Low, Medium, High, Xhigh, Max]);
-    opus46.supports_fast = Some(true);
-    opus46.supports_ultracode = Some(true);
-    opus46.supports_adaptive_thinking = Some(true);
-    models.push(opus46);
-
-    let mut opus46_1m = m("opus[1m]", "Opus 4.6 (1M context)", EXTENDED_CONTEXT_WINDOW);
-    opus46_1m.supported_efforts = efforts(&[Low, Medium, High, Xhigh, Max]);
-    opus46_1m.supports_fast = Some(true);
-    opus46_1m.supports_ultracode = Some(true);
-    opus46_1m.supports_adaptive_thinking = Some(true);
-    models.push(opus46_1m);
-
-    let mut sonnet46 = m("claude-sonnet-4-6", "Sonnet 4.6", DEFAULT_CONTEXT_WINDOW);
-    sonnet46.supported_efforts = efforts(&[Low, Medium, High, Max]);
-    sonnet46.supports_fast = Some(true);
-    models.push(sonnet46);
-
-    let mut sonnet46_1m = m(
-        "sonnet[1m]",
-        "Sonnet 4.6 (1M context)",
-        EXTENDED_CONTEXT_WINDOW,
-    );
-    sonnet46_1m.supported_efforts = efforts(&[Low, Medium, High, Max]);
-    sonnet46_1m.supports_fast = Some(true);
-    models.push(sonnet46_1m);
-
-    let mut opus45 = m(
-        "claude-opus-4-5-20251101",
-        "Opus 4.5",
-        DEFAULT_CONTEXT_WINDOW,
-    );
-    opus45.supported_efforts = efforts(&[Low, Medium, High, Xhigh, Max]);
-    opus45.supports_ultracode = Some(true);
-    models.push(opus45);
-
-    let mut sonnet45 = m(
-        "claude-sonnet-4-5-20250929",
-        "Sonnet 4.5",
-        DEFAULT_CONTEXT_WINDOW,
-    );
-    sonnet45.supported_efforts = efforts(&[Low, Medium, High, Max]);
-    models.push(sonnet45);
-
-    let mut opus41 = m(
-        "claude-opus-4-1-20250805",
-        "Opus 4.1",
-        DEFAULT_CONTEXT_WINDOW,
-    );
-    opus41.supported_efforts = efforts(&[Low, Medium, High, Xhigh, Max]);
-    opus41.supports_ultracode = Some(true);
-    models.push(opus41);
-
-    let mut sonnet4 = m(
-        "claude-sonnet-4-20250514",
-        "Sonnet 4",
-        DEFAULT_CONTEXT_WINDOW,
-    );
-    sonnet4.supported_efforts = efforts(&[Low, Medium, High, Max]);
-    models.push(sonnet4);
-
-    let mut opus40 = m("claude-opus-4-20250514", "Opus 4.0", DEFAULT_CONTEXT_WINDOW);
-    opus40.supported_efforts = efforts(&[Low, Medium, High, Xhigh, Max]);
-    opus40.supports_ultracode = Some(true);
-    models.push(opus40);
-
-    let mut sonnet37 = m(
-        "claude-3-7-sonnet-20250219",
-        "Sonnet 3.7",
-        DEFAULT_CONTEXT_WINDOW,
-    );
-    sonnet37.supported_efforts = efforts(&[Low, Medium, High, Max]);
-    models.push(sonnet37);
-
-    // Window live-verified 2026-07-07: the CLI's get_context_usage reports
-    // maxTokens 967,000 for claude-sonnet-5 (1M minus the CLI's reserve).
-    models.push(m("claude-sonnet-5", "Sonnet 5", EXTENDED_CONTEXT_WINDOW));
-    models.push(m(
-        "claude-haiku-4-5-20251001",
-        "Haiku 4.5",
-        DEFAULT_CONTEXT_WINDOW,
-    ));
-    models.push(m(
-        "claude-3-5-sonnet-20241022",
-        "Sonnet 3.5",
-        DEFAULT_CONTEXT_WINDOW,
-    ));
-    models.push(m(
-        "claude-3-5-haiku-20241022",
-        "Haiku 3.5",
-        DEFAULT_CONTEXT_WINDOW,
-    ));
-
-    models
-}
-
-fn has_extended_window_suffix(id: &str) -> bool {
-    id.to_lowercase().ends_with("[1m]")
-}
-
-/// `/\b1m\b|1m context/i` on a description.
-fn description_hints_extended(description: &str) -> bool {
-    let lower = description.to_lowercase();
-    if lower.contains("1m context") {
-        return true;
-    }
-    // `\b1m\b` — "1m" bounded by non-word chars.
-    let chars: Vec<char> = lower.chars().collect();
-    let n = chars.len();
-    let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    let mut i = 0;
-    while i + 2 <= n {
-        if chars[i] == '1' && chars[i + 1] == 'm' {
-            let before_ok = i == 0 || !is_word(chars[i - 1]);
-            let after_ok = i + 2 >= n || !is_word(chars[i + 2]);
-            if before_ok && after_ok {
-                return true;
-            }
-        }
-        i += 1;
-    }
-    false
-}
-
-/// Reconcile probed entries with the static catalog so known IDs retain their
-/// authoritative window, unknown IDs ending in "[1m]" (on the entry id OR its own
-/// `resolvedModel` — the CLI puts the suffix on either side, e.g.
-/// `claude-fable-5[1m]` resolves to a bare `claude-fable-5`) get the extended
-/// window, and everything else falls back to a description sniff before the 200k
-/// default. `default_resolved_model` is kept for callers probing legacy payloads
-/// where only the "default" entry carried a resolution.
-pub fn enrich_with_context_window(
-    probed: Vec<AdapterModel>,
-    default_resolved_model: Option<&str>,
-) -> Vec<AdapterModel> {
-    let static_windows: std::collections::HashMap<String, i64> = claude_models()
-        .into_iter()
-        .filter_map(|model| model.context_window.map(|w| (model.id, w)))
-        .collect();
-
-    probed
-        .into_iter()
-        .map(|mut model| {
-            // TS `if (model.contextWindow) return model;` — truthy (present & nonzero).
-            if model.context_window.filter(|&w| w != 0).is_some() {
-                return model;
-            }
-            // model.resolvedModel ?? (id === 'default' ? defaultResolvedModel : undefined)
-            let resolved: Option<String> = model.resolved_model.clone().or_else(|| {
-                if model.id == "default" {
-                    default_resolved_model.map(str::to_string)
-                } else {
-                    None
-                }
-            });
-            let resolved_ref = resolved.as_deref();
-            if has_extended_window_suffix(&model.id)
-                || resolved_ref
-                    .map(has_extended_window_suffix)
-                    .unwrap_or(false)
-            {
-                model.context_window = Some(EXTENDED_CONTEXT_WINDOW);
-                return model;
-            }
-            // staticById.get(id)?.contextWindow ?? (resolved && staticById.get(resolved)?.contextWindow)
-            let from_static = static_windows
-                .get(&model.id)
-                .copied()
-                .or_else(|| resolved_ref.and_then(|r| static_windows.get(r).copied()));
-            if let Some(w) = from_static {
-                model.context_window = Some(w);
-                return model;
-            }
-            let window = if model
-                .description
-                .as_deref()
-                .map(description_hints_extended)
-                .unwrap_or(false)
-            {
-                EXTENDED_CONTEXT_WINDOW
-            } else {
-                DEFAULT_CONTEXT_WINDOW
-            };
-            model.context_window = Some(window);
-            model
-        })
-        .collect()
-}
 
 /// `\d+\.\d+\.\d+` — the first N.N.N triple in `stdout` (no regex crate).
 fn first_version_triple(stdout: &str) -> Option<String> {
@@ -400,7 +169,8 @@ impl Adapter for ClaudeAdapter {
             if let Some(result) = crate::probe_models::probe_models(&exe, path.as_str()).await {
                 let enriched =
                     enrich_with_context_window(result.models, result.resolved_model.as_deref());
-                *dynamic.lock().unwrap_or_else(|e| e.into_inner()) = Some(enriched);
+                *dynamic.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some(merge_older_models(enriched));
             }
             Ok(dynamic.lock().unwrap_or_else(|e| e.into_inner()).clone())
         })
@@ -522,135 +292,6 @@ impl Adapter for ClaudeAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn probed(id: &str) -> AdapterModel {
-        AdapterModel {
-            id: id.to_string(),
-            label: id.to_string(),
-            description: None,
-            resolved_model: None,
-            context_window: None,
-            is_default: None,
-            supported_efforts: None,
-            default_effort: None,
-            supports_fast: None,
-            supports_ultracode: None,
-            supports_adaptive_thinking: None,
-            supports_personality: None,
-        }
-    }
-
-    fn window_of(models: &[AdapterModel], id: &str) -> Option<i64> {
-        models
-            .iter()
-            .find(|m| m.id == id)
-            .and_then(|m| m.context_window)
-    }
-
-    // These port probe-context-window.test.ts's enrichment assertions. The TS
-    // harness drives them through a mocked `ClaudeAdapter.probeModels()`, which is
-    // exactly `enrich_with_context_window(result.models, result.resolvedModel)`;
-    // called directly here since the adapter struct is deferred (above).
-
-    #[test]
-    fn preserves_context_window_from_static_catalog_for_known_ids() {
-        let mut default = probed("default");
-        default.is_default = Some(true);
-        default.description = Some("Opus 4.7 with 1M context · Most capable".to_string());
-        let out = enrich_with_context_window(
-            vec![default, probed("claude-sonnet-4-6"), probed("sonnet[1m]")],
-            None,
-        );
-        assert_eq!(window_of(&out, "default"), Some(1_000_000));
-        assert_eq!(window_of(&out, "claude-sonnet-4-6"), Some(200_000));
-        assert_eq!(window_of(&out, "sonnet[1m]"), Some(1_000_000));
-    }
-
-    #[test]
-    fn falls_back_to_description_sniff_for_unknown_ids() {
-        let mut big = probed("claude-future-1m");
-        big.description = Some("Future model with 1M context".to_string());
-        let mut small = probed("claude-future-small");
-        small.description = Some("Faster everyday model".to_string());
-        let out = enrich_with_context_window(vec![big, small], None);
-        assert_eq!(window_of(&out, "claude-future-1m"), Some(1_000_000));
-        assert_eq!(window_of(&out, "claude-future-small"), Some(200_000));
-    }
-
-    #[test]
-    fn respects_explicit_context_window_on_probed_entry() {
-        let mut custom = probed("claude-custom");
-        custom.context_window = Some(500_000);
-        let out = enrich_with_context_window(vec![custom], None);
-        assert_eq!(out[0].context_window, Some(500_000));
-    }
-
-    #[test]
-    fn stamps_default_window_from_resolved_model_without_description() {
-        let mut default = probed("default");
-        default.is_default = Some(true);
-        let out = enrich_with_context_window(vec![default], Some("claude-fable-5[1m]"));
-        assert_eq!(out[0].context_window, Some(1_000_000));
-    }
-
-    // Translated assertion-for-assertion from the new adapter-enrich.test.ts cases
-    // (each probed entry carries its own resolvedModel).
-    fn probed_full(id: &str, description: &str, resolved: &str) -> AdapterModel {
-        let mut m = probed(id);
-        m.description = Some(description.to_string());
-        m.resolved_model = Some(resolved.to_string());
-        m
-    }
-
-    #[test]
-    fn infers_1m_from_a_non_default_entry_whose_own_resolved_model_carries_1m() {
-        let probed = vec![
-            probed_full(
-                "opus[1m]",
-                "Opus 4.8 with 1M context",
-                "claude-opus-4-8[1m]",
-            ),
-            probed_full("my-alias", "Some model", "claude-something-9[1m]"),
-        ];
-        let enriched = enrich_with_context_window(probed, None);
-        assert_eq!(enriched[0].context_window, Some(1_000_000));
-        assert_eq!(enriched[1].context_window, Some(1_000_000));
-    }
-
-    #[test]
-    fn keeps_the_1m_id_suffix_authoritative_even_when_resolved_model_drops_it() {
-        let probed = vec![probed_full(
-            "claude-fable-5[1m]",
-            "Fable 5",
-            "claude-fable-5",
-        )];
-        assert_eq!(
-            enrich_with_context_window(probed, None)[0].context_window,
-            Some(1_000_000)
-        );
-    }
-
-    #[test]
-    fn resolves_the_static_catalog_window_via_the_entry_resolved_model_for_alias_ids() {
-        let probed = vec![probed_full("haiku", "Fastest", "claude-haiku-4-5-20251001")];
-        assert_eq!(
-            enrich_with_context_window(probed, None)[0].context_window,
-            Some(200_000)
-        );
-    }
-
-    #[test]
-    fn gives_claude_sonnet_5_the_extended_window_from_the_static_catalog() {
-        let probed = vec![probed_full(
-            "sonnet",
-            "Efficient for routine tasks",
-            "claude-sonnet-5",
-        )];
-        assert_eq!(
-            enrich_with_context_window(probed, None)[0].context_window,
-            Some(1_000_000)
-        );
-    }
 
     // ---- ClaudeAdapter surface ----
     fn opts(chat_id: &str) -> SessionOptions {

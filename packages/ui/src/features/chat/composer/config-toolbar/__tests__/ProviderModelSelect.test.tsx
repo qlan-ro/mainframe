@@ -423,3 +423,80 @@ describe('ProviderModelSelect — default model shows "default" marker', () => {
     expect(haikuRow.textContent).not.toContain('default');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 8. Older models sit under their own label, after the current ones
+// ---------------------------------------------------------------------------
+
+const OPUS_41: AdapterModel = {
+  id: 'claude-opus-4-1-20250805',
+  label: 'Opus 4.1',
+  isOlder: true,
+};
+
+const ADAPTER_CLAUDE_WITH_OLDER: AdapterInfo = {
+  ...ADAPTER_CLAUDE,
+  models: [SONNET, HAIKU, OPUS_41],
+};
+
+describe('ProviderModelSelect — older models group', () => {
+  it('renders the "Older models" label when the catalog carries an isOlder model', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_OLDER],
+      adapter: ADAPTER_CLAUDE_WITH_OLDER,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.getByTestId('composer-model-older-header').textContent).toContain('Older models');
+    expect(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805')).toBeInTheDocument();
+  });
+
+  it('orders the older row after the header, and the current rows before it', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_OLDER],
+      adapter: ADAPTER_CLAUDE_WITH_OLDER,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    const header = screen.getByTestId('composer-model-older-header');
+    const haiku = screen.getByTestId('composer-model-select-option-haiku');
+    const opus = screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805');
+    expect(haiku.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(header.compareDocumentPosition(opus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('omits the "Older models" label when no model is flagged', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-model-older-header')).toBeNull();
+  });
+
+  it('selecting an older model calls setModel with its exact id', async () => {
+    const setModel = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_OLDER],
+      adapter: ADAPTER_CLAUDE_WITH_OLDER,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+      setModel,
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805'));
+
+    expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805');
+  });
+});
