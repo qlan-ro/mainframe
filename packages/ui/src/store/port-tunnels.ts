@@ -24,6 +24,13 @@ export interface PortTunnelEntry {
   error?: string;
   /** True once cloudflared's edge DNS resolves the hostname — a `ready` tunnel can 404 until then. */
   dnsVerified?: boolean;
+  /**
+   * Set only when a client `.catch` wrote this `error`; its absence means the
+   * daemon did. Only a daemon-sourced error is evidence about what the daemon
+   * holds, so a URL tab's tunnel claim moves on an unmarked error and ignores a
+   * marked one (#281 D10/AC12).
+   */
+  errorOrigin?: 'client';
 }
 
 export interface PortTunnelListEntry extends PortTunnelEntry {
@@ -112,14 +119,23 @@ const lastToastAt = new Map<number, number>();
  * A tunnel that is already `ready` is never downgraded: cloudflared re-emits
  * errors for a live tunnel (a transient edge reconnect), and taking a working
  * URL away from the user over one is worse than saying nothing.
+ *
+ * `origin` defaults to `'daemon'`, so **any new client-side `.catch` caller must
+ * pass `'client'` explicitly**: a client error that silently claims daemon
+ * origin revokes a URL tab's live tunnel claim and leaks cloudflared (#281 D10).
  */
-export function reportPortTunnelError(port: number, message: string): void {
+export function reportPortTunnelError(port: number, message: string, origin: 'daemon' | 'client' = 'daemon'): void {
   if (usePortTunnelsStore.getState().byPort[port]?.state === 'ready') {
     console.warn(`[port-tunnels] ignoring an error for the live tunnel on port ${port}: ${message}`);
     return;
   }
 
-  setEntry(port, { state: 'error', error: message });
+  setEntry(
+    port,
+    origin === 'client'
+      ? { state: 'error', error: message, errorOrigin: 'client' }
+      : { state: 'error', error: message },
+  );
 
   const now = Date.now();
   const last = lastToastAt.get(port);

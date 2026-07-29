@@ -249,6 +249,29 @@ describe('reportPortTunnelError', () => {
   });
 });
 
+describe('reportPortTunnelError — error provenance (#281 D10/AC12)', () => {
+  it('marks a client-written error so a reader can tell it apart from daemon truth', () => {
+    reportPortTunnelError(5173, 'fetch failed', 'client');
+    expect(entries()).toEqual({ 5173: { state: 'error', error: 'fetch failed', errorOrigin: 'client' } });
+  });
+
+  it('leaves a daemon-origin error unmarked — the absence of the key IS the daemon claim', () => {
+    reportPortTunnelError(5173, 'cloudflared exited', 'daemon');
+    expect(entries()).toEqual({ 5173: { state: 'error', error: 'cloudflared exited' } });
+  });
+
+  it('defaults to daemon origin, so an unmarked entry stays evidence about the daemon', () => {
+    applyPortTunnelEvent(tunnelEvent({ state: 'error', label: 'port:5173', error: 'cloudflared exited' }));
+    expect(entries()[5173]).not.toHaveProperty('errorOrigin');
+  });
+
+  it('drops the marker when a daemon error replaces a client one on the same port', () => {
+    reportPortTunnelError(5173, 'fetch failed', 'client');
+    reportPortTunnelError(5173, 'cloudflared exited');
+    expect(entries()).toEqual({ 5173: { state: 'error', error: 'cloudflared exited' } });
+  });
+});
+
 describe('seedPortTunnels', () => {
   it('applies the snapshot and the daemon’s own port', async () => {
     listPortTunnels.mockResolvedValue({
