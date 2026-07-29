@@ -9,6 +9,8 @@ export type SurfaceIntent =
   | { type: 'inspector-tab'; tab: 'files' | 'changes' }
   /** Spawn a new terminal in the Run surface (optionally targeting a pane). */
   | { type: 'new-terminal'; paneId?: string }
+  /** Open (or focus) a URL tab in the Run surface (optionally targeting a pane). */
+  | { type: 'open-url-tab'; url: string; paneId?: string }
   /** Open the global search / command palette overlay. */
   | { type: 'open-search-palette' }
   /** Open the find-in-path overlay scoped to a file or directory. */

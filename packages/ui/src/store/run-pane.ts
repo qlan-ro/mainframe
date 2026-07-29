@@ -8,19 +8,21 @@
  * (`layout.ts`) owns the wiring + side-effects.
  */
 
-export type RunTabKind = 'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer';
+export type RunTabKind = 'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer' | 'url';
 
-/** A tab inside a Run pane (a launched preview/console, a terminal, or a Files guest). */
+/** A tab inside a Run pane (a launched preview/console, a terminal, a Files guest, or a URL tab). */
 export interface RunTab {
   id: string;
   kind: RunTabKind;
   title: string;
-  /** File path for code/diff/skill/viewer guests; absent for preview/console/terminal. */
+  /** File path for code/diff/skill/viewer guests; absent for preview/console/terminal/url. */
   path?: string;
   /** Launch-config name for preview (webview) and console (process) tabs. */
   config?: string;
   /** Resolved dev-server port for a preview tab (the webview loads localhost:port). */
   port?: number;
+  /** Normalized address for a `url` tab (http/https only — see normalizePreviewUrl). */
+  url?: string;
   /**
    * Launch scope this tab belongs to (`buildLaunchScope(projectId,
    * effectivePath)`), captured at creation from the active session. Run tabs are
@@ -37,6 +39,22 @@ export interface RunTab {
 /** A launch-config tab — a `preview` webview or a `console` process. */
 function isLaunchTab(t: RunTab): boolean {
   return t.kind === 'preview' || t.kind === 'console';
+}
+
+/**
+ * A predicate matching the existing tab `addRunTab` should focus instead of
+ * duplicating, or `null` when `tab` has no dedup identity. Launch tabs dedup by
+ * `config` + `scopeKey`; `url` tabs dedup by exact (already-normalized) `url` +
+ * `scopeKey` — same shape, different identity field.
+ */
+function dedupMatcher(tab: RunTab): ((t: RunTab) => boolean) | null {
+  if (isLaunchTab(tab) && tab.config) {
+    return (t) => isLaunchTab(t) && t.config === tab.config && t.scopeKey === tab.scopeKey;
+  }
+  if (tab.kind === 'url' && tab.url) {
+    return (t) => t.kind === 'url' && t.url === tab.url && t.scopeKey === tab.scopeKey;
+  }
+  return null;
 }
 
 export interface RunPane {
@@ -78,17 +96,17 @@ export function emptyRun(): RunState {
  */
 export function addRunTab(run: RunState | null, tab: RunTab, paneId?: string): RunState | null {
   const base = run ?? emptyRun();
-  // Launch-config tabs (preview webview OR console process) are singletons per
-  // config WITHIN a launch scope: if one already exists for the same config AND
-  // scope (in any pane), focus it instead of stacking a duplicate — the run
-  // button re-launches the same config repeatedly. Different scopes (a same-named
-  // config in another project/worktree) get their own tab. This is the "or
-  // activates" half of addRunTab.
-  if (isLaunchTab(tab) && tab.config) {
-    const matches = (t: RunTab): boolean => isLaunchTab(t) && t.config === tab.config && t.scopeKey === tab.scopeKey;
-    const pane = base.panes.find((p) => p.tabs.some(matches));
+  // Launch-config tabs (preview webview OR console process) and url tabs are
+  // singletons per identity WITHIN a launch scope: if one already exists (in
+  // any pane), focus it instead of stacking a duplicate — the run button
+  // re-launches the same config repeatedly, and typing the same address twice
+  // shouldn't open a second webview. Different scopes get their own tab. This
+  // is the "or activates" half of addRunTab.
+  const matcher = dedupMatcher(tab);
+  if (matcher) {
+    const pane = base.panes.find((p) => p.tabs.some(matcher));
     if (pane) {
-      const existing = pane.tabs.find(matches)!;
+      const existing = pane.tabs.find(matcher)!;
       return activateRunTab(base, pane.id, existing.id);
     }
   }
@@ -140,26 +158,24 @@ export function closePane(run: RunState, paneId: string): RunState | null {
   return { ...run, panes, flex: [1, 1] };
 }
 
-/** Every terminal tab id in the run state (across all panes). */
-export function terminalIdsInRun(run: RunState | null): string[] {
+/** Every tab id of `kind` in the run state (across all panes). */
+export function tabIdsInRun(run: RunState | null, kind: RunTabKind): string[] {
   if (!run) return [];
-  return run.panes.flatMap((p) => p.tabs.filter((t) => t.kind === 'terminal').map((t) => t.id));
+  return run.panes.flatMap((p) => p.tabs.filter((t) => t.kind === kind).map((t) => t.id));
 }
 
-/** Terminal tab ids in a single pane. */
-export function terminalIdsInPane(run: RunState | null, paneId: string): string[] {
+/** Tab ids of `kind` in a single pane. */
+export function tabIdsInPane(run: RunState | null, paneId: string, kind: RunTabKind): string[] {
   if (!run) return [];
   const pane = run.panes.find((p) => p.id === paneId);
   if (!pane) return [];
-  return pane.tabs.filter((t) => t.kind === 'terminal').map((t) => t.id);
+  return pane.tabs.filter((t) => t.kind === kind).map((t) => t.id);
 }
 
-/** Terminal tab ids belonging to a launch scope (across all panes). */
-export function terminalIdsForScope(run: RunState | null, scopeKey: string): string[] {
+/** Tab ids of `kind` belonging to a launch scope (across all panes). */
+export function tabIdsForScope(run: RunState | null, scopeKey: string, kind: RunTabKind): string[] {
   if (!run) return [];
-  return run.panes.flatMap((p) =>
-    p.tabs.filter((t) => t.kind === 'terminal' && t.scopeKey === scopeKey).map((t) => t.id),
-  );
+  return run.panes.flatMap((p) => p.tabs.filter((t) => t.kind === kind && t.scopeKey === scopeKey).map((t) => t.id));
 }
 
 /**
@@ -178,6 +194,29 @@ export function releaseRunScope(run: RunState, scopeKey: string): RunState | nul
     .filter((p) => p.tabs.length > 0);
   if (panes.length === 0) return null;
   return { ...run, panes, flex: panes.length === 1 ? [1, 1] : run.flex };
+}
+
+/**
+ * Point a `url` tab at a new address (the address bar navigated in place). If a
+ * sibling tab in the same scope already holds the target URL, activate that
+ * sibling instead of creating a duplicate and leave the source tab untouched —
+ * mirrors addRunTab's dedup-or-activate rule for the in-place case. Returns the
+ * same `run` reference for a no-op: unknown `tabId`, a non-`url` tab, or
+ * retargeting to the URL the tab already holds.
+ */
+export function retargetUrlTab(run: RunState, tabId: string, url: string, title: string): RunState {
+  const sourcePane = run.panes.find((p) => p.tabs.some((t) => t.id === tabId));
+  const source = sourcePane?.tabs.find((t) => t.id === tabId);
+  if (!sourcePane || !source || source.kind !== 'url' || source.url === url) return run;
+
+  const holds = (t: RunTab): boolean => t.kind === 'url' && t.url === url && t.scopeKey === source.scopeKey;
+  const holderPane = run.panes.find((p) => p.tabs.some(holds));
+  if (holderPane) return activateRunTab(run, holderPane.id, holderPane.tabs.find(holds)!.id);
+
+  const panes = run.panes.map((p) =>
+    p.id === sourcePane.id ? { ...p, tabs: p.tabs.map((t) => (t.id === tabId ? { ...t, url, title } : t)) } : p,
+  );
+  return { ...run, panes };
 }
 
 /**

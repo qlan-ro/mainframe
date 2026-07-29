@@ -22,6 +22,15 @@ export interface PortTunnelEntry {
   state: 'starting' | 'ready' | 'error';
   url?: string;
   error?: string;
+  /** True once cloudflared's edge DNS resolves the hostname — a `ready` tunnel can 404 until then. */
+  dnsVerified?: boolean;
+  /**
+   * Set only when a client `.catch` wrote this `error`; its absence means the
+   * daemon did. Only a daemon-sourced error is evidence about what the daemon
+   * holds, so a URL tab's tunnel claim moves on an unmarked error and ignores a
+   * marked one (#281 D10/AC12).
+   */
+  errorOrigin?: 'client';
 }
 
 export interface PortTunnelListEntry extends PortTunnelEntry {
@@ -86,6 +95,19 @@ function clearEntry(port: number): void {
   });
 }
 
+/**
+ * Clear a non-live entry so a Retry action starts from `pending` instead of
+ * replaying the same failure. Never touches a `ready` entry — a live tunnel
+ * only clears via the daemon's own `stopped` event. Returns whether it
+ * actually cleared anything.
+ */
+export function clearPortTunnelEntry(port: number): boolean {
+  const entry = usePortTunnelsStore.getState().byPort[port];
+  if (!entry || entry.state === 'ready') return false;
+  clearEntry(port);
+  return true;
+}
+
 const TOAST_DEDUPE_MS = 1000;
 const lastToastAt = new Map<number, number>();
 
@@ -97,14 +119,23 @@ const lastToastAt = new Map<number, number>();
  * A tunnel that is already `ready` is never downgraded: cloudflared re-emits
  * errors for a live tunnel (a transient edge reconnect), and taking a working
  * URL away from the user over one is worse than saying nothing.
+ *
+ * `origin` defaults to `'daemon'`, so **any new client-side `.catch` caller must
+ * pass `'client'` explicitly**: a client error that silently claims daemon
+ * origin revokes a URL tab's live tunnel claim and leaks cloudflared (#281 D10).
  */
-export function reportPortTunnelError(port: number, message: string): void {
+export function reportPortTunnelError(port: number, message: string, origin: 'daemon' | 'client' = 'daemon'): void {
   if (usePortTunnelsStore.getState().byPort[port]?.state === 'ready') {
     console.warn(`[port-tunnels] ignoring an error for the live tunnel on port ${port}: ${message}`);
     return;
   }
 
-  setEntry(port, { state: 'error', error: message });
+  setEntry(
+    port,
+    origin === 'client'
+      ? { state: 'error', error: message, errorOrigin: 'client' }
+      : { state: 'error', error: message },
+  );
 
   const now = Date.now();
   const last = lastToastAt.get(port);
@@ -123,10 +154,21 @@ export function applyPortTunnelEvent(event: DaemonEvent): void {
     case 'starting':
       setEntry(port, { state: 'starting' });
       break;
-    case 'ready':
+    case 'ready': {
+      const prior = usePortTunnelsStore.getState().byPort[port];
+      const url = event.url ?? prior?.url;
+      // Never downgrade: a late duplicate `ready` must not un-verify a tunnel
+      // a `dns_verified` event already confirmed.
+      const dnsVerified = prior?.dnsVerified ?? false;
+      setEntry(port, url !== undefined ? { state: 'ready', url, dnsVerified } : { state: 'ready', dnsVerified });
+      break;
+    }
     case 'dns_verified': {
       const url = event.url ?? usePortTunnelsStore.getState().byPort[port]?.url;
-      setEntry(port, url !== undefined ? { state: 'ready', url } : { state: 'ready' });
+      setEntry(
+        port,
+        url !== undefined ? { state: 'ready', url, dnsVerified: true } : { state: 'ready', dnsVerified: true },
+      );
       break;
     }
     case 'error':
@@ -138,11 +180,21 @@ export function applyPortTunnelEvent(event: DaemonEvent): void {
   }
 }
 
-/** Replace the live entries with a REST snapshot. Does not touch `generation`. */
+/**
+ * Replace the live entries with a REST snapshot. Does not touch `generation`.
+ * A snapshot only ever reports a tunnel already `ready`, so it's already past
+ * DNS verification — the seed can't observe the `starting`→`ready` transition
+ * the WS stream does.
+ */
 export function applyPortTunnelSnapshot(tunnels: PortTunnelInfo[]): void {
   const byPort: Record<number, PortTunnelEntry> = {};
   for (const t of tunnels) {
-    byPort[t.port] = t.url !== undefined ? { state: t.state, url: t.url } : { state: t.state };
+    if (t.state === 'ready') {
+      byPort[t.port] =
+        t.url !== undefined ? { state: 'ready', url: t.url, dnsVerified: true } : { state: 'ready', dnsVerified: true };
+    } else {
+      byPort[t.port] = t.url !== undefined ? { state: t.state, url: t.url } : { state: t.state };
+    }
   }
   usePortTunnelsStore.setState({ byPort });
 }
