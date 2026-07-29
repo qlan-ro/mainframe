@@ -13,6 +13,10 @@
  * models the adapter reaches through a separate endpoint (`group`, e.g. CLIProxyAPI)
  * under theirs.
  *
+ * `locked` and `disabled` are different rules: `locked` freezes the provider row
+ * for the session, `disabled` makes the whole picker inert while a turn runs, so
+ * no model change can reach a CLI mid-answer.
+ *
  * No assistant-ui ModelContext: that targets the AI-SDK transport, which is inert
  * under our external-store runtime. Selection writes through our setAdapter/setModel
  * → PATCH /config; config is server-authoritative (the daemon's chat.updated
@@ -28,6 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MenuLabel } from '@/components/ui/menu';
 import { cn } from '@/lib/utils';
+import { RunningHint } from './RunningHint';
 
 export interface ProviderModelSelectProps {
   chat: Chat;
@@ -37,6 +42,8 @@ export interface ProviderModelSelectProps {
   model: AdapterModel | null;
   /** True once the chat has messages — locks the provider (agent) for the session. */
   locked: boolean;
+  /** True while a turn is running — the whole picker goes inert, as the effort and feature controls already do. */
+  disabled: boolean;
   setAdapter: (adapterId: string) => void;
   setModel: (model: string) => void;
 }
@@ -147,6 +154,7 @@ export function ProviderModelSelect({
   adapter,
   model,
   locked,
+  disabled,
   setAdapter,
   setModel,
 }: ProviderModelSelectProps) {
@@ -172,93 +180,103 @@ export function ProviderModelSelect({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              data-testid="composer-model-select"
-              data-tut="model"
-              aria-label={`Provider and model: ${triggerLabel}`}
-              className={cn(
-                'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-label text-muted-foreground',
-                'hover:bg-accent hover:text-accent-foreground',
-                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
-                'transition-colors focus-visible:outline-none',
-              )}
-            >
-              <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
-              <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
-                {triggerLabel}
-              </span>
-              <ChevronDown size={12} className="flex-shrink-0 text-mf-text-3" />
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top">Provider &amp; model</TooltipContent>
-      </Tooltip>
-
-      <PopoverContent
-        data-testid="composer-provider-model-popover"
-        align="start"
-        side="top"
-        sideOffset={6}
-        className="w-72"
-      >
-        <div data-testid="composer-provider-header">
-          <MenuLabel
-            trailing={
-              locked ? (
-                <span className="flex items-center gap-1 text-caption text-muted-foreground">
-                  <Lock size={12} /> Locked
+    <RunningHint active={disabled}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-testid="composer-model-select"
+                data-tut="model"
+                disabled={disabled}
+                aria-label={`Provider and model: ${triggerLabel}`}
+                className={cn(
+                  'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-label text-muted-foreground',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
+                  'transition-colors focus-visible:outline-none',
+                  'disabled:pointer-events-none disabled:opacity-40',
+                )}
+              >
+                <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
+                <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
+                  {triggerLabel}
                 </span>
-              ) : undefined
-            }
-          >
-            Provider
-          </MenuLabel>
-        </div>
+                <ChevronDown size={12} className="flex-shrink-0 text-mf-text-3" />
+              </button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top">Provider &amp; model</TooltipContent>
+        </Tooltip>
 
-        <div className="flex flex-wrap gap-1 px-[8px]">
-          {adapters.map((a) => (
-            <ProviderPill key={a.id} option={a} active={a.id === activeId} locked={locked} onSelect={onPickProvider} />
-          ))}
-        </div>
+        <PopoverContent
+          data-testid="composer-provider-model-popover"
+          align="start"
+          side="top"
+          sideOffset={6}
+          className="w-72"
+        >
+          <div data-testid="composer-provider-header">
+            <MenuLabel
+              trailing={
+                locked ? (
+                  <span className="flex items-center gap-1 text-caption text-muted-foreground">
+                    <Lock size={12} /> Locked
+                  </span>
+                ) : undefined
+              }
+            >
+              Provider
+            </MenuLabel>
+          </div>
 
-        <div className="my-2 border-t border-border" />
+          <div className="flex flex-wrap gap-1 px-[8px]">
+            {adapters.map((a) => (
+              <ProviderPill
+                key={a.id}
+                option={a}
+                active={a.id === activeId}
+                locked={locked}
+                onSelect={onPickProvider}
+              />
+            ))}
+          </div>
 
-        <MenuLabel>{active?.name ?? 'Models'} models</MenuLabel>
-        <div className="flex max-h-[264px] flex-col gap-px overflow-y-auto">
-          {current.map((m) => (
-            <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
-          ))}
-          {older.length > 0 && (
-            <>
-              <div data-testid="composer-model-older-header">
-                <MenuLabel>Older models</MenuLabel>
-              </div>
-              {older.map((m) => (
-                <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
-              ))}
-            </>
-          )}
-          {groups.map(([label, models]) => (
-            <Fragment key={label}>
-              <div data-testid={`composer-model-group-header-${groupSlug(label)}`}>
-                <MenuLabel>{label}</MenuLabel>
-              </div>
-              {models.map((m) => (
-                <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
-              ))}
-            </Fragment>
-          ))}
-        </div>
+          <div className="my-2 border-t border-border" />
 
-        <p data-testid="composer-provider-footer" className="px-[8px] pt-2 text-caption text-muted-foreground">
-          {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
-        </p>
-      </PopoverContent>
-    </Popover>
+          <MenuLabel>{active?.name ?? 'Models'} models</MenuLabel>
+          <div className="flex max-h-[264px] flex-col gap-px overflow-y-auto">
+            {current.map((m) => (
+              <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
+            ))}
+            {older.length > 0 && (
+              <>
+                <div data-testid="composer-model-older-header">
+                  <MenuLabel>Older models</MenuLabel>
+                </div>
+                {older.map((m) => (
+                  <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
+                ))}
+              </>
+            )}
+            {groups.map(([label, models]) => (
+              <Fragment key={label}>
+                <div data-testid={`composer-model-group-header-${groupSlug(label)}`}>
+                  <MenuLabel>{label}</MenuLabel>
+                </div>
+                {models.map((m) => (
+                  <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
+                ))}
+              </Fragment>
+            ))}
+          </div>
+
+          <p data-testid="composer-provider-footer" className="px-[8px] pt-2 text-caption text-muted-foreground">
+            {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
+          </p>
+        </PopoverContent>
+      </Popover>
+    </RunningHint>
   );
 }

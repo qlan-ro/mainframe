@@ -1,10 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "preview-bridge-capability",
-  "description": "Preview child webviews load remote origins (the user's dev server or tunnel), so their IPC is denied by default. Grant exactly the four preview-bridge callbacks — picker/navigation results and the scheme-allowlisted external opener — and nothing else.",
+  "description": "Preview and URL tabs load arbitrary user-named http/https origins in remote child webviews, so their IPC is denied by default unless granted here. Every http(s) origin may call the four preview-bridge callbacks — picker/navigation results and the scheme-allowlisted external opener. No other scheme matches, since the scheme component of each pattern is literal. Accepted risk: a hostile page can fabricate an inspect-result payload that reaches the agent's context.",
   "webviews": ["preview-*"],
   "remote": {
-    "urls": ["http://localhost:*", "http://127.0.0.1:*", "https://*.trycloudflare.com"]
+    "urls": ["http://*:*", "https://*:*"]
   },
   "permissions": [
     "preview-bridge:allow-inspect-result",

@@ -1,4 +1,5 @@
-import { ChevronRight, Code2, Eye, FileText, GitCompare, Terminal } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Code2, Eye, FileText, GitCompare, Globe, Terminal } from 'lucide-react';
 import type { SurfaceId } from '@/store/layout';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { MenuDivider, MenuLabel } from '@/components/ui/menu';
@@ -6,6 +7,7 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { useRecentFiles } from '@/features/files/use-recent-files';
+import { RunUrlEntry } from './RunUrlEntry';
 
 interface RowProps {
   testid: string;
@@ -76,13 +78,26 @@ function FilesPickerContent() {
   );
 }
 
-/** Run-surface picker content: a New-terminal row + the launch-config list. */
+/** Run-surface picker content: Open-URL + New-terminal rows, then the launch-config list. */
 function RunPickerContent() {
+  const [urlEntryOpen, setUrlEntryOpen] = useState(false);
   const { projectId, chatId } = useActiveIdentity();
   const port = useDaemonPort();
   const { configs, handleLaunch } = useLaunchActions(port, projectId ?? undefined, chatId ?? undefined);
   return (
     <>
+      {urlEntryOpen ? (
+        <div className="flex px-[12px] py-[8px]">
+          <RunUrlEntry onDone={() => setUrlEntryOpen(false)} />
+        </div>
+      ) : (
+        <PickerRow
+          testid="run-picker-open-url"
+          icon={<Globe size={14} className="flex-shrink-0 text-mf-surface-run" />}
+          label="Open URL…"
+          onClick={() => setUrlEntryOpen(true)}
+        />
+      )}
       <PickerRow
         testid="run-picker-new-terminal"
         icon={<Terminal size={14} className="flex-shrink-0 text-mf-term-cyan" />}

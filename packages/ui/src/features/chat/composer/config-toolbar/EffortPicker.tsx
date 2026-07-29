@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { effortOptions, displayEffort } from '@/lib/model-tuning';
+import { RunningHint } from './RunningHint';
 
 export interface EffortPickerProps {
   chat: Chat;
@@ -42,55 +43,57 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
   const triggerLabel = selectedOption?.label ?? current;
 
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              data-testid="composer-effort-select"
-              disabled={isDisabled}
-              aria-label={`Effort: ${triggerLabel}`}
-              className={[
-                'flex h-[20px] shrink-0 items-center justify-center gap-[3px] px-[6px]',
-                '@[560px]:justify-start @[560px]:gap-[5px] @[560px]:pl-[8px] @[560px]:pr-[7px]',
-                'rounded-[11px] border-[0.5px] border-border text-caption text-muted-foreground',
-                'hover:bg-accent hover:text-accent-foreground',
-                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
-                'transition-colors',
-                'disabled:pointer-events-none',
-                'disabled:opacity-40',
-                'focus-visible:outline-none',
-              ].join(' ')}
-            >
-              <Gauge size={12} className="shrink-0" />
-              <span className="hidden @[560px]:inline whitespace-nowrap text-label font-medium">{triggerLabel}</span>
-              {locked && <Lock size={12} className="shrink-0 text-mf-warning" />}
-              <ChevronDown size={12} className="hidden @[560px]:inline shrink-0 text-mf-text-3" />
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top">
-          {locked ? 'Effort locked by Ultracode' : `Reasoning effort: ${triggerLabel}`}
-        </TooltipContent>
-      </Tooltip>
-
-      <DropdownMenuContent align="start" side="top" sideOffset={6} className="min-w-40">
-        {options.map((option) => (
-          <Tooltip key={option.id}>
-            <TooltipTrigger asChild>
-              <DropdownMenuItem
-                data-testid={`composer-effort-select-option-${option.id}`}
-                onSelect={() => setEffort(option.id as EffortLevel)}
-                className={option.id === current ? 'bg-mf-selection text-foreground font-medium' : ''}
+    <RunningHint active={disabled}>
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                data-testid="composer-effort-select"
+                disabled={isDisabled}
+                aria-label={`Effort: ${triggerLabel}`}
+                className={[
+                  'flex h-[20px] shrink-0 items-center justify-center gap-[3px] px-[6px]',
+                  '@[560px]:justify-start @[560px]:gap-[5px] @[560px]:pl-[8px] @[560px]:pr-[7px]',
+                  'rounded-[11px] border-[0.5px] border-border text-caption text-muted-foreground',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
+                  'transition-colors',
+                  'disabled:pointer-events-none',
+                  'disabled:opacity-40',
+                  'focus-visible:outline-none',
+                ].join(' ')}
               >
-                {option.label}
-              </DropdownMenuItem>
-            </TooltipTrigger>
-            {option.description ? <TooltipContent side="right">{option.description}</TooltipContent> : null}
-          </Tooltip>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+                <Gauge size={12} className="shrink-0" />
+                <span className="hidden @[560px]:inline whitespace-nowrap text-label font-medium">{triggerLabel}</span>
+                {locked && <Lock size={12} className="shrink-0 text-mf-warning" />}
+                <ChevronDown size={12} className="hidden @[560px]:inline shrink-0 text-mf-text-3" />
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {locked ? 'Effort locked by Ultracode' : `Reasoning effort: ${triggerLabel}`}
+          </TooltipContent>
+        </Tooltip>
+
+        <DropdownMenuContent align="start" side="top" sideOffset={6} className="min-w-40">
+          {options.map((option) => (
+            <Tooltip key={option.id}>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem
+                  data-testid={`composer-effort-select-option-${option.id}`}
+                  onSelect={() => setEffort(option.id as EffortLevel)}
+                  className={option.id === current ? 'bg-mf-selection text-foreground font-medium' : ''}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              {option.description ? <TooltipContent side="right">{option.description}</TooltipContent> : null}
+            </Tooltip>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </RunningHint>
   );
 }

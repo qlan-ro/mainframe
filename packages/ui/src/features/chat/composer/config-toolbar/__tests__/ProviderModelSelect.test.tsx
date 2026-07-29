@@ -23,6 +23,8 @@
  *  6. Clicking an installed, non-active provider pill calls setAdapter with
  *     that adapter's id
  *  7. A model with isDefault=true includes "default" in its row text
+ *  8. disabled=true (mid-turn) disables the trigger and blocks the popover
+ *     from opening, matching the effort/features controls' running-inertness
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -103,6 +105,7 @@ interface RenderProps {
   adapter?: AdapterInfo | null;
   model?: AdapterModel | null;
   locked?: boolean;
+  disabled?: boolean;
   setAdapter?: (id: string) => void;
   setModel?: (id: string) => void;
 }
@@ -115,6 +118,7 @@ function renderSelect(props: RenderProps = {}) {
   const adapter = props.adapter !== undefined ? props.adapter : ADAPTER_CLAUDE;
   const model = props.model !== undefined ? props.model : SONNET;
   const locked = props.locked ?? false;
+  const disabled = props.disabled ?? false;
 
   render(
     <TooltipProvider>
@@ -124,6 +128,7 @@ function renderSelect(props: RenderProps = {}) {
         adapter={adapter}
         model={model}
         locked={locked}
+        disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
       />
@@ -425,7 +430,42 @@ describe('ProviderModelSelect — default model shows "default" marker', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Older models sit under their own label, after the current ones
+// 8. disabled=true (mid-turn) makes the whole picker inert
+// ---------------------------------------------------------------------------
+
+describe('ProviderModelSelect — disabled prop makes the picker inert mid-turn', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('disabled=true renders the trigger with the disabled attribute', () => {
+    renderSelect({ disabled: true });
+
+    expect(screen.getByTestId('composer-model-select')).toBeDisabled();
+  });
+
+  it('disabled=true blocks the popover from opening and never calls setModel', async () => {
+    const setModel = vi.fn();
+    renderSelect({ disabled: true, setModel });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-provider-model-popover')).not.toBeInTheDocument();
+    expect(setModel).not.toHaveBeenCalled();
+  });
+
+  it('disabled=false (default) leaves the trigger enabled and the popover openable', async () => {
+    renderSelect({});
+
+    const trigger = screen.getByTestId('composer-model-select');
+    expect(trigger).not.toBeDisabled();
+
+    await userEvent.click(trigger);
+
+    expect(screen.getByTestId('composer-provider-model-popover')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Older models sit under their own label, after the current ones
 // ---------------------------------------------------------------------------
 
 const OPUS_41: AdapterModel = {

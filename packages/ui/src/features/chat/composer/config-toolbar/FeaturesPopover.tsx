@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MenuLabel } from '@/components/ui/menu';
 import { visibleFeatures, effectiveFeature } from '@/lib/model-tuning';
+import { RunningHint } from './RunningHint';
 
 export interface FeaturesPopoverProps {
   chat: Chat;
@@ -63,52 +64,60 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
   const hasActive = features.some((f) => effectiveFeature(chat, providerDefaults, f.key));
 
   return (
-    <Popover>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              data-testid="composer-features-trigger"
-              disabled={disabled}
-              aria-label="Feature settings"
-              className={[
-                'relative flex h-[20px] w-[26px] shrink-0 items-center justify-center',
-                'rounded-sm border-[0.5px] border-border text-muted-foreground',
-                'hover:bg-accent hover:text-accent-foreground',
-                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
-                'transition-colors',
-                'disabled:pointer-events-none',
-                'disabled:opacity-40',
-                'focus-visible:outline-none',
-              ].join(' ')}
-            >
-              <SlidersHorizontal size={12} />
-              {hasActive && (
-                <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
-              )}
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top">Feature settings</TooltipContent>
-      </Tooltip>
+    <RunningHint active={disabled}>
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-testid="composer-features-trigger"
+                disabled={disabled}
+                aria-label="Feature settings"
+                className={[
+                  'relative flex h-[20px] w-[26px] shrink-0 items-center justify-center',
+                  'rounded-sm border-[0.5px] border-border text-muted-foreground',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
+                  'transition-colors',
+                  'disabled:pointer-events-none',
+                  'disabled:opacity-40',
+                  'focus-visible:outline-none',
+                ].join(' ')}
+              >
+                <SlidersHorizontal size={12} />
+                {hasActive && (
+                  <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
+                )}
+              </button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top">Feature settings</TooltipContent>
+        </Tooltip>
 
-      <PopoverContent data-testid="composer-features-popover" align="start" side="top" sideOffset={6} className="w-64">
-        <MenuLabel>{model.label ?? 'Model'} features</MenuLabel>
-        <div className="divide-y divide-border">
-          {features.map((f) => (
-            <FeatureRow
-              key={f.key}
-              featureKey={f.key}
-              label={f.label}
-              desc={f.desc}
-              checked={effectiveFeature(chat, providerDefaults, f.key)}
-              disabled={disabled}
-              onToggle={setFeature}
-            />
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+        <PopoverContent
+          data-testid="composer-features-popover"
+          align="start"
+          side="top"
+          sideOffset={6}
+          className="w-64"
+        >
+          <MenuLabel>{model.label ?? 'Model'} features</MenuLabel>
+          <div className="divide-y divide-border">
+            {features.map((f) => (
+              <FeatureRow
+                key={f.key}
+                featureKey={f.key}
+                label={f.label}
+                desc={f.desc}
+                checked={effectiveFeature(chat, providerDefaults, f.key)}
+                disabled={disabled}
+                onToggle={setFeature}
+              />
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </RunningHint>
   );
 }

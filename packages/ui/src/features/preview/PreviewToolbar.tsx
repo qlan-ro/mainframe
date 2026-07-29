@@ -5,11 +5,8 @@ import { PreviewDeviceToggle } from './PreviewDeviceToggle';
 import { PreviewCaptureCluster } from './PreviewCaptureCluster';
 
 interface PreviewToolbarProps {
-  tabId: string;
-  port: number | null;
-  configName: string | undefined;
-  projectId: string | undefined;
-  daemonPort: number;
+  /** The address the URL bar shows until the webview navigates elsewhere. */
+  seedUrl: string | null;
   status: LaunchProcessStatus | null;
   device: 'desktop' | 'mobile';
   onDeviceChange: (d: 'desktop' | 'mobile') => void;
@@ -25,8 +22,7 @@ interface PreviewToolbarProps {
 }
 
 export function PreviewToolbar({
-  tabId: _tabId,
-  port,
+  seedUrl,
   status,
   device,
   onDeviceChange,
@@ -48,7 +44,7 @@ export function PreviewToolbar({
       className="flex h-[38px] flex-shrink-0 items-center gap-[8px] [border-bottom:0.5px_solid_var(--border)] bg-background px-[8px]"
     >
       <PreviewRunControl status={status} onRun={onRun} onStop={onStop} onRestart={onRestart} />
-      <PreviewUrlBar handle={handle} port={port} isRunning={isRunning} />
+      <PreviewUrlBar handle={handle} seedUrl={seedUrl} enabled={isRunning} />
       <PreviewDeviceToggle device={device} onChange={onDeviceChange} />
       <PreviewCaptureCluster
         isRunning={isRunning}
