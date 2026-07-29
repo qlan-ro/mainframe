@@ -28,11 +28,7 @@ async function renderToolbar(status: LaunchProcessStatus | null) {
   const { PreviewToolbar } = await import('../PreviewToolbar');
   render(
     <PreviewToolbar
-      tabId="t1"
-      port={3000}
-      configName="dev"
-      projectId="p1"
-      daemonPort={31415}
+      seedUrl="http://localhost:3000"
       status={status}
       device="desktop"
       onDeviceChange={onDeviceChange}

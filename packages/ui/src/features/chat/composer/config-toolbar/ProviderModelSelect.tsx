@@ -8,7 +8,8 @@
  * adapters (`installed === false`) render locked + muted; once the chat has
  * messages the WHOLE row locks (switching agents mid-thread would orphan the CLI
  * session — mirrors the desktop invariant). Bottom section: the active provider's
- * models, each with its description and a `· default` marker.
+ * models, each with its description and a `· default` marker; the older-but-still-active
+ * models the CLI's own picker hides (`isOlder`) follow under their own label.
  *
  * `locked` and `disabled` are different rules: `locked` freezes the provider row
  * for the session, `disabled` makes the whole picker inert while a turn runs, so
@@ -145,6 +146,8 @@ export function ProviderModelSelect({
   const active = adapter ?? adapters.find((a) => a.installed) ?? adapters[0] ?? null;
   const currentModelId = model?.id ?? chat.model ?? '';
   const rows = modelRows(active, chat.model);
+  const current = rows.filter((m) => !m.isOlder);
+  const older = rows.filter((m) => m.isOlder);
   const triggerLabel = rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
   const activeId = chat.adapterId ?? active?.id ?? '';
 
@@ -223,10 +226,20 @@ export function ProviderModelSelect({
           <div className="my-2 border-t border-border" />
 
           <MenuLabel>{active?.name ?? 'Models'} models</MenuLabel>
-          <div className="flex flex-col gap-px">
-            {rows.map((m) => (
+          <div className="flex max-h-[264px] flex-col gap-px overflow-y-auto">
+            {current.map((m) => (
               <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
             ))}
+            {older.length > 0 && (
+              <>
+                <div data-testid="composer-model-older-header">
+                  <MenuLabel>Older models</MenuLabel>
+                </div>
+                {older.map((m) => (
+                  <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
+                ))}
+              </>
+            )}
           </div>
 
           <p data-testid="composer-provider-footer" className="px-[8px] pt-2 text-caption text-muted-foreground">

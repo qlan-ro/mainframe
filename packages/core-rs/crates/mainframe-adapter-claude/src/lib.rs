@@ -28,6 +28,8 @@ pub mod history_converters;
 pub mod history_subagents;
 pub mod history_tool_result;
 pub mod messages;
+pub mod models;
+pub mod permission_updates;
 pub mod plan_mode_handler;
 pub mod pr_detection;
 pub mod probe_models;

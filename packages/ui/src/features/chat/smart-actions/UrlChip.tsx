@@ -7,7 +7,14 @@
  * On a local daemon the chip is a plain opener and the word "tunnel" appears
  * nowhere — same port, different machine, different meaning.
  */
-import { ExternalLink, Globe, Unplug } from 'lucide-react';
+import { AppWindow, ExternalLink, Globe, Unplug } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useUrlTunnel } from './use-url-tunnel';
 import type { PortTunnelEntry } from '@/store/port-tunnels';
 
@@ -54,17 +61,34 @@ export function UrlChip({ href, port }: UrlChipProps) {
     <span className={CHIP_CLASS} data-smart-action-port={port}>
       <span className="font-mono text-caption text-primary">{href}</span>
       {badge && <span className={`${BADGE_CLASS} ${badge.className}`}>{badge.label}</span>}
-      <button
-        type="button"
-        data-testid="smart-action-url-open"
-        title={openLabel}
-        aria-label={openLabel}
-        disabled={busy}
-        className={ICON_BUTTON_CLASS}
-        onClick={open}
-      >
-        <OpenIcon className="size-3.5" />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            data-testid="smart-action-url-open"
+            title={openLabel}
+            aria-label={openLabel}
+            disabled={busy}
+            className={ICON_BUTTON_CLASS}
+          >
+            <OpenIcon className="size-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {/* The tab owns tunnelling — this path must not start one. */}
+          <DropdownMenuItem
+            data-testid="smart-action-url-open-in-app"
+            onSelect={() => emitSurfaceIntent({ type: 'open-url-tab', url: href })}
+          >
+            <AppWindow />
+            Open in Mainframe
+          </DropdownMenuItem>
+          <DropdownMenuItem data-testid="smart-action-url-open-browser" onSelect={open}>
+            <ExternalLink />
+            Open in browser
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {canStop && (
         <button
           type="button"

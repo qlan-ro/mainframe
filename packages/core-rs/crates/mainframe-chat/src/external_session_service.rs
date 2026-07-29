@@ -12,7 +12,7 @@ use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
-use crate::title_generator::derive_title_from_message;
+use crate::title_generator::{derive_title_from_message, resolve_title_binary};
 
 /// 5 minutes.
 const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
@@ -350,10 +350,10 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         return;
     }
 
-    let binary = deps
-        .settings_get("provider", &format!("{adapter_id}.titleBinary"))
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "claude".to_string());
+    let binary = resolve_title_binary(
+        deps.settings_get("provider", &format!("{adapter_id}.titleBinary")),
+        adapter_id,
+    );
     let Some(title) = deps.generate_title(adapter_id, content, &binary).await else {
         return;
     };

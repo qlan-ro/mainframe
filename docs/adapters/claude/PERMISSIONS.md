@@ -287,16 +287,16 @@ destination}`), `setMode` (`{mode, destination}`), `addDirectories`,
 `localSettings` persist to disk; `session` and `cliArg` are in-memory. Echoing
 `permission_suggestions` back verbatim mirrors the CLI's own "don't ask again"
 behavior — note Bash suggestions arrive with `destination: 'localSettings'`
-(disk, repo root) while file/dir suggestions arrive with `session`; rewrite
-the destination to `session` for an ephemeral grant.
+(disk, repo root) while file/dir suggestions arrive with `session`; Mainframe
+forwards each suggestion's declared destination verbatim, so an ephemeral
+grant is whatever the CLI itself scoped as `session`.
 
-> **Adapter mismatch (flagged, not fixed).** Mainframe's
-> `session.rs::promote_to_local_settings` (~`:212-232`) rewrites the
-> destination the other way — `session` → `localSettings` — behind a comment
-> asserting the CLI "always use[s] `destination:"session"`". The leak says the
-> opposite per suggestion kind, as documented above. The practical effect is
-> that an ephemeral file-write grant is persisted to disk. See finding 7 in the
-> [research doc](../../research/2026-07-25-todo-241-claude-cli-reverse-engineer.md).
+> **Fixed in #283.** Mainframe's `permission_updates.rs::keep_mode_changes_session_scoped`
+> forwards each update's declared destination as-is, with one added invariant: a
+> `setMode` update is always forwarded `session`-scoped, so a permission-mode
+> change is never persisted as the project default. See finding 7 in the
+> [research doc](../../research/2026-07-25-todo-241-claude-cli-reverse-engineer.md)
+> for the mismatch this closed.
 
 **`SandboxNetworkAccess`**: sandboxed Bash emits a synthetic `can_use_tool`
 with `tool_name: "SandboxNetworkAccess"` mid-execution

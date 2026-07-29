@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -78,6 +79,16 @@ function openButton(): HTMLElement {
   return screen.getByTestId('smart-action-url-open');
 }
 
+/**
+ * The open control is a menu since #281 — every browser-open assertion below
+ * goes through it. This file stays about tunnelling; the menu itself (row order,
+ * the in-app row) is covered separately.
+ */
+async function openInBrowser(trigger: HTMLElement = openButton()): Promise<void> {
+  await userEvent.click(trigger);
+  await userEvent.click(await screen.findByTestId('smart-action-url-open-browser'));
+}
+
 /** A start POST that never settles — the daemon answers over WS long before it resolves. */
 function pendingStart(): void {
   startPortTunnel.mockReturnValue(new Promise<{ url: string }>(() => {}));
@@ -101,7 +112,7 @@ describe('UrlChip — local daemon', () => {
     daemonIsLocal = true;
   });
 
-  it('opens the localhost URL directly and never mentions tunnelling', () => {
+  it('opens the localhost URL directly and never mentions tunnelling', async () => {
     const { container } = renderChip();
 
     expect(openButton()).toHaveAttribute('title', 'Open');
@@ -110,7 +121,7 @@ describe('UrlChip — local daemon', () => {
     expect(screen.queryByTestId('smart-action-url-stop-tunnel')).toBeNull();
     expect(container.textContent).toBe('http://localhost:5173/app');
 
-    fireEvent.click(openButton());
+    await openInBrowser();
 
     expect(openExternal).toHaveBeenCalledWith(HREF);
     expect(startPortTunnel).not.toHaveBeenCalled();
@@ -132,12 +143,12 @@ describe('UrlChip — local daemon', () => {
 });
 
 describe('UrlChip — remote daemon, first open', () => {
-  it('asks the daemon to tunnel the port for the active chat', () => {
+  it('asks the daemon to tunnel the port for the active chat', async () => {
     pendingStart();
     renderChip();
 
     expect(openButton()).toHaveAttribute('title', 'Tunnel and open');
-    fireEvent.click(openButton());
+    await openInBrowser();
 
     expect(startPortTunnel).toHaveBeenCalledTimes(1);
     expect(startPortTunnel).toHaveBeenCalledWith(31415, { port: 5173, chatId: 'chat-1' });
@@ -146,10 +157,10 @@ describe('UrlChip — remote daemon, first open', () => {
     expect(screen.getByText('tunnelling…')).toBeInTheDocument();
   });
 
-  it('reaches tunnelled and opens the event URL while the start POST is still pending', () => {
+  it('reaches tunnelled and opens the event URL while the start POST is still pending', async () => {
     pendingStart();
     renderChip();
-    fireEvent.click(openButton());
+    await openInBrowser();
 
     emit({ state: 'starting', label: 'port:5173' });
     expect(screen.getByText('tunnelling…')).toBeInTheDocument();
@@ -164,10 +175,10 @@ describe('UrlChip — remote daemon, first open', () => {
     expect(openButton()).toHaveAttribute('title', 'Reopen tunnel URL');
   });
 
-  it('warns that the link is public exactly once', () => {
+  it('warns that the link is public exactly once', async () => {
     pendingStart();
     renderChip();
-    fireEvent.click(openButton());
+    await openInBrowser();
     emit({ state: 'ready', label: 'port:5173', url: TUNNEL_URL });
 
     expect(toastSuccess).toHaveBeenCalledTimes(1);
@@ -176,10 +187,10 @@ describe('UrlChip — remote daemon, first open', () => {
     );
   });
 
-  it('does not reopen on the dns_verified event that follows ready', () => {
+  it('does not reopen on the dns_verified event that follows ready', async () => {
     pendingStart();
     renderChip();
-    fireEvent.click(openButton());
+    await openInBrowser();
     emit({ state: 'ready', label: 'port:5173', url: TUNNEL_URL });
     emit({ state: 'dns_verified', label: 'port:5173', url: TUNNEL_URL, dnsVerified: true });
 
@@ -188,12 +199,12 @@ describe('UrlChip — remote daemon, first open', () => {
     expect(screen.getByText('tunnelled')).toBeInTheDocument();
   });
 
-  it('does nothing without a chat in scope', () => {
+  it('does nothing without a chat in scope', async () => {
     chatId = undefined;
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderChip();
 
-    fireEvent.click(openButton());
+    await openInBrowser();
 
     expect(startPortTunnel).not.toHaveBeenCalled();
     expect(openExternal).not.toHaveBeenCalled();
@@ -203,7 +214,7 @@ describe('UrlChip — remote daemon, first open', () => {
 });
 
 describe('UrlChip — a second chip on the same port', () => {
-  it('shares the tunnel state but only the clicked chip opens a window', () => {
+  it('shares the tunnel state but only the clicked chip opens a window', async () => {
     pendingStart();
     render(
       <TooltipProvider>
@@ -212,7 +223,7 @@ describe('UrlChip — a second chip on the same port', () => {
       </TooltipProvider>,
     );
 
-    fireEvent.click(screen.getAllByTestId('smart-action-url-open')[0]!);
+    await openInBrowser(screen.getAllByTestId('smart-action-url-open')[0]!);
     emit({ state: 'ready', label: 'port:5173', url: TUNNEL_URL });
 
     expect(screen.getAllByText('tunnelled')).toHaveLength(2);
@@ -223,11 +234,11 @@ describe('UrlChip — a second chip on the same port', () => {
 });
 
 describe('UrlChip — reopen', () => {
-  it('opens the known tunnel URL without starting a second tunnel', () => {
+  it('opens the known tunnel URL without starting a second tunnel', async () => {
     renderChip();
     emit({ state: 'ready', label: 'port:5173', url: TUNNEL_URL });
 
-    fireEvent.click(openButton());
+    await openInBrowser();
 
     expect(openExternal).toHaveBeenCalledWith(TUNNEL_URL);
     expect(startPortTunnel).not.toHaveBeenCalled();
@@ -292,7 +303,7 @@ describe('UrlChip — failed start', () => {
     startPortTunnel.mockRejectedValue(new Error('cloudflared is not installed'));
     renderChip();
 
-    fireEvent.click(openButton());
+    await openInBrowser();
     await vi.waitFor(() => expect(screen.getByText('tunnel failed')).toBeInTheDocument());
 
     expect(toastError).toHaveBeenCalledTimes(1);
@@ -308,10 +319,10 @@ describe('UrlChip — failed start', () => {
     expect(toastError).toHaveBeenCalledTimes(1);
   });
 
-  it('re-enables the button on a daemon error event while the POST hangs', () => {
+  it('re-enables the button on a daemon error event while the POST hangs', async () => {
     pendingStart();
     renderChip();
-    fireEvent.click(openButton());
+    await openInBrowser();
     emit({ state: 'starting', label: 'port:5173' });
     expect(openButton()).toBeDisabled();
 
@@ -321,10 +332,10 @@ describe('UrlChip — failed start', () => {
     expect(openButton()).toBeEnabled();
   });
 
-  it('does not open a window when a later ready arrives after the failure', () => {
+  it('does not open a window when a later ready arrives after the failure', async () => {
     pendingStart();
     renderChip();
-    fireEvent.click(openButton());
+    await openInBrowser();
     emit({ state: 'error', label: 'port:5173', error: 'tunnel died' });
     emit({ state: 'ready', label: 'port:5173', url: TUNNEL_URL });
 
@@ -342,12 +353,12 @@ describe('UrlChip — reload seed', () => {
     expect(openButton()).toBeDisabled();
   });
 
-  it('shows a seeded ready tunnel as tunnelled and reopens it without a POST', () => {
+  it('shows a seeded ready tunnel as tunnelled and reopens it without a POST', async () => {
     act(() => applyPortTunnelSnapshot([{ port: PORT, state: 'ready', url: TUNNEL_URL }]));
     renderChip();
 
     expect(screen.getByText('tunnelled')).toBeInTheDocument();
-    fireEvent.click(openButton());
+    await openInBrowser();
 
     expect(openExternal).toHaveBeenCalledWith(TUNNEL_URL);
     expect(startPortTunnel).not.toHaveBeenCalled();
