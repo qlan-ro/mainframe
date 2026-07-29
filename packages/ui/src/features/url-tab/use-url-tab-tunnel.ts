@@ -127,15 +127,22 @@ export function useUrlTabTunnel({
       .then(({ url: startUrl }) => {
         if (attemptRef.current === at) setFlags((f) => ({ ...f, startUrl }));
       })
-      .catch((err: unknown) => reportPortTunnelError(port, message(err)));
+      .catch((err: unknown) => {
+        // A rejected start created nothing on the daemon to own — revoke the
+        // optimistic claim so a later `ready` entry (someone else's tunnel)
+        // is never mistaken for this tab's to stop (AC12/D10).
+        setOwnedPort((p) => (p === port ? null : p));
+        reportPortTunnelError(port, message(err));
+      });
   }, [isPending, port, daemonPort, chatId, httpPort, attempt, entry]);
 
   // The tunnel this tab started can be stopped out from under it (the chat
-  // chip's Stop, or the daemon reaping it) — a later `ready` entry on the
-  // same port belongs to whoever restarted it, never to this tab, so the
-  // claim is dropped the moment the store reports the owned tunnel gone.
+  // chip's Stop, or the daemon reaping it) or die with a daemon-side `error`
+  // entry (cloudflared crash) — either way the daemon holds no live tunnel of
+  // this tab's on the port, so a later `ready` entry belongs to whoever
+  // restarted it, never to this tab, and the claim is dropped.
   useEffect(() => {
-    if (target.kind === 'stopped' && ownedPort === port) setOwnedPort(null);
+    if ((target.kind === 'stopped' || target.kind === 'failed') && ownedPort === port) setOwnedPort(null);
   }, [target.kind, ownedPort, port]);
 
   useEffect(() => {

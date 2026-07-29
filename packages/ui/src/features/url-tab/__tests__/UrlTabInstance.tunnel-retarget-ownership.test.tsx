@@ -196,3 +196,67 @@ describe('UrlTabInstance — a port abandoned via retarget is never re-adopted a
     expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
   });
 });
+
+describe('UrlTabInstance — a start POST that itself fails never leaves this tab owning the port', () => {
+  it('does not stop a tunnel a different consumer later starts on the same port', async () => {
+    vi.mocked(startPortTunnel).mockRejectedValueOnce(new Error('daemon says no'));
+
+    render(<UrlTabInstance tabId="t1" url="http://localhost:5173/" visible />, {
+      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+    });
+    await act(async () => {});
+    expect(startPortTunnel).toHaveBeenCalledWith(31415, { port: 5173, chatId: 'chat-1' });
+
+    // The chat chip starts its own tunnel on the same port after this tab's start failed.
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: { ...s.byPort, 5173: { state: 'starting' } },
+        generation: s.generation + 1,
+      }));
+    });
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: {
+          ...s.byPort,
+          5173: { state: 'ready', url: 'https://chip-owned.trycloudflare.com', dnsVerified: true },
+        },
+        generation: s.generation + 1,
+      }));
+    });
+
+    releaseUrlTunnelConsumers(['t1']);
+    expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
+  });
+});
+
+describe('UrlTabInstance — a live tunnel that dies with a daemon-side error is never this tab’s to stop once restarted', () => {
+  it('does not stop a tunnel a different consumer restarts after this tab’s own tunnel errors out', async () => {
+    render(<UrlTabInstance tabId="t1" url="http://localhost:5173/" visible />, {
+      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+    });
+    await act(async () => {});
+    expect(startPortTunnel).toHaveBeenCalledWith(31415, { port: 5173, chatId: 'chat-1' });
+
+    // This tab's own tunnel dies with a daemon-side error entry (not a `stopped`).
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: { ...s.byPort, 5173: { state: 'error', error: 'cloudflared died' } },
+        generation: s.generation + 1,
+      }));
+    });
+
+    // A different consumer restarts a NEW tunnel on the same port.
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: {
+          ...s.byPort,
+          5173: { state: 'ready', url: 'https://restarted.trycloudflare.com', dnsVerified: true },
+        },
+        generation: s.generation + 1,
+      }));
+    });
+
+    releaseUrlTunnelConsumers(['t1']);
+    expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
+  });
+});
