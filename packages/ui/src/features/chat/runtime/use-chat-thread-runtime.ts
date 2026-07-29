@@ -34,6 +34,7 @@ import type { QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-t
 import { projectChatThreadRepository } from '../controller/project-messages';
 import { selectPermissionFront } from '../gates/select-front';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
+import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 
 // ---------------------------------------------------------------------------
 // Extras shape + brand
@@ -145,7 +146,7 @@ export function useChatThreadRuntime(
     async (message: AppendMessage): Promise<void> => {
       if (!controller.hasRemoteId()) {
         const { remoteId } = await createForLocal(controller.getThreadId(), port);
-        controller.setRemoteId(remoteId);
+        chatControllerRegistry.adopt(controller, remoteId);
       }
       await controller.sendMessage(message);
     },
