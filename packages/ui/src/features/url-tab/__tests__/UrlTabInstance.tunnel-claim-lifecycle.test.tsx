@@ -180,3 +180,37 @@ describe('UrlTabInstance — a session-switch unmount does not lose this tab’s
     expect(stopPortTunnel).toHaveBeenCalledWith(31415, 5173);
   });
 });
+
+describe('UrlTabInstance — a revocation that happens entirely while unmounted is not missed (review-fix NEW finding)', () => {
+  it('does not stop a foreign tunnel a chip or settings restarted on the same port while this tab was unmounted', async () => {
+    const { unmount } = renderTab('http://localhost:5173/');
+
+    act(() => {
+      setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true });
+    });
+    expect(screen.getByTestId('url-tab-body-loaded')).toBeInTheDocument();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+
+    // A session switch unmounts the tab without releasing it. While unmounted,
+    // the daemon drops this tab's tunnel and a foreign consumer (the chip, or
+    // the settings UI — neither registers in the URL-tab registry) starts a
+    // brand-new one on the same port. Neither write goes through this tab's
+    // own React effects, since none are mounted to run them.
+    unmount();
+    act(() => {
+      deletePortEntry(5173);
+    });
+    act(() => {
+      setPortEntry(5173, { state: 'ready', url: 'https://foreign.trycloudflare.com', dnsVerified: true });
+    });
+
+    // Remounting must not re-adopt the foreign tunnel as if this tab still
+    // owned it, and issues no new start against an already-`ready` port.
+    renderTab('http://localhost:5173/');
+    expect(screen.getByTestId('url-tab-body-loaded')).toBeInTheDocument();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+
+    releaseUrlTunnelConsumers(['t1']);
+    expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
+  });
+});
