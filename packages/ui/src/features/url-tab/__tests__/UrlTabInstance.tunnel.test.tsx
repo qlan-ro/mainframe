@@ -98,6 +98,39 @@ afterEach(() => {
   resetHostForTesting();
 });
 
+describe('UrlTabInstance — rehydrated tabs stay unmounted until first activation', () => {
+  it('requests no tunnel and mounts no webview while never visible, then does both on first activation', async () => {
+    const { rerender } = render(<UrlTabInstance tabId="t1" url={URL} visible={false} />, {
+      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+    });
+
+    expect(fakeHost.preview.mount).not.toHaveBeenCalled();
+    expect(startPortTunnel).not.toHaveBeenCalled();
+    expect(registerUrlTunnelConsumer).not.toHaveBeenCalled();
+
+    await act(async () => {
+      rerender(<UrlTabInstance tabId="t1" url={URL} visible />);
+    });
+
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+    expect(registerUrlTunnelConsumer).toHaveBeenCalled();
+    expect(fakeHost.preview.mount).toHaveBeenCalledWith(expect.anything(), TUNNEL_URL, expect.anything());
+  });
+
+  it('stays mounted once activated even after switching to another tab (visible false again)', async () => {
+    const { rerender } = render(<UrlTabInstance tabId="t1" url={URL} visible />, {
+      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+    });
+    await act(async () => {});
+    expect(fakeHost.preview.mount).toHaveBeenCalledTimes(1);
+
+    rerender(<UrlTabInstance tabId="t1" url={URL} visible={false} />);
+
+    expect(fakeHandle.destroy).not.toHaveBeenCalled();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('UrlTabInstance — tunnel adoption and ownership', () => {
   it('a fresh start owns the tunnel (D10, AC12)', () => {
     renderTab();

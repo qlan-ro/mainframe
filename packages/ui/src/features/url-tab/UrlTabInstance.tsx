@@ -36,8 +36,16 @@ export function UrlTabInstance({ tabId, url, visible, projectId }: UrlTabInstanc
   const effectiveProjectId = projectId ?? identity.projectId;
   const setUrlTabTarget = useLayoutStore((s) => s.setUrlTabTarget);
 
-  const { target, retry, reloadNonce } = useUrlTabTunnel({ tabId, url });
-  const loadUrl = target.kind === 'direct' || target.kind === 'tunnelled' ? target.url : null;
+  // A rehydrated tab must stay unmounted and tunnel-free until it is first shown
+  // (spec: "rehydrate unmounted and load on first activation") — latch true on
+  // first `visible` and never back, so switching away doesn't tear it down again.
+  const [hasBeenVisible, setHasBeenVisible] = useState(visible);
+  useEffect(() => {
+    if (visible) setHasBeenVisible(true);
+  }, [visible]);
+
+  const { target, retry, reloadNonce } = useUrlTabTunnel({ tabId, url, active: hasBeenVisible });
+  const loadUrl = hasBeenVisible && (target.kind === 'direct' || target.kind === 'tunnelled') ? target.url : null;
 
   const handle = useWebviewMount({
     url: loadUrl,

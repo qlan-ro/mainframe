@@ -18,37 +18,37 @@ const rec = (port: number, started: boolean): ConsumerRecord => ({ port, started
 
 describe('releaseConsumers', () => {
   it('stops the port when the released tab started it and is the only consumer', () => {
-    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
+    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
     const { next, stop } = releaseConsumers(state, ['tab-1']);
     expect(stop).toEqual([{ port: 5173, daemonHttpPort: 31415 }]);
     expect(next.byTab).toEqual({});
   });
 
   it('does not stop when the released tab only adopted the tunnel and is the only consumer', () => {
-    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, false));
+    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, false)).next;
     const { next, stop } = releaseConsumers(state, ['tab-1']);
     expect(stop).toEqual([]);
     expect(next.byTab).toEqual({});
   });
 
   it('does not stop while another consumer remains on the port', () => {
-    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
-    state = addConsumer(state, 'tab-2', rec(5173, false));
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    state = addConsumer(state, 'tab-2', rec(5173, false)).next;
     const { next, stop } = releaseConsumers(state, ['tab-1']);
     expect(stop).toEqual([]);
     expect(next.byTab).toEqual({ 'tab-2': rec(5173, false) });
   });
 
   it('stops the port once, not twice, when both consumers are released together', () => {
-    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
-    state = addConsumer(state, 'tab-2', rec(5173, false));
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    state = addConsumer(state, 'tab-2', rec(5173, false)).next;
     const { next, stop } = releaseConsumers(state, ['tab-1', 'tab-2']);
     expect(stop).toEqual([{ port: 5173, daemonHttpPort: 31415 }]);
     expect(next.byTab).toEqual({});
   });
 
   it('releasing an unknown tab id is a no-op and returns the same state reference', () => {
-    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
+    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
     const { next, stop } = releaseConsumers(state, ['nope']);
     expect(stop).toEqual([]);
     expect(next).toBe(state);
@@ -57,8 +57,8 @@ describe('releaseConsumers', () => {
 
 describe('clearConsumers', () => {
   it('empties the registry without producing any stops', () => {
-    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
-    state = addConsumer(state, 'tab-2', rec(8080, false));
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    state = addConsumer(state, 'tab-2', rec(8080, false)).next;
     const cleared = clearConsumers(state);
     expect(cleared.byTab).toEqual({});
   });
@@ -66,20 +66,44 @@ describe('clearConsumers', () => {
 
 describe('addConsumer — ownership persistence (D10, AC12)', () => {
   it('re-registering on the same port with started: false keeps started: true', () => {
-    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
-    state = addConsumer(state, 'tab-1', rec(5173, false));
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    state = addConsumer(state, 'tab-1', rec(5173, false)).next;
     expect(state.byTab['tab-1']).toEqual(rec(5173, true));
   });
 
   it('re-registering on a different port takes the new started verbatim: true to false', () => {
-    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true));
-    state = addConsumer(state, 'tab-1', rec(8080, false));
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    state = addConsumer(state, 'tab-1', rec(8080, false)).next;
     expect(state.byTab['tab-1']).toEqual(rec(8080, false));
   });
 
   it('re-registering on a different port takes the new started verbatim: false to true', () => {
-    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, false));
-    state = addConsumer(state, 'tab-1', rec(8080, true));
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, false)).next;
+    state = addConsumer(state, 'tab-1', rec(8080, true)).next;
     expect(state.byTab['tab-1']).toEqual(rec(8080, true));
+  });
+});
+
+describe('addConsumer — retarget releases the abandoned port (AC12/D10)', () => {
+  it('an owned port stops when its sole tab retargets to a different port', () => {
+    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    const { next, stop } = addConsumer(state, 'tab-1', rec(8080, false));
+    expect(stop).toEqual([{ port: 5173, daemonHttpPort: 31415 }]);
+    expect(next.byTab).toEqual({ 'tab-1': rec(8080, false) });
+  });
+
+  it('an owned port shared with another tab does not stop on retarget', () => {
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
+    state = addConsumer(state, 'tab-2', rec(5173, false)).next;
+    const { next, stop } = addConsumer(state, 'tab-1', rec(8080, true));
+    expect(stop).toEqual([]);
+    expect(next.byTab).toEqual({ 'tab-1': rec(8080, true), 'tab-2': rec(5173, false) });
+  });
+
+  it('an adopted (not owned) port never stops on retarget', () => {
+    const state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, false)).next;
+    const { next, stop } = addConsumer(state, 'tab-1', rec(8080, false));
+    expect(stop).toEqual([]);
+    expect(next.byTab).toEqual({ 'tab-1': rec(8080, false) });
   });
 });

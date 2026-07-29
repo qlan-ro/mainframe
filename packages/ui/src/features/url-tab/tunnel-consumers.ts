@@ -19,20 +19,30 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Register (or re-register) a URL tab's claim on a tunnelled port. Idempotent per tab id. */
+function stopTunnels(stop: Array<{ port: number; daemonHttpPort: number }>): void {
+  for (const { port, daemonHttpPort } of stop) {
+    stopPortTunnel(daemonHttpPort, port).catch((err: unknown) => {
+      console.warn(`[url-tab] failed to stop the tunnel on port ${port}`, message(err));
+    });
+  }
+}
+
+/**
+ * Register (or re-register) a URL tab's claim on a tunnelled port. Idempotent
+ * per tab id. Retargeting to a different port releases the old one first
+ * (stopping it if this tab owned it and no other consumer remains).
+ */
 export function registerUrlTunnelConsumer(tabId: string, rec: ConsumerRecord): void {
-  state = addConsumer(state, tabId, rec);
+  const { next, stop } = addConsumer(state, tabId, rec);
+  state = next;
+  stopTunnels(stop);
 }
 
 /** Release the given tabs' claims, stopping any port whose last owner just left. */
 export function releaseUrlTunnelConsumers(tabIds: string[]): void {
   const { next, stop } = releaseConsumers(state, tabIds);
   state = next;
-  for (const { port, daemonHttpPort } of stop) {
-    stopPortTunnel(daemonHttpPort, port).catch((err: unknown) => {
-      console.warn(`[url-tab] failed to stop the tunnel on port ${port}`, message(err));
-    });
-  }
+  stopTunnels(stop);
 }
 
 /** Daemon-switch cleanup: drop the registry without stopping anything (wrong-daemon risk). */

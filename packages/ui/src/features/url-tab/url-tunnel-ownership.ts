@@ -18,10 +18,28 @@ export interface ConsumerState {
 
 export const emptyConsumerState: ConsumerState = { byTab: {} };
 
-export function addConsumer(state: ConsumerState, tabId: string, rec: ConsumerRecord): ConsumerState {
+export function addConsumer(
+  state: ConsumerState,
+  tabId: string,
+  rec: ConsumerRecord,
+): {
+  next: ConsumerState;
+  stop: Array<{ port: number; daemonHttpPort: number }>;
+} {
   const existing = state.byTab[tabId];
-  // An owner (started: true) stays an owner across a same-port re-register (Retry);
-  // a port change takes the new value verbatim — the old port's ownership doesn't apply to the new one.
+  // A retarget to a different port abandons this tab's claim on the old one —
+  // release it through the same owner-and-last-consumer rule a close uses, so
+  // an owned tunnel never survives orphaned (AC12/D10).
+  if (existing !== undefined && existing.port !== rec.port) {
+    const released = releaseConsumers(state, [tabId]);
+    return { next: writeConsumer(released.next, tabId, rec), stop: released.stop };
+  }
+  return { next: writeConsumer(state, tabId, rec), stop: [] };
+}
+
+function writeConsumer(state: ConsumerState, tabId: string, rec: ConsumerRecord): ConsumerState {
+  const existing = state.byTab[tabId];
+  // An owner (started: true) stays an owner across a same-port re-register (Retry).
   const started = existing && existing.port === rec.port ? existing.started || rec.started : rec.started;
   return { byTab: { ...state.byTab, [tabId]: { ...rec, started } } };
 }

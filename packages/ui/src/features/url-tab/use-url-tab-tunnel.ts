@@ -46,7 +46,16 @@ export interface UrlTabTunnel {
   reloadNonce: number;
 }
 
-export function useUrlTabTunnel({ tabId, url }: { tabId: string; url: string }): UrlTabTunnel {
+export function useUrlTabTunnel({
+  tabId,
+  url,
+  active,
+}: {
+  tabId: string;
+  url: string;
+  /** Gates the tunnel start + ownership claim — a never-activated rehydrated tab must request neither (spec §"rehydrate unmounted and load on first activation"). */
+  active: boolean;
+}): UrlTabTunnel {
   const isLocal = useDaemonIsLocal();
   const httpPort = useDaemonPort();
   const daemonPort = useTunnelDaemonPort();
@@ -86,7 +95,10 @@ export function useUrlTabTunnel({ tabId, url }: { tabId: string; url: string }):
     if (entry !== undefined) setFlags((f) => (f.everHadEntry ? f : { ...f, everHadEntry: true }));
   }, [entry]);
 
-  const isPending = target.kind === 'pending';
+  // Nothing below this point is real until the tab has been activated at least
+  // once — a rehydrated-but-unmounted tab must request no tunnel and start no
+  // watchdog (spec: URL tabs "rehydrate unmounted and load on first activation").
+  const isPending = active && target.kind === 'pending';
 
   useEffect(() => {
     if (!isPending) return;
@@ -117,9 +129,9 @@ export function useUrlTabTunnel({ tabId, url }: { tabId: string; url: string }):
   }, [isPending, port, daemonPort, chatId, httpPort, attempt, entry]);
 
   useEffect(() => {
-    if (port === null) return;
+    if (!active || port === null) return;
     registerUrlTunnelConsumer(tabId, { port, started: owned, daemonHttpPort: httpPort });
-  }, [tabId, port, owned, httpPort]);
+  }, [active, tabId, port, owned, httpPort]);
 
   const [reloadNonce, setReloadNonce] = useState(0);
   const loadedBeforeDnsRef = useRef(false);
