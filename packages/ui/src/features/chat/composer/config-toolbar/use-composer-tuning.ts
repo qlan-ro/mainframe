@@ -6,11 +6,8 @@
  * Three independent concerns:
  *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
  *                         catalog store, seeded/kept fresh at the app root (adapters-seed).
- *   useProviderDefaults — reads the requested adapter's ProviderConfig (a structural
- *                         TuningDefaults, D-D) live from the shared settings store —
- *                         the same store the Settings pane edits optimistically — so a
- *                         provider-default change reflects in the composer immediately.
- *                         Seeds the store via one fetch when it hasn't been loaded yet.
+ *   useProviderDefaults — re-exported from ./use-provider-defaults: the adapter's
+ *                         saved ProviderConfig, live from the shared settings store.
  *   useComposerTuning   — fetches the current chat, resolves the model, and
  *                         exposes setEffort/setFeature with optimistic updates.
  *
@@ -21,9 +18,12 @@
  * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
  * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
  * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
+ *
+ * setEffort/setFeature/setModel route their live path through the mid-session
+ * warning gate (see ./use-tuning-warning), so no control can bypass it.
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type {
   AdapterInfo,
@@ -35,13 +35,13 @@ import type {
   ProviderConfig,
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
-import { getProviderSettings } from '@/lib/api/settings';
-import { useSettingsStore } from '@/store/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
+import { useProviderDefaults } from './use-provider-defaults';
+import { useTuningWarning, type TuningWarningHook } from './use-tuning-warning';
 
 // ---------------------------------------------------------------------------
 // useAdapters — the shared store selector (seeded/kept fresh at the app root;
@@ -51,32 +51,8 @@ import { synthesizeDraftChat } from './synthesize-draft-chat';
 
 export { useAdapters } from '@/store/adapters';
 
-// ---------------------------------------------------------------------------
-// useProviderDefaults
-// ---------------------------------------------------------------------------
-
-/**
- * Returns this adapter's ProviderConfig (a structural TuningDefaults, D-D) live from
- * the shared settings store, or undefined while loading, on error, or when the adapter
- * has no saved config. The Settings pane writes the same store optimistically on every
- * edit, so provider-default changes reflect here without a reload. Seeds the store with
- * one fetch when nothing has loaded it yet (composer mounted, dialog never opened).
- */
-export function useProviderDefaults(adapterId: string | null): ProviderConfig | undefined {
-  const extras = useChatExtras();
-  const port = extras?.port;
-  const config = useSettingsStore((s) => (adapterId != null ? s.providers[adapterId] : undefined));
-
-  useEffect(() => {
-    if (port == null) return;
-    if (Object.keys(useSettingsStore.getState().providers).length > 0) return;
-    getProviderSettings(port)
-      .then((data) => useSettingsStore.getState().loadProviders(data))
-      .catch((err: unknown) => console.warn('[composer/useProviderDefaults] failed to load provider settings', err));
-  }, [port]);
-
-  return config;
-}
+// Re-exported so the existing importers keep their path (see ./use-provider-defaults).
+export { useProviderDefaults };
 
 // ---------------------------------------------------------------------------
 // useComposerTuning
@@ -94,6 +70,11 @@ export interface ComposerTuningHook {
   setPlanMode: (on: boolean) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
   disabled: boolean;
+  /** True once the thread has any message — the trigger for the mid-session warning. */
+  hasMessages: boolean;
+  /** CLI-reported conversation size, null until the first usage report. */
+  contextTokens: number | null;
+  tuningWarning: TuningWarningHook;
 }
 
 /**
@@ -130,6 +111,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   // Live run-state from the assistant-ui thread — stays accurate mid-run
   // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
+  const hasMessages = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length > 0);
 
   const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
 
@@ -152,6 +134,10 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     );
   })();
 
+  const contextTokens = extras?.state.contextUsage?.totalTokens ?? null;
+  const tuningWarning = useTuningWarning({ chat, model, providerDefaults, hasMessages, contextTokens });
+  const guard = tuningWarning.guard;
+
   const setEffort = useCallback(
     (effort: EffortLevel) => {
       if (draftMode && chatId) {
@@ -159,12 +145,14 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         return;
       }
       if (port == null || !patchChatId) return;
-      const tuning: SessionTuning = { effort };
-      setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
-        console.warn('[composer/useComposerTuning] setEffort failed', { err }),
-      );
+      guard({ kind: 'effort', to: effort }, () => {
+        const tuning: SessionTuning = { effort };
+        setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
+          console.warn('[composer/useComposerTuning] setEffort failed', { err }),
+        );
+      });
     },
-    [draftMode, chatId, patchChatId, port],
+    [draftMode, chatId, patchChatId, port, guard],
   );
 
   const setFeature = useCallback(
@@ -174,13 +162,15 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         return;
       }
       if (port == null || !patchChatId) return;
-      // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
-      const patch: SessionTuning = { [key]: on };
-      setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
-        console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
-      );
+      guard({ kind: 'feature', key, to: on }, () => {
+        // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
+        const patch: SessionTuning = { [key]: on };
+        setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
+          console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
+        );
+      });
     },
-    [draftMode, chatId, patchChatId, port],
+    [draftMode, chatId, patchChatId, port, guard],
   );
 
   // adapter / model / permission / plan all go through PATCH /config (or the draft).
@@ -200,9 +190,9 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         patchDraftConfig(chatId, { model: m });
         return;
       }
-      patchConfig({ model: m }, 'setModel');
+      guard({ kind: 'model', to: m }, () => patchConfig({ model: m }, 'setModel'));
     },
-    [draftMode, chatId, patchConfig],
+    [draftMode, chatId, patchConfig, guard],
   );
   const setAdapter = useCallback(
     (id: string) => {
@@ -260,5 +250,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setPlanMode,
     setPermissionMode,
     disabled: isRunning,
+    hasMessages,
+    contextTokens,
+    tuningWarning,
   };
 }
