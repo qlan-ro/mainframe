@@ -1,7 +1,7 @@
+use std::future::Future;
+use std::pin::{Pin, pin};
 use std::sync::Arc;
 use std::time::Duration;
-
-use tokio::time::sleep;
 
 use super::{PortTunnelRegistry, PortTunnelScope, port_tunnel_label};
 use crate::test_support::{
@@ -20,6 +20,22 @@ fn registry_with(bin: String) -> (Arc<TunnelManager>, Arc<PortTunnelRegistry>) {
     let manager = Arc::new(TunnelManager::with_config(None, config));
     let registry = Arc::new(PortTunnelRegistry::new(manager.clone()));
     (manager, registry)
+}
+
+/// Drives a start into its mid-start state and no further. `start` records the
+/// entry and spawns cloudflared before its first suspension point, so one poll
+/// is the whole precondition — waiting a fixed number of milliseconds instead
+/// only bets on the scheduler, and reports a start that failed outright as an
+/// empty registry rather than as its error.
+async fn enter_mid_start<F: Future>(start: Pin<&mut F>)
+where
+    F::Output: std::fmt::Debug,
+{
+    tokio::select! {
+        biased;
+        outcome = start => panic!("the start resolved instead of staying mid-start: {outcome:?}"),
+        () = std::future::ready(()) => {}
+    }
 }
 
 fn scope(chat_id: &str) -> PortTunnelScope {
@@ -107,19 +123,14 @@ async fn list_reports_a_mid_start_tunnel_without_a_url() {
     let dir = tempfile::tempdir().unwrap();
     let (_manager, registry) = registry_with(write_silent_cloudflared(dir.path()));
 
-    let starting = tokio::spawn({
-        let registry = registry.clone();
-        async move { registry.start(5173, scope("chat-a")).await }
-    });
-    sleep(Duration::from_millis(100)).await;
+    let mut starting = pin!(registry.start(5173, scope("chat-a")));
+    enter_mid_start(starting.as_mut()).await;
 
     let listed = registry.list();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].port, 5173);
     assert!(!listed[0].ready);
     assert_eq!(listed[0].url, None);
-
-    starting.abort();
 }
 
 #[tokio::test]
@@ -140,17 +151,11 @@ async fn stopping_a_mid_start_tunnel_cancels_it_once_it_resolves() {
     let dir = tempfile::tempdir().unwrap();
     let (manager, registry) = registry_with(write_slow_cloudflared(dir.path()));
 
-    let starting = tokio::spawn({
-        let registry = registry.clone();
-        async move { registry.start(5173, scope("chat-a")).await }
-    });
-    sleep(Duration::from_millis(80)).await;
+    let mut starting = pin!(registry.start(5173, scope("chat-a")));
+    enter_mid_start(starting.as_mut()).await;
     registry.stop(5173);
 
-    assert_eq!(
-        starting.await.unwrap(),
-        Err("Tunnel start cancelled".to_string())
-    );
+    assert_eq!(starting.await, Err("Tunnel start cancelled".to_string()));
     assert_eq!(manager.get_url(&port_tunnel_label(5173)), None);
     assert_eq!(registry.list(), vec![]);
 }
