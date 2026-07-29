@@ -1,0 +1,196 @@
+/**
+ * UrlTabInstance — tunnel adoption, ownership, retry, DNS reload (#281, Task 3).
+ *
+ * Every case runs on a remote daemon against `http://localhost:5173/app?x=1`
+ * unless noted, exercising `useUrlTabTunnel` through the mounted component so
+ * the ownership registration and the mount seam are proven together.
+ */
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { PreviewHandle } from '@qlan-ro/mainframe-types';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { HostProvider, setHostForTesting, resetHostForTesting } from '@/lib/host';
+import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
+import { useLayoutStore } from '@/store/layout';
+import { usePortTunnelsStore, type PortTunnelEntry } from '@/store/port-tunnels';
+import { useSandboxStore } from '@/store/sandbox';
+import { startPortTunnel } from '@/lib/api/tunnel-ports';
+import { registerUrlTunnelConsumer } from '@/features/url-tab/tunnel-consumers';
+
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
+}));
+
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+}));
+
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({
+  useDaemonIsLocal: vi.fn(),
+}));
+
+vi.mock('@/lib/api/tunnel-ports', () => ({
+  startPortTunnel: vi.fn(),
+  stopPortTunnel: vi.fn(),
+}));
+
+vi.mock('@/features/url-tab/tunnel-consumers', () => ({
+  registerUrlTunnelConsumer: vi.fn(),
+  releaseUrlTunnelConsumers: vi.fn(),
+  clearUrlTunnelConsumers: vi.fn(),
+}));
+
+import { UrlTabInstance } from '../UrlTabInstance';
+
+const URL = 'http://localhost:5173/app?x=1';
+const TUNNEL_URL = 'https://abc.trycloudflare.com/app?x=1';
+const FRESH_LAYOUT = { top: ['run' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+
+let fakeHost: FakeHostBridge;
+let fakeHandle: PreviewHandle;
+
+function setPortEntry(port: number, entry: PortTunnelEntry) {
+  usePortTunnelsStore.setState((s) => ({ byPort: { ...s.byPort, [port]: entry }, generation: s.generation + 1 }));
+}
+
+function renderTab(url = URL) {
+  return render(<UrlTabInstance tabId="t1" url={url} visible />, {
+    wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+  });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  fakeHandle = {
+    setVisible: vi.fn(),
+    compositesAboveDom: false,
+    navigate: vi.fn().mockResolvedValue(undefined),
+    capture: vi.fn().mockResolvedValue(new Uint8Array()),
+    startInspect: vi.fn().mockResolvedValue(undefined),
+    onInspect: vi.fn().mockReturnValue(() => {}),
+    startRegionSelect: vi.fn().mockResolvedValue(undefined),
+    onRegionSelect: vi.fn().mockReturnValue(() => {}),
+    onNavigate: vi.fn().mockReturnValue(() => {}),
+    refit: vi.fn(),
+    reanchor: vi.fn(),
+    setDevice: vi.fn(),
+    destroy: vi.fn(),
+  };
+  fakeHost = new FakeHostBridge();
+  fakeHost.preview.mount = vi.fn().mockReturnValue(fakeHandle);
+  setHostForTesting(fakeHost);
+
+  vi.mocked(useDaemonIsLocal).mockReturnValue(false);
+  vi.mocked(startPortTunnel).mockResolvedValue({ url: TUNNEL_URL.replace('/app?x=1', '') });
+
+  useSandboxStore.setState({
+    captures: [],
+    logsOutput: [],
+    selectedConfigByScope: {},
+    lastStartedProcess: null,
+    processStatuses: {},
+  });
+  usePortTunnelsStore.setState({ byPort: {}, daemonPort: 31415, generation: 0 });
+  useLayoutStore.setState({ layout: { ...FRESH_LAYOUT }, run: null, sessions: new Map(), activeSessionId: null });
+});
+
+afterEach(() => {
+  resetHostForTesting();
+});
+
+describe('UrlTabInstance — tunnel adoption and ownership', () => {
+  it('a fresh start owns the tunnel (D10, AC12)', () => {
+    renderTab();
+
+    expect(screen.getByTestId('url-tab-body-pending')).toBeInTheDocument();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+    expect(startPortTunnel).toHaveBeenCalledWith(31415, { port: 5173, chatId: 'chat-1' });
+    expect(registerUrlTunnelConsumer).toHaveBeenLastCalledWith('t1', {
+      port: 5173,
+      started: true,
+      daemonHttpPort: 31415,
+    });
+  });
+
+  it('adopting a mid-start tunnel issues its own start but does not own it', () => {
+    setPortEntry(5173, { state: 'starting' });
+
+    renderTab();
+
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+    expect(registerUrlTunnelConsumer).toHaveBeenLastCalledWith('t1', {
+      port: 5173,
+      started: false,
+      daemonHttpPort: 31415,
+    });
+  });
+
+  it('a ready tunnel skips pending and carries the original path/query (D12, AC8)', () => {
+    setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true });
+
+    renderTab();
+
+    expect(screen.queryByTestId('url-tab-body-pending')).toBeNull();
+    expect(fakeHost.preview.mount).toHaveBeenCalledWith(expect.anything(), TUNNEL_URL, expect.anything());
+  });
+
+  it('reloads exactly once when DNS verifies after the tab already loaded (D11)', () => {
+    setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: false });
+
+    renderTab();
+    expect(fakeHost.preview.mount).toHaveBeenCalledWith(expect.anything(), TUNNEL_URL, expect.anything());
+    expect(fakeHandle.navigate).not.toHaveBeenCalled();
+
+    act(() => {
+      setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true });
+    });
+    expect(fakeHandle.navigate).toHaveBeenCalledTimes(1);
+    expect(fakeHandle.navigate).toHaveBeenCalledWith(TUNNEL_URL);
+
+    // A later, unrelated re-set of the same ready+verified entry adds no further reload.
+    act(() => {
+      setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true });
+    });
+    expect(fakeHandle.navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('short-circuits a rejected port below 1024 without requesting a tunnel (AC10)', () => {
+    renderTab('http://localhost:22/');
+
+    const body = screen.getByTestId('url-tab-body-rejected');
+    expect(body.textContent).toContain('Port must be 1024 or higher');
+    expect(startPortTunnel).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits a rejected daemon's-own-port without requesting a tunnel (AC10)", () => {
+    renderTab('http://localhost:31415/');
+
+    const body = screen.getByTestId('url-tab-body-rejected');
+    expect(body.textContent).toContain("Cannot tunnel the daemon's own port");
+    expect(startPortTunnel).not.toHaveBeenCalled();
+  });
+
+  it('retry re-requests after clearing the stale error entry (PD1, AC9)', () => {
+    setPortEntry(5173, { state: 'error', error: 'boom' });
+
+    renderTab();
+    expect(screen.getByTestId('url-tab-body-failed')).toBeInTheDocument();
+    expect(startPortTunnel).not.toHaveBeenCalled();
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('url-tab-retry'));
+    });
+
+    expect(usePortTunnelsStore.getState().byPort[5173]).toBeUndefined();
+    expect(startPortTunnel).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ready entry has no retry to click — it is never cleared (PD2)', () => {
+    setPortEntry(5173, { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true });
+
+    renderTab();
+
+    expect(screen.getByTestId('url-tab-body-loaded')).toBeInTheDocument();
+    expect(screen.queryByTestId('url-tab-retry')).toBeNull();
+  });
+});
