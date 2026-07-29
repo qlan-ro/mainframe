@@ -65,9 +65,19 @@ describe('clearConsumers', () => {
 });
 
 describe('addConsumer — ownership persistence (D10, AC12)', () => {
-  it('re-registering on the same port with started: false keeps started: true', () => {
+  // Retry's D10 guarantee ("stays owner across retries") is enforced by the
+  // hook's `ownedPort` state, not here: a same-port re-register takes
+  // `started` verbatim so an explicit disown (review-fix findings 1+2) is
+  // never swallowed by a stale prior `true`.
+  it('re-registering on the same port takes the new started verbatim: true to false', () => {
     let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
     state = addConsumer(state, 'tab-1', rec(5173, false)).next;
+    expect(state.byTab['tab-1']).toEqual(rec(5173, false));
+  });
+
+  it('re-registering on the same port takes the new started verbatim: false to true', () => {
+    let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, false)).next;
+    state = addConsumer(state, 'tab-1', rec(5173, true)).next;
     expect(state.byTab['tab-1']).toEqual(rec(5173, true));
   });
 

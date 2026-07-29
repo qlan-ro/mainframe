@@ -4,6 +4,12 @@
  * `started: true` means this tab's own POST started the tunnel; `started: false`
  * means it merely adopted one another tab already owns. Only an owner's release
  * should ever stop a tunnel, and only when no other consumer remains on the port.
+ *
+ * A same-port re-register takes `started` verbatim, no OR-merge with the prior
+ * value: the hook is the one source of truth for whether *this* tab currently
+ * owns the port (`ownedPort`, cleared on retarget and on an observed stop), so
+ * a stale `true` here would out-live the state that justified it — exactly the
+ * bug this file exists to prevent (review-fix findings 1+2).
  */
 
 export interface ConsumerRecord {
@@ -30,18 +36,9 @@ export function addConsumer(
   // A retarget to a different port abandons this tab's claim on the old one —
   // release it through the same owner-and-last-consumer rule a close uses, so
   // an owned tunnel never survives orphaned (AC12/D10).
-  if (existing !== undefined && existing.port !== rec.port) {
-    const released = releaseConsumers(state, [tabId]);
-    return { next: writeConsumer(released.next, tabId, rec), stop: released.stop };
-  }
-  return { next: writeConsumer(state, tabId, rec), stop: [] };
-}
-
-function writeConsumer(state: ConsumerState, tabId: string, rec: ConsumerRecord): ConsumerState {
-  const existing = state.byTab[tabId];
-  // An owner (started: true) stays an owner across a same-port re-register (Retry).
-  const started = existing && existing.port === rec.port ? existing.started || rec.started : rec.started;
-  return { byTab: { ...state.byTab, [tabId]: { ...rec, started } } };
+  const base =
+    existing !== undefined && existing.port !== rec.port ? releaseConsumers(state, [tabId]) : { next: state, stop: [] };
+  return { next: { byTab: { ...base.next.byTab, [tabId]: rec } }, stop: base.stop };
 }
 
 export function releaseConsumers(

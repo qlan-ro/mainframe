@@ -1,6 +1,7 @@
 /**
- * UrlTabInstance — retargeting never falsely claims an already-tunnelled port
- * (#281, review-fix findings 1+2, AC12/D10).
+ * UrlTabInstance — retargeting and an externally-restarted tunnel never
+ * falsely claim a port this tab didn't (still) start (#281, review-fix
+ * findings 1+2, AC12/D10).
  *
  * Runs the REAL `tunnel-consumers` registry (only `startPortTunnel`/
  * `stopPortTunnel` are mocked), so a stale-state write that the pure reducer
@@ -113,5 +114,85 @@ describe('UrlTabInstance — retarget onto an already-tunnelled port never adopt
     // Releasing the tab must not stop port 4000 — this tab only adopted it.
     releaseUrlTunnelConsumers(['t1']);
     expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 4000);
+  });
+});
+
+describe('UrlTabInstance — an externally-restarted tunnel on the owned port is never this tab’s to stop', () => {
+  it('drops ownership when the started tunnel disappears, so a later restart by someone else survives release', async () => {
+    render(<UrlTabInstance tabId="t1" url="http://localhost:5173/" visible />, {
+      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+    });
+    await act(async () => {});
+    expect(startPortTunnel).toHaveBeenCalledWith(31415, { port: 5173, chatId: 'chat-1' });
+
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: { ...s.byPort, 5173: { state: 'ready', url: 'https://abc.trycloudflare.com', dnsVerified: true } },
+        generation: s.generation + 1,
+      }));
+    });
+
+    // The chat chip's Stop tears the tunnel down — the store entry disappears.
+    act(() => {
+      usePortTunnelsStore.setState((s) => {
+        const byPort = { ...s.byPort };
+        delete byPort[5173];
+        return { byPort, generation: s.generation + 1 };
+      });
+    });
+
+    // A different consumer starts a NEW tunnel on the same port; this tab
+    // never asked for it and must not claim it.
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: {
+          ...s.byPort,
+          5173: { state: 'ready', url: 'https://new-owner.trycloudflare.com', dnsVerified: true },
+        },
+        generation: s.generation + 1,
+      }));
+    });
+
+    releaseUrlTunnelConsumers(['t1']);
+    expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
+  });
+});
+
+describe('UrlTabInstance — a port abandoned via retarget is never re-adopted as owned on return', () => {
+  it('does not stop a foreign tunnel that later appears on a previously-owned, since-abandoned port', async () => {
+    const { rerender } = render(<UrlTabInstance tabId="t1" url="http://localhost:5173/" visible />, {
+      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+    });
+    await act(async () => {});
+    expect(startPortTunnel).toHaveBeenCalledWith(31415, { port: 5173, chatId: 'chat-1' });
+
+    // Retarget onto a port someone else already tunnels, so this tab's own
+    // start effect never fires for it — it only adopts.
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: { ...s.byPort, 4000: { state: 'ready', url: 'https://xyz.trycloudflare.com', dnsVerified: true } },
+        generation: s.generation + 1,
+      }));
+    });
+    await act(async () => {
+      rerender(<UrlTabInstance tabId="t1" url="http://localhost:4000/" visible />);
+    });
+    expect(stopPortTunnel).toHaveBeenCalledWith(31415, 5173);
+    vi.mocked(stopPortTunnel).mockClear();
+
+    // The abandoned port later gets a fresh, unrelated tunnel (e.g. the chat chip).
+    act(() => {
+      usePortTunnelsStore.setState((s) => ({
+        byPort: { ...s.byPort, 5173: { state: 'ready', url: 'https://foreign.trycloudflare.com', dnsVerified: true } },
+        generation: s.generation + 1,
+      }));
+    });
+
+    await act(async () => {
+      rerender(<UrlTabInstance tabId="t1" url="http://localhost:5173/" visible />);
+    });
+
+    releaseUrlTunnelConsumers(['t1']);
+    expect(stopPortTunnel).not.toHaveBeenCalledWith(31415, 5173);
   });
 });

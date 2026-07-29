@@ -68,20 +68,27 @@ export function useUrlTabTunnel({
 
   const [attempt, setAttempt] = useState(0);
   const [flags, setFlags] = useState<AttemptFlags>(FRESH);
-  // The port this tab owns, or null. Keyed by port rather than a plain boolean
-  // so a retarget is correct on the very first render after `port` changes:
-  // `ownedPort === port` reads as false against the *new* port before any
-  // effect runs, with no reset effect needed and no window for a stale
-  // `started: true` write to land on the port being adopted (D10, AC12).
+  // The port this tab owns, or null. Cleared whenever the tab stops being the
+  // live starter of a port — on a retarget away from it (below) and when the
+  // store reports the owned tunnel gone (the `stopped`-transition effect
+  // below) — so a later return to that same port never re-adopts a tunnel
+  // this tab didn't start (D10, AC12; review-fix findings 1+2).
   const [ownedPort, setOwnedPort] = useState<number | null>(null);
   const attemptRef = useRef(0);
   const startedForAttemptRef = useRef<number | null>(null);
+  const prevPortRef = useRef(port);
 
   // Declared first so a Retry's reset lands before the effects that read it.
   useEffect(() => {
     attemptRef.current = attempt;
     startedForAttemptRef.current = null;
     setFlags(FRESH);
+    // Retry bumps `attempt` on the same port and must keep the owner (D10);
+    // only an actual retarget abandons the claim.
+    if (prevPortRef.current !== port) {
+      prevPortRef.current = port;
+      setOwnedPort(null);
+    }
   }, [attempt, port]);
 
   const target = useMemo(
@@ -122,6 +129,14 @@ export function useUrlTabTunnel({
       })
       .catch((err: unknown) => reportPortTunnelError(port, message(err)));
   }, [isPending, port, daemonPort, chatId, httpPort, attempt, entry]);
+
+  // The tunnel this tab started can be stopped out from under it (the chat
+  // chip's Stop, or the daemon reaping it) — a later `ready` entry on the
+  // same port belongs to whoever restarted it, never to this tab, so the
+  // claim is dropped the moment the store reports the owned tunnel gone.
+  useEffect(() => {
+    if (target.kind === 'stopped' && ownedPort === port) setOwnedPort(null);
+  }, [target.kind, ownedPort, port]);
 
   useEffect(() => {
     if (!active || port === null) return;
