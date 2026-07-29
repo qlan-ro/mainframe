@@ -11,10 +11,15 @@
 //! into Mainframe's DB, the OS keyring, or any serializable payload — hence the manual
 //! `Debug` impls below.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use mainframe_types::adapter::AdapterModel;
+
+mod config;
+mod label;
+mod order;
+
+pub use config::discover;
 
 /// Namespace prefix on every proxy model id (`cliproxy/gpt-5.6-sol`). Load-bearing:
 /// it is how the spawn path decides to apply env, how the picker groups, and how a
@@ -23,8 +28,6 @@ pub const ENDPOINT_ID: &str = "cliproxy";
 /// Picker section label.
 pub const GROUP_LABEL: &str = "CLIProxyAPI";
 
-/// The proxy's own default, used when the config omits `port:`.
-const DEFAULT_PORT: u16 = 8317;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Candidates for the CLI's small/fast model, best first. An explicit preference
@@ -94,105 +97,6 @@ fn is_image_model(id: &str) -> bool {
     id.contains("-image-") || id.starts_with("image-") || id.ends_with("-image")
 }
 
-/// Escape hatch for installs the three standard paths miss (a moved Homebrew prefix,
-/// Linux). An env var rather than a provider setting because the catalog probe runs
-/// behind `Adapter::probe_models`, which has no settings access — a setting would work
-/// at spawn but leave the picker empty, which is the worse half to get right.
-const CONFIG_PATH_ENV: &str = "MAINFRAME_CLIPROXY_CONFIG";
-
-fn config_candidates(override_path: Option<&str>) -> Vec<PathBuf> {
-    if let Some(path) = override_path.map(str::trim).filter(|p| !p.is_empty()) {
-        return vec![PathBuf::from(path)];
-    }
-    let mut paths = vec![
-        PathBuf::from("/opt/homebrew/etc/cliproxyapi.conf"),
-        PathBuf::from("/usr/local/etc/cliproxyapi.conf"),
-    ];
-    if let Some(home) = dirs::home_dir() {
-        paths.push(home.join(".cli-proxy-api/config.yaml"));
-    }
-    paths
-}
-
-/// Strip a trailing `# comment` and surrounding quotes/whitespace from a YAML scalar.
-fn scalar(raw: &str) -> &str {
-    let value = match raw.find(" #") {
-        Some(idx) => &raw[..idx],
-        None => raw,
-    }
-    .trim();
-    value
-        .strip_prefix('"')
-        .and_then(|v| v.strip_suffix('"'))
-        .or_else(|| value.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')))
-        .unwrap_or(value)
-}
-
-/// Read the two keys we need out of the proxy's config. `packages/core-rs` carries no
-/// YAML dependency and the maintained crates are thick for the job, so this reads
-/// top-level `port:` and the first entry of top-level `api-keys:` directly. Indented
-/// keys are ignored on purpose — `remote-management.secret-key` must never be mistaken
-/// for an API key.
-fn parse_config(text: &str) -> Option<CliProxyConfig> {
-    let mut port = DEFAULT_PORT;
-    let mut auth_token: Option<String> = None;
-    let mut in_api_keys = false;
-
-    for line in text.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with('#') || trimmed.is_empty() {
-            continue;
-        }
-        let top_level = line.len() == trimmed.len();
-
-        if in_api_keys {
-            if let Some(item) = trimmed.strip_prefix("- ")
-                && !top_level
-            {
-                let value = scalar(item);
-                if !value.is_empty() {
-                    auth_token = Some(value.to_string());
-                }
-                in_api_keys = false;
-                continue;
-            }
-            // Any other line ends the list; an empty `api-keys:` leaves the token unset.
-            in_api_keys = false;
-        }
-        if !top_level {
-            continue;
-        }
-        if let Some(rest) = trimmed.strip_prefix("port:") {
-            port = scalar(rest).parse().unwrap_or(DEFAULT_PORT);
-        } else if trimmed.starts_with("api-keys:") {
-            in_api_keys = true;
-        }
-    }
-
-    // `host:` is deliberately ignored: its default `""` means "bind all interfaces",
-    // not a connect address.
-    Some(CliProxyConfig {
-        base_url: format!("http://127.0.0.1:{port}"),
-        auth_token: auth_token?,
-    })
-}
-
-/// First readable, parseable config wins. `None` whenever the proxy isn't installed.
-pub async fn discover(override_path: Option<&str>) -> Option<CliProxyConfig> {
-    let from_env = std::env::var(CONFIG_PATH_ENV).ok();
-    let effective = override_path
-        .filter(|p| !p.trim().is_empty())
-        .or(from_env.as_deref());
-    for path in config_candidates(effective) {
-        if let Ok(text) = tokio::fs::read_to_string(&path).await
-            && let Some(config) = parse_config(&text)
-        {
-            return Some(config);
-        }
-    }
-    None
-}
-
 /// The proxy's chat catalog, or `None` on any transport or non-200 result — which is
 /// also how "installed but not running" reads.
 pub async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyModel>> {
@@ -229,28 +133,31 @@ pub async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyModel>> {
     )
 }
 
-/// Present the proxy catalog as picker entries. Everything Anthropic-specific stays
-/// `None`: the proxy publishes no context window, and the CLI's effort/fast/thinking
-/// flags are Claude capabilities that the models behind the proxy do not honour — so
-/// the tuning controls hide themselves rather than sending flags into the void.
+/// Present the proxy catalog as picker entries, strongest model first. Everything
+/// Anthropic-specific stays `None`: the proxy publishes no context window, and the CLI's
+/// effort/fast/thinking flags are Claude capabilities that the models behind the proxy do
+/// not honour — so the tuning controls hide themselves rather than sending flags into the void.
 pub fn to_adapter_models(catalog: &[ProxyModel]) -> Vec<AdapterModel> {
-    catalog
-        .iter()
-        .map(|model| AdapterModel {
-            id: namespaced(&model.id),
-            label: model.id.clone(),
-            description: model.owned_by.clone(),
-            group: Some(GROUP_LABEL.to_string()),
-            resolved_model: None,
-            context_window: None,
-            is_default: None,
-            is_older: None,
-            supported_efforts: None,
-            default_effort: None,
-            supports_fast: None,
-            supports_ultracode: None,
-            supports_adaptive_thinking: None,
-            supports_personality: None,
+    order::by_capability(catalog)
+        .into_iter()
+        .map(|model| {
+            let owner = model.owned_by.as_deref();
+            AdapterModel {
+                id: namespaced(&model.id),
+                label: label::display_label(&model.id, owner),
+                description: Some(label::display_description(&model.id, owner)),
+                group: Some(GROUP_LABEL.to_string()),
+                resolved_model: None,
+                context_window: None,
+                is_default: None,
+                is_older: None,
+                supported_efforts: None,
+                default_effort: None,
+                supports_fast: None,
+                supports_ultracode: None,
+                supports_adaptive_thinking: None,
+                supports_personality: None,
+            }
         })
         .collect()
 }

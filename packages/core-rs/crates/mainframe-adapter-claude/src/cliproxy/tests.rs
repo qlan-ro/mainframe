@@ -1,104 +1,11 @@
 //! Discovery is allowed to fail silently, so these tests pin the *shape* of every
-//! failure as tightly as the happy path — a parser that quietly returned the
-//! management `secret-key` as an API key would look identical at runtime.
+//! failure as tightly as the happy path. Config parsing has its own tests in
+//! `cliproxy/config.rs`; naming and ordering in `label.rs` and `order.rs`.
 
 use super::*;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-
-/// The config Homebrew ships, trimmed to the blocks that matter. The nested
-/// `secret-key` is load-bearing: it sits between the top-level keys we read.
-const REAL_CONFIG: &str = r#"
-# Server host/interface to bind to. Default is empty ("") to bind all interfaces.
-host: "127.0.0.1"
-
-# Server port
-port: 8317
-
-tls:
-  enable: false
-  cert: ""
-  key: ""
-
-remote-management:
-  allow-remote: false
-  secret-key: ""
-
-auth-dir: "~/.cli-proxy-api"
-
-# API keys for authentication
-api-keys:
-  - "ddd31f47720eb5ba25182fd1b61d19d9beebd294ef5125ff"
-"#;
-
-#[test]
-fn parses_the_shipped_config() {
-    let config = parse_config(REAL_CONFIG).expect("config parses");
-    assert_eq!(config.base_url, "http://127.0.0.1:8317");
-    assert_eq!(
-        config.auth_token,
-        "ddd31f47720eb5ba25182fd1b61d19d9beebd294ef5125ff"
-    );
-}
-
-#[test]
-fn takes_the_first_of_several_api_keys() {
-    let config = parse_config("port: 9000\napi-keys:\n  - \"first\"\n  - \"second\"\n")
-        .expect("config parses");
-    assert_eq!(config.auth_token, "first");
-    assert_eq!(config.base_url, "http://127.0.0.1:9000");
-}
-
-#[test]
-fn never_reads_the_nested_management_secret_as_an_api_key() {
-    let text = "remote-management:\n  secret-key: \"hunter2\"\n  api-keys:\n    - \"nested\"\n";
-    assert!(parse_config(text).is_none());
-}
-
-#[test]
-fn an_empty_api_keys_list_is_not_a_config() {
-    assert!(parse_config("port: 8317\napi-keys:\nauth-dir: \"~/x\"\n").is_none());
-    assert!(parse_config("port: 8317\n").is_none());
-}
-
-#[test]
-fn garbage_is_not_a_config() {
-    assert!(parse_config("").is_none());
-    assert!(parse_config("\u{0}\u{1}not yaml at all").is_none());
-}
-
-#[test]
-fn a_missing_port_falls_back_to_the_proxys_own_default() {
-    let config = parse_config("api-keys:\n  - key\n").expect("config parses");
-    assert_eq!(config.base_url, "http://127.0.0.1:8317");
-}
-
-#[test]
-fn an_unparseable_port_falls_back_rather_than_dropping_the_config() {
-    let config = parse_config("port: not-a-number\napi-keys:\n  - key\n").expect("config parses");
-    assert_eq!(config.base_url, "http://127.0.0.1:8317");
-}
-
-#[test]
-fn debug_never_prints_the_token() {
-    let config = CliProxyConfig {
-        base_url: "http://127.0.0.1:8317".to_string(),
-        auth_token: "sk-super-secret".to_string(),
-    };
-    let rendered = format!("{config:?}");
-    assert!(!rendered.contains("sk-super-secret"), "{rendered}");
-    assert!(rendered.contains("<redacted>"), "{rendered}");
-
-    let env = CliProxyEnv {
-        base_url: config.base_url.clone(),
-        auth_token: "sk-super-secret".to_string(),
-        small_fast_model: "gpt-5.4-mini".to_string(),
-    };
-    let rendered = format!("{env:?}");
-    assert!(!rendered.contains("sk-super-secret"), "{rendered}");
-    assert!(rendered.contains("gpt-5.4-mini"), "{rendered}");
-}
 
 #[test]
 fn split_endpoint_round_trips_and_leaves_native_ids_alone() {
@@ -153,8 +60,12 @@ fn adapter_models_are_namespaced_grouped_and_carry_no_claude_capabilities() {
 
     let entry = models.first().expect("one model");
     assert_eq!(entry.id, "cliproxy/gpt-5.6-sol");
-    assert_eq!(entry.label, "gpt-5.6-sol");
-    assert_eq!(entry.description.as_deref(), Some("openai"));
+    // Only the id is contractual here; the two display lines are `label.rs`'s job.
+    assert_eq!(entry.label, "OpenAI - GPT 5.6 Sol");
+    assert_eq!(
+        entry.description.as_deref(),
+        Some("GPT 5.6 Sol · Runs on your OpenAI account")
+    );
     assert_eq!(entry.group.as_deref(), Some("CLIProxyAPI"));
     // Effort/fast/thinking are Claude flags the proxy's models do not honour, and
     // is_default must never move the picker's default off the native catalog.
@@ -262,29 +173,6 @@ async fn fetch_models_returns_none_when_nothing_is_listening() {
 
     let config = config_for(format!("http://127.0.0.1:{port}"));
     assert!(fetch_models(&config).await.is_none());
-}
-
-#[tokio::test]
-async fn discover_reads_the_override_path_and_ignores_the_system_paths() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("cliproxyapi.conf");
-    tokio::fs::write(&path, REAL_CONFIG).await.expect("write");
-
-    let config = discover(Some(path.to_str().expect("utf8")))
-        .await
-        .expect("discovered");
-    assert_eq!(config.base_url, "http://127.0.0.1:8317");
-
-    assert!(
-        discover(Some("/nonexistent/cliproxyapi.conf"))
-            .await
-            .is_none()
-    );
-    // A blank override falls through to the system probe rather than pinning "".
-    assert_eq!(
-        config_candidates(Some("   ")).len(),
-        config_candidates(None).len()
-    );
 }
 
 #[tokio::test]
