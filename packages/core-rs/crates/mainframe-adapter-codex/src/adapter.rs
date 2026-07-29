@@ -13,6 +13,7 @@ use mainframe_types::display::ToolCategories;
 use crate::external_sessions::list_external_sessions;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
+use crate::title_generator::generate_codex_title;
 use crate::transcript::is_codex_transcript_present;
 use crate::types::{ModelInfo, ModelListResult};
 
@@ -219,6 +220,15 @@ impl Adapter for CodexAdapter {
             let exe = executable_path.unwrap_or_else(|| "codex".to_string());
             Ok(Some(self.load_models(&exe).await))
         })
+    }
+
+    fn generate_title(
+        &self,
+        content: String,
+        binary: String,
+    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        let path = self.resolved_path.clone();
+        Box::pin(async move { generate_codex_title(&content, &binary, path.as_str()).await })
     }
 
     /// `isTranscriptPresent(sessionId)` — Codex resolves presence from its state DB
