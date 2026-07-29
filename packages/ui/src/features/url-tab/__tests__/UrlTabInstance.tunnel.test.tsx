@@ -8,14 +8,13 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
-import { FakeHostBridge } from '@/lib/host/fake-adapter';
-import { HostProvider, setHostForTesting, resetHostForTesting } from '@/lib/host';
+import type { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { HostProvider, resetHostForTesting } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
-import { useLayoutStore } from '@/store/layout';
-import { usePortTunnelsStore, type PortTunnelEntry } from '@/store/port-tunnels';
-import { useSandboxStore } from '@/store/sandbox';
+import { usePortTunnelsStore } from '@/store/port-tunnels';
 import { startPortTunnel } from '@/lib/api/tunnel-ports';
 import { registerUrlTunnelConsumer } from '@/features/url-tab/tunnel-consumers';
+import { installFakeHost, seedStores, setPortEntry, renderTab as renderUrlTab } from './url-tab-tunnel-harness';
 
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
@@ -44,54 +43,21 @@ import { UrlTabInstance } from '../UrlTabInstance';
 
 const URL = 'http://localhost:5173/app?x=1';
 const TUNNEL_URL = 'https://abc.trycloudflare.com/app?x=1';
-const FRESH_LAYOUT = { top: ['run' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
 
 let fakeHost: FakeHostBridge;
 let fakeHandle: PreviewHandle;
 
-function setPortEntry(port: number, entry: PortTunnelEntry) {
-  usePortTunnelsStore.setState((s) => ({ byPort: { ...s.byPort, [port]: entry }, generation: s.generation + 1 }));
-}
-
 function renderTab(url = URL) {
-  return render(<UrlTabInstance tabId="t1" url={url} visible />, {
-    wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
-  });
+  return renderUrlTab(url);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  fakeHandle = {
-    setVisible: vi.fn(),
-    compositesAboveDom: false,
-    navigate: vi.fn().mockResolvedValue(undefined),
-    capture: vi.fn().mockResolvedValue(new Uint8Array()),
-    startInspect: vi.fn().mockResolvedValue(undefined),
-    onInspect: vi.fn().mockReturnValue(() => {}),
-    startRegionSelect: vi.fn().mockResolvedValue(undefined),
-    onRegionSelect: vi.fn().mockReturnValue(() => {}),
-    onNavigate: vi.fn().mockReturnValue(() => {}),
-    refit: vi.fn(),
-    reanchor: vi.fn(),
-    setDevice: vi.fn(),
-    destroy: vi.fn(),
-  };
-  fakeHost = new FakeHostBridge();
-  fakeHost.preview.mount = vi.fn().mockReturnValue(fakeHandle);
-  setHostForTesting(fakeHost);
+  ({ fakeHost, fakeHandle } = installFakeHost());
+  seedStores();
 
   vi.mocked(useDaemonIsLocal).mockReturnValue(false);
   vi.mocked(startPortTunnel).mockResolvedValue({ url: TUNNEL_URL.replace('/app?x=1', '') });
-
-  useSandboxStore.setState({
-    captures: [],
-    logsOutput: [],
-    selectedConfigByScope: {},
-    lastStartedProcess: null,
-    processStatuses: {},
-  });
-  usePortTunnelsStore.setState({ byPort: {}, daemonPort: 31415, generation: 0 });
-  useLayoutStore.setState({ layout: { ...FRESH_LAYOUT }, run: null, sessions: new Map(), activeSessionId: null });
 });
 
 afterEach(() => {
@@ -118,9 +84,7 @@ describe('UrlTabInstance — rehydrated tabs stay unmounted until first activati
   });
 
   it('stays mounted once activated even after switching to another tab (visible false again)', async () => {
-    const { rerender } = render(<UrlTabInstance tabId="t1" url={URL} visible />, {
-      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
-    });
+    const { rerender } = renderTab();
     await act(async () => {});
     expect(fakeHost.preview.mount).toHaveBeenCalledTimes(1);
 
