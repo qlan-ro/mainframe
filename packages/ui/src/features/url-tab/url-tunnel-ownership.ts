@@ -6,10 +6,10 @@
  * should ever stop a tunnel, and only when no other consumer remains on the port.
  *
  * A same-port re-register takes `started` verbatim, no OR-merge with the prior
- * value: the hook is the one source of truth for whether *this* tab currently
- * owns the port (`ownedPort`, cleared on retarget and on an observed stop), so
- * a stale `true` here would out-live the state that justified it — exactly the
- * bug this file exists to prevent (review-fix findings 1+2).
+ * value: the claim reducer in `tunnel-claim.ts` is the one source of truth for
+ * whether *this* tab currently owns the port, so a stale `true` here would
+ * out-live the evidence that justified it — exactly the bug this file exists to
+ * prevent (review-fix findings 1+2).
  */
 
 export interface ConsumerRecord {

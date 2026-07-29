@@ -66,9 +66,9 @@ describe('clearConsumers', () => {
 
 describe('addConsumer — ownership persistence (D10, AC12)', () => {
   // Retry's D10 guarantee ("stays owner across retries") is enforced by the
-  // hook's `ownedPort` state, not here: a same-port re-register takes
-  // `started` verbatim so an explicit disown (review-fix findings 1+2) is
-  // never swallowed by a stale prior `true`.
+  // claim reducer, not here: a same-port re-register takes `started` verbatim
+  // so an explicit disown (review-fix findings 1+2) is never swallowed by a
+  // stale prior `true`.
   it('re-registering on the same port takes the new started verbatim: true to false', () => {
     let state = addConsumer(emptyConsumerState, 'tab-1', rec(5173, true)).next;
     state = addConsumer(state, 'tab-1', rec(5173, false)).next;
