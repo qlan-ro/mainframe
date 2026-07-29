@@ -34,6 +34,10 @@ pub struct FakeSession {
     pub set_plan_mode_ok: bool,
     /// Configurable history returned by `load_history` (empty by default).
     pub history: Vec<ChatMessage>,
+    /// Fires synchronously inside `respond_to_permission`, before it resolves —
+    /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
+    /// round-trip an `.await` on this call represents.
+    pub on_respond_to_permission: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl FakeSession {
@@ -112,6 +116,9 @@ impl AdapterSession for FakeSession {
         &self,
         _response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        if let Some(hook) = &self.on_respond_to_permission {
+            hook();
+        }
         ok()
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {

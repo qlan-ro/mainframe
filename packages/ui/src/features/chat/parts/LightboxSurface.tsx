@@ -2,6 +2,7 @@
 
 import { useRef, type MouseEvent, type ReactNode } from 'react';
 import { DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { ImageContextMenu } from './ImageContextMenu';
 
 interface LightboxSurfaceProps {
   testId: string;
@@ -29,13 +30,15 @@ export function LightboxSurface({ testId, imageTestId, src, alt = '', onDismiss,
       className="max-w-[92vw] border-none bg-transparent p-0 shadow-none"
     >
       <DialogTitle className="sr-only">Image preview</DialogTitle>
-      <img
-        ref={imageRef}
-        data-testid={imageTestId}
-        src={src}
-        alt={alt}
-        className="mx-auto max-h-[88vh] max-w-full rounded-md object-contain"
-      />
+      <ImageContextMenu src={src}>
+        <img
+          ref={imageRef}
+          data-testid={imageTestId}
+          src={src}
+          alt={alt}
+          className="mx-auto max-h-[88vh] max-w-full rounded-md object-contain"
+        />
+      </ImageContextMenu>
       {children}
     </DialogContent>
   );

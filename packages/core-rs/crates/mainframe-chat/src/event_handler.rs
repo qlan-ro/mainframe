@@ -20,7 +20,7 @@ use tracing::{debug, warn};
 
 use crate::display_emitter::emit_display_delta;
 use crate::message_cache::MessageCache;
-use crate::permission_manager::PermissionManager;
+use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
@@ -92,9 +92,10 @@ pub trait EventHandlerDeps: Send + Sync {
     fn send_push(&self, _msg: PushOut) {}
 
     /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
-    /// end (the CLI owns them; none can report completion after it dies). Default
-    /// no-op mirrors the TS optional `tracker?`.
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
+    /// end (the CLI owns them; none can report completion after it dies). Required,
+    /// not defaulted: a silently-inherited no-op left orphaned tasks Running forever
+    /// in production, the same defaulted-trait bug class as #273.
+    fn tracker_end_all_running(&self, chat_id: &str);
 
     /// `onProviderQuota(adapterId, quota)` — an account-wide provider-plan quota
     /// escalation pushed from a session event (Codex `account/rateLimits/updated`,
@@ -310,6 +311,35 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let r = f(&mut v);
         msgs.set(&self.chat_id, v);
         Some(r)
+    }
+
+    /// Emits `PermissionRequested` (plus its push, when notify-worthy) for the
+    /// request now at the front of the queue, then a `ChatUpdated` — mirroring
+    /// what `on_permission` emits for a freshly enqueued front request.
+    fn promote_next(&self, next: Option<ControlRequest>) {
+        if let Some(next) = next {
+            let notify = self.deps.should_notify_permission(Some(&next.tool_name));
+            self.deps.emit_event(DaemonEvent::PermissionRequested {
+                chat_id: self.chat_id.clone(),
+                request: next.clone(),
+                notify,
+            });
+            if notify {
+                let tool = &next.tool_name;
+                self.deps.send_push(PushOut {
+                    chat_id: self.chat_id.clone(),
+                    title: "Permission Required".to_string(),
+                    body: format!("Agent wants to run: {tool}"),
+                    push_type: "permission".to_string(),
+                    priority: "high".to_string(),
+                });
+            }
+        }
+        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+            let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+            self.deps
+                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        }
     }
 }
 
@@ -604,6 +634,35 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     priority: "high".to_string(),
                 });
             }
+        }
+    }
+
+    fn on_permission_cancelled(&self, request_id: &str) {
+        let outcome = self
+            .permissions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .cancel(&self.chat_id, request_id);
+
+        let was_front = matches!(outcome, CancelOutcome::Front { .. });
+        let next = match outcome {
+            CancelOutcome::Unknown => {
+                debug!(
+                    chat_id = self.chat_id,
+                    request_id, "permission cancel for an unknown or already-resolved request"
+                );
+                return;
+            }
+            CancelOutcome::Queued => None,
+            CancelOutcome::Front { next } => next,
+        };
+
+        self.deps.emit_event(DaemonEvent::PermissionResolved {
+            chat_id: self.chat_id.clone(),
+            request_id: request_id.to_string(),
+        });
+        if was_front {
+            self.promote_next(next);
         }
     }
 
@@ -1183,6 +1242,9 @@ fn now_ms() -> i64 {
 mod worktree_trigger_tests;
 
 #[cfg(test)]
+mod permission_cancel_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::test_chat;
@@ -1282,6 +1344,8 @@ mod tests {
                 q.ingest(adapter_id, quota, IngestMode::Push);
             }
         }
+        /// Empty on purpose: BgDeps below covers on_exit's tracker_end_all_running wiring.
+        fn tracker_end_all_running(&self, _chat_id: &str) {}
     }
 
     fn umsg(id: &str, meta: Option<HashMap<String, serde_json::Value>>) -> ChatMessage {
@@ -1947,8 +2011,9 @@ mod tests {
 // notes: parent assistant usage (or None); codex sends this turn's raw input usage
 // notes: to mirror the TS `undefined→usage` fallback. onContextUsage persists
 // notes: lastContextTotal/MaxTokens +
-// notes: broadcasts chat.updated ungated. onExit calls tracker_end_all_running (new
-// notes: defaulted deps method) BEFORE clearing processState. onMessage drain-turn
+// notes: broadcasts chat.updated ungated. onExit calls tracker_end_all_running
+// notes: (required deps method, wired through DaemonChatDeps — #273) BEFORE
+// notes: clearing processState. onMessage drain-turn
 // notes: re-entry flips a non-working processState back to working + emits chat.updated
 // notes: (snapshot-under-lock, emit-after-drop per CONCURRENCY.tsv rule 3).
 // notes: Ported: session-path (3), move-on-process (3), turn-timing (2),

@@ -35,6 +35,7 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
         ),
         "onToolResult" => sink.on_tool_result(arg(event, 0)?),
         "onPermission" => sink.on_permission(arg::<ControlRequest>(event, 0)?),
+        "onPermissionCancelled" => sink.on_permission_cancelled(&arg::<String>(event, 0)?),
         "onResult" => sink.on_result(arg::<SessionResult>(event, 0)?),
         "onExit" => sink.on_exit(arg::<Option<i32>>(event, 0)?),
         "onError" => sink.on_error(AdapterError::Message(recorded_error(event)?)),
@@ -74,4 +75,87 @@ fn recorded_error(event: &RecordedEvent) -> Result<String, String> {
         .and_then(Value::as_str)
         .map(str::to_string)
         .ok_or_else(|| "invalid recorded error".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use serde_json::json;
+
+    use crate::fixture::EventDirection;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct RecordingSink {
+        cancelled: Mutex<Vec<String>>,
+    }
+    impl SessionSink for RecordingSink {
+        fn on_init(&self, _session_id: &str) {}
+        fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
+        fn on_tool_result(&self, _content: Vec<MessageContent>) {}
+        fn on_permission(&self, _request: ControlRequest) {}
+        fn on_permission_cancelled(&self, request_id: &str) {
+            self.cancelled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(request_id.to_string());
+        }
+        fn on_result(&self, _data: SessionResult) {}
+        fn on_exit(&self, _code: Option<i32>) {}
+        fn on_error(&self, _error: AdapterError) {}
+        fn on_compact(&self) {}
+        fn on_compact_start(&self) {}
+        fn on_context_usage(&self, _usage: ContextUsage) {}
+        fn on_plan_file(&self, _file_path: &str) {}
+        fn on_skill_file(&self, _entry: SkillFileEntry) {}
+        fn on_queued_processed(&self, _uuid: &str) {}
+        fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
+        fn on_pr_detected(&self, _pr: DetectedPr) {}
+        fn on_cli_message(&self, _text: &str) {}
+        fn on_skill_loaded(&self, _entry: LoadedSkill) {}
+        fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
+    }
+
+    fn recorded(method: &str, args: Vec<Value>) -> RecordedEvent {
+        RecordedEvent {
+            dir: EventDirection::Out,
+            method: method.to_string(),
+            args,
+            delay_ms: 0,
+            files: Vec::new(),
+            deleted: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn dispatches_a_recorded_on_permission_cancelled() {
+        let sink = Arc::new(RecordingSink::default());
+        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
+        let event = recorded("onPermissionCancelled", vec![json!("req_1")]);
+
+        dispatch(&dyn_sink, &event).unwrap();
+
+        assert_eq!(
+            *sink.cancelled.lock().unwrap_or_else(|e| e.into_inner()),
+            vec!["req_1".to_string()]
+        );
+    }
+
+    #[test]
+    fn an_unknown_method_returns_ok_without_touching_the_sink() {
+        let sink = Arc::new(RecordingSink::default());
+        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
+        let event = recorded("onSomethingNobodyHeardOf", vec![json!("x")]);
+
+        dispatch(&dyn_sink, &event).unwrap();
+
+        assert!(
+            sink.cancelled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_empty()
+        );
+    }
 }

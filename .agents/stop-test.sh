@@ -8,15 +8,18 @@
 # zsh, or sh regardless of how it's invoked.
 set -uo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+PROJECT_ROOT="${MF_TARGET:-$(cd "$(dirname "$0")/.." && pwd -P)}"
 PROTECTED_PORT=31415
 
 if [ "$#" -gt 0 ]; then
   PORTS="$*"
-else
+elif [ -f "$PROJECT_ROOT/.env" ]; then
   # shellcheck disable=SC1091
-  [ -f "$PROJECT_ROOT/.env" ] && . "$PROJECT_ROOT/.env"
-  PORTS="${DAEMON_PORT:-31500} ${VITE_PORT:-5174} 9222"
+  . "$PROJECT_ROOT/.env"
+  PORTS="${DAEMON_PORT} ${VITE_PORT} 9222"
+else
+  echo "STOP_SKIPPED: no $PROJECT_ROOT/.env — nothing was launched from this checkout" >&2
+  exit 0
 fi
 
 for port in $PORTS; do

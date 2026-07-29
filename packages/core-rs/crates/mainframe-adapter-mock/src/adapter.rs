@@ -71,6 +71,7 @@ fn model(
         resolved_model: None,
         context_window: None,
         is_default: is_default.then_some(true),
+        is_older: None,
         supported_efforts: efforts,
         default_effort: capable.then_some(EffortLevel::Medium),
         supports_fast: capable.then_some(true),

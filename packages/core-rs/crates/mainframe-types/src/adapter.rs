@@ -340,6 +340,9 @@ pub struct AdapterModel {
     pub context_window: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_default: Option<bool>,
+    /// Older-but-still-active model Mainframe offers beyond the CLI's own picker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_older: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supported_efforts: Option<Vec<EffortLevel>>,
     #[serde(skip_serializing_if = "Option::is_none")]

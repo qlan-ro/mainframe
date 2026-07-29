@@ -267,6 +267,18 @@ fn handle_control_request_event(event: &Value, sink: &dyn SessionSink) {
     }
 }
 
+fn handle_control_cancel_request_event(event: &Value, sink: &dyn SessionSink) {
+    let request_id = event
+        .get("request_id")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if request_id.is_empty() {
+        tracing::warn!("control_cancel_request with a missing or empty request_id, ignoring");
+        return;
+    }
+    sink.on_permission_cancelled(request_id);
+}
+
 pub fn handle_control_response_event(
     session: &ClaudeSession,
     event: &Value,
@@ -400,6 +412,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
         Some("assistant") => handle_assistant_event(session, event, sink),
         Some("user") => handle_user_event(session, event, sink),
         Some("control_request") => handle_control_request_event(event, sink),
+        Some("control_cancel_request") => handle_control_cancel_request_event(event, sink),
         Some("control_response") => handle_control_response_event(session, event, sink),
         Some("rate_limit_event") => handle_rate_limit_event(event, sink),
         Some("result") => {
@@ -419,7 +432,13 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
             }
             handle_result_event(session, event, sink);
         }
-        _ => {}
+        _ => {
+            tracing::debug!(
+                session_id = %session.id,
+                r#type = ?ty,
+                "claude: unhandled event type"
+            );
+        }
     }
 }
 
@@ -454,6 +473,7 @@ mod tests {
         prs: Vec<DetectedPr>,
         queued: Vec<String>,
         permissions: Vec<ControlRequest>,
+        cancelled: Vec<String>,
         provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
     }
 
@@ -478,6 +498,9 @@ mod tests {
         }
         fn on_permission(&self, request: ControlRequest) {
             self.r().permissions.push(request);
+        }
+        fn on_permission_cancelled(&self, request_id: &str) {
+            self.r().cancelled.push(request_id.to_string());
         }
         fn on_result(&self, _data: SessionResult) {
             self.r().results += 1;
@@ -1341,15 +1364,60 @@ mod tests {
             &sink,
         );
     }
+
+    #[test]
+    fn control_cancel_request_forwards_the_request_id_to_the_sink() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "control_cancel_request", "request_id": "req_7" }),
+        );
+        assert_eq!(sink.r().cancelled, vec!["req_7".to_string()]);
+        assert!(sink.r().permissions.is_empty());
+    }
+
+    #[test]
+    fn a_cancel_frame_without_a_usable_request_id_forwards_nothing() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "control_cancel_request" }),
+        );
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "control_cancel_request", "request_id": "" }),
+        );
+        assert!(sink.r().cancelled.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_event_type_touches_no_sink_callback() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(&s, &sink, serde_json::json!({ "type": "stream_event" }));
+        let rec = sink.r();
+        assert!(rec.init.is_empty());
+        assert_eq!(rec.messages, 0);
+        assert_eq!(rec.tool_results, 0);
+        assert!(rec.permissions.is_empty());
+        assert!(rec.cancelled.is_empty());
+        assert_eq!(rec.results, 0);
+        assert_eq!(rec.errors, 0);
+    }
 }
 
 // PORT STATUS: src/plugins/builtin/claude/events.ts (227 lines)
 // confidence: high
 // todos: 0
 // notes: handle_stdout buffers via split('\n')+pop like TS; unknown event types
-// notes: fall through the match (logged once at the top debug!, as TS logs every
-// notes: event) — no hard error. Informational stderr patterns + the two-token
-// notes: trust advisory are hand-rolled (no regex crate). Tests ported from
+// notes: fall through the match, logged at debug on every occurrence (no hard
+// notes: error). Informational stderr patterns + the two-token trust advisory
+// notes: are hand-rolled (no regex crate). Tests ported from
 // notes: claude-events.test.ts (handleStdout/handleStderr, subagent, compaction,
 // notes: result isolation), todo-extraction, task-events-integration (real
 // notes: tracker keyed by mainframeChatId), and stop-task-routing (the resolve()
@@ -1357,3 +1425,6 @@ mod tests {
 // notes: rate_limit_event (#255/#258) normalizes via quota_rate_limit and emits
 // notes: through sink.on_provider_quota; chrono::Utc::now() is read only at this
 // notes: wiring boundary, mirroring the TS Date.now() call at the same layer.
+// notes: `control_cancel_request` (#284) is a Rust-only dispatch arm with no TS
+// notes: original: forwards a non-empty top-level request_id to
+// notes: sink.on_permission_cancelled, warning and dropping the frame otherwise.

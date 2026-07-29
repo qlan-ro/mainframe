@@ -197,6 +197,12 @@ export class ChatThreadController {
     // Stay 'idle' until setRemoteId adopts a real id (which re-fires load()).
     if (this.isLocalOnly()) return;
     if (this.loadPromise && !force) return this.loadPromise;
+    // Seed once. The adopted controller is mounted twice across the first-send
+    // handoff (draft item, then the canonical remote item), and the second
+    // mount's seed would wholesale-replace a live transcript with a REST
+    // snapshot taken before the daemon stored the message. Re-seeds are
+    // explicit: refresh() forces.
+    if (!force && this.state.loadState.type === 'ready') return;
 
     this.dispatch({ type: 'history.loading' });
 
