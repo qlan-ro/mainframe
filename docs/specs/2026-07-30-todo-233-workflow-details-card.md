@@ -48,16 +48,17 @@ Below the header, every phase from the run's seeded list renders in index order,
 that have not started (marked `not started`, no rows) — what is still coming is among the most
 informative things on the panel. Each phase header shows its kind and agent count. Agents group
 under their phase in index order. An agent row shows a state dot, its label, and right-aligned
-tokens and duration; model and attempt live in the row's hover title. Beneath the row sits at most
-**one** detail line, chosen by precedence: stale note → error text → result preview → last tool name
-and summary → nothing.
+tokens and duration; model, attempt and tool count live in the row's hover title. Beneath the row
+sits at most **one** detail line, chosen by precedence: stale note → error text → result preview →
+last tool name and summary → nothing.
 
 **Run totals are run-scoped.** The tokens and duration in the header and launcher row are the run's
 cumulative totals, not one agent's.
 
-**Live behavior.** Progress events without a snapshot update liveness only — last tool, run totals —
-and never clear the rendered structure. A snapshot replaces phases and agents wholesale rather than
-merging entry by entry, so a late or out-of-order snapshot cannot resurrect a stale agent state.
+**Live behavior.** Progress events without a snapshot update the run's token and duration totals only,
+and never clear the rendered structure. Such an event names no agent, and the panel renders no
+run-level last tool, so nothing else on screen moves. A snapshot replaces phases and agents wholesale
+rather than merging entry by entry, so a late or out-of-order snapshot cannot resurrect a stale state.
 An open panel reflects a new snapshot without waiting for a new assistant message.
 
 **Durability, honestly bounded.**
@@ -96,6 +97,11 @@ activity pill continues to distinguish nothing beyond live/not-live; run state l
 
 - Per-agent transcript drill-down — `declined` (design gate: a popover is a status readout, not a
   reading surface; the session transcript already carries the content).
+- The current phase on the transcript launcher row — `declined` (the design gate enumerates the row's
+  metadata string exhaustively; the phase is on the panel header, one click away).
+- A run-level last-tool readout and a run tool-call total — `declined` (neither the panel header nor
+  the launcher string carries them under the design gate, and a snapshot-less progress event names no
+  agent to attribute a last tool to).
 - The run's log lines, including the CLI's 500-entry ring — `declined` (same gate; a second scroll
   context inside a popover).
 - The workflow script source — `declined` (arrives as the launch prompt and can be enormous).
@@ -168,11 +174,12 @@ activity pill continues to distinguish nothing beyond live/not-live; run state l
    `data-testid="chat-workflow-phase-<index>"`; a phase with no agents reads `not started`.
 10. Each agent renders under its own phase in index order with
     `data-testid="chat-workflow-agent-<agentId>"`, showing state dot, label, tokens and duration, with
-    model and attempt in the element's title.
+    model, attempt and tool count in the element's title.
 11. An agent row shows at most one detail line, selected by the precedence: stale note, error text,
     result preview, last tool name and summary, none.
-12. A progress event carrying no snapshot updates the run totals and last activity and leaves the
-    previously rendered phases and agents intact.
+12. A progress event carrying no snapshot updates the header's and launcher row's run token and
+    duration totals and leaves the previously rendered phases and agents intact — including each
+    agent's state dot, metrics and detail line.
 13. A snapshot replaces phases and agents wholesale; feeding a snapshot older than one already applied
     does not restore an agent to an earlier state.
 14. With the panel open, a snapshot reaching the daemon updates the panel without a new assistant
@@ -275,3 +282,16 @@ activity pill continues to distinguish nothing beyond live/not-live; run state l
   response to a real run event or run record, so absence handles itself. `reversible`
 - **D17 — "Rust daemon parity" is not a constraint here.** The Node daemon is retired; the Rust daemon
   is the only runtime, per the brief. `reversible`
+- **D18 — The launcher row does not name the current phase, overriding the brief's acceptance list.**
+  The 2026-07-29 gate enumerates the row's metadata string exhaustively — agents, failed, unknown,
+  `running`, tokens, duration — and a phase title is the one field there that has no bounded width;
+  the panel header names the phase one click away. `reversible`
+- **D19 — The agent row's tool count goes in the row's hover title, beside model and attempt, not in
+  the visible row.** The snapshot carries `toolCalls`, so the brief's criterion is satisfiable, but the
+  gate fixed the visible row at two right-aligned metrics; the title is the surface the gate already
+  uses for the row's secondary identity fields. `reversible`
+- **D20 — A snapshot-less progress event updates run tokens and duration only; there is no run-level
+  last-tool or tool-call readout, overriding the brief's acceptance list.** The gate's header and
+  launcher string carry neither field, and such an event names no agent, so a last tool could not be
+  attributed to a row even if one were rendered. Last tool survives per agent, from snapshots, as the
+  row's detail line. `reversible`
