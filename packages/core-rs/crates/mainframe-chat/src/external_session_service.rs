@@ -12,7 +12,9 @@ use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
-use crate::title_generator::{derive_title_from_message, resolve_title_binary};
+use crate::title_generator::{
+    derive_title_from_message, resolve_title_binary, strip_reference_lines,
+};
 
 /// 5 minutes.
 const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
@@ -123,8 +125,15 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             ..Default::default()
         };
 
-        // Strip XML-like tags from the title (e.g. <command-message>, <local-command-caveat>)
-        let clean_title = title.map(strip_xml_tags).filter(|s| !s.is_empty());
+        // Drop the `Referenced session @session[...]: <path>` preamble (#240) — an
+        // imported session's first message carries it verbatim, and it addresses the
+        // agent, not the reader. It runs before strip_xml_tags because that collapses
+        // newlines, which would fuse the preamble with the body into one line the
+        // line-based strip then swallows whole. Both title paths consume the result.
+        let clean_title = title
+            .map(strip_reference_lines)
+            .map(|t| strip_xml_tags(&t))
+            .filter(|s| !s.is_empty());
         if let Some(ct) = &clean_title {
             updates.title = Some(derive_title_from_message(ct));
         }

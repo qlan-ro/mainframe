@@ -1792,6 +1792,27 @@ async fn with_external_sessions_wires_import_session_through_the_facade() {
     );
 }
 
+#[tokio::test]
+async fn import_session_title_drops_the_session_reference_preamble() {
+    let ext = Arc::new(FakeExternalDeps::default());
+    let service = Arc::new(ExternalSessionService::new(ext.clone()));
+    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+
+    let facade = mgr.external_session_service().expect("service injected");
+    let chat = facade
+        .import_session(
+            "p1",
+            "s1",
+            "claude",
+            Some("Referenced session @session[Model Identity]: /repo/a.jsonl\n\nlook at this"),
+            None,
+            None,
+        )
+        .await;
+
+    assert_eq!(chat.title.as_deref(), Some("look at this"));
+}
+
 // ── trust_workspace ─────────────────────────────────────────────────────────
 
 #[tokio::test]
