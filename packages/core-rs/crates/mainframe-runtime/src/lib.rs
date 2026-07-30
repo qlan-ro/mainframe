@@ -4,6 +4,7 @@
 
 pub mod auth;
 pub mod config;
+#[cfg(any(test, feature = "test-support"))]
 pub mod log_capture;
 pub mod logging;
 pub mod spawn_env;
