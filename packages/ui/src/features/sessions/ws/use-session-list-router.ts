@@ -8,6 +8,7 @@
  *   chat.updated                        → runtime.threads.reload() (idempotent;
  *                                          re-derives custom from the daemon)
  *   chat.notification / permission(notify) → unread.markUnread()
+ *   chat.notification (attention_request)  → host.notify() (OS banner)
  *
  * On every active-thread change it also: clears the active chat's unread,
  * clears the project filter when the activated chat crosses projects, adopts
@@ -26,6 +27,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
+import { getHost } from '../../../lib/host';
 import { useUnreadStore } from '../../../store/unread-store';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
@@ -108,6 +110,14 @@ export function useSessionListRouter(): void {
         // it here would leave a stale dot until the next thread switch.
         if (activeChatIdsRef.current.has(id)) return;
         useUnreadStore.getState().markUnread(id);
+      },
+      // Deliberately outside the active-thread guard onMarkUnread uses: Claude
+      // asked for the user's attention, and the user may be looking at another
+      // app entirely even when this session is the one on screen.
+      onOsNotify: (title, body) => {
+        void getHost()
+          .notify(title, body)
+          .catch((err: unknown) => console.warn('[sessions/useSessionListRouter] notify failed', err));
       },
     });
     return () => {
