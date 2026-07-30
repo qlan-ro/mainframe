@@ -7,6 +7,7 @@
  */
 import type { ApiResponse, ApiResponseEmpty } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from '../daemon/active-daemon';
+import { describeHttpFailure } from './http-failure';
 
 export function apiBase(_port?: number): string {
   return getActiveDaemon().baseUrl;
@@ -51,11 +52,13 @@ export interface ApiErrorDetail {
  */
 export class ApiRequestError extends Error {
   readonly details: ApiErrorDetail[];
+  readonly status: number;
 
-  constructor(message: string, details: ApiErrorDetail[] = []) {
+  constructor(message: string, details: ApiErrorDetail[] = [], status = 0) {
     super(message);
     this.name = 'ApiRequestError';
     this.details = details;
+    this.status = status;
   }
 }
 
@@ -78,12 +81,12 @@ async function extractError(res: Response): Promise<ApiRequestError> {
         ? data.error
         : typeof data.message === 'string'
           ? data.message
-          : `HTTP ${res.status}`;
-    return new ApiRequestError(text, errorDetails(data.errors));
+          : describeHttpFailure(res.status);
+    return new ApiRequestError(text, errorDetails(data.errors), res.status);
   } catch {
     /* not JSON */
   }
-  return new ApiRequestError(`HTTP ${res.status}`);
+  return new ApiRequestError(describeHttpFailure(res.status), [], res.status);
 }
 
 /** Fetch, unwrap the `ApiResponse<T>` envelope, and return `data`. Throws on HTTP or API error. */
