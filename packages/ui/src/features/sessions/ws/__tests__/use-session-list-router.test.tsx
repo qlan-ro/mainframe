@@ -48,7 +48,7 @@ let fakeThreadItems: Array<{
   custom?: { projectId?: string; updatedAt?: number };
 }>;
 
-let notifySpy: ReturnType<typeof vi.fn>;
+let notifySpy: ReturnType<typeof vi.fn<(title: string, body?: string) => Promise<void>>>;
 
 // Captured from the createSessionListRouter factory mock
 let capturedDeps: {
@@ -81,7 +81,7 @@ vi.mock('../session-list-router', () => ({
 }));
 
 vi.mock('../../../../lib/host', () => ({
-  getHost: () => ({ notify: (...args: unknown[]) => notifySpy(...args) }),
+  getHost: () => ({ notify: (title: string, body?: string) => notifySpy(title, body) }),
 }));
 
 vi.mock('../../../../store/unread-store', () => ({
