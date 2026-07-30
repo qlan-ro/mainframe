@@ -87,6 +87,7 @@ const REMOTE_META: DaemonMeta = {
 
 const mockAdd = vi.fn();
 const mockSwitchTo = vi.fn();
+const mockRetoken = vi.fn();
 
 let fakeHost: FakeHostBridge;
 let setTokenSpy: ReturnType<typeof vi.spyOn>;
@@ -104,6 +105,7 @@ beforeEach(() => {
     rename: vi.fn(),
     remove: vi.fn(),
     switchTo: mockSwitchTo,
+    retoken: mockRetoken,
   });
 
   vi.mocked(verifyDaemon).mockResolvedValue({ ok: true, version: '1.2.3', ms: 45 });

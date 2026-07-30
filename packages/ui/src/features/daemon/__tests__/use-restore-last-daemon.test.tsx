@@ -17,6 +17,7 @@ function makeRegistry(over: Partial<UseDaemonRegistryResult>): UseDaemonRegistry
     rename: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
     switchTo: vi.fn().mockResolvedValue(undefined),
+    retoken: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
 }
