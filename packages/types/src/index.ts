@@ -19,6 +19,7 @@ export * from './setup-advisor.js';
 export * from './session-transcript.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
+export * from './claude-workflow.js';
 export * from './worktree-offer.js';
 export * from './automation.js';
 export * from './automation-domain/index.js';
