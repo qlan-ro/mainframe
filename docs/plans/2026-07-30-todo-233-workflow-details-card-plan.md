@@ -139,6 +139,15 @@ Flag these to the user — they are mine, not the spec's.
   Inline tests would put the test group and the implementation group in the same file. The test group
   also lays down the new crate's skeleton with `unimplemented!()` bodies so the red phase is a
   failing assertion rather than a compile error.
+- **A9 — Neutralization is keyed to *any* terminal run status; the AC 18 banner is not.** AC 16 says
+  a row left in-progress under a terminal header is neutralized whenever the record cannot be read,
+  and a record can be unreadable under `completed` and `failed` just as easily as under `stopped`
+  (the CLI writes `wf_<runId>.json` on completion, so reconciliation can race the flush). So
+  `neutralizeStaleAgents` fires on `completed | failed | stopped | unavailable`. The banner stays
+  where the spec put it: AC 18 names it only for the stopped run, so only a `stopped` run renders it.
+  The consequence is the row's detail-line copy — `stopped` keeps AC 18's exact "Last observed Ns
+  before the run stopped", and the other terminal statuses read "Last observed Ns before the run
+  ended", which is one string the design gate never ruled on. **Flag to the user.**
 
 ## Files touched
 
@@ -151,7 +160,7 @@ Flag these to the user — they are mine, not the spec's.
 | `.changeset/todo-233-claude-workflow-details.md` | contract |
 | `packages/core-rs/crates/mainframe-claude-workflows/Cargo.toml` | rust-tests (skeleton) → wf-core |
 | `packages/core-rs/crates/mainframe-claude-workflows/src/{lib,store,snapshot,status,record,merge,bridge,reconcile}.rs` | rust-tests (stubs) → wf-core |
-| `packages/core-rs/crates/mainframe-claude-workflows/tests/{snapshot_parse,status_mapping,run_record,merge_precedence,store_lifecycle}.rs` | rust-tests |
+| `packages/core-rs/crates/mainframe-claude-workflows/tests/{snapshot_parse,status_mapping,run_record,merge_precedence,store_lifecycle,reconcile}.rs` | rust-tests |
 | `packages/core-rs/crates/mainframe-claude-workflows/tests/fixtures/*.json` | rust-tests |
 | `packages/core-rs/crates/mainframe-adapter-claude/tests/workflow_task_events.rs` | rust-tests |
 | `packages/core-rs/crates/mainframe-server/tests/workflow_runs_history.rs` | rust-tests |
@@ -291,7 +300,9 @@ impl ClaudeWorkflowStore {
     pub fn apply_progress(&self, chat_id: &str, task_id: &str, usage: ProgressUsage, snapshot: Option<&[Value]>);
     /// Terminal or paused stamp. Idempotent: a second terminal signal does not restart duration (AC edge).
     pub fn stamp_status(&self, chat_id: &str, task_id: &str, status: ClaudeWorkflowRunStatus);
-    /// Terminal reconciliation result (D7) and disk backfill (D9) both land here.
+    /// Terminal reconciliation (D7) lands here: a record-sourced run supersedes the retained
+    /// snapshot regardless of `structure_revision`. The disk backfill (D9) does *not* use this —
+    /// it merges outside the store via `merge_runs`.
     pub fn apply_record(&self, chat_id: &str, run: ClaudeWorkflowRun);
     /// D5 — the CLI-exit sweep's workflow counterpart.
     pub fn stop_all_running(&self, chat_id: &str);
@@ -533,9 +544,11 @@ for the same `task_id`; the result must be one record-sourced run carrying the l
 
 **Verify:** both files fail as unimplemented under `cargo test -p mainframe-claude-workflows`.
 
-### Task 9 — Store-lifecycle tests (red)
+### Task 9 — Store-lifecycle and reconcile tests (red)
 
-**Files:** create `tests/store_lifecycle.rs`.
+**Files:** create `tests/store_lifecycle.rs` and `tests/reconcile.rs`.
+
+`store_lifecycle.rs`:
 
 1. `seed` then `runs_for_chat` returns one `Running`/`Launch` run keyed by `task_id`.
 2. `link_run_id` fills `run_id` and `workflow_name`; a second call with a different id does not
@@ -553,8 +566,30 @@ for the same `task_id`; the result must be one record-sourced run carrying the l
    their last snapshot (AC 24, D5).
 8. `subscribe()` receives one `RunEvent` per mutating call and none for a no-op call.
 9. `remove_chat` drops the chat's runs.
+10. `apply_record` over a stale snapshot (AC 23, D8): seed a run, `apply_progress` a snapshot whose
+    `structure_revision` is **larger** than the record's, `stamp_status(Completed)`, then
+    `apply_record` a record-sourced run for the same `task_id`. The retained run must carry the
+    record's phases and agents, `source: Record`, and no agent left in `Start`/`Progress` — the
+    record wins despite the smaller revision.
+11. `apply_record` does not regress observed numbers: when the retained run's `total_tokens` or
+    `duration_ms` exceed the record's, the larger values survive; the record's learned `run_id` and
+    `workflow_name` fill in where the retained run lacks them.
+12. `apply_record` twice with the same record is a no-op the second time — no `RunEvent` on
+    `subscribe()`, and `terminal_at` does not move (a duplicate terminal signal reaching a
+    record-sourced run; spec's duplicate-terminal edge case).
+13. `apply_record` for a `task_id` the chat has never seen inserts the run rather than dropping it
+    (a run reconciled after `remove_chat`, or a record for a task the store never seeded).
 
-**Verify:** `cargo test -p mainframe-claude-workflows --test store_lifecycle` fails as unimplemented.
+`reconcile.rs`: with a `tempfile::TempDir` standing in for the project dir, write
+`<tmp>/<session_id>/workflows/wf_<runId>.json` (the Task 8 fixture), seed the store with a run
+carrying a stale in-progress snapshot for that `task_id`, call `spawn_terminal_reconcile`, and await
+the store's `subscribe()` receiver under a `tokio::time::timeout` (never a bare sleep). Assert the run
+ends record-sourced with the record's agents. A second test points `RecordLocation` at an empty dir
+and asserts the run keeps its stamped terminal status and its retained snapshot, and that no
+`RunEvent` arrives before the timeout — the deferral Task 16 documents.
+
+**Verify:** `cargo test -p mainframe-claude-workflows --test store_lifecycle --test reconcile` fails as
+unimplemented.
 
 ### Task 10 — Adapter task-event tests (red)
 
@@ -661,10 +696,24 @@ no-op and emits no event. `stop_all_running` stamps `Stopped` on every run whose
 functions to stay under the limits; if `store.rs` approaches 300 lines, move the mutation helpers to
 `store_mutations.rs` and re-export.
 
+`apply_record` is the one method that does **not** follow `apply_progress`'s freshness rule. Per D8
+the record is final by definition, so it supersedes the retained run's `phases`, `agents`, `status`,
+`terminal_at` and `structure_revision` **regardless of `structure_revision`** — a snapshot revision
+larger than the record's never blocks it. It sets `source: Record`, keeps cumulative totals at
+`max(retained, record)` so observed numbers cannot regress, and copies a learned `run_id` /
+`workflow_name` from whichever side has one. Two carve-outs, both pinned by Task 9: a record whose
+`phases` *and* `agents` are both empty does not clobber a populated retained run (the same inversion
+as *Merge precedence* rule 2 — it may still stamp status and totals); and a record identical to a run
+already `Record`-sourced is a no-op that emits no event and does not move `terminal_at`. A `task_id`
+the chat does not hold is inserted.
+
 `reconcile.rs`: `spawn_terminal_reconcile` spawns a Tokio task that calls
 `record::read_run_records`, finds the record whose `task_id` matches, and calls `store.apply_record`.
-When no record is found it logs at `debug` and leaves the stamped status alone — the UI's
-neutralization (AC 16 second half) handles it.
+When no record is found — unreadable, or not yet flushed — it logs at `debug` and leaves the stamped
+terminal status and the retained snapshot alone. The rows that snapshot still shows as `start` /
+`progress` are then neutralized by the UI under **any** terminal status, not only `Stopped`
+(AC 16 second half; Task 26/34's `neutralizeStaleAgents` predicate). The daemon never invents an
+outcome the record did not supply.
 
 `bridge.rs`: `spawn_workflow_run_bridge` mirrors `main.rs:506` exactly — subscribe, loop, map
 `RunEvent` to `DaemonEvent::ClaudeWorkflowRunUpdated`, `warn!` on `Lagged`, `break` on `Closed`.
@@ -914,8 +963,17 @@ Against the (not yet written) pure modules:
 - `summarizeRun(run, now)` names the **deepest phase that has spawned an agent**, including the case
   where the only unfinished agent errored in an earlier phase (AC 8), and emits
   `X of Y done`, `N running`, `N failed`, `N unknown` with zeros omitted.
-- `neutralizeStaleAgents(run, now)`: with `run.status === 'stopped'`, agents in `start`/`progress`
-  become `unknown`; agents in `done`/`error` are untouched; observed tokens survive (D14, AC 18).
+- `neutralizeStaleAgents(run, now)` — the predicate is **any terminal run status**, not `stopped`
+  alone: `completed`, `failed`, `stopped` and `unavailable` all neutralize agents last seen
+  `start`/`progress` into `unknown`, because the daemon defers to the UI whenever the run record was
+  unreadable or not yet flushed (Task 16's `reconcile.rs`). One test per status, including a
+  `completed` run and a `failed` run whose agents are still `progress` — those are the AC 16 cases a
+  `stopped`-only predicate leaves asserting a stale in-progress state under a terminal header.
+  Agents in `done`/`error` are untouched under every status, a `running` run neutralizes nothing, and
+  observed tokens and duration survive neutralization (D14, AC 16, AC 18).
+- `staleNote(run, agent, now)` supplies the neutralized row's detail line: a `stopped` run reads
+  "Last observed Ns before the run stopped" (AC 18's words, verbatim); every other terminal status
+  reads "Last observed Ns before the run ended" (A9). One test per branch.
 - `agentDetailLine(agent, run)` returns exactly one line by the precedence stale → error →
   resultPreview → lastToolName·lastToolSummary → null — one test per rung (AC 11).
 
@@ -943,6 +1001,10 @@ Against the (not yet written) pure modules:
 - An agent in the `error` state shows its error text as the single detail line (AC 11).
 - A `stopped` run renders hollow-ring `unknown` rows with dimmed metrics, a "Last observed Ns before
   the run stopped" detail line, and the banner naming the unknown count (AC 18).
+- A `completed` run whose last snapshot still holds `progress` agents — the record was unreadable, so
+  the daemon left the stamp alone — renders those rows hollow-ring `unknown` with the "before the run
+  ended" detail line and **no** banner, and never a pulsing in-progress dot under the Completed chip
+  (AC 16, A9). Same assertion for a `failed` run.
 - An `unavailable` run renders "Run details unavailable", one explanatory line, the run id in the
   header, and **no** phase list, agent rows or counters (AC 19).
 - A snapshot with no agents, and a run with no phases, render without error (spec edge case).
@@ -1040,7 +1102,17 @@ standard fractional steps) and that `mf-*` typos render as nothing with no error
 **Files:** create `workflow/workflow-progress.ts` (run-level: `parseWorkflowLaunch`, `summarizeRun`,
 `runMetaString`, `outcomeDot`, `statusChipLabel`, `formatRunTokens`, `formatRunDuration`) and
 `workflow/workflow-agent-view.ts` (agent-level: the `ViewAgent` type, `neutralizeStaleAgents`,
-`agentDetailLine`, `agentDotTone`, `agentTitle`).
+`staleNote`, `agentDetailLine`, `agentDotTone`, `agentTitle`).
+
+`neutralizeStaleAgents(run, now)` neutralizes on **any terminal run status** — `completed`, `failed`,
+`stopped`, `unavailable` — never on `stopped` alone (A9). Every agent last seen `start` or `progress`
+under one of those statuses becomes `state: 'unknown'` with its observed tokens and duration intact;
+`done` and `error` agents pass through untouched; a `running` run is returned as-is. This is the
+second half of AC 16: the daemon leaves a run's stamped terminal status alone when its record is
+unreadable or not yet flushed (Task 16), so `completed` and `failed` runs reach the UI carrying
+in-progress rows exactly as `stopped` runs do. `staleNote` supplies the neutralized row's detail line,
+which `agentDetailLine` ranks first in its precedence: "Last observed Ns before the run stopped" for a
+stopped run, "Last observed Ns before the run ended" for the other terminal statuses.
 
 Reuse `formatElapsed` from `BackgroundActivityBar.tsx` (already exported) rather than adding a third
 duration formatter.
@@ -1065,7 +1137,9 @@ Both files under 300 lines, every function under 50.
 Header: workflow name, status chip (`STATUS_LABEL`/`STATUS_CHIP` records from the prototype), the
 summary line from `summarizeRun`, right-aligned run tokens and duration; shell
 `flex items-start gap-2.5 border-b border-border px-2.5 py-2.5`. Banner: one sentence naming the
-unknown-outcome count and how long before the stop they were last seen. Unavailable body: the
+unknown-outcome count and how long before the stop they were last seen. It renders **only** for a
+`stopped` run (A9) — the other terminal statuses still neutralize their rows, but AC 18 scopes the
+banner to the stopped case and its copy names the stop. Unavailable body: the
 "Run details unavailable" title, one explanatory line, and the run id where the summary would be.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui typecheck`; each file under 150 lines.
