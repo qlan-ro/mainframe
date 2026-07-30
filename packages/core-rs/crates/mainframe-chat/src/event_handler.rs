@@ -91,6 +91,10 @@ pub trait EventHandlerDeps: Send + Sync {
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool;
     fn notify_task_complete(&self) -> bool;
     fn notify_session_error(&self) -> bool;
+    /// Gates `notifications.chat.attentionRequest`. Not defaulted — a
+    /// defaulted trait method silently inherited the wrong behavior once
+    /// before (bug class #273), so every deps impl must state its answer.
+    fn notify_attention_request(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
 
     /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
@@ -1348,6 +1352,9 @@ mod tests {
         fn notify_session_error(&self) -> bool {
             false
         }
+        fn notify_attention_request(&self) -> bool {
+            true
+        }
         fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
             // Mirror DaemonChatDeps: session-pushed quota sparse-merges (Push).
             if let Some(q) = &self.quota {
@@ -1872,6 +1879,9 @@ mod tests {
         }
         fn notify_session_error(&self) -> bool {
             false
+        }
+        fn notify_attention_request(&self) -> bool {
+            true
         }
         fn tracker_end_all_running(&self, chat_id: &str) {
             self.tracker.end_all_running(chat_id);

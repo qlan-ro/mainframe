@@ -245,6 +245,10 @@ pub trait ChatManagerDeps: Send + Sync {
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool;
     fn notify_task_complete(&self) -> bool;
     fn notify_session_error(&self) -> bool;
+    /// Gates `notifications.chat.attentionRequest`. Not defaulted — a
+    /// defaulted trait method silently inherited the wrong behavior once
+    /// before (bug class #273), so every deps impl must state its answer.
+    fn notify_attention_request(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
 
     /// `onProviderQuota(adapterId, quota)` — account-wide provider-plan quota pushed
@@ -479,6 +483,9 @@ impl EventHandlerDeps for EhDeps {
     }
     fn notify_session_error(&self) -> bool {
         self.deps.notify_session_error()
+    }
+    fn notify_attention_request(&self) -> bool {
+        self.deps.notify_attention_request()
     }
     fn send_push(&self, msg: PushOut) {
         self.deps.send_push(msg);
