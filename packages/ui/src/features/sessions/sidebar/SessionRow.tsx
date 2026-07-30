@@ -202,6 +202,7 @@ function SessionRowInner({
                 worktreeMissing={custom.worktreeMissing}
                 tags={custom.tags}
                 colorOf={colorOf}
+                hasPrAffordance={custom.detectedPrs.length > 0}
               />
               <SessionRowPrRegion detectedPrs={custom.detectedPrs} />
               <SessionRowTrailingSlot

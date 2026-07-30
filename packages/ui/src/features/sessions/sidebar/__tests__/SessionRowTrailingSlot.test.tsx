@@ -49,3 +49,18 @@ it('renders all three hover actions, always present in the DOM', () => {
   expect(screen.getByTestId('sessions-row-action-tags')).toBeTruthy();
   expect(screen.getByTestId('sessions-row-action-archive')).toBeTruthy();
 });
+
+it('goes invisible on hover instead of relying on an opaque overlay, so it never shows through the icons', () => {
+  render(
+    <SessionRowTrailingSlot updatedAt={Date.now()} pinned={false} onPin={noop} onUnpin={noop} onTags={vi.fn()} onArchive={noop} />,
+  );
+  expect(screen.getByTestId('sessions-row-relative-time').className).toContain('group-hover:invisible');
+});
+
+it('paints no background of its own behind the hover actions, so the row is the only thing tinting it', () => {
+  const { container } = render(
+    <SessionRowTrailingSlot updatedAt={Date.now()} pinned={false} onPin={noop} onUnpin={noop} onTags={vi.fn()} onArchive={noop} />,
+  );
+  const overlay = container.querySelector('.absolute.inset-0');
+  expect(overlay?.className).not.toMatch(/bg-accent|bg-mf-selection/);
+});

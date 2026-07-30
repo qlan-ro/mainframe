@@ -20,7 +20,12 @@ import { it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
-import { SESSION_ROW_DOT_YIELD_CLASS, SESSION_ROW_WORKTREE_YIELD_CLASS } from '../session-row-layout';
+import {
+  SESSION_ROW_DOT_YIELD_CLASS,
+  SESSION_ROW_WORKTREE_YIELD_CLASS,
+  SESSION_ROW_DOT_YIELD_CLASS_NO_PR,
+  SESSION_ROW_WORKTREE_YIELD_CLASS_NO_PR,
+} from '../session-row-layout';
 
 vi.mock('@assistant-ui/react', () => ({
   ThreadListItemRuntimeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -134,11 +139,28 @@ it('renders the inline chip, not the count indicator, for exactly one detected P
   expect(screen.queryByTestId('sessions-row-pr-overflow')).toBeNull();
 });
 
-it('gives the worktree glyph and tag dots their own independent container-query yield class', () => {
-  render(<SessionRow item={makeItem({ worktreePath: '/repos/mf/.git/worktrees/feat-x', tags: ['a'] })} />);
+it('gives the worktree glyph and tag dots their own independent container-query yield class, on a row carrying a PR', () => {
+  render(
+    <SessionRow
+      item={makeItem({
+        worktreePath: '/repos/mf/.git/worktrees/feat-x',
+        tags: ['a'],
+        detectedPrs: [{ number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' }],
+      })}
+    />,
+  );
 
   expect(screen.getByTestId('sessions-row-meta-icon-worktree').className).toContain(SESSION_ROW_WORKTREE_YIELD_CLASS);
   expect(screen.getByTestId('sessions-row-meta-icon-tag-dots').className).toContain(SESSION_ROW_DOT_YIELD_CLASS);
+});
+
+it('gives a PR-less row the looser no-PR yield classes, since it never pays the PR affordance width cost', () => {
+  render(<SessionRow item={makeItem({ worktreePath: '/repos/mf/.git/worktrees/feat-x', tags: ['a'] })} />);
+
+  expect(screen.getByTestId('sessions-row-meta-icon-worktree').className).toContain(
+    SESSION_ROW_WORKTREE_YIELD_CLASS_NO_PR,
+  );
+  expect(screen.getByTestId('sessions-row-meta-icon-tag-dots').className).toContain(SESSION_ROW_DOT_YIELD_CLASS_NO_PR);
 });
 
 it('reserves the trailing slot at rest, unaffected by how many PRs or tags the row carries', () => {
