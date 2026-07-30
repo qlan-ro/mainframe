@@ -7,6 +7,7 @@
  */
 import type { ApiResponse, ApiResponseEmpty } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from '../daemon/active-daemon';
+import { markAuthFailure, clearAuthFailure } from '../daemon/auth-failure-store';
 import { describeHttpFailure } from './http-failure';
 
 export function apiBase(_port?: number): string {
@@ -73,6 +74,24 @@ function errorDetails(raw: unknown): ApiErrorDetail[] {
   });
 }
 
+/**
+ * Every REST wrapper routes its fetch through here so a remote 401/403 marks
+ * that daemon's auth-failure state (driving `needs-repair` in the footer) and
+ * any other outcome clears it. A local (loopback-trusted) target is never
+ * marked — it carries no token and can never legitimately need a re-pair.
+ * Any status other than 401/403/ok leaves the marker untouched: a 500 is a
+ * server failure, not an authorization statement.
+ */
+async function fetchChecked(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  const { kind, id } = getActiveDaemon();
+  if (kind === 'remote') {
+    if (res.status === 401 || res.status === 403) markAuthFailure(id);
+    else if (res.ok) clearAuthFailure(id);
+  }
+  return res;
+}
+
 async function extractError(res: Response): Promise<ApiRequestError> {
   try {
     const data = (await res.json()) as { error?: unknown; message?: unknown; errors?: unknown };
@@ -91,7 +110,7 @@ async function extractError(res: Response): Promise<ApiRequestError> {
 
 /** Fetch, unwrap the `ApiResponse<T>` envelope, and return `data`. Throws on HTTP or API error. */
 export async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, fetchInit(method, body));
+  const res = await fetchChecked(url, fetchInit(method, body));
   if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponse<T>;
   if (!json.success) throw new Error(json.error);
@@ -100,7 +119,7 @@ export async function request<T>(method: string, url: string, body?: unknown): P
 
 /** Like `request` but for routes that return `okEmpty` (no `data`). */
 export async function requestEmpty(method: string, url: string, body?: unknown): Promise<void> {
-  const res = await fetch(url, fetchInit(method, body));
+  const res = await fetchChecked(url, fetchInit(method, body));
   if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponseEmpty;
   if (!json.success) throw new Error(json.error);
@@ -108,7 +127,7 @@ export async function requestEmpty(method: string, url: string, body?: unknown):
 
 /** For routes that return HTTP 204 with no body (e.g. DELETE /api/tags/:name). */
 export async function requestNoContent(method: string, url: string): Promise<void> {
-  const res = await fetch(url, fetchInit(method));
+  const res = await fetchChecked(url, fetchInit(method));
   if (!res.ok) throw await extractError(res);
 }
 
@@ -118,14 +137,14 @@ export async function requestNoContent(method: string, url: string): Promise<voi
  * body typed as T (the caller extracts the named field).
  */
 export async function requestPlugin<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, fetchInit(method, body));
+  const res = await fetchChecked(url, fetchInit(method, body));
   if (!res.ok) throw await extractError(res);
   return (await res.json()) as T;
 }
 
 /** For plugin routes that return HTTP 204 with no body (DELETE). */
 export async function requestPluginNoContent(method: string, url: string): Promise<void> {
-  const res = await fetch(url, { method, headers: authHeaders() });
+  const res = await fetchChecked(url, { method, headers: authHeaders() });
   if (!res.ok) throw await extractError(res);
 }
 
