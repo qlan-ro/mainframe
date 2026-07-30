@@ -30,6 +30,8 @@ struct StoreDeps {
     /// When `Some`, `write_workspace_trust` fails with this message instead of
     /// recording the call.
     fail_trust_write: Mutex<Option<String>>,
+    /// When `Some`, `projects_remove` records the id and then fails with this message.
+    fail_project_remove: Mutex<Option<String>>,
     /// What `generate_title` returns.
     generated_title: Mutex<Option<String>>,
     /// The `content` of every `generate_title` call, in order.
@@ -144,11 +146,15 @@ impl ChatManagerDeps for StoreDeps {
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         Some("/tmp/test".to_string())
     }
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         self.project_removed
             .lock()
             .unwrap()
             .push(project_id.to_string());
+        match self.fail_project_remove.lock().unwrap().clone() {
+            Some(msg) => Err(msg),
+            None => Ok(()),
+        }
     }
     fn write_workspace_trust<'a>(
         &'a self,
@@ -1335,12 +1341,38 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
     seed_active(&mgr, "c1", c1, s1);
     seed_active(&mgr, "c2", c2, s2);
 
-    mgr.remove_project("p1").await;
+    assert!(mgr.remove_project("p1").await.is_ok());
 
     let order = order.lock().unwrap();
     let idx = |s: &str| order.iter().position(|x| x == s);
     assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert!(idx("kill:c2:no-wt").unwrap() < idx("sess.kill:c2").unwrap());
+    assert_eq!(
+        deps.project_removed.lock().unwrap().as_slice(),
+        &["p1".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn remove_project_propagates_a_row_delete_failure() {
+    let mut c1 = test_chat("c1");
+    c1.project_id = "p1".to_string();
+    c1.worktree_path = Some("/wt/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    let order = deps.order.clone();
+    *deps.fail_project_remove.lock().unwrap() = Some("database is locked".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let s1 = RecSession::with_order("c1", order.clone());
+    seed_active(&mgr, "c1", c1, s1);
+
+    let result = mgr.remove_project("p1").await;
+    assert_eq!(result, Err("database is locked".to_string()));
+
+    let order = order.lock().unwrap();
+    let idx = |s: &str| order.iter().position(|x| x == s);
+    assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert_eq!(
         deps.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
