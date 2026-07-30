@@ -143,6 +143,7 @@ pub struct ProviderConfigUpdate {
 pub struct NotificationChatConfig {
     pub task_complete: bool,
     pub session_error: bool,
+    pub attention_request: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +192,7 @@ impl Default for NotificationConfig {
             chat: NotificationChatConfig {
                 task_complete: true,
                 session_error: true,
+                attention_request: true,
             },
             permission: NotificationPermissionConfig {
                 tool_request: true,
