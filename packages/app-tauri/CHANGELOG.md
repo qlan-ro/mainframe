@@ -1,5 +1,26 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.0.0-rc.17
+
+### Minor Changes
+
+- [#542](https://github.com/qlan-ro/mainframe/pull/542) [`39daa55`](https://github.com/qlan-ro/mainframe/commit/39daa550646397b31943ab6f747ea8f1fa42948d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - The Run surface can open any http/https URL in a tab, tunnelling loopback URLs on a remote daemon.
+
+### Patch Changes
+
+- [#530](https://github.com/qlan-ro/mainframe/pull/530) [`dd2f683`](https://github.com/qlan-ro/mainframe/commit/dd2f683638bc003cb8ed27bdc7040fae3eb2cbd6) Thanks [@doruchiulan](https://github.com/doruchiulan)! - A session started with a slash command now gets a title. The daemon skipped its whole title path when the first message was a command, so the session stayed "Untitled" on every client, including the phone. It now derives the same fallback title from what you typed and replaces it with the generated summary moments later.
+
+- [#529](https://github.com/qlan-ro/mainframe/pull/529) [`739b8d8`](https://github.com/qlan-ro/mainframe/commit/739b8d8e9baf1a808969fcb9e32c279703900c0a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the Claude adapter persisting session-scoped permission grants. It used to rewrite every permission update's destination to `.claude/settings.local.json` before echoing it back to the CLI, regardless of what the CLI itself declared — most damagingly for a permission-mode change, which landed as the project's new default mode. The adapter now forwards each update's declared destination as-is, with one added rule: a mode change is never forwarded to a persisting destination, so it can only ever apply to the running session.
+
+  The same inverted rewrite is removed from the orphaned Node daemon (`packages/core`); its `setMode` guard was not ported there, since that daemon is unshipped and kept only for its `package.json` version.
+
+  Entries this bug already wrote into `.claude/settings.local.json` — most notably a stray `defaultMode` — are not migrated or removed by this fix. If you see one you didn't set deliberately, delete it by hand.
+
+- [#533](https://github.com/qlan-ro/mainframe/pull/533) [`88f1da1`](https://github.com/qlan-ro/mainframe/commit/88f1da1a3f87f63a1f88322005c4f0ba024b8a73) Thanks [@doruchiulan](https://github.com/doruchiulan)! - `pnpm tauri:dev` now provisions the daemon sidecar when it is missing, so a checkout that has never built one starts instead of failing in `build.rs` with an unexplained missing-resource panic.
+
+- Updated dependencies [[`25ea938`](https://github.com/qlan-ro/mainframe/commit/25ea93843e5215a5c0a7b0b1f4ee7757b868be1c), [`ca7cda3`](https://github.com/qlan-ro/mainframe/commit/ca7cda36edd6a4523d959c43e3d66718dc61f6ee), [`3479a7f`](https://github.com/qlan-ro/mainframe/commit/3479a7f9c772f1baa1da6d9ff4ecdf889b7d68b1), [`1a21bd0`](https://github.com/qlan-ro/mainframe/commit/1a21bd001a67ba8fb5d05d9b6fcb503e9053502e), [`39daa55`](https://github.com/qlan-ro/mainframe/commit/39daa550646397b31943ab6f747ea8f1fa42948d), [`58b017f`](https://github.com/qlan-ro/mainframe/commit/58b017f57d7edc57ba277201c114201288d78975)]:
+  - @qlan-ro/mainframe-ui@2.0.0-rc.17
+
 ## 2.0.0-rc.16
 
 ### Minor Changes
