@@ -8,7 +8,7 @@ Sending a message with attachments to a **remote** daemon fails silently-ish: th
 
 ## Constraints
 
-- Max 300 lines/file, 50 lines/function. `AddRemoteDialog.tsx` is **already at 308 lines** — task 19 extracts a helper so the file shrinks rather than grows. `routes/attachments.rs::upload` is already 48 lines — task 21 decomposes it before adding logging.
+- Max 300 lines/file, 50 lines/function. `AddRemoteDialog.tsx` is **already at 308 lines** — task 20 extracts a helper so the file shrinks rather than grows. `routes/attachments.rs::upload` is already 48 lines — task 22 decomposes it before adding logging.
 - Every interactive element gets a kebab-case `data-testid` keyed by domain id.
 - No `@ts-ignore`; no silent catches; new logic gets tests; a changeset is required.
 - Contract changes to WS/REST must stay additive (mobile co-owns the contract). Nothing here changes the wire contract.
@@ -125,11 +125,28 @@ File: `packages/ui/src/features/daemon/__tests__/AddRemoteDialog-retoken.test.ts
 
 Verify: `vitest run src/features/daemon/__tests__/AddRemoteDialog-retoken.test.tsx` — fails (no token refresh path).
 
+### Task 8 — unit test: a remote auth failure marks the daemon
+
+File: `packages/ui/src/lib/api/__tests__/http-auth-failure.test.ts` (new — mirror `http-auth.test.ts`, which already drives `setActiveDaemon` plus `vi.spyOn(globalThis, 'fetch')`)
+
+This is the causal link the whole fix rests on: a 401 from the attachment upload must be what makes the daemon read `needs-repair`. Task 2 tests the store alone and task 6 tests the footer *given* a marker; only this test joins them.
+
+Drive `request('GET', apiBase() + '/api/projects')` from `../http` against a mocked `fetch` and assert `hasAuthFailure` from `../../daemon/auth-failure-store`. The store is module-level state, so `clearAuthFailure` both ids in `beforeEach`.
+
+- Remote active (`{ id: 'studio', kind: 'remote', token: 'jwt' }`), response `401` → `hasAuthFailure('studio')` is true.
+- Remote active, response `403` → true.
+- **Local** active (`{ id: 'local', kind: 'local', token: null }`), response `401` → `hasAuthFailure('local')` stays false. A local target carries no token and can never legitimately need a re-pair, so it must never be marked.
+- Remote active, response `500`, marker set beforehand via `markAuthFailure('studio')` → still true; with no marker set → still false. A server error is not an authorization statement, so it moves the marker in neither direction.
+- Remote active, response `200` with `{"success":true,"data":null}`, marker set beforehand → cleared.
+- Every failing case still rejects with the `ApiRequestError` `extractError` produced — marking must not swallow or replace the thrown error.
+
+Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/api/__tests__/http-auth-failure.test.ts` — fails (module `../../daemon/auth-failure-store` missing).
+
 ---
 
 ## Phase 0b — red tests (Rust)
 
-### Task 8 — integration test: one log record per upload outcome
+### Task 9 — integration test: one log record per upload outcome
 
 Files: `packages/core-rs/crates/mainframe-server/tests/routes_attachments_logging.rs` (new), `packages/core-rs/crates/mainframe-server/Cargo.toml` (add `tracing-subscriber = { workspace = true }` to `[dev-dependencies]`)
 
@@ -142,11 +159,11 @@ Each `tests/*.rs` is its own binary, so a capturing subscriber installed here af
 
 Verify: `cd packages/core-rs && cargo test -p mainframe-server --test routes_attachments_logging` — fails (no records emitted).
 
-### Task 9 — un-ignore the >2 MB upload test
+### Task 10 — un-ignore the >2 MB upload test
 
 File: `packages/core-rs/crates/mainframe-server/tests/routes_attachments.rs`
 
-Delete the `#[ignore = "http.rs applies RequestBodyLimitLayer(30mb) but not DefaultBodyLimit::disable() …"]` attribute (and its stale reasoning) on `returns_400_when_base64_payload_exceeds_5mb`. This test documents a real, currently-shipping bug: axum's default 2 MB extractor limit shadows the 30 MB layer, so **any attachment over ~1.5 MB is rejected with an empty-bodied 413** — on local *and* remote daemons — even though the composer's own gate allows 5 MB. Task 23 fixes it.
+Delete the `#[ignore = "http.rs applies RequestBodyLimitLayer(30mb) but not DefaultBodyLimit::disable() …"]` attribute (and its stale reasoning) on `returns_400_when_base64_payload_exceeds_5mb`. This test documents a real, currently-shipping bug: axum's default 2 MB extractor limit shadows the 30 MB layer, so **any attachment over ~1.5 MB is rejected with an empty-bodied 413** — on local *and* remote daemons — even though the composer's own gate allows 5 MB. Task 24 fixes it.
 
 Verify: `cargo test -p mainframe-server --test routes_attachments returns_400_when_base64_payload_exceeds_5mb` — fails with 413 instead of 400.
 
@@ -154,7 +171,7 @@ Verify: `cargo test -p mainframe-server --test routes_attachments returns_400_wh
 
 ## Phase 1 — REST error layer (`core`)
 
-### Task 10 — human sentences + a status on `ApiRequestError`
+### Task 11 — human sentences + a status on `ApiRequestError`
 
 Files: `packages/ui/src/lib/api/http-failure.ts` (new), `packages/ui/src/lib/api/http.ts`
 
@@ -164,7 +181,7 @@ Files: `packages/ui/src/lib/api/http-failure.ts` (new), `packages/ui/src/lib/api
 
 Verify: `vitest run src/lib/api/__tests__/http-failure.test.ts` passes (task 1 goes green).
 
-### Task 11 — mark and clear the remote auth failure
+### Task 12 — mark and clear the remote auth failure
 
 Files: `packages/ui/src/lib/daemon/auth-failure-store.ts` (new), `packages/ui/src/lib/api/http.ts`
 
@@ -172,9 +189,9 @@ Files: `packages/ui/src/lib/daemon/auth-failure-store.ts` (new), `packages/ui/sr
 - In `http.ts`, add one private `async function fetchChecked(url, init): Promise<Response>` that all six wrappers (`request`, `requestEmpty`, `requestNoContent`, `requestPlugin`, `requestPluginNoContent`, and `fetchInit`'s callers) route through. It calls `fetch`, then, **only when the active daemon is remote**: on `res.status === 401 || res.status === 403` calls `markAuthFailure(activeId)`; on `res.ok` calls `clearAuthFailure(activeId)`. Any other status leaves the marker alone (a 500 is not an authorization statement).
 - Do **not** add this store to `resetDaemonScopedStores` — the markers are keyed *by* daemon id, so switching daemons must not erase another daemon's state. Add a one-line comment in the store saying so.
 
-Verify: `vitest run src/lib/daemon/__tests__/auth-failure-store.test.ts` passes; `vitest run src/lib/api/__tests__/http-auth.test.ts` still passes.
+Verify: `vitest run src/lib/api/__tests__/http-auth-failure.test.ts` passes (task 8 goes green — this is the marking path's only coverage); `vitest run src/lib/daemon/__tests__/auth-failure-store.test.ts` passes; `vitest run src/lib/api/__tests__/http-auth.test.ts` still passes.
 
-### Task 12 — one canonical fallback sentence
+### Task 13 — one canonical fallback sentence
 
 Files: `packages/ui/src/lib/api/projects.ts`, `packages/ui/src/lib/api/__tests__/http-plugin.test.ts`, `__tests__/projects.test.ts`, `__tests__/http-envelope.test.ts`
 
@@ -187,15 +204,15 @@ Verify: `vitest run src/lib/api/__tests__/http-plugin.test.ts src/lib/api/__test
 
 ## Phase 2 — chat send failure (`ui`)
 
-### Task 13 — keep the `File` on a completed attachment
+### Task 14 — keep the `File` on a completed attachment
 
 File: `packages/ui/src/features/chat/composer/attachment-adapter.ts`
 
-`toCompleteAttachment` drops `file`. `CompleteAttachment` declares `file?: File` (verified in `@assistant-ui/core@0.2.21` `types/attachment.d.ts`), so carry it through: `...(attachment.file ? { file: attachment.file } : {})`. This is what lets the restore in task 17 re-add the exact files without re-reading them from a stash. Extend the function's docstring with that one reason.
+`toCompleteAttachment` drops `file`. `CompleteAttachment` declares `file?: File` (verified in `@assistant-ui/core@0.2.21` `types/attachment.d.ts`), so carry it through: `...(attachment.file ? { file: attachment.file } : {})`. This is what lets the restore in task 18 re-add the exact files without re-reading them from a stash. Extend the function's docstring with that one reason.
 
 Verify: `vitest run src/features/chat/composer/__tests__/attachment-adapter.test.ts` (existing) plus a new case asserting `file` survives the status flip — add it to that existing file.
 
-### Task 14 — record which stage failed
+### Task 15 — record which stage failed
 
 Files: `packages/ui/src/features/chat/controller/chat-thread-state.ts`, `controller/chat-thread-controller.ts`
 
@@ -205,7 +222,7 @@ Files: `packages/ui/src/features/chat/controller/chat-thread-state.ts`, `control
 
 Verify: `vitest run src/features/chat/controller/__tests__/chat-thread-controller-send.test.ts src/features/chat/controller/__tests__/chat-thread-controller-retry.test.ts` — both still green (the existing assertion `expect(pendingValues[0]!.error).toBe(uploadError)` must keep passing: the controller still stores the **raw** error, classification happens at projection time).
 
-### Task 15 — classify at projection time
+### Task 16 — classify at projection time
 
 Files: `packages/ui/src/features/chat/controller/describe-send-error.ts` (new), `controller/project-messages.ts`, `view-model/message-meta.ts`
 
@@ -215,7 +232,7 @@ Files: `packages/ui/src/features/chat/controller/describe-send-error.ts` (new), 
 
 Verify: `vitest run src/features/chat/controller/__tests__/describe-send-error.test.ts src/features/chat/controller/__tests__/project-messages.test.ts`.
 
-### Task 16 — render the sentence, suppress the misleading retry
+### Task 17 — render the sentence, suppress the misleading retry
 
 File: `packages/ui/src/features/chat/messages/UserMessage.tsx`
 
@@ -223,7 +240,7 @@ Inside the existing `sendError != null` block: keep the `chat-user-message-send-
 
 Verify: `vitest run src/features/chat/messages/__tests__/UserMessage-send-failure.test.tsx src/features/chat/messages/__tests__/UserMessage.test.tsx` — task 4 goes green and the pre-existing suite stays green.
 
-### Task 17 — put the attachments back
+### Task 18 — put the attachments back
 
 File: `packages/ui/src/features/chat/runtime/use-chat-thread-runtime.ts`
 
@@ -238,7 +255,7 @@ Verify: `vitest run src/features/chat/runtime/__tests__/use-chat-thread-runtime-
 
 ## Phase 3 — daemon repair (`ui`)
 
-### Task 18 — refresh the active token without a teardown
+### Task 19 — refresh the active token without a teardown
 
 Files: `packages/ui/src/lib/daemon/active-daemon.ts`, `packages/ui/src/features/daemon/use-daemon-registry.ts`
 
@@ -247,7 +264,7 @@ Files: `packages/ui/src/lib/daemon/active-daemon.ts`, `packages/ui/src/features/
 
 Verify: `vitest run src/lib/daemon/__tests__/active-daemon.test.ts src/features/daemon/__tests__/use-daemon-registry.test.tsx` (extend both with the new cases in the same pass).
 
-### Task 19 — extract the pairing-apply step and call `retoken`
+### Task 20 — extract the pairing-apply step and call `retoken`
 
 Files: `packages/ui/src/features/daemon/apply-pairing.ts` (new), `features/daemon/AddRemoteDialog.tsx`
 
@@ -255,7 +272,7 @@ Files: `packages/ui/src/features/daemon/apply-pairing.ts` (new), `features/daemo
 
 Verify: `vitest run src/features/daemon/__tests__/AddRemoteDialog-retoken.test.tsx src/features/daemon/__tests__/AddRemoteDialog.test.tsx`; `wc -l packages/ui/src/features/daemon/AddRemoteDialog.tsx` under 300.
 
-### Task 20 — surface `needs-repair` in the footer
+### Task 21 — surface `needs-repair` in the footer
 
 File: `packages/ui/src/features/daemon/DaemonFooterStatus.tsx`
 
@@ -267,7 +284,7 @@ Verify: `vitest run src/features/daemon/__tests__/DaemonFooterStatus-needs-repai
 
 ## Phase 4 — daemon (`core`, Rust)
 
-### Task 21 — one structured record per upload outcome
+### Task 22 — one structured record per upload outcome
 
 File: `packages/core-rs/crates/mainframe-server/src/routes/attachments.rs`
 
@@ -279,7 +296,7 @@ File: `packages/core-rs/crates/mainframe-server/src/routes/attachments.rs`
 
 Verify: `cargo test -p mainframe-server --test routes_attachments_logging`; `cargo test -p mainframe-server --test routes_attachments`.
 
-### Task 22 — log the 401 the middleware issues
+### Task 23 — log the 401 the middleware issues
 
 File: `packages/core-rs/crates/mainframe-server/src/middleware/auth.rs`
 
@@ -287,22 +304,22 @@ A rejected upload never reaches the route, so the route log alone leaves a 401 i
 
 Verify: `cargo test -p mainframe-server --test routes_auth --test routes_automations_auth --test routes_attachments_logging`.
 
-### Task 23 — stop axum's default 2 MB limit from shadowing the 30 MB layer
+### Task 24 — stop axum's default 2 MB limit from shadowing the 30 MB layer
 
 File: `packages/core-rs/crates/mainframe-server/src/http.rs`
 
 Add `.layer(DefaultBodyLimit::disable())` immediately inside the existing `RequestBodyLimitLayer::new(BODY_LIMIT_BYTES)` layer so the explicit 30 MB limit is the only one in force. Today a 2 MB attachment (≈2.7 MB base64) is rejected with an **empty-bodied 413** before the handler runs — that is the "non-JSON error body" case the brief calls out, and it breaks 2–5 MB attachments on every daemon, local or remote. Update the `// notes:` block at the bottom of the file to record why the default limit is disabled.
 
-Verify: `cargo test -p mainframe-server --test routes_attachments` (task 9's un-ignored test goes green); `cargo test -p mainframe-server --test http_integration`.
+Verify: `cargo test -p mainframe-server --test routes_attachments` (task 10's un-ignored test goes green); `cargo test -p mainframe-server --test http_integration`.
 
 ---
 
 ## Phase 5 — close out
 
-### Task 24 — changeset and full verification
+### Task 25 — changeset and full verification
 
 - `pnpm changeset` → patch for `@qlan-ro/mainframe-ui`; describe the user-visible change (a stale remote token now reads "Re-pair" in the footer, the failed message says why, attachments come back, uploads above 2 MB work again). Mention the Rust daemon's upload logging and body-limit fix in the body — `packages/core-rs` is not a changeset package, so it rides in the prose.
-- Run: `pnpm --filter @qlan-ro/mainframe-ui typecheck`; the vitest files touched by tasks 1–20 (run them file-by-file, not as one batch — large batches hit the cross-file `React.act` failure); `cd packages/core-rs && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test -p mainframe-server`.
+- Run: `pnpm --filter @qlan-ro/mainframe-ui typecheck`; the vitest files touched by tasks 1–21 (run them file-by-file, not as one batch — large batches hit the cross-file `React.act` failure); `cd packages/core-rs && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test -p mainframe-server`.
 - Confirm no file exceeds 300 lines and no new function exceeds 50: `wc -l` on every file in the change surface.
 
 ---
@@ -319,5 +336,5 @@ Verify: `cargo test -p mainframe-server --test routes_attachments` (task 9's un-
 ## Risks
 
 - **Mid-session WS revocation stays invisible.** The socket authenticates once at connect and is never revalidated, so a token revoked mid-session is only discovered on the next REST call (which is exactly the attachment upload — the path this plan covers). Anything WS-only keeps working until reconnect.
-- **Restore ordering depends on `sendMessage` not rejecting synchronously.** It cannot today (its first statement before an `await` is a pure parse), but a future refactor that throws synchronously in `sendMessage` would re-add the attachments *before* `composer.reset()` wipes them. Task 17's comment and task 5's test guard this.
+- **Restore ordering depends on `sendMessage` not rejecting synchronously.** It cannot today (its first statement before an `await` is a pure parse), but a future refactor that throws synchronously in `sendMessage` would re-add the attachments *before* `composer.reset()` wipes them. Task 18's comment and task 5's test guard this.
 - **Log-capture flakiness.** The Rust capture subscriber is process-global within its test binary; tests must filter by a unique chat id rather than asserting on the whole buffer.
