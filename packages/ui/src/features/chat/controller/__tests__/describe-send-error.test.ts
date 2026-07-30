@@ -16,47 +16,47 @@ function withStatus(message: string, status: number): ApiRequestError {
 
 describe('describeSendError', () => {
   it('a 401 reads as not-authorized, with no attachments to mention', () => {
-    expect(describeSendError(withStatus('Unauthorized', 401), { hadAttachments: false })).toBe(
+    expect(describeSendError(withStatus('Unauthorized', 401), { attachmentsRestored: false })).toBe(
       'Not authorized on this daemon. Re-pair it from the daemon menu, then send again.',
     );
   });
 
-  it('a 401 with attachments appends the restore sentence', () => {
-    expect(describeSendError(withStatus('Unauthorized', 401), { hadAttachments: true })).toBe(
+  it('a 401 with restored attachments appends the restore sentence', () => {
+    expect(describeSendError(withStatus('Unauthorized', 401), { attachmentsRestored: true })).toBe(
       'Not authorized on this daemon. Re-pair it from the daemon menu, then send again. Your attachments are back in the composer.',
     );
   });
 
   it('a 403 reads with the same authorization sentence as 401', () => {
-    expect(describeSendError(withStatus('Forbidden', 403), { hadAttachments: false })).toBe(
+    expect(describeSendError(withStatus('Forbidden', 403), { attachmentsRestored: false })).toBe(
       'Not authorized on this daemon. Re-pair it from the daemon menu, then send again.',
     );
   });
 
   it('a 413 reads as too large, naming the daemon-side limit', () => {
-    expect(describeSendError(withStatus('Payload Too Large', 413), { hadAttachments: true })).toBe(
+    expect(describeSendError(withStatus('Payload Too Large', 413), { attachmentsRestored: true })).toBe(
       'The attachment is too large. The daemon accepts files up to 5MB.',
     );
   });
 
   it('the composer pre-flight size error is returned verbatim', () => {
     const preflight = new Error('"shot.png" is too large. Max file size is 5MB.');
-    expect(describeSendError(preflight, { hadAttachments: true })).toBe(
+    expect(describeSendError(preflight, { attachmentsRestored: true })).toBe(
       '"shot.png" is too large. Max file size is 5MB.',
     );
   });
 
   it('a fetch-level TypeError reads as unreachable', () => {
-    expect(describeSendError(new TypeError('Failed to fetch'), { hadAttachments: false })).toBe(
+    expect(describeSendError(new TypeError('Failed to fetch'), { attachmentsRestored: false })).toBe(
       'The daemon is unreachable. Check the connection, then send again.',
     );
   });
 
   it('an arbitrary Error falls back to its own message', () => {
-    expect(describeSendError(new Error('boom'), { hadAttachments: false })).toBe('boom');
+    expect(describeSendError(new Error('boom'), { attachmentsRestored: false })).toBe('boom');
   });
 
   it('an undefined error falls back to a generic sentence', () => {
-    expect(describeSendError(undefined, { hadAttachments: false })).toBe('Failed to send');
+    expect(describeSendError(undefined, { attachmentsRestored: false })).toBe('Failed to send');
   });
 });

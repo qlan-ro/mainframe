@@ -69,10 +69,8 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
           clientId: pending.clientId,
           ...(pending.status === 'failed'
             ? {
-                error: describeSendError(pending.error, { hadAttachments: pending.stage === 'upload' }),
-                // An upload-stage failure never emitted the send frame, so the
-                // runtime put the attachments back into the composer.
-                attachmentsRestored: pending.stage === 'upload',
+                error: describeSendError(pending.error, { attachmentsRestored: pending.attachmentsRestored === true }),
+                attachmentsRestored: pending.attachmentsRestored === true,
               }
             : {}),
         },

@@ -396,6 +396,26 @@ describe('ChatThreadController.sendMessage — failure stage', () => {
     expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.stage).toBe('send');
   });
 
+  it('records an actual restore for an attachment send whose upload succeeded but WS send threw', async () => {
+    vi.mocked(uploadAttachments).mockResolvedValueOnce(['id-1']);
+
+    const sendError = new Error('socket closed');
+    const { fakeClient } = makeFakeWs();
+    vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {
+      throw sendError;
+    });
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+
+    await ctrl
+      .sendMessage(makeMsg({ text: 'with attachment', attachments: [makeCompleteAttachment('a.png')] }))
+      .catch(() => {});
+    ctrl.markAttachmentsRestoredForFailure(sendError);
+
+    const pending = Object.values(ctrl.getState().pendingUserMessages)[0]!;
+    expect(pending.stage).toBe('send');
+    expect(pending.attachmentsRestored).toBe(true);
+  });
+
   it("records stage 'send' for a text-only message whose WS frame threw", async () => {
     const { fakeClient } = makeFakeWs();
     vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {

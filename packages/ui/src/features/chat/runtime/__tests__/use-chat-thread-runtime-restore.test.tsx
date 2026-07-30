@@ -17,6 +17,10 @@ vi.mock('../../../sessions/runtime/new-thread-coordinator', () => ({
   createForLocal: vi.fn().mockResolvedValue({ remoteId: 'chat-77' }),
 }));
 
+vi.mock('../../../sessions/runtime/chat-controller-registry', () => ({
+  chatControllerRegistry: { adopt: vi.fn() },
+}));
+
 const addAttachmentSpy = vi.fn().mockResolvedValue(undefined);
 
 type ExternalStoreOpts = {
@@ -59,17 +63,21 @@ const useChatThreadRuntime = _useChatThreadRuntime as (
 
 const PORT = 9999;
 
-function makeController(sendMessage: (msg: AppendMessage) => Promise<void>): ChatThreadController {
+function makeController(
+  sendMessage: (msg: AppendMessage) => Promise<void>,
+  opts: { hasRemoteId?: boolean } = {},
+): ChatThreadController {
   const stableState: ChatThreadState = createChatThreadState('chat-existing');
   return {
     subscribeState: (_l: () => void) => () => {},
     subscribeLive: () => () => {},
     getState: () => stableState,
     getThreadId: () => 'chat-existing',
-    hasRemoteId: () => true,
+    hasRemoteId: () => opts.hasRemoteId ?? true,
     load: vi.fn().mockResolvedValue(undefined),
     setRemoteId: vi.fn(),
     sendMessage: vi.fn(sendMessage),
+    markAttachmentsRestoredForFailure: vi.fn(),
     cancel: vi.fn().mockResolvedValue(undefined),
     replyToPermission: vi.fn().mockResolvedValue(undefined),
     cancelQueued: vi.fn().mockResolvedValue(undefined),
@@ -158,6 +166,53 @@ describe('useChatThreadRuntime — attachments return to the composer on a faile
 
     await expect(capturedOnNew.current?.(msg)).rejects.toBe(boom);
     expect(addAttachmentSpy).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('restores attachments when createForLocal rejects (no remoteId yet, e.g. a stale token 401ing createChat)', async () => {
+    const { createForLocal } = await import('../../../sessions/runtime/new-thread-coordinator');
+    const authError = Object.assign(new Error('Unauthorized'), { status: 401 });
+    vi.mocked(createForLocal).mockRejectedValueOnce(authError);
+
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const controller = makeController(sendMessage, { hasRemoteId: false });
+    const { unmount } = renderHook(() => useChatThreadRuntime(controller, PORT, { active: false }));
+
+    const fileA = makeFile('a.png');
+    const msg = messageWithAttachments([fileA]);
+
+    await expect(capturedOnNew.current?.(msg)).rejects.toBe(authError);
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(addAttachmentSpy).toHaveBeenCalledTimes(1);
+    expect(addAttachmentSpy.mock.calls[0]![0]).toBe(fileA);
+    unmount();
+  });
+
+  it('marks the pending failure only after every attachment was restored', async () => {
+    const authError = Object.assign(new Error('Unauthorized'), { status: 401 });
+    const controller = makeController(() => Promise.reject(authError));
+    const { unmount } = renderHook(() => useChatThreadRuntime(controller, PORT, { active: false }));
+
+    const msg = messageWithAttachments([makeFile('a.png'), makeFile('b.png')]);
+
+    await expect(capturedOnNew.current?.(msg)).rejects.toBe(authError);
+
+    expect(controller.markAttachmentsRestoredForFailure).toHaveBeenCalledWith(authError);
+    unmount();
+  });
+
+  it('does not mark attachments restored when a re-add fails', async () => {
+    addAttachmentSpy.mockRejectedValueOnce(new Error('add failed'));
+    const authError = Object.assign(new Error('Unauthorized'), { status: 401 });
+    const controller = makeController(() => Promise.reject(authError));
+    const { unmount } = renderHook(() => useChatThreadRuntime(controller, PORT, { active: false }));
+
+    const msg = messageWithAttachments([makeFile('a.png'), makeFile('b.png')]);
+
+    await expect(capturedOnNew.current?.(msg)).rejects.toBe(authError);
+
+    expect(controller.markAttachmentsRestoredForFailure).not.toHaveBeenCalled();
     unmount();
   });
 });

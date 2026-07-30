@@ -30,10 +30,29 @@ vi.mock('../../daemon/auth-failure-store', () => ({
 }));
 
 const REMOTE = { id: 'studio', kind: 'remote' as const, label: 'S', baseUrl: 'https://studio.example.com', token: 't' };
+const REMOTE_B = {
+  id: 'gamma',
+  kind: 'remote' as const,
+  label: 'G',
+  baseUrl: 'https://gamma.example.com',
+  token: 't2',
+};
 const LOCAL = { id: 'local', kind: 'local' as const, label: 'L', baseUrl: 'http://127.0.0.1:31500', token: null };
 
 function mockFetchOnce(status: number, body: unknown = { success: false, error: 'nope' }): void {
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
+}
+
+function deferredFetch(): { resolve: (status: number, body?: unknown) => void } {
+  let resolveFetch!: (res: Response) => void;
+  const pending = new Promise<Response>((resolve) => {
+    resolveFetch = resolve;
+  });
+  vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pending);
+  return {
+    resolve: (status, body = { success: false, error: 'nope' }) =>
+      resolveFetch(new Response(JSON.stringify(body), { status })),
+  };
 }
 
 beforeEach(() => {
@@ -50,12 +69,12 @@ describe('http auth-failure marking', () => {
     expect(hasAuthFailure('studio')).toBe(true);
   });
 
-  it('a remote 403 marks the active daemon id and still rejects with ApiRequestError', async () => {
+  it('a remote 403 is application policy, not a credential problem — leaves the marker untouched', async () => {
     setActiveDaemon(REMOTE);
     mockFetchOnce(403);
 
     await expect(request('GET', apiBase() + '/api/projects')).rejects.toBeInstanceOf(ApiRequestError);
-    expect(hasAuthFailure('studio')).toBe(true);
+    expect(hasAuthFailure('studio')).toBe(false);
   });
 
   it('a local 401 never marks (loopback-trusted, no re-pair concept)', async () => {
@@ -90,5 +109,45 @@ describe('http auth-failure marking', () => {
 
     await request('GET', apiBase() + '/api/projects');
     expect(hasAuthFailure('studio')).toBe(false);
+  });
+
+  it('a delayed 401 marks the daemon that was active when the request was sent, not whatever became active meanwhile', async () => {
+    setActiveDaemon(REMOTE);
+    const deferred = deferredFetch();
+
+    const pending = request('GET', apiBase() + '/api/projects');
+    setActiveDaemon(REMOTE_B); // switch mid-flight, before the response lands
+    deferred.resolve(401);
+
+    await expect(pending).rejects.toBeInstanceOf(ApiRequestError);
+    expect(hasAuthFailure('studio')).toBe(true);
+    expect(hasAuthFailure('gamma')).toBe(false);
+  });
+
+  it('a delayed success clears the marker of the daemon that sent the request, not the one now active', async () => {
+    setActiveDaemon(REMOTE);
+    authFailureIds.add('studio');
+    authFailureIds.add('gamma');
+    const deferred = deferredFetch();
+
+    const pending = request('GET', apiBase() + '/api/projects');
+    setActiveDaemon(REMOTE_B); // switch mid-flight, before the response lands
+    deferred.resolve(200, { success: true, data: [] });
+
+    await pending;
+    expect(hasAuthFailure('studio')).toBe(false);
+    expect(hasAuthFailure('gamma')).toBe(true);
+  });
+
+  it('a delayed 401 still marks the originating remote daemon even after switching to local mid-flight', async () => {
+    setActiveDaemon(REMOTE);
+    const deferred = deferredFetch();
+
+    const pending = request('GET', apiBase() + '/api/projects');
+    setActiveDaemon(LOCAL); // switch mid-flight, before the response lands
+    deferred.resolve(401);
+
+    await expect(pending).rejects.toBeInstanceOf(ApiRequestError);
+    expect(hasAuthFailure('studio')).toBe(true);
   });
 });

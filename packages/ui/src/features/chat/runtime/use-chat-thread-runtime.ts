@@ -92,27 +92,26 @@ function isRunningFromState(state: ChatThreadState): boolean {
 // Failed send → attachments back to the composer
 // ---------------------------------------------------------------------------
 
-/**
- * Re-adds a failed send's attachments to the composer, one by one.
- *
- * Never throws: a restore failure must not mask the send error the caller is
- * about to rethrow, and one bad file must not strand the rest.
- */
 async function restoreAttachments(
   runtime: AssistantRuntime | null,
   attachments: AppendMessage['attachments'],
-): Promise<void> {
+): Promise<boolean> {
   const composer = runtime?.thread.composer;
-  if (!composer) return;
-  for (const attachment of attachments ?? []) {
+  const pending = attachments ?? [];
+  if (!composer || pending.length === 0) return false;
+
+  let restored = 0;
+  for (const attachment of pending) {
     const file = attachment.file;
     if (!file) continue;
     try {
       await composer.addAttachment(file);
+      restored += 1;
     } catch (error) {
       console.warn('[chat-runtime] could not restore an attachment to the composer', error);
     }
   }
+  return restored === pending.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,17 +174,20 @@ export function useChatThreadRuntime(
   // (pre-existing chat, or one created earlier this session) just sends.
   const onNew = useCallback(
     async (message: AppendMessage): Promise<void> => {
-      if (!controller.hasRemoteId()) {
-        const { remoteId } = await createForLocal(controller.getThreadId(), port);
-        chatControllerRegistry.adopt(controller, remoteId);
-      }
+      // createChat can 401 before a pending bubble exists, after the composer reset.
       try {
+        if (!controller.hasRemoteId()) {
+          const { remoteId } = await createForLocal(controller.getThreadId(), port);
+          chatControllerRegistry.adopt(controller, remoteId);
+        }
         await controller.sendMessage(message);
       } catch (error) {
         // Safe against the composer reset: sendMessage cannot reject before its
         // first await (the upload fetch), so this lands after append() has
         // dropped this promise and use-submit-composition has reset the composer.
-        await restoreAttachments(runtimeRef.current, message.attachments);
+        if (await restoreAttachments(runtimeRef.current, message.attachments)) {
+          controller.markAttachmentsRestoredForFailure(error);
+        }
         throw error;
       }
     },

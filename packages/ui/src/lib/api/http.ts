@@ -75,18 +75,23 @@ function errorDetails(raw: unknown): ApiErrorDetail[] {
 }
 
 /**
- * Every REST wrapper routes its fetch through here so a remote 401/403 marks
- * that daemon's auth-failure state (driving `needs-repair` in the footer) and
- * any other outcome clears it. A local (loopback-trusted) target is never
- * marked — it carries no token and can never legitimately need a re-pair.
- * Any status other than 401/403/ok leaves the marker untouched: a 500 is a
- * server failure, not an authorization statement.
+ * Every REST wrapper routes its fetch through here so a remote 401 marks that
+ * daemon's auth-failure state (driving `needs-repair` in the footer) and any
+ * other outcome clears it. A local (loopback-trusted) target is never marked
+ * — it carries no token and can never legitimately need a re-pair. Any status
+ * other than 401/ok leaves the marker untouched: a 500 is a server failure,
+ * and a 403 here is application policy (e.g. "path outside project"), not a
+ * credential problem — the daemon's auth middleware only ever emits 401.
+ *
+ * The daemon to attribute the outcome to is captured BEFORE the fetch, not
+ * after: switching the active daemon mid-flight would otherwise let a
+ * response from the old target mark or clear the new one's marker.
  */
 async function fetchChecked(url: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(url, init);
   const { kind, id } = getActiveDaemon();
+  const res = await fetch(url, init);
   if (kind === 'remote') {
-    if (res.status === 401 || res.status === 403) markAuthFailure(id);
+    if (res.status === 401) markAuthFailure(id);
     else if (res.ok) clearAuthFailure(id);
   }
   return res;

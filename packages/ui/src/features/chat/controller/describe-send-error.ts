@@ -17,10 +17,10 @@ function statusOf(error: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined;
 }
 
-export function describeSendError(error: unknown, opts: { hadAttachments: boolean }): string {
+export function describeSendError(error: unknown, opts: { attachmentsRestored: boolean }): string {
   const status = statusOf(error);
   if (status === 401 || status === 403) {
-    return opts.hadAttachments ? `${AUTH_SENTENCE} ${RESTORED_CLAUSE}` : AUTH_SENTENCE;
+    return opts.attachmentsRestored ? `${AUTH_SENTENCE} ${RESTORED_CLAUSE}` : AUTH_SENTENCE;
   }
   if (status === 413) return TOO_LARGE_SENTENCE;
   // fetch reports a network-level failure as a TypeError, never as a status.
