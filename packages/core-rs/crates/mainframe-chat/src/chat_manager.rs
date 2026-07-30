@@ -163,7 +163,7 @@ pub trait ChatManagerDeps: Send + Sync {
     /// returns is unused by `addMention` (it always emits `context.updated`).
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    fn projects_remove(&self, project_id: &str);
+    fn projects_remove(&self, project_id: &str) -> Result<(), String>;
     /// `writeWorkspaceTrust(projectPath)` — persists workspace trust to the
     /// Claude CLI's `~/.claude.json` (injected so this crate does not depend on
     /// `mainframe-adapter-claude`). Backs `trust_workspace`.
@@ -1752,8 +1752,7 @@ impl ChatManager {
     }
 
     /// Remove a project and all its chats' live resources.
-    pub async fn remove_project(&self, project_id: &str) {
-        info!(project_id, "project removed");
+    pub async fn remove_project(&self, project_id: &str) -> Result<(), String> {
         let chats = self.deps.chats_list(project_id);
         for chat in chats {
             let cell = self.get_active(&chat.id);
@@ -1784,7 +1783,9 @@ impl ChatManager {
             self.deps.tracker_remove_chat(&chat.id);
             self.event_handler.clear_display_cache(&chat.id);
         }
-        self.deps.projects_remove(project_id);
+        self.deps.projects_remove(project_id)?;
+        info!(project_id, "project removed");
+        Ok(())
     }
 
     // ── the message send path + CLI-owned queue ──────────────────────────────
