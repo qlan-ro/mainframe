@@ -746,6 +746,7 @@ impl ConfigManagerDeps for CmDeps {
             created_at: String::new(),
             last_opened_at: String::new(),
             parent_project_id: None,
+            available: None,
         })
     }
     fn settings_get(&self, ns: &str, key: &str) -> Option<String> {

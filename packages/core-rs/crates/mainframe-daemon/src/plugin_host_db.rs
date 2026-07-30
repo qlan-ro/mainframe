@@ -142,6 +142,8 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         display_status: None,
         is_running: None,
         worktree_missing: None,
+        directory_missing: None,
+        missing_directory_path: None,
         todos: None,
         pinned: None,
         effort: None,

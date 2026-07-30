@@ -1761,6 +1761,7 @@ async fn with_external_sessions_wires_scan_page_through_the_facade() {
         created_at: "now".into(),
         last_opened_at: "now".into(),
         parent_project_id: None,
+        available: None,
     });
     ext.sessions.lock().unwrap().push(external_session("s1"));
     let service = Arc::new(ExternalSessionService::new(ext));
