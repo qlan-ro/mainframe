@@ -210,15 +210,22 @@ Group E owns no shared file, but its Task 21 gate is the same whole-package type
   `\u{2026}`) and call it from `get_last_assistant_text`. Behavior must not change.
 - New module contents:
   - `pub const ATTENTION_DEDUPE_WINDOW: Duration = Duration::from_secs(60);`
-  - `pub fn normalize_attention_body(raw: &str) -> Option<String>` — trim; return `None` when empty after
-    trimming; otherwise `Some(truncate_push_body(trimmed))`.
+  - `pub struct NormalizedAttention { pub dedupe_key: String, pub body: String }` — `dedupe_key` is the
+    trimmed but **untruncated** message, `body` is truncated for display/push. Spec D7 keys the dedupe
+    window on exact message text, not the 200-char display body, so a truncated key would collapse two
+    distinct long messages sharing a prefix into one admission.
+  - `pub fn normalize_attention_body(raw: &str) -> Option<NormalizedAttention>` — trim; return `None` when
+    empty after trimming; otherwise `Some(NormalizedAttention { dedupe_key: trimmed.to_string(), body:
+    truncate_push_body(trimmed) })`.
   - `#[derive(Default)] pub struct AttentionDedupe { seen: HashMap<(String, String), Instant> }` with
-    `pub fn admit(&mut self, chat_id: &str, body: &str, now: Instant) -> bool` — prunes entries older than
-    the window, returns `false` when the same `(chat_id, body)` was admitted within the window, otherwise
-    records `now` and returns `true`.
+    `pub fn admit(&mut self, chat_id: &str, key: &str, now: Instant) -> bool` — prunes entries older than
+    the window, returns `false` when the same `(chat_id, key)` was admitted within the window, otherwise
+    records `now` and returns `true`. Callers pass `dedupe_key`, never `body`.
 - Write the tests first, inline: empty / whitespace-only → `None`; a 250-char message truncates to 200 chars
-  ending in `…`; a 200-char message is untouched; same text twice at `t` and `t + 59s` → one admit; at
-  `t + 61s` → two; different texts back to back → two; same text in two chat ids → two (AC7, AC8).
+  ending in `…` while `dedupe_key` stays untruncated; a 200-char message is untouched; same text twice at
+  `t` and `t + 59s` → one admit; at `t + 61s` → two; different texts back to back → two; same text in two
+  chat ids → two; two >200-char messages sharing a 199-char prefix → two admits, since the truncated bodies
+  would collide but the untruncated keys do not (AC7, AC8).
 - Register `pub mod attention_request;` in `lib.rs` (alphabetical position).
 - Keep the file under 300 lines and every function under 50.
 - Verify: `cargo test -p mainframe-chat attention_request`.
@@ -252,12 +259,16 @@ Group E owns no shared file, but its Task 21 gate is the same whole-package type
 - Add `attention_dedupe: Arc<Mutex<AttentionDedupe>>` to `EventHandler` (created in `new`) and to
   `SessionSinkImpl` (cloned in `build_sink`).
 - Implement `on_attention_request` on `SessionSinkImpl` in this exact order, and keep it under 50 lines:
-  1. `let Some(body) = normalize_attention_body(message) else { return; };`
+  1. `let Some(attention) = normalize_attention_body(message) else { return; };`
   2. `if !self.deps.notify_attention_request() { return; }` — no log line on this path (AC6).
-  3. `if !dedupe.admit(&self.chat_id, &body, Instant::now()) { return; }`
+  3. `if !dedupe.admit(&self.chat_id, &attention.dedupe_key, Instant::now()) { return; }` — the untruncated
+     key, per spec D7; using `attention.body` here would let two long messages sharing a 199-char prefix
+     collapse into one notification.
   4. `self.deps.emit_event(DaemonEvent::ChatNotification { chat_id, title: "Claude needs your attention",
-     body: body.clone(), level: ChatNotificationLevel::Success, kind: Some(ChatNotificationKind::AttentionRequest) })`
-  5. `self.deps.send_push(PushOut { chat_id, title, body, push_type: "attention_request", priority: "high" })`
+     body: attention.body.clone(), level: ChatNotificationLevel::Success, kind:
+     Some(ChatNotificationKind::AttentionRequest) })`
+  5. `self.deps.send_push(PushOut { chat_id, title, body: attention.body, push_type: "attention_request",
+     priority: "high" })`
 - Verify: `cargo check -p mainframe-chat`.
 
 ### Task 13 — sink tests
@@ -270,7 +281,9 @@ Group E owns no shared file, but its Task 21 gate is the same whole-package type
   "Claude needs your attention", body `M`, `kind: Some(AttentionRequest)`, and one `PushOut` with
   `push_type: "attention_request"`, `priority: "high"` (AC1, AC5); toggle off → zero events, zero pushes
   (AC6); the same message twice back to back → one event (AC7); empty / whitespace-only message → zero
-  events (AC8); a 250-char message → body is 200 chars ending in `…` (AC1).
+  events (AC8); a 250-char message → body is 200 chars ending in `…` (AC1); two >200-char messages sharing
+  a 199-char prefix → two events and two pushes, proving the dedupe key is the untruncated message, not the
+  truncated display body (AC7, D7).
 - Verify: `cargo test -p mainframe-chat attention`.
 
 ### Task 14 — daemon wiring for the setting

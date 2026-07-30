@@ -1256,7 +1256,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_attention_request(&self, message: &str) {
-        let Some(body) = normalize_attention_body(message) else {
+        let Some(attention) = normalize_attention_body(message) else {
             return;
         };
         if !self.deps.notify_attention_request() {
@@ -1266,21 +1266,21 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             .attention_dedupe
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .admit(&self.chat_id, &body, Instant::now());
+            .admit(&self.chat_id, &attention.dedupe_key, Instant::now());
         if !admitted {
             return;
         }
         self.deps.emit_event(DaemonEvent::ChatNotification {
             chat_id: self.chat_id.clone(),
             title: "Claude needs your attention".to_string(),
-            body: body.clone(),
+            body: attention.body.clone(),
             level: ChatNotificationLevel::Success,
             kind: Some(ChatNotificationKind::AttentionRequest),
         });
         self.deps.send_push(PushOut {
             chat_id: self.chat_id.clone(),
             title: "Claude needs your attention".to_string(),
-            body,
+            body: attention.body,
             push_type: "attention_request".to_string(),
             priority: "high".to_string(),
         });

@@ -191,3 +191,21 @@ fn a_long_message_is_truncated_to_200_chars() {
     assert_eq!(body.chars().count(), 200);
     assert!(body.ends_with('\u{2026}'));
 }
+
+/// Spec D7 / AC7: dedupe keys on exact message text, not the truncated
+/// display body — two long messages sharing a 199-char prefix must not
+/// collapse into one notification (regression for the truncated-key bug).
+#[test]
+fn two_long_messages_sharing_a_199_char_prefix_both_notify() {
+    let deps = AttentionDeps::new();
+    let sink = sink(deps.clone());
+    let prefix = "a".repeat(199);
+    let first = format!("{prefix}1 tail that pushes it well past 200 chars total");
+    let second = format!("{prefix}2 a completely different tail after the shared prefix");
+
+    sink.on_attention_request(&first);
+    sink.on_attention_request(&second);
+
+    assert_eq!(deps.events().len(), 2);
+    assert_eq!(deps.pushes().len(), 2);
+}
