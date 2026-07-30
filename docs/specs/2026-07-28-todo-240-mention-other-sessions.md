@@ -53,11 +53,12 @@ shows, what the inserted token carries, and what the chip displays; no chat id a
 to the user.
 
 **What selection inserts.** Selecting a session replaces the typed `@` token with the literal text
-`@session[<label>]`, followed by one space — the same insertion path a file or agent mention uses. The
-composer shows that token literally, tinted in a color of its own, distinct from the tint used for file
-mentions and skills. Deleting a reference is deleting text; there is no separate chip row and no second
-removable-item collection. The composer's highlight overlay continues to match the textarea content
-character for character, so the caret never drifts.
+`@<label>`, followed by one space — the same insertion path a file or agent mention uses. The composer
+shows that token literally, tinted in a color of its own, distinct from the tint used for file mentions
+and skills. At send, the app rewrites each of the draft's own labels to the wire token `@session[<label>]`
+(amended 2026-07-30 — see decision 1). Deleting a reference is deleting text; there is no separate chip
+row and no second removable-item collection. The composer's highlight overlay continues to match the
+textarea content character for character, so the caret never drifts.
 
 Insertion is unconditional and immediate: the absolute transcript path was already resolved when the
 picker's data was fetched, so there is no check to fail and nothing to veto. The draft records the label
@@ -191,8 +192,9 @@ location. Only *resolved* chats are offered.
    that session in the trigger popover as a row in the same flat list as agents and files, with no group
    header, carrying a leading glyph that agent and file rows do not render; when a query matches all three
    kinds, the rendered order is agents, then sessions, then files and directories.
-2. Selecting that row replaces the typed `@…` token with the exact literal text `@session[<label>] ` in
-   the composer, and changes no other character of the composer text.
+2. Selecting that row replaces the typed `@…` token with the exact literal text `@<label> ` in the
+   composer, and changes no other character of the composer text; the sent body carries
+   `@session[<label>]` in its place.
 3. The composer's highlight overlay's concatenated `textContent` equals the textarea's `value` exactly
    while a session token is present.
 4. The session token renders in the composer overlay with a color class distinct from the class applied
@@ -258,11 +260,17 @@ location. Only *resolved* chats are offered.
 
 ## Decisions
 
-1. **Inline `@session[<label>]` token in the typed text, not a chip row above the composer.**
+1. **Inline mention token in the typed text, not a chip row above the composer.**
    `reversible` — Ruled at the design gate 2026-07-28, reversing the brief. Verified: `@` file mentions
    are already plain characters in the textarea tinted by a color-only overlay whose contract is that
    concatenated `textContent` equals the raw input, so a session token joins existing machinery with no
    caret risk and no new removable-item model.
+   **Amended 2026-07-30:** the draft spells the token `@<label>`, not `@session[<label>]`. The overlay
+   shows a token verbatim, so the wire form put `session[…]` on screen while typing — rejected on review.
+   The bracket form survives on the wire (it delimits a title's spaces and keys the reference lines and
+   the chip); `expandSessionMentions` rewrites the draft's own recorded labels at send, and the overlay
+   tints them from the same list. A hand-edited label no longer matches, so it sends as plain text with
+   no reference line — the same outcome a hand-typed unknown token already had (AC 9).
 2. **Reference-line literal is `Referenced session @session[<label>]: <absolute path>`, one per line,
    prepended above the whole composition.** `hard-to-reverse` — Once messages ship with this shape, old
    messages only render as chips if the parser keeps recognizing it. Reusing the token form inside the

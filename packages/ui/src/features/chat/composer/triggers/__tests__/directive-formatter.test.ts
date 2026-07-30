@@ -59,17 +59,16 @@ describe('mentionDirectiveFormatter', () => {
 
     // A session token carries the reference LABEL, never the chat id: the label
     // is what the sent message's chip displays and what the reference line keys on.
-    it('session item → @session[<label>] when no label resolver is given', () => {
-      expect(fmt.serialize({ id: 'chat-1', type: 'session', label: 'Fix the parser' })).toBe(
-        '@session[Fix the parser]',
-      );
+    // The draft spells it bare — `expandSessionMentions` adds `session[…]` at submit.
+    it('session item → @<label> when no label resolver is given', () => {
+      expect(fmt.serialize({ id: 'chat-1', type: 'session', label: 'Fix the parser' })).toBe('@Fix the parser');
     });
   });
 
   describe('serialize with a label resolver', () => {
     it('session item uses the resolved label, not the item label', () => {
       const withResolver = mentionDirectiveFormatter(() => 'Foo (2)');
-      expect(withResolver.serialize({ id: 'chat-2', type: 'session', label: 'Foo' })).toBe('@session[Foo (2)]');
+      expect(withResolver.serialize({ id: 'chat-2', type: 'session', label: 'Foo' })).toBe('@Foo (2)');
     });
 
     it('the resolver is never consulted for a file item', () => {

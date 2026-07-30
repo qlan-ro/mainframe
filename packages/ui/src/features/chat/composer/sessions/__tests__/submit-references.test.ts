@@ -85,6 +85,30 @@ describe('submit — one referenced session', () => {
   });
 });
 
+describe('submit — the draft spelling the picker inserts', () => {
+  it('expands a bare @<label> mention into the wire token and its reference line', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Model Identity', '/tmp/a.jsonl');
+    liveText = 'look at @Model Identity now';
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    expect(appendedText()).toBe(
+      'Referenced session @session[Model Identity]: /tmp/a.jsonl\n\nlook at @session[Model Identity] now',
+    );
+  });
+
+  it('leaves a bare @token that matches no recorded label as plain text', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo', '/tmp/foo.jsonl');
+    liveText = 'ask @Somebody else';
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    expect(appendedText()).toBe('ask @Somebody else');
+  });
+});
+
 describe('submit — duplicate and multiple references', () => {
   it('two tokens with the same label produce exactly one reference line', () => {
     useSessionReferences.getState().record(THREAD_ID, 'Foo', '/tmp/foo.jsonl');

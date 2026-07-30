@@ -7,7 +7,8 @@ Branch: `todo/240-mention-other-sessions`
 
 Let a user reference another session from the composer without ever touching a session id: typing `@`
 merges the current project's started sessions into the existing flat trigger list (agents → sessions →
-files), selecting one inserts the literal text `@session[<label>] ` into the textarea, and at send the app
+files), selecting one inserts the literal text `@<label> ` into the textarea, and at send the app rewrites
+that mention to `@session[<label>]` and
 prepends one `Referenced session @session[<label>]: <absolute transcript path>` line per unique referenced
 label above the whole composition — except when the composition is a slash command, where the lines go
 *below* the command line so the leading `/` survives (decision D1). Offerability is settled *before* a row is drawn, by one batched,
@@ -430,17 +431,40 @@ a new `TriggerFieldPopover.test.tsx` if none exists): a config with `itemTestId`
 one item and `undefined` for another falls back correctly; a config with `itemGlyph` renders the node for
 the matching item and renders no extra element for others; existing rows keep their prefix-derived ids.
 
-**E4. `@session[…]` serialization in `directive-formatter.ts`.**
+**E4. Session serialization in `directive-formatter.ts`.**
+
+*Amended 2026-07-30: the draft spells the mention `@<label>`, not `@session[<label>]`. The overlay shows
+whatever the textarea holds, so the wire form put `session[…]` on screen while typing — rejected on review.
+The bracket form still goes on the wire; `expandSessionMentions` (E4b) rewrites the draft at send.*
 
 - `mentionDirectiveFormatter(resolveSessionLabel?: (item: TriggerItem) => string)`.
-- In `serialize`: if `item.type === 'session'`, return `` `@session[${resolveSessionLabel?.(item) ?? item.label}]` ``.
+- In `serialize`: if `item.type === 'session'`, return `` `@${resolveSessionLabel?.(item) ?? item.label}` ``.
   **No trailing space** — `insertDirective` owns that via `appendSpace`
   (`use-trigger-field.ts:127-129`), and `shouldCloseTriggerOnInsert` already returns `true` for every type
   but `directory`, so a session insertion gets the AC-2 trailing space with no change to that predicate.
   All other branches untouched.
-- Update `__tests__/directive-formatter.test.ts`: session item with no resolver → `@session[Foo]`;
-  with a resolver returning `Foo (2)` → `@session[Foo (2)]`; `shouldCloseTriggerOnInsert` is `true` for a
+- Update `__tests__/directive-formatter.test.ts`: session item with no resolver → `@Foo`;
+  with a resolver returning `Foo (2)` → `@Foo (2)`; `shouldCloseTriggerOnInsert` is `true` for a
   session item; file/directory/agent output unchanged (AC 22).
+
+**E4b. Draft→wire translation — `session-references/session-mention.ts` (new).**
+
+- `findSessionMentions(text, labels)` returns `{ start, end, label }` for every `@<label>` in `text` whose
+  label is one of the draft's own recorded labels: the `@` must start a token (offset 0 or after whitespace),
+  the longest matching label wins (so `Foo (2)` beats `Foo`), and the character after the label may not be
+  alphanumeric (`@Foobar` is not the label `Foo`). Matching against the recorded labels is what makes a
+  label with spaces unambiguous without brackets.
+- `expandSessionMentions(text, labels)` splices each match to `@session[<label>]` and returns the rest
+  verbatim; an already-bracketed token, a file mention, and an unrecorded `@token` all pass through.
+- `use-submit-composition.ts` runs it on the draft before `prependSessionReferences`, so both the reference
+  lines and the sent body carry the bracket form — the chip, the strip, and the daemon are unchanged.
+- `ComposerHighlight` passes the same label list into `renderHighlights`, which tints a bare mention with
+  the session color; chunks between mentions go through `mainframeUserInlineFormatter` so a leading
+  `/command` is still only recognized at offset 0. The overlay's char-for-char contract holds — only the
+  node split changes, never a character.
+- Tests: `session-references/__tests__/session-mention.test.ts` (spaces, boundaries, longest-first,
+  repeats, expansion, `/review @Foo` → `/review @session[Foo]`), plus the bare-label cases in
+  `render-highlights.test.tsx` and `submit-references.test.ts`.
 
 **E5. Merge session items into the mention adapter.**
 
@@ -582,12 +606,13 @@ Steps, in order:
 - Update `__tests__/ComposerTriggers.test.tsx` for the new hook wiring (mock
   `use-session-mention-source`).
 
-**F7. Prepend at send — `.../segments/use-submit-composition.ts`.**
+**F7. Expand and prepend at send — `.../segments/use-submit-composition.ts`.**
 
 ```ts
 const text = serializeComposition(...);
 if (text === '' && state.attachments.length === 0) return;      // unchanged, still on the pre-prepend text
-const body = prependSessionReferences(text, sessionReferencesFor(threadId));
+const references = sessionReferencesFor(threadId);
+const body = prependSessionReferences(expandSessionMentions(text, [...references.keys()]), references);
 ...
 aui.thread().append({ role: 'user', content: [{ type: 'text', text: body }], attachments, runConfig });
 composer.reset();

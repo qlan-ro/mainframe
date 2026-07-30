@@ -16,16 +16,18 @@ export function literalDirectiveFormatter(prefix: string): DirectiveFormatter {
  * `shouldCloseTriggerOnInsert` below (`closeOnInsert: false` for it), which
  * keeps the `@` token open so the popover re-lists that directory.
  *
- * A session serializes to `@session[<label>]`: the bracket delimiter carries
- * the spaces a session title has, which the renderer's bare-mention pattern
- * cannot. `resolveSessionLabel` lets the composer hand back the draft-unique
- * label it will record the transcript path under, so the token and the
- * reference line agree.
+ * A session serializes to the bare `@<label>` — the draft spelling. The
+ * `session[…]` scaffolding the wire body needs would otherwise sit on screen
+ * while typing, since the composer overlay shows a token verbatim;
+ * `expandSessionMentions` puts it back at submit (see `session-mention.ts`).
+ * `resolveSessionLabel` lets the composer hand back the draft-unique label it
+ * will record the transcript path under, so the token and the reference line
+ * agree.
  */
 export function mentionDirectiveFormatter(resolveSessionLabel?: (item: TriggerItem) => string): DirectiveFormatter {
   return {
     serialize: (item) => {
-      if (item.type === 'session') return `@session[${resolveSessionLabel?.(item) ?? item.label}]`;
+      if (item.type === 'session') return `@${resolveSessionLabel?.(item) ?? item.label}`;
       return item.type === 'directory' ? `@${item.id}/` : `@${item.id}`;
     },
   };
