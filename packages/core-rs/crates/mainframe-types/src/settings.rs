@@ -275,7 +275,7 @@ mod tests {
         let json = serde_json::to_string(&NotificationConfig::default()).unwrap();
         assert_eq!(
             json,
-            r#"{"chat":{"taskComplete":true,"sessionError":true},"permission":{"toolRequest":true,"userQuestion":true,"planApproval":true},"other":{"plugin":true}}"#
+            r#"{"chat":{"taskComplete":true,"sessionError":true,"attentionRequest":true},"permission":{"toolRequest":true,"userQuestion":true,"planApproval":true},"other":{"plugin":true}}"#
         );
     }
 
