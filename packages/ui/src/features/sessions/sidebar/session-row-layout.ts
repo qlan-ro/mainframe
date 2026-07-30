@@ -18,13 +18,12 @@
  * prop, which SessionRow derives from `detectedPrs.length > 0` — exactly
  * the condition under which `SessionRowPrRegion` renders anything at all.
  *
- * With a PR affordance (worst case: pinned, one PR chip), from the #285
- * rework brief's budget table:
- *   - title-floor(44) + leading(32) + chip(40) + slot(78) + 3 gaps(27) = 221
- *   - + worktree(14) + 1 gap(9)  = 244  -> reveals at content-box 244, i.e.
- *     sidebar width 244 + 52 = 296
- *   - + dots(21) + 1 gap(9)     = 274  -> reveals at content-box 274, i.e.
- *     sidebar width 274 + 52 = 326
+ * With a PR affordance (the accepted 280px QA surface: unpinned, or pinned
+ * inside the Pinned group where the row-level pin glyph is suppressed):
+ *   - title-floor(44) + leading(16) + chip(40) + slot(78) + 3 gaps(27) = 205
+ *   - + worktree(14) + 1 gap(9) = 228  -> fits the 280px sidebar floor
+ *   - dots stay on the conservative 326px threshold, so they still yield
+ *     before the worktree glyph on every PR-bearing row
  *
  * Without a PR affordance (worst case: pinned, no PR region rendered at
  * all), the same method with the chip's 40px + its gap dropped:
@@ -50,27 +49,27 @@ export const SESSION_ROW_TITLE_FLOOR = 'min-w-[44px]';
  *  (absolutely positioned) on hover. Never changes width or position. */
 export const SESSION_ROW_TRAILING_SLOT_PX = 78;
 
-export const SESSION_ROW_WORKTREE_THRESHOLD_PX = 296;
+export const SESSION_ROW_WORKTREE_THRESHOLD_PX = 280;
 /** Hides the worktree glyph below SESSION_ROW_WORKTREE_THRESHOLD_PX, on a
  *  row that also carries a PR affordance. */
-export const SESSION_ROW_WORKTREE_YIELD_CLASS = '@max-[295px]:hidden';
+export const SESSION_ROW_WORKTREE_YIELD_CLASS = '@max-[280px]:hidden';
 
 export const SESSION_ROW_DOT_THRESHOLD_PX = 326;
 /** Hides the tag dots below SESSION_ROW_DOT_THRESHOLD_PX, on a row that
  *  also carries a PR affordance — the wider of the two thresholds, so dots
  *  yield before the worktree glyph does. */
-export const SESSION_ROW_DOT_YIELD_CLASS = '@max-[325px]:hidden';
+export const SESSION_ROW_DOT_YIELD_CLASS = '@max-[326px]:hidden';
 
 export const SESSION_ROW_WORKTREE_THRESHOLD_NO_PR_PX = 247;
 /** Hides the worktree glyph below SESSION_ROW_WORKTREE_THRESHOLD_NO_PR_PX,
  *  on a row with no PR affordance at all — well under the 280px sidebar
  *  floor, so this glyph is unconditionally visible there. */
-export const SESSION_ROW_WORKTREE_YIELD_CLASS_NO_PR = '@max-[246px]:hidden';
+export const SESSION_ROW_WORKTREE_YIELD_CLASS_NO_PR = '@max-[247px]:hidden';
 
 export const SESSION_ROW_DOT_THRESHOLD_NO_PR_PX = 274;
 /** Hides the tag dots below SESSION_ROW_DOT_THRESHOLD_NO_PR_PX, on a row
  *  with no PR affordance at all — also under the 280px sidebar floor. */
-export const SESSION_ROW_DOT_YIELD_CLASS_NO_PR = '@max-[273px]:hidden';
+export const SESSION_ROW_DOT_YIELD_CLASS_NO_PR = '@max-[274px]:hidden';
 
 /** Purely decorative: no PR input lives here. Bounded content (one 14px
  *  glyph plus at most three 5px dots) means it never needs to shrink —

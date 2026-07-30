@@ -21,7 +21,11 @@ import { render, screen } from '@testing-library/react';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
 import {
+  SESSION_ROW_DOT_THRESHOLD_NO_PR_PX,
+  SESSION_ROW_DOT_THRESHOLD_PX,
   SESSION_ROW_DOT_YIELD_CLASS,
+  SESSION_ROW_WORKTREE_THRESHOLD_NO_PR_PX,
+  SESSION_ROW_WORKTREE_THRESHOLD_PX,
   SESSION_ROW_WORKTREE_YIELD_CLASS,
   SESSION_ROW_DOT_YIELD_CLASS_NO_PR,
   SESSION_ROW_WORKTREE_YIELD_CLASS_NO_PR,
@@ -131,7 +135,9 @@ it('renders the inline chip, not the count indicator, for exactly one detected P
   render(
     <SessionRow
       item={makeItem({
-        detectedPrs: [{ number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' }],
+        detectedPrs: [
+          { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
+        ],
       })}
     />,
   );
@@ -145,13 +151,26 @@ it('gives the worktree glyph and tag dots their own independent container-query 
       item={makeItem({
         worktreePath: '/repos/mf/.git/worktrees/feat-x',
         tags: ['a'],
-        detectedPrs: [{ number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' }],
+        detectedPrs: [
+          { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
+        ],
       })}
     />,
   );
 
   expect(screen.getByTestId('sessions-row-meta-icon-worktree').className).toContain(SESSION_ROW_WORKTREE_YIELD_CLASS);
   expect(screen.getByTestId('sessions-row-meta-icon-tag-dots').className).toContain(SESSION_ROW_DOT_YIELD_CLASS);
+});
+
+it('keeps the worktree glyph available at the 280px sidebar floor for PR-bearing rows', () => {
+  expect(SESSION_ROW_WORKTREE_THRESHOLD_PX).toBe(280);
+  expect(SESSION_ROW_WORKTREE_YIELD_CLASS).toBe('@max-[280px]:hidden');
+});
+
+it('aligns yield classes to their exported thresholds without a one-pixel early reveal', () => {
+  expect(SESSION_ROW_DOT_YIELD_CLASS).toBe(`@max-[${SESSION_ROW_DOT_THRESHOLD_PX}px]:hidden`);
+  expect(SESSION_ROW_WORKTREE_YIELD_CLASS_NO_PR).toBe(`@max-[${SESSION_ROW_WORKTREE_THRESHOLD_NO_PR_PX}px]:hidden`);
+  expect(SESSION_ROW_DOT_YIELD_CLASS_NO_PR).toBe(`@max-[${SESSION_ROW_DOT_THRESHOLD_NO_PR_PX}px]:hidden`);
 });
 
 it('gives a PR-less row the looser no-PR yield classes, since it never pays the PR affordance width cost', () => {
