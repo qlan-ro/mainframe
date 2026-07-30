@@ -255,6 +255,8 @@ export class ChatThreadController {
   }
 
   public async sendMessage(message: AppendMessage): Promise<void> {
+    if (this.refuseIfDirectoryMissing()) return;
+
     const input = parseSendInput(message);
     if (!input) return;
     const { text, uploadItems } = input;
@@ -291,6 +293,7 @@ export class ChatThreadController {
   public async retryMessage(clientId: string): Promise<void> {
     const pending = this.state.pendingUserMessages[clientId];
     if (!pending) return;
+    if (this.refuseIfDirectoryMissing()) return;
 
     this.dispatch({ type: 'local.message.retrying', clientId });
     this.dispatch({ type: 'run.started' });
@@ -301,6 +304,15 @@ export class ChatThreadController {
       this.dispatch({ type: 'local.message.failed', clientId, error });
       throw error;
     }
+  }
+
+  private refuseIfDirectoryMissing(): boolean {
+    const chat = this.state.chatConfig;
+    if (chat?.directoryMissing !== true) return false;
+    mfToast.error('Can’t send — the working directory is missing', {
+      description: chat.missingDirectoryPath ?? 'The directory this session runs in no longer exists.',
+    });
+    return true;
   }
 
   public async cancel(): Promise<void> {
