@@ -136,13 +136,15 @@ describe('DaemonFooterStatus — needs-repair marker', () => {
     expect(screen.getByTestId('daemon-footer-trigger-status')).toHaveTextContent('Re-pair');
   });
 
-  it('a disconnected connection state still reads Unreachable even when marked', () => {
+  // 'Offline' is DAEMON_STATUS.unreachable.word; 'Unreachable' is its longer
+  // aria label, which the trigger does not render.
+  it('a disconnected connection state still reads unreachable even when marked', () => {
     render(<DaemonFooterStatus />, { wrapper: makeWrapper(REMOTE_STUDIO_TARGET, 'disconnected') });
 
     act(() => {
       markAuthFailure('studio');
     });
 
-    expect(screen.getByTestId('daemon-footer-trigger-status')).toHaveTextContent('Unreachable');
+    expect(screen.getByTestId('daemon-footer-trigger-status')).toHaveTextContent('Offline');
   });
 });
