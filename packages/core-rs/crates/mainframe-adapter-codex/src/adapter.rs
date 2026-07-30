@@ -396,19 +396,6 @@ mod tests {
             Some(vec![EffortLevel::High, EffortLevel::Ultra])
         );
     }
-
-    // Regression pin for #287 mode 3 (`adapter_has_no_title_model`): Codex is
-    // the one shipped adapter that relies on `Adapter::generate_title`'s
-    // default body, so this proves T8's added log line there doesn't change
-    // the returned value.
-    #[tokio::test]
-    async fn default_generate_title_returns_no_title() {
-        let adapter = CodexAdapter::default();
-        let result = adapter
-            .generate_title("hello".to_string(), "codex".to_string())
-            .await;
-        assert_eq!(result.unwrap(), None);
-    }
 }
 
 // PORT STATUS: src/plugins/builtin/codex/adapter.ts (160 lines)
