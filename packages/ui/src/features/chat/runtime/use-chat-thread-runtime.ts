@@ -26,7 +26,7 @@ import { createAttachmentAdapter } from '../composer/attachment-adapter';
 /** Stateless — the per-chat daemon upload happens in the controller on send. */
 const ATTACHMENT_ADAPTER = createAttachmentAdapter();
 import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import type { ChatThreadController } from '../controller/chat-thread-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
@@ -89,6 +89,33 @@ function isRunningFromState(state: ChatThreadState): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Failed send → attachments back to the composer
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-adds a failed send's attachments to the composer, one by one.
+ *
+ * Never throws: a restore failure must not mask the send error the caller is
+ * about to rethrow, and one bad file must not strand the rest.
+ */
+async function restoreAttachments(
+  runtime: AssistantRuntime | null,
+  attachments: AppendMessage['attachments'],
+): Promise<void> {
+  const composer = runtime?.thread.composer;
+  if (!composer) return;
+  for (const attachment of attachments ?? []) {
+    const file = attachment.file;
+    if (!file) continue;
+    try {
+      await composer.addAttachment(file);
+    } catch (error) {
+      console.warn('[chat-runtime] could not restore an attachment to the composer', error);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -139,6 +166,10 @@ export function useChatThreadRuntime(
     [controller, port, state],
   );
 
+  // The restore below needs the runtime this hook produces, which doesn't exist
+  // yet when onNew is created — the ref closes that loop.
+  const runtimeRef = useRef<AssistantRuntime | null>(null);
+
   // onNew: a new (__LOCALID_*) thread has no daemon chat yet — create it, adopt
   // its id (setRemoteId), then send. A thread that already has a remoteId
   // (pre-existing chat, or one created earlier this session) just sends.
@@ -148,12 +179,20 @@ export function useChatThreadRuntime(
         const { remoteId } = await createForLocal(controller.getThreadId(), port);
         chatControllerRegistry.adopt(controller, remoteId);
       }
-      await controller.sendMessage(message);
+      try {
+        await controller.sendMessage(message);
+      } catch (error) {
+        // Safe against the composer reset: sendMessage cannot reject before its
+        // first await (the upload fetch), so this lands after append() has
+        // dropped this promise and use-submit-composition has reset the composer.
+        await restoreAttachments(runtimeRef.current, message.attachments);
+        throw error;
+      }
     },
     [controller, port],
   );
 
-  return useExternalStoreRuntime<ThreadMessage>({
+  const runtime = useExternalStoreRuntime<ThreadMessage>({
     isLoading: state.loadState.type === 'loading',
     isRunning,
     messageRepository,
@@ -164,6 +203,9 @@ export function useChatThreadRuntime(
       await controller.cancel();
     },
   });
+  runtimeRef.current = runtime;
+
+  return runtime;
 }
 
 // ---------------------------------------------------------------------------

@@ -254,7 +254,8 @@ function stateWithFailedPending(error: unknown, stage?: 'upload' | 'send') {
 }
 
 function mainframeMetaOf(state: Parameters<typeof projectChatThreadMessages>[0]) {
-  const projected = projectChatThreadMessages(state).at(-1)!;
+  const messages = projectChatThreadMessages(state);
+  const projected = messages[messages.length - 1]!;
   return (
     projected.metadata as {
       custom: { mainframe: { error?: string; attachmentsRestored?: boolean } };
