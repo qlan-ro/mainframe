@@ -109,6 +109,7 @@ fn seed(h: &Harness, id: &str, kind: BackgroundWorkKind, description: &str) {
             tool_use_id: format!("tu-{id}"),
             command: "cmd".to_string(),
             description: description.to_string(),
+            workflow_name: None,
         },
         format!("/tmp/mf-273-{id}.log"),
     );
