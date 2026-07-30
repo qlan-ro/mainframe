@@ -32,7 +32,7 @@ the existing `chat.notification` event, which is what lets the client single out
 
 | Area | Files |
 | --- | --- |
-| Shared TS types | `packages/types/src/settings.ts`, `packages/types/src/events.ts` |
+| Shared TS types | `packages/types/src/settings.ts`, `packages/types/src/events.ts`, `packages/ui/src/features/settings/panes/notifications/__tests__/NotificationsPane.test.tsx` (fixture line only — Task 1) |
 | Rust settings | `packages/core-rs/crates/mainframe-types/src/settings.rs`, `packages/core-rs/crates/mainframe-services/src/notifications/notification_config.rs`, `packages/core-rs/crates/mainframe-server/src/routes/settings.rs`, `packages/core-rs/crates/mainframe-server/tests/routes_settings.rs` |
 | Rust event contract | `packages/core-rs/crates/mainframe-types/src/events.rs`, `packages/core-rs/crates/mainframe-server/tests/ws_integration.rs` |
 | Rust attention pipeline | `packages/core-rs/crates/mainframe-chat/src/attention_request.rs` (new), `packages/core-rs/crates/mainframe-chat/src/lib.rs`, `packages/core-rs/crates/mainframe-chat/src/event_handler.rs`, `packages/core-rs/crates/mainframe-chat/src/event_handler/attention_tests.rs` (new), `packages/core-rs/crates/mainframe-chat/src/chat_manager.rs`, `packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs`, `packages/core-rs/crates/mainframe-chat/src/event_handler/permission_cancel_tests.rs`, `packages/core-rs/crates/mainframe-chat/src/event_handler/worktree_trigger_tests.rs`, `packages/core-rs/crates/mainframe-server/src/chat_deps.rs` |
@@ -67,6 +67,29 @@ the existing `chat.notification` event, which is what lets the client single out
 - **P7 — The Tauri notification permission is requested on first use.** The capability set currently allows
   `notify` and `is-permission-granted` but not `request-permission`, so `sendNotification` would silently do
   nothing on a machine that never granted permission. Task 25 adds the capability and gates the send.
+- **P8 — Whole-package gates decide the group order, not file collisions.** Several groups verify with a
+  gate that compiles far more than the group edits: every UI group runs
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck`, which compiles all of `packages/ui/src` and resolves
+  `@qlan-ro/mainframe-types` through `./dist/index.d.ts` — the very dist Group A rebuilds in Task 2. Group C
+  is the same story on the Rust side: Task 8's `cargo check -p mainframe-server --tests` and Task 16's
+  `cargo test … -p mainframe-services -p mainframe-server` compile crates Group B is editing, and Task 5
+  leaves `mainframe-server` uncompilable until Task 7 lands. Those gates make the ordering below binding
+  even where two groups share no files.
+
+## Group order
+
+Groups run in dependency waves. The edges are gate-driven (decision P8), not file collisions.
+
+| Wave | Groups | Depends on |
+| --- | --- | --- |
+| 1 | A (shared TS contracts), B (Rust settings leaf) | — |
+| 2 | C (Rust attention pipeline) | B |
+| 2 | D (settings toggle), E (transcript tool card), F (OS notification) | A |
+
+No UI group may run in Group A's wave: Group A rewrites `packages/types/src/settings.ts` and rebuilds the
+dist that every UI group's typecheck resolves through, and it is the task that makes
+`NotificationsPane.test.tsx` typecheck at all (Task 1). This applies to Group E as much as to D and F —
+Group E owns no shared file, but its Task 21 gate is the same whole-package typecheck.
 
 ---
 
@@ -76,10 +99,21 @@ the existing `chat.notification` event, which is what lets the client single out
 
 ### Task 1 — `attentionRequest` in the shared notification config
 
-- File: `packages/types/src/settings.ts`.
+- Files: `packages/types/src/settings.ts`,
+  `packages/ui/src/features/settings/panes/notifications/__tests__/NotificationsPane.test.tsx`.
 - Add `attentionRequest: boolean;` to `NotificationConfig['chat']` (after `sessionError`).
 - Add `attentionRequest: true` to `NOTIFICATION_DEFAULTS.chat`.
-- Verify: `pnpm --filter @qlan-ro/mainframe-types build` succeeds.
+- Add `attentionRequest: true` to the `NOTIF` fixture's `chat` object
+  (`NotificationsPane.test.tsx:14`). The fixture is assigned to `general` (typed `GeneralConfig`) via
+  `useSettingsStore.setState`, so the moment this task makes the leaf required the literal is a TS2739
+  missing-property error; `packages/ui/tsconfig.json` has `"include": ["src"]`, so `tsc --noEmit`
+  typechecks it. The fixture belongs to this task, not to Group D: this is the task that makes the field
+  required, and every UI group's whole-package typecheck gate compiles this file whether or not that group
+  owns it. It also gives Task 17's "checked when the store holds the default config" case a defined value
+  to assert — with the fixture unpatched, `notifications.chat.attentionRequest` is `undefined` at runtime
+  and that case can never pass.
+- Verify: `pnpm --filter @qlan-ro/mainframe-types build` succeeds, then
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
 
 ### Task 2 — optional `kind` discriminator on `chat.notification`
 
@@ -136,9 +170,17 @@ the existing `chat.notification` event, which is what lets the client single out
   (b) `PUT` with `{"notifications":{"chat":{"attentionRequest":"nope"}}}` returns the `fail` envelope with
   `400` and the stored config is byte-identical afterwards (AC12); (c) update any existing assertion that
   compares the full defaults object.
-- Then add `attention_request: Option<bool>` to `ChatPartial` and merge it in `merge_notifications`
-  alongside the existing leaves. `parse_notifications`/`put_general` need no other change — the existing
-  body-parse failure path already produces the `fail` envelope.
+- Then add `attention_request: Option<bool>` to `ChatPartial` — the partial that both `parse_notifications`
+  and `merge_notifications` read — and merge it in `merge_notifications` alongside the existing leaves.
+- Add `attention_request: chat.attention_request.unwrap_or(d.chat.attention_request)` to the
+  `NotificationChatConfig` literal inside `parse_notifications` (`routes/settings.rs:96-99`). Two failure
+  modes make this line mandatory rather than incidental: Task 5 makes the struct field required, so omitting
+  it is an E0063 that stops this task's own gate from compiling; and hardcoding `d.chat.attention_request`
+  instead compiles while silently discarding the stored value on both call sites (`get_general` at line 170,
+  `put_general` at line 298) — reads would always report `true` and any unrelated notification PUT would
+  reset a stored `false`, failing test (a) and AC11.
+- `put_general` needs no other change — the existing body-parse failure path already produces the `fail`
+  envelope.
 - Verify: `cargo test -p mainframe-server --test routes_settings`.
 
 ## Group C — Rust attention pipeline
@@ -280,7 +322,9 @@ the existing `chat.notification` event, which is what lets the client single out
   `label="When Claude asks for your attention"`,
   `description="Notify when Claude interrupts to ask for you"`,
   `checked={notifications.chat.attentionRequest}`, `onChange={(v) => patchChat('attentionRequest', v)}`,
-  `testId="settings-notify-attention-request-toggle"`. No other change — `patchChat` is already generic.
+  `testId="settings-notify-attention-request-toggle"`. Nothing else in this file changes — `patchChat` is
+  already keyed by `keyof NotificationConfig['chat']`. The test file's `NOTIF` fixture already carries
+  `attentionRequest: true` from Task 1; do not re-add it.
 - Verify: the same vitest command passes, plus `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
 
 ## Group E — transcript tool card (UI)
