@@ -267,9 +267,12 @@ export class ChatThreadController {
     this.dispatch({ type: 'local.message.queued', pending });
     this.dispatch({ type: 'run.started' });
 
+    // Hoisted so the catch can tell an upload rejection (still undefined) from a
+    // WS-send throw — the projection words the failure differently for each.
+    let attachmentIds: string[] | undefined;
     try {
       // Upload attachments first → reference them by id (the daemon stores the bytes).
-      const attachmentIds =
+      attachmentIds =
         uploadItems.length > 0 ? await uploadAttachments(this.port, this.daemonId, uploadItems) : undefined;
       this.ws.send({
         type: 'message.send',
@@ -278,7 +281,8 @@ export class ChatThreadController {
         ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       });
     } catch (error) {
-      this.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error });
+      const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
+      this.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage });
       throw error;
     }
   }
@@ -298,7 +302,7 @@ export class ChatThreadController {
     try {
       this.ws.send({ type: 'message.send', chatId: this.daemonId, content: pending.text });
     } catch (error) {
-      this.dispatch({ type: 'local.message.failed', clientId, error });
+      this.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send' });
       throw error;
     }
   }

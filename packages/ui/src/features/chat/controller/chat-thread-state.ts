@@ -35,6 +35,9 @@ export interface PendingUserMessage {
   createdAt: number;
   status: 'pending' | 'failed';
   error?: unknown;
+  /** Which half of the send failed — the projection needs it to tell an upload
+   *  rejection (attachments went back to the composer) from a WS-send throw. */
+  stage?: 'upload' | 'send';
 }
 
 export interface ChatPermissionEntry {
@@ -126,7 +129,7 @@ export type ChatStateEvent =
   | { type: 'queued.snapshot'; refs: QueuedMessageRef[] }
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
-  | { type: 'local.message.failed'; clientId: string; error: unknown }
+  | { type: 'local.message.failed'; clientId: string; error: unknown; stage?: 'upload' | 'send' }
   | { type: 'local.message.retrying'; clientId: string }
   | { type: 'chat.config.updated'; chat: Chat }
   | { type: 'chat.id.adopted'; chatId: string }
@@ -496,7 +499,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         ...state,
         pendingUserMessages: {
           ...state.pendingUserMessages,
-          [event.clientId]: { ...current, status: 'failed', error: event.error },
+          [event.clientId]: { ...current, status: 'failed', error: event.error, stage: event.stage },
         },
         runState: { type: 'error', error: event.error },
       };
@@ -505,7 +508,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'local.message.retrying': {
       const current = state.pendingUserMessages[event.clientId];
       if (!current) return state;
-      const { error: _dropped, ...rest } = current;
+      const { error: _dropped, stage: _dropped2, ...rest } = current;
       return {
         ...state,
         pendingUserMessages: {
