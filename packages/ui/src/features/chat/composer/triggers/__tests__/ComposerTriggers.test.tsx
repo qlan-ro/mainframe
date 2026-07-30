@@ -167,15 +167,16 @@ describe('ComposerTriggers — session mention rows', () => {
     await waitFor(() => expect(refreshSessionsMock).toHaveBeenCalled());
   });
 
-  it('inserts the @session[label] token and records label → transcript path', async () => {
+  it('inserts the bare @label mention and records label → transcript path', async () => {
     render(<Harness />);
     const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
 
     typeInto(input, '@');
     fireEvent.click(await screen.findByTestId('composer-mention-session-chat-2'));
 
+    // The draft spelling — submit rewrites it to `@session[Foo refactor]`.
     await waitFor(() => {
-      expect(input.value).toBe('@session[Foo refactor] ');
+      expect(input.value).toBe('@Foo refactor ');
     });
     const recorded = Object.values(useSessionReferences.getState().byThread);
     expect(recorded).toContainEqual({ 'Foo refactor': '/tmp/transcripts/chat-2.jsonl' });
