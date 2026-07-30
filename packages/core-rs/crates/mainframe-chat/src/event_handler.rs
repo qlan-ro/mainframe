@@ -1292,6 +1292,9 @@ fn now_ms() -> i64 {
 }
 
 #[cfg(test)]
+mod attention_tests;
+
+#[cfg(test)]
 mod worktree_trigger_tests;
 
 #[cfg(test)]
