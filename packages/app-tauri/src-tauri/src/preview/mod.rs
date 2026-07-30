@@ -68,15 +68,16 @@ pub struct NavigateResult {
 
 // ── URL scheme allowlist ───────────────────────────────────────────────────────
 
-/// Canonical allowlist — mirrors @qlan-ro/mainframe-types ALLOWED_EXTERNAL_SCHEMES
-/// (source of truth: packages/types/src/host/external-schemes.ts). Both hosts behave 1:1.
-const ALLOWED_EXTERNAL_SCHEMES: &[&str] = &[
-    "http", "https", "mailto", "slack", "vscode", "vscode-insiders", "cursor",
-    "jetbrains", "idea", "zed", "figma", "linear", "notion", "discord", "tel",
-];
+/// Deliberately narrower than `@qlan-ro/mainframe-types` `ALLOWED_EXTERNAL_SCHEMES`
+/// (packages/types/src/host/external-schemes.ts, the main window's own
+/// link-opening allowlist): `capabilities/preview.json` grants this bridge
+/// command to every http(s) origin a preview/URL tab loads, so a deep-link
+/// scheme here would let any previewed page launch a local app. Widening past
+/// http/https is a design-gate decision, not one this guard should inherit.
+const ALLOWED_EXTERNAL_SCHEMES: &[&str] = &["http", "https"];
 
-/// Returns `true` only for schemes safe to forward to the OS opener.
-/// Rejects `file://`, `javascript:`, `ssh://`, `data:` and any unknown scheme.
+/// Returns `true` only for schemes safe to forward to the OS opener from a
+/// remote-origin preview page. Rejects everything but http/https.
 pub(crate) fn is_allowed_external_scheme(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
     ALLOWED_EXTERNAL_SCHEMES
@@ -394,14 +395,18 @@ mod tests {
         assert!(is_allowed_external_scheme("HTTP://example.com"));
     }
 
+    /// Deep-link/IDE/app schemes are safe for the main window's own opener
+    /// (`ALLOWED_EXTERNAL_SCHEMES` in `@qlan-ro/mainframe-types`), but every
+    /// http(s) origin loaded in a preview/URL tab can reach this bridge
+    /// command — so it must reject all of them, not mirror that wider list.
     #[test]
-    fn ide_and_app_schemes_pass() {
+    fn ide_and_app_schemes_are_rejected() {
         for s in [
             "vscode://open", "vscode-insiders://open", "cursor://x", "jetbrains://x",
             "idea://x", "zed://x", "slack://chan", "linear://x", "notion://x",
             "figma://x", "discord://x", "mailto:a@b.com", "tel:+15551234",
         ] {
-            assert!(is_allowed_external_scheme(s), "expected allowed: {s}");
+            assert!(!is_allowed_external_scheme(s), "expected rejected: {s}");
         }
     }
 

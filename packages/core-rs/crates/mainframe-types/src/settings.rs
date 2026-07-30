@@ -97,6 +97,10 @@ pub struct ProviderConfig {
     pub personality: Option<Personality>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_summary: Option<ReasoningSummary>,
+    /// Model the CLI uses for its own background calls on a CLIProxyAPI session,
+    /// whose catalog has no Haiku to fall back on. Absent = pick from the catalog.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cliproxy_small_fast_model: Option<String>,
 }
 
 /// Patch shape for updating provider settings. The enum-valued fields additionally
@@ -130,6 +134,8 @@ pub struct ProviderConfigUpdate {
     pub personality: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cliproxy_small_fast_model: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

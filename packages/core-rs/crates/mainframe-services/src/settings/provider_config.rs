@@ -16,7 +16,7 @@ impl SettingsReader for mainframe_db::DatabaseManager {
     }
 }
 
-const FIELDS: [&str; 11] = [
+const FIELDS: [&str; 12] = [
     "defaultModel",
     "defaultMode",
     "defaultPlanMode",
@@ -28,6 +28,7 @@ const FIELDS: [&str; 11] = [
     "defaultAdaptiveThinking",
     "personality",
     "reasoningSummary",
+    "cliproxySmallFastModel",
 ];
 
 pub fn get_provider_config(db: &impl SettingsReader, adapter_id: &str) -> ProviderConfig {

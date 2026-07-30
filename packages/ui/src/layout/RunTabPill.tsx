@@ -2,8 +2,8 @@
  * RunTabPill — one tab in the Run surface strip: a STATIC type glyph, the tab
  * title, an optional Stop, and a hover close (×). The leading glyph identifies
  * the tab TYPE and never changes with the process's running/stopped state:
- * console (logs-only launch) = square-terminal (cli console), preview webview = eye, terminal =
- * terminal, Files guest = file. A launch-config tab (console/preview — the only
+ * console (logs-only launch) = square-terminal (cli console), preview webview = eye, url = globe,
+ * terminal = terminal, Files guest = file. A launch-config tab (console/preview — the only
  * tabs carrying `config`) whose process is live shows a red Stop as a SEPARATE
  * control between the title and the close, mirroring the toolbar's Stop (todo
  * #206); clicking it stops the config via the same daemon call the toolbar uses,
@@ -11,7 +11,7 @@
  *
  * data-testid: run-tab-<id> / run-tab-stop-<id> / run-tab-close-<id>.
  */
-import { Eye, FileText, Square, SquareTerminal, Terminal, X } from 'lucide-react';
+import { Eye, FileText, Globe, Square, SquareTerminal, Terminal, X } from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
@@ -24,11 +24,12 @@ function tabGlyph(tab: RunTab, isActive: boolean) {
     ? 'text-mf-text-3'
     : tab.kind === 'terminal'
       ? 'text-mf-term-cyan'
-      : tab.kind === 'preview' || tab.kind === 'console'
+      : tab.kind === 'preview' || tab.kind === 'console' || tab.kind === 'url'
         ? 'text-mf-surface-run'
         : 'text-foreground';
   const cls = `flex-shrink-0 ${color}`;
   if (tab.kind === 'preview') return <Eye size={12} className={cls} />;
+  if (tab.kind === 'url') return <Globe size={12} className={cls} />;
   if (tab.kind === 'console') return <SquareTerminal size={12} className={cls} />;
   if (tab.kind === 'terminal') return <Terminal size={12} className={cls} />;
   return <FileText size={12} className={cls} />;

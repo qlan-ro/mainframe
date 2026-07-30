@@ -16,10 +16,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 // Module mocks — factories must not reference out-of-scope variables
 // ---------------------------------------------------------------------------
 
-vi.mock('@assistant-ui/react', () => ({
-  useAuiState: vi.fn().mockReturnValue(false),
-}));
-
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
 }));
@@ -80,6 +76,16 @@ vi.mock('../use-composer-tuning', () => ({
     setFeature: vi.fn(),
     disabled: false,
     providerDefaults: undefined,
+    hasMessages: false,
+    contextTokens: null,
+    tuningWarning: {
+      pending: null,
+      suppressChecked: false,
+      setSuppressChecked: vi.fn(),
+      guard: vi.fn(),
+      confirm: vi.fn(),
+      cancel: vi.fn(),
+    },
   }),
 }));
 
@@ -125,6 +131,16 @@ describe('ComposerToolbar — no render when chat is null', () => {
       setFeature: vi.fn(),
       disabled: false,
       providerDefaults: undefined,
+      hasMessages: false,
+      contextTokens: null,
+      tuningWarning: {
+        pending: null,
+        suppressChecked: false,
+        setSuppressChecked: vi.fn(),
+        guard: vi.fn(),
+        confirm: vi.fn(),
+        cancel: vi.fn(),
+      },
     });
 
     const { container } = renderToolbar();

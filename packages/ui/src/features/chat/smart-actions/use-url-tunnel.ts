@@ -82,7 +82,9 @@ export function useUrlTunnel(href: string, port: number): UrlTunnelController {
     startPortTunnel(daemonPort, { port, chatId }).catch((err: unknown) => {
       pendingOpenRef.current = false;
       setStarting(false);
-      reportPortTunnelError(port, message(err));
+      // This chip's start failed; the daemon said nothing. Marking the entry
+      // client-written keeps it out of a URL tab's claim evidence (#281 D10).
+      reportPortTunnelError(port, message(err), 'client');
     });
   }, [chatId, daemonPort, entry, href, isLocal, openExternal, port]);
 

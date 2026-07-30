@@ -83,6 +83,10 @@ pub struct SessionSpawnOptions {
     pub system_prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tuning: Option<ResolvedTuning>,
+    /// Overrides the model the CLI uses for its own background calls when the chat
+    /// runs against CLIProxyAPI, whose catalog has no Haiku to fall back on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub small_fast_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -343,6 +347,9 @@ pub struct AdapterModel {
     /// Older-but-still-active model Mainframe offers beyond the CLI's own picker.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_older: Option<bool>,
+    /// Labelled picker section this model belongs to; absent = the adapter's main list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supported_efforts: Option<Vec<EffortLevel>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -355,6 +362,17 @@ pub struct AdapterModel {
     pub supports_adaptive_thinking: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_personality: Option<bool>,
+}
+
+/// The endpoint a model id is namespaced to (`cliproxy/gpt-5.6-sol` → `cliproxy`),
+/// or `None` for a native id. Which endpoints exist is the adapter's business; all
+/// the chat layer needs is that crossing endpoints costs a respawn, since the
+/// endpoint is fixed in the child process's environment.
+pub fn model_endpoint(model: &str) -> Option<&str> {
+    model
+        .split_once('/')
+        .filter(|(endpoint, bare)| !endpoint.is_empty() && !bare.is_empty())
+        .map(|(endpoint, _)| endpoint)
 }
 
 /// Single source of truth for the boolean tuning features. Mirrors the TS

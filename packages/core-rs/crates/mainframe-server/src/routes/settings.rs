@@ -456,6 +456,8 @@ struct ProviderPatch {
     personality: Option<String>,
     #[serde(rename = "reasoningSummary")]
     reasoning_summary: Option<String>,
+    #[serde(rename = "cliproxySmallFastModel")]
+    cliproxy_small_fast_model: Option<String>,
 }
 
 /// `true` when a present value satisfies its Zod enum. `None` (absent) is always
@@ -551,6 +553,9 @@ async fn put_provider(
             }
             if let Some(v) = patch.reasoning_summary {
                 set_or_delete(s, &adapter_id, "reasoningSummary", &v)?;
+            }
+            if let Some(v) = patch.cliproxy_small_fast_model {
+                set_or_delete(s, &adapter_id, "cliproxySmallFastModel", &v)?;
             }
             Ok(())
         })

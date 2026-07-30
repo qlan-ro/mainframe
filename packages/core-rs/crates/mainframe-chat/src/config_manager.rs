@@ -6,6 +6,7 @@ use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
 use mainframe_services::workspace::{
     create_worktree, get_claude_project_dir, move_session_files, remove_worktree,
 };
+use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat::Project;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
@@ -347,8 +348,15 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             return Ok(());
         }
 
+        // The endpoint a model runs against is fixed in the child's environment at
+        // spawn, so crossing endpoints needs a respawn even though the adapter is
+        // unchanged — `set_model` alone would leave the CLI pointed at the old one.
+        let endpoint_changed = model_changed
+            && model.as_deref().and_then(model_endpoint)
+                != cur_model.as_deref().and_then(model_endpoint);
+
         let session_spawned = session.as_ref().is_some_and(|s| s.is_spawned());
-        if session_spawned && !adapter_changed {
+        if session_spawned && !adapter_changed && !endpoint_changed {
             // `session_spawned` implies `Some`; the `if let` avoids an Option unwrap.
             if let Some(session) = session {
                 self.apply_live_session_settings(
@@ -779,6 +787,56 @@ mod tests {
         assert!(
             matches!(&events[0], DaemonEvent::ChatUpdated { chat: c, reason: None } if c.permission_mode == Some(ExecutionMode::AcceptEdits))
         );
+    }
+
+    /// Crossing endpoints changes the child's environment, which only a respawn can
+    /// do. A live `set_model` would leave the CLI talking to the old endpoint under
+    /// a model id it has never heard of.
+    #[tokio::test]
+    async fn moving_a_live_chat_onto_an_endpoint_model_respawns_instead_of_setting_the_model() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with(session.clone());
+        let manager = ChatConfigManager::new(FakeDeps::new(cell.clone()));
+
+        manager
+            .update_chat_config(
+                "c1",
+                None,
+                Some("cliproxy/gpt-5.6-sol".to_string()),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(session.set_model_calls.lock().unwrap().is_empty());
+        assert_eq!(session.kills(), 1);
+        assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            cell.lock().unwrap().chat.model.as_deref(),
+            Some("cliproxy/gpt-5.6-sol")
+        );
+    }
+
+    /// Within one endpoint the environment is already right, so the switch stays live.
+    #[tokio::test]
+    async fn switching_between_two_models_on_the_same_endpoint_stays_live() {
+        let session = Arc::new(FakeSession::spawned());
+        let cell = cell_with(session.clone());
+        cell.lock().unwrap().chat.model = Some("cliproxy/gpt-5.6-sol".to_string());
+        let manager = ChatConfigManager::new(FakeDeps::new(cell.clone()));
+
+        manager
+            .update_chat_config("c1", None, Some("cliproxy/kimi-k3".to_string()), None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            session.set_model_calls.lock().unwrap().as_slice(),
+            &["cliproxy/kimi-k3".to_string()]
+        );
+        assert_eq!(session.kills(), 0);
+        assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]

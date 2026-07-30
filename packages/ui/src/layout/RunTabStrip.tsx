@@ -16,13 +16,14 @@
  *   run-surface-drag                      — surface drag grip (primary pane)
  *   run-tab-strip-add-<paneId>            — the + trigger
  *   run-pane-new-terminal-<paneId>        — "New terminal" menu row
+ *   run-pane-open-url-<paneId>            — "URL…" menu row (opens the inline entry)
  *   run-pane-launch-<config>-<paneId>     — a launch-config menu row
  *   run-tab-strip-split-right / -split-down — split actions (primary)
  *   run-surface-close                     — close the Run surface (primary)
  *   run-pane-close-<paneId>               — un-split (secondary pane)
  */
 import { useState } from 'react';
-import { Eye, GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, Plus, Terminal, X } from 'lucide-react';
+import { Eye, Globe, GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, Plus, Terminal, X } from 'lucide-react';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuDivider, MenuEmpty, MenuLabel, MenuRow } from '@/components/ui/menu';
@@ -33,6 +34,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { useSurfaceDragStore } from './use-surface-drag';
 import { RunTabPill } from './RunTabPill';
+import { RunUrlEntry } from './RunUrlEntry';
 import { Hint } from '@/components/ui/hint';
 import type { RunPane } from '@/store/run-pane';
 
@@ -43,14 +45,15 @@ interface RunAddMenuProps {
   paneId: string;
   configs: LaunchConfiguration[];
   onLaunch: (config: LaunchConfiguration) => void;
+  onOpenUrl: () => void;
 }
 
-function RunAddMenu({ paneId, configs, onLaunch }: RunAddMenuProps) {
+function RunAddMenu({ paneId, configs, onLaunch, onOpenUrl }: RunAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label="New terminal / Open preview">
+      <Hint label="New terminal, URL, or preview">
         <PopoverTrigger asChild>
           <button
             data-testid={`run-tab-strip-add-${paneId}`}
@@ -62,7 +65,7 @@ function RunAddMenu({ paneId, configs, onLaunch }: RunAddMenuProps) {
         </PopoverTrigger>
       </Hint>
       <PopoverContent data-testid={`run-add-menu-${paneId}`} className="w-[214px] rounded-[8px] p-[4px]" align="start">
-        <MenuLabel>New terminal</MenuLabel>
+        <MenuLabel>New tab</MenuLabel>
         <MenuRow
           data-testid={`run-pane-new-terminal-${paneId}`}
           icon={<Terminal className="size-[13px] text-mf-term-cyan" />}
@@ -71,6 +74,15 @@ function RunAddMenu({ paneId, configs, onLaunch }: RunAddMenuProps) {
           onClick={() => {
             setOpen(false);
             emitSurfaceIntent({ type: 'new-terminal', paneId });
+          }}
+        />
+        <MenuRow
+          data-testid={`run-pane-open-url-${paneId}`}
+          icon={<Globe className="size-[13px] text-mf-surface-run" />}
+          label="URL…"
+          onClick={() => {
+            setOpen(false);
+            onOpenUrl();
           }}
         />
         <MenuDivider />
@@ -104,6 +116,7 @@ function RunAddMenu({ paneId, configs, onLaunch }: RunAddMenuProps) {
 }
 
 export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean }) {
+  const [urlEntryOpen, setUrlEntryOpen] = useState(false);
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
@@ -138,22 +151,37 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
         <Play size={12} className="text-mf-surface-run" fill="currentColor" />
       </div>
 
-      <div className="flex h-full min-w-0 flex-initial items-center gap-[2px] overflow-x-auto pr-[2px] [scrollbar-width:none]">
-        {pane.tabs.map((t) => (
-          <RunTabPill
-            key={t.id}
-            pane={pane}
-            tab={t}
+      {/* The entry replaces the pill row rather than floating over the tab body:
+          the native child webview composites above the DOM and would swallow it. */}
+      {urlEntryOpen ? (
+        <div className="flex min-w-0 flex-1 items-center pr-[6px]">
+          <RunUrlEntry paneId={pane.id} onDone={() => setUrlEntryOpen(false)} />
+        </div>
+      ) : (
+        <>
+          <div className="flex h-full min-w-0 flex-initial items-center gap-[2px] overflow-x-auto pr-[2px] [scrollbar-width:none]">
+            {pane.tabs.map((t) => (
+              <RunTabPill
+                key={t.id}
+                pane={pane}
+                tab={t}
+                configs={configs}
+                scopeStatuses={scopeStatuses}
+                onStop={handleStop}
+              />
+            ))}
+          </div>
+
+          <RunAddMenu
+            paneId={pane.id}
             configs={configs}
-            scopeStatuses={scopeStatuses}
-            onStop={handleStop}
+            onLaunch={handleLaunch}
+            onOpenUrl={() => setUrlEntryOpen(true)}
           />
-        ))}
-      </div>
+        </>
+      )}
 
-      <RunAddMenu paneId={pane.id} configs={configs} onLaunch={handleLaunch} />
-
-      <div className="flex-1" />
+      {!urlEntryOpen && <div className="flex-1" />}
 
       <div className="flex flex-shrink-0 items-center gap-px pl-[2px] pr-[6px]">
         {primary && splitAvailable && (

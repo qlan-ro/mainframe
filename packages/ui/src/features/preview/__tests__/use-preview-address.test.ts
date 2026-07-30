@@ -23,24 +23,32 @@ function makeHandle(over: Partial<PreviewHandle> = {}): PreviewHandle {
 }
 
 describe('usePreviewAddress', () => {
-  it('seeds currentUrl from the port', () => {
-    const { result } = renderHook(({ h, p }) => usePreviewAddress(h, p), {
-      initialProps: { h: makeHandle(), p: 3000 as number | null },
+  it('seeds currentUrl from the seed URL', () => {
+    const { result } = renderHook(({ h, u }) => usePreviewAddress(h, u), {
+      initialProps: { h: makeHandle(), u: 'http://localhost:3000' as string | null },
     });
     expect(result.current.currentUrl).toBe('http://localhost:3000');
   });
 
-  it('re-seeds when the port changes', () => {
-    const { result, rerender } = renderHook(({ h, p }) => usePreviewAddress(h, p), {
-      initialProps: { h: makeHandle(), p: 3000 as number | null },
+  it('re-seeds when the seed URL changes', () => {
+    const { result, rerender } = renderHook(({ h, u }) => usePreviewAddress(h, u), {
+      initialProps: { h: makeHandle(), u: 'http://localhost:3000' as string | null },
     });
-    rerender({ h: makeHandle(), p: 4000 });
-    expect(result.current.currentUrl).toBe('http://localhost:4000');
+    rerender({ h: makeHandle(), u: 'https://example.com/docs' });
+    expect(result.current.currentUrl).toBe('https://example.com/docs');
+  });
+
+  it('keeps the current URL when the seed goes null', () => {
+    const { result, rerender } = renderHook(({ h, u }) => usePreviewAddress(h, u), {
+      initialProps: { h: makeHandle(), u: 'http://localhost:3000' as string | null },
+    });
+    rerender({ h: makeHandle(), u: null });
+    expect(result.current.currentUrl).toBe('http://localhost:3000');
   });
 
   it('navigateTo normalizes + calls handle.navigate and updates currentUrl', () => {
     const handle = makeHandle();
-    const { result } = renderHook(() => usePreviewAddress(handle, 3000));
+    const { result } = renderHook(() => usePreviewAddress(handle, 'http://localhost:3000'));
     let ok = false;
     act(() => {
       ok = result.current.navigateTo('localhost:3000/dashboard');
@@ -52,7 +60,7 @@ describe('usePreviewAddress', () => {
 
   it('navigateTo returns false and does not navigate on invalid input', () => {
     const handle = makeHandle();
-    const { result } = renderHook(() => usePreviewAddress(handle, 3000));
+    const { result } = renderHook(() => usePreviewAddress(handle, 'http://localhost:3000'));
     let ok = true;
     act(() => {
       ok = result.current.navigateTo('   ');
@@ -69,7 +77,7 @@ describe('usePreviewAddress', () => {
         return () => {};
       },
     });
-    const { result } = renderHook(() => usePreviewAddress(handle, 3000));
+    const { result } = renderHook(() => usePreviewAddress(handle, 'http://localhost:3000'));
     act(() => emit!('http://localhost:3000/from-page'));
     expect(result.current.currentUrl).toBe('http://localhost:3000/from-page');
   });

@@ -7,7 +7,7 @@ vi.mock('../../../features/sessions/runtime/chat-controller-registry', () => ({
 }));
 vi.mock('../../../store/terminal-cleanup', () => ({ killAndDisposeCachedTerminals: vi.fn() }));
 vi.mock('../../../store/layout', () => ({ useLayoutStore: { getState: vi.fn(() => ({ run: null })) } }));
-vi.mock('../../../store/run-pane', () => ({ terminalIdsInRun: vi.fn(() => []) }));
+vi.mock('../../../store/run-pane', () => ({ tabIdsInRun: vi.fn(() => []) }));
 
 // adapters/adapters-seed are exercised for real (not mocked) so the store-state
 // and generation-guard assertions below pin actual behavior. Only their network

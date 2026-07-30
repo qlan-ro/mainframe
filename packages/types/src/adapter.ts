@@ -257,6 +257,8 @@ export interface AdapterModel {
   isDefault?: boolean;
   /** Older-but-still-active model Mainframe offers beyond the CLI's own picker. */
   isOlder?: boolean;
+  /** Labelled picker section this model belongs to; absent = the adapter's main list. */
+  group?: string;
   /** Dynamic, per-model. Empty/absent → model has no effort control. */
   supportedEfforts?: EffortLevel[];
   defaultEffort?: EffortLevel;

@@ -7,7 +7,7 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use mainframe_adapter_api::AdapterError;
+use mainframe_adapter_api::{AdapterError, finalize_title};
 use tokio::process::Command;
 
 const TITLE_TIMEOUT_MS: u64 = 30_000;
@@ -61,50 +61,6 @@ pub async fn generate_claude_title(
     Ok(finalize_title(&String::from_utf8_lossy(&output.stdout)))
 }
 
-/// `stdout.trim().replace(/^["']|["']$/g, '').trim()`, accepting only a 2..=80 char
-/// result (else `null`).
-fn finalize_title(stdout: &str) -> Option<String> {
-    let mut t = stdout.trim().to_string();
-    if t.starts_with('"') || t.starts_with('\'') {
-        t.remove(0);
-    }
-    if t.ends_with('"') || t.ends_with('\'') {
-        t.pop();
-    }
-    let title = t.trim();
-    let len = title.chars().count();
-    if !title.is_empty() && (2..=80).contains(&len) {
-        Some(title.to_string())
-    } else {
-        None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn strips_surrounding_quotes_and_trims() {
-        assert_eq!(
-            finalize_title("  \"Auth Refactor\"\n"),
-            Some("Auth Refactor".to_string())
-        );
-        assert_eq!(
-            finalize_title("'Fix Login Bug'"),
-            Some("Fix Login Bug".to_string())
-        );
-    }
-
-    #[test]
-    fn rejects_too_short_or_too_long() {
-        assert_eq!(finalize_title("a"), None);
-        assert_eq!(finalize_title("   "), None);
-        let long: String = "x".repeat(81);
-        assert_eq!(finalize_title(&long), None);
-    }
-}
-
 // PORT STATUS: src/plugins/builtin/claude/title-generator.ts (48 lines)
 // confidence: high
 // todos: 0
@@ -114,5 +70,5 @@ mod tests {
 // notes: (TS execFile rejects on timeout; callers keep the deterministic title). PATH
 // notes: threaded explicitly + NO_COLOR=1 (edition-2024 can't mutate process env).
 // notes: maxBuffer:8192 dropped (title output is a few words; unbounded read is safe).
-// notes: The quote-strip/length gate is factored into finalize_title and unit-tested
-// notes: (no TS test covers this module directly).
+// notes: The quote-strip/length gate moved to mainframe_adapter_api::finalize_title
+// notes: (#275) so the Codex generator can't drift from it; tests moved with it.

@@ -15,6 +15,7 @@ use tracing::{info, warn};
 
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
+use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
 
 /// True when no chat OTHER than `exclude_chat_id` is still active (non-archived)
@@ -768,11 +769,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .chat
             .adapter_id
             .clone();
-        let binary = self
-            .deps
-            .settings_get("provider", &format!("{adapter_id}.titleBinary"))
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "claude".to_string());
+        let binary = resolve_title_binary(
+            self.deps
+                .settings_get("provider", &format!("{adapter_id}.titleBinary")),
+            &adapter_id,
+        );
 
         if let Some(title) = self
             .deps
@@ -942,6 +943,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let system_prompt = self
             .deps
             .settings_get("provider", &format!("{}.systemPrompt", chat.adapter_id));
+        let small_fast_model = self.deps.settings_get(
+            "provider",
+            &format!("{}.cliproxySmallFastModel", chat.adapter_id),
+        );
         let tuning = self.deps.resolve_tuning(chat_id).await;
         let process = session
             .spawn(
@@ -952,6 +957,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     executable_path,
                     system_prompt,
                     tuning,
+                    small_fast_model,
                 }),
                 Some(sink),
             )

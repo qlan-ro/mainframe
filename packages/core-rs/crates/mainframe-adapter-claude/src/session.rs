@@ -21,7 +21,7 @@
 //! and a `setMode` update is always forced session-scoped (#283).
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 
@@ -43,6 +43,7 @@ use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 
+use crate::cliproxy::{self, CliProxyEnv};
 use crate::constants::MAINFRAME_SYSTEM_PROMPT_APPEND;
 use crate::context_files::collect_claude_context_files;
 use crate::events::{handle_stderr, handle_stdout};
@@ -164,6 +165,10 @@ struct SharedSurface {
     pid: AtomicU32,
     status: AtomicU8,
     last_activity_ms: AtomicI64,
+    /// Set when the live child talks to CLIProxyAPI rather than Anthropic. Read by
+    /// the event path, whose rate-limit reports would otherwise be attributed to the
+    /// user's real Claude account.
+    endpoint: AtomicBool,
 }
 
 fn status_to_u8(s: AdapterProcessStatus) -> u8 {
@@ -242,6 +247,7 @@ fn build_spawn_command(
     args: &[String],
     project_path: &str,
     resolved_path: &str,
+    proxy: Option<&CliProxyEnv>,
 ) -> tokio::process::Command {
     let mut cmd = tokio::process::Command::new(executable);
     cmd.args(args)
@@ -256,6 +262,17 @@ fn build_spawn_command(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
+    if let Some(proxy) = proxy {
+        // Both small/fast vars: the CLI renamed ANTHROPIC_SMALL_FAST_MODEL to
+        // ANTHROPIC_DEFAULT_HAIKU_MODEL and still honours whichever it finds.
+        // ANTHROPIC_API_KEY is removed because it outranks the auth token — an
+        // inherited key would silently route this session back to Anthropic.
+        cmd.env("ANTHROPIC_BASE_URL", &proxy.base_url)
+            .env("ANTHROPIC_AUTH_TOKEN", &proxy.auth_token)
+            .env("ANTHROPIC_DEFAULT_HAIKU_MODEL", &proxy.small_fast_model)
+            .env("ANTHROPIC_SMALL_FAST_MODEL", &proxy.small_fast_model)
+            .env_remove("ANTHROPIC_API_KEY");
+    }
     cmd
 }
 
@@ -343,6 +360,7 @@ impl ClaudeSession {
                 pid: AtomicU32::new(0),
                 status: AtomicU8::new(status_to_u8(AdapterProcessStatus::Starting)),
                 last_activity_ms: AtomicI64::new(now_ms()),
+                endpoint: AtomicBool::new(false),
             }),
             state: Arc::new(Mutex::new(ClaudeSessionState {
                 chat_id,
@@ -413,6 +431,12 @@ impl ClaudeSession {
         self.state().child.is_some()
     }
 
+    /// True when the live child was spawned against an endpoint (CLIProxyAPI) rather
+    /// than the user's own Anthropic account.
+    pub fn is_endpoint_session(&self) -> bool {
+        self.shared.endpoint.load(Ordering::SeqCst)
+    }
+
     pub fn last_activity_at(&self) -> i64 {
         self.shared.last_activity_ms.load(Ordering::SeqCst)
     }
@@ -437,6 +461,10 @@ impl ClaudeSession {
         self.state().child = Some(child);
     }
     #[cfg(test)]
+    pub(crate) fn set_endpoint_for_test(&self) {
+        self.shared.endpoint.store(true, Ordering::SeqCst);
+    }
+    #[cfg(test)]
     pub(crate) fn set_stdin_for_test(&self, tx: Option<StdinTx>) {
         *self.stdin_tx.lock().unwrap() = tx;
     }
@@ -455,6 +483,29 @@ impl ClaudeSession {
         sink: Option<Arc<dyn SessionSink>>,
     ) -> Result<AdapterProcess, AdapterError> {
         let active_sink: Arc<dyn SessionSink> = sink.unwrap_or_else(|| Arc::new(NullSink));
+
+        // A `cliproxy/`-namespaced model runs the same CLI against the local proxy.
+        // The namespace is Mainframe's; the CLI only ever sees the bare id.
+        let endpoint_model = options
+            .model
+            .as_deref()
+            .map(cliproxy::split_endpoint)
+            .and_then(|(endpoint, bare)| endpoint.map(|_| bare.to_string()));
+        let mut options = options;
+        let proxy_env = match &endpoint_model {
+            Some(bare) => {
+                options.model = Some(bare.clone());
+                Some(
+                    cliproxy::resolve_env(None, options.small_fast_model.as_deref(), bare)
+                        .await
+                        .map_err(AdapterError::Message)?,
+                )
+            }
+            None => None,
+        };
+        self.shared
+            .endpoint
+            .store(endpoint_model.is_some(), Ordering::SeqCst);
 
         let (args, base_mode) = build_args(&options, &self.resume_session_id);
         *self
@@ -482,6 +533,7 @@ impl ClaudeSession {
             &args,
             &self.project_path,
             self.resolved_path.as_str(),
+            proxy_env.as_ref(),
         )
         .spawn()?;
 
@@ -777,8 +829,12 @@ impl ClaudeSession {
                 self.id
             )));
         }
+        // Same strip as spawn: the endpoint namespace is Mainframe's bookkeeping and
+        // means nothing to the CLI. Crossing endpoints never reaches here — that is a
+        // respawn, since the endpoint lives in the child's environment.
+        let (_, bare) = cliproxy::split_endpoint(&model);
         self.require_success(
-            json!({ "subtype": "set_model", "model": model }),
+            json!({ "subtype": "set_model", "model": bare }),
             "set_model",
         )
         .await
@@ -1085,6 +1141,7 @@ impl AdapterSession for ClaudeSession {
             executable_path: None,
             system_prompt: None,
             tuning: None,
+            small_fast_model: None,
         });
         Box::pin(ClaudeSession::spawn(self, options, sink))
     }
@@ -1170,6 +1227,7 @@ mod tests {
             &["--version".to_string()],
             "/tmp",
             "/opt/homebrew/bin:/usr/bin",
+            None,
         );
         let path = cmd
             .as_std()
@@ -1178,6 +1236,65 @@ mod tests {
             .and_then(|(_, v)| v)
             .map(|v| v.to_string_lossy().into_owned());
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
+    }
+
+    fn spawn_env(proxy: Option<&CliProxyEnv>) -> HashMap<String, Option<String>> {
+        build_spawn_command("claude", &[], "/tmp", "/usr/bin", proxy)
+            .as_std()
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect()
+    }
+
+    /// The proxy env is the whole mechanism: a session that keeps ANTHROPIC_API_KEY
+    /// or misses the base url talks to Anthropic under a model id Anthropic has
+    /// never heard of, and fails in a way that looks like a Mainframe bug.
+    #[test]
+    fn a_proxy_session_is_pointed_at_the_endpoint_and_stripped_of_the_real_api_key() {
+        let env = spawn_env(Some(&CliProxyEnv {
+            base_url: "http://127.0.0.1:8317".to_string(),
+            auth_token: "sk-proxy".to_string(),
+            small_fast_model: "gpt-5.4-mini".to_string(),
+        }));
+
+        assert_eq!(
+            env.get("ANTHROPIC_BASE_URL").cloned().flatten().as_deref(),
+            Some("http://127.0.0.1:8317")
+        );
+        assert_eq!(
+            env.get("ANTHROPIC_AUTH_TOKEN")
+                .cloned()
+                .flatten()
+                .as_deref(),
+            Some("sk-proxy")
+        );
+        for key in [
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_SMALL_FAST_MODEL",
+        ] {
+            assert_eq!(
+                env.get(key).cloned().flatten().as_deref(),
+                Some("gpt-5.4-mini"),
+                "{key}"
+            );
+        }
+        // `None` is how tokio's Command records an env_remove.
+        assert_eq!(env.get("ANTHROPIC_API_KEY"), Some(&None));
+    }
+
+    /// A native Claude session must inherit the daemon's Anthropic env untouched.
+    #[test]
+    fn a_native_session_carries_no_endpoint_env() {
+        let env = spawn_env(None);
+        assert!(!env.contains_key("ANTHROPIC_BASE_URL"));
+        assert!(!env.contains_key("ANTHROPIC_AUTH_TOKEN"));
+        assert!(!env.contains_key("ANTHROPIC_API_KEY"));
+        assert!(!env.contains_key("ANTHROPIC_DEFAULT_HAIKU_MODEL"));
     }
 
     pub(super) fn session() -> Arc<ClaudeSession> {
@@ -1203,6 +1320,7 @@ mod tests {
             executable_path: None,
             system_prompt: None,
             tuning: None,
+            small_fast_model: None,
         }
     }
 

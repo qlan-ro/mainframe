@@ -3,12 +3,14 @@
  * 1 or 2 panes laid out along `run.dir`; each pane is a `RunTabStrip` + the
  * active body. A preview-config tab shows the webview (`PreviewInstance`); a
  * process-config tab shows a full-space console (`ConsolePane variant="full"`);
- * a terminal tab shows the PTY. The whole surface is a drop target for a
+ * a terminal tab shows the PTY; a `url` tab shows an arbitrary address in the
+ * same webview (`UrlTabInstance`). The whole surface is a drop target for a
  * Files-tab drag (`data-drop-surface="run"`).
  */
 import { GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, X } from 'lucide-react';
 import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { PreviewInstance } from '@/features/preview/PreviewInstance';
+import { UrlTabInstance } from '@/features/url-tab/UrlTabInstance';
 import { ConsolePane } from '@/features/run/ConsolePane';
 import { RunTabStrip } from '../RunTabStrip';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
@@ -124,6 +126,19 @@ function RunTabBody({
         scopeKey={tabScope ?? undefined}
         projectId={projectId ?? undefined}
         port={tab.port ?? null}
+      />
+    );
+  }
+  if (tab.kind === 'url') {
+    // A corrupt persisted tab with no url resolves to the `invalid` body, which
+    // still carries a live address bar — never the placeholder below.
+    return (
+      <UrlTabInstance
+        tabId={tab.id}
+        url={tab.url ?? ''}
+        visible={active}
+        scopeKey={tabScope ?? undefined}
+        projectId={projectId ?? undefined}
       />
     );
   }
