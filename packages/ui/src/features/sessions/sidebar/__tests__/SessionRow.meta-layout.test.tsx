@@ -1,11 +1,13 @@
 /**
- * SessionRow — the title-floor / meta-cluster yield contract.
+ * SessionRow — the title-floor / row starvation contract (#285 rework).
  *
- * session-row-layout.ts is the one place this contract is defined: a new
- * meta glyph goes INSIDE SessionRowMetaIcons's cluster (and inherits the
- * yield behavior for free), never beside it. This file's regression proves
- * that an inflated meta cluster — far more items than any real session
- * carries today — still cannot take the title's floor away.
+ * session-row-layout.ts is the one place this contract is defined: the title
+ * floor and the row's fixed PR region never yield; only the purely
+ * decorative worktree glyph and tag dots give up width, each independently,
+ * at its own container-query threshold. This file's regression proves that
+ * an inflated decorative cluster — far more tags than any real session
+ * carries today — still cannot take the title's floor away, and that a PR
+ * can never become unreachable regardless of how many are detected.
  *
  * A fresh minimal harness (not the shared one from SessionRow.test.tsx):
  * nothing here clicks, renames, pins or archives, so it only needs the four
@@ -18,6 +20,7 @@ import { it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
+import { SESSION_ROW_DOT_YIELD_CLASS, SESSION_ROW_WORKTREE_YIELD_CLASS } from '../session-row-layout';
 
 vi.mock('@assistant-ui/react', () => ({
   ThreadListItemRuntimeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -85,7 +88,7 @@ function makeItem(overrides?: Partial<SessionCustom>): SessionItem {
   return { id: 'chat-1', title: 'Build the sidebar', status: 'regular', custom };
 }
 
-it("a bloated meta cluster cannot take the title's floor", () => {
+it("a bloated decorative cluster cannot take the title's floor, and a PR is never unreachable", () => {
   const eightPrs: DetectedPr[] = Array.from({ length: 8 }, (_, i) => ({
     number: i + 1,
     url: `https://github.com/org/r/pull/${i + 1}`,
@@ -110,11 +113,45 @@ it("a bloated meta cluster cannot take the title's floor", () => {
   expect(title.className.match(/min-w-\S+/g)).toHaveLength(1);
 
   const cluster = screen.getByTestId('sessions-row-meta-icons');
-  expect(cluster.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')).toHaveLength(2);
+  expect(cluster.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')).toHaveLength(0);
 
   const indicator = screen.getByTestId('sessions-row-pr-overflow');
   expect(indicator.textContent).toContain('8');
   expect(cluster.contains(indicator)).toBe(false);
 
   expect(screen.getByTestId('sessions-row-meta-icon-tag-dots').children).toHaveLength(3);
+});
+
+it('renders the inline chip, not the count indicator, for exactly one detected PR', () => {
+  render(
+    <SessionRow
+      item={makeItem({
+        detectedPrs: [{ number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' }],
+      })}
+    />,
+  );
+  expect(screen.getByTestId('sessions-row-meta-icon-pr-42')).toBeTruthy();
+  expect(screen.queryByTestId('sessions-row-pr-overflow')).toBeNull();
+});
+
+it('gives the worktree glyph and tag dots their own independent container-query yield class', () => {
+  render(<SessionRow item={makeItem({ worktreePath: '/repos/mf/.git/worktrees/feat-x', tags: ['a'] })} />);
+
+  expect(screen.getByTestId('sessions-row-meta-icon-worktree').className).toContain(SESSION_ROW_WORKTREE_YIELD_CLASS);
+  expect(screen.getByTestId('sessions-row-meta-icon-tag-dots').className).toContain(SESSION_ROW_DOT_YIELD_CLASS);
+});
+
+it('reserves the trailing slot at rest, unaffected by how many PRs or tags the row carries', () => {
+  const eightPrs: DetectedPr[] = Array.from({ length: 8 }, (_, i) => ({
+    number: i + 1,
+    url: `https://github.com/org/r/pull/${i + 1}`,
+    owner: 'org',
+    repo: 'r',
+    source: 'created' as const,
+  }));
+  render(<SessionRow item={makeItem({ detectedPrs: eightPrs, tags: ['a', 'b', 'c', 'd'] })} />);
+
+  const slot = screen.getByTestId('sessions-row-trailing-slot');
+  expect(slot.style.width).toBe('78px');
+  expect(screen.getByTestId('sessions-row-relative-time')).toBeTruthy();
 });

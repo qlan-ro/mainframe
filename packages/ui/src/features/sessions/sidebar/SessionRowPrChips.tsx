@@ -1,9 +1,9 @@
 /**
- * The inline PR chips on a session row — capped at MAX_ROW_PR_CHIPS, the
- * session's own PRs first (arrangeRowPrs). Renders a Fragment, not a wrapper,
- * so each chip is a direct child of the meta cluster and yields whole under
- * pressure (see session-row-layout.ts). Everything the cap leaves out is
- * reachable through SessionRowPrOverflow, which sits beside the cluster.
+ * The row's one inline PR chip — MAX_ROW_PR_CHIPS caps it at 1 (arrangeRowPrs
+ * picks the most recent). Lives in the row's fixed PR region beside the count
+ * indicator (session-row-layout.ts), never in the yielding decorative
+ * cluster, so it can never wrap, clip, or become unreachable. The label
+ * clamps at 5 glyphs so its width is part of the row's fixed budget.
  */
 import { useMemo } from 'react';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
@@ -29,7 +29,7 @@ export function SessionRowPrChips({ detectedPrs }: { detectedPrs: DetectedPr[] }
             href={pr.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center font-mono text-caption font-semibold text-mf-success hover:underline"
+            className="inline-flex max-w-[5ch] items-center truncate font-mono text-caption font-semibold text-mf-success hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
             #{pr.number}

@@ -15,9 +15,9 @@
  * in a SessionMetaCard shown on hover, positioned from this row's rect
  * (useRowHoverCard).
  *
- * The title's minimum width and the meta cluster's yield behavior are defined
- * together in session-row-layout.ts: a new meta glyph goes INSIDE the cluster,
- * and only something that must stay clickable at 280px goes beside it.
+ * The title's minimum width and the row's starvation rule (fixed PR
+ * region + trailing slot never yield; only the decorative worktree/tag
+ * cluster gives up width) are defined together in session-row-layout.ts.
  */
 import { memo, useRef, useState } from 'react';
 import {
@@ -31,14 +31,13 @@ import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionBadge } from '../view-model/session-status';
 import { isSessionUnread } from '../view-model/session-unread';
-import { formatRelativeTime } from '../view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { pinChat } from '@/lib/api/chats';
 import { StatusDot } from './SessionRowStatus';
-import { RowHoverActions } from './SessionRowHoverActions';
 import { SessionRowMetaIcons } from './SessionRowMetaIcons';
-import { SessionRowPrOverflow } from './SessionRowPrOverflow';
+import { SessionRowPrRegion } from './SessionRowPrRegion';
+import { SessionRowTrailingSlot } from './SessionRowTrailingSlot';
 import { SESSION_ROW_TITLE_FLOOR } from './session-row-layout';
 import { SessionMetaCard } from './SessionMetaCard';
 import { useRowHoverCard } from './use-row-hover-card';
@@ -57,18 +56,6 @@ import { sidebarIndentPx, SIDEBAR_ROW_GUTTER_PX } from '@/layout/sidebar-indent'
 const SESSION_ROW_CONTENT_INSET_PX = sidebarIndentPx(2) - SIDEBAR_ROW_GUTTER_PX;
 
 export { StatusDot } from './SessionRowStatus';
-
-function RelativeTime({ updatedAt }: { updatedAt: number }) {
-  const text = formatRelativeTime(updatedAt, Date.now());
-  return (
-    <span
-      data-testid="sessions-row-relative-time"
-      className="flex-shrink-0 text-caption tabular-nums text-muted-foreground group-hover:hidden"
-    >
-      {text}
-    </span>
-  );
-}
 
 /**
  * `colorOf` is threaded down from the sidebar's single `useTagRegistry` so the
@@ -213,13 +200,12 @@ function SessionRowInner({
               <SessionRowMetaIcons
                 worktreePath={custom.worktreePath}
                 worktreeMissing={custom.worktreeMissing}
-                detectedPrs={custom.detectedPrs}
                 tags={custom.tags}
                 colorOf={colorOf}
               />
-              <SessionRowPrOverflow detectedPrs={custom.detectedPrs} />
-              <RelativeTime updatedAt={custom.updatedAt} />
-              <RowHoverActions
+              <SessionRowPrRegion detectedPrs={custom.detectedPrs} />
+              <SessionRowTrailingSlot
+                updatedAt={custom.updatedAt}
                 pinned={custom.pinned}
                 onPin={handlePin}
                 onUnpin={handleUnpin}

@@ -2,4 +2,4 @@
 '@qlan-ro/mainframe-ui': patch
 ---
 
-Cap a session row's PR chips at two with an indicator that opens the full list, and give the row title a minimum width so the meta glyphs can no longer squeeze it out.
+Fix a session row's PR chip vanishing under width pressure: at most one PR ever renders inline (the most recent, created preferred over merely-mentioned), a count indicator always stands in above one PR, and hover no longer reflows the row — only the purely decorative worktree glyph and tag dots yield width, one at a time, and only ever at their own natural size.

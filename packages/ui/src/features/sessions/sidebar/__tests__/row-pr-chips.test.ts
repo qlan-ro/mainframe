@@ -2,9 +2,10 @@
  * row-pr-chips — pure cap/prioritise logic (TDD red phase).
  *
  * A session's `detected_prs` list is unbounded, but the row can only afford
- * MAX_ROW_PR_CHIPS inline. `arrangeRowPrs` decides which PRs render inline
- * (session-owned "created" first), which spill to the overflow indicator,
- * and the single priority order the overflow panel lists.
+ * MAX_ROW_PR_CHIPS inline. `arrangeRowPrs` decides which single PR renders
+ * inline (the most recent session-created one, falling back to the most
+ * recent merely-mentioned one), which PRs spill to the count indicator, and
+ * the priority order the indicator's popover lists.
  */
 import { describe, it, expect } from 'vitest';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
@@ -14,8 +15,8 @@ function pr(number: number, source: DetectedPr['source'], owner = 'org', repo = 
   return { number, source, owner, repo, url: `https://github.com/${owner}/${repo}/pull/${number}` };
 }
 
-it('caps inline chips at 2', () => {
-  expect(MAX_ROW_PR_CHIPS).toBe(2);
+it('caps inline chips at 1', () => {
+  expect(MAX_ROW_PR_CHIPS).toBe(1);
 });
 
 describe('arrangeRowPrs', () => {
@@ -28,18 +29,18 @@ describe('arrangeRowPrs', () => {
 
   it('puts a single created PR inline with no overflow', () => {
     const result = arrangeRowPrs([pr(1, 'created')]);
-    expect(result.inline).toHaveLength(1);
+    expect(result.inline.map((p) => p.number)).toEqual([1]);
     expect(result.overflow).toHaveLength(0);
     expect(result.ordered).toHaveLength(1);
   });
 
-  it('keeps exactly 2 PRs inline with no overflow at the cap', () => {
+  it('picks the last-appended created PR inline for 2 created PRs, spilling the other', () => {
     const result = arrangeRowPrs([pr(1, 'created'), pr(2, 'created')]);
-    expect(result.inline).toHaveLength(2);
-    expect(result.overflow).toHaveLength(0);
+    expect(result.inline.map((p) => p.number)).toEqual([2]);
+    expect(result.overflow.map((p) => p.number)).toEqual([1]);
   });
 
-  it('caps inline at 2 and spills the rest to overflow for 5 PRs', () => {
+  it('caps inline at 1 and spills the rest to overflow for 5 created PRs, newest first is not assumed', () => {
     const result = arrangeRowPrs([
       pr(1, 'created'),
       pr(2, 'created'),
@@ -47,23 +48,29 @@ describe('arrangeRowPrs', () => {
       pr(4, 'created'),
       pr(5, 'created'),
     ]);
-    expect(result.inline).toHaveLength(2);
-    expect(result.overflow).toHaveLength(3);
+    expect(result.inline.map((p) => p.number)).toEqual([5]);
+    expect(result.overflow).toHaveLength(4);
     expect(result.ordered).toHaveLength(5);
   });
 
-  it('ranks created PRs before mentioned ones, preserving order within each group', () => {
+  it('prefers the last-appended created PR over any mentioned PR, regardless of append order', () => {
+    const input = [pr(1, 'mentioned'), pr(2, 'created'), pr(3, 'mentioned'), pr(4, 'created')];
+    const result = arrangeRowPrs(input);
+    expect(result.inline.map((p) => p.number)).toEqual([4]);
+    expect(result.overflow.map((p) => p.number).sort()).toEqual([1, 2, 3]);
+  });
+
+  it('falls back to the last-appended mentioned PR when the session created none', () => {
+    const input = [pr(5, 'mentioned'), pr(3, 'mentioned'), pr(9, 'mentioned')];
+    const result = arrangeRowPrs(input);
+    expect(result.inline.map((p) => p.number)).toEqual([9]);
+    expect(result.overflow.map((p) => p.number)).toEqual([5, 3]);
+  });
+
+  it('ranks created PRs before mentioned ones in the ordered list, preserving append order within each group', () => {
     const input = [pr(1, 'mentioned'), pr(2, 'created'), pr(3, 'mentioned'), pr(4, 'created')];
     const result = arrangeRowPrs(input);
     expect(result.ordered.map((p) => p.number)).toEqual([2, 4, 1, 3]);
-    expect(result.inline.map((p) => p.number)).toEqual([2, 4]);
-    expect(result.overflow.map((p) => p.number)).toEqual([1, 3]);
-  });
-
-  it('keeps original order when every PR is only mentioned', () => {
-    const input = [pr(5, 'mentioned'), pr(3, 'mentioned'), pr(9, 'mentioned')];
-    const result = arrangeRowPrs(input);
-    expect(result.ordered.map((p) => p.number)).toEqual([5, 3, 9]);
   });
 
   it('keeps same-numbered PRs from different repos distinct', () => {
@@ -71,6 +78,7 @@ describe('arrangeRowPrs', () => {
     const result = arrangeRowPrs(input);
     expect(result.ordered).toHaveLength(2);
     expect(new Set(result.ordered.map((p) => p.url)).size).toBe(2);
+    expect(result.inline[0]?.url).toBe('https://github.com/org/b/pull/7');
   });
 
   it('does not mutate the input array', () => {

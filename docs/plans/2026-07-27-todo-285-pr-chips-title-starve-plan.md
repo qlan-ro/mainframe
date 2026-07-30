@@ -1,3 +1,18 @@
+> **SUPERSEDED 2026-07-30.** This plan's mechanism — a 2-chip cap living inside
+> the shrinking meta cluster, relying on flex-wrap-and-clip to hide overflow —
+> was the design blocked twice by review for reproducing the starvation it set
+> out to fix (a detected PR could still go unreachable at exactly 2 PRs). The
+> #285 rework brief and Design direction (todo body, 2026-07-29) replaced it:
+> cap is 1 inline chip (last-appended created, else last-appended mentioned),
+> the PR affordance moved out of the cluster into its own never-yielding
+> region beside the count indicator, hover actions paint over a permanently
+> reserved trailing slot instead of reflowing the row, and the decorative
+> cluster's two remaining items (worktree glyph, tag dots) each yield
+> independently via a `session-row-layout.ts` container-query threshold. See
+> that module and `row-pr-chips.ts` for the mechanism actually shipped. This
+> document is kept for the T1–T8 history below; do not follow its "Remaining
+> scope" section.
+
 # Implementation plan — cap the session row's PR chips so they can't starve the title (#285)
 
 **Brief (the contract):** todo #285, `## Agent Brief` (route `no-spec`; project `rgoM5ZldH0UeeOonms6PK`). Its Decisions section is settled; this plan implements it and does not reopen it.

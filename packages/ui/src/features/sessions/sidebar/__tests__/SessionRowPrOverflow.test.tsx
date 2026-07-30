@@ -20,9 +20,14 @@ function fivePrs(): DetectedPr[] {
   return [pr(1, 'created'), pr(2, 'created'), pr(3, 'mentioned'), pr(4, 'mentioned'), pr(5, 'created')];
 }
 
-it('renders nothing when only 2 PRs are detected (nothing is hidden)', () => {
-  const { container } = render(<SessionRowPrOverflow detectedPrs={[pr(1, 'created'), pr(2, 'created')]} />);
+it('renders nothing for a single detected PR (the row shows the inline chip instead)', () => {
+  const { container } = render(<SessionRowPrOverflow detectedPrs={[pr(1, 'created')]} />);
   expect(container.firstChild).toBeNull();
+});
+
+it('renders for exactly 2 PRs, since the row can only ever show one inline', () => {
+  render(<SessionRowPrOverflow detectedPrs={[pr(1, 'created'), pr(2, 'created')]} />);
+  expect(screen.getByTestId('sessions-row-pr-overflow')).toBeTruthy();
 });
 
 it('shows the total PR count and an aria-label naming it, for 5 PRs', () => {

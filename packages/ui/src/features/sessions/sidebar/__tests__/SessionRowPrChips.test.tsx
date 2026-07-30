@@ -1,5 +1,5 @@
 /**
- * SessionRowPrChips — the row's inline PR chips, capped by arrangeRowPrs.
+ * SessionRowPrChips — the row's one inline PR chip, picked by arrangeRowPrs.
  * Renders plain props, no mocking needed (Hint carries its own TooltipProvider).
  */
 import { it, expect, vi } from 'vitest';
@@ -22,23 +22,24 @@ it('renders one chip whose text is "#42" for a single PR', () => {
   expect(screen.getByTestId('sessions-row-meta-icon-pr-42').textContent).toBe('#42');
 });
 
-it('renders exactly 2 chips for 5 PRs', () => {
+it('renders exactly 1 chip for 5 PRs, the most recently appended', () => {
   const { container } = render(
     <SessionRowPrChips
       detectedPrs={[pr(1, 'created'), pr(2, 'created'), pr(3, 'created'), pr(4, 'created'), pr(5, 'created')]}
     />,
   );
-  expect(container.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')).toHaveLength(2);
+  expect(container.querySelectorAll('[data-testid^="sessions-row-meta-icon-pr-"]')).toHaveLength(1);
+  expect(screen.getByTestId('sessions-row-meta-icon-pr-5')).toBeTruthy();
 });
 
-it('prioritises created PRs over mentioned ones when picking which chips render', () => {
+it('prioritises the last-appended created PR over any mentioned one', () => {
   render(<SessionRowPrChips detectedPrs={[pr(1, 'mentioned'), pr(2, 'created'), pr(3, 'mentioned')]} />);
   expect(screen.getByTestId('sessions-row-meta-icon-pr-2')).toBeTruthy();
-  expect(screen.getByTestId('sessions-row-meta-icon-pr-1')).toBeTruthy();
+  expect(screen.queryByTestId('sessions-row-meta-icon-pr-1')).toBeNull();
   expect(screen.queryByTestId('sessions-row-meta-icon-pr-3')).toBeNull();
 });
 
-it('sets each chip href to the PR url', () => {
+it('sets the chip href to the PR url', () => {
   render(<SessionRowPrChips detectedPrs={[pr(42, 'created')]} />);
   expect(screen.getByTestId('sessions-row-meta-icon-pr-42')).toHaveAttribute(
     'href',
@@ -46,13 +47,17 @@ it('sets each chip href to the PR url', () => {
   );
 });
 
-it('keeps same-numbered PRs from different repos distinct via data-pr-url', () => {
-  const { container } = render(
-    <SessionRowPrChips detectedPrs={[pr(7, 'created', 'org', 'a'), pr(7, 'created', 'org', 'b')]} />,
+it('picks the last-appended PR when same-numbered PRs come from different repos', () => {
+  render(<SessionRowPrChips detectedPrs={[pr(7, 'created', 'org', 'a'), pr(7, 'created', 'org', 'b')]} />);
+  expect(screen.getByTestId('sessions-row-meta-icon-pr-7')).toHaveAttribute(
+    'data-pr-url',
+    'https://github.com/org/b/pull/7',
   );
-  expect(container.querySelectorAll('[data-pr-url]')).toHaveLength(2);
-  expect(container.querySelector('[data-pr-url="https://github.com/org/a/pull/7"]')).toBeTruthy();
-  expect(container.querySelector('[data-pr-url="https://github.com/org/b/pull/7"]')).toBeTruthy();
+});
+
+it('clamps the chip label width so it never grows past the fixed PR-region budget', () => {
+  render(<SessionRowPrChips detectedPrs={[pr(42, 'created')]} />);
+  expect(screen.getByTestId('sessions-row-meta-icon-pr-42').className).toContain('max-w-[5ch]');
 });
 
 it('does not bubble a chip click to a parent handler', async () => {

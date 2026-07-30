@@ -1,13 +1,13 @@
 /**
- * The session row's PR overflow indicator — a glyph plus the TOTAL detected-PR
- * count, revealing every PR in a popover.
+ * The session row's PR count indicator — a glyph plus the TOTAL detected-PR
+ * count, revealing every PR in a popover. Renders whenever more than one PR
+ * is detected, replacing the single inline chip (never both at once).
  *
- * It sits beside the meta cluster rather than inside it (session-row-layout.ts):
- * inside, it would be squeezed away exactly when the row is tightest, and an
- * affordance a mouse user cannot click is worse than none. It shows the total,
- * not the hidden count, because the cluster can squeeze an inline chip away and
- * a "+N hidden" label would then be wrong. The label clamps at 99+ so its width
- * stays bounded — the title's floor is derived from a budget this sits in.
+ * It lives in the row's fixed PR region, never the decorative cluster
+ * (session-row-layout.ts): squeezed away exactly when the row is tightest, an
+ * affordance a mouse user cannot reach is worse than none. It shows the
+ * total, not a "+N hidden" count, since only one PR is ever inline. The label
+ * clamps at 99+ so its width stays part of the row's fixed budget.
  */
 import { useMemo } from 'react';
 import { GitPullRequest } from 'lucide-react';
@@ -37,8 +37,8 @@ function PrOverflowItem({ pr }: { pr: DetectedPr }) {
 }
 
 export function SessionRowPrOverflow({ detectedPrs }: { detectedPrs: DetectedPr[] }) {
-  const { overflow, ordered } = useMemo(() => arrangeRowPrs(detectedPrs), [detectedPrs]);
-  if (overflow.length === 0) return null;
+  const { ordered } = useMemo(() => arrangeRowPrs(detectedPrs), [detectedPrs]);
+  if (ordered.length <= 1) return null;
 
   return (
     <Popover>
