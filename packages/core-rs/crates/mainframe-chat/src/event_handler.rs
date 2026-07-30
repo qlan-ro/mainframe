@@ -136,6 +136,16 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+/// Truncate to [`PUSH_BODY_MAX_LENGTH`] chars, ending in an ellipsis; shared
+/// with `attention_request::normalize_attention_body`.
+pub(crate) fn truncate_push_body(text: &str) -> String {
+    if text.chars().count() <= PUSH_BODY_MAX_LENGTH {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(PUSH_BODY_MAX_LENGTH - 1).collect();
+    format!("{head}\u{2026}")
+}
+
 fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
     let Some(msgs) = msgs else {
         return String::new();
@@ -150,11 +160,7 @@ fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
                 if text.is_empty() {
                     continue;
                 }
-                if text.chars().count() <= PUSH_BODY_MAX_LENGTH {
-                    return text.to_string();
-                }
-                let head: String = text.chars().take(PUSH_BODY_MAX_LENGTH - 1).collect();
-                return format!("{head}\u{2026}");
+                return truncate_push_body(text);
             }
         }
     }
