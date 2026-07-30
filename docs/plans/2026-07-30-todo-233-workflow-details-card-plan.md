@@ -31,9 +31,11 @@ From the root `CLAUDE.md`, `packages/ui/CLAUDE.md`, and spec AC 26–30:
   field, an enum variant, or a single delegating call into a new sibling module. Each such task below
   states its own line budget. No new logic lands in those files.
 - **`data-testid` on every interactive element**, `<surface>-<element>` kebab-case, keyed by domain id.
-  The gate fixes four: `chat-workflow-launcher-<runId>`, `chat-workflow-panel-<runId>`,
-  `chat-workflow-phase-<index>`, `chat-workflow-agent-<agentId>`. `<index>` here is the CLI's own
-  `workflow_phase.index` from the snapshot — a domain id, not an array position. Say so in the code.
+  The gate fixes six: `chat-workflow-launcher-<runId>`, `chat-workflow-panel-<runId>`,
+  `chat-workflow-phase-<index>`, `chat-workflow-agent-<agentId>`,
+  `chat-background-workflow-<runId>`, and `chat-workflow-back-<runId>`. `<index>` here is the CLI's
+  own `workflow_phase.index` from the snapshot — a domain id, not an array position. Say so in the
+  code.
 - **No sync I/O in the daemon.** The disk read runs on the async history path only (D9).
 - **No silent catches.** Every `catch`/`Err` arm logs through `tracing` in Rust.
 - **Single canonical type** — every wire shape is defined once in `mainframe-types` (Rust) and
@@ -171,14 +173,31 @@ Flag these to the user — they are mine, not the spec's.
 
 **Modified** (all dispatch-only where the file is already over 300 lines)
 
-`mainframe-types/src/{lib,background_task,display,events}.rs` · `packages/types/src/{index,background-task,display,events}.ts` ·
-`packages/core-rs/Cargo.toml` · `mainframe-adapter-claude/{Cargo.toml,src/lib.rs,src/events.rs,src/task_events.rs,src/user_event.rs,src/session.rs,src/adapter.rs}` ·
-`mainframe-background-tasks/src/tracker.rs` · `mainframe-daemon/{Cargo.toml,src/main.rs}` ·
-`mainframe-server/{Cargo.toml,src/ctx.rs,src/chat_deps.rs,src/routes/chats.rs,src/routes/mod.rs}` ·
-`mainframe-chat/src/{chat_manager.rs,event_handler.rs,chat_manager/tests.rs,event_handler/worktree_trigger_tests.rs,event_handler/permission_cancel_tests.rs}` ·
-`packages/ui/src/features/chat/controller/{chat-thread-state.ts,handle-daemon-event.ts,chat-thread-controller.ts}` ·
-`packages/ui/src/features/chat/composer/BackgroundActivityBar.tsx` · `packages/ui/src/features/chat/tools/register-cards.ts` ·
-`packages/ui/src/features/chat/composer/__tests__/BackgroundActivityBar.test.tsx`
+| Path | Owner group |
+|---|---|
+| `packages/core-rs/crates/mainframe-types/src/{lib,background_task,display,events}.rs` | contract |
+| `packages/types/src/{index,background-task,display,events}.ts` | contract |
+| `packages/types/src/__tests__/background-activity.test.ts` | contract |
+| `packages/core/src/chat/chat-manager.ts` | contract |
+| `packages/ui/src/features/sessions/runtime/__tests__/new-thread-create-once.test.tsx` | contract |
+| `packages/core-rs/Cargo.toml` | rust-tests |
+| `packages/core-rs/crates/mainframe-adapter-claude/{Cargo.toml,src/lib.rs,src/events.rs,src/task_events.rs,src/user_event.rs,src/session.rs,src/adapter.rs}` | wf-adapter |
+| `packages/core-rs/crates/mainframe-background-tasks/src/{tracker,reconcile,kill,liveness}.rs` | wf-adapter |
+| `packages/core-rs/crates/mainframe-daemon/{Cargo.toml,src/main.rs}` | wf-daemon |
+| `packages/core-rs/crates/mainframe-daemon/tests/{boot_routes_integration,health_integration}.rs` | wf-daemon |
+| `packages/core-rs/crates/mainframe-server/{Cargo.toml,src/ctx.rs,src/chat_deps.rs}` | wf-daemon |
+| `packages/core-rs/crates/mainframe-server/src/routes/{chats,mod,background_tasks,adapters,automations_test_support,quota}.rs` | wf-daemon |
+| `packages/core-rs/crates/mainframe-server/tests/support/mod.rs` | wf-daemon |
+| `packages/core-rs/crates/mainframe-server/tests/chat_background_activity.rs` | rust-tests |
+| `packages/core-rs/crates/mainframe-chat/src/{chat_manager,event_handler}.rs` | wf-daemon |
+| `packages/core-rs/crates/mainframe-chat/src/chat_manager/tests.rs` | wf-daemon |
+| `packages/core-rs/crates/mainframe-chat/src/event_handler/{worktree_trigger_tests,permission_cancel_tests}.rs` | wf-daemon |
+| `packages/ui/src/features/chat/controller/{chat-thread-state,handle-daemon-event,chat-thread-controller}.ts` | ui-state |
+| `packages/ui/src/features/chat/controller/__tests__/handle-daemon-event-background.test.ts` | contract |
+| `packages/ui/src/features/chat/controller/__tests__/chat-thread-state-background.test.ts` | ui-tests |
+| `packages/ui/src/features/chat/composer/BackgroundActivityBar.tsx` | ui-view |
+| `packages/ui/src/features/chat/tools/register-cards.ts` | ui-view |
+| `packages/ui/src/features/chat/composer/__tests__/BackgroundActivityBar.test.tsx` | ui-tests |
 
 ## The wire contract (write it exactly once, here)
 
@@ -219,8 +238,8 @@ pub struct ClaudeWorkflowRun {
     pub source: ClaudeWorkflowRunSource,
     pub total_tokens: i64,
     pub duration_ms: i64,
-    pub snapshot_at: Option<i64>,        // ms epoch of the last applied snapshot
-    pub terminal_at: Option<i64>,        // ms epoch the run went terminal
+    pub structure_revision: Option<i64>, // usage.duration_ms of the last accepted snapshot
+    pub terminal_at: Option<i64>,         // ms epoch the run went terminal
     pub phases: Vec<ClaudeWorkflowPhase>,
     pub agents: Vec<ClaudeWorkflowAgent>,
 }
@@ -239,6 +258,19 @@ Additive wire changes:
 - `DaemonEvent` gains `#[serde(rename = "claude_workflow.run.updated")] ClaudeWorkflowRunUpdated { chat_id: String, run: ClaudeWorkflowRun }`
   and the TS union gains `| { type: 'claude_workflow.run.updated'; chatId: string; run: ClaudeWorkflowRun }`.
 
+### Structural freshness signal
+
+The CLI event has no event sequence or top-level timestamp, so arrival time is not a valid freshness
+signal. Use the event's run-cumulative `usage.duration_ms` as `structure_revision` **only when that
+event carries `workflow_progress`**. Verified fact 4 establishes that this value is wall-clock elapsed
+run time, so an older emitted snapshot has a smaller revision even when an unchanged agent happens to
+carry the newest `lastProgressAt` in both arrays. The store accepts a snapshot when its revision is
+greater than or equal to the retained revision. A `task_progress` event with no `workflow_progress`
+may advance displayed cumulative totals but never changes `structure_revision`. Totals themselves use
+`max(current, incoming)` so a delayed event cannot make them run backwards. A disk record with a
+snapshot sets its revision from record `durationMs`; terminal records still win by source precedence,
+regardless of revision.
+
 ## The store contract (crate `mainframe-claude-workflows`)
 
 ```rust
@@ -246,7 +278,7 @@ Additive wire changes:
 pub struct RunEvent { pub chat_id: String, pub run: ClaudeWorkflowRun }
 pub struct ProgressUsage { pub total_tokens: i64, pub duration_ms: i64 }
 
-pub struct ClaudeWorkflowStore { /* DashMap<String, IndexMap<String, ClaudeWorkflowRun>> + broadcast::Sender<RunEvent> */ }
+pub struct ClaudeWorkflowStore { /* DashMap<String, HashMap<String, ClaudeWorkflowRun>> + broadcast::Sender<RunEvent> */ }
 
 impl ClaudeWorkflowStore {
     pub fn new() -> Self;
@@ -268,7 +300,10 @@ impl ClaudeWorkflowStore {
 }
 
 // snapshot.rs
-pub struct ParsedSnapshot { pub phases: Vec<ClaudeWorkflowPhase>, pub agents: Vec<ClaudeWorkflowAgent> }
+pub struct ParsedSnapshot {
+    pub phases: Vec<ClaudeWorkflowPhase>,
+    pub agents: Vec<ClaudeWorkflowAgent>,
+}
 pub fn parse_snapshot(entries: &[Value]) -> ParsedSnapshot;
 
 // status.rs
@@ -309,14 +344,21 @@ Status mapping tables, fixed here so three groups agree:
 `terminal_task_status` is the `task_notification` path: same table, but `Ignore` collapses to
 `Stopped` (a notification is terminal by definition).
 
-Merge precedence (`merge_runs`, D8) — join on `run_id` when both sides have one, else `task_id`:
+Merge precedence (`merge_runs`, D8) uses a pairwise identity predicate, not a per-run fallback key:
+`same_run(a, b)` compares `run_id` when both sides have one; otherwise it compares `task_id`. Fold
+memory and records into one vector, find an incumbent with `same_run`, and apply the rules below. This
+makes the asymmetric learned-identity case canonical: memory `{ task_id: T, run_id: None }` and record
+`{ task_id: T, run_id: Some(R) }` collapse to one run carrying `R`.
 
-1. A `Record`-sourced run supersedes a `Snapshot`/`Launch` run for the same key.
+1. A `Record`-sourced run supersedes a `Snapshot`/`Launch` run for the same run.
 2. **Except** when the record's `phases` *and* `agents` are both empty and the in-memory run's are
-   not — then the in-memory run wins (the empty-snapshot carve-out, inverted).
-3. Between two `Snapshot` runs, the larger `snapshot_at` wins.
+   not — then the in-memory run wins (the empty-snapshot carve-out, inverted), while copying any
+   learned `run_id`/`workflow_name` that the winning side lacks.
+3. Between two `Snapshot` runs, the larger `structure_revision` wins; equal or absent revisions use
+   the later fold candidate so a same-timestamp cumulative snapshot can still replace its predecessor.
 4. A run present on only one side passes through unchanged.
-5. Output is ordered by `snapshot_at`/`terminal_at` ascending, then `task_id`, so the UI list is stable.
+5. Output is ordered by `structure_revision.or(terminal_at).unwrap_or(0)` ascending, then `task_id`,
+   so the UI list is stable.
 
 ---
 
@@ -340,7 +382,8 @@ enums. Add `impl ClaudeWorkflowRunStatus { pub fn is_terminal(self) -> bool }` r
 `Completed | Failed | Stopped | Unavailable` (`Paused` is **not** terminal — its duration is frozen,
 but a resume from the CLI's own TUI may still move it). Add
 `impl ClaudeWorkflowRun { pub fn new_seed(task_id: &str, workflow_name: Option<String>) -> Self }`
-producing `status: Running`, `source: Launch`, zeroed totals, empty vectors.
+producing `run_id: None`, `status: Running`, `source: Launch`, zeroed totals,
+`structure_revision: None`, `terminal_at: None`, and empty vectors.
 
 Do **not** name anything `WorkflowRun*` without the `Claude` prefix (verified fact 8).
 
@@ -355,8 +398,10 @@ Do **not** name anything `WorkflowRun*` without the `Claude` prefix (verified fa
 - `BackgroundTask` and `BackgroundActivityTask` each gain
   `#[serde(skip_serializing_if = "Option::is_none")] pub workflow_name: Option<String>` and the same
   for `pub run_id: Option<String>`. Update `to_activity_task` to copy both through. Update every
-  struct-literal construction in this file and its `mod tests` to set them to `None`.
-- `ChatHistoryPayload` gains `#[serde(default)] pub workflow_runs: Vec<ClaudeWorkflowRun>`.
+  struct-literal construction in this file and its `mod tests` to set them to `None`. Tasks 11, 18,
+  19, 22, and 23 own every literal outside this crate; none is left implicit.
+- `ChatHistoryPayload` gains `#[serde(default)] pub workflow_runs: Vec<ClaudeWorkflowRun>`. Task 25
+  owns the existing `ChatManager::get_display_messages` constructor.
 - `DaemonEvent` gains the `ClaudeWorkflowRunUpdated` variant from *The wire contract*, placed
   directly after `BackgroundTaskEnded` (line 362) and **before** the Automations `workflow.*` block,
   with a one-line comment naming the collision it avoids.
@@ -366,21 +411,32 @@ fields). `cargo check -p mainframe-background-tasks -p mainframe-chat -p mainfra
 struct-literal errors in files owned by later groups — record them in the task's notes, do not fix
 them here.
 
-### Task 3 — TypeScript mirror
+### Task 3 — TypeScript mirror and projection
 
 **Files:** create `packages/types/src/claude-workflow.ts`; edit `packages/types/src/index.ts` (+1
-export line), `background-task.ts` (+4 lines incl. the two `.optional()` Zod fields on
-`BackgroundActivityTaskSchema`), `display.ts` (+2), `events.ts` (+1 union member).
+export line), `background-task.ts`, `display.ts`, `events.ts`,
+`packages/types/src/__tests__/background-activity.test.ts`,
+`packages/core/src/chat/chat-manager.ts`,
+`packages/ui/src/features/chat/controller/__tests__/handle-daemon-event-background.test.ts`, and
+`packages/ui/src/features/sessions/runtime/__tests__/new-thread-create-once.test.tsx`.
 
 Mirror the Rust types as TS interfaces and string-literal unions using **camelCase** keys exactly as
-serde emits them. Keep the `ClaudeWorkflow` prefix. `ChatHistoryPayload.workflowRuns` is
-`ClaudeWorkflowRun[]` (required in TS; the daemon always sends it, `#[serde(default)]` covers old
-records). Export everything from `index.ts`.
+serde emits them. Keep the `ClaudeWorkflow` prefix. `BackgroundTask` and `BackgroundActivityTask`
+gain optional `workflowName` and `runId`; add both `.optional()` fields to
+`BackgroundActivityTaskSchema`, and make `toActivityTask` copy both fields so live
+`background_task.updated` events do not drop a late link. Extend `background-activity.test.ts` with a
+workflow projection assertion that hardcodes both fields and proves the schema accepts them. Extend
+`handle-daemon-event-background.test.ts` with a live update that starts unlinked, receives a tracker
+update carrying `workflowName`/`runId`, and projects both into the replacement reducer event.
 
-**Verify:** `pnpm --filter @qlan-ro/mainframe-types build` succeeds;
-`pnpm --filter @qlan-ro/mainframe-types test` passes, including the existing
-`__tests__/background-activity.test.ts` (the two new fields are optional, so it must still pass
-unchanged).
+`ChatHistoryPayload.workflowRuns` is `ClaudeWorkflowRun[]` and required in TS. Add `workflowRuns: []`
+to the retired TypeScript core's `getDisplayMessages` return and to the typed
+`new-thread-create-once.test.tsx` `getChatMessages` mock; these are the only typed producers found by
+`rg 'ChatHistoryPayload' packages/core/src packages/ui/src`. Export everything from `index.ts`.
+
+**Verify:** `pnpm build:types && pnpm build:core`; `pnpm --filter @qlan-ro/mainframe-types test`;
+`pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`; and run the two touched UI tests
+individually: `handle-daemon-event-background.test.ts` and `new-thread-create-once.test.tsx`.
 
 ### Task 4 — Changeset
 
@@ -463,14 +519,17 @@ defaultModel, workflowProgress, totalTokens, totalToolCalls`) with `status: "com
 
 `run_record.rs`: `parse_run_record` maps `runId → run_id`, `taskId → task_id`,
 `workflowName → workflow_name`, `status` through `run_status`, `totalTokens → total_tokens`,
-`durationMs → duration_ms`, `workflowProgress` through `parse_snapshot`, and sets
-`source: Record`; a record with `status: "killed"` yields `Stopped`; a malformed record (not an
+`durationMs → duration_ms`, `workflowProgress` through `parse_snapshot`,
+`structure_revision: Some(duration_ms)`, and `source: Record`; a record with `status: "killed"`
+yields `Stopped`; a malformed record (not an
 object) yields `None`; `read_run_records` on a `tempfile` dir containing two `wf_*.json` files plus
 one unrelated file returns exactly two runs, and returns empty (not an error) when the directory does
 not exist (constraint 8).
 
 `merge_precedence.rs`: one test per numbered rule in *Merge precedence* — including the
-**empty-record carve-out** (rule 2) and the two-snapshot recency rule (rule 3).
+**empty-record carve-out** (rule 2), the two-snapshot structural-revision rule (rule 3), and an
+asymmetric identity test where memory has `run_id: None` while the terminal record has `Some(run_id)`
+for the same `task_id`; the result must be one record-sourced run carrying the learned id.
 
 **Verify:** both files fail as unimplemented under `cargo test -p mainframe-claude-workflows`.
 
@@ -481,10 +540,13 @@ not exist (constraint 8).
 1. `seed` then `runs_for_chat` returns one `Running`/`Launch` run keyed by `task_id`.
 2. `link_run_id` fills `run_id` and `workflow_name`; a second call with a different id does not
    overwrite a known `run_id`.
-3. `apply_progress` with `snapshot: None` updates `total_tokens`/`duration_ms` and leaves `phases`
-   and `agents` byte-identical (AC 12).
-4. `apply_progress` with a snapshot replaces phases and agents wholesale; applying an *older*
-   snapshot (smaller `snapshot_at`) does not restore an earlier agent state (AC 13).
+3. `apply_progress` with `snapshot: None` advances cumulative `total_tokens`/`duration_ms`, leaves
+   `phases` and `agents` byte-identical, and does not advance `structure_revision` (AC 12). A delayed
+   liveness event with smaller totals cannot make either value decrease.
+4. `apply_progress` with a snapshot sets `structure_revision` from that event's `usage.duration_ms`
+   and replaces phases and agents wholesale. Applying an older snapshot with a smaller duration does
+   not restore an earlier agent state; a same-revision snapshot is accepted so equal-millisecond
+   cumulative updates are not lost (AC 13).
 5. `stamp_status(Completed)` twice does not move `terminal_at` or `duration_ms` (idempotence edge).
 6. `stamp_status(Paused)` sets `Paused` and freezes `duration_ms` at its current value.
 7. `stop_all_running` stamps only `Running` runs `Stopped`, leaves terminal runs alone, and retains
@@ -510,6 +572,12 @@ Tests against the (not yet existing) `mainframe_adapter_claude::workflow_events`
 4. `parse_launch_result` (the `Workflow` tool-result scanner) extracts `taskId`, `runId`,
    `workflowName` from an `async_launched` result, returns `None` for non-JSON text, and returns
    `None` for a JSON object without a `runId`.
+5. Three lock-regression tests drive public `events::handle_stdout` on a worker thread and require a
+   completion signal within one second: one `task_updated`, one `task_notification`, and one user
+   `Workflow` tool-result event. Seed each session through the same public event path, then assert the
+   first two stamp terminal run state and the third links both the workflow store and background task
+   tracker. These tests fail if any helper re-locks `ClaudeSessionState` while its caller holds the
+   non-reentrant mutex.
 
 **Verify:** `cargo test -p mainframe-adapter-claude --test workflow_task_events` fails to compile
 (the module does not exist). This is the red state; record the compiler error.
@@ -517,14 +585,16 @@ Tests against the (not yet existing) `mainframe_adapter_claude::workflow_events`
 ### Task 11 — History-backfill integration test (red)
 
 **Files:** create `packages/core-rs/crates/mainframe-server/tests/workflow_runs_history.rs`, modelled
-on `tests/chat_background_activity.rs` (reuse its `support/` harness).
+on `tests/chat_background_activity.rs` (reuse its `support/` harness); edit
+`tests/chat_background_activity.rs` to add `workflow_name: None` to its existing `TaskSeed` literal.
 
 1. `GET /api/chats/{id}/messages` returns an `ok` envelope whose `data.workflowRuns` is `[]` for a
    chat that has never run a workflow (AC: "a session that never runs a workflow — nothing changes").
 2. With a `wf_<runId>.json` written into the fake `<project_dir>/<sessionId>/workflows/`, the same
    route returns one run with the record's phases and agents and `source: "record"` (AC 17).
 3. With both a retained in-memory snapshot **and** a terminal record for the same run, the response
-   carries the record's structure (AC 16, D8).
+   carries the record's structure (AC 16, D8). Make the memory run omit `run_id` while the record has
+   it, proving the pairwise task-id fallback collapses the asymmetric late-link state.
 4. With a retained snapshot and **no** record, the response carries the snapshot.
 
 **Verify:** the file fails to compile (`ctx.claude_workflows` and the route field do not exist).
@@ -539,8 +609,9 @@ Turn each red test green in order. Do not add behavior the tests do not pin.
 Implement `parse_snapshot` over `&[Value]`: match `entry["type"]` on `"workflow_phase"`,
 `"workflow_agent"`, `"workflow_log"`, ignoring anything else. Extract with typed `.get(...).and_then(...)`
 helpers — never `unwrap`. Agent `state` maps `start|progress|done|error` and falls through to
-`Unknown`. Sort phases by `index` and agents by `(phase_index, index)`. Keep the entry-mapping bodies
-in private helpers so no function exceeds 50 lines.
+`Unknown`. Sort phases by `index` and agents by `(phase_index, index)`. Keep entry mapping in private
+helpers so no function exceeds 50 lines; revision assignment belongs in `store.rs`, where the event's
+cumulative usage is available.
 
 **Verify:** `cargo test -p mainframe-claude-workflows --test snapshot_parse` green.
 
@@ -558,15 +629,19 @@ Implement the three functions per the status table. `killed` must not log. The u
 `serde_json::from_str`s each, and logs a `tracing::warn!` with the path on any read or parse failure
 (no silent catches) while continuing with the rest. A missing directory returns an empty vec and logs
 at `debug`, not `warn` (constraint 8 makes absence the normal interrupted-run case).
-`parse_run_record` maps per Task 8's assertions.
+`parse_run_record` maps per Task 8's assertions and sets `structure_revision: Some(duration_ms)` when
+`workflowProgress` is present; the record's source precedence, not that revision, makes it final.
 
 **Verify:** `--test run_record` green.
 
 ### Task 15 — `merge.rs`
 
-Implement `merge_runs` per the five numbered precedence rules. Build the join key as
-`run.run_id.clone().unwrap_or_else(|| run.task_id.clone())`. Keep the comparison in a private
-`fn wins(candidate: &ClaudeWorkflowRun, incumbent: &ClaudeWorkflowRun) -> bool` under 50 lines.
+Implement `merge_runs` per the five numbered precedence rules. Do **not** build independent fallback
+keys. Fold candidates into a vector and find the incumbent with a private
+`fn same_run(a: &ClaudeWorkflowRun, b: &ClaudeWorkflowRun) -> bool`: compare ids only when both
+`run_id` values exist, otherwise compare `task_id`. Keep precedence in a private
+`fn wins(candidate: &ClaudeWorkflowRun, incumbent: &ClaudeWorkflowRun) -> bool` under 50 lines, and
+copy a missing learned identity from the losing side before replacing or retaining.
 
 **Verify:** `--test merge_precedence` green.
 
@@ -575,12 +650,16 @@ Implement `merge_runs` per the five numbered precedence rules. Build the join ke
 `store.rs`: `DashMap<String, HashMap<String, ClaudeWorkflowRun>>` plus a
 `broadcast::Sender<RunEvent>` with capacity 256 (matching the tracker). Every mutating method takes
 the chat's entry, mutates, clones the run, drops the guard, then sends — never hold a `DashMap` guard
-across a `send`. `apply_progress` with `snapshot: None` touches only `total_tokens`, `duration_ms`
-and `snapshot_at`. `stamp_status` returns early when the run is already terminal
-(`status.is_terminal()`) so a duplicate signal is a no-op and emits no event. `stop_all_running`
-stamps `Stopped` on every run whose status is `Running`. `runs_for_chat` sorts as *Merge precedence*
-rule 5 describes. Split `apply_*` helpers into private functions to stay under the limits; if
-`store.rs` approaches 300 lines, move the mutation helpers to `store_mutations.rs` and re-export.
+across a `send`. `apply_progress` updates `total_tokens` and `duration_ms` with
+`max(current, incoming)`. With `snapshot: None` it changes nothing else, including
+`structure_revision`. With a snapshot it uses incoming `usage.duration_ms` as the revision and
+applies the wholesale phase/agent replacement only when the freshness rules permit; rejected
+structure still preserves any larger cumulative totals. `stamp_status`
+returns early when the run is already terminal (`status.is_terminal()`) so a duplicate signal is a
+no-op and emits no event. `stop_all_running` stamps `Stopped` on every run whose status is `Running`.
+`runs_for_chat` sorts as *Merge precedence* rule 5 describes. Split `apply_*` helpers into private
+functions to stay under the limits; if `store.rs` approaches 300 lines, move the mutation helpers to
+`store_mutations.rs` and re-export.
 
 `reconcile.rs`: `spawn_terminal_reconcile` spawns a Tokio task that calls
 `record::read_run_records`, finds the record whose `task_id` matches, and calls `store.apply_record`.
@@ -607,21 +686,58 @@ Public surface:
 pub fn task_updated_payload(event: &Value) -> TaskUpdatedPayload;   // reads patch.status / patch.end_time
 pub struct LaunchResult { pub task_id: String, pub run_id: String, pub workflow_name: Option<String> }
 pub fn parse_launch_result(text: &str) -> Option<LaunchResult>;
-pub fn handle_task_progress(session: &ClaudeSession, event: &Value);
-pub fn record_location(session: &ClaudeSession) -> Option<RecordLocation>;
+pub(crate) fn handle_task_progress(state: &ClaudeSessionState, event: &Value);
+pub(crate) fn record_location(state: &ClaudeSessionState) -> Option<RecordLocation>;
+pub(crate) fn link_launch(state: &ClaudeSessionState, text: &str);
 ```
 
+The three state-bound helpers accept the caller's borrowed `ClaudeSessionState`; they must never call
+`session.state.lock()`. This is load-bearing because `events.rs` holds the non-reentrant state mutex
+through `task_updated` and `task_notification`, and `handle_user_event` holds it through the
+tool-result loop.
+
 `handle_task_progress` reads `task_id`, `usage.total_tokens`, `usage.duration_ms` and the optional
-`workflow_progress` array, then calls `store.apply_progress`. It returns early when
-`mainframe_chat_id` is empty (matching every existing arm). `record_location` builds
-`RecordLocation` from `crate::transcript::get_session_jsonl_path(&st.chat_id, &st.real_project_path).project_dir`
-plus `st.chat_id` — this is the only place the two crates meet, and it keeps
-`mainframe-claude-workflows` free of any adapter dependency (no cycle).
+`workflow_progress` array, then calls the store available through `state.task_events`. It returns
+early when `mainframe_chat_id` is empty. `record_location` builds `RecordLocation` from
+`crate::transcript::get_session_jsonl_path(&state.chat_id, &state.real_project_path).project_dir` plus
+`state.chat_id`. `link_launch` parses the result and delegates to `state.task_events.link_run_id`,
+which updates the store and tracker without touching the session mutex. This is the only place the
+workflow crate and adapter path logic meet, and it keeps `mainframe-claude-workflows` free of an
+adapter dependency (no cycle).
 
-**Verify:** `cargo test -p mainframe-adapter-claude --test workflow_task_events` green for its
-`task_updated_payload`, `parse_launch_result` and `map_task_kind` tests. File under 300 lines.
+**Verify:** run the `task_updated_payload`, `parse_launch_result`, and `map_task_kind` test-name
+filters in `workflow_task_events` individually; those pure tests are green while the three dispatch
+lock regressions remain red until Task 20. File under 300 lines.
 
-### Task 18 — Rewire `task_events.rs` (dispatch only, net line change ≈ 0)
+### Task 18 — Store injection and tracker fields
+
+**Files:** `src/adapter.rs` (+4), `src/session.rs` (+4), `src/task_events.rs` (constructor and field
+only), and `mainframe-background-tasks/src/{tracker,reconcile,kill,liveness}.rs`.
+
+- `ClaudeAdapter::new(background_tasks, workflow_store, resolved_path)` — a third parameter stored
+  as `workflow_store: Arc<ClaudeWorkflowStore>`. Update `impl Default` (line 105) to construct a
+  fresh store.
+- `ClaudeTaskEvents::new` takes a second argument, `Arc<ClaudeWorkflowStore>`, stored as a field. Add
+  `ClaudeTaskEvents::link_run_id(chat_id, task_id, run_id, workflow_name)`, which delegates to both
+  the workflow store and tracker using their interior synchronization and never reaches
+  `ClaudeSessionState`.
+- Thread the store into `ClaudeSession` alongside `background_tasks` (see `session.rs:351–367`) and
+  into the `ClaudeTaskEvents` construction. No public `workflow_store()` accessor is needed: all
+  state-locked call sites delegate through the `ClaudeTaskEvents` value they already borrow.
+- `tracker.rs`: `TaskSeed` gains `workflow_name: Option<String>`; `start` copies it and an initial
+  `run_id: None` onto the `BackgroundTask`. Add
+  `pub fn link_run_id(&self, chat_id: &str, task_id: &str, run_id: &str)` that sets `run_id` on a live
+  task and emits `TaskEvent::Updated`; it is a no-op when the task is unknown or already carries that
+  id. Add inline tests for the no-op and late-link branches.
+- Update every existing `BackgroundTask` and `TaskSeed` literal owned by this crate: tracker
+  production/test helpers, `reconcile.rs`'s recovered task, and the `kill.rs`/`liveness.rs` tests.
+  Non-workflow literals set `workflow_name: None` and `run_id: None` as applicable.
+
+**Verify:** `cargo test -p mainframe-background-tasks` is green;
+`cargo check -p mainframe-adapter-claude` is green; `cargo check -p mainframe-daemon` now fails only
+on the `ClaudeAdapter::new` arity and `AppCtx` field owned by Tasks 21–22.
+
+### Task 19 — Rewire `task_events.rs` (dispatch only, net line change ≈ 0)
 
 **Files:** `packages/core-rs/crates/mainframe-adapter-claude/src/task_events.rs` (630 lines — must
 not grow).
@@ -636,78 +752,75 @@ not grow).
   when the resulting run status `is_terminal()`, `spawn_terminal_reconcile` with the location the
   caller threads in.
 - `handle_task_notification`: use `terminal_task_status`, and stamp the store the same way.
-- `ClaudeTaskEvents::new` takes a second argument, `Arc<ClaudeWorkflowStore>`, stored as a field.
-  `handle_task_started` calls `store.seed(chat_id, &task_id, workflow_name)` when
-  `map_task_kind(...) == BackgroundWorkKind::Workflow`; `TaskSeed` gains `workflow_name`.
+- `TaskStartedPayload` gains `workflow_name`; `handle_task_started` calls
+  `store.seed(chat_id, &task_id, workflow_name.clone())` when
+  `map_task_kind(...) == BackgroundWorkKind::Workflow`, and its `TaskSeed` literal passes that same
+  optional name.
 - `handle_task_updated` / `handle_task_notification` gain a `loc: Option<RecordLocation>` parameter.
 
 Keep each handler under 50 lines by extracting a private
 `fn stamp_run(&self, chat_id: &str, task_id: &str, cli_status: &str, loc: Option<RecordLocation>)`.
 
-**Verify:** `cargo test -p mainframe-adapter-claude` green (existing `mod tests` included);
-`wc -l task_events.rs` ≤ 630.
+**Verify:** `cargo test -p mainframe-adapter-claude task_events::tests` is green; run
+`cargo test -p mainframe-adapter-claude --test workflow_task_events --no-run` to prove the helper
+signatures line up, but leave its three dispatch tests for Task 20. `wc -l task_events.rs` ≤ 630.
 
-### Task 19 — Dispatch arms in `events.rs` and `user_event.rs`
+### Task 20 — Dispatch arms in `events.rs` and `user_event.rs`
 
 **Files:** `src/events.rs` (+4 lines net), `src/user_event.rs` (+3 lines net).
 
-- `events.rs`: add `Some("task_progress") => crate::workflow_events::handle_task_progress(session, event),`
-  immediately before the `_ => {}` catch-all at line 218.
-- `events.rs`: in the `task_updated` arm (line 157), replace the inline `TaskUpdatedPayload`
-  construction with `crate::workflow_events::task_updated_payload(event)` and pass
-  `crate::workflow_events::record_location(session)`. This *shrinks* `handle_system_event`, which is
-  already over the 50-line limit — note the before/after line count in the task summary.
-- `events.rs`: pass `record_location(session)` into the existing `task_notification` call too.
+- `events.rs`: add a `task_progress` arm that locks once, borrows `&st`, and calls
+  `crate::workflow_events::handle_task_progress(&st, event)` immediately before the catch-all. In the
+  existing `task_started` payload construction, copy `event.workflow_name` into the new field.
+- `events.rs`: in the `task_updated` arm (line 157), keep the existing guard, replace the inline
+  payload construction with `crate::workflow_events::task_updated_payload(event)`, and pass
+  `crate::workflow_events::record_location(&st)`. Do the same for `task_notification`. No helper in
+  either arm may receive `&ClaudeSession` or acquire the state mutex. This shrinks
+  `handle_system_event`, which is already over 50 lines; note the before/after line count.
 - `user_event.rs`: inside the existing tool-result block loop (line 425), after
-  `extract_tool_result_content`, add a single call
-  `crate::workflow_events::link_launch(session, &text);` — a thin wrapper in `workflow_events.rs`
-  that runs `parse_launch_result` and, on `Some`, calls `store.link_run_id(...)` plus the tracker's
-  new `link_run_id`. No parsing logic in `user_event.rs`.
+  `extract_tool_result_content`, call `crate::workflow_events::link_launch(st, &text)`. The function
+  consumes the already-borrowed state and delegates through `ClaudeTaskEvents`; no parsing logic and
+  no lock acquisition lands in `user_event.rs`.
 
-**Verify:** `cargo test -p mainframe-adapter-claude` green. `git diff --stat` on these two files shows
-`events.rs` net-negative or ≤ +4, `user_event.rs` ≤ +3.
-
-### Task 20 — Store injection and tracker fields
-
-**Files:** `src/adapter.rs` (+4), `src/session.rs` (+4), `mainframe-background-tasks/src/tracker.rs`
-(+~20).
-
-- `ClaudeAdapter::new(background_tasks, workflow_store, resolved_path)` — a third parameter stored
-  as `workflow_store: Arc<ClaudeWorkflowStore>`. Update `impl Default` (line 105) to construct a
-  fresh store.
-- Thread the store into `ClaudeSession` alongside `background_tasks` (see `session.rs:351–367` and
-  the `ClaudeTaskEvents` construction) and expose it as `pub(crate) fn workflow_store(&self)`.
-- `tracker.rs`: `TaskSeed` gains `workflow_name: Option<String>`; `start` copies it onto the
-  `BackgroundTask`. Add `pub fn link_run_id(&self, chat_id: &str, task_id: &str, run_id: &str)` that
-  sets `run_id` on a live task and emits `TaskEvent::Updated`; it is a no-op (no event) when the task
-  is unknown or already carries that id. Add an inline unit test for both branches.
-
-**Verify:** `cargo test -p mainframe-adapter-claude -p mainframe-background-tasks` green;
-`cargo check -p mainframe-daemon` now fails only on the `ClaudeAdapter::new` arity at `main.rs:198`
-(fixed in Task 21).
+**Verify:** `cargo test -p mainframe-adapter-claude --test workflow_task_events` passes all three
+one-second lock-regression tests, then `cargo test -p mainframe-adapter-claude` is green. `git diff --stat`
+on these two files shows `events.rs` net-negative or ≤ +4, `user_event.rs` ≤ +3.
 
 ## Group `wf-daemon` — daemon, server and chat wiring (core)
 
 ### Task 21 — Daemon construction and bridge
 
-**Files:** `mainframe-daemon/src/main.rs` (+6 lines), `mainframe-daemon/Cargo.toml` (+1 dep).
+**Files:** `mainframe-daemon/src/main.rs` (+6 lines), `mainframe-daemon/Cargo.toml` (+1 dep), and
+`mainframe-daemon/tests/{boot_routes_integration,health_integration}.rs`.
 
 After line 196, `let claude_workflows = Arc::new(ClaudeWorkflowStore::new());`. Pass
 `Arc::clone(&claude_workflows)` as `ClaudeAdapter::new`'s second argument. Beside
 `spawn_task_event_bridge` (line ~210) add
 `spawn_workflow_run_bridge(Arc::clone(&claude_workflows), broadcast.clone());`. Pass the store into
-the `AppCtx` construction.
+the production `AppCtx` construction. Add a fresh store to both daemon integration-test `AppCtx`
+literals.
 
-**Verify:** `cargo check -p mainframe-daemon` clean. `git diff --stat main.rs` ≤ +6.
+**Verify:** `cargo check -p mainframe-daemon` and
+`cargo test -p mainframe-daemon --test boot_routes_integration --test health_integration` clean.
+`git diff --stat main.rs` ≤ +6.
 
 ### Task 22 — `AppCtx` field and chat deps
 
-**Files:** `mainframe-server/src/ctx.rs` (+2), `mainframe-server/Cargo.toml` (+1 dep).
+**Files:** `mainframe-server/src/ctx.rs`, `mainframe-server/Cargo.toml`,
+`src/routes/{adapters,automations_test_support,quota,background_tasks}.rs`, and
+`tests/support/mod.rs`.
 
 Add `pub claude_workflows: Arc<ClaudeWorkflowStore>` to `AppCtx` (line ~95), directly after
-`background_tasks`, and to every constructor/test builder in that file.
+`background_tasks`. Populate every server-owned `AppCtx` literal found by `rg -F 'AppCtx {'`: the
+`ctx.rs` test builder, the adapters/quota route test builders, the automations harness, and the shared
+integration-test support builder. Task 21 owns the three daemon-side literals.
 
-**Verify:** `cargo check -p mainframe-server` shows only the two errors the next tasks fix.
+Also finish the server-owned task-shape propagation: add `workflow_name: None` to
+`background_tasks.rs`'s `TaskSeed` literal and `workflow_name: None, run_id: None` to its adopted
+`BackgroundTask` literal.
+
+**Verify:** `cargo check -p mainframe-server` shows only the chat-history and chat-deps errors owned by
+Tasks 23–25; `cargo test -p mainframe-server background_tasks` compiles.
 
 ### Task 23 — D5: the CLI-exit workflow stop
 
@@ -727,8 +840,13 @@ line each).
   seeded `Running` run becomes `Stopped` with its snapshot retained (AC 24).
 - The five test doubles get an empty body with the same `/// Empty on purpose:` comment style the
   file already uses, pointing at the chat_deps test.
+- Finish chat-owned task-shape propagation in files already touched by this task: the
+  `event_handler.rs` `TaskSeed` helper and `chat_deps.rs` seed set `workflow_name: None`; the
+  `chat_manager/tests.rs` `BackgroundTask` and `BackgroundActivityTask` helpers set
+  `workflow_name: None, run_id: None`.
 
-**Verify:** `cargo test -p mainframe-chat -p mainframe-server chat_deps` green.
+**Verify:** `cargo test -p mainframe-chat -p mainframe-server chat_deps` green, including compilation
+of every listed test double and helper literal.
 
 ### Task 24 — Backfill composer
 
@@ -756,7 +874,11 @@ from a pre-resume session id fall through to the Unavailable state.
 
 ### Task 25 — Extend the history route
 
-**Files:** `mainframe-server/src/routes/chats.rs` (+3 lines in `async fn messages`, line 143).
+**Files:** `mainframe-server/src/routes/chats.rs` (+3 lines in `async fn messages`, line 143) and
+`mainframe-chat/src/chat_manager.rs` (+1 field in the existing payload constructor).
+
+Initialize `ChatManager::get_display_messages`'s `ChatHistoryPayload` with `workflow_runs: Vec::new()`,
+then compose the server-owned async backfill:
 
 ```rust
 let mut payload = cm.get_display_messages(&id).await;
@@ -831,10 +953,11 @@ Against the (not yet written) pure modules:
 
 Keep every existing assertion. Add:
 
-- A live workflow task renders a clickable row with the workflow name and agent count; agent and bash
-  rows stay non-interactive (AC 5).
-- Clicking it swaps the popover body for the run panel with a `‹ Background activity` breadcrumb;
-  clicking the breadcrumb returns to the list (AC 6).
+- A live workflow task renders a clickable row with the workflow name and agent count at
+  `data-testid="chat-background-workflow-<runId>"`; agent and bash rows stay non-interactive (AC 5).
+- Clicking it swaps the popover body for the run panel with a `‹ Background activity` breadcrumb at
+  `data-testid="chat-workflow-back-<runId>"`; clicking the breadcrumb returns to the list (AC 6).
+  Assert both ids from the rendered DOM and drive navigation through those elements.
 - The pill stays mounted while the popover is open even after the live set empties (spec edge case).
 - Switching `chatId` closes the popover (spec edge case).
 
@@ -842,13 +965,17 @@ Keep every existing assertion. Add:
 
 **Files:** create
 `packages/ui/src/features/chat/controller/__tests__/chat-thread-state-workflow-runs.test.ts` and
-`__tests__/handle-daemon-event-workflow.test.ts`.
+`__tests__/handle-daemon-event-workflow.test.ts`; edit
+`__tests__/chat-thread-state-background.test.ts`.
 
 - `handleDaemonEvent` maps `claude_workflow.run.updated` to a `workflow.run.updated` reducer event.
 - The reducer upserts by `taskId`, replaces an existing run wholesale, and leaves other slices alone.
 - `history.loaded` carrying `workflowRuns` seeds the slice (AC 15/17 restore path) and **replaces**
   rather than merges.
 - An event for an unknown `taskId` inserts it rather than dropping it (a run adopted mid-stream).
+- The background-state test proves a reconnect `background.snapshot` whose only change is the newly
+  learned identity is **not** treated as equal, then proves a subsequent field-identical snapshot
+  returns the same state reference. This pins both late-link and reconnect behavior.
 
 **Verify (all of Group ui-tests):** each file fails (module-not-found or assertion). Record the
 output before any ui-state/ui-view work begins.
@@ -879,6 +1006,10 @@ docstring, two `ChatStateEvent` members (`{ type: 'workflow.run.updated'; run: C
 and `{ type: 'workflow.runs.snapshot'; runs: ClaudeWorkflowRun[] }`), the initial `{}` in
 `createChatThreadState`, an optional `workflowRuns?: ClaudeWorkflowRun[]` on the existing
 `history.loaded` event, and three reducer arms that call straight into Task 31's functions.
+
+Extend `sameBackgroundTasks` to compare `workflowName` and `runId` as well as the existing fields.
+This keeps identical reconnect snapshots identity-stable without dropping an identity learned after
+the initial `task_started` projection.
 
 **Verify:** `vitest run .../chat-thread-state-workflow-runs.test.ts` green;
 `wc -l chat-thread-state.ts` ≤ 530.
@@ -960,7 +1091,8 @@ assembly lands next).
 **Files:** create `WorkflowRunPanel.tsx`.
 
 `data-testid={`chat-workflow-panel-${runId}`}`, an optional `onBack` prop that renders the
-`‹ Background activity` breadcrumb only when supplied (AC 4 vs AC 6), body
+`‹ Background activity` breadcrumb only when supplied (AC 4 vs AC 6). The breadcrumb is a button
+with `data-testid={`chat-workflow-back-${runId}`}`. The body is
 `min-h-0 flex-1 overflow-y-auto px-1 py-1.5` inside `flex max-h-[min(440px,56vh)] flex-col`. It
 composes Tasks 36–37 and short-circuits to `WorkflowRunUnavailable` when the run is missing or its
 status is `unavailable`.
@@ -992,8 +1124,11 @@ opens a Radix `Popover` (`components/ui/popover.tsx`) anchored to the row contai
 
 Extract the popover content into `WorkflowActivityPopover.tsx` with a `level` state
 (`'list' | 'run'`): the list is today's rendering plus clickable workflow rows (glyph, workflow name
-from `task.workflowName`, agent count from the looked-up run, chevron); the run level renders
-`WorkflowRunPanel` with `onBack`. Width transitions
+from `task.workflowName`, agent count from the looked-up run, chevron). Each interactive workflow
+row requires `task.runId` and carries
+`data-testid={`chat-background-workflow-${task.runId}`}`; a workflow entry not yet linked to a run id
+renders inert until the tracker update arrives. The run level renders `WorkflowRunPanel` with
+`onBack`, whose breadcrumb carries `data-testid={`chat-workflow-back-${runId}`}`. Width transitions
 `cn('p-0 transition-[width] duration-150', level === 'list' ? 'w-80' : 'w-[380px]')`, and
 `onOpenAutoFocus={(e) => e.preventDefault()}`. `BackgroundActivityBar.tsx` keeps its pill, owns the
 `open` state, stays mounted while `open` even when the live set empties, and resets `open` and
@@ -1007,17 +1142,21 @@ from `task.workflowName`, agent count from the looked-up run, chevron); the run 
 
 No files. Run, from `<worktree>`:
 
-1. `pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-types test`
-2. `pnpm --filter @qlan-ro/mainframe-ui typecheck`
+1. Run the CI dependency builds exactly: `pnpm build:types && pnpm build:core`, then
+   `pnpm --filter @qlan-ro/mainframe-types test`.
+2. Run both CI TypeScript checks exactly: `pnpm --filter @qlan-ro/mainframe-ui typecheck` and
+   `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`.
 3. Every touched UI test file individually via
    `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` (never a batch — see the `React.act`
-   trap in `app-tauri-vitest-batch-react-act`)
+   trap in `app-tauri-vitest-batch-react-act`). Include the pre-existing
+   `new-thread-create-once`, background-state, and background-event files changed for required-field,
+   late-link, and reconnect coverage.
 4. From `packages/core-rs`: `cargo fmt --check`, `cargo clippy --workspace -- -D warnings`,
-   `cargo test --workspace`
-5. `pnpm changeset status`
+   `cargo test --workspace`.
+5. `pnpm changeset status`.
 6. Line-limit sweep: `find` every file in the *Files touched* table and assert ≤ 300 lines, and
-   re-read the four already-over-limit adapter/chat files to confirm their diffs are dispatch-only
-7. Walk the spec's 30 acceptance criteria one at a time and name the test or file that satisfies each
+   re-read the four already-over-limit adapter/chat files to confirm their diffs are dispatch-only.
+7. Walk the spec's 30 acceptance criteria one at a time and name the test or file that satisfies each.
 
 **Verify:** all seven steps clean, with the AC walk recorded in the task summary.
 
