@@ -16,6 +16,7 @@ use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, ImageInput,
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
+use mainframe_services::workspace::worktree::is_directory_present;
 use mainframe_types::adapter::{
     ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
@@ -370,9 +371,14 @@ fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
 }
 
-/// `enrichChat` — set displayStatus/isRunning/backgroundActivity/worktreeMissing
-/// (mutates in place). `live_tasks` is `tracker.listLive(chat.id)`.
-fn enrich_chat(chat: &mut Chat, has_pending: bool, live_tasks: &[BackgroundTask]) {
+/// `enrichChat` — set displayStatus/isRunning/backgroundActivity/directory signals.
+/// Mutates in place. `live_tasks` is `tracker.listLive(chat.id)`.
+fn enrich_chat(
+    chat: &mut Chat,
+    has_pending: bool,
+    live_tasks: &[BackgroundTask],
+    project_path: Option<&str>,
+) {
     let working = is_working(chat);
     // Live background work broadens the sidebar 'working' state, but never
     // isRunning — the composer/thread indicator stays main-turn-only.
@@ -392,6 +398,13 @@ fn enrich_chat(chat: &mut Chat, has_pending: bool, live_tasks: &[BackgroundTask]
             .map(|p| !is_worktree_present(p))
             .unwrap_or(false),
     );
+    let missing_path = match chat.worktree_path.as_deref() {
+        Some(path) if !is_worktree_present(path) => Some(path),
+        Some(_) => None,
+        None => project_path.filter(|path| !is_directory_present(path)),
+    };
+    chat.directory_missing = Some(missing_path.is_some());
+    chat.missing_directory_path = missing_path.map(str::to_string);
 }
 
 /// Enrich chat.updated/chat.created then emit through the raw `onEvent`.
@@ -407,7 +420,8 @@ fn enrich_and_emit(
                 .unwrap_or_else(|e| e.into_inner())
                 .has_pending(&chat.id);
             let live = deps.tracker_list_live(&chat.id);
-            enrich_chat(chat, has_pending, &live);
+            let project_path = deps.projects_get_path(&chat.project_id);
+            enrich_chat(chat, has_pending, &live, project_path.as_deref());
         }
         _ => {}
     }
@@ -1168,7 +1182,8 @@ impl ChatManager {
             .unwrap_or_else(|e| e.into_inner())
             .has_pending(chat_id);
         let live = self.deps.tracker_list_live(chat_id);
-        enrich_chat(&mut chat, has_pending, &live);
+        let project_path = self.deps.projects_get_path(&chat.project_id);
+        enrich_chat(&mut chat, has_pending, &live, project_path.as_deref());
         Some(chat)
     }
 
@@ -1183,7 +1198,8 @@ impl ChatManager {
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
                 let live = self.deps.tracker_list_live(&c.id);
-                enrich_chat(&mut c, hp, &live);
+                let project_path = self.deps.projects_get_path(&c.project_id);
+                enrich_chat(&mut c, hp, &live, project_path.as_deref());
                 c
             })
             .collect()
@@ -1200,7 +1216,8 @@ impl ChatManager {
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
                 let live = self.deps.tracker_list_live(&c.id);
-                enrich_chat(&mut c, hp, &live);
+                let project_path = self.deps.projects_get_path(&c.project_id);
+                enrich_chat(&mut c, hp, &live, project_path.as_deref());
                 c
             })
             .collect()
@@ -1417,7 +1434,8 @@ impl ChatManager {
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
                 let live = self.deps.tracker_list_live(&c.id);
-                enrich_chat(&mut c, hp, &live);
+                let project_path = self.deps.projects_get_path(&c.project_id);
+                enrich_chat(&mut c, hp, &live, project_path.as_deref());
                 c
             })
             .collect()
