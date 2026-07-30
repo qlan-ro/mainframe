@@ -226,11 +226,20 @@ enrichment test regresses.
 **File:** `packages/core-rs/crates/mainframe-chat/src/lifecycle_manager.rs`
 
 - In `do_start_chat` (~line 879), immediately after `projects_get_path` resolves `project_path` and before
-  `create_session`, mirror the existing worktree guard:
+  `create_session`, mirror the existing worktree guard — **scoped to the no-worktree branch**:
   ```
-  if !self.deps.path_exists(&project_path) { return Err(LifecycleError::Message(format!(
-      "Project directory does not exist or is not accessible: {project_path}"))); }
+  if chat.worktree_path.is_none() && !self.deps.path_exists(&project_path) {
+      return Err(LifecycleError::Message(format!(
+          "Project directory does not exist or is not accessible: {project_path}")));
+  }
   ```
+  The scoping is load-bearing, not defensive. The spawn runs in
+  `chat.worktree_path.clone().unwrap_or(project_path)` (line 918), so a chat with a live worktree does not
+  need the project path to exist — and Task 3.1 derives `directoryMissing` over that same effective
+  directory, so such a chat reports `directoryMissing: false` and renders a working composer. An
+  unconditional guard would refuse a start that works today and that the UI shows as available. The
+  worktree branch is already covered by the pre-existing guard at lines 904–909.
+
   The wording matches what `mainframe-adapter-claude/src/session.rs:525` and
   `mainframe-adapter-codex/src/session.rs:325` already emit, so the message is identical whether the guard or
   the adapter catches it — but it is now adapter-independent and reached before a process spawn.
@@ -256,6 +265,9 @@ Add tests:
   `ProcessStarted` was emitted.
 - `start_chat_emits_a_chat_scoped_error_when_the_worktree_is_gone` — same shape via the pre-existing worktree
   guard; asserts the error is chat-scoped and names the worktree path.
+- `start_chat_proceeds_when_the_worktree_is_live_and_the_project_path_is_gone` — worktree path present,
+  project path absent; assert the new guard does not fire (no `Error` event naming the project directory).
+  This pins the `worktree_path.is_none()` scoping from Task 3.3.
 
 **Verify:** `cd packages/core-rs && cargo test -p mainframe-chat lifecycle` — new tests pass, existing pass.
 
@@ -316,8 +328,18 @@ known cross-file `React.act` failure.
 
 **File (new):** `packages/ui/src/features/chat/thread/__tests__/ChatThread-degraded-placement.test.tsx`
 
-Mirror the mocking style of the existing `ChatThread-compacting.test.tsx` (mock
-`../runtime/use-chat-thread-runtime`'s `useChatExtras`, `@assistant-ui/react` primitives). Assert:
+Mirror the *mocking style* of the existing `ChatThread-compacting.test.tsx` (mock
+`../runtime/use-chat-thread-runtime`'s `useChatExtras`, mock the `@assistant-ui/react` primitives, stub the
+heavy children) — but **not** its two mocks for the components under test. That file mocks `DegradedChatCard`
+to `null` (line 33) and stubs the composer as `data-testid="composer-stub"` (line 41), which would make both
+assertions below unobservable. In this spec:
+
+- render the **real** `DegradedChatCard` (no `vi.mock('../DegradedChatCard', ...)`), stubbing only what it
+  reaches outside the tree under test (`@/lib/api/chats`, `daemon-port-context`);
+- stub the composer as `<div data-testid="chat-composer" />`, matching the real `Composer`'s testid
+  (`Composer.tsx:108`), so `chat-composer` counts mean what they say.
+
+Assert:
 
 - `directoryMissing: true` → `chat-degraded-card` is present, and it is a descendant of the sticky footer
   element, **not** of `chat-thread-viewport`'s message column. Assert placement structurally (the card's
@@ -339,8 +361,12 @@ Add a `describe('DegradedChatCard — project directory missing')`:
   a "Project directory missing" section naming `/gone/proj`; `chat-degraded-delete` is offered;
   `chat-degraded-recreate-worktree`, `chat-degraded-project-root` and `chat-degraded-continue` are absent
   (nothing in scope can recover a vanished project root).
-- `directoryMissing: true` **with** a `worktreePath` → the existing "Worktree deleted" section renders and the
-  new project-directory section does **not** (the worktree is the missing directory, not the project root).
+- `directoryMissing: true, worktreeMissing: true` **with** a `worktreePath` → the existing "Worktree deleted"
+  section renders and the new project-directory section does **not** (the worktree is the missing directory,
+  not the project root). The fixture must set `worktreeMissing: true` as well: that section is gated on
+  `worktreeMissing` (`DegradedChatCard.tsx:66`) and Task 6.2 leaves the gate alone, so `directoryMissing`
+  on its own renders neither section. This pairing is exactly what the daemon produces — Task 3.1 sets both
+  flags true for a gone worktree.
 - Geometry: the card root (`chat-degraded-card`) has `w-full` and does **not** carry `max-w-md`, `mx-auto`, or
   `my-8` — it is now sized by the footer's message column.
 - Both rendered paths (worktree and project) sit in a `<code>` element carrying `break-all` (D2).
@@ -492,7 +518,10 @@ then the same for `DegradedChatCard.test.tsx`, `ChatThread.test.tsx`, `ChatThrea
   upload. Copy goes through the `writing-clearly-and-concisely` skill.
 - Import `mfToast` from `@/lib/toast` (`chat-event-router.ts` in the same directory already does; use the
   same import path). Do **not** use `sonner` directly.
-- Keep the file under 300 lines and the methods under 50.
+- Size gate: **add no new violation**. `chat-thread-controller.ts` is already 376 lines — over the 300-line
+  cap before this change. Keep `refuseIfDirectoryMissing` and both call sites under 50 lines each and do not
+  grow the file beyond what the guard needs; refactoring the pre-existing overage is out of scope for this
+  todo.
 
 ### Task 7.2 — Let the new signals through the config-equality gate
 
@@ -604,7 +633,12 @@ composer instead of at the top of the transcript.
 5. Each touched vitest file run individually — never one large batch.
 6. `grep -rn "Internal error" packages/core-rs/crates/mainframe-server/src/websocket.rs` returns nothing.
 7. `grep -rn "worktreeMissing" packages/ui/src/features/chat/composer` returns nothing.
-8. Every file touched is under 300 lines; every function under 50.
+8. No new size violation. Every file this plan *creates* is under 300 lines and every function it *adds*
+   is under 50. Several touched files are already over the caps and stay out of scope:
+   `chat-thread-controller.ts` (376 lines), `ChatThread()` (58 lines — the `ThreadFooterInput` extraction in
+   Task 6.1 is line-neutral), and every touched Rust file (429–2158 lines). Do not refactor them here; do
+   not let a touched file that is currently under a cap cross it (`DegradedChatCard.tsx` is the one at risk —
+   Task 6.2 already names `DegradedChatCauses.tsx` as its escape hatch).
 9. A changeset exists.
 
 ## Manual QA (the design direction's verify list)
