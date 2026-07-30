@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_runtime::time::now_iso8601;
@@ -20,6 +21,7 @@ use mainframe_types::events::{
 };
 use tracing::{debug, warn};
 
+use crate::attention_request::{AttentionDedupe, normalize_attention_body};
 use crate::display_emitter::emit_display_delta;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
@@ -176,6 +178,9 @@ pub struct EventHandler<D: EventHandlerDeps + 'static> {
     permissions: Arc<Mutex<PermissionManager>>,
     display_cache: DisplayCache,
     deps: Arc<D>,
+    /// Survives a session resume (plan decision P3) — kept on the handler,
+    /// not the per-session sink `build_sink` recreates.
+    attention_dedupe: Arc<Mutex<AttentionDedupe>>,
 }
 
 impl<D: EventHandlerDeps + 'static> EventHandler<D> {
@@ -189,6 +194,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             permissions,
             display_cache: Arc::new(Mutex::new(HashMap::new())),
             deps,
+            attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
         }
     }
 
@@ -210,6 +216,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
+            attention_dedupe: self.attention_dedupe.clone(),
         })
     }
 
@@ -276,6 +283,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
+    attention_dedupe: Arc<Mutex<AttentionDedupe>>,
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
@@ -1245,6 +1253,37 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
 
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         self.deps.on_provider_quota(adapter_id, quota);
+    }
+
+    fn on_attention_request(&self, message: &str) {
+        let Some(body) = normalize_attention_body(message) else {
+            return;
+        };
+        if !self.deps.notify_attention_request() {
+            return;
+        }
+        let admitted = self
+            .attention_dedupe
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .admit(&self.chat_id, &body, Instant::now());
+        if !admitted {
+            return;
+        }
+        self.deps.emit_event(DaemonEvent::ChatNotification {
+            chat_id: self.chat_id.clone(),
+            title: "Claude needs your attention".to_string(),
+            body: body.clone(),
+            level: ChatNotificationLevel::Success,
+            kind: Some(ChatNotificationKind::AttentionRequest),
+        });
+        self.deps.send_push(PushOut {
+            chat_id: self.chat_id.clone(),
+            title: "Claude needs your attention".to_string(),
+            body,
+            push_type: "attention_request".to_string(),
+            priority: "high".to_string(),
+        });
     }
 }
 
