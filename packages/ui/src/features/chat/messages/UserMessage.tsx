@@ -43,7 +43,7 @@ import { QueuedUserTurn } from './QueuedUserTurn';
 import { queuePosition } from './queue-position';
 import { InlineImageThumbs } from './InlineImageThumbs';
 import { userMarkdownComponents } from './user-directive-renderers';
-import { stripReferenceLines } from '../session-references/reference-line';
+import { visibleMessageText } from '../markers/message-markers';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
 import { ReviewCommentCard } from './ReviewCommentCard';
@@ -153,9 +153,9 @@ function UserMessageImpl() {
   // message.attachments (built in convert-message).
   const attachmentCount = useAuiState((s) => s.message.attachments?.length ?? 0);
 
-  // The reference lines are addressed to the agent, not the reader — the chips
-  // in the body already say which sessions were referenced.
-  const cleanText = stripReferenceLines(meta.cleanText ?? rawText);
+  // Reference lines are addressed to the agent, not the reader — the chips in
+  // the body already say which sessions were referenced.
+  const cleanText = visibleMessageText(meta.cleanText ?? rawText);
 
   // ── Command / skill resolution from metadata ──────────────────────────────
   const { skills } = useChatSkills();
@@ -168,7 +168,7 @@ function UserMessageImpl() {
       name: isCommand ? metaCmd.name : resolveSkillName(metaCmd.name, skills),
       // A slash command keeps line 1, so its references sit below it and survive
       // the cleanText strip above. Idempotent — the fallback is already stripped.
-      userText: stripReferenceLines(metaCmd.userText ?? cleanText),
+      userText: visibleMessageText(metaCmd.userText ?? cleanText),
     };
   }
 

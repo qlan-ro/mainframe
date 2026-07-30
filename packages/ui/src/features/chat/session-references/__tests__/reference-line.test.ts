@@ -1,15 +1,17 @@
 /**
- * Behavior tests for composeReferenceLines / parseReferenceLine / stripReferenceLines /
+ * Behavior tests for composeReferenceLines / parseReferenceLine /
  * collectSessionTokenLabels / prependSessionReferences.
  *
  * Every case pins a fixed input to a concrete, hardcoded output — none of the
- * compose/parse/strip logic is re-derived here.
+ * compose/parse logic is re-derived here. `stripReferenceLines` is tested in
+ * `markers/__tests__/message-markers.test.ts`; only the prepend→strip round
+ * trips stay here, where the pair they pin lives.
  */
 import { describe, it, expect } from 'vitest';
+import { stripReferenceLines } from '../../markers/message-markers';
 import {
   composeReferenceLines,
   parseReferenceLine,
-  stripReferenceLines,
   collectSessionTokenLabels,
   prependSessionReferences,
 } from '../reference-line';
@@ -115,36 +117,7 @@ describe('prependSessionReferences', () => {
   });
 });
 
-describe('stripReferenceLines', () => {
-  it('strips a leading run of reference lines plus the following blank line', () => {
-    const text =
-      'Referenced session @session[Foo]: /tmp/foo.jsonl\n' +
-      'Referenced session @session[Bar]: /tmp/bar.jsonl\n\n' +
-      'look at this';
-    expect(stripReferenceLines(text)).toBe('look at this');
-  });
-
-  it('strips a reference run that starts a later block (decision D1 layout)', () => {
-    const text = '/review\n\nReferenced session @session[Foo]: /tmp/foo.jsonl\n\nrest';
-    expect(stripReferenceLines(text)).toBe('/review\n\nrest');
-  });
-
-  it('leaves a reference-shaped line alone when it is preceded by a non-empty line', () => {
-    const text = 'some prose\nReferenced session @session[Foo]: /tmp/foo.jsonl\nmore prose';
-    expect(stripReferenceLines(text)).toBe(text);
-  });
-
-  it('is a no-op for text with no reference lines', () => {
-    const text = 'just a plain message with @session[Foo] inline';
-    expect(stripReferenceLines(text)).toBe(text);
-  });
-
-  it('returns an empty string for text that is only reference lines', () => {
-    const text =
-      'Referenced session @session[Foo]: /tmp/foo.jsonl\nReferenced session @session[Bar]: /tmp/bar.jsonl';
-    expect(stripReferenceLines(text)).toBe('');
-  });
-
+describe('prependSessionReferences → stripReferenceLines round trip', () => {
   it('round-trips a single-line slash body byte-identically (decision D1)', () => {
     const body = '/review @session[Foo]';
     const prepended = prependSessionReferences(body, new Map([['Foo', '/tmp/foo.jsonl']]));

@@ -12,9 +12,8 @@ use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
-use crate::title_generator::{
-    derive_title_from_message, resolve_title_binary, strip_reference_lines,
-};
+use crate::message_markers::visible_message_text;
+use crate::title_generator::{derive_title_from_message, resolve_title_binary};
 
 /// 5 minutes.
 const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
@@ -125,13 +124,13 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             ..Default::default()
         };
 
-        // Drop the `Referenced session @session[...]: <path>` preamble (#240) — an
-        // imported session's first message carries it verbatim, and it addresses the
-        // agent, not the reader. It runs before strip_xml_tags because that collapses
-        // newlines, which would fuse the preamble with the body into one line the
-        // line-based strip then swallows whole. Both title paths consume the result.
+        // Drop the composer's markers (message_markers.rs) — an imported session's
+        // first message carries them verbatim, and they address the agent or the
+        // renderer, not the reader. This runs before strip_xml_tags because that
+        // collapses newlines, which would fuse a marker block with the body into one
+        // line the line-based strip then swallows whole. Both title paths consume it.
         let clean_title = title
-            .map(strip_reference_lines)
+            .map(visible_message_text)
             .map(|t| strip_xml_tags(&t))
             .filter(|s| !s.is_empty());
         if let Some(ct) = &clean_title {

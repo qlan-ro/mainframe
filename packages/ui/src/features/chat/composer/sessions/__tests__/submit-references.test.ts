@@ -7,6 +7,7 @@
  * already pinned in use-submit-composition.test.tsx; this file states only
  * the session-reference outcomes, as fixed inputs with hardcoded expected
  * bodies — never a recomputation of prependSessionReferences/stripReferenceLines.
+ * The strip import is only the decode half of the wire round trip.
  *
  * Mocking strategy mirrors use-submit-composition.test.tsx: a fake
  * `useAui`/`useAuiState` pair over `@assistant-ui/react`, with the REAL
@@ -15,7 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useComposerSegments } from '../../segments/segment-store';
-import { stripReferenceLines } from '../../../session-references/reference-line';
+import { stripReferenceLines } from '../../../markers/message-markers';
 
 const THREAD_ID = 'thread-1';
 

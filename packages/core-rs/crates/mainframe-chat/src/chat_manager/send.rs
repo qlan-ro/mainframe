@@ -25,10 +25,9 @@ impl ChatManager {
             .unwrap_or_default()
             .is_empty();
         if title_empty {
-            // Both title paths must see the reader's text, not the raw
-            // `Referenced session @session[...]: <path>` preamble the composer
-            // prepends to the wire body (#240).
-            let visible_content = strip_reference_lines(content);
+            // Both title paths must see the reader's text, not the markers the
+            // composer wraps around it (message_markers.rs).
+            let visible_content = visible_message_text(content);
             let title = derive_title_from_message(&visible_content);
             {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
