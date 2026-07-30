@@ -348,11 +348,14 @@ impl ChatManagerDeps for DaemonChatDeps {
             .map(|p| p.path)
     }
 
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         let pid = project_id.to_string();
-        if let Err(err) = self.db.call_blocking(move |d| d.projects.remove(&pid)) {
-            tracing::warn!(%err, project_id, "projects.remove failed");
-        }
+        self.db
+            .call_blocking(move |d| d.projects.remove(&pid))
+            .map_err(|err| {
+                tracing::warn!(%err, project_id, "projects.remove failed");
+                err.to_string()
+            })
     }
 
     fn write_workspace_trust<'a>(
