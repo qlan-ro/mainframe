@@ -163,6 +163,31 @@ mod tests {
     }
 
     #[test]
+    fn honours_a_stored_attention_request_override() {
+        let stored = r#"{"chat":{"attentionRequest":false}}"#;
+        let result = read_notification_config(&fake_db(Some(stored)));
+        assert!(!result.chat.attention_request);
+    }
+
+    #[test]
+    fn attention_request_defaults_to_true_when_the_key_is_absent() {
+        let stored = r#"{"chat":{"taskComplete":false}}"#;
+        let result = read_notification_config(&fake_db(Some(stored)));
+        assert!(result.chat.attention_request);
+    }
+
+    #[test]
+    fn a_non_boolean_attention_request_falls_back_to_the_whole_group_default() {
+        let stored = r#"{"chat":{"taskComplete":false,"attentionRequest":"nope"}}"#;
+        let result = read_notification_config(&fake_db(Some(stored)));
+        assert_eq!(
+            result.chat.task_complete,
+            NotificationConfig::default().chat.task_complete
+        );
+        assert!(result.chat.attention_request);
+    }
+
+    #[test]
     fn drops_a_non_object_root_entirely() {
         assert_eq!(
             read_notification_config(&fake_db(Some("123"))),
