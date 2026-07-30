@@ -211,6 +211,8 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.ultracode === b.ultracode &&
     a.adaptiveThinking === b.adaptiveThinking &&
     a.worktreeMissing === b.worktreeMissing &&
+    a.directoryMissing === b.directoryMissing &&
+    a.missingDirectoryPath === b.missingDirectoryPath &&
     a.transcriptMissing === b.transcriptMissing &&
     a.worktreePath === b.worktreePath &&
     a.branchName === b.branchName
