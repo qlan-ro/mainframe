@@ -15,7 +15,9 @@ use mainframe_types::chat::{
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, ToolCategories};
-use mainframe_types::events::{ChatNotificationLevel, ChatUpdatedReason, DaemonEvent};
+use mainframe_types::events::{
+    ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
+};
 use tracing::{debug, warn};
 
 use crate::display_emitter::emit_display_delta;
@@ -891,6 +893,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                         title: "Session Error".to_string(),
                         body: "A session ended unexpectedly".to_string(),
                         level: ChatNotificationLevel::Error,
+                        kind: Some(ChatNotificationKind::SessionError),
                     });
                     self.deps.send_push(PushOut {
                         chat_id: self.chat_id.clone(),
@@ -916,6 +919,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 title: "Task Complete".to_string(),
                 body: body.clone(),
                 level: ChatNotificationLevel::Success,
+                kind: Some(ChatNotificationKind::TaskComplete),
             });
             self.deps.send_push(PushOut {
                 chat_id: self.chat_id.clone(),
