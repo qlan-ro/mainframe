@@ -91,10 +91,6 @@ async fn returns_400_when_declared_size_exceeds_5mb() {
 }
 
 #[tokio::test]
-#[ignore = "http.rs applies RequestBodyLimitLayer(30mb) but not DefaultBodyLimit::disable(), \
-            so axum's built-in 2MB extractor limit shadows it and this >2MB body is rejected \
-            with 413 before reaching the handler (would be 400 under the TS 30mb limit). \
-            Un-ignore once http.rs disables the default body limit — reported as a blocker."]
 async fn returns_400_when_base64_payload_exceeds_5mb() {
     let server = spawn_test_server(None).await;
     // 8MB of valid base64 chars → computed floor(len*3/4) = 6MB > 5MB.
