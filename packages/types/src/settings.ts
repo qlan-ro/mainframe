@@ -48,7 +48,7 @@ export type ProviderConfigUpdate = Omit<
 };
 
 export interface NotificationConfig {
-  chat: { taskComplete: boolean; sessionError: boolean };
+  chat: { taskComplete: boolean; sessionError: boolean; attentionRequest: boolean };
   permission: { toolRequest: boolean; userQuestion: boolean; planApproval: boolean };
   other: { plugin: boolean };
 }
@@ -65,7 +65,7 @@ export interface GeneralConfig {
 }
 
 export const NOTIFICATION_DEFAULTS: NotificationConfig = {
-  chat: { taskComplete: true, sessionError: true },
+  chat: { taskComplete: true, sessionError: true, attentionRequest: true },
   permission: { toolRequest: true, userQuestion: true, planApproval: true },
   other: { plugin: true },
 };

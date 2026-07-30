@@ -11,7 +11,7 @@ vi.mock('../../../../../lib/api/settings', () => ({
 }));
 
 const NOTIF = {
-  chat: { taskComplete: true, sessionError: true },
+  chat: { taskComplete: true, sessionError: true, attentionRequest: true },
   permission: { toolRequest: true, userQuestion: true, planApproval: false },
   other: { plugin: true },
 };
