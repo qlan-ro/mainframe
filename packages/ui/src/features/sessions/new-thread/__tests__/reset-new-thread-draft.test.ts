@@ -14,6 +14,7 @@ import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runti
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { markDraftDiscarded, isDraftDiscarded, useDiscardedDraftStore } from '../discarded-drafts';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
+import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
 const abandonCreateForLocal = vi.fn();
 vi.mock('../../runtime/new-thread-coordinator', () => ({
   abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
@@ -25,6 +26,7 @@ beforeEach(() => {
   useNewThreadReady.setState({ readyIds: new Set() });
   useDiscardedDraftStore.setState({ ids: new Set() });
   useComposerSegments.setState({ byThread: {} });
+  useSessionReferences.setState({ byThread: {} });
   abandonCreateForLocal.mockReset();
 });
 
@@ -94,5 +96,20 @@ describe('resetNewThreadDraft', () => {
     resetNewThreadDraft('__LOCALID_1');
 
     expect(useComposerSegments.getState().byThread['chat-42']?.liveQuote?.text).toBe('Q2');
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression (#240): session references are keyed by the same reused id, so
+  // an abandoned draft's `@session[label]` binding would attach a foreign
+  // project's transcript path to the next New's message.
+  // -------------------------------------------------------------------------
+  it("clears the reused slot's session references", () => {
+    useSessionReferences.getState().record('__LOCALID_1', 'Foo refactor', '/tmp/a.jsonl');
+    useSessionReferences.getState().record('chat-42', 'Bar', '/tmp/b.jsonl');
+
+    resetNewThreadDraft('__LOCALID_1');
+
+    expect(useSessionReferences.getState().byThread['__LOCALID_1']).toEqual({});
+    expect(useSessionReferences.getState().byThread['chat-42']).toEqual({ Bar: '/tmp/b.jsonl' });
   });
 });

@@ -11,14 +11,20 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import type { AgentConfig } from '@qlan-ro/mainframe-types';
-import type { TriggerAdapter } from '@/components/trigger-engine/types';
-import { buildMentionTriggerAdapter, type MentionCache } from './mention-adapter';
+import type { TriggerAdapter, TriggerItem } from '@/components/trigger-engine/types';
+import { buildMentionTriggerAdapter, NO_SESSIONS, type MentionCache } from './mention-adapter';
 
 /** Stable identity — an inline `[]` default would churn the adapter memo every render. */
 const NO_AGENTS: AgentConfig[] = [];
 
-export function useMentionTriggerAdapter(cache: MentionCache, agents: AgentConfig[] = NO_AGENTS): TriggerAdapter {
+export { NO_SESSIONS };
+
+export function useMentionTriggerAdapter(
+  cache: MentionCache,
+  agents: AgentConfig[] = NO_AGENTS,
+  sessions: readonly TriggerItem[] = NO_SESSIONS,
+): TriggerAdapter {
   const [version, bump] = useState(0);
   useEffect(() => cache.subscribe(() => bump((n) => n + 1)), [cache]);
-  return useMemo(() => buildMentionTriggerAdapter(cache, agents), [cache, agents, version]);
+  return useMemo(() => buildMentionTriggerAdapter(cache, agents, sessions), [cache, agents, sessions, version]);
 }

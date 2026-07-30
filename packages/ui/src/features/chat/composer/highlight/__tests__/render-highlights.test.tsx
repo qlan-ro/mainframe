@@ -10,8 +10,8 @@ import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { renderHighlights } from '../render-highlights';
 
-function html(text: string) {
-  const { container } = render(<>{renderHighlights(text)}</>);
+function html(text: string, sessionLabels: string[] = []) {
+  const { container } = render(<>{renderHighlights(text, sessionLabels)}</>);
   return container;
 }
 
@@ -47,6 +47,42 @@ describe('renderHighlights', () => {
   it('does not double-count the space before an @mention', () => {
     const input = 'hello @world end';
     const c = html(input);
+    expect(c.textContent).toBe(input);
+  });
+
+  it('tints an @session token with its own class, distinct from mention and skill', () => {
+    const c = html('look at @session[Fix foo handling] now');
+    const span = c.querySelector('span.text-mf-directive-session');
+    expect(span?.textContent).toBe('@session[Fix foo handling]');
+    expect(c.querySelector('span.text-primary')).toBeNull();
+    expect(c.querySelector('span.text-mf-directive-skill')).toBeNull();
+  });
+
+  it('preserves textContent char-for-char with a session token present', () => {
+    // AC 3/4: the overlay must match the textarea exactly, brackets and all.
+    const input = '/review @src/app.ts and @session[Fix foo handling (2)] please';
+    const c = html(input);
+    expect(c.textContent).toBe(input);
+  });
+
+  it('tints a bare @<label> mention as a session when the draft recorded that label', () => {
+    const c = html('look at @Model Identity now', ['Model Identity']);
+    const span = c.querySelector('span.text-mf-directive-session');
+    expect(span?.textContent).toBe('@Model Identity');
+    expect(c.textContent).toBe('look at @Model Identity now');
+  });
+
+  it('leaves a bare @token plain when no label matches it', () => {
+    const c = html('look at @Model Identity now', ['Other session']);
+    expect(c.querySelector('span.text-mf-directive-session')).toBeNull();
+    expect(c.textContent).toBe('look at @Model Identity now');
+  });
+
+  it('still highlights the leading /command with a bare label mention after it', () => {
+    const input = '/review @Model Identity please';
+    const c = html(input, ['Model Identity']);
+    expect(c.querySelector('span.text-primary')?.textContent).toBe('/review');
+    expect(c.querySelector('span.text-mf-directive-session')?.textContent).toBe('@Model Identity');
     expect(c.textContent).toBe(input);
   });
 });

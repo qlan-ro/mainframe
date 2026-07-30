@@ -19,9 +19,12 @@
 import { useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { ComposerPrimitive, INTERNAL, useAui, useAuiState } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
 import { useDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { resolveDraftChatContext } from './resolve-draft-chat-context';
+import { useSessionMentionSource } from '../sessions/use-session-mention-source';
+import { createSessionInsertion, sessionItemGlyph, sessionItemTestId } from '../sessions/session-trigger-wiring';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
 import { createMentionCache } from './mention-adapter';
@@ -35,8 +38,11 @@ import { useTriggerField, type TriggerField } from '@/components/trigger-engine/
 import { TriggerFieldPopover } from '@/components/trigger-engine/TriggerFieldPopover';
 import type { TriggerConfig } from '@/components/trigger-engine/types';
 
-/** Builds the `/` skills and `@` mention trigger configs for the active chat. */
-function useComposerTriggerConfigs(): TriggerConfig[] {
+/**
+ * Builds the `/` skills and `@` mention trigger configs for the active chat,
+ * plus the callback that re-asks the daemon which sessions are referenceable.
+ */
+function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessions: () => void } {
   const extras = useChatExtras();
   const port = extras?.port ?? null;
   const activeChatId = extras?.state.chatId ?? null;
@@ -68,9 +74,19 @@ function useComposerTriggerConfigs(): TriggerConfig[] {
     [port, projectId, chatId],
   );
 
-  const mentionAdapter = useMentionTriggerAdapter(mentionCache, agents);
+  const sessions = useSessionMentionSource({ port, projectId, activeChatId });
+  const mentionAdapter = useMentionTriggerAdapter(mentionCache, agents, sessions.items);
 
-  return useMemo(
+  // The reference store and `useSubmitComposition` must key on the SAME id —
+  // the aui thread item id, not the daemon chat id — or every reference line is
+  // dropped at send.
+  const threadId = useActiveThreadId() ?? null;
+  const insertion = useMemo(
+    () => createSessionInsertion({ threadId, pathByChatId: sessions.pathByChatId }),
+    [threadId, sessions.pathByChatId],
+  );
+
+  const triggers = useMemo(
     () => [
       {
         char: '/',
@@ -81,13 +97,18 @@ function useComposerTriggerConfigs(): TriggerConfig[] {
       {
         char: '@',
         adapter: mentionAdapter,
-        formatter: mentionDirectiveFormatter(),
+        formatter: mentionDirectiveFormatter(insertion.resolveSessionLabel),
         itemTestIdPrefix: 'composer-file-item',
+        itemTestId: sessionItemTestId,
+        itemGlyph: sessionItemGlyph,
+        onInserted: insertion.onInserted,
         closeOnInsert: shouldCloseTriggerOnInsert,
       },
     ],
-    [skillsAdapter, mentionAdapter],
+    [skillsAdapter, mentionAdapter, insertion],
   );
+
+  return { triggers, refreshSessions: sessions.refresh };
 }
 
 /**
@@ -122,7 +143,7 @@ export function ComposerTriggers({
   children: ReactNode;
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
 }) {
-  const triggers = useComposerTriggerConfigs();
+  const { triggers, refreshSessions } = useComposerTriggerConfigs();
   const aui = useAui();
   const text = useAuiState((s) => s.composer.text);
   const field = useTriggerField({
@@ -131,6 +152,13 @@ export function ComposerTriggers({
     triggers,
     textareaRef,
   });
+
+  // Re-ask on open, not per keystroke: a session started since the last read
+  // becomes offerable, and one whose transcript was deleted stops being.
+  const triggerChar = field.trigger?.char;
+  useEffect(() => {
+    if (field.open && triggerChar === '@') refreshSessions();
+  }, [field.open, triggerChar, refreshSessions]);
 
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
