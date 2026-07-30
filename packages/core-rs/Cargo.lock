@@ -1346,6 +1346,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-claude-workflows"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "dashmap",
+ "mainframe-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mainframe-daemon"
 version = "0.0.0"
 dependencies = [
