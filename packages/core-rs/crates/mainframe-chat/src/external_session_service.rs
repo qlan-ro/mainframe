@@ -615,26 +615,20 @@ mod tests {
 
     // ── generate_import_title observability (#287) ──────────────────────────
     // Each case installs a `LogCapture` guard and asserts the captured
-    // `(level, reason)` event plus the title-retention invariants.
+    // `(level, reason)` event plus the title-retention invariants; only the
+    // deps setup and the expected reason token differ between cases.
 
-    #[tokio::test]
-    async fn import_with_title_generation_disabled_logs_and_keeps_the_title() {
-        let deps = Arc::new(SweepDeps {
-            title_disabled: true,
-            ..Default::default()
-        });
-        let mut chat = test_chat("c1");
-        chat.title = Some("Fallback Title".to_string());
+    type CapturedEvents = StdMutex<Vec<(tracing::Level, Option<String>)>>;
 
-        let (subscriber, events) = crate::test_support::LogCapture::install();
-        let _guard = tracing::subscriber::set_default(subscriber);
-        generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
-
+    fn assert_logged_once_and_title_untouched(
+        events: &Arc<CapturedEvents>,
+        expected_reason: &str,
+        deps: &SweepDeps,
+    ) {
         assert_eq!(
-            crate::test_support::LogCapture::events_with_reason(&events),
-            vec![(tracing::Level::DEBUG, "disabled_by_setting".to_string())]
+            crate::test_support::LogCapture::events_with_reason(events),
+            vec![(tracing::Level::DEBUG, expected_reason.to_string())]
         );
-        assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
         assert!(
             deps.title_updates
                 .lock()
@@ -652,6 +646,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn import_with_title_generation_disabled_logs_and_keeps_the_title() {
+        let deps = Arc::new(SweepDeps {
+            title_disabled: true,
+            ..Default::default()
+        });
+        let mut chat = test_chat("c1");
+        chat.title = Some("Fallback Title".to_string());
+
+        let (subscriber, events) = crate::test_support::LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
+
+        assert_logged_once_and_title_untouched(&events, "disabled_by_setting", &deps);
+        assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
+    }
+
+    #[tokio::test]
     async fn import_with_no_title_logs_no_title_and_keeps_the_title() {
         let deps = Arc::new(SweepDeps::default());
         let mut chat = test_chat("c1");
@@ -661,25 +672,8 @@ mod tests {
         let _guard = tracing::subscriber::set_default(subscriber);
         generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
 
-        assert_eq!(
-            crate::test_support::LogCapture::events_with_reason(&events),
-            vec![(tracing::Level::DEBUG, "no_title".to_string())]
-        );
+        assert_logged_once_and_title_untouched(&events, "no_title", &deps);
         assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
-        assert!(
-            deps.title_updates
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_empty()
-        );
-        assert!(
-            !deps
-                .events
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .iter()
-                .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
-        );
     }
 }
 
