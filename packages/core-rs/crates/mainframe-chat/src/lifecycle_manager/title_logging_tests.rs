@@ -14,6 +14,34 @@ use super::tests::{FakeDeps, chat_over, manager};
 use crate::test_support::LogCapture;
 use crate::types::ActiveChat;
 
+/// One captured event: its level, and the `reason` field it carried (if any)
+/// — mirrors the return type of `LogCapture::install()`.
+type CapturedEvents = Arc<Mutex<Vec<(Level, Option<String>)>>>;
+
+/// Every case here installs a capture guard, drives `do_generate_title` once,
+/// and expects exactly one reason-bearing event plus the same three
+/// title-retention invariants; only the reason token (and, for two of the
+/// three cases, an extra check of the cell's own title) differs per test.
+fn assert_logged_once_and_title_untouched(
+    events: &CapturedEvents,
+    expected_reason: &str,
+    deps: &FakeDeps,
+) {
+    assert_eq!(
+        LogCapture::events_with_reason(events),
+        vec![(Level::DEBUG, expected_reason.to_string())]
+    );
+    assert!(deps.title_updates.lock().unwrap().is_empty());
+    assert!(
+        !deps
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
+    );
+}
+
 #[tokio::test]
 async fn evicted_chat_logs_chat_not_active_and_leaves_the_title_alone() {
     let chat = chat_over("c1", None, ChatStatus::Active);
@@ -26,19 +54,7 @@ async fn evicted_chat_logs_chat_not_active_and_leaves_the_title_alone() {
     let _guard = tracing::subscriber::set_default(subscriber);
     mgr.do_generate_title("c1", "some first message").await;
 
-    assert_eq!(
-        LogCapture::events_with_reason(&events),
-        vec![(Level::DEBUG, "chat_not_active".to_string())]
-    );
-    assert!(deps.title_updates.lock().unwrap().is_empty());
-    assert!(
-        !deps
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
-    );
+    assert_logged_once_and_title_untouched(&events, "chat_not_active", &deps);
 }
 
 #[tokio::test]
@@ -58,22 +74,10 @@ async fn disabled_setting_logs_disabled_by_setting() {
     let _guard = tracing::subscriber::set_default(subscriber);
     mgr.do_generate_title("c1", "some first message").await;
 
-    assert_eq!(
-        LogCapture::events_with_reason(&events),
-        vec![(Level::DEBUG, "disabled_by_setting".to_string())]
-    );
+    assert_logged_once_and_title_untouched(&events, "disabled_by_setting", &deps);
     assert_eq!(
         cell.lock().unwrap().chat.title.as_deref(),
         Some("Fallback Title")
-    );
-    assert!(deps.title_updates.lock().unwrap().is_empty());
-    assert!(
-        !deps
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
     );
 }
 
@@ -94,22 +98,10 @@ async fn none_outcome_logs_no_title_and_keeps_the_fallback() {
     let _guard = tracing::subscriber::set_default(subscriber);
     mgr.do_generate_title("c1", "some first message").await;
 
-    assert_eq!(
-        LogCapture::events_with_reason(&events),
-        vec![(Level::DEBUG, "no_title".to_string())]
-    );
+    assert_logged_once_and_title_untouched(&events, "no_title", &deps);
     assert_eq!(
         cell.lock().unwrap().chat.title.as_deref(),
         Some("Fallback Title")
-    );
-    assert!(deps.title_updates.lock().unwrap().is_empty());
-    assert!(
-        !deps
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
     );
 }
 
