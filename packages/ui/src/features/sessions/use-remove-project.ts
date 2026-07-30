@@ -2,9 +2,9 @@
  * useRemoveProject — the remove-project orchestration: confirm in-app, ask the
  * daemon to drop the project, then update the list, the filter and the toast.
  *
- * The confirmation goes through the app's confirm bridge, not `window.confirm`:
- * the Tauri webview implements no JavaScript confirm panel, so the native call
- * resolves false without rendering and the removal silently never happens.
+ * The confirmation goes through the app's confirm bridge rather than a browser
+ * dialog: the Tauri webview implements no JavaScript confirm panel, so a native
+ * call resolves false without rendering and the removal never happens.
  *
  * `removeProjectFromList` is passed in (not pulled from a local `useProjects()`)
  * so the row drops from the CALLER's rendered instance — `useProjects` is local

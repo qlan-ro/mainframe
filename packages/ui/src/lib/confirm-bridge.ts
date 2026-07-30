@@ -1,7 +1,7 @@
 /**
  * Confirm bridge — the app's single boolean-confirm mechanism: a zustand store
  * that lets any action hook await a yes/no dialog without coupling to React
- * rendering, and without the native `window.confirm` the Tauri webview never
+ * rendering, and without the browser-native dialogs the Tauri webview never
  * renders.
  *
  * `requestConfirm(opts)` returns a Promise<boolean> that resolves when the user

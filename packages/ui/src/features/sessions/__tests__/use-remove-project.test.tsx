@@ -137,7 +137,8 @@ describe('useRemoveProject — dialog copy', () => {
     });
 
     expect(requestConfirm).toHaveBeenCalledTimes(1);
-    const arg = requestConfirm.mock.calls[0][0];
+    const [firstCall] = requestConfirm.mock.calls;
+    const arg = firstCall?.[0];
     expect(arg.title).toContain('alpha');
     expect(arg.destructive).toBe(true);
     expect(arg.testid).toBe('sessions-remove-project-dialog');
