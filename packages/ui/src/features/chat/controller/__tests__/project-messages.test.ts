@@ -236,3 +236,58 @@ describe('projectChatThreadMessages — per-message conversion memoization', () 
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 5: a failed pending is projected as a classified sentence (todo #219)
+// ---------------------------------------------------------------------------
+
+/** Seeds a failed pending through the official reducer events. */
+function stateWithFailedPending(error: unknown, stage?: 'upload' | 'send') {
+  const pending = makePending();
+  const queued = stateWithPending(pending);
+  return reduceChatThreadState(queued, {
+    type: 'local.message.failed',
+    clientId: pending.clientId,
+    error,
+    stage,
+  });
+}
+
+function mainframeMetaOf(state: Parameters<typeof projectChatThreadMessages>[0]) {
+  const projected = projectChatThreadMessages(state).at(-1)!;
+  return (
+    projected.metadata as {
+      custom: { mainframe: { error?: string; attachmentsRestored?: boolean } };
+    }
+  ).custom.mainframe;
+}
+
+describe('projectChatThreadMessages — failed pending classification', () => {
+  it('projects an upload-stage 401 as the authorization sentence with the restore clause', () => {
+    const state = stateWithFailedPending(Object.assign(new Error('Unauthorized'), { status: 401 }), 'upload');
+
+    expect(mainframeMetaOf(state).error).toBe(
+      'Not authorized on this daemon. Re-pair it from the daemon menu, then send again. Your attachments are back in the composer.',
+    );
+  });
+
+  it('marks attachmentsRestored for an upload-stage failure and not for a send-stage one', () => {
+    expect(mainframeMetaOf(stateWithFailedPending(new Error('boom'), 'upload')).attachmentsRestored).toBe(true);
+    expect(mainframeMetaOf(stateWithFailedPending(new Error('boom'), 'send')).attachmentsRestored).toBe(false);
+  });
+
+  it('projects a send-stage failure without the restore clause', () => {
+    const state = stateWithFailedPending(Object.assign(new Error('Unauthorized'), { status: 401 }), 'send');
+
+    expect(mainframeMetaOf(state).error).toBe(
+      'Not authorized on this daemon. Re-pair it from the daemon menu, then send again.',
+    );
+  });
+
+  it('carries no error or attachmentsRestored while the pending is still in flight', () => {
+    const meta = mainframeMetaOf(stateWithPending(makePending()));
+
+    expect(meta.error).toBeUndefined();
+    expect(meta.attachmentsRestored).toBeUndefined();
+  });
+});

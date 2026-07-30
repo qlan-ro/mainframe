@@ -49,6 +49,9 @@ export interface MainframeMessageMeta {
   readonly pending?: boolean;
   readonly clientId?: string;
   readonly error?: string;
+  /** The failed send's attachments went back into the composer — Retry is
+   *  text-only, so it is hidden rather than silently dropping them. */
+  readonly attachmentsRestored?: boolean;
   // system turn
   readonly isCompacted?: boolean;
   readonly skillLoaded?: { readonly skillName: string; readonly path: string; readonly content: string };

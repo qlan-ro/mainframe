@@ -17,6 +17,7 @@ import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
 import type { DisplayMessage } from '@qlan-ro/mainframe-types';
 import { convertMessage } from '../view-model/convert-message';
+import { describeSendError } from './describe-send-error';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
 /**
@@ -68,8 +69,10 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
           clientId: pending.clientId,
           ...(pending.status === 'failed'
             ? {
-                error:
-                  pending.error instanceof Error ? pending.error.message : String(pending.error ?? 'Failed to send'),
+                error: describeSendError(pending.error, { hadAttachments: pending.stage === 'upload' }),
+                // An upload-stage failure never emitted the send frame, so the
+                // runtime put the attachments back into the composer.
+                attachmentsRestored: pending.stage === 'upload',
               }
             : {}),
         },
