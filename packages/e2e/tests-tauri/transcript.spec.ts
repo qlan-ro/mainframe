@@ -213,8 +213,11 @@ test.describe('§transcript — thread turn', () => {
     expect(OVERFLOW_TEXT.length).toBeLessThan(600);
 
     await sendMessage(page, OVERFLOW_TEXT);
-    const bubble = page.getByTestId('chat-user-bubble').last();
+    // `sendMessage` doesn't wait for the new turn to mount, so `.last()` alone could
+    // resolve to the PREVIOUS turn's bubble — bind to this turn's content instead.
+    const bubble = page.getByTestId('chat-user-bubble').filter({ hasText: UNBREAKABLE });
     await expect(bubble).toBeVisible({ timeout: 10_000 });
+    await expect(bubble).toContainText(UNBREAKABLE);
 
     const box = await bubble.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
