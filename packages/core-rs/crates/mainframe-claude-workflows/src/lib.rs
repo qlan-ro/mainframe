@@ -12,3 +12,4 @@ pub mod record;
 pub mod snapshot;
 pub mod status;
 pub mod store;
+mod store_mutations;

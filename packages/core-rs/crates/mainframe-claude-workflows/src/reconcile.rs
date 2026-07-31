@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::record::read_run_records;
 use crate::store::ClaudeWorkflowStore;
 
 /// Where a chat's Claude session writes its workflow records.
@@ -17,10 +18,22 @@ pub struct RecordLocation {
 }
 
 pub fn spawn_terminal_reconcile(
-    _store: Arc<ClaudeWorkflowStore>,
-    _chat_id: String,
-    _task_id: String,
-    _loc: RecordLocation,
+    store: Arc<ClaudeWorkflowStore>,
+    chat_id: String,
+    task_id: String,
+    loc: RecordLocation,
 ) {
-    unimplemented!("wf-core")
+    tokio::spawn(async move {
+        let records = read_run_records(&loc.project_dir, &loc.session_id).await;
+        let Some(record) = records.into_iter().find(|run| run.task_id == task_id) else {
+            tracing::debug!(
+                chat_id = %chat_id,
+                task_id = %task_id,
+                session_id = %loc.session_id,
+                "no workflow run record found for terminal task"
+            );
+            return;
+        };
+        store.apply_record(&chat_id, record);
+    });
 }

@@ -30,7 +30,7 @@ pub fn merge_runs(
         }
     }
 
-    merged.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
+    merged.sort_by_key(sort_key);
     merged
 }
 
@@ -103,7 +103,7 @@ fn carry_missing_identity(
     winner
 }
 
-fn sort_key(run: &ClaudeWorkflowRun) -> (i64, String) {
+pub(crate) fn sort_key(run: &ClaudeWorkflowRun) -> (i64, String) {
     (
         run.structure_revision.or(run.terminal_at).unwrap_or(0),
         run.task_id.clone(),

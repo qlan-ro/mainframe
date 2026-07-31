@@ -11,8 +11,24 @@ use tokio::sync::broadcast;
 use crate::store::ClaudeWorkflowStore;
 
 pub fn spawn_workflow_run_bridge(
-    _store: Arc<ClaudeWorkflowStore>,
-    _bus: broadcast::Sender<DaemonEvent>,
+    store: Arc<ClaudeWorkflowStore>,
+    bus: broadcast::Sender<DaemonEvent>,
 ) {
-    unimplemented!("wf-core")
+    let mut rx = store.subscribe();
+    tokio::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    let _ = bus.send(DaemonEvent::ClaudeWorkflowRunUpdated {
+                        chat_id: event.chat_id,
+                        run: event.run,
+                    });
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(dropped = n, "claude-workflow event bridge lagged");
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 }
