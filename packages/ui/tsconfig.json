@@ -20,7 +20,8 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@v2/*": ["src/v2/*"]
     }
   },
   "include": ["src"]

@@ -1,0 +1,88 @@
+/* ════════════════════════════════════════════════════════════════════════
+   v2 token layer — the scale repair.
+
+   The shipped stylesheet is imported whole, so colours, radii, shadows, the
+   three schemes and the three window styles have exactly one definition and it
+   lives there. This file overrides the two scales that are actually broken.
+   ════════════════════════════════════════════════════════════════════════ */
+@import "../../styles/globals.css";
+
+/* The shipped stylesheet is the one Tailwind roots automatic source detection
+   at, so scanning would start under src/styles/ and miss every v2 file. Point it
+   at src/ explicitly. */
+@source "../../";
+
+/* ────────────────────────────────────────────────────────────────────────
+   SPACING — hand the scale back to Tailwind's 4px base.
+
+   The shipped theme overrides the twelve integer steps with a compressed ramp
+   (--spacing-2: 4px, --spacing-3: 6px, …) but leaves Tailwind's fractional
+   steps resolving off the stock 0.25rem multiplier. Mixing the two families is
+   non-monotonic — p-2.5 is 10px, p-3 is 6px — so "one step up" can be a step
+   down, which is why 718 arbitrary [Npx] spacing utilities exist: the scale
+   couldn't be trusted, so it was bypassed.
+
+   Setting each override to `initial` deletes it, and the 0.25rem base takes
+   over for integers and fractionals alike. Two consequences to expect while
+   porting: every integer step roughly doubles (p-2: 4px → 8px), and the
+   fractional steps are unchanged, so an existing p-1.5 still means 6px.
+   ──────────────────────────────────────────────────────────────────────── */
+@theme {
+  --spacing-1: initial;
+  --spacing-2: initial;
+  --spacing-3: initial;
+  --spacing-4: initial;
+  --spacing-5: initial;
+  --spacing-6: initial;
+  --spacing-7: initial;
+  --spacing-8: initial;
+  --spacing-9: initial;
+  --spacing-10: initial;
+  --spacing-11: initial;
+  --spacing-12: initial;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   TYPE — 8 rungs down to 6.
+
+   The shipped scale spends four of its eight rungs inside a 3px band
+   (micro 10 · caption 11 · label 12 · body 13). Choosing between them is a
+   decision with no visual consequence, so the choices drifted and the result
+   reads as noise rather than hierarchy. v2 keeps six rungs, each at least 14%
+   from its neighbour, and the bottom of the range moves up: body 13 → 14 and
+   the old 12px label band folds into it.
+
+   micro and label are DELETED, not remapped. An undefined font-size class is
+   silently inert — it renders at the inherited size with no error — so a
+   shipped primitive that still says `text-label` will look subtly wrong rather
+   than fail. scripts/v2-lint.mjs greps for both.
+
+   Label-vs-value is now weight and colour, not a 1px size step: both sit on
+   `body`, the label at `font-medium text-muted-foreground`. That's how shadcn
+   separates them, and it survives at any zoom level, which a 1px step does not.
+   ──────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --text-micro: initial;
+  --text-micro--line-height: initial;
+  --text-label: initial;
+  --text-label--line-height: initial;
+
+  --text-caption: 0.75rem;   /* 12px — timestamps, counts, uppercase group headers */
+  --text-body: 0.875rem;     /* 14px — DEFAULT: controls, field labels, list rows   */
+  --text-heading: 1rem;      /* 16px — section titles                               */
+  --text-title: 1.25rem;     /* 20px — panel and page titles                        */
+  --text-display: 1.5rem;    /* 24px — empty states                                 */
+  --text-hero: 1.875rem;     /* 30px — onboarding                                   */
+
+  --text-caption--line-height: 1.4;
+  --text-body--line-height: 1.5;
+  --text-heading--line-height: 1.4;
+  --text-title--line-height: 1.3;
+  --text-display--line-height: 1.2;
+  --text-hero--line-height: 1.15;
+}
+
+/* The shipped file pins the document to the old 13px body rung. */
+body {
+  font-size: 0.875rem;
+}
