@@ -22,6 +22,8 @@ pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
 pub mod history;
+pub(crate) mod history_collab;
+pub(crate) mod history_convert;
 pub(crate) mod image_generation_history;
 pub(crate) mod image_generation_render;
 pub mod item_types;
@@ -43,6 +45,7 @@ pub mod transcript;
 pub mod turn_config;
 pub(crate) mod turn_lifecycle;
 pub mod types;
+pub(crate) mod unified_diff;
 pub(crate) mod web_search_history;
 pub(crate) mod web_search_render;
 
