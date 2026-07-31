@@ -157,15 +157,20 @@ Cases:
    predicate was actually consulted.
 5. `the_external_session_sweep_reconciles_an_unopened_chat` — `PredicateOutcome::Absent`,
    seeded `None`. Do **not** call `get_display_messages`. Instead
-   `manager.external_sessions().expect("service wired").start_auto_scan(&project_id)`,
+   `manager.external_session_service().expect("service wired").start_auto_scan(&project_id)`,
    then poll `persisted_missing(&h)` every 25ms until it is `Some(true)` or a 5s
    timeout elapses; call `stop_auto_scan(&project_id)` before asserting. The stub
    adapter's id is neither `claude` nor `codex`, so `external_session_adapter_ids`
    returns empty and the co-scheduled `emit_count` scan is a no-op.
 
-**Verify:** `cargo test -p mainframe-server --test transcript_presence_wiring` — all
-five cases FAIL (cases 1, 2, 5 on the assertion; 3 and 4 pass trivially at this point
-and must be re-confirmed as still passing after group B). Record the failure output.
+**Verify:** `cargo test -p mainframe-server --test transcript_presence_wiring` — cases
+1, 2, 4 and 5 fail; only case 3 passes trivially and must be re-confirmed as still
+passing after group B. Case 4 fails in the red phase on `adapter.calls == 1`, not on
+the flag: until B2 lands, `DaemonChatDeps` inherits the trait default
+(`chat_manager.rs:278-286`), which returns `None` without touching `self.adapters`, so
+the stub's predicate is never invoked and `calls == 0`. Keep that assertion — it is the
+only thing separating "predicate consulted and errored" from "predicate never reached".
+Record the failure output.
 
 ### A3. Confirm the pre-existing suites are green
 
@@ -331,19 +336,40 @@ the todo's out-of-scope ruling.
 Run the Tauri dev app with an isolated data dir and port (`MAINFRAME_DATA_DIR` +
 `DAEMON_PORT` — an unisolated launch hijacks :31415 and the real `~/.mainframe`).
 
-1. Open a Claude session with real history, note its session id, stop the CLI, delete the
-   transcript under `~/.claude/projects/…`.
-2. Reload the chat. Assert `chat-degraded-card` renders, and check its type scale,
-   spacing, and destructive-tone usage against the `mainframe-design-system` skill —
-   this card has never rendered in production, so its live appearance is unverified.
-3. Exercise `chat-degraded-continue`, `chat-degraded-project-root`, and
-   `chat-degraded-recreate-worktree`.
-4. Restore the transcript file, reload, and confirm the card disappears (self-healing).
-5. With the transcript deleted and no live CLI, send a message. Confirm the daemon logs
-   the `continue-here` reset and spawns a fresh session rather than resuming the dead id.
-6. Leave a second chat closed while its transcript is deleted and wait for the sweep
-   (or restart the daemon to trigger `start_auto_scan`'s initial pass) — its sidebar row
-   should pick up the degraded marker without ever being opened.
+**Scope: the transcript-missing path only.** `chat-degraded-project-root` and
+`chat-degraded-recreate-worktree` render only under `worktreeMissing`
+(`DegradedChatCard.tsx:106` and `:95`), which a transcript-only scenario never sets;
+`continue_in_project_root` would in any case reject with
+`DegradedRecoveryError::NoWorktree` (`degraded_recovery.rs:130-132`). That flag comes
+from the pre-existing worktree check (`chat_manager.rs:389`), already live in
+production and untouched here, so those two actions are out of D1's scope.
+
+Each degraded action is terminal for the card: `continue_here` clears the session and
+the `transcript_missing` flag (`degraded_recovery.rs:112-123`), so the card unmounts
+(`DegradedChatCard.tsx:38`). Every click below therefore gets its own freshly seeded
+chat — do not chain clicks on one chat.
+
+Seeding a degraded chat means: open a Claude session with real history, note its session
+id, stop the CLI, delete its transcript under `~/.claude/projects/…`, reload the chat.
+
+1. Seed chat A. Assert `chat-degraded-card` renders with the "Transcript deleted" cause
+   and exactly two actions, `chat-degraded-continue` and `chat-degraded-delete`. Check
+   its type scale, spacing, and destructive-tone usage against the
+   `mainframe-design-system` skill — this card has never rendered in production for the
+   transcript cause, so its live appearance is unverified.
+2. Restore chat A's transcript file, reload, and confirm the card disappears
+   (self-healing).
+3. Delete chat A's transcript again, reload, click `chat-degraded-continue`. Confirm the
+   card unmounts and the db row's `claude_session_id` and `transcript_missing` are both
+   cleared.
+4. Seed chat B, click `chat-degraded-delete`, and confirm the chat leaves the sidebar
+   (archived with its worktree).
+5. Seed chat C but leave no live CLI, then send a message without touching the card.
+   Confirm the daemon logs the `continue-here` reset and spawns a fresh session rather
+   than resuming the dead id.
+6. Seed chat D and leave it closed, then wait for the sweep (or restart the daemon to
+   trigger `start_auto_scan`'s initial pass) — its sidebar row should pick up the
+   degraded marker without ever being opened.
 
 **Verify:** each step's outcome recorded in the PR description; any visual defect filed
 as a new todo rather than fixed here.
