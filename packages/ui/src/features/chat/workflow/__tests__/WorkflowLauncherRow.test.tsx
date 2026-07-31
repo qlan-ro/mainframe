@@ -128,12 +128,13 @@ describe('WorkflowLauncherRow', () => {
     expect(screen.queryByTestId('chat-workflow-back-run_1')).not.toBeInTheDocument();
   });
 
-  it('a launch-failure result renders a non-interactive row with the error text', async () => {
+  it('a launch-failure result renders a non-interactive row with a red dot and the error text', async () => {
     const user = userEvent.setup();
     render(<WorkflowLauncherRow {...baseProps} result={JSON.stringify({ error: 'workflow script not found' })} />);
 
     const row = screen.getByTestId('chat-workflow-launcher-tc-wf-1');
     expect(row.textContent).toContain('workflow script not found');
+    expect(screen.getByTestId('chat-workflow-launcher-dot')).toHaveAttribute('data-tone', 'red');
 
     await user.click(row);
     expect(screen.queryByTestId(/^chat-workflow-panel-/)).not.toBeInTheDocument();
