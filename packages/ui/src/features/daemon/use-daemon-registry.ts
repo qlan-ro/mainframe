@@ -1,6 +1,6 @@
 /**
  * useDaemonRegistry — lists all known daemons (local synthetic + persisted
- * remotes) and provides mutations: add, rename, remove, switchTo.
+ * remotes) and provides mutations: add, rename, remove, switchTo, retoken.
  *
  * The synthetic "local" entry is never persisted; it is always prepended to the
  * list derived from getHost().daemons.list().  Mutations reload the remote list
@@ -11,6 +11,8 @@
 import { useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { getHost } from '@/lib/host';
+import { updateActiveDaemonToken } from '@/lib/daemon/active-daemon';
+import { clearAuthFailure } from '@/lib/daemon/auth-failure-store';
 import { parseRemoteUrl } from './pair-daemon';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveDaemon } from './active-daemon-context';
@@ -23,6 +25,7 @@ export interface UseDaemonRegistryResult {
   rename(id: string, label: string): Promise<void>;
   remove(id: string): Promise<void>;
   switchTo(id: string): Promise<void>;
+  retoken(id: string): Promise<void>;
 }
 
 function buildSyntheticLocal(port: number): DaemonMeta {
@@ -149,6 +152,16 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
     [localPort, contextSwitchTo],
   );
 
+  const retoken = useCallback(async (id: string): Promise<void> => {
+    const token = await getHost().daemons.getToken(id);
+    if (token == null) {
+      console.warn('[useDaemonRegistry] retoken: no stored token for', id);
+      return;
+    }
+    updateActiveDaemonToken(id, token);
+    clearAuthFailure(id);
+  }, []);
+
   return {
     daemons,
     activeId: target.id,
@@ -157,5 +170,6 @@ export function useDaemonRegistry(): UseDaemonRegistryResult {
     rename,
     remove,
     switchTo,
+    retoken,
   };
 }

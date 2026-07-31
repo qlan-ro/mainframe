@@ -7,6 +7,8 @@
  */
 import type { ApiResponse, ApiResponseEmpty } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from '../daemon/active-daemon';
+import { markAuthFailure, clearAuthFailure } from '../daemon/auth-failure-store';
+import { describeHttpFailure } from './http-failure';
 
 export function apiBase(_port?: number): string {
   return getActiveDaemon().baseUrl;
@@ -51,11 +53,13 @@ export interface ApiErrorDetail {
  */
 export class ApiRequestError extends Error {
   readonly details: ApiErrorDetail[];
+  readonly status: number;
 
-  constructor(message: string, details: ApiErrorDetail[] = []) {
+  constructor(message: string, details: ApiErrorDetail[] = [], status = 0) {
     super(message);
     this.name = 'ApiRequestError';
     this.details = details;
+    this.status = status;
   }
 }
 
@@ -70,6 +74,29 @@ function errorDetails(raw: unknown): ApiErrorDetail[] {
   });
 }
 
+/**
+ * Every REST wrapper routes its fetch through here so a remote 401 marks that
+ * daemon's auth-failure state (driving `needs-repair` in the footer) and any
+ * other outcome clears it. A local (loopback-trusted) target is never marked
+ * — it carries no token and can never legitimately need a re-pair. Any status
+ * other than 401/ok leaves the marker untouched: a 500 is a server failure,
+ * and a 403 here is application policy (e.g. "path outside project"), not a
+ * credential problem — the daemon's auth middleware only ever emits 401.
+ *
+ * The daemon to attribute the outcome to is captured BEFORE the fetch, not
+ * after: switching the active daemon mid-flight would otherwise let a
+ * response from the old target mark or clear the new one's marker.
+ */
+async function fetchChecked(url: string, init: RequestInit): Promise<Response> {
+  const { kind, id } = getActiveDaemon();
+  const res = await fetch(url, init);
+  if (kind === 'remote') {
+    if (res.status === 401) markAuthFailure(id);
+    else if (res.ok) clearAuthFailure(id);
+  }
+  return res;
+}
+
 async function extractError(res: Response): Promise<ApiRequestError> {
   try {
     const data = (await res.json()) as { error?: unknown; message?: unknown; errors?: unknown };
@@ -78,17 +105,17 @@ async function extractError(res: Response): Promise<ApiRequestError> {
         ? data.error
         : typeof data.message === 'string'
           ? data.message
-          : `HTTP ${res.status}`;
-    return new ApiRequestError(text, errorDetails(data.errors));
+          : describeHttpFailure(res.status);
+    return new ApiRequestError(text, errorDetails(data.errors), res.status);
   } catch {
     /* not JSON */
   }
-  return new ApiRequestError(`HTTP ${res.status}`);
+  return new ApiRequestError(describeHttpFailure(res.status), [], res.status);
 }
 
 /** Fetch, unwrap the `ApiResponse<T>` envelope, and return `data`. Throws on HTTP or API error. */
 export async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, fetchInit(method, body));
+  const res = await fetchChecked(url, fetchInit(method, body));
   if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponse<T>;
   if (!json.success) throw new Error(json.error);
@@ -97,7 +124,7 @@ export async function request<T>(method: string, url: string, body?: unknown): P
 
 /** Like `request` but for routes that return `okEmpty` (no `data`). */
 export async function requestEmpty(method: string, url: string, body?: unknown): Promise<void> {
-  const res = await fetch(url, fetchInit(method, body));
+  const res = await fetchChecked(url, fetchInit(method, body));
   if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponseEmpty;
   if (!json.success) throw new Error(json.error);
@@ -105,7 +132,7 @@ export async function requestEmpty(method: string, url: string, body?: unknown):
 
 /** For routes that return HTTP 204 with no body (e.g. DELETE /api/tags/:name). */
 export async function requestNoContent(method: string, url: string): Promise<void> {
-  const res = await fetch(url, fetchInit(method));
+  const res = await fetchChecked(url, fetchInit(method));
   if (!res.ok) throw await extractError(res);
 }
 
@@ -115,14 +142,14 @@ export async function requestNoContent(method: string, url: string): Promise<voi
  * body typed as T (the caller extracts the named field).
  */
 export async function requestPlugin<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, fetchInit(method, body));
+  const res = await fetchChecked(url, fetchInit(method, body));
   if (!res.ok) throw await extractError(res);
   return (await res.json()) as T;
 }
 
 /** For plugin routes that return HTTP 204 with no body (DELETE). */
 export async function requestPluginNoContent(method: string, url: string): Promise<void> {
-  const res = await fetch(url, { method, headers: authHeaders() });
+  const res = await fetchChecked(url, { method, headers: authHeaders() });
   if (!res.ok) throw await extractError(res);
 }
 

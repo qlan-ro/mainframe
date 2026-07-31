@@ -233,4 +233,9 @@ pub fn test_chat(id: &str) -> Chat {
     }
 }
 
+/// `mainframe-chat` and `mainframe-server` both depend on `mainframe-runtime`
+/// already, so the tracing capture helper lives there and is re-exported here
+/// for the crate's existing `crate::test_support::LogCapture` call sites.
+pub use mainframe_runtime::log_capture::LogCapture;
+
 // Not a port; test scaffolding only. No PORT STATUS trailer.

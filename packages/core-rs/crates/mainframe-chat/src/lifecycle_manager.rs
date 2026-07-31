@@ -11,7 +11,7 @@ use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -756,23 +756,37 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub async fn do_generate_title(&self, chat_id: &str, content: &str) {
+        // The title task is spawned, so it can outlive the chat it was
+        // spawned for (#287): a bare unlogged return here was indistinguishable
+        // from every other silent title-generation outcome.
         let Some(cell) = self.get_active(chat_id) else {
+            debug!(
+                chat_id,
+                reason = "chat_not_active",
+                "title generation skipped"
+            );
             return;
         };
-        if self
-            .deps
-            .settings_get("general", "titleGeneration.disabled")
-            .as_deref()
-            == Some("true")
-        {
-            return;
-        }
         let adapter_id = cell
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .chat
             .adapter_id
             .clone();
+        if self
+            .deps
+            .settings_get("general", "titleGeneration.disabled")
+            .as_deref()
+            == Some("true")
+        {
+            debug!(
+                chat_id,
+                adapter_id = %adapter_id,
+                reason = "disabled_by_setting",
+                "title generation skipped"
+            );
+            return;
+        }
         let binary = resolve_title_binary(
             self.deps
                 .settings_get("provider", &format!("{adapter_id}.titleBinary")),
@@ -784,21 +798,32 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .generate_title(&adapter_id, content, &binary)
             .await
         {
-            let chat = {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-                guard.chat.title = Some(title.clone());
-                guard.chat.clone()
-            };
-            self.deps.chats_update(
+            self.apply_generated_title(chat_id, &cell, title);
+        } else {
+            debug!(
                 chat_id,
-                &LifecycleChatUpdate {
-                    title: Some(title),
-                    ..Default::default()
-                },
+                adapter_id = %adapter_id,
+                reason = "no_title",
+                "title generation produced no title"
             );
-            self.deps
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         }
+    }
+
+    fn apply_generated_title(&self, chat_id: &str, cell: &Arc<Mutex<ActiveChat>>, title: String) {
+        let chat = {
+            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            guard.chat.title = Some(title.clone());
+            guard.chat.clone()
+        };
+        self.deps.chats_update(
+            chat_id,
+            &LifecycleChatUpdate {
+                title: Some(title),
+                ..Default::default()
+            },
+        );
+        self.deps
+            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
     async fn do_load_chat(&self, chat_id: &str) {
@@ -981,12 +1006,15 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 }
 
 #[cfg(test)]
+mod title_logging_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
     use std::collections::HashSet;
 
-    fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
+    pub(super) fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
         let mut c = test_chat(id);
         c.worktree_path = worktree.map(str::to_string);
         c.status = status;
@@ -1047,29 +1075,45 @@ mod tests {
     }
 
     // ── archiveChat (kills-tasks + releases-scope) ───────────────────────────
-    struct FakeDeps {
+    pub(super) struct FakeDeps {
         chat: Chat,
         siblings: Vec<Chat>,
         order: Mutex<Vec<String>>,
-        events: Mutex<Vec<DaemonEvent>>,
+        pub(super) events: Mutex<Vec<DaemonEvent>>,
         stop_calls: Mutex<Vec<(String, String)>>,
         tunnel_stop_calls: Mutex<Vec<(String, String)>>,
         present_paths: Mutex<Option<HashSet<String>>>,
         /// `false` reproduces a scope that never ran a launch config, where
         /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it.
         has_launches: bool,
+        /// Titles the deps observed `chats_update` writing (only when
+        /// `patch.title.is_some()`, so unrelated lifecycle updates don't pollute
+        /// title-logging assertions).
+        pub(super) title_updates: Mutex<Vec<String>>,
+        /// When `true`, `settings_get("general", "titleGeneration.disabled")`
+        /// answers `Some("true")`.
+        disabled: bool,
     }
 
     impl FakeDeps {
-        fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, true)
+        pub(super) fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
+            Self::build(chat, siblings, true, false)
         }
 
         fn launchless(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, false)
+            Self::build(chat, siblings, false, false)
         }
 
-        fn build(chat: Chat, siblings: Vec<Chat>, has_launches: bool) -> Arc<Self> {
+        pub(super) fn title_disabled(chat: Chat) -> Arc<Self> {
+            Self::build(chat, Vec::new(), true, true)
+        }
+
+        pub(super) fn build(
+            chat: Chat,
+            siblings: Vec<Chat>,
+            has_launches: bool,
+            disabled: bool,
+        ) -> Arc<Self> {
             Arc::new(Self {
                 chat,
                 siblings,
@@ -1079,6 +1123,8 @@ mod tests {
                 tunnel_stop_calls: Mutex::new(Vec::new()),
                 present_paths: Mutex::new(None),
                 has_launches,
+                title_updates: Mutex::new(Vec::new()),
+                disabled,
             })
         }
 
@@ -1102,7 +1148,11 @@ mod tests {
         ) -> Chat {
             self.chat.clone()
         }
-        fn chats_update(&self, _chat_id: &str, _patch: &LifecycleChatUpdate) {}
+        fn chats_update(&self, _chat_id: &str, patch: &LifecycleChatUpdate) {
+            if let Some(title) = &patch.title {
+                self.title_updates.lock().unwrap().push(title.clone());
+            }
+        }
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
             let mut all = vec![self.chat.clone()];
             all.extend(self.siblings.clone());
@@ -1111,8 +1161,12 @@ mod tests {
         fn projects_get_path(&self, _project_id: &str) -> Option<String> {
             Some("/proj".to_string())
         }
-        fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-            None
+        fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
+            if self.disabled && ns == "general" && key == "titleGeneration.disabled" {
+                Some("true".to_string())
+            } else {
+                None
+            }
         }
         fn create_session(&self, _a: &str, _o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             None
@@ -1201,7 +1255,7 @@ mod tests {
         }
     }
 
-    fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
+    pub(super) fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
         ChatLifecycleManager::new(
             deps,
             Arc::new(DashMap::new()),

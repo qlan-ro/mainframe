@@ -113,11 +113,21 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     }
 }
 
+/// `ChatManager::remove_project`'s result → the route envelope. Split out
+/// because the route harness cannot build a ChatManager to reach the Err arm.
+fn removal_response(result: Result<(), String>) -> Response {
+    match result {
+        Ok(()) => ok_empty(),
+        Err(err) => fail(StatusCode::INTERNAL_SERVER_ERROR, err),
+    }
+}
+
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // The TS handler is `await ctx.chats.removeProject(id)` then `ok_empty()` —
-    // ChatManager.removeProject stops the project's live sessions and tears down
-    // its worktrees before deleting the row. When the ChatManager is unwired the
-    // teardown cannot run, so the endpoint keeps the TS failure-path 500 envelope
+    // ChatManager.remove_project stops the project's live sessions and tears
+    // down its worktrees before deleting the row, then reports whether the row
+    // delete itself succeeded so a failed delete answers with `fail()` instead
+    // of a false `ok_empty()`. When the ChatManager is unwired the teardown
+    // cannot run, so the endpoint keeps the TS failure-path 500 envelope
     // (ChatManager construction is a documented blocker).
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(
@@ -129,14 +139,44 @@ async fn remove(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Respo
             "Failed to remove project",
         );
     };
-    cm.remove_project(&id).await;
-    ok_empty()
+    removal_response(cm.remove_project(&id).await)
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/api/projects", get(list).post(create))
         .route("/api/projects/{id}", get(get_one).delete(remove))
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+
+    async fn body_json(resp: Response) -> (StatusCode, serde_json::Value) {
+        let status = resp.status();
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn removal_response_ok_emits_the_empty_success_envelope() {
+        let (status, body) = body_json(removal_response(Ok(()))).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, json!({ "success": true }));
+    }
+
+    #[tokio::test]
+    async fn removal_response_err_emits_the_failure_envelope_with_the_message() {
+        let (status, body) =
+            body_json(removal_response(Err("database is locked".to_string()))).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            body,
+            json!({ "success": false, "error": "database is locked" })
+        );
+    }
 }
 
 // PORT STATUS: src/server/routes/projects.ts (4 endpoints, 57 lines)
@@ -146,5 +186,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
 // get_by_path/create). POST's 409 carries `data: existing` (a non-standard fail
 // envelope) so it is hand-built, not via `fail()`. CreateProjectBody path.min(1)
 // → serde String + explicit non-empty check. DELETE :id calls the real
-// ChatManager.removeProject (stops live sessions + tears down worktrees before the
-// row delete); unwired (Phase-3 harness) → the TS failure-path 500 string.
+// ChatManager.remove_project (stops live sessions + tears down worktrees before
+// the row delete) and maps its Result through `removal_response()`; unwired
+// (Phase-3 harness) → the TS failure-path 500 string.

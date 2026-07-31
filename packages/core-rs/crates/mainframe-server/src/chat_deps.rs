@@ -348,11 +348,14 @@ impl ChatManagerDeps for DaemonChatDeps {
             .map(|p| p.path)
     }
 
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         let pid = project_id.to_string();
-        if let Err(err) = self.db.call_blocking(move |d| d.projects.remove(&pid)) {
-            tracing::warn!(%err, project_id, "projects.remove failed");
-        }
+        self.db
+            .call_blocking(move |d| d.projects.remove(&pid))
+            .map_err(|err| {
+                tracing::warn!(%err, project_id, "projects.remove failed");
+                err.to_string()
+            })
     }
 
     fn write_workspace_trust<'a>(
@@ -577,17 +580,24 @@ impl ChatManagerDeps for DaemonChatDeps {
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
         // Adapter-aware (#430): route to the owning adapter's `generateTitle`;
-        // adapters without a cheap one-shot title model return `None` and the
-        // caller keeps the deterministic truncated title.
-        let adapter = self.adapters.get(adapter_id);
+        // an unregistered adapter id and an adapter error are logged
+        // separately (#287) so an operator can tell the two apart.
+        let Some(adapter) = self.adapters.get(adapter_id) else {
+            tracing::warn!(
+                adapter_id,
+                reason = "unknown_adapter",
+                "title generation skipped"
+            );
+            return Box::pin(async { None });
+        };
         let content = content.to_string();
         let binary = binary.to_string();
+        let adapter_id = adapter_id.to_string();
         Box::pin(async move {
-            let adapter = adapter?;
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {
-                    tracing::warn!(%err, "title generation failed");
+                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
                     None
                 }
             }
@@ -629,6 +639,12 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn notify_session_error(&self) -> bool {
         self.db
             .call_blocking(|d| Ok(read_notification_config(d).chat.session_error))
+            .unwrap_or(true)
+    }
+
+    fn notify_attention_request(&self) -> bool {
+        self.db
+            .call_blocking(|d| Ok(read_notification_config(d).chat.attention_request))
             .unwrap_or(true)
     }
 
@@ -1121,6 +1137,8 @@ mod scan_loaded_history_tests {
     use super::*;
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 
+    use mainframe_runtime::log_capture::LogCapture;
+
     fn text_msg(id: &str, r#type: ChatMessageType, text: &str) -> ChatMessage {
         ChatMessage {
             id: id.to_string(),
@@ -1328,6 +1346,22 @@ mod scan_loaded_history_tests {
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
         }
+    }
+
+    #[tokio::test]
+    async fn unknown_adapter_id_logs_and_returns_none() {
+        let deps = test_deps();
+        let (subscriber, events) = LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let result =
+            ChatManagerDeps::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
+
+        assert_eq!(result, None);
+        assert_eq!(
+            LogCapture::events_with_reason(&events),
+            vec![(tracing::Level::WARN, "unknown_adapter".to_string())]
+        );
     }
 
     #[test]

@@ -15,20 +15,19 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Server, X } from 'lucide-react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
-import { getHost } from '@/lib/host';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { verifyDaemon, confirmPairing, parseRemoteUrl, PairingError } from './pair-daemon';
+import { verifyDaemon, confirmPairing, PairingError } from './pair-daemon';
 import { useDaemonRegistry } from './use-daemon-registry';
-import { StepRail, type UrlPhase } from './pairing-shared';
+import { applyPairing } from './apply-pairing';
+import { StepRail, type DialogMode, type UrlPhase } from './pairing-shared';
 import { Step0Body, Step1Body, FooterStep0, FooterStep1, type Step1Phase } from './pairing-steps';
 
 export { StepRail } from './pairing-shared';
+export type { DialogMode } from './pairing-shared';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export type DialogMode = 'add' | 'repair';
 
 export interface AddRemoteBodyProps {
   mode: DialogMode;
@@ -219,29 +218,12 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
     setStep1Phase('confirming');
 
     try {
-      const { token } = await confirmPairing(targetUrl, trimmedCode, device.trim() || 'This Mac');
+      const deviceLabel = device.trim() || 'This Mac';
+      const { token } = await confirmPairing(targetUrl, trimmedCode, deviceLabel);
 
-      // Pairing succeeded server-side; a failure below is LOCAL token storage
-      // (the host keyring). Surface it as its own phase instead of reporting
-      // "Paired" — a tokenless entry silently fails the WebSocket auth.
       let addedId: string | undefined;
       try {
-        if (mode === 'add') {
-          const host = parseRemoteUrl(targetUrl).host;
-          const label = host.split('.')[0] ?? 'New server';
-          const meta: DaemonMeta = {
-            id: crypto.randomUUID(),
-            kind: 'remote',
-            label,
-            host,
-            device: device.trim() || 'This Mac',
-            paired: 'Just now',
-          };
-          await registry.add(meta, token);
-          addedId = meta.id;
-        } else if (target != null) {
-          await getHost().daemons.setToken(target.id, token);
-        }
+        ({ addedId } = await applyPairing({ mode, target, targetUrl, device: deviceLabel, token, registry }));
       } catch (storageErr) {
         console.warn('[settings/AddRemoteDialog] token storage failed', storageErr);
         setStep1Phase('storage');
