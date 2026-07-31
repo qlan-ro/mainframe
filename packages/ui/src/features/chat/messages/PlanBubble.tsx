@@ -29,7 +29,8 @@ export function PlanBubble({ plan }: { plan: string }) {
     <div
       data-testid="chat-plan-bubble"
       style={CARD_STYLE}
-      className="max-w-[530px] overflow-hidden rounded-xl border-[0.5px] border-mf-um-edge text-mf-um-ink"
+      // No overflow-hidden: clipping would hide containment bugs instead of surfacing them.
+      className="max-w-[530px] break-words rounded-xl border-[0.5px] border-mf-um-edge text-mf-um-ink"
     >
       <div className="flex items-center gap-[8px] px-[16px] pb-[9px] pt-[10px]">
         <span className="flex size-[20px] shrink-0 items-center justify-center rounded-[6px] bg-mf-success-tint">
