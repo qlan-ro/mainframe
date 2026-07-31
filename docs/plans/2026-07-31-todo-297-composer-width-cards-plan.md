@@ -207,3 +207,38 @@ No files change in this group. It discharges the acceptance criteria that jsdom 
 | Light + dark + one non-`glass` window style | D1 steps 4–5 |
 | Width asserted live or in E2E, never jsdom | C1–C3 assert boxes; A1 asserts only class absence |
 | Existing gate component tests stay green; changeset included | B1 verification list; B2 |
+
+---
+
+## Group D — live verification result (2026-07-31)
+
+**Environment.** The worktree's UI served by Vite, talking to the Rust daemon in `E2E_MODE=mock`
+replay on an isolated port and data dir, rendered in Chromium at 1600×1000. `pnpm tauri:dev` was
+not used: the Tauri dev binary hard-codes `devUrl http://localhost:5174`, which another worktree's
+dev server holds, and a `cargo` build here would strand a multi-GB `target/` (root CLAUDE.md, Disk
+Hygiene). The change deletes a width class and introduces no compositing, sticky, or backdrop
+surface, so nothing in it is engine-dependent; WKWebView was not exercised.
+
+**Coverage.** Each gate was driven to its live state — permission (`permissions-interactive`),
+ask-question (`ask-question`), plan (`plan-approval`) — and measured in seven configurations: wide
+light/glass, wide dark/glass, wide dark/unified, wide light/unified, narrow with the Files surface
+lit alongside chat, and window widths 900 and 760.
+
+**Result.** In all 21 combinations the gate card's left and right edges equal the composer's
+exactly, the gate stays inside the transcript column, and the thread viewport never scrolls
+horizontally. Box measurements at 1600px, glass, plan gate:
+
+| element | x | right | width |
+|---|---|---|---|
+| `chat-thread-footer` (column) | 559.5 | 1327.5 | 768 |
+| `read-card-root` / `chat-write-card` / `chat-plan-card` | 571.5 | 1315.5 | 744 |
+| `chat-gate-card` | 571.5 | 1315.5 | 744 |
+| `chat-composer` | 571.5 | 1315.5 | 744 |
+
+The card's border and accent chrome read correctly at the wider size in light and dark and in the
+non-`glass` `unified` style. The right-aligned bubbles are unchanged: `chat-user-message` is the
+full-column flex wrapper, and the bubble inside it still stops well short of the column's right
+edge. No findings; this group changed no product code.
+
+**Evidence.** Screenshots (`<gate>-<config>.png`, one per gate per configuration) in
+`~/Documents/mf-verification/todo-297-gate-width/`.
