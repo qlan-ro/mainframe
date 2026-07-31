@@ -21,6 +21,7 @@ mainframe-types = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-services = { workspace = true }
 mainframe-adapter-api = { workspace = true }
+mainframe-git = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

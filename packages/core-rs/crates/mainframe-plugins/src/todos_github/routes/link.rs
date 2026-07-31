@@ -6,6 +6,7 @@ use std::sync::Arc;
 use axum::extract::{Json, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use mainframe_git::is_valid_repo_segment;
 use mainframe_runtime::time::now_iso8601;
 use serde_json::{Value, json};
 
@@ -13,7 +14,10 @@ use crate::PluginContext;
 use crate::db_context::text;
 use crate::todos_github::{run, store};
 
-use super::{as_non_empty_string, bad_request, conflict, json_response, link_json, server_error};
+use super::{
+    as_non_empty_string, bad_request, conflict, json_response, link_json, server_error,
+    workflow_labels_json,
+};
 
 pub(crate) async fn get_link(
     State(ctx): State<Arc<PluginContext>>,
@@ -37,6 +41,7 @@ pub(crate) async fn get_link(
             "link": link.as_ref().map(link_json),
             "running": run::is_running(&project_id),
             "latestRunId": latest_run.map(|r| r.id),
+            "workflowLabels": workflow_labels_json(),
         }),
     )
 }
@@ -54,6 +59,9 @@ pub(crate) async fn put_link(
     let Some(repo) = as_non_empty_string(&body, "repo") else {
         return bad_request("repo required");
     };
+    if !is_valid_repo_segment(&owner) || !is_valid_repo_segment(&repo) {
+        return bad_request("owner and repo must be a valid GitHub owner/repo");
+    }
     let Some(remote_name) = as_non_empty_string(&body, "remoteName") else {
         return bad_request("remoteName required");
     };

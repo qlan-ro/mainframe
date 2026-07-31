@@ -304,7 +304,12 @@ pub fn github_repo_from_url(url: &str) -> Option<GitHubRepoRef> {
     })
 }
 
-fn is_valid_repo_segment(s: &str) -> bool {
+/// Rejects anything outside `[A-Za-z0-9._-]` — the shape GitHub itself
+/// enforces for an owner or repo name. Any caller that accepts an
+/// `owner`/`repo` pair from outside this module (route input, stored
+/// config, …) must run it through here before the value reaches a URL or a
+/// process argument.
+pub fn is_valid_repo_segment(s: &str) -> bool {
     !s.is_empty()
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')

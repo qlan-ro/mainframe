@@ -25,10 +25,11 @@ async fn get_link_returns_null_link_not_running_no_run() {
     let (status, body) =
         read(link::get_link(test_support::state(&h), qs(&[("projectId", "p1")])).await).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        body,
-        json!({ "link": null, "running": false, "latestRunId": null })
-    );
+    assert_eq!(body["link"], json!(null));
+    assert_eq!(body["running"], json!(false));
+    assert_eq!(body["latestRunId"], json!(null));
+    assert!(body["workflowLabels"]["prefixes"].as_array().is_some());
+    assert!(body["workflowLabels"]["labels"].as_array().is_some());
     assert!(body.get("success").is_none());
 }
 
@@ -64,6 +65,32 @@ async fn put_link_twice_returns_409() {
     read(link::put_link(test_support::state(&h), Json(link_body())).await).await;
     let (status, _) = read(link::put_link(test_support::state(&h), Json(link_body())).await).await;
     assert_eq!(status, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn put_link_rejects_an_owner_that_is_not_a_valid_github_segment() {
+    let h = setup(FakeGitHub::default()).await;
+    let mut body = link_body();
+    body["owner"] = json!("acme/../etc");
+    let (status, body) = read(link::put_link(test_support::state(&h), Json(body)).await).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("owner and repo must be a valid GitHub owner/repo")
+    );
+}
+
+#[tokio::test]
+async fn put_link_rejects_a_repo_shaped_as_a_process_argument() {
+    let h = setup(FakeGitHub::default()).await;
+    let mut body = link_body();
+    body["repo"] = json!("widgets; rm -rf /");
+    let (status, body) = read(link::put_link(test_support::state(&h), Json(body)).await).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("owner and repo must be a valid GitHub owner/repo")
+    );
 }
 
 #[tokio::test]

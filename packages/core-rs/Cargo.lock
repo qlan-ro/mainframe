@@ -1467,6 +1467,7 @@ dependencies = [
  "axum",
  "dashmap",
  "mainframe-adapter-api",
+ "mainframe-git",
  "mainframe-runtime",
  "mainframe-services",
  "mainframe-types",

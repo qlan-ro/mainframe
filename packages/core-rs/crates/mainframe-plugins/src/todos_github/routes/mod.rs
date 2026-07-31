@@ -104,6 +104,17 @@ pub(super) fn link_json(link: &store::Link) -> Value {
     })
 }
 
+/// The daemon is the sole owner of the reserved-label denylist
+/// (`todos_github::labels`) — the UI takes it as data on `GET /link` instead
+/// of restating the prefixes/labels, so the publish dialog's preview can
+/// never drift from what a sync run actually withholds.
+pub(super) fn workflow_labels_json() -> Value {
+    json!({
+        "prefixes": crate::todos_github::labels::WORKFLOW_LABEL_PREFIXES,
+        "labels": crate::todos_github::labels::WORKFLOW_LABELS,
+    })
+}
+
 /// The fields a `Pair` needs on the wire, gathered from wherever the caller
 /// already has them (a store row plus a separately queried `todos.number`).
 pub(super) struct PairFields<'a> {
