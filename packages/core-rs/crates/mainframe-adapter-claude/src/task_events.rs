@@ -20,10 +20,16 @@ use tokio::task::JoinHandle;
 use mainframe_background_tasks::encoding::encode_cwd_segment;
 use mainframe_background_tasks::spool_root::spool_root;
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
+use mainframe_claude_workflows::reconcile::{RecordLocation, spawn_terminal_reconcile};
+use mainframe_claude_workflows::status::{
+    TaskUpdateAction, run_status, task_update_action, terminal_task_status,
+};
 use mainframe_claude_workflows::store::{ClaudeWorkflowStore, ProgressUsage};
 use mainframe_types::background_task::{
-    BackgroundTaskStatus, BackgroundTaskToolName, BackgroundTaskUsage, BackgroundWorkKind,
+    BackgroundTaskToolName, BackgroundTaskUsage, BackgroundWorkKind,
 };
+
+use crate::workflow_events::TaskUpdatedPayload;
 
 const METADATA_TTL_MS: u64 = 60_000;
 
@@ -38,12 +44,7 @@ pub struct TaskStartedPayload {
     pub tool_use_id: Option<String>,
     pub description: Option<String>,
     pub task_type: Option<String>,
-}
-
-/// `task_updated` payload subset.
-pub struct TaskUpdatedPayload {
-    pub task_id: String,
-    pub status: String,
+    pub workflow_name: Option<String>,
 }
 
 /// Context threaded from the session at `task_started` time.
@@ -90,21 +91,6 @@ pub fn map_task_kind(task_type: Option<&str>, has_bash_metadata: bool) -> Backgr
     }
 }
 
-fn map_status(s: &str) -> BackgroundTaskStatus {
-    match s {
-        "completed" => BackgroundTaskStatus::Completed,
-        "failed" => BackgroundTaskStatus::Failed,
-        "stopped" => BackgroundTaskStatus::Stopped,
-        _ => {
-            tracing::warn!(
-                status = %s,
-                "unknown task_notification status, defaulting to stopped"
-            );
-            BackgroundTaskStatus::Stopped
-        }
-    }
-}
-
 #[derive(Default)]
 struct Inner {
     metadata: HashMap<String, Metadata>,
@@ -139,7 +125,8 @@ impl ClaudeTaskEvents {
         run_id: &str,
         workflow_name: Option<String>,
     ) {
-        self.tracker.link_run_id(chat_id, task_id, run_id);
+        self.tracker
+            .link_run_id(chat_id, task_id, run_id, workflow_name.clone());
         self.workflow_store
             .link_run_id(chat_id, task_id, run_id, workflow_name);
     }
@@ -212,6 +199,11 @@ impl ClaudeTaskEvents {
         ctx: TaskStartedCtx,
     ) {
         let meta = payload.tool_use_id.as_deref().and_then(|t| self.consume(t));
+        let kind = map_task_kind(payload.task_type.as_deref(), meta.is_some());
+        if kind == BackgroundWorkKind::Workflow {
+            self.workflow_store
+                .seed(chat_id, &payload.task_id, payload.workflow_name.clone());
+        }
         let output_path = format!(
             "{}/{}/{}/tasks/{}.output",
             spool_root().to_string_lossy(),
@@ -223,7 +215,7 @@ impl ClaudeTaskEvents {
             chat_id,
             TaskSeed {
                 id: payload.task_id.clone(),
-                kind: map_task_kind(payload.task_type.as_deref(), meta.is_some()),
+                kind,
                 tool_name: meta
                     .as_ref()
                     .map(|m| m.tool_name)
@@ -235,39 +227,76 @@ impl ClaudeTaskEvents {
                     .or_else(|| payload.description.clone())
                     .unwrap_or_else(|| "<unknown>".to_string()),
                 description: payload.description.unwrap_or_default(),
-                // Task 19 threads the real workflow name through here once
-                // `TaskStartedPayload` carries it.
-                workflow_name: None,
+                workflow_name: payload.workflow_name,
             },
             output_path,
         );
     }
 
+    /// Stamps the workflow-run store from a CLI status string, spawning the
+    /// terminal-reconcile read when the resulting run status is terminal.
+    fn stamp_run(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        cli_status: &str,
+        loc: Option<RecordLocation>,
+    ) {
+        let Some(status) = run_status(cli_status) else {
+            return;
+        };
+        self.workflow_store.stamp_status(chat_id, task_id, status);
+        if status.is_terminal() {
+            if let Some(loc) = loc {
+                spawn_terminal_reconcile(
+                    Arc::clone(&self.workflow_store),
+                    chat_id.to_string(),
+                    task_id.to_string(),
+                    loc,
+                );
+            }
+        }
+    }
+
     /// `task_updated` fires alongside `task_notification` (post-leak CLI addition).
     /// Only a terminal status closes the task — the tracker dedups when the
     /// notification already landed; non-terminal updates carry nothing we track.
-    pub fn handle_task_updated(&self, chat_id: &str, payload: TaskUpdatedPayload) {
-        if !matches!(payload.status.as_str(), "completed" | "failed" | "stopped") {
-            return;
+    pub fn handle_task_updated(
+        &self,
+        chat_id: &str,
+        payload: TaskUpdatedPayload,
+        loc: Option<RecordLocation>,
+    ) {
+        match task_update_action(&payload.status) {
+            TaskUpdateAction::Ignore => {}
+            TaskUpdateAction::End(status) => {
+                self.tracker.end(
+                    chat_id,
+                    &payload.task_id,
+                    TerminalUpdate {
+                        status,
+                        output_path: String::new(),
+                        summary: String::new(),
+                        usage: None,
+                    },
+                );
+            }
         }
-        self.tracker.end(
-            chat_id,
-            &payload.task_id,
-            TerminalUpdate {
-                status: map_status(&payload.status),
-                output_path: String::new(),
-                summary: String::new(),
-                usage: None,
-            },
-        );
+        self.stamp_run(chat_id, &payload.task_id, &payload.status, loc);
     }
 
-    pub fn handle_task_notification(&self, chat_id: &str, payload: TaskNotificationPayload) {
+    pub fn handle_task_notification(
+        &self,
+        chat_id: &str,
+        payload: TaskNotificationPayload,
+        loc: Option<RecordLocation>,
+    ) {
+        let status = terminal_task_status(&payload.status);
         self.tracker.end(
             chat_id,
             &payload.task_id,
             TerminalUpdate {
-                status: map_status(&payload.status),
+                status,
                 output_path: payload.output_file.unwrap_or_default(),
                 summary: payload.summary.unwrap_or_default(),
                 usage: payload.usage.map(|u| BackgroundTaskUsage {
@@ -277,6 +306,7 @@ impl ClaudeTaskEvents {
                 }),
             },
         );
+        self.stamp_run(chat_id, &payload.task_id, &payload.status, loc);
     }
 
     fn consume(&self, tool_use_id: &str) -> Option<Metadata> {
@@ -292,6 +322,7 @@ impl ClaudeTaskEvents {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mainframe_types::background_task::BackgroundTaskStatus;
 
     const SESS: &str = "sess-uuid";
     const CWD: &str = "/Users/x/proj";
@@ -309,6 +340,7 @@ mod tests {
             tool_use_id: Some(tool_use_id.to_string()),
             description: Some(description.to_string()),
             task_type: None,
+            workflow_name: None,
         }
     }
 
@@ -401,6 +433,7 @@ mod tests {
                     duration_ms: 500,
                 }),
             },
+            None,
         );
         let task = tracker.get("chat-a", "t-4").unwrap();
         assert_eq!(task.status, BackgroundTaskStatus::Completed);
@@ -432,6 +465,7 @@ mod tests {
                 summary: Some("killed".to_string()),
                 usage: None,
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "t-5").unwrap().output_path,
@@ -458,6 +492,7 @@ mod tests {
                 summary: Some(String::new()),
                 usage: None,
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "t-6").unwrap().status,
@@ -471,6 +506,7 @@ mod tests {
             tool_use_id: None,
             description: Some("x".to_string()),
             task_type: task_type.map(str::to_string),
+            workflow_name: None,
         }
     }
 
@@ -552,6 +588,7 @@ mod tests {
                 tool_use_id: Some("tu-k".to_string()),
                 description: Some("dev".to_string()),
                 task_type: None,
+                workflow_name: None,
             },
             ctx(),
         );
@@ -584,7 +621,9 @@ mod tests {
             TaskUpdatedPayload {
                 task_id: "u1".to_string(),
                 status: "completed".to_string(),
+                end_time: None,
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "u1").unwrap().status,
@@ -602,7 +641,9 @@ mod tests {
             TaskUpdatedPayload {
                 task_id: "u2".to_string(),
                 status: "running".to_string(),
+                end_time: None,
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "u2").unwrap().status,
@@ -619,7 +660,9 @@ mod tests {
             TaskUpdatedPayload {
                 task_id: "ghost".to_string(),
                 status: "completed".to_string(),
+                end_time: None,
             },
+            None,
         );
         assert!(tracker.get("chat-a", "ghost").is_none());
     }
@@ -635,6 +678,7 @@ mod tests {
                 tool_use_id: Some("tu1".to_string()),
                 description: Some("d".to_string()),
                 task_type: None,
+                workflow_name: None,
             },
             ctx(),
         );

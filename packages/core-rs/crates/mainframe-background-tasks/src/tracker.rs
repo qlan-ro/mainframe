@@ -193,8 +193,16 @@ impl BackgroundTaskTracker {
 
     /// Learned from the `Workflow` tool result, after `start` already seeded
     /// the task with `run_id: None`. No-op when the task is unknown or
-    /// already carries this `run_id`.
-    pub fn link_run_id(&self, chat_id: &str, task_id: &str, run_id: &str) {
+    /// already carries this `run_id`. `workflow_name` fills in only when the
+    /// task doesn't already carry one — `task_started` may have preceded the
+    /// CLI naming its own workflow.
+    pub fn link_run_id(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        run_id: &str,
+        workflow_name: Option<String>,
+    ) {
         let Some(mut chat) = self.by_chat.get_mut(chat_id) else {
             return;
         };
@@ -205,6 +213,9 @@ impl BackgroundTaskTracker {
             return;
         }
         task.run_id = Some(run_id.to_string());
+        if task.workflow_name.is_none() {
+            task.workflow_name = workflow_name;
+        }
         let updated = task.clone();
         drop(chat);
         let _ = self.emitter.send(TaskEvent::Updated {
@@ -865,7 +876,7 @@ mod tests {
             "/tmp/spool/task-1.output".to_string(),
         );
         let mut rx = tracker.subscribe();
-        tracker.link_run_id("chat-a", "task-1", "run-1");
+        tracker.link_run_id("chat-a", "task-1", "run-1", None);
         assert_eq!(
             tracker.get("chat-a", "task-1").unwrap().run_id.as_deref(),
             Some("run-1")
@@ -885,7 +896,7 @@ mod tests {
     fn link_run_id_is_a_no_op_for_an_unknown_task() {
         let tracker = BackgroundTaskTracker::new();
         let mut rx = tracker.subscribe();
-        tracker.link_run_id("chat-ghost", "task-1", "run-1");
+        tracker.link_run_id("chat-ghost", "task-1", "run-1", None);
         assert!(drain(&mut rx).is_empty());
     }
 
@@ -897,9 +908,9 @@ mod tests {
             make_seed("task-1"),
             "/tmp/spool/task-1.output".to_string(),
         );
-        tracker.link_run_id("chat-a", "task-1", "run-1");
+        tracker.link_run_id("chat-a", "task-1", "run-1", None);
         let mut rx = tracker.subscribe();
-        tracker.link_run_id("chat-a", "task-1", "run-1");
+        tracker.link_run_id("chat-a", "task-1", "run-1", None);
         assert!(drain(&mut rx).is_empty());
     }
 }
