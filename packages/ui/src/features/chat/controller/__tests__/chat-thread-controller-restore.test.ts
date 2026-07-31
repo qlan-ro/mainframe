@@ -30,7 +30,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
 }));
 
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] }),
   getChat: vi.fn().mockResolvedValue({ id: 'chat', adapterId: 'claude' }),
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
@@ -244,7 +244,7 @@ describe('restorePendingPermission — duplicate guard', () => {
 describe('reconcilePendingAgainstHistory — matching text', () => {
   it('removes an optimistic pending whose text matches a user message in the re-fetched history', async () => {
     // getChatMessages returns empty on the initial load triggered by subscribe.
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -259,6 +259,7 @@ describe('reconcilePendingAgainstHistory — matching text', () => {
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-1', 'hello reconnect')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     await ctrl.refresh();
@@ -274,7 +275,7 @@ describe('reconcilePendingAgainstHistory — matching text', () => {
 
 describe('reconcilePendingAgainstHistory — non-matching text', () => {
   it('does NOT remove a pending whose text differs from every user message in history', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -288,6 +289,7 @@ describe('reconcilePendingAgainstHistory — non-matching text', () => {
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-2', 'a completely different message')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     await ctrl.refresh();
@@ -311,7 +313,7 @@ describe('reconcilePendingAgainstHistory — non-matching text', () => {
 
 describe('reconcilePendingAgainstHistory — count-aware (identical text)', () => {
   it('reconciles exactly one pending when two identical sends have only one server echo', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -326,6 +328,7 @@ describe('reconcilePendingAgainstHistory — count-aware (identical text)', () =
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-dbl-1', 'ask me two questions')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
     await ctrl.refresh();
 
@@ -333,7 +336,7 @@ describe('reconcilePendingAgainstHistory — count-aware (identical text)', () =
   });
 
   it('reconciles both pendings when two identical sends have two server echoes', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -350,6 +353,7 @@ describe('reconcilePendingAgainstHistory — count-aware (identical text)', () =
         userDisplayMsg('srv-dbl-2', 'ask me two questions'),
       ],
       transcriptMissing: false,
+      workflowRuns: [],
     });
     await ctrl.refresh();
 
@@ -364,7 +368,7 @@ describe('reconcilePendingAgainstHistory — count-aware (identical text)', () =
 
 describe('reconcilePendingAgainstHistory — partial match: one cleared, one retained', () => {
   it('removes only the pending whose text is in history, leaving the other intact', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -379,6 +383,7 @@ describe('reconcilePendingAgainstHistory — partial match: one cleared, one ret
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-p1', 'first question')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     await ctrl.refresh();
@@ -402,7 +407,7 @@ describe('reconcilePendingAgainstHistory — partial match: one cleared, one ret
 
 describe('reconcilePendingAgainstHistory — delayed echo past the live match window', () => {
   it('reconciles a pending older than 10 minutes when history contains the matching text', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -421,6 +426,7 @@ describe('reconcilePendingAgainstHistory — delayed echo past the live match wi
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-late-1', 'delayed echo message')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     await ctrl.refresh();

@@ -320,6 +320,8 @@ impl ChatManagerDeps for StoreDeps {
     }
     /// Empty on purpose: chat_deps.rs's tracker_end_all_running_delegates_... test covers the wiring (#273).
     fn tracker_end_all_running(&self, _chat_id: &str) {}
+    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     fn is_transcript_present<'a>(
         &'a self,
         _adapter_id: &'a str,
@@ -1516,6 +1518,8 @@ mod background_activity {
             summary: None,
             usage: None,
             recovered: None,
+            workflow_name: None,
+            run_id: None,
         }
     }
 
@@ -1525,6 +1529,8 @@ mod background_activity {
             kind,
             description: description.to_string(),
             started_at: 5000,
+            workflow_name: None,
+            run_id: None,
         }
     }
 

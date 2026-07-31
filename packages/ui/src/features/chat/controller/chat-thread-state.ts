@@ -18,11 +18,14 @@
 import type {
   BackgroundActivityTask,
   Chat,
+  ClaudeWorkflowRun,
   ControlRequest,
   DisplayMessage,
   QueuedMessageRef,
   WorktreeSwitchOffer,
 } from '@qlan-ro/mainframe-types';
+import { seedWorkflowRuns, upsertWorkflowRun, type WorkflowRunsSlice } from './chat-workflow-runs';
+import { sameBackgroundTasks, sameWorktreeOffers } from './snapshot-equality';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -92,6 +95,12 @@ export interface ChatThreadState {
    */
   readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
   /**
+   * Claude CLI workflow runs keyed by the CLI task id — fed by
+   * `claude_workflow.run.updated` and re-seeded from the history payload, which
+   * is what survives a reload of a run that finished while the webview was gone.
+   */
+  readonly workflowRuns: WorkflowRunsSlice;
+  /**
    * Worktrees the agent created during this session that the chat is not bound
    * to yet, keyed by canonical worktree path — fed by `worktree.offer.*`.
    * Drives the WorktreeSwitchBanner.
@@ -111,7 +120,12 @@ export interface ChatThreadState {
 
 export type ChatStateEvent =
   | { type: 'history.loading' }
-  | { type: 'history.loaded'; messages: DisplayMessage[]; transcriptMissing?: boolean }
+  | {
+      type: 'history.loaded';
+      messages: DisplayMessage[];
+      transcriptMissing?: boolean;
+      workflowRuns?: ClaudeWorkflowRun[];
+    }
   | { type: 'history.failed'; error: unknown }
   | { type: 'run.started' }
   | { type: 'run.cancelling' }
@@ -139,6 +153,7 @@ export type ChatStateEvent =
   | { type: 'background.upsert'; task: BackgroundActivityTask }
   | { type: 'background.ended'; taskId: string }
   | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] }
+  | { type: 'workflow.run.updated'; run: ClaudeWorkflowRun }
   | { type: 'worktree.offer.added'; offer: WorktreeSwitchOffer }
   | { type: 'worktree.offer.removed'; worktreePath: string }
   | { type: 'worktree.offer.snapshot'; offers: WorktreeSwitchOffer[] }
@@ -166,6 +181,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     contextUsage: null,
     compacting: false,
     backgroundTasks: {} as Readonly<Record<string, BackgroundActivityTask>>,
+    workflowRuns: {} as WorkflowRunsSlice,
     worktreeOffers: {} as Readonly<Record<string, WorktreeSwitchOffer>>,
     switching: null,
   };
@@ -222,30 +238,6 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
   );
 }
 
-/** True when the snapshot lists exactly the tasks already in state (field-equal). */
-function sameBackgroundTasks(
-  current: Readonly<Record<string, BackgroundActivityTask>>,
-  snapshot: BackgroundActivityTask[],
-): boolean {
-  if (Object.keys(current).length !== snapshot.length) return false;
-  return snapshot.every((t) => {
-    const c = current[t.id];
-    return c !== undefined && c.kind === t.kind && c.description === t.description && c.startedAt === t.startedAt;
-  });
-}
-
-/** True when the snapshot lists exactly the offers already in state (field-equal). */
-function sameWorktreeOffers(
-  current: Readonly<Record<string, WorktreeSwitchOffer>>,
-  snapshot: WorktreeSwitchOffer[],
-): boolean {
-  if (Object.keys(current).length !== snapshot.length) return false;
-  return snapshot.every((o) => {
-    const c = current[o.worktreePath];
-    return c !== undefined && c.branchName === o.branchName && c.detectedAt === o.detectedAt;
-  });
-}
-
 /**
  * The daemon's `chat.updated` carrying the target path is the only confirmation
  * that an accepted switch rebound the chat, so the settle is derived here rather
@@ -288,6 +280,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         messagesById,
         messageOrder,
         chatConfig,
+        workflowRuns: seedWorkflowRuns(event.workflowRuns ?? []),
       };
     }
 
@@ -451,6 +444,11 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       const backgroundTasks: Record<string, BackgroundActivityTask> = {};
       for (const task of event.tasks) backgroundTasks[task.id] = task;
       return { ...state, backgroundTasks };
+    }
+
+    case 'workflow.run.updated': {
+      const workflowRuns = upsertWorkflowRun(state.workflowRuns, event.run);
+      return workflowRuns === state.workflowRuns ? state : { ...state, workflowRuns };
     }
 
     case 'worktree.offer.added':

@@ -87,6 +87,7 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         background_tasks: Arc::new(
             mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
         ),
+        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
         chat_manager: None,
         launch_registry: None,
         tunnel_manager: None,

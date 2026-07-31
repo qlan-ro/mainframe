@@ -64,6 +64,7 @@ mainframe-adapter-mock = { path = "crates/mainframe-adapter-mock" }
 mainframe-plugins = { path = "crates/mainframe-plugins" }
 mainframe-chat = { path = "crates/mainframe-chat" }
 mainframe-background-tasks = { path = "crates/mainframe-background-tasks" }
+mainframe-claude-workflows = { path = "crates/mainframe-claude-workflows" }
 mainframe-launch = { path = "crates/mainframe-launch" }
 mainframe-lsp = { path = "crates/mainframe-lsp" }
 mainframe-automations = { path = "crates/mainframe-automations" }

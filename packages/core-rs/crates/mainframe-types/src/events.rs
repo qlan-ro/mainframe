@@ -18,6 +18,7 @@ use crate::automation::{
 };
 use crate::background_task::BackgroundTask;
 use crate::chat::{Chat, ChatMessage, QueuedMessageRef, TodoItem};
+use crate::claude_workflow::ClaudeWorkflowRun;
 use crate::display::DisplayMessage;
 use crate::launch::LaunchProcessStatus;
 use crate::plugin::UiZone;
@@ -372,6 +373,13 @@ pub enum DaemonEvent {
     BackgroundTaskEnded {
         chat_id: String,
         task: BackgroundTask,
+    },
+    /// Distinct from the Automations `workflow.run.updated` below — this one carries
+    /// a Claude CLI `/workflows` run, not an Automations `WorkflowRunSummary`.
+    #[serde(rename = "claude_workflow.run.updated")]
+    ClaudeWorkflowRunUpdated {
+        chat_id: String,
+        run: ClaudeWorkflowRun,
     },
     #[serde(rename = "workflow.run.updated")]
     WorkflowRunUpdated { run: WorkflowRunSummary },

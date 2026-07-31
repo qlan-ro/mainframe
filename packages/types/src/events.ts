@@ -105,6 +105,8 @@ export type DaemonEvent =
   | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask }
+  // Distinct from 'automation.run.updated' below — this carries a Claude CLI /workflows run, not an Automations run.
+  | { type: 'claude_workflow.run.updated'; chatId: string; run: import('./claude-workflow.js').ClaudeWorkflowRun }
   | { type: 'automation.run.updated'; run: AutomationRunSummary }
   | { type: 'automation.interaction.created'; interaction: AutomationInteractionSummary }
   | { type: 'automation.interaction.resolved'; interactionId: string; runId: string }

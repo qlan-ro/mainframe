@@ -220,9 +220,9 @@ export class ChatThreadController {
       .catch((err: unknown) => console.warn('[chat-controller] seed chat config failed', err));
 
     const request = getChatMessages(this.port, this.daemonId)
-      .then(({ messages, transcriptMissing }) => {
+      .then(({ messages, transcriptMissing, workflowRuns }) => {
         if (this.loadPromise !== request) return;
-        this.dispatch({ type: 'history.loaded', messages, transcriptMissing });
+        this.dispatch({ type: 'history.loaded', messages, transcriptMissing, workflowRuns });
         this.reconcilePendingAgainstHistory(messages);
       })
       .catch((error: unknown) => {

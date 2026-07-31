@@ -11,6 +11,7 @@ use mainframe_adapter_api::{
     Adapter, AdapterError, AdapterSession, BoxFuture, PlanModeActionHandler,
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::display::ToolCategories;
@@ -74,6 +75,7 @@ fn merged_catalog(
 
 pub struct ClaudeAdapter {
     background_tasks: Arc<BackgroundTaskTracker>,
+    workflow_store: Arc<ClaudeWorkflowStore>,
     sessions: Arc<Mutex<HashMap<String, Arc<ClaudeSession>>>>,
     dynamic_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
     /// Models a local CLIProxyAPI serves, refreshed by each probe. Empty is the
@@ -86,9 +88,14 @@ pub struct ClaudeAdapter {
 }
 
 impl ClaudeAdapter {
-    pub fn new(background_tasks: Arc<BackgroundTaskTracker>, resolved_path: ResolvedPath) -> Self {
+    pub fn new(
+        background_tasks: Arc<BackgroundTaskTracker>,
+        workflow_store: Arc<ClaudeWorkflowStore>,
+        resolved_path: ResolvedPath,
+    ) -> Self {
         Self {
             background_tasks,
+            workflow_store,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             dynamic_models: Arc::new(Mutex::new(None)),
             proxy_models: Arc::new(Mutex::new(Vec::new())),
@@ -106,6 +113,7 @@ impl Default for ClaudeAdapter {
     fn default() -> Self {
         Self::new(
             Arc::new(BackgroundTaskTracker::new()),
+            Arc::new(ClaudeWorkflowStore::new()),
             ResolvedPath::from_value("/usr/bin:/bin"),
         )
     }
@@ -207,6 +215,7 @@ impl Adapter for ClaudeAdapter {
             options,
             None,
             self.background_tasks.clone(),
+            self.workflow_store.clone(),
             self.resolved_path.clone(),
         ));
         session.init_weak();
