@@ -1373,6 +1373,7 @@ dependencies = [
  "mainframe-adapter-codex",
  "mainframe-adapter-mock",
  "mainframe-background-tasks",
+ "mainframe-claude-workflows",
  "mainframe-db",
  "mainframe-launch",
  "mainframe-lsp",

@@ -48,6 +48,7 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
         ws_clients: Arc::new(DashMap::new()),
         adapter_registry: Arc::new(AdapterRegistry::new()),
         background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
         chat_manager: None,
         launch_registry: None,
         tunnel_manager: None,
