@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::git_exec::{GitExecError, GitExecOptions, exec_git};
 use crate::git_parse::{
-    BranchList, PorcelainStatus, count_auto_merges, js_parse_int, parse_branch_list,
-    parse_commit_hash, parse_diff_stat_summary, parse_remotes, parse_status_z,
+    BranchList, PorcelainStatus, RemoteUrl, count_auto_merges, js_parse_int, parse_branch_list,
+    parse_commit_hash, parse_diff_stat_summary, parse_remote_urls, parse_remotes, parse_status_z,
 };
 use crate::project_lock::acquire_project_lock;
 
@@ -415,6 +415,15 @@ impl<E: GitExec> GitService<E> {
             }
         }
         Ok(None)
+    }
+
+    /// Every remote's name and URL, deduped across the fetch/push pair `git
+    /// remote -v` prints for each. No filtering — callers derive `owner/repo`
+    /// (e.g. `github_repo_from_url`) themselves.
+    pub async fn remotes_with_urls(&self) -> Result<Vec<RemoteUrl>, GitServiceError> {
+        Ok(parse_remote_urls(
+            &self.git(argv!["remote", "-v"], None).await?,
+        ))
     }
 
     pub async fn checkout(&self, branch: &str) -> Result<(), GitServiceError> {
@@ -1068,6 +1077,31 @@ mod mock_tests {
             })
         });
         assert_eq!(svc.current_branch().await.unwrap(), "feat/test");
+    }
+
+    // ---- remotesWithUrls() ----
+
+    #[tokio::test]
+    async fn remotes_with_urls_issues_remote_dash_v_and_parses_the_output() {
+        let (svc, calls) = service(|_i, _args| {
+            Ok("origin\thttps://github.com/o/r.git (fetch)\n\
+                origin\thttps://github.com/o/r.git (push)\n"
+                .to_string())
+        });
+        let result = svc.remotes_with_urls().await.unwrap();
+        assert_eq!(
+            result,
+            vec![RemoteUrl {
+                name: "origin".to_string(),
+                url: "https://github.com/o/r.git".to_string(),
+            }]
+        );
+        let calls = calls.lock().unwrap();
+        assert!(
+            calls
+                .iter()
+                .any(|(a, o)| *a == owned(&["remote", "-v"]) && o.is_none())
+        );
     }
 
     // ---- checkout() ----
