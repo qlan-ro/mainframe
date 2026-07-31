@@ -171,12 +171,12 @@ Harness cost, know it before starting: `fixtures/global-setup.ts` rebuilds `pack
    const UNBREAKABLE = 'A'.repeat(200);
    const OVERFLOW_TEXT = [
      UNBREAKABLE,
-     `https://example.com/${'segment'.repeat(20)}`,
-     `/Users/dev/${'deeply-nested-directory/'.repeat(8)}file.ts`,
-     `\`${'x'.repeat(120)}\``,
+     `https://example.com/${'segment'.repeat(10)}`,
+     `/Users/dev/${'deeply-nested-directory/'.repeat(4)}file.ts`,
+     `\`${'x'.repeat(80)}\``,
    ].join(' ');
    ```
-   Keep the joined string under 600 characters — assert it in the test body (`expect(OVERFLOW_TEXT.length).toBeLessThan(600)`) so a later edit cannot silently re-enable the clamp and neuter the measurement.
+   The four fragments are 200 + 90 + 114 + 82 characters plus 3 join spaces = **489**, which leaves 111 characters of headroom under the 600 threshold. Keep it that way: the repeat counts are load-bearing, not decorative. Assert the bound in the test body (`expect(OVERFLOW_TEXT.length).toBeLessThan(600)`) so a later edit cannot silently re-enable the clamp and neuter the measurement — a clamped bubble puts `overflow: hidden` on the content div, which pins `scrollWidth` to `clientWidth` and makes both the containment assertion and Task 10's negative control vacuous.
 2. Add the test:
    ```ts
    test('a long unbreakable token wraps inside the user bubble instead of painting outside it', async () => {
