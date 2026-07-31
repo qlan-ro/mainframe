@@ -11,3 +11,6 @@ mod labels_tests;
 
 #[cfg(test)]
 mod store_tests;
+
+#[cfg(test)]
+mod touch_tests;
