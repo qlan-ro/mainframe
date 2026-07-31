@@ -18,7 +18,7 @@
 //!      routing each call back through `Db::call_blocking`.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::{AdapterError, AdapterRegistry, AdapterSession, BoxFuture};
 use mainframe_adapter_claude::external_session_cache::{
@@ -132,6 +132,9 @@ pub struct DaemonChatDeps {
     /// (not a module-level singleton, forbidden by PORTING.md §5) and threaded
     /// into every `list_external_sessions("claude", ...)` call.
     claude_external_session_cache: ExternalSessionCache,
+    /// `Weak`, set once after construction in [`build_chat_manager`] — the manager
+    /// is built *from* these deps, so a strong reference here would cycle.
+    chat_manager: OnceLock<Weak<ChatManager>>,
 }
 
 impl DaemonChatDeps {
@@ -866,9 +869,13 @@ pub fn build_chat_manager(
         scope_tunnels,
         quota,
         claude_external_session_cache: new_external_session_cache(),
+        chat_manager: OnceLock::new(),
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
-    Arc::new(ChatManager::new(deps).with_external_sessions(external_sessions))
+    let manager =
+        Arc::new(ChatManager::new(deps.clone()).with_external_sessions(external_sessions));
+    let _ = deps.chat_manager.set(Arc::downgrade(&manager));
+    manager
 }
 
 /// Bridge `Arc<dyn AdapterSession>` → the `SessionLike` the kill sweep wants.
@@ -1354,6 +1361,7 @@ mod scan_loaded_history_tests {
             scope_tunnels: Arc::new(NoopScopeTunnelStopper),
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
+            chat_manager: OnceLock::new(),
         }
     }
 
