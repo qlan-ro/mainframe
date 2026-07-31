@@ -54,6 +54,17 @@ pub enum ChatNotificationLevel {
     Error,
 }
 
+/// Which producer raised a `chat.notification` — lets a client single out an
+/// attention request without adding a parallel event type. Optional on the
+/// wire: absent on old daemons and never required by the mobile client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatNotificationKind {
+    TaskComplete,
+    SessionError,
+    AttentionRequest,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TunnelState {
@@ -274,6 +285,8 @@ pub enum DaemonEvent {
         title: String,
         body: String,
         level: ChatNotificationLevel,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kind: Option<ChatNotificationKind>,
     },
     #[serde(rename = "chat.compacting")]
     ChatCompacting { chat_id: String },
@@ -821,6 +834,43 @@ mod tests {
                 "title": "Daily standup",
                 "body": "Standup posted",
                 "links": { "runId": "run_1", "chatIds": ["chat_1"] }
+            }),
+        );
+    }
+
+    #[test]
+    fn chat_notification_kind_wire_shape() {
+        assert_daemon_wire(
+            DaemonEvent::ChatNotification {
+                chat_id: "chat_1".into(),
+                title: "Claude needs your attention".into(),
+                body: "Ready to deploy?".into(),
+                level: ChatNotificationLevel::Success,
+                kind: Some(ChatNotificationKind::AttentionRequest),
+            },
+            json!({
+                "type": "chat.notification",
+                "chatId": "chat_1",
+                "title": "Claude needs your attention",
+                "body": "Ready to deploy?",
+                "level": "success",
+                "kind": "attention_request"
+            }),
+        );
+        assert_daemon_wire(
+            DaemonEvent::ChatNotification {
+                chat_id: "chat_1".into(),
+                title: "Task Complete".into(),
+                body: "done".into(),
+                level: ChatNotificationLevel::Success,
+                kind: None,
+            },
+            json!({
+                "type": "chat.notification",
+                "chatId": "chat_1",
+                "title": "Task Complete",
+                "body": "done",
+                "level": "success"
             }),
         );
     }

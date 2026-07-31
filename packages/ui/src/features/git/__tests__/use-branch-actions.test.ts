@@ -70,7 +70,7 @@ vi.mock('@/lib/api/git', () => ({
 }));
 
 const mockRequestGitConfirm = vi.fn();
-vi.mock('../use-git-confirm', () => ({
+vi.mock('../git-confirm', () => ({
   requestGitConfirm: (...args: unknown[]) => mockRequestGitConfirm(...args),
   useGitConfirm: { getState: () => ({ request: mockRequestGitConfirm }) },
 }));

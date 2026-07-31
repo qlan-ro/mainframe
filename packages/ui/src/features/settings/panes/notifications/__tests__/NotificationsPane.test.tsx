@@ -11,7 +11,7 @@ vi.mock('../../../../../lib/api/settings', () => ({
 }));
 
 const NOTIF = {
-  chat: { taskComplete: true, sessionError: true },
+  chat: { taskComplete: true, sessionError: true, attentionRequest: true },
   permission: { toolRequest: true, userQuestion: true, planApproval: false },
   other: { plugin: true },
 };
@@ -47,6 +47,18 @@ describe('NotificationsPane', () => {
     fireEvent.click(screen.getByTestId('settings-notify-plugin-toggle'));
     const body = updateGeneralSettings.mock.calls[0]![1];
     expect(body).toEqual({ notifications: { other: { plugin: false } } });
+  });
+  it('renders the attention-request toggle in the Chat group, checked by default', () => {
+    render(<NotificationsPane port={31415} />);
+    expect(screen.getByTestId('settings-notify-attention-request-toggle')).toBeChecked();
+  });
+  it('toggling the attention request fires a leaf-only PUT and updates the store', () => {
+    render(<NotificationsPane port={31415} />);
+    fireEvent.click(screen.getByTestId('settings-notify-attention-request-toggle'));
+    expect(updateGeneralSettings).toHaveBeenCalledWith(31415, {
+      notifications: { chat: { attentionRequest: false } },
+    });
+    expect(useSettingsStore.getState().general.notifications.chat.attentionRequest).toBe(false);
   });
   it('two rapid toggles on different keys — second PUT carries only the second changed key, not a stale snapshot', () => {
     // This test guards against the stale-closure bug: patchChat spreading the

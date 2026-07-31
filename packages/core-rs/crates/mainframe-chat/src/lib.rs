@@ -13,6 +13,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod attachment_processor;
+pub mod attention_request;
 pub mod chat_manager;
 pub mod config_manager;
 pub mod context_tracker;

@@ -45,12 +45,14 @@ pub async fn generate_claude_title(
         .env("NO_COLOR", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .output();
 
     let output = match tokio::time::timeout(Duration::from_millis(TITLE_TIMEOUT_MS), run).await {
-        Ok(res) => res?,
+        Ok(res) => res.map_err(|err| {
+            AdapterError::Message(format!("failed to spawn title binary {binary}: {err}"))
+        })?,
         Err(_) => {
             return Err(AdapterError::Message(
                 "claude title generation timed out".into(),
@@ -58,7 +60,58 @@ pub async fn generate_claude_title(
         }
     };
 
-    Ok(finalize_title(&String::from_utf8_lossy(&output.stdout)))
+    interpret_output(output, binary)
+}
+
+/// Turns a completed title-child `Output` into the accepted title, or an error
+/// that names the exit status and the CLI's own (bounded) stderr.
+fn interpret_output(
+    output: std::process::Output,
+    binary: &str,
+) -> Result<Option<String>, AdapterError> {
+    if !output.status.success() {
+        let status = output
+            .status
+            .code()
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let stderr = truncate_stderr(&output.stderr);
+        let stderr = if stderr.is_empty() {
+            "<no stderr>".to_string()
+        } else {
+            stderr
+        };
+        return Err(AdapterError::Message(format!(
+            "claude title generation exited with {status}: {stderr}"
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = stdout.trim();
+    let candidate_chars = stdout.chars().count();
+    let title = finalize_title(stdout);
+    if title.is_none() {
+        tracing::debug!(
+            adapter_id = "claude",
+            reason = "candidate_rejected",
+            binary,
+            candidate_chars,
+            "title generation skipped"
+        );
+    }
+    Ok(title)
+}
+
+/// Bounds the CLI's stderr to 1024 *characters* (not bytes, so a multibyte code
+/// point is never split), appending `…` when the source was longer.
+fn truncate_stderr(raw: &[u8]) -> String {
+    let text = String::from_utf8_lossy(raw);
+    let text = text.trim();
+    let mut truncated: String = text.chars().take(1024).collect();
+    if text.chars().count() > 1024 {
+        truncated.push('…');
+    }
+    truncated
 }
 
 // PORT STATUS: src/plugins/builtin/claude/title-generator.ts (48 lines)
@@ -70,5 +123,7 @@ pub async fn generate_claude_title(
 // notes: (TS execFile rejects on timeout; callers keep the deterministic title). PATH
 // notes: threaded explicitly + NO_COLOR=1 (edition-2024 can't mutate process env).
 // notes: maxBuffer:8192 dropped (title output is a few words; unbounded read is safe).
+// notes: stderr is piped (not nulled) and capped at 1024 chars in the returned error;
+// notes: a non-zero exit is now Err, not an empty Ok(None) (#287).
 // notes: The quote-strip/length gate moved to mainframe_adapter_api::finalize_title
 // notes: (#275) so the Codex generator can't drift from it; tests moved with it.
