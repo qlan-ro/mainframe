@@ -146,9 +146,10 @@ export function QueuedUserTurn({
             queued message — otherwise it renders as an empty box. */}
         {children && (
           <div
+            data-testid="chat-queued-bubble"
             style={PENDING_CARD}
             className={cn(
-              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-loose tracking-tight text-mf-um-ink',
+              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-loose tracking-tight break-words text-mf-um-ink',
               'transition-[opacity,border-color] duration-200 ease-in-out',
               'border-dashed border-mf-um-dash opacity-[0.82]',
             )}
