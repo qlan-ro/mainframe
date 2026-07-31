@@ -284,14 +284,15 @@ pub trait ChatManagerDeps: Send + Sync {
     ) -> BoxFuture<'a, Option<bool>> {
         Box::pin(async { None })
     }
-    /// `adapters.getSnapshots().find(id)?.models ?? []` — for the lifecycle default-
-    /// model normalization. Default empty.
+    /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
+    /// the lifecycle default-model normalization. Required, not defaulted: an
+    /// implementation that silently inherited the empty default made
+    /// `normalize_saved_default_model`'s probe-failure short-circuit fire on every
+    /// chat creation, so a retired saved default leaked into new chats (#290).
     fn adapter_snapshot_models(
         &self,
-        _adapter_id: &str,
-    ) -> Vec<mainframe_types::adapter::AdapterModel> {
-        Vec::new()
-    }
+        adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel>;
 }
 
 /// Object-safe facade over `ExternalSessionService<D>` (`ctx.chats.
