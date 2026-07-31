@@ -29,14 +29,10 @@ use serde_json::{Map, Value, json};
 
 use crate::approval_handler::{ApprovalHandler, PlanContext};
 use crate::event_mapper::{CodexSessionState, handle_notification};
-use crate::history::convert_thread_items;
+use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
-use crate::rollout_reader::read_rollout_items;
-use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
-use crate::types::{
-    ThreadItem, ThreadReadResult, ThreadResumeResult, ThreadStartResult, TurnStartResult,
-};
+use crate::types::{ThreadResumeResult, ThreadStartResult, TurnStartResult};
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 
@@ -176,7 +172,7 @@ impl CodexSession {
     }
 }
 
-fn de<T: DeserializeOwned>(v: Value) -> Result<T, AdapterError> {
+pub(crate) fn de<T: DeserializeOwned>(v: Value) -> Result<T, AdapterError> {
     serde_json::from_value(v).map_err(|e| AdapterError::Message(e.to_string()))
 }
 
@@ -773,97 +769,6 @@ impl CodexSession {
             }),
         }
     }
-}
-
-async fn load_history_inner(
-    temp: &Arc<JsonRpcClient>,
-    resume_thread_id: &str,
-    project_path: &str,
-) -> Result<Vec<ChatMessage>, AdapterError> {
-    let _ = project_path;
-    let read: ThreadReadResult = de(temp
-        .request(
-            "thread/read",
-            Some(json!({ "threadId": resume_thread_id, "includeTurns": true })),
-        )
-        .await
-        .map_err(|e| AdapterError::Message(e.0))?)?;
-
-    let all_items: Vec<ThreadItem> = read
-        .thread
-        .turns
-        .unwrap_or_default()
-        .into_iter()
-        .flat_map(|t| t.items)
-        .collect();
-
-    // Collect spawned sub-agent thread ids referenced by `wait` collabAgentToolCall items.
-    let mut child_thread_ids: Vec<String> = Vec::new();
-    for item in &all_items {
-        if let ThreadItem::CollabAgentToolCall(c) = item
-            && c.tool == "wait"
-            && let Some(ids) = &c.receiver_thread_ids
-        {
-            for id in ids {
-                if !child_thread_ids.contains(id) {
-                    child_thread_ids.push(id.clone());
-                }
-            }
-        }
-    }
-
-    let agent_meta_by_thread: std::collections::HashMap<String, AgentMetadata> =
-        if child_thread_ids.is_empty() {
-            std::collections::HashMap::new()
-        } else {
-            lookup_agent_metadata(&child_thread_ids)
-        };
-
-    let mut child_items_by_thread: std::collections::HashMap<String, Vec<ThreadItem>> =
-        std::collections::HashMap::new();
-    for child_id in &child_thread_ids {
-        // Prefer the raw rollout JSONL — it has function_call records (bash) that
-        // thread/read strips. Fall back to thread/read if unavailable.
-        let rollout_path = agent_meta_by_thread
-            .get(child_id)
-            .and_then(|m| m.rollout_path.clone());
-        if let Some(rollout_path) = rollout_path {
-            let items = read_rollout_items(&rollout_path, Some(child_id), None).await;
-            if !items.is_empty() {
-                child_items_by_thread.insert(child_id.clone(), items);
-                continue;
-            }
-        }
-        match temp
-            .request(
-                "thread/read",
-                Some(json!({ "threadId": child_id, "includeTurns": true })),
-            )
-            .await
-        {
-            Ok(v) => {
-                let child_result: ThreadReadResult = de(v)?;
-                let items: Vec<ThreadItem> = child_result
-                    .thread
-                    .turns
-                    .unwrap_or_default()
-                    .into_iter()
-                    .flat_map(|t| t.items)
-                    .collect();
-                child_items_by_thread.insert(child_id.clone(), items);
-            }
-            Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err.0, child_id, "codex: failed to read child thread, nesting will be skipped");
-            }
-        }
-    }
-
-    Ok(convert_thread_items(
-        &all_items,
-        resume_thread_id,
-        &child_items_by_thread,
-        &agent_meta_by_thread,
-    ))
 }
 
 #[cfg(test)]
