@@ -166,6 +166,79 @@ async fn apply_progress_with_a_snapshot_sets_structure_revision_and_replaces_str
 }
 
 #[test]
+fn apply_progress_with_a_trailing_empty_snapshot_keeps_a_reconciled_records_structure() {
+    let store = ClaudeWorkflowStore::new();
+    store.seed(CHAT, TASK, None);
+    store.apply_record(CHAT, record(TASK, Some("run-1"), false));
+
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 500,
+            duration_ms: 9_000,
+        },
+        Some(&[]),
+    );
+
+    let run = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(run.source, ClaudeWorkflowRunSource::Record);
+    assert_eq!(run.phases.len(), 1);
+    assert_eq!(run.agents.len(), 1);
+}
+
+#[test]
+fn apply_progress_on_a_reconciled_record_still_advances_totals() {
+    let store = ClaudeWorkflowStore::new();
+    store.seed(CHAT, TASK, None);
+    store.apply_record(CHAT, record(TASK, Some("run-1"), false));
+
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 900,
+            duration_ms: 12_000,
+        },
+        Some(&[]),
+    );
+
+    let run = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(run.total_tokens, 900);
+    assert_eq!(run.duration_ms, 12_000);
+}
+
+#[test]
+fn apply_progress_on_a_running_snapshot_run_still_accepts_a_fresher_snapshot() {
+    let store = ClaudeWorkflowStore::new();
+    store.seed(CHAT, TASK, None);
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 10,
+            duration_ms: 1_000,
+        },
+        Some(&snapshot("start", 10, 1_000)),
+    );
+
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 20,
+            duration_ms: 2_000,
+        },
+        Some(&snapshot("done", 20, 2_000)),
+    );
+
+    let run = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(run.source, ClaudeWorkflowRunSource::Snapshot);
+    assert_eq!(run.structure_revision, Some(2_000));
+    assert_eq!(run.agents[0].state, ClaudeWorkflowAgentState::Done);
+}
+
+#[test]
 fn stamp_status_completed_twice_is_idempotent() {
     let store = ClaudeWorkflowStore::new();
     store.seed(CHAT, TASK, None);

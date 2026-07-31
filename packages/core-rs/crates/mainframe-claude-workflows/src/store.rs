@@ -7,7 +7,9 @@
 use std::collections::HashMap;
 
 use dashmap::DashMap;
-use mainframe_types::claude_workflow::{ClaudeWorkflowRun, ClaudeWorkflowRunStatus};
+use mainframe_types::claude_workflow::{
+    ClaudeWorkflowRun, ClaudeWorkflowRunSource, ClaudeWorkflowRunStatus,
+};
 use serde_json::Value;
 use tokio::sync::broadcast;
 
@@ -90,7 +92,8 @@ impl ClaudeWorkflowStore {
     /// `task_progress`. Cumulative totals always take `max(current, incoming)`.
     /// `snapshot: None` updates totals only and never clears structure
     /// (AC 12); a snapshot only replaces the retained structure when its
-    /// revision is at least as fresh as the one already held.
+    /// revision is at least as fresh as the one already held and the run has
+    /// not settled (terminal, or already record-sourced).
     pub fn apply_progress(
         &self,
         chat_id: &str,
@@ -109,13 +112,16 @@ impl ClaudeWorkflowStore {
         run.duration_ms = run.duration_ms.max(usage.duration_ms);
 
         if let Some(entries) = snapshot {
+            // D8: a settled run's structure is final, so a trailing snapshot
+            // racing terminal reconciliation cannot blank it.
+            let settled = run.status.is_terminal() || run.source == ClaudeWorkflowRunSource::Record;
             let retained_revision = run.structure_revision.unwrap_or(i64::MIN);
-            if usage.duration_ms >= retained_revision {
+            if !settled && usage.duration_ms >= retained_revision {
                 let parsed = crate::snapshot::parse_snapshot(entries);
                 run.structure_revision = Some(usage.duration_ms);
                 run.phases = parsed.phases;
                 run.agents = parsed.agents;
-                run.source = mainframe_types::claude_workflow::ClaudeWorkflowRunSource::Snapshot;
+                run.source = ClaudeWorkflowRunSource::Snapshot;
             }
         }
 
