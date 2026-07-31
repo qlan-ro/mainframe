@@ -1520,6 +1520,7 @@ dependencies = [
  "mainframe-automations",
  "mainframe-background-tasks",
  "mainframe-chat",
+ "mainframe-claude-workflows",
  "mainframe-db",
  "mainframe-git",
  "mainframe-launch",
