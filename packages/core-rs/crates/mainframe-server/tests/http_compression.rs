@@ -17,7 +17,7 @@ use std::io::Read;
 
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
-use support::{TestServer, spawn_test_server};
+use support::{TestServer, WsClient, spawn_test_server};
 use tempfile::TempDir;
 
 /// Spawn a server with a real project containing `big.txt`: a highly
@@ -275,4 +275,34 @@ async fn attachment_responses_are_not_double_encoded() {
     assert_eq!(headers.get_all("content-encoding").iter().count(), 1);
     assert_eq!(headers.get("content-encoding").unwrap(), "gzip");
     assert_eq!(gunzip(&body), identity.2);
+}
+
+// ── the WebSocket upgrade is unaffected ──────────────────────────────────────
+
+/// Passes before and after Group B by design — this is the regression guard
+/// for Decision D5 (compression scoped to the HTTP router only), not red-phase
+/// evidence: advertising `Accept-Encoding` on the WS upgrade must never affect
+/// the handshake or subsequent frames.
+#[tokio::test]
+async fn websocket_upgrade_completes_when_the_client_advertises_an_encoding() {
+    let server = spawn_test_server(None).await;
+    let mut ws = WsClient::connect_with(server.addr, "/", None, &[("Accept-Encoding", "gzip, br")])
+        .await
+        .unwrap();
+    ws.wait_for("connection.ready").await;
+
+    ws.send_json(&serde_json::json!({ "type": "subscribe", "chatId": "c1" }))
+        .await;
+
+    let queued_snapshot = ws.read_event().await;
+    assert_eq!(queued_snapshot["type"], "message.queued.snapshot");
+    assert_eq!(queued_snapshot["chatId"], "c1");
+
+    let offer_snapshot = ws.read_event().await;
+    assert_eq!(offer_snapshot["type"], "worktree.offer.snapshot");
+    assert_eq!(offer_snapshot["chatId"], "c1");
+
+    let ack = ws.read_event().await;
+    assert_eq!(ack["type"], "subscribe:ack");
+    assert_eq!(ack["chatId"], "c1");
 }
