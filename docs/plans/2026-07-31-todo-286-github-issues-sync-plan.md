@@ -668,9 +668,13 @@ src/features/tasks/github/__tests__/ImportIssuesDialog.test.tsx` green.
 Render `PairGlyph` in the trailing slot of `TaskListRow.tsx` and `TaskCard.tsx`, and add the unlink icon button to
 `TaskRowActions.tsx` and to `TaskCard.tsx`'s cluster (fact 21), shown only for a paired task. No new props on
 either component (D4).
-*Verify:* `vitest run src/features/tasks/__tests__` and the github test directory green; both files under 300
-lines. No typecheck here: `ui-pair-actions` does not depend on `ui-report`, so `SyncReportDialog.tsx` may still be
-absent (see the standing rule above; the gate lives on task 37).
+*Verify:* `vitest run src/features/tasks/__tests__ src/features/tasks/github/__tests__/PairGlyph.test.tsx
+src/features/tasks/github/__tests__/PublishTaskDialog.test.tsx
+src/features/tasks/github/__tests__/ImportIssuesDialog.test.tsx` green; both files under 300 lines. Name those
+three files rather than running the whole `github/__tests__` directory: the directory also holds the red-phase
+tests for `GitHubSyncControl`, `LinkRepoDialog`, `SyncRunBanner` and `SyncReportDialog`, whose components belong to
+`ui-report` and `ui-header-link` and do not exist yet. Do not create them here. No typecheck here either — same
+reason (see the standing rule above; the gate lives on task 37).
 
 ### Group `rust-acceptance` — cross-cutting acceptance tests (kind: test)
 
