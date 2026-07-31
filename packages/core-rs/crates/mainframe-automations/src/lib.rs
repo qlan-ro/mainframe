@@ -8,6 +8,7 @@ pub mod credentials;
 pub mod domain;
 pub mod engine;
 pub mod error;
+pub mod github_http;
 pub mod interactions;
 pub mod ports;
 pub mod scheduler;
