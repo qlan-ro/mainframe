@@ -8,9 +8,7 @@ use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::github_issues::{
-    CreateIssue, GitHubError, GitHubIssuesClient, IssuePatch, IssueState, RepoRef,
-};
+use super::github_issues::{CreateIssue, GitHubIssuesClient, IssuePatch, IssueState, RepoRef};
 
 pub(super) fn repo() -> RepoRef {
     RepoRef {

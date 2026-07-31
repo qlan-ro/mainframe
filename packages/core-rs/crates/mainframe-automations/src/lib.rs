@@ -9,6 +9,8 @@ pub mod domain;
 pub mod engine;
 pub mod error;
 pub mod github_http;
+pub mod github_issues;
+mod github_issues_types;
 pub mod interactions;
 pub mod ports;
 pub mod scheduler;
