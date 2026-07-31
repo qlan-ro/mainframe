@@ -82,7 +82,24 @@ All paths are relative to `/Users/doruchiulan/Projects/qlan/mainframe/.worktrees
     header + `bearer_auth(&creds.token)`. `wiremock` is a dev-dependency of this crate only.
 14. `packages/core-rs/crates/mainframe-automations/src/credentials.rs` — `Credentials { kind, token, extra }` with
     a hand-written redacting `Debug`, `trait CredentialStore`, and `FileCredentialStore` (0600, atomic
-    temp+rename).
+    temp+rename). `credentials.rs:70-78` — the store's `cache: RwLock<BTreeMap<..>>` is filled **once** by
+    `load()`, and `credentials.rs:143-145` — `get` reads only that cache, so two stores over the same file do not
+    see each other's writes. `packages/core-rs/crates/mainframe-automations/src/service.rs:80` holds
+    `credentials: Arc<FileCredentialStore>` as a **private** field; `service.rs:209-228` exposes only
+    `credential_labels` / `credential_kind` / `set_credential` / `delete_credential`, none of which returns a token
+    or the store. The sole production instance is built at `mainframe-automations/src/service/build.rs:37`; no
+    other crate constructs one. The link dialog's token reaches that instance through
+    `PUT /api/automation-credentials/github` → `engine.set_credential`
+    (`packages/core-rs/crates/mainframe-server/src/routes/automation_admin.rs:113-127`).
+24. `packages/core-rs/crates/mainframe-daemon/Cargo.toml:25-38` — the daemon crate depends on `mainframe-plugins`
+    and `mainframe-server` but **not** on `mainframe-automations`; the workspace already declares the path
+    dependency (`packages/core-rs/Cargo.toml:70`), so adding it is one line.
+25. `packages/core-rs/crates/mainframe-daemon/src/main.rs:299,312,336` — the automations engine is built (299) and
+    started (312) **before** the `PluginManager` (336), and it is an `Option`: a build failure leaves `None` and
+    the daemon serves on.
+26. `packages/ui/tsconfig.json` — `{ "include": ["src"] }` with **no `exclude`** and `"noEmit": true`, and UI
+    tests live at `src/**/__tests__/*.test.tsx`. `tsc --noEmit` therefore typechecks every red-phase test file
+    along with the source.
 15. `packages/core-rs/crates/mainframe-automations/src/lib.rs:25-31` — the house pattern for a test module in its
     own file: `#[cfg(test)] mod credentials_tests;`. New Rust tests use this so test files and implementation
     files never collide.
@@ -266,6 +283,20 @@ Verification commands run from the worktree root unless stated. Rust:
 `cd packages/core-rs && cargo test -p <crate> <filter>`. UI:
 `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>`.
 
+Two rules hold across every task below.
+
+- **Every `*_tests.rs` file under `todos_github/` is declared `#[cfg(test)] mod <name>;` in `todos_github/mod.rs`
+  by the task that creates it** (the house pattern, fact 15). A `.rs` file no `mod` declaration references is not
+  compiled: `cargo test` reports 0 tests and exits 0, and `cargo clippy --all-targets` stays green, so a forgotten
+  declaration is a silent false pass, not a red phase. `todos_github/mod.rs` and its `pub mod todos_github;` line
+  in `mainframe-plugins/src/lib.rs` are created by task 6, before the first test file.
+- **The UI typecheck gate runs exactly once, on task 37**, plus the final verification block. `packages/ui`'s
+  tsconfig has no `exclude` (fact 26), so `tsc --noEmit` compiles the red-phase test files from tasks 25–29 too.
+  Those tests import components that tasks 33–40 create, so any earlier gate fails with TS2307. Task 37 is the
+  last UI task — its group `ui-header-link` depends on every other UI group — and is the first point at which the
+  whole tree exists. Reordering cannot move the gate earlier: `ui-api-store` is by construction the first UI
+  implementation group. Earlier UI tasks verify with vitest only.
+
 ### Group `rust-github-client` — the issues client, the port, and the daemon wiring
 
 **Task 1 — extract the shared GitHub HTTP conventions.**
@@ -306,37 +337,69 @@ Create `packages/core-rs/crates/mainframe-plugins/src/github_port.rs` with a dyn
 automations — fact 12) and `GitHubPortError`. Add `pub github: Arc<dyn GitHubIssues>` to `PluginContext`
 (`context.rs:202`) and `pub github: Option<Arc<dyn GitHubIssues>>` to `PluginContextDeps` (`context.rs:234`); in
 `build_plugin_context`, wire the real handle when `has(PluginCapability::HttpOutbound)` **and** the dep is
-`Some`, otherwise `guards::GuardGitHub` returning `PluginError::CapabilityRequired("http:outbound")` from every
-method (D2, fact 10). Export from `lib.rs`. Add a test in a new
-`packages/core-rs/crates/mainframe-plugins/src/github_port_tests.rs` asserting the guard's error text for a
-manifest without the capability.
+`Some`, otherwise `guards::GuardGitHub` (D2, fact 10). The guard carries the reason it was installed and fails
+every method with it: capability missing → `PluginError::CapabilityRequired("http:outbound")` (verbatim house
+text); dependency absent → `PluginError::Message("GitHub sync is unavailable: the automations engine did not
+start, so no credential store is available.")`. It never panics and never reaches the network. Export from
+`lib.rs`. Add a test in a new `packages/core-rs/crates/mainframe-plugins/src/github_port_tests.rs` asserting both
+guard texts — one manifest without the capability, one context built with `github: None`.
 *Verify:* `cargo test -p mainframe-plugins github_port`.
 
-**Task 5 — wire the adapter in the daemon.**
-Create `packages/core-rs/crates/mainframe-daemon/src/github_issues_port.rs` implementing the plugins-crate trait
-over `mainframe_automations::github_issues::GitHubIssuesClient`, resolving the bearer through
-`FileCredentialStore::get(label)` per call and mapping `GitHubError` → `GitHubPortError`. Add `"http:outbound"` to
-`TODOS_MANIFEST` (`builtin_plugins.rs:57`), thread `github: Some(Arc::new(...))` through `PluginManagerDeps` /
-`load_builtin` into `PluginContextDeps`, and construct it at `main.rs:336`.
-*Verify:* `cargo check -p mainframe-daemon`; `cargo test -p mainframe-daemon`; the daemon boots
-(`cargo run -p mainframe-daemon` with `DAEMON_PORT=31500 MAINFRAME_DATA_DIR=/tmp/mf-286`, `curl :31500/health`).
+**Task 5 — wire the adapter in the daemon over the engine's own credential store.**
+
+*5a — expose the store the link dialog writes to.* Add
+`pub fn credentials(&self) -> Arc<dyn CredentialStore>` to `AutomationsEngine`
+(`packages/core-rs/crates/mainframe-automations/src/service.rs`), returning a clone of the private
+`credentials` field coerced to the trait object. This accessor is the port's **only** permitted credential source.
+Do not construct a second `FileCredentialStore` anywhere: the store caches the file once at `load()` and `get`
+reads only that cache (fact 14), while the first-run flow writes the token through the engine's instance
+(link dialog → `CredentialConnect` → `PUT /api/automation-credentials/github` → `engine.set_credential`). A
+boot-time snapshot at the composition root would answer `get("github")` with `None` forever, failing AC1, AC3,
+AC6 and AC8 on every fresh install until the daemon restarts.
+
+*5b — the adapter.* Create `packages/core-rs/crates/mainframe-daemon/src/github_issues_port.rs` implementing the
+plugins-crate trait over `mainframe_automations::github_issues::GitHubIssuesClient`. It takes
+`Arc<dyn CredentialStore>` at construction, calls `get(label)` **per request** (so a token connected after boot
+works without a restart), and maps `GitHubError` → `GitHubPortError`. A label with no stored credential is
+`GitHubPortError::Auth` with the text `No GitHub credential is stored for '<label>'. Link the repository again to
+connect one.` — a readable reason carrying no token material. Add
+`mainframe-automations = { workspace = true }` to `packages/core-rs/crates/mainframe-daemon/Cargo.toml`
+(fact 24; the workspace path entry already exists).
+
+*5c — composition.* Add `"http:outbound"` to `TODOS_MANIFEST` (`builtin_plugins.rs:57`) and thread
+`github: Option<Arc<dyn GitHubIssues>>` through `PluginManagerDeps` / `load_builtin` into `PluginContextDeps`. At
+`main.rs:336` the engine already exists (fact 25) but is an `Option`: build the port inside
+`if let Some(automations) = &automations` from `automations.credentials()`, and pass `github: None` otherwise. The
+`None` arm is not an error path to hide — task 4's guard then answers every GitHub call with the
+"automations engine did not start" message, the routes surface it as a `503`-class failure with that text, and the
+daemon serves everything else.
+*Verify:* `cargo check -p mainframe-daemon`; `cargo test -p mainframe-daemon`; `cargo test -p mainframe-automations
+credentials` (the accessor must not disturb the existing store tests); the daemon boots
+(`cargo run -p mainframe-daemon` with `DAEMON_PORT=31500 MAINFRAME_DATA_DIR=/tmp/mf-286`, `curl :31500/health`);
+and, against that daemon, `PUT /api/automation-credentials/github` followed by a GitHub plugin call **in the same
+process** resolves the token — no restart between the two.
 
 ### Group `todos-sync-store` — labels, schema, store, touch map
 
-**Task 6 — failing tests for the workflow-label denylist.**
-Create `packages/core-rs/crates/mainframe-plugins/src/todos_github/labels_tests.rs`: each of the seven prefixes
+**Task 6 — the module root, then failing tests for the workflow-label denylist.**
+First create `packages/core-rs/crates/mainframe-plugins/src/todos_github/mod.rs` (empty of submodules for now) and
+add `pub mod todos_github;` to `packages/core-rs/crates/mainframe-plugins/src/lib.rs`. Without them no file under
+`todos_github/` is compiled at all, and this task's red phase would be `cargo test` exiting 0 on 0 tests.
+Then create `packages/core-rs/crates/mainframe-plugins/src/todos_github/labels_tests.rs`, declared
+`#[cfg(test)] mod labels_tests;` in `mod.rs`: each of the seven prefixes
 (`route:`, `gate:`, `approved:`, `rework:`, `pipeline:`, `pr:`, `wayfinder:`) and each of the seven exact labels
 (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `parked`, `dispatched`) is a
 workflow label; ordinary labels (`bug`, `routes`, `pr-review`) are not; `syncable(local)` strips them and
 `merge_inbound(local, remote)` never introduces one; a test greps the crate source to assert the list is declared
 exactly once (AC27, AC28).
-*Verify:* red — module missing.
+*Verify:* `cargo test -p mainframe-plugins todos_github::labels` **fails to compile** — the declared test module
+resolves `super::labels`, which does not exist yet. A run that compiles, or one reporting `0 tests`, means the
+`mod` declarations were skipped and the red phase did not happen.
 
 **Task 7 — implement `todos_github/labels.rs`.**
-`WORKFLOW_LABEL_PREFIXES`, `WORKFLOW_LABELS`, `is_workflow_label`, `syncable_labels`, `keep_workflow_labels`.
-Create `todos_github/mod.rs` declaring the submodules and add `pub mod todos_github;` to
-`packages/core-rs/crates/mainframe-plugins/src/lib.rs`.
-*Verify:* `cargo test -p mainframe-plugins todos_github::labels`.
+`WORKFLOW_LABEL_PREFIXES`, `WORKFLOW_LABELS`, `is_workflow_label`, `syncable_labels`, `keep_workflow_labels`,
+declared `pub mod labels;` in the `todos_github/mod.rs` task 6 created.
+*Verify:* `cargo test -p mainframe-plugins todos_github::labels` — green, with a non-zero test count.
 
 **Task 8 — failing tests for the schema and store.**
 Create `packages/core-rs/crates/mainframe-plugins/src/todos_github/store_tests.rs` reusing the `todos.rs` test
@@ -543,8 +606,9 @@ the extract-at-three threshold).
 **Task 32 — the store.**
 Create `packages/ui/src/features/tasks/github/use-github-sync-store.ts` per the module contract, with the
 `_loadSeq` stale guard (fact 23) and refetch-of-todos after every mutation.
-*Verify:* `vitest run src/features/tasks/github/__tests__/use-github-sync-store.test.ts` green;
-`pnpm --filter @qlan-ro/mainframe-ui typecheck`.
+*Verify:* `vitest run src/features/tasks/github/__tests__/use-github-sync-store.test.ts` green. No typecheck here:
+the red-phase test files from tasks 27–29 are already committed and import components tasks 33–40 create, so
+`tsc` would report TS2307 for each (see the standing rule above; the gate lives on task 37).
 
 ### Group `ui-report` — the report dialog
 
@@ -578,8 +642,9 @@ src/features/tasks/github/__tests__/SyncRunBanner.test.tsx` green.
 Call `init(port, projectId)` and `load()` on mount; render `GitHubSyncControl` in the right-aligned trailing group
 before `tasks-board-new` (fact 19); render `SyncRunBanner` under the header; mount `LinkRepoDialog`,
 `ImportIssuesDialog`, `PublishTaskDialog`, and `SyncReportDialog` once, driven by `store.dialog` (D5).
-*Verify:* `pnpm --filter @qlan-ro/mainframe-ui typecheck`; `vitest run src/features/tasks/__tests__` green;
-`TasksBoard.tsx` stays under 300 lines.
+*Verify:* `pnpm --filter @qlan-ro/mainframe-ui typecheck` — the single UI typecheck gate, and the first task at
+which it can pass (every component the red-phase tests import now exists); `vitest run src/features/tasks/__tests__`
+green; `TasksBoard.tsx` stays under 300 lines.
 
 ### Group `ui-pair-actions` — row glyphs, publish, import
 
@@ -603,8 +668,9 @@ src/features/tasks/github/__tests__/ImportIssuesDialog.test.tsx` green.
 Render `PairGlyph` in the trailing slot of `TaskListRow.tsx` and `TaskCard.tsx`, and add the unlink icon button to
 `TaskRowActions.tsx` and to `TaskCard.tsx`'s cluster (fact 21), shown only for a paired task. No new props on
 either component (D4).
-*Verify:* `vitest run src/features/tasks/__tests__` and the github test directory green;
-`pnpm --filter @qlan-ro/mainframe-ui typecheck`; both files under 300 lines.
+*Verify:* `vitest run src/features/tasks/__tests__` and the github test directory green; both files under 300
+lines. No typecheck here: `ui-pair-actions` does not depend on `ui-report`, so `SyncReportDialog.tsx` may still be
+absent (see the standing rule above; the gate lives on task 37).
 
 ### Group `rust-acceptance` — cross-cutting acceptance tests (kind: test)
 
