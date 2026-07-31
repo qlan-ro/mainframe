@@ -97,6 +97,7 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
         process_state: patch.process_state,
         updated_at: patch.updated_at.clone(),
         plan_mode: patch.plan_mode,
+        transcript_missing: patch.transcript_missing,
         ..Default::default()
     }
 }
@@ -588,6 +589,34 @@ impl ChatManagerDeps for DaemonChatDeps {
                 Ok(title) => title,
                 Err(err) => {
                     tracing::warn!(%err, "title generation failed");
+                    None
+                }
+            }
+        })
+    }
+
+    fn is_transcript_present<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>> {
+        let adapter = self.adapters.get(adapter_id);
+        let (session_id, project_path) = (session_id.to_string(), project_path.to_string());
+        let session_file_path = session_file_path.map(str::to_string);
+        Box::pin(async move {
+            let Some(adapter) = adapter else {
+                tracing::warn!(adapter_id, "transcript presence: no adapter registered");
+                return None;
+            };
+            match adapter
+                .is_transcript_present(session_id, project_path, session_file_path)
+                .await
+            {
+                Ok(present) => present,
+                Err(err) => {
+                    tracing::warn!(%err, adapter_id, "transcript presence check failed");
                     None
                 }
             }
