@@ -77,9 +77,11 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
     /// `adapters.getSnapshots().find((s) => s.id === adapterId)?.models ?? []` —
     /// the live probed catalog used to normalize a saved default-model id.
-    fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
-        Vec::new()
-    }
+    /// Required, not defaulted: an implementation that silently inherited the
+    /// empty default made `normalize_saved_default_model`'s probe-failure
+    /// short-circuit fire on every chat creation, so a retired saved default
+    /// leaked into new chats (#290).
+    fn adapter_snapshot_models(&self, adapter_id: &str) -> Vec<AdapterModel>;
     /// Record the worktrees that already existed when the chat activated, so a
     /// switch offer only ever names one registered since.
     fn seed_worktree_baseline<'a>(
@@ -303,6 +305,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             {
                 let models = self.deps.adapter_snapshot_models(adapter_id);
                 effective_model = normalize_saved_default_model(Some(&m), &models);
+                if effective_model.is_none() {
+                    warn!(
+                        adapter_id,
+                        configured_model = %m,
+                        "saved default model is not in the adapter catalog; new chat falls back to the adapter default"
+                    );
+                }
             }
             if effective_mode.is_none()
                 && let Some(m) = default_mode
@@ -1167,6 +1176,9 @@ mod tests {
             } else {
                 None
             }
+        }
+        fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
+            Vec::new()
         }
         fn create_session(&self, _a: &str, _o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             None

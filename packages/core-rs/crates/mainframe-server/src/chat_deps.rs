@@ -436,6 +436,15 @@ impl ChatManagerDeps for DaemonChatDeps {
             .map(|adapter| adapter.create_session(options))
     }
 
+    fn adapter_snapshot_models(&self, adapter_id: &str) -> Vec<AdapterModel> {
+        self.adapters
+            .get_snapshots()
+            .into_iter()
+            .find(|info| info.id == adapter_id)
+            .map(|info| info.models)
+            .unwrap_or_default()
+    }
+
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             self.attachments.delete_chat(chat_id).await;

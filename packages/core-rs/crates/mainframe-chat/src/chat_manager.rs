@@ -292,14 +292,15 @@ pub trait ChatManagerDeps: Send + Sync {
     ) -> BoxFuture<'a, Option<bool>> {
         Box::pin(async { None })
     }
-    /// `adapters.getSnapshots().find(id)?.models ?? []` — for the lifecycle default-
-    /// model normalization. Default empty.
+    /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
+    /// the lifecycle default-model normalization. Required, not defaulted: an
+    /// implementation that silently inherited the empty default made
+    /// `normalize_saved_default_model`'s probe-failure short-circuit fire on every
+    /// chat creation, so a retired saved default leaked into new chats (#290).
     fn adapter_snapshot_models(
         &self,
-        _adapter_id: &str,
-    ) -> Vec<mainframe_types::adapter::AdapterModel> {
-        Vec::new()
-    }
+        adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel>;
 }
 
 /// Object-safe facade over `ExternalSessionService<D>` (`ctx.chats.
@@ -2179,13 +2180,15 @@ mod tests;
 // notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. New defaulted ChatManagerDeps methods still silently unoverridden
-// notes: in chat_deps.rs (filed as #289 is_transcript_present, #290
-// notes: adapter_snapshot_models): tracker_list_live and tracker_end_all_running
-// notes: are required, not defaulted (#273 — a silent default caused
-// notes: backgroundActivity to stay empty, then let orphaned tasks stay Running
-// notes: forever, in production); generate_title gained an adapter_id arg
-// notes: (adapter-aware).
+// notes: spawned. A defaulted ChatManagerDeps method is still silently unoverridden
+// notes: in chat_deps.rs (filed as #289 is_transcript_present); adapter_snapshot_models
+// notes: is now required and wired in chat_deps.rs (#290 — a silent default made
+// notes: normalize_saved_default_model's probe-failure short-circuit fire on every
+// notes: chat creation, leaking a retired saved default into new chats).
+// notes: tracker_list_live and tracker_end_all_running are required, not defaulted
+// notes: (#273 — a silent default caused backgroundActivity to stay empty, then let
+// notes: orphaned tasks stay Running forever, in production); generate_title gained
+// notes: an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity
 // notes: integration test (#273). Also chat-manager-degraded (3).

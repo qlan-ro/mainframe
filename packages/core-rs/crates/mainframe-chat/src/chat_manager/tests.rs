@@ -200,6 +200,12 @@ impl ChatManagerDeps for StoreDeps {
             }) as Arc<dyn AdapterSession>
         })
     }
+    fn adapter_snapshot_models(
+        &self,
+        _adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel> {
+        Vec::new()
+    }
     fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }
