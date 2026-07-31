@@ -39,7 +39,6 @@ fn task_updated_payload_prefers_patch_status_over_the_top_level_status() {
     let payload = task_updated_payload(&event);
     assert_eq!(payload.task_id, "w1");
     assert_eq!(payload.status, "completed");
-    assert_eq!(payload.end_time.as_deref(), Some("2026-07-30T12:00:00Z"));
 }
 
 #[test]

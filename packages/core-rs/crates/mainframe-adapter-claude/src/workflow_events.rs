@@ -14,39 +14,28 @@ use mainframe_claude_workflows::store::ProgressUsage;
 
 use crate::session::ClaudeSessionState;
 
-/// `task_updated` payload subset this module reads. Distinct from
-/// `task_events::TaskUpdatedPayload`, which gains the same `end_time` field
-/// in Task 19 once `handle_task_updated` is rewired to consume this one.
+/// The `task_updated` fields `task_events::handle_task_updated` consumes.
 pub struct TaskUpdatedPayload {
     pub task_id: String,
     pub status: String,
-    pub end_time: Option<String>,
 }
 
-/// Reads `task_id` from the top level and `status`/`end_time` from `patch`
-/// only — the CLI never puts a current status at the top level for this
-/// event, so there is no top-level fallback to prefer over `patch`.
+/// Reads `task_id` from the top level and `status` from `patch` only — the CLI
+/// never puts a current status at the top level for this event, so there is no
+/// top-level fallback to prefer over `patch`.
 pub fn task_updated_payload(event: &Value) -> TaskUpdatedPayload {
     let task_id = event
         .get("task_id")
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let patch = event.get("patch");
-    let status = patch
+    let status = event
+        .get("patch")
         .and_then(|p| p.get("status"))
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let end_time = patch
-        .and_then(|p| p.get("end_time"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    TaskUpdatedPayload {
-        task_id,
-        status,
-        end_time,
-    }
+    TaskUpdatedPayload { task_id, status }
 }
 
 /// The identity learned from a `Workflow` tool result (`type:

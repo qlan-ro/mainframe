@@ -621,7 +621,6 @@ mod tests {
             TaskUpdatedPayload {
                 task_id: "u1".to_string(),
                 status: "completed".to_string(),
-                end_time: None,
             },
             None,
         );
@@ -641,7 +640,6 @@ mod tests {
             TaskUpdatedPayload {
                 task_id: "u2".to_string(),
                 status: "running".to_string(),
-                end_time: None,
             },
             None,
         );
@@ -660,7 +658,6 @@ mod tests {
             TaskUpdatedPayload {
                 task_id: "ghost".to_string(),
                 status: "completed".to_string(),
-                end_time: None,
             },
             None,
         );
