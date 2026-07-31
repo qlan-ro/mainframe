@@ -8,6 +8,10 @@
 //! (`chat_background_activity.rs`'s pattern) wired into a real `axum::serve`
 //! instance (`support::spawn_test_server_with`'s pattern), plus the
 //! not-yet-existing `claude_workflows` store field Task 22 adds to `AppCtx`.
+//!
+//! `record()`'s nested `json!` fixture (phases + workflow_progress agents) needs
+//! more than the default macro depth to expand.
+#![recursion_limit = "256"]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::HashMap;
@@ -322,6 +326,10 @@ async fn a_retained_snapshot_with_no_record_surfaces_unchanged() {
     let h = harness("sess-snapshot-only").await;
     h.store
         .seed(&h.chat_id, "task-3", Some("deploy".to_string()));
+    // `Some(&[])` establishes the retained snapshot the test's name and
+    // `source: "snapshot"` assertion depend on; `None` (the fixture's original
+    // arg) only updates totals per the store contract and leaves the run
+    // `Launch`-sourced (mainframe-claude-workflows/src/store.rs `apply_progress`).
     h.store.apply_progress(
         &h.chat_id,
         "task-3",
@@ -329,7 +337,7 @@ async fn a_retained_snapshot_with_no_record_surfaces_unchanged() {
             total_tokens: 42,
             duration_ms: 2_000,
         },
-        None,
+        Some(&[]),
     );
 
     let body = h.messages().await;

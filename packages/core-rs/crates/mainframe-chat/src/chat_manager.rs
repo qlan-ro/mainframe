@@ -1590,6 +1590,7 @@ impl ChatManager {
         ChatHistoryPayload {
             messages,
             transcript_missing,
+            workflow_runs: Vec::new(),
         }
     }
 
