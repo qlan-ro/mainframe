@@ -49,8 +49,10 @@ its result. When Codex reports a per-sub-agent final message of its own, that wi
 **Errors.** Three things resolve a card to an error state: Codex reporting the sub-agent as
 interrupted, which reads "Sub-agent interrupted"; Codex reporting the delegation call
 itself as failed, which reads "Sub-agent failed" unless the sub-agent left a message, in
-which case the message is the result; and the sub-agent's own turn ending in a failed,
-errored or interrupted status. A delegation that merely returns nothing is not an error.
+which case the message is the result; and the sub-agent's own turn ending `failed` or
+`interrupted` — the only two error states its turn-status enum defines, and the same two
+the parent's own turn already treats as errors. A delegation that merely returns nothing
+is not an error.
 
 **The parent session is unaffected.** A sub-agent's turn starting or completing does not
 start or end the parent's turn; the parent chat stays "running" until the parent's own
@@ -216,12 +218,18 @@ Hard-to-reverse first.
    `reversible` — the spawn prompt is encrypted in the payload, so a prompt is the
    exception, not the rule; a blank task line is worse than a name.
 8. **Error state comes from three in-protocol signals: a `failed` collab tool call, an
-   `interrupted` sub-agent activity, or the sub-agent's own turn ending failed, errored or
-   interrupted. The `interrupted` half of today's status comparison is deleted.**
-   `reversible` — the tool call's enum is `inProgress | completed | failed`, so `failed` is
-   a real signal and stays, while `interrupted` is not a member and can never match. The
-   two other signals are kept because a `completed` wait says only that the parent stopped
-   waiting, not that the sub-agent succeeded.
+   `interrupted` sub-agent activity, or the sub-agent's own turn ending `failed` or
+   `interrupted`. The `interrupted` half of today's collab-tool-call status comparison is
+   deleted.** `reversible` — the tool call's enum is `inProgress | completed | failed`, so
+   `failed` is a real signal and stays, while `interrupted` is not a member and can never
+   match. The third signal reads the sub-agent's *turn* status, whose enum is
+   `inProgress | completed | failed | interrupted`; the adapter already treats those same
+   two members as errors on the parent's own turn, so no new comparison value is
+   introduced. The per-sub-agent state carried in the wait call was rejected as this
+   signal's source: it is a different enum, and the shipping build sends that map empty, so
+   a signal read from it would never fire. The two non-tool-call signals are kept because a
+   `completed` wait says only that the parent stopped waiting, not that the sub-agent
+   succeeded.
 9. **The live stream drives the card during a run; the stored rollout is the reload
    source.** `reversible` — adopts the brief's recommendation; the capture proves
    sub-agent items arrive on the same connection, and running both sources into one open
