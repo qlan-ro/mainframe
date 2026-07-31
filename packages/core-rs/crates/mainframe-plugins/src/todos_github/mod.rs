@@ -3,6 +3,7 @@
 //! records local recency without disturbing `todos.updated_at`.
 
 pub mod labels;
+pub mod pairing;
 pub mod reconcile;
 pub mod run;
 pub mod schema;
@@ -14,6 +15,9 @@ mod fake_github;
 
 #[cfg(test)]
 mod labels_tests;
+
+#[cfg(test)]
+mod pairing_tests;
 
 #[cfg(test)]
 mod reconcile_tests;
