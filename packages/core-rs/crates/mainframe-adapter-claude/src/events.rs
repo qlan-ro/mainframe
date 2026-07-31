@@ -453,6 +453,7 @@ mod tests {
     use super::*;
     use crate::session::ClaudeSession;
     use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+    use mainframe_claude_workflows::store::ClaudeWorkflowStore;
     use mainframe_types::adapter::SessionOptions;
     use mainframe_types::adapter::{ContextUsage, ControlRequest, DetectedPr, MessageMetadata};
     use mainframe_types::chat::{MessageContent, TodoItem};
@@ -573,6 +574,7 @@ mod tests {
             },
             None,
             tracker,
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1142,6 +1144,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1173,6 +1176,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1212,6 +1216,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1243,6 +1248,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
