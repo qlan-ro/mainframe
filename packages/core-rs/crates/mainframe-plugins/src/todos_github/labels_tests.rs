@@ -98,14 +98,16 @@ fn keep_workflow_labels_drops_workflow_labels_no_longer_local() {
 
 #[test]
 fn workflow_label_list_is_declared_exactly_once() {
-    let count = count_occurrences_in_crate("WORKFLOW_LABEL_PREFIXES: [&str; 7] = [");
+    // Non-test source only: this very assertion has to name the const to test
+    // it, which would otherwise self-match as a second "declaration".
+    let count = count_occurrences_in_non_test_source("const WORKFLOW_LABEL_PREFIXES");
     assert_eq!(
         count, 1,
         "WORKFLOW_LABEL_PREFIXES must be declared exactly once in the crate"
     );
 }
 
-fn count_occurrences_in_crate(needle: &str) -> usize {
+fn count_occurrences_in_non_test_source(needle: &str) -> usize {
     let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut count = 0;
     visit(&src_dir, needle, &mut count);
@@ -120,9 +122,16 @@ fn visit(dir: &std::path::Path, needle: &str, count: &mut usize) {
         let path = entry.path();
         if path.is_dir() {
             visit(&path, needle, count);
-        } else if path.extension().and_then(|e| e.to_str()) == Some("rs")
-            && let Ok(contents) = std::fs::read_to_string(&path)
-        {
+            continue;
+        }
+        let is_test_file = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.ends_with("_tests.rs"));
+        if is_test_file || path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        if let Ok(contents) = std::fs::read_to_string(&path) {
             *count += contents.matches(needle).count();
         }
     }

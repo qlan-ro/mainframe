@@ -2,5 +2,7 @@
 //! denylist, the additive schema + store, and the per-field touch map that
 //! records local recency without disturbing `todos.updated_at`.
 
+pub mod labels;
+
 #[cfg(test)]
 mod labels_tests;
