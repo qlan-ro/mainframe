@@ -7,7 +7,8 @@ use crate::PluginError;
 use crate::context::PluginContext;
 use crate::db_context::text;
 use crate::github_port::{IssuePatch, IssueState};
-use crate::todos_github::reconcile::{LocalWrites, RemoteWrites};
+use crate::todos_github::reconcile::{LocalWrites, Reconciliation, RemoteWrites};
+use crate::todos_github::store;
 
 /// Advances `updated_at` whenever anything is written, even a labels-only
 /// change, but never stamps the touch map — that would make this run's own
@@ -74,4 +75,34 @@ pub(super) fn build_issue_patch(writes: &RemoteWrites) -> Option<IssuePatch> {
         }),
         state_reason: closing.then(|| "completed".to_string()),
     })
+}
+
+/// The write half of a pair's sync, run after any outbound GitHub PATCH has
+/// already succeeded: the local writes, the new baseline, and the pair's
+/// resting state, which reflects only the *last* run (a clean run clears any
+/// earlier `errored`/`remotely-unlinked` mark).
+pub(super) async fn persist_pair(
+    ctx: &PluginContext,
+    pair: &store::Pair,
+    plan: &Reconciliation,
+    now: &str,
+) -> Result<(), PluginError> {
+    apply_local_writes(ctx, &pair.todo_id, &plan.local_writes, now).await?;
+    store::write_baseline(
+        ctx,
+        &pair.todo_id,
+        &plan.next_baseline.title,
+        &plan.next_baseline.body,
+        &plan.next_baseline.state,
+        &plan.next_baseline.labels,
+        now,
+    )
+    .await?;
+
+    let pair_state = if plan.report_rows.is_empty() {
+        "clean"
+    } else {
+        "overwritten"
+    };
+    store::set_pair_state(ctx, &pair.todo_id, pair_state, None).await
 }

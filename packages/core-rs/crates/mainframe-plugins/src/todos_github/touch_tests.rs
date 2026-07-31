@@ -6,6 +6,7 @@ use crate::db_context::text;
 use crate::todos;
 use crate::todos_github::schema::run_github_migrations;
 use crate::todos_github::store;
+use crate::todos_github::touch;
 use crate::todos_github::touch::read_touch;
 
 async fn setup() -> todos::tests::Harness {
@@ -188,22 +189,29 @@ async fn move_between_open_and_in_progress_stamps_nothing() {
 
 #[tokio::test]
 async fn move_to_done_and_back_stamps_state() {
+    // Pin a known-old stamp before each move and assert it advanced, rather
+    // than diffing two wall-clock reads: `now_iso8601()` is millisecond
+    // precision, so two `move_status` calls back-to-back can land in the
+    // same millisecond and make the stamps byte-identical.
+    const OLD_STAMP: &str = "2020-01-01T00:00:00.000Z";
+
     let h = setup().await;
     let todo = create(&h).await;
     let id = todo["id"].as_str().unwrap().to_string();
-    let created = read_touch(&h.ctx, &id).await.unwrap();
 
+    touch::stamp_create(&h.ctx, &id, OLD_STAMP).await.unwrap();
     assert_eq!(move_status(&h, &id, "done").await, StatusCode::OK);
     let after_done = read_touch(&h.ctx, &id).await.unwrap();
     assert_ne!(
-        after_done["state"], created["state"],
+        after_done["state"], OLD_STAMP,
         "crossing into done stamps state"
     );
 
+    touch::stamp_create(&h.ctx, &id, OLD_STAMP).await.unwrap();
     assert_eq!(move_status(&h, &id, "open").await, StatusCode::OK);
     let after_reopen = read_touch(&h.ctx, &id).await.unwrap();
     assert_ne!(
-        after_reopen["state"], after_done["state"],
+        after_reopen["state"], OLD_STAMP,
         "crossing out of done stamps state again"
     );
 }

@@ -65,6 +65,10 @@ pub(super) fn server_error(err: PluginError) -> Response {
 
 // ─── Request parsing ─────────────────────────────────────────────────────────
 
+// `Response` dwarfs the `Ok` payload, but every caller immediately returns
+// this `Err` as-is, so building a smaller error type here would just move
+// the conversion to each call site.
+#[allow(clippy::result_large_err)]
 pub(super) fn require_project_id(params: &HashMap<String, String>) -> Result<String, Response> {
     match params.get("projectId").map(|s| s.trim()) {
         Some(s) if !s.is_empty() => Ok(s.to_string()),

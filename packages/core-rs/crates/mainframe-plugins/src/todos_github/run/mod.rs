@@ -14,9 +14,8 @@ use mainframe_runtime::time::now_iso8601;
 use crate::PluginError;
 use crate::context::PluginContext;
 use crate::github_port::{GitHubPortError, RepoRef};
-use crate::todos_github::reconcile::{self, Baseline, RemoteIssueView, TouchTimes};
-use crate::todos_github::{store, touch};
-use fetch::{LocalRow, fetch_local, needs_field_times, project_issue_state};
+use crate::todos_github::store;
+use fetch::plan_pair;
 
 const KEEP_RUNS: i64 = 10;
 
@@ -123,49 +122,9 @@ async fn reconcile_pair(
     run_id: &str,
     report_rows: &mut Vec<store::ReportRow>,
 ) -> Result<bool, (&'static str, String)> {
-    let Some(local) = fetch_local(ctx, &pair.todo_id).await.map_err(internal)? else {
+    let Some((local, plan)) = plan_pair(ctx, repo, credential_label, pair).await? else {
         return Ok(false);
     };
-
-    let issue = match ctx
-        .github
-        .get_issue(repo, pair.issue_number as u64, credential_label)
-        .await
-    {
-        Ok(issue) => issue,
-        Err(err) => return handle_port_error(ctx, pair, err).await,
-    };
-
-    let baseline = Baseline {
-        title: pair.base_title.clone(),
-        body: pair.base_body.clone(),
-        state: pair.base_state.clone(),
-        labels: pair.base_labels.clone(),
-    };
-
-    let field_times = if needs_field_times(&local, &baseline, &issue) {
-        match ctx
-            .github
-            .issue_field_times(repo, pair.issue_number as u64, credential_label)
-            .await
-        {
-            Ok(times) => times,
-            Err(err) => return handle_port_error(ctx, pair, err).await,
-        }
-    } else {
-        Default::default()
-    };
-
-    let plan = reconcile::reconcile(
-        &to_local_task(&local),
-        &to_remote_view(&issue, field_times),
-        &baseline,
-        &to_touch_times(
-            &touch::read_touch(ctx, &pair.todo_id)
-                .await
-                .map_err(internal)?,
-        ),
-    );
 
     if let Some(patch) = apply::build_issue_patch(&plan.remote_writes)
         && let Err(err) = ctx
@@ -177,30 +136,7 @@ async fn reconcile_pair(
     }
 
     let now = now_iso8601();
-    apply::apply_local_writes(ctx, &pair.todo_id, &plan.local_writes, &now)
-        .await
-        .map_err(internal)?;
-    store::write_baseline(
-        ctx,
-        &pair.todo_id,
-        &plan.next_baseline.title,
-        &plan.next_baseline.body,
-        &plan.next_baseline.state,
-        &plan.next_baseline.labels,
-        &now,
-    )
-    .await
-    .map_err(internal)?;
-
-    // The state reflects the *last* run, not history: a clean run clears any
-    // earlier `errored`/`remotely-unlinked` mark, and only a run that
-    // actually replaced something on either side earns the amber glyph.
-    let pair_state = if plan.report_rows.is_empty() {
-        "clean"
-    } else {
-        "overwritten"
-    };
-    store::set_pair_state(ctx, &pair.todo_id, pair_state, None)
+    apply::persist_pair(ctx, pair, &plan, &now)
         .await
         .map_err(internal)?;
 
@@ -260,36 +196,4 @@ async fn handle_port_error(
 
 fn internal(err: PluginError) -> (&'static str, String) {
     ("internal", err.to_string())
-}
-
-fn to_local_task(row: &LocalRow) -> reconcile::LocalTask {
-    reconcile::LocalTask {
-        title: row.title.clone(),
-        body: row.body.clone(),
-        status: row.status.clone(),
-        labels: row.labels.clone(),
-    }
-}
-
-fn to_remote_view(
-    issue: &crate::github_port::IssueSnapshot,
-    field_times: crate::github_port::IssueFieldTimes,
-) -> RemoteIssueView {
-    RemoteIssueView {
-        title: issue.title.clone(),
-        body: issue.body.clone(),
-        state: project_issue_state(issue).to_string(),
-        labels: issue.labels.clone(),
-        updated_at: issue.updated_at.clone(),
-        title_at: field_times.title_at,
-        state_at: field_times.state_at,
-    }
-}
-
-fn to_touch_times(touch: &std::collections::HashMap<String, String>) -> TouchTimes {
-    TouchTimes {
-        title_at: touch.get("title").cloned(),
-        body_at: touch.get("body").cloned(),
-        state_at: touch.get("state").cloned(),
-    }
 }

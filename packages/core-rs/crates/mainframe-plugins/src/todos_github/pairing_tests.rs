@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::db_context::text;
-use crate::github_port::IssueState;
+use crate::github_port::{GitHubPortError, IssueState};
 use crate::todos_github::fake_github::{Call, FakeGitHub};
 use crate::todos_github::pairing::{self, PairingError};
 use crate::todos_github::run_test_support::{insert_pair, insert_todo, issue, link_project};
@@ -208,4 +208,21 @@ async fn listing_issues_annotates_already_paired_ones_with_their_todo_number() {
     let paired = issues.iter().find(|i| i.number == 2).unwrap();
     assert_eq!(unpaired.paired_todo_number, None);
     assert_eq!(paired.paired_todo_number, Some(1));
+}
+
+#[tokio::test]
+async fn listing_issues_surfaces_a_list_fetch_error() {
+    let fake = Arc::new(
+        FakeGitHub::default().with_list_error(GitHubPortError::Request {
+            status: 503,
+            message: "server error".into(),
+        }),
+    );
+    let harness = setup(fake).await;
+    let ctx = &harness.ctx;
+    link_project(ctx, "p1").await;
+
+    let err = pairing::list_remote_issues(ctx, "p1").await.unwrap_err();
+
+    assert!(matches!(err, PairingError::Failed(_)));
 }
