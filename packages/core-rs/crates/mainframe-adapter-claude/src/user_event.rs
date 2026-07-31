@@ -424,6 +424,7 @@ pub fn handle_user_event(session: &ClaudeSession, event: &Value, sink: &dyn Sess
         let ty = block.get("type").and_then(Value::as_str);
         if ty == Some("tool_result") {
             let text = extract_tool_result_content(block.get("content"));
+            crate::workflow_events::link_launch(st, &text);
             let tool_use_id = block.get("tool_use_id").and_then(Value::as_str);
             let plan_path = plan_file_path(&text);
             if let Some(p) = plan_path {
