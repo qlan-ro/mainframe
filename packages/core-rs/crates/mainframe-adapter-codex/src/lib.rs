@@ -14,6 +14,7 @@
 
 pub mod adapter;
 pub mod approval_handler;
+pub(crate) mod collab_identity;
 pub(crate) mod collab_protocol;
 pub(crate) mod compaction;
 pub mod event_mapper;
