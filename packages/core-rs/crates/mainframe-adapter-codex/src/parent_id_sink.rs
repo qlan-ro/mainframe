@@ -11,8 +11,7 @@ use crate::history::with_parent;
 
 /// Wraps a sink to tag every emitted block with `parentToolUseId` (mirrors the TS
 /// `wrapSinkWithParentId`). Only `on_message`/`on_tool_result` are transformed;
-/// every other callback delegates unchanged. `pub(crate)` so `child_tail.rs` can
-/// wrap a raw sink before streaming reconstructed child items into it.
+/// every other callback delegates unchanged.
 pub(crate) struct ParentIdSink {
     inner: Arc<dyn SessionSink>,
     parent: String,
