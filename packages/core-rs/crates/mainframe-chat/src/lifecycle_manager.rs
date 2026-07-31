@@ -305,6 +305,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             {
                 let models = self.deps.adapter_snapshot_models(adapter_id);
                 effective_model = normalize_saved_default_model(Some(&m), &models);
+                if effective_model.is_none() {
+                    warn!(
+                        adapter_id,
+                        configured_model = %m,
+                        "saved default model is not in the adapter catalog; new chat falls back to the adapter default"
+                    );
+                }
             }
             if effective_mode.is_none()
                 && let Some(m) = default_mode
