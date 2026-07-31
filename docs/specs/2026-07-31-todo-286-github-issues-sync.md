@@ -131,9 +131,10 @@ default colour.
 
 ### Pair state on the board
 
-Task rows are otherwise unchanged — no new column, no shifted anatomy. At rest, sync shows as the trailing glyph
-only; on hover, the row's existing action cluster carries one sync action (publish when unpaired, unlink when
-paired):
+Task rows are otherwise unchanged — no new column, no shifted anatomy. Sync state shows in the row's trailing glyph
+slot. On an unpaired row that slot is empty at rest and reveals the publish action on hover; on a paired row it
+holds the issue number, so a paired row's unlink action sits in the row's existing hover-revealed action cluster
+instead:
 
 | Pair state | Trailing glyph |
 |---|---|
@@ -201,10 +202,10 @@ unpaired; it can be imported again later as a new task with a new number. Unlink
 and baseline only: no field is written on either side, the task stays, and the issue stays.
 
 The unlink action is an icon button in the task's existing hover-revealed action cluster — the same cluster that
-carries start, edit, and delete on a list row and on a board card, and the same one that carries the publish action
-while the task is unpaired. A paired task shows unlink where an unpaired task shows publish; the two never appear
-together, so the cluster grows by one control at most and the row's resting anatomy is unchanged. There is no
-per-task menu on this board and this feature does not introduce one.
+carries start, edit, and delete on a list row and on a board card. It appears only on a paired task, because the
+trailing glyph slot that reveals publish on an unpaired row holds the issue number once the task is paired. The
+cluster grows by one control at most and the row's resting anatomy is unchanged. There is no per-task menu on this
+board and this feature does not introduce one.
 
 ## Not Included
 
@@ -310,9 +311,10 @@ per-task menu on this board and this feature does not introduce one.
     follows a transfer redirect, is excluded from following runs' writes, and is surfaced as a pair state distinct
     from any report row.
 26. Unlinking a single pair drops the pairing and baseline only, with a test asserting no field write on either
-    side. The control is a hover-revealed icon button in the task's existing action cluster on both the list row
-    and the board card; it is present only for a paired task, the publish button is present only for an unpaired
-    one, and no dropdown menu is added to a task row or card.
+    side. The unlink control is a hover-revealed icon button in the task's existing action cluster on both the list
+    row and the board card, present only for a paired task; the publish control is a hover-revealed button in the
+    row's trailing glyph slot, present only for an unpaired task; and no dropdown menu is added to a task row or
+    card.
 27. No workflow label — the seven declared prefixes or the seven declared exact labels — appears in any outbound
     request, and no label arriving from GitHub introduces one locally. Tests cover both directions and read the
     single declared constant.
@@ -388,8 +390,10 @@ per-task menu on this board and this feature does not introduce one.
 - **The clean-state trailing glyph is the GitHub issue number as static text, not a link.** The row already carries
   the task number, and the design direction reserves clickability for the amber overwritten state; opening the
   issue in a browser is deferred. `reversible`
-- **Unlinking a pair is an icon button in the task's existing hover-revealed action cluster, not a menu item.** The
-  design direction names four surfaces and does not place per-pair unlink. Verified in the code: `TaskListRow.tsx`
+- **Unlinking a pair is an icon button in the task's existing hover-revealed action cluster, not a menu item and
+  not the trailing glyph.** The design direction assigns the trailing glyph to the publish action on an unpaired row
+  and to the issue number on a paired one, and it does not place per-pair unlink. Verified in the code:
+  `TaskListRow.tsx`
   and `TaskCard.tsx` render start, edit, and delete as icon buttons in one `opacity-0 group-hover:opacity-100`
   cluster, and the tasks feature has no per-task dropdown — `DropdownMenu` appears there only in the board-level
   `FilterMenu`. Reusing that cluster keeps the resting row unchanged and commissions no new control type on a
