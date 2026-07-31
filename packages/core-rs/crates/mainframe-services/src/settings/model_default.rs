@@ -35,6 +35,7 @@ mod tests {
             context_window: None,
             is_default,
             is_older: None,
+            group: None,
             supported_efforts: None,
             default_effort: None,
             supports_fast: None,

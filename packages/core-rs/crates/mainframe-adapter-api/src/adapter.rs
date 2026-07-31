@@ -24,6 +24,7 @@ use mainframe_types::chat::{ChatMessage, MessageContent, ResolvedTuning, TodoIte
 use mainframe_types::context::{ContextFile, SkillFileEntry};
 use mainframe_types::display::ToolCategories;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::transcript::TranscriptLocation;
 use serde::{Deserialize, Serialize};
 
 use crate::{AdapterError, BoxFuture};
@@ -253,6 +254,19 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
+    /// Absolute on-disk location of the CLI transcript for `session_id`.
+    /// `Ok(None)` = the adapter cannot determine the layout — callers MUST treat
+    /// it as "unknown" and hide the session, never as "missing".
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        let _ = (session_id, project_path, session_file_path);
+        Box::pin(async { Ok(None) })
+    }
+
     // TODO(port): the optional skill/agent/command/external-session CRUD methods
     // and `createPlanModeHandler?` from adapter.ts are deferred to the phase that
     // ports the concrete claude/codex adapters and their routes — their default
@@ -271,3 +285,5 @@ pub trait Adapter: Send + Sync {
 // session_id, project_path, session_file_path). Owned `String` params (not &str)
 // to stay consistent with this trait's async BoxFuture methods; `None` return =
 // "unsupported / cannot determine — don't flag".
+// notes: todo #240 adds a third optional method, locate_transcript, alongside
+// is_transcript_present — same default-Ok(None) shape, same owned-String args.

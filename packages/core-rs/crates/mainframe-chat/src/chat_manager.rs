@@ -42,6 +42,7 @@ use crate::lifecycle_manager::{
     ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
 };
 use crate::message_cache::MessageCache;
+use crate::message_markers::visible_message_text;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
 use crate::permission_manager::PermissionManager;
 use crate::title_generator::derive_title_from_message;

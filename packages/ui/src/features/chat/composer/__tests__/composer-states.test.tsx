@@ -165,6 +165,7 @@ describe('ProviderModelSelect — footer shows in both locked and unlocked state
           adapter={ADAPTER_CLAUDE}
           model={MODEL_WITH_EFFORTS}
           locked={locked}
+          disabled={false}
           setAdapter={vi.fn()}
           setModel={vi.fn()}
         />

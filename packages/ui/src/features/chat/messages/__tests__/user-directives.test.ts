@@ -5,7 +5,7 @@
  * segment array — no logic from the formatter is re-derived here.
  */
 import { describe, it, expect } from 'vitest';
-import { mainframeUserFormatter } from '../user-directives';
+import { mainframeUserFormatter, mainframeUserInlineFormatter } from '../user-directives';
 
 // ---------------------------------------------------------------------------
 // Plain text — no directives
@@ -98,5 +98,76 @@ describe('mainframeUserFormatter.parse — /command', () => {
     const segments = mainframeUserFormatter.parse('/foo/bar.baz rest');
     const cmd = segments.find((s) => s.kind === 'mention' && (s as { type?: string }).type === 'command');
     expect(cmd).toEqual({ kind: 'mention', type: 'command', label: '/foo/bar.baz', id: 'foo/bar.baz' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// @session[…] tokens (todo #240)
+// ---------------------------------------------------------------------------
+
+/** Concatenating every segment's rendered characters must reproduce the input. */
+function reassemble(segments: readonly import('@assistant-ui/react').Unstable_DirectiveSegment[]): string {
+  return segments.map((s) => (s.kind === 'text' ? s.text : s.label)).join('');
+}
+
+describe('mainframeUserFormatter.parse — @session[…]', () => {
+  it('emits a session segment whose label is the whole token and id is the reference label', () => {
+    expect(mainframeUserFormatter.parse('look at @session[Foo] please')).toEqual([
+      { kind: 'text', text: 'look at ' },
+      { kind: 'mention', type: 'session', label: '@session[Foo]', id: 'Foo' },
+      { kind: 'text', text: ' please' },
+    ]);
+  });
+
+  it('parses a label containing spaces and a (2) suffix as one token', () => {
+    expect(mainframeUserFormatter.parse('@session[Fix foo handling (2)] ok')).toEqual([
+      { kind: 'mention', type: 'session', label: '@session[Fix foo handling (2)]', id: 'Fix foo handling (2)' },
+      { kind: 'text', text: ' ok' },
+    ]);
+  });
+
+  it('parses bare @session (no brackets) as a plain file mention, unchanged', () => {
+    expect(mainframeUserFormatter.parse('see @session now')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'mention', type: 'mention', label: '@session', id: 'session' },
+      { kind: 'text', text: ' now' },
+    ]);
+  });
+
+  it('does not match a token that is not whitespace- or start-bounded', () => {
+    expect(mainframeUserFormatter.parse('email@session[x]')).toEqual([{ kind: 'text', text: 'email@session[x]' }]);
+  });
+
+  it('reproduces a mixed command + mention + session string char-for-char', () => {
+    const input = '/review @src/app.ts with @session[Foo Bar] and @session[Baz] done';
+    const segments = mainframeUserFormatter.parse(input);
+    expect(reassemble(segments)).toBe(input);
+    expect(segments.filter((s) => s.kind === 'mention' && s.type === 'session')).toHaveLength(2);
+  });
+
+  it('emits an empty id for an empty label rather than throwing', () => {
+    expect(mainframeUserFormatter.parse('@session[]')).toEqual([
+      { kind: 'mention', type: 'session', label: '@session[]', id: '' },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The inline formatter — same tokens, no command recognition
+// ---------------------------------------------------------------------------
+
+describe('mainframeUserInlineFormatter.parse', () => {
+  it('emits no command segment for a leading /foo', () => {
+    expect(mainframeUserInlineFormatter.parse('/review the diff')).toEqual([
+      { kind: 'text', text: '/review the diff' },
+    ]);
+  });
+
+  it('still recognizes @mention and @session tokens', () => {
+    expect(mainframeUserInlineFormatter.parse('@a.ts and @session[Foo]')).toEqual([
+      { kind: 'mention', type: 'mention', label: '@a.ts', id: 'a.ts' },
+      { kind: 'text', text: ' and ' },
+      { kind: 'mention', type: 'session', label: '@session[Foo]', id: 'Foo' },
+    ]);
   });
 });

@@ -12,6 +12,7 @@ use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
+use crate::message_markers::visible_message_text;
 use crate::title_generator::{derive_title_from_message, resolve_title_binary};
 
 /// 5 minutes.
@@ -123,8 +124,15 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             ..Default::default()
         };
 
-        // Strip XML-like tags from the title (e.g. <command-message>, <local-command-caveat>)
-        let clean_title = title.map(strip_xml_tags).filter(|s| !s.is_empty());
+        // Drop the composer's markers (message_markers.rs) — an imported session's
+        // first message carries them verbatim, and they address the agent or the
+        // renderer, not the reader. This runs before strip_xml_tags because that
+        // collapses newlines, which would fuse a marker block with the body into one
+        // line the line-based strip then swallows whole. Both title paths consume it.
+        let clean_title = title
+            .map(visible_message_text)
+            .map(|t| strip_xml_tags(&t))
+            .filter(|s| !s.is_empty());
         if let Some(ct) = &clean_title {
             updates.title = Some(derive_title_from_message(ct));
         }

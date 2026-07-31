@@ -1,12 +1,11 @@
 /**
  * Encode sandbox captures into the sentinel markdown block + base64 attachment
- * items for upload. The encoding MUST round-trip with the receive-side decoder
- * in `features/chat/view-model/parse-captures.ts` — do NOT alter the sentinel,
- * the header line, or the row format without updating that file too.
+ * items for upload. The row format here is the inverse of `CAPTURE_ROW_RE`, so
+ * the two move together — the sentinel and header come from the marker registry.
  *
  * Ported verbatim from `packages/app-electron/src/renderer/lib/format-captures.ts`.
  */
-import { SANDBOX_CAPTURE_SENTINEL } from '@/features/chat/view-model/parse-captures';
+import { CAPTURE_HEADER_LINE, SANDBOX_CAPTURE_SENTINEL } from '@/features/chat/markers/message-markers';
 import type { UploadAttachmentItem } from '@/lib/api/attachments';
 
 export interface CaptureLike {
@@ -23,7 +22,7 @@ export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
 } {
   if (captures.length === 0) return { markdown: '', attachments: [] };
   const attachments: UploadAttachmentItem[] = [];
-  const lines: string[] = ['> **Preview captures**'];
+  const lines: string[] = [CAPTURE_HEADER_LINE];
   let el = 0;
   let sc = 0;
   for (const c of captures) {

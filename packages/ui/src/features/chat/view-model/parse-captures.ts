@@ -5,11 +5,13 @@
  * A capture message's text starts with the \0 sentinel followed by a
  * `> **Preview captures**` blockquote; each row names an attached image
  * (element1.png / screenshot1.png) with an optional selector + annotation.
+ * The syntax itself lives in `features/chat/markers/message-markers.ts`
+ * alongside every other hidden-from-the-reader block.
  * Render-only in app-tauri — the capture COMPOSER stays gated on the
  * sandbox surface (see docs/architecture/MIGRATION-TRACKER.md). The format
  * side (`formatCaptures`) is deliberately NOT ported.
  */
-export const SANDBOX_CAPTURE_SENTINEL = '\0__MF_SANDBOX_CAPTURE__';
+import { CAPTURE_ROW_RE, splitSandboxCaptureBlock } from '../markers/message-markers';
 
 export interface CaptureRow {
   label: string;
@@ -24,21 +26,15 @@ export interface CaptureRow {
  * zero rows) — desktop semantics, the sentinel itself is always stripped.
  */
 export function parseSandboxCaptureBlock(text: string): { rows: CaptureRow[]; rest: string } | null {
-  if (!text.startsWith(SANDBOX_CAPTURE_SENTINEL)) return null;
-  const body = text.slice(SANDBOX_CAPTURE_SENTINEL.length).replace(/^\n/, '');
-  const all = body.split('\n');
-  const rows: CaptureRow[] = [];
-  let i = 0;
-  if (all[i]?.trim() === '> **Preview captures**') i += 1;
-  for (; i < all.length; i++) {
-    const line = all[i] ?? '';
-    const m = line.match(/^> - `([^`]+)`(?: — selector `([^`]+)`)?(?: — "(.*)")?$/);
-    if (!m) break;
+  const block = splitSandboxCaptureBlock(text);
+  if (!block) return null;
+  const rows = block.rowLines.map((line) => {
+    // Non-null: the splitter only collects lines this pattern already matched.
+    const m = CAPTURE_ROW_RE.exec(line)!;
     const row: CaptureRow = { label: m[1]!, imageName: `${m[1]!}.png` };
     if (m[2]) row.selector = m[2];
     if (m[3]) row.annotation = m[3];
-    rows.push(row);
-  }
-  const rest = all.slice(i).join('\n').trim();
-  return { rows, rest };
+    return row;
+  });
+  return { rows, rest: block.rest };
 }

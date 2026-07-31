@@ -14,12 +14,13 @@ use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::display::ToolCategories;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::models::{claude_models, enrich_with_context_window, merge_older_models};
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::is_claude_transcript_present;
+use crate::transcript::{is_claude_transcript_present, locate_claude_transcript};
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -60,10 +61,24 @@ fn tool_category(names: &[&str]) -> std::collections::HashSet<String> {
     names.iter().map(|s| s.to_string()).collect()
 }
 
+/// The native catalog — the live probe when one succeeded, the static list otherwise —
+/// followed by the CLIProxyAPI section. Order is the picker's order.
+fn merged_catalog(
+    native: Option<Vec<AdapterModel>>,
+    proxy: Vec<AdapterModel>,
+) -> Vec<AdapterModel> {
+    let mut models = native.unwrap_or_else(claude_models);
+    models.extend(proxy);
+    models
+}
+
 pub struct ClaudeAdapter {
     background_tasks: Arc<BackgroundTaskTracker>,
     sessions: Arc<Mutex<HashMap<String, Arc<ClaudeSession>>>>,
     dynamic_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
+    /// Models a local CLIProxyAPI serves, refreshed by each probe. Empty is the
+    /// expected steady state — most installs have no proxy.
+    proxy_models: Arc<Mutex<Vec<AdapterModel>>>,
     /// Boot-resolved login-shell `PATH`, applied to every spawned `claude` CLI so
     /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
     /// `enrichPath` env mutation).
@@ -76,6 +91,7 @@ impl ClaudeAdapter {
             background_tasks,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             dynamic_models: Arc::new(Mutex::new(None)),
+            proxy_models: Arc::new(Mutex::new(Vec::new())),
             resolved_path,
         }
     }
@@ -143,13 +159,11 @@ impl Adapter for ClaudeAdapter {
 
     fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
         let dynamic = self.dynamic_models.clone();
+        let proxy = self.proxy_models.clone();
         Box::pin(async move {
-            let models = dynamic
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone()
-                .unwrap_or_else(claude_models);
-            Ok(models)
+            let native = dynamic.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let proxy = proxy.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            Ok(merged_catalog(native, proxy))
         })
     }
 
@@ -162,6 +176,7 @@ impl Adapter for ClaudeAdapter {
         executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
         let dynamic = self.dynamic_models.clone();
+        let proxy = self.proxy_models.clone();
         let path = self.resolved_path.clone();
         Box::pin(async move {
             let exe = executable_path.unwrap_or_else(|| "claude".to_string());
@@ -171,7 +186,15 @@ impl Adapter for ClaudeAdapter {
                 *dynamic.lock().unwrap_or_else(|e| e.into_inner()) =
                     Some(merge_older_models(enriched));
             }
-            Ok(dynamic.lock().unwrap_or_else(|e| e.into_inner()).clone())
+            *proxy.lock().unwrap_or_else(|e| e.into_inner()) =
+                crate::cliproxy::probe_catalog().await;
+
+            let native = dynamic.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let proxy = proxy.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            if native.is_none() && proxy.is_empty() {
+                return Ok(None);
+            }
+            Ok(Some(merged_catalog(native, proxy)))
         })
     }
 
@@ -247,6 +270,20 @@ impl Adapter for ClaudeAdapter {
                 )
                 .await,
             ))
+        })
+    }
+
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        Box::pin(async move {
+            Ok(
+                locate_claude_transcript(&session_id, &project_path, session_file_path.as_deref())
+                    .await,
+            )
         })
     }
 

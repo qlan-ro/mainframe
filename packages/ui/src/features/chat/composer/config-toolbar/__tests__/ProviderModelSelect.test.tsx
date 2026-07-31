@@ -23,6 +23,8 @@
  *  6. Clicking an installed, non-active provider pill calls setAdapter with
  *     that adapter's id
  *  7. A model with isDefault=true includes "default" in its row text
+ *  8. disabled=true (mid-turn) disables the trigger and blocks the popover
+ *     from opening, matching the effort/features controls' running-inertness
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -103,6 +105,7 @@ interface RenderProps {
   adapter?: AdapterInfo | null;
   model?: AdapterModel | null;
   locked?: boolean;
+  disabled?: boolean;
   setAdapter?: (id: string) => void;
   setModel?: (id: string) => void;
 }
@@ -115,6 +118,7 @@ function renderSelect(props: RenderProps = {}) {
   const adapter = props.adapter !== undefined ? props.adapter : ADAPTER_CLAUDE;
   const model = props.model !== undefined ? props.model : SONNET;
   const locked = props.locked ?? false;
+  const disabled = props.disabled ?? false;
 
   render(
     <TooltipProvider>
@@ -124,6 +128,7 @@ function renderSelect(props: RenderProps = {}) {
         adapter={adapter}
         model={model}
         locked={locked}
+        disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
       />
@@ -425,7 +430,42 @@ describe('ProviderModelSelect — default model shows "default" marker', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Older models sit under their own label, after the current ones
+// 8. disabled=true (mid-turn) makes the whole picker inert
+// ---------------------------------------------------------------------------
+
+describe('ProviderModelSelect — disabled prop makes the picker inert mid-turn', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('disabled=true renders the trigger with the disabled attribute', () => {
+    renderSelect({ disabled: true });
+
+    expect(screen.getByTestId('composer-model-select')).toBeDisabled();
+  });
+
+  it('disabled=true blocks the popover from opening and never calls setModel', async () => {
+    const setModel = vi.fn();
+    renderSelect({ disabled: true, setModel });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-provider-model-popover')).not.toBeInTheDocument();
+    expect(setModel).not.toHaveBeenCalled();
+  });
+
+  it('disabled=false (default) leaves the trigger enabled and the popover openable', async () => {
+    renderSelect({});
+
+    const trigger = screen.getByTestId('composer-model-select');
+    expect(trigger).not.toBeDisabled();
+
+    await userEvent.click(trigger);
+
+    expect(screen.getByTestId('composer-provider-model-popover')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Older models sit under their own label, after the current ones
 // ---------------------------------------------------------------------------
 
 const OPUS_41: AdapterModel = {
@@ -498,5 +538,121 @@ describe('ProviderModelSelect — older models group', () => {
     await userEvent.click(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805'));
 
     expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Models reached through a separate endpoint sit in their own labelled group
+// ---------------------------------------------------------------------------
+
+const PROXY_SOL: AdapterModel = {
+  id: 'cliproxy/gpt-5.6-sol',
+  label: 'gpt-5.6-sol',
+  description: 'openai',
+  group: 'CLIProxyAPI',
+};
+
+const PROXY_KIMI: AdapterModel = {
+  id: 'cliproxy/kimi-k3',
+  label: 'kimi-k3',
+  description: 'moonshot',
+  group: 'CLIProxyAPI',
+};
+
+const ADAPTER_CLAUDE_WITH_PROXY: AdapterInfo = {
+  ...ADAPTER_CLAUDE,
+  models: [SONNET, HAIKU, OPUS_41, PROXY_SOL, PROXY_KIMI],
+};
+
+describe('ProviderModelSelect — endpoint model group', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders one header per group, labelled with the group name', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_PROXY],
+      adapter: ADAPTER_CLAUDE_WITH_PROXY,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.getByTestId('composer-model-group-header-cliproxyapi').textContent).toBe('CLIProxyAPI');
+    expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3')).toBeInTheDocument();
+  });
+
+  it('places the group after both the current and the older rows', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_PROXY],
+      adapter: ADAPTER_CLAUDE_WITH_PROXY,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    const opus = screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805');
+    const groupHeader = screen.getByTestId('composer-model-group-header-cliproxyapi');
+    expect(opus.compareDocumentPosition(groupHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps grouped models out of the "Older models" section', async () => {
+    renderSelect({
+      adapters: [{ ...ADAPTER_CLAUDE, models: [SONNET, PROXY_SOL] }],
+      adapter: { ...ADAPTER_CLAUDE, models: [SONNET, PROXY_SOL] },
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-model-older-header')).toBeNull();
+    expect(screen.getByTestId('composer-model-group-header-cliproxyapi')).toBeInTheDocument();
+  });
+
+  it('omits every group header when no model carries a group', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-model-group-header-cliproxyapi')).toBeNull();
+  });
+
+  it('selects a grouped model by its namespaced id', async () => {
+    const setModel = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE_WITH_PROXY],
+      adapter: ADAPTER_CLAUDE_WITH_PROXY,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+      setModel,
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3'));
+
+    expect(setModel).toHaveBeenCalledExactlyOnceWith('cliproxy/kimi-k3');
+  });
+
+  it('still shows the stored endpoint model when the endpoint has gone away', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE],
+      adapter: ADAPTER_CLAUDE,
+      model: null,
+      chat: makeChat({ adapterId: 'claude', model: 'cliproxy/gpt-5.6-sol' }),
+    });
+
+    expect(screen.getByTestId('composer-model-select').textContent).toContain('cliproxy/gpt-5.6-sol');
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-model-group-header-cliproxyapi')).toBeNull();
   });
 });

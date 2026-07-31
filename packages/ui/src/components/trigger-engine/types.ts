@@ -6,9 +6,11 @@
  * unstable library surface.
  */
 
+import type { ReactNode } from 'react';
+
 export interface TriggerItem {
   id: string;
-  /** Domain kind — `skill` / `file` / `directory` / `agent`. Drives icons and close-on-insert. */
+  /** Domain kind — `skill` / `file` / `directory` / `agent` / `session`. Drives icons and close-on-insert. */
   type: string;
   label: string;
   description?: string;
@@ -46,6 +48,10 @@ export interface TriggerConfig {
   formatter: DirectiveFormatter;
   /** Test-id prefix for the popover rows: `<prefix>-<item.id>`. */
   itemTestIdPrefix: string;
+  /** Overrides the `<itemTestIdPrefix>-<id>` row test id for items it returns a string for. */
+  itemTestId?(item: TriggerItem): string | undefined;
+  /** Optional leading glyph for a row. Items it returns null for render no glyph node at all. */
+  itemGlyph?(item: TriggerItem): ReactNode;
   /** Defaults to true. `false` keeps the token open (directory drill-down). */
   closeOnInsert?(item: TriggerItem): boolean;
   onInserted?(item: TriggerItem): void;

@@ -1,4 +1,7 @@
 //! Ported from `packages/core/src/chat/title-generator.ts`.
+//!
+//! Callers must hand these functions [`crate::message_markers::visible_message_text`]
+//! output, not a raw wire body — a title has to read like the message did.
 
 /// Deterministic fallback title: the first user message, cleaned and truncated at
 /// a word boundary.

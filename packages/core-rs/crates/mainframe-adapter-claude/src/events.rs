@@ -312,7 +312,13 @@ pub fn handle_control_response_event(
     }
 }
 
-fn handle_rate_limit_event(event: &Value, sink: &dyn SessionSink) {
+fn handle_rate_limit_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+    // An endpoint session's limits are the proxy's, not the user's Claude
+    // subscription's. Reporting them would overwrite the real account's quota with
+    // a number from a provider the user never signed into.
+    if session.is_endpoint_session() {
+        return;
+    }
     let info = event.get("rate_limit_info");
     let now = chrono::Utc::now().timestamp_millis();
     if let Some(quota) = normalize_rate_limit_event(info, now) {
@@ -414,7 +420,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
         Some("control_request") => handle_control_request_event(event, sink),
         Some("control_cancel_request") => handle_control_cancel_request_event(event, sink),
         Some("control_response") => handle_control_response_event(session, event, sink),
-        Some("rate_limit_event") => handle_rate_limit_event(event, sink),
+        Some("rate_limit_event") => handle_rate_limit_event(session, event, sink),
         Some("result") => {
             // Subagent result events (parent_tool_use_id present) are inner
             // sub-turns — dropping them keeps the parent processState 'working'.
@@ -1289,6 +1295,24 @@ mod tests {
         assert_eq!(session.label, None);
         // observedAt (#268) is stamped from the wall clock at handling time.
         assert!(session.observed_at.is_some());
+    }
+
+    /// The proxy relays whatever limits its own upstream reports. Attributing those
+    /// to "claude" would overwrite the real subscription's quota in the UI.
+    #[test]
+    fn rate_limit_event_from_an_endpoint_session_is_not_reported_as_claude_quota() {
+        let s = session();
+        s.set_endpoint_for_test();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "rate_limit_event",
+                "rate_limit_info": { "rateLimitType": "five_hour", "utilization": 0.42, "resetsAt": 1_789_999_999i64 },
+            }),
+        );
+        assert!(sink.r().provider_quota.is_empty());
     }
 
     #[test]

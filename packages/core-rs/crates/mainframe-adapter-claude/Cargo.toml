@@ -17,6 +17,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 nanoid = { workspace = true }
 dirs = { workspace = true }
+reqwest = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-adapter-api = { workspace = true }

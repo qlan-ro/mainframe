@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SIDEBAR_EXPANDED_WIDTH } from '@/layout/SidebarShell';
 import {
   useUiPrefs,
@@ -12,6 +12,14 @@ import {
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
+/** Fresh module + fresh initial state, hydrated from whatever is in localStorage right now. */
+async function reloadStore() {
+  vi.resetModules();
+  const mod = await import('../ui-prefs');
+  await mod.useUiPrefs.persist.rehydrate();
+  return mod.useUiPrefs;
+}
+
 beforeEach(() => {
   localStorage.clear();
   // Reset store to declared defaults between tests.
@@ -22,6 +30,7 @@ beforeEach(() => {
     bottomPanelTab: 'context',
     bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
     rightClickHintDismissed: false,
+    dontWarnOnTuningChange: false,
     collapsedSidebarSections: {},
   });
 });
@@ -35,6 +44,7 @@ describe('useUiPrefs defaults', () => {
     expect(s.bottomPanelTab).toBe('context');
     expect(s.bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
     expect(s.rightClickHintDismissed).toBe(false);
+    expect(s.dontWarnOnTuningChange).toBe(false);
     expect(s.collapsedSidebarSections).toEqual({});
   });
 });
@@ -74,6 +84,18 @@ describe('useUiPrefs actions', () => {
     expect(useUiPrefs.getState().rightClickHintDismissed).toBe(false);
     useUiPrefs.getState().dismissRightClickHint();
     expect(useUiPrefs.getState().rightClickHintDismissed).toBe(true);
+  });
+
+  it('dismissTuningChangeWarning permanently suppresses the mid-session tuning warning', () => {
+    expect(useUiPrefs.getState().dontWarnOnTuningChange).toBe(false);
+    useUiPrefs.getState().dismissTuningChangeWarning();
+    expect(useUiPrefs.getState().dontWarnOnTuningChange).toBe(true);
+  });
+
+  it('dismissTuningChangeWarning persists the flag, not just in-memory state', () => {
+    useUiPrefs.getState().dismissTuningChangeWarning();
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.dontWarnOnTuningChange).toBe(true);
   });
 
   it('toggleSidebarSection flips a section from expanded to collapsed and back', () => {
@@ -123,6 +145,7 @@ describe('useUiPrefs persistence', () => {
         'bottomPanelHeight',
         'bottomPanelTab',
         'collapsedSidebarSections',
+        'dontWarnOnTuningChange',
         'inspectorVisible',
         'rightClickHintDismissed',
         'sidebarVisible',
@@ -131,5 +154,27 @@ describe('useUiPrefs persistence', () => {
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
+  });
+});
+
+describe('useUiPrefs rehydration: dontWarnOnTuningChange', () => {
+  it('fills the default when a legacy payload predates the key', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { bottomPanelTab: 'skills' }, version: 1 }));
+    const fresh = await reloadStore();
+    // Proves hydration actually ran, so the next assertion isn't vacuous.
+    expect(fresh.getState().bottomPanelTab).toBe('skills');
+    expect(fresh.getState().dontWarnOnTuningChange).toBe(false);
+  });
+
+  it('a persisted true survives a reload', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: { bottomPanelTab: 'skills', dontWarnOnTuningChange: true },
+        version: 1,
+      }),
+    );
+    const fresh = await reloadStore();
+    expect(fresh.getState().dontWarnOnTuningChange).toBe(true);
   });
 });

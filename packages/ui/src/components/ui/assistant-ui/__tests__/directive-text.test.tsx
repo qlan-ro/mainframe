@@ -80,3 +80,55 @@ describe('createDirectiveText — plainTypes render mode', () => {
     expect(mention.closest('[data-slot="directive-text-chip"]')).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-type renderers (todo #240) — a segment type may supply its own chrome.
+// ---------------------------------------------------------------------------
+
+const sessionFormatter: Unstable_DirectiveFormatter = {
+  serialize: () => '',
+  parse: () => [
+    { kind: 'text', text: 'see ' },
+    { kind: 'mention', type: 'session', label: '@session[Foo]', id: 'Foo' },
+    { kind: 'text', text: ' and ' },
+    { kind: 'mention', type: 'mention', label: '@a.ts', id: 'a.ts' },
+  ],
+};
+
+function SessionMarker({ id }: { type: string; label: string; id: string }) {
+  return <span data-testid={`session-marker-${id}`}>{id}</span>;
+}
+
+describe('createDirectiveText — per-type renderers', () => {
+  it('renders a segment through its type renderer instead of a chip', () => {
+    const Text = createDirectiveText(sessionFormatter, { renderers: { session: SessionMarker } });
+    render(<Text type="text" text="hi" status={{ type: 'complete' }} />);
+
+    const marker = screen.getByTestId('session-marker-Foo');
+    expect(marker).toHaveTextContent('Foo');
+    expect(marker.closest('[data-slot="directive-text-chip"]')).toBeNull();
+    expect(screen.queryByText('@session[Foo]')).not.toBeInTheDocument();
+  });
+
+  it('takes precedence over plainTypes for the same type', () => {
+    const Text = createDirectiveText(sessionFormatter, {
+      plainTypes: ['session', 'mention'],
+      renderers: { session: SessionMarker },
+    });
+    render(<Text type="text" text="hi" status={{ type: 'complete' }} />);
+
+    expect(screen.getByTestId('session-marker-Foo')).toBeInTheDocument();
+    // The type with no renderer keeps its plain treatment.
+    expect(screen.getByText('@a.ts').className).toContain('text-primary');
+  });
+
+  it('leaves types with no renderer entry on their existing treatment', () => {
+    const Text = createDirectiveText(sessionFormatter, {
+      iconMap: { mention: AtSign },
+      renderers: { session: SessionMarker },
+    });
+    render(<Text type="text" text="hi" status={{ type: 'complete' }} />);
+
+    expect(screen.getByText('@a.ts').closest('[data-slot="directive-text-chip"]')).not.toBeNull();
+  });
+});
