@@ -10,7 +10,7 @@ use mainframe_types::claude_workflow::{
 };
 use serde_json::Value;
 
-use crate::snapshot::parse_snapshot;
+use crate::snapshot::{ParsedSnapshot, parse_snapshot};
 use crate::status::run_status;
 
 /// `<project_dir>/<session_id>/workflows`.
@@ -40,11 +40,10 @@ pub fn parse_run_record(value: &Value) -> Option<ClaudeWorkflowRun> {
             .get("workflowName")
             .and_then(Value::as_str)
             .map(str::to_string),
-        status: object
-            .get("status")
-            .and_then(Value::as_str)
-            .and_then(run_status)
-            .unwrap_or(ClaudeWorkflowRunStatus::Unavailable),
+        status: record_status(
+            object.get("status").and_then(Value::as_str),
+            parsed.as_ref(),
+        ),
         source: ClaudeWorkflowRunSource::Record,
         total_tokens: object
             .get("totalTokens")
@@ -59,6 +58,23 @@ pub fn parse_run_record(value: &Value) -> Option<ClaudeWorkflowRun> {
             .unwrap_or_default(),
         agents: parsed.map(|p| p.agents).unwrap_or_default(),
     })
+}
+
+/// D15 reserves `Unavailable` for a record with no recoverable structure, so an
+/// unrecognized or absent status downgrades a record only when it also parsed
+/// nothing. With structure in hand the run is finished but unclassifiable —
+/// `Stopped`, the same landing spot `status::task_update_action` gives the
+/// tracker for an unknown status.
+fn record_status(raw: Option<&str>, parsed: Option<&ParsedSnapshot>) -> ClaudeWorkflowRunStatus {
+    if let Some(status) = raw.and_then(run_status) {
+        return status;
+    }
+    let has_structure = parsed.is_some_and(|p| !p.phases.is_empty() || !p.agents.is_empty());
+    if has_structure {
+        ClaudeWorkflowRunStatus::Stopped
+    } else {
+        ClaudeWorkflowRunStatus::Unavailable
+    }
 }
 
 /// Reads every `wf_*.json` file in the session's `workflows/` directory.

@@ -402,6 +402,29 @@ async fn apply_record_twice_with_the_same_record_is_a_no_op_the_second_time() {
 }
 
 #[test]
+fn apply_record_with_an_unavailable_status_leaves_the_known_retained_status_alone() {
+    let store = ClaudeWorkflowStore::new();
+    store.seed(CHAT, TASK, None);
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 10,
+            duration_ms: 1_000,
+        },
+        Some(&snapshot("done", 10, 1_000)),
+    );
+    store.stamp_status(CHAT, TASK, ClaudeWorkflowRunStatus::Completed);
+
+    let mut incoming = record(TASK, Some("run-1"), true);
+    incoming.status = ClaudeWorkflowRunStatus::Unavailable;
+    store.apply_record(CHAT, incoming);
+
+    let run = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(run.status, ClaudeWorkflowRunStatus::Completed);
+}
+
+#[test]
 fn apply_record_for_an_unseen_task_id_inserts_the_run() {
     let store = ClaudeWorkflowStore::new();
     store.apply_record(CHAT, record("never-seeded", Some("run-x"), false));

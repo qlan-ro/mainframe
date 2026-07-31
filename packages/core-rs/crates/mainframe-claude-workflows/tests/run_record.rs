@@ -42,6 +42,34 @@ fn parse_run_record_maps_a_killed_status_to_stopped() {
 }
 
 #[test]
+fn parse_run_record_keeps_a_parsed_structure_when_the_status_is_unrecognized() {
+    let mut value = fixture();
+    value["status"] = Value::String("cancelling".to_string());
+    let run = parse_run_record(&value).unwrap();
+    assert_ne!(run.status, ClaudeWorkflowRunStatus::Unavailable);
+    assert_eq!(run.phases.len(), 2);
+    assert_eq!(run.agents.len(), 2);
+}
+
+#[test]
+fn parse_run_record_keeps_a_parsed_structure_when_the_status_is_absent() {
+    let mut value = fixture();
+    value.as_object_mut().unwrap().remove("status");
+    let run = parse_run_record(&value).unwrap();
+    assert_ne!(run.status, ClaudeWorkflowRunStatus::Unavailable);
+    assert_eq!(run.agents.len(), 2);
+}
+
+#[test]
+fn parse_run_record_is_unavailable_only_when_it_also_recovered_no_structure() {
+    let mut value = fixture();
+    value["status"] = Value::String("cancelling".to_string());
+    value["workflowProgress"] = Value::Array(Vec::new());
+    let run = parse_run_record(&value).unwrap();
+    assert_eq!(run.status, ClaudeWorkflowRunStatus::Unavailable);
+}
+
+#[test]
 fn parse_run_record_returns_none_for_a_malformed_record() {
     assert!(parse_run_record(&Value::String("not an object".to_string())).is_none());
     assert!(parse_run_record(&Value::Null).is_none());
