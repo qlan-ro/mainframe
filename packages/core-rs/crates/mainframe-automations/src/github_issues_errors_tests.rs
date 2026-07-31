@@ -72,6 +72,43 @@ async fn forbidden_with_retry_after_maps_to_rate_limited() {
 }
 
 #[tokio::test]
+async fn forbidden_primary_rate_limit_with_no_retry_after_maps_to_rate_limited() {
+    // GitHub's primary rate limit answers 403 with `x-ratelimit-remaining: 0`
+    // and no `Retry-After` — only the secondary limit sends `Retry-After`.
+    let reset_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 300;
+    let err = get_issue_error(
+        ResponseTemplate::new(403)
+            .insert_header("x-ratelimit-remaining", "0")
+            .insert_header("x-ratelimit-reset", reset_at.to_string().as_str())
+            .set_body_string("API rate limit exceeded"),
+        "tok",
+    )
+    .await;
+    match err {
+        GitHubError::RateLimited { wait: Some(wait) } => {
+            assert!(wait.as_secs() <= 300 && wait.as_secs() >= 295, "{wait:?}");
+        }
+        other => panic!("expected RateLimited with a wait, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn forbidden_with_nonzero_remaining_still_maps_to_auth() {
+    let err = get_issue_error(
+        ResponseTemplate::new(403)
+            .insert_header("x-ratelimit-remaining", "42")
+            .set_body_string("Bad credentials"),
+        "tok",
+    )
+    .await;
+    assert!(matches!(err, GitHubError::Auth(_)));
+}
+
+#[tokio::test]
 async fn too_many_requests_with_reset_header_maps_to_rate_limited() {
     let reset_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)

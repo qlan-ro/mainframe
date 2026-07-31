@@ -101,13 +101,22 @@ impl GitHubIssuesClient {
         number: u64,
         token: &str,
     ) -> Result<IssueFieldTimes, GitHubError> {
-        let url = format!(
-            "{}/repos/{}/{}/issues/{number}/timeline?per_page=100",
+        let mut url = format!(
+            "{}/repos/{}/{}/issues/{number}/timeline?per_page=100&page=1",
             self.base_url, repo.owner, repo.repo
         );
-        let request = self.request(reqwest::Method::GET, url, token);
-        let response = check_status(self.send(request).await?).await?;
-        let events: Vec<TimelineEvent> = parse_body(response).await?;
+        let mut events = Vec::new();
+        loop {
+            let request = self.request(reqwest::Method::GET, url, token);
+            let response = check_status(self.send(request).await?).await?;
+            let next = next_page_url(response.headers());
+            let page: Vec<TimelineEvent> = parse_body(response).await?;
+            events.extend(page);
+            match next {
+                Some(next_url) => url = next_url,
+                None => break,
+            }
+        }
         let title_at = events
             .iter()
             .rev()
@@ -189,6 +198,15 @@ async fn check_status(response: reqwest::Response) -> Result<reqwest::Response, 
     {
         return Err(GitHubError::RateLimited { wait: Some(wait) });
     }
+    // GitHub's primary rate limit answers 403 with `x-ratelimit-remaining: 0`
+    // and no `Retry-After` — only the secondary limit sends `Retry-After`.
+    // Left unchecked, this falls through to `Auth` below and tells the user
+    // their credentials are bad when the account is simply out of budget.
+    if status == StatusCode::FORBIDDEN && rate_limit_remaining_is_zero(response.headers()) {
+        return Err(GitHubError::RateLimited {
+            wait: rate_limit_reset_wait(response.headers()),
+        });
+    }
     if status == StatusCode::TOO_MANY_REQUESTS {
         return Err(GitHubError::RateLimited {
             wait: rate_limit_reset_wait(response.headers()),
@@ -216,6 +234,14 @@ fn retry_after(headers: &HeaderMap) -> Option<Duration> {
         .parse::<u64>()
         .ok()
         .map(Duration::from_secs)
+}
+
+fn rate_limit_remaining_is_zero(headers: &HeaderMap) -> bool {
+    headers
+        .get("x-ratelimit-remaining")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+        == Some(0)
 }
 
 fn rate_limit_reset_wait(headers: &HeaderMap) -> Option<Duration> {

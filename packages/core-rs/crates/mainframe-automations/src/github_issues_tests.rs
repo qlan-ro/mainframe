@@ -127,6 +127,49 @@ async fn field_times_read_the_last_rename_and_the_last_state_change() {
 }
 
 #[tokio::test]
+async fn field_times_follow_pagination_to_find_the_newest_event() {
+    // The timeline is ascending, so the newest rename/state event on a busy
+    // issue lives on a later page — reading only page 1 would silently
+    // return a stale (or missing) stamp.
+    let server = MockServer::start().await;
+    let next_link = format!(
+        "<{}/repos/qlan/mainframe/issues/9/timeline?per_page=100&page=2>; rel=\"next\"",
+        server.uri()
+    );
+    Mock::given(method("GET"))
+        .and(path("/repos/qlan/mainframe/issues/9/timeline"))
+        .and(query_param("page", "1"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("Link", next_link.as_str())
+                .set_body_json(json!([
+                    {"event": "renamed", "created_at": "2026-01-01T00:00:00Z"},
+                ])),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/repos/qlan/mainframe/issues/9/timeline"))
+        .and(query_param("page", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"event": "renamed", "created_at": "2026-02-01T00:00:00Z"},
+            {"event": "closed", "created_at": "2026-02-02T00:00:00Z"},
+        ])))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let times = GitHubIssuesClient::with_base_url(server.uri())
+        .issue_field_times(&repo(), 9, "tok")
+        .await
+        .unwrap();
+
+    assert_eq!(times.title_at.as_deref(), Some("2026-02-01T00:00:00Z"));
+    assert_eq!(times.state_at.as_deref(), Some("2026-02-02T00:00:00Z"));
+}
+
+#[tokio::test]
 async fn field_times_are_none_when_the_family_never_happened() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
