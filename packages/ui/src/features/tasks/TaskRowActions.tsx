@@ -8,6 +8,7 @@ import React from 'react';
 import { Play, Edit, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
+import { UnlinkPairButton } from './github/UnlinkPairButton';
 
 interface Props {
   todo: Todo;
@@ -21,6 +22,7 @@ export function TaskRowActions({ todo, onEdit, onStartSession, onDelete }: Props
 
   return (
     <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+      <UnlinkPairButton todo={todo} surface="list" />
       {canStart && (
         <Tooltip>
           <TooltipTrigger asChild>

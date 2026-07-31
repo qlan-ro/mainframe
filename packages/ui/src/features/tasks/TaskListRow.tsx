@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils';
 import type { Todo } from '@/lib/api/todos';
 import { priorityTint, priorityDotClass, typeTint } from './task-palettes';
 import { TaskRowActions } from './TaskRowActions';
+import { PairGlyph } from './github/PairGlyph';
+import { useGitHubSyncStore } from './github/use-github-sync-store';
 
 interface Props {
   todo: Todo;
@@ -124,6 +126,7 @@ export function TaskListRow({
   onDelete,
 }: Props): React.ReactElement {
   const isDone = todo.status === 'done';
+  const linked = useGitHubSyncStore((s) => s.link !== null);
 
   return (
     <div
@@ -179,6 +182,9 @@ export function TaskListRow({
 
         {/* Priority pill with leading dot */}
         <PriorityPill todo={todo} />
+
+        {/* GitHub pairing — absent entirely until the project is linked */}
+        {linked && <PairGlyph todo={todo} surface="list" />}
 
         {/* Hover actions */}
         <TaskRowActions todo={todo} onEdit={onEdit} onStartSession={onStartSession} onDelete={onDelete} />

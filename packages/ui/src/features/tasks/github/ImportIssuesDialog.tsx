@@ -16,8 +16,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { mfToast } from '@/lib/toast';
 import type { RemoteIssue } from '@/lib/api/todos-github';
+import { runOrToast } from './run-or-toast';
 import { useGitHubSyncStore } from './use-github-sync-store';
 
 interface RowProps {
@@ -88,14 +88,11 @@ export function ImportIssuesDialog(): React.ReactElement | null {
       return next;
     });
 
-  const runImport = async (): Promise<void> => {
-    try {
+  const runImport = (): Promise<void> =>
+    runOrToast('Import failed', async () => {
       await importIssues(chosen);
       closeDialog();
-    } catch (err) {
-      mfToast.error('Import failed', { description: err instanceof Error ? err.message : String(err) });
-    }
-  };
+    });
 
   return (
     <Dialog

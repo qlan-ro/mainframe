@@ -8,8 +8,8 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { mfToast } from '@/lib/toast';
 import { useGitHubSyncStore } from './use-github-sync-store';
+import { runOrToast } from './run-or-toast';
 import { partitionLabels, withheldLabelsSentence } from './workflow-labels';
 
 function PayloadRow({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
@@ -30,14 +30,11 @@ export function PublishTaskDialog(): React.ReactElement | null {
   const { syncable, withheld } = partitionLabels(todo.labels);
   const withheldSentence = withheldLabelsSentence(withheld);
 
-  const runPublish = async (): Promise<void> => {
-    try {
+  const runPublish = (): Promise<void> =>
+    runOrToast('Publish failed', async () => {
       await publish(todo.id);
       closeDialog();
-    } catch (err) {
-      mfToast.error('Publish failed', { description: err instanceof Error ? err.message : String(err) });
-    }
-  };
+    });
 
   return (
     <Dialog
