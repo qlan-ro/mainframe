@@ -307,6 +307,9 @@ impl ChatManagerDeps for StoreDeps {
     fn notify_session_error(&self) -> bool {
         false
     }
+    fn notify_attention_request(&self) -> bool {
+        true
+    }
     fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
         *self.mentions_found.lock().unwrap()
     }

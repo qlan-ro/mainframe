@@ -101,6 +101,10 @@ pub trait SessionSink: Send + Sync {
     /// Account-wide provider plan quota (`onProviderQuota?`) — optional in TS,
     /// default no-op; no chatId, mirrors `on_context_usage`.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
+    /// Claude's `PushNotification` tool call, forwarded raw; the sink owns
+    /// trimming, truncation and dedupe (todo #293). Default no-op: adapters
+    /// with no such tool need not implement it.
+    fn on_attention_request(&self, _message: &str) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored

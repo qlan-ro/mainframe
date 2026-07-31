@@ -642,6 +642,12 @@ impl ChatManagerDeps for DaemonChatDeps {
             .unwrap_or(true)
     }
 
+    fn notify_attention_request(&self) -> bool {
+        self.db
+            .call_blocking(|d| Ok(read_notification_config(d).chat.attention_request))
+            .unwrap_or(true)
+    }
+
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);
         let message = PushMessage {

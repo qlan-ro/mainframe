@@ -25,6 +25,7 @@ import { SlashCommandCard } from './cards/SlashCommandCard';
 import { TaskCard } from './cards/TaskCard';
 import { TaskProgressCard } from './cards/TaskProgressCard';
 import { WebFetchCard } from './cards/WebFetchCard';
+import { PushNotificationCard } from './cards/PushNotificationCard';
 
 Object.assign(TOOL_REGISTRY, {
   // file-mutating
@@ -41,6 +42,7 @@ Object.assign(TOOL_REGISTRY, {
   AskUserQuestion: AskUserQuestionCard,
   WebFetch: WebFetchCard,
   WebSearch: WebFetchCard,
+  PushNotification: PushNotificationCard,
   // marker pills
   _Mcp: MCPToolCard,
   ScheduleWakeup: ScheduleWakeupCard,
