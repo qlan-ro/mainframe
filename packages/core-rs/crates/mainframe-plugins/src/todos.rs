@@ -789,6 +789,7 @@ async fn run_migrations(ctx: &PluginContext) -> Result<(), PluginError> {
             )
             .await?;
     }
+    crate::todos_github::schema::run_github_migrations(ctx).await?;
     Ok(())
 }
 

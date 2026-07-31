@@ -75,7 +75,10 @@ async fn migration_creates_every_table_on_a_fresh_db() {
 
 #[tokio::test]
 async fn migration_is_additive_over_preexisting_todos() {
-    let h = todos::tests::setup().await; // github migrations not run yet
+    // todos::tests::setup() already runs the github migration (task 9 wires it
+    // into todos::run_migrations), so re-running it here exercises the same
+    // "migration already ran, todos already exist" case AC31 requires.
+    let h = todos::tests::setup().await;
     todos::tests::create_todo(&h, json!({ "projectId": "p1", "title": "Existing" })).await;
     run_github_migrations(&h.ctx).await.unwrap();
     let rows = h
