@@ -3,12 +3,16 @@
 //! records local recency without disturbing `todos.updated_at`.
 
 pub mod labels;
+pub mod reconcile;
 pub mod schema;
 pub mod store;
 pub mod touch;
 
 #[cfg(test)]
 mod labels_tests;
+
+#[cfg(test)]
+mod reconcile_tests;
 
 #[cfg(test)]
 mod store_tests;
