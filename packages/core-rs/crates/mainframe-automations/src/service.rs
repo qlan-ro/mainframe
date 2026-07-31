@@ -223,6 +223,15 @@ impl AutomationsEngine {
         self.credentials.set(label, creds).await
     }
 
+    /// The store the link dialog writes through (`set_credential` above), for
+    /// callers outside this crate (the GitHub port adapter). The only other
+    /// permitted credential source: a second `FileCredentialStore` built at
+    /// boot would cache the file once and never see a token connected after
+    /// startup, since `get` reads only that snapshot.
+    pub fn credentials(&self) -> Arc<dyn CredentialStore> {
+        self.credentials.clone()
+    }
+
     pub async fn delete_credential(&self, label: &str) -> Result<(), CredentialError> {
         self.credentials.delete(label).await
     }
@@ -276,6 +285,8 @@ fn validated(input: &AutomationCreateInput) -> Result<(), EngineError> {
     }
 }
 
+#[cfg(test)]
+mod credentials_accessor_tests;
 #[cfg(test)]
 mod registration_tests;
 #[cfg(test)]
