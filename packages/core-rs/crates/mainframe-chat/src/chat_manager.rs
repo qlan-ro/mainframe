@@ -275,15 +275,16 @@ pub trait ChatManagerDeps: Send + Sync {
     fn chats_clear_worktree(&self, chat_id: &str);
     /// `adapters.get(adapterId)?.isTranscriptPresent(sessionId, projectPath, sessionFilePath)`.
     /// `None` = presence cannot be determined (missing predicate / null / error).
+    /// Required, not defaulted: an implementation that silently inherited a `None`
+    /// default left transcript-presence reconciliation permanently inert in
+    /// production — same class as #273 (#289).
     fn is_transcript_present<'a>(
         &'a self,
-        _adapter_id: &'a str,
-        _session_id: &'a str,
-        _project_path: &'a str,
-        _session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
-        Box::pin(async { None })
-    }
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>>;
     /// `adapters.getSnapshots().find(id)?.models ?? []` — for the lifecycle default-
     /// model normalization. Default empty.
     fn adapter_snapshot_models(
