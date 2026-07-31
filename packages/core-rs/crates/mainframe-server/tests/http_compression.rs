@@ -181,3 +181,98 @@ async fn chat_history_route_is_byte_identical_through_the_layer() {
     let json: serde_json::Value = serde_json::from_slice(&identity_body).unwrap();
     assert_eq!(json["success"], false);
 }
+
+// ── CORS and attachments under compression ──────────────────────────────────
+
+const TEST_ORIGIN: &str = "http://localhost:5173";
+
+#[tokio::test]
+async fn cors_headers_are_present_on_a_compressed_response() {
+    let (server, id, _dir) = spawn_project_with_big_file().await;
+    let (status, headers, _body) = get(
+        &server,
+        &format!("/api/projects/{id}/files?path=big.txt"),
+        Some("gzip"),
+        Some(TEST_ORIGIN),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get("content-encoding").unwrap(), "gzip");
+    assert_eq!(
+        headers.get("access-control-allow-origin").unwrap(),
+        TEST_ORIGIN
+    );
+    assert!(headers.get("access-control-allow-methods").is_some());
+    assert!(headers.get("access-control-allow-headers").is_some());
+    assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+}
+
+#[tokio::test]
+async fn preflight_still_answers_204_when_an_encoding_is_advertised() {
+    let (server, id, _dir) = spawn_project_with_big_file().await;
+    let resp = reqwest::Client::new()
+        .request(
+            reqwest::Method::OPTIONS,
+            server.http_url(&format!("/api/projects/{id}/files?path=big.txt")),
+        )
+        .header("Origin", TEST_ORIGIN)
+        .header("Accept-Encoding", "gzip, br")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(resp.headers().get("content-encoding").is_none());
+    assert_eq!(
+        resp.headers().get("access-control-allow-origin").unwrap(),
+        TEST_ORIGIN
+    );
+    assert!(resp.headers().get("access-control-allow-methods").is_some());
+    assert!(resp.headers().get("access-control-allow-headers").is_some());
+    assert_eq!(
+        resp.headers().get("x-content-type-options").unwrap(),
+        "nosniff"
+    );
+}
+
+#[tokio::test]
+async fn attachment_responses_are_not_double_encoded() {
+    let server = spawn_test_server(None).await;
+    // 4000 valid base64 chars (a multiple of 4, so no mid-string padding) →
+    // 3000 bytes, comfortably clearing the 1024-byte floor and staying far
+    // under the 5 MB attachment cap.
+    let data = "A".repeat(4000);
+    let upload = reqwest::Client::new()
+        .post(server.http_url("/api/chats/c1/attachments"))
+        .json(&serde_json::json!({
+            "attachments": [{ "name": "big.bin", "mediaType": "application/octet-stream", "data": data }]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(upload.status(), StatusCode::OK);
+    let upload_body: serde_json::Value = upload.json().await.unwrap();
+    let id = upload_body["data"]["attachments"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let identity = get(
+        &server,
+        &format!("/api/chats/c1/attachments/{id}"),
+        None,
+        None,
+    )
+    .await;
+
+    let (status, headers, body) = get(
+        &server,
+        &format!("/api/chats/c1/attachments/{id}"),
+        Some("gzip"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers.get_all("content-encoding").iter().count(), 1);
+    assert_eq!(headers.get("content-encoding").unwrap(), "gzip");
+    assert_eq!(gunzip(&body), identity.2);
+}
