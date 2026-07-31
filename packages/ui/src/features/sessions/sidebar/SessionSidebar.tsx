@@ -24,7 +24,6 @@
  */
 import { memo, useCallback, useMemo } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
-import { mfToast } from '@/lib/toast';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -36,6 +35,7 @@ import { useUnreadStore } from '@/store/unread-store';
 import { useLastSessionStore } from '@/store/last-session';
 import { useProjects } from '../use-projects';
 import { useAddProject } from '../use-add-project';
+import { useRemoveProject } from '../use-remove-project';
 import { SessionListVirtuoso } from './SessionListVirtuoso';
 import { SessionRow } from './SessionRow';
 import { SessionSortMenu } from './SessionSortMenu';
@@ -49,7 +49,6 @@ import { TagFilterBar } from '../filter/TagFilterBar';
 import { TasksSidebarSection } from '@/features/tasks/TasksSidebarSection';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
-import { removeProject } from '@/lib/api/projects';
 import { resolveProjectSession } from './resolve-project-session';
 import { sidebarIndentPx, SIDEBAR_INDENT_STEP_PX } from '@/layout/sidebar-indent';
 import { useUiPrefs, isSidebarSectionCollapsed } from '@/store/ui-prefs';
@@ -180,28 +179,7 @@ function SessionSidebarImpl() {
     [allItems, runtime, setFilterProjectId],
   );
 
-  const handleRemoveProject = useCallback(
-    async (project: { id: string; name: string }) => {
-      const confirmed = window.confirm(
-        `Remove project "${project.name}"?\n\nThis will stop all its sessions and remove the project from the database. Files on disk are NOT affected.\n\nThis cannot be undone.`,
-      );
-      if (!confirmed) return;
-
-      try {
-        await removeProject(port, project.id);
-        removeProjectFromList(project.id);
-        if (filterProjectId === project.id) setFilterProjectId(null);
-        mfToast.success('Project removed', { description: project.name });
-      } catch (error) {
-        console.warn('[sessions] remove project failed', error);
-        mfToast.error('Failed to remove project', {
-          description: error instanceof Error ? error.message : String(error),
-        });
-      }
-    },
-    [filterProjectId, port, removeProjectFromList, setFilterProjectId],
-  );
-
+  const handleRemoveProject = useRemoveProject(removeProjectFromList);
   const handleAddProject = useAddProject(reloadProjects);
 
   // Project chip on each row only in "All" view (no active project filter); the
