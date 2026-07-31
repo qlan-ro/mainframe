@@ -46,9 +46,11 @@ at the top level of the parent conversation.
 its result. When Codex reports a per-sub-agent final message of its own, that wins.
 "Sub-agent completed" appears only when the sub-agent produced no message at all.
 
-**Errors.** A sub-agent Codex reports as interrupted resolves its card to an error state
-reading "Sub-agent interrupted". A sub-agent whose own turn ends failed or interrupted
-resolves to an error state. A delegation that merely returns nothing is not an error.
+**Errors.** Three things resolve a card to an error state: Codex reporting the sub-agent as
+interrupted, which reads "Sub-agent interrupted"; Codex reporting the delegation call
+itself as failed, which reads "Sub-agent failed" unless the sub-agent left a message, in
+which case the message is the result; and the sub-agent's own turn ending in a failed,
+errored or interrupted status. A delegation that merely returns nothing is not an error.
 
 **The parent session is unaffected.** A sub-agent's turn starting or completing does not
 start or end the parent's turn; the parent chat stays "running" until the parent's own
@@ -112,13 +114,18 @@ nested transcripts and results as the live run showed.
    (`packages/core-rs/crates/mainframe-adapter-codex/tests/fixtures/collab-delegation-0.144.3.jsonl`,
    recorded live against Codex 0.144.3: a `subAgentActivity` item with `kind: "started"`,
    then a `wait` collab tool call with `receiverThreadIds: []` and `agentsStates: {}`,
-   then the sub-agent's reasoning and final message on the sub-agent's thread id, then the
-   wait completing still empty) produces exactly one sub-agent card.
+   then a reasoning item and a final message on the sub-agent's thread id, then the wait
+   completing still empty) produces exactly one sub-agent card. The capture's sub-agent
+   reasoning item carries an empty `summary` and empty `content`, so it renders as an
+   empty thinking block; no criterion asserts sub-agent reasoning *text* against this
+   capture.
 2. That card's title is not "Sub-agent"; for this capture it is "compute sum", derived
    from the agent path `/root/compute_sum`.
 3. That card's task line is non-empty.
-4. That card's nested transcript contains the sub-agent's reasoning text and its final
-   message "4. Confirmed: 2 + 2 = 4."
+4. That card's nested transcript contains the sub-agent's final message
+   "4. Confirmed: 2 + 2 = 4.", and it contains the thinking block the sub-agent's reasoning
+   item renders to — asserted by presence and position inside the card, since that item's
+   text is empty in the capture.
 5. That card's result text is "4. Confirmed: 2 + 2 = 4."
 6. In that same replay, no block carrying the sub-agent's reasoning or final message is
    emitted into the parent conversation at top level, and the parent's own two messages
@@ -139,10 +146,12 @@ nested transcripts and results as the live run showed.
     registers the sub-agent and opens its card, `interacted` leaves the open card
     unchanged and running, `interrupted` resolves it to an error result reading
     "Sub-agent interrupted".
-12. No test and no branch decides success versus error from the collab tool call's own
-    status field, whose protocol enum defines only `inProgress` and `completed`. A test
-    asserts a `completed` wait whose sub-agent was interrupted still renders an errored
-    card.
+12. No branch and no test compares the collab tool call's status against a value its
+    protocol enum does not define. The enum is `inProgress`, `completed`, `failed`; the
+    `interrupted` comparison present today is dead and is removed. A test asserts a
+    `failed` wait resolves its card to an error state, and a test asserts a `completed`
+    wait whose sub-agent was interrupted still renders an errored card — `completed` alone
+    is not proof of success.
 13. A test asserts that an item whose thread id is neither the session's thread nor a
     registered sub-agent's is dropped — it reaches neither the parent conversation nor any
     card — and that an item with no thread id reaches the parent conversation.
@@ -198,17 +207,21 @@ Hard-to-reverse first.
    end as a backstop.** `reversible` — Codex documents wait as returning an empty status on
    timeout and ending early on new user input, so wait completion alone is not proof the
    sub-agent finished.
-6. **Title fallback chain: Codex registry nickname/role → nickname/role in the wait call's
-   per-sub-agent state → humanized agent path → "Sub-agent".** `reversible` — adopts the
-   brief's recommendation and adds the in-protocol state entry, which the protocol schema
-   shows carries nickname and role.
+6. **Title fallback chain: Codex registry nickname/role → humanized agent path →
+   "Sub-agent".** `reversible` — adopts the brief's recommendation unchanged. The wait
+   call's per-sub-agent state was considered as a middle link and rejected: that value is
+   `{ status, message }` only, so it carries no name. Nickname and role live solely on the
+   registry's thread row, and `message` feeds the result line, not the title.
 7. **Task line falls back to the sub-agent's humanized name when no prompt is present.**
    `reversible` — the spawn prompt is encrypted in the payload, so a prompt is the
    exception, not the rule; a blank task line is worse than a name.
-8. **Error state comes from an `interrupted` activity or the sub-agent's own failed
-   /interrupted turn — never from the collab tool call's status.** `reversible` — that
-   status enum defines only `inProgress` and `completed`, so today's `failed`/`interrupted`
-   comparison can never match.
+8. **Error state comes from three in-protocol signals: a `failed` collab tool call, an
+   `interrupted` sub-agent activity, or the sub-agent's own turn ending failed, errored or
+   interrupted. The `interrupted` half of today's status comparison is deleted.**
+   `reversible` — the tool call's enum is `inProgress | completed | failed`, so `failed` is
+   a real signal and stays, while `interrupted` is not a member and can never match. The
+   two other signals are kept because a `completed` wait says only that the parent stopped
+   waiting, not that the sub-agent succeeded.
 9. **The live stream drives the card during a run; the stored rollout is the reload
    source.** `reversible` — adopts the brief's recommendation; the capture proves
    sub-agent items arrive on the same connection, and running both sources into one open
