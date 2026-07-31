@@ -23,9 +23,11 @@ export function GateCardShell({
   ...props
 }: HTMLAttributes<HTMLDivElement> & { resolved?: boolean; accent?: GateAccent; children: ReactNode }) {
   return (
+    // No width of its own: the gate matches the composer by inheriting the transcript column (#297).
     <div
+      data-testid="chat-gate-card"
       className={cn(
-        'max-w-[680px] overflow-hidden rounded-xl border bg-card',
+        'overflow-hidden rounded-xl border bg-card',
         resolved ? 'border-border' : 'border-mf-border-hover',
         className,
       )}
