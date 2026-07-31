@@ -97,6 +97,11 @@ pub trait EventHandlerDeps: Send + Sync {
     /// in production, the same defaulted-trait bug class as #273.
     fn tracker_end_all_running(&self, chat_id: &str);
 
+    /// D5 (#273) — the workflow-run store's counterpart to
+    /// `tracker_end_all_running`: the CLI owns every live workflow run, so none
+    /// can report completion after it dies.
+    fn workflow_runs_stop_all(&self, chat_id: &str);
+
     /// `onProviderQuota(adapterId, quota)` — an account-wide provider-plan quota
     /// escalation pushed from a session event (Codex `account/rateLimits/updated`,
     /// Claude `rate_limit_event`). Default no-op mirrors the TS optional callback: a
@@ -1010,6 +1015,8 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         // orphaned entries don't pin the sidebar's working indicator; the
         // tracker emits `ended` per survivor for connected clients.
         self.deps.tracker_end_all_running(&self.chat_id);
+        // D5 (#273): the workflow-run store gets the same CLI-exit sweep.
+        self.deps.workflow_runs_stop_all(&self.chat_id);
 
         if let Some(cell) = &cell {
             let chat = {
@@ -1346,6 +1353,8 @@ mod tests {
         }
         /// Empty on purpose: BgDeps below covers on_exit's tracker_end_all_running wiring.
         fn tracker_end_all_running(&self, _chat_id: &str) {}
+        /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+        fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     }
 
     fn umsg(id: &str, meta: Option<HashMap<String, serde_json::Value>>) -> ChatMessage {
@@ -1866,6 +1875,8 @@ mod tests {
         fn tracker_end_all_running(&self, chat_id: &str) {
             self.tracker.end_all_running(chat_id);
         }
+        /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+        fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     }
 
     fn bg_sink(deps: Arc<BgDeps>) -> Arc<dyn SessionSink> {
@@ -1885,6 +1896,7 @@ mod tests {
             tool_use_id: format!("tu-{id}"),
             command: command.to_string(),
             description: description.to_string(),
+            workflow_name: None,
         }
     }
 

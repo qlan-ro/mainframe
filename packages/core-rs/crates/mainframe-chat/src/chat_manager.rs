@@ -267,6 +267,9 @@ pub trait ChatManagerDeps: Send + Sync {
     /// empty default left orphaned tasks Running forever, pinning `displayStatus:
     /// working` and `backgroundActivity` with no recovery path (#273).
     fn tracker_end_all_running(&self, chat_id: &str);
+    /// D5 (#273) — the workflow-run store's counterpart to
+    /// `tracker_end_all_running`, delegated to `EventHandlerDeps` below.
+    fn workflow_runs_stop_all(&self, chat_id: &str);
     /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
     /// Required (not a no-op default): `continue-here` relies on it persisting.
     fn chats_clear_session(&self, chat_id: &str);
@@ -491,6 +494,9 @@ impl EventHandlerDeps for EhDeps {
     }
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.deps.tracker_end_all_running(chat_id);
+    }
+    fn workflow_runs_stop_all(&self, chat_id: &str) {
+        self.deps.workflow_runs_stop_all(chat_id);
     }
 }
 

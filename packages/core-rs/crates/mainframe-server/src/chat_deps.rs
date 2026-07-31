@@ -44,6 +44,7 @@ use mainframe_chat::external_session_service::{
     ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
 };
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::attachment::AttachmentStore;
@@ -131,6 +132,9 @@ pub struct DaemonChatDeps {
     /// (not a module-level singleton, forbidden by PORTING.md §5) and threaded
     /// into every `list_external_sessions("claude", ...)` call.
     claude_external_session_cache: ExternalSessionCache,
+    /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
+    /// per-chat workflow-run store (D5's CLI-exit sweep target).
+    claude_workflows: Arc<ClaudeWorkflowStore>,
 }
 
 impl DaemonChatDeps {
@@ -674,6 +678,10 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.background_tasks.end_all_running(chat_id);
     }
+
+    fn workflow_runs_stop_all(&self, chat_id: &str) {
+        self.claude_workflows.stop_all_running(chat_id);
+    }
 }
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
@@ -820,6 +828,7 @@ pub fn build_chat_manager(
     launch: Arc<dyn LaunchStopper>,
     scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
+    claude_workflows: Arc<ClaudeWorkflowStore>,
     // Title generation is now adapter-aware (#430) — the resolved PATH lives with
     // the adapter's title spawn, so the ChatManager no longer needs it. The param
     // is retained for the boot call site (mainframe-daemon) until it drops the arg.
@@ -837,6 +846,7 @@ pub fn build_chat_manager(
         scope_tunnels,
         quota,
         claude_external_session_cache: new_external_session_cache(),
+        claude_workflows,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
     Arc::new(ChatManager::new(deps).with_external_sessions(external_sessions))
@@ -1111,9 +1121,11 @@ mod scan_loaded_history_tests {
 
     use mainframe_adapter_api::{AdapterError, ContextFiles, ImageInput, SessionSink};
     use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
+    use mainframe_claude_workflows::store::ProgressUsage;
     use mainframe_db::DatabaseManager;
     use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
     use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
+    use mainframe_types::claude_workflow::ClaudeWorkflowRunStatus;
     use mainframe_types::context::MentionKind;
 
     use super::*;
@@ -1325,6 +1337,7 @@ mod scan_loaded_history_tests {
             scope_tunnels: Arc::new(NoopScopeTunnelStopper),
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
+            claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
         }
     }
 
@@ -1340,6 +1353,7 @@ mod scan_loaded_history_tests {
                 tool_use_id: "tu-a-1".to_string(),
                 command: "cmd".to_string(),
                 description: "reviewer".to_string(),
+                workflow_name: None,
             },
             "/tmp/mf-273-a-1.log".to_string(),
         );
@@ -1348,6 +1362,37 @@ mod scan_loaded_history_tests {
         deps.tracker_end_all_running("c-live");
 
         assert!(deps.background_tasks.list_live("c-live").is_empty());
+    }
+
+    #[test]
+    fn workflow_runs_stop_all_delegates_to_the_workflow_store() {
+        let deps = test_deps();
+        deps.claude_workflows
+            .seed("c-live", "task-1", Some("todo-lane".to_string()));
+        deps.claude_workflows.apply_progress(
+            "c-live",
+            "task-1",
+            ProgressUsage {
+                total_tokens: 10,
+                duration_ms: 500,
+            },
+            Some(&[serde_json::json!({
+                "type": "workflow_phase",
+                "index": 0,
+                "title": "Plan"
+            })]),
+        );
+
+        deps.workflow_runs_stop_all("c-live");
+
+        let runs = deps.claude_workflows.runs_for_chat("c-live");
+        let run = runs.iter().find(|r| r.task_id == "task-1").unwrap();
+        assert_eq!(run.status, ClaudeWorkflowRunStatus::Stopped);
+        assert_eq!(
+            run.phases.len(),
+            1,
+            "AC 24: the snapshot must survive the stop"
+        );
     }
 
     #[test]

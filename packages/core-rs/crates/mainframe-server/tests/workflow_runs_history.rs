@@ -123,6 +123,7 @@ async fn harness(session_id: &str) -> Harness {
         Arc::new(NoopLaunchStopper),
         Arc::new(NoopScopeTunnelStopper),
         quota,
+        Arc::clone(&store),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
     );
 

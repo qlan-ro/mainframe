@@ -17,6 +17,7 @@ use std::time::Duration;
 use mainframe_adapter_api::AdapterRegistry;
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
 use mainframe_chat::chat_manager::ChatManager;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_db::DatabaseManager;
 use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
@@ -86,6 +87,7 @@ fn harness() -> Harness {
         Arc::new(NoopLaunchStopper),
         Arc::new(NoopScopeTunnelStopper),
         quota,
+        Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
     );
 

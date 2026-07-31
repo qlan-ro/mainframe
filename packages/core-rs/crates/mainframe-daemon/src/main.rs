@@ -286,6 +286,7 @@ async fn run_daemon() {
             db.clone(),
         )),
         Arc::clone(&quota_manager),
+        Arc::clone(&claude_workflows),
         resolved_path.clone(),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
