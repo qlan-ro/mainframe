@@ -1372,6 +1372,7 @@ dependencies = [
  "mainframe-adapter-claude",
  "mainframe-adapter-codex",
  "mainframe-adapter-mock",
+ "mainframe-automations",
  "mainframe-background-tasks",
  "mainframe-claude-workflows",
  "mainframe-db",
@@ -1390,6 +1391,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]

@@ -105,6 +105,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit,
         adapters: None,
+        github: None,
     }));
     plugin_manager
         .load_builtin(manifest("demo"), data_dir.path().to_path_buf(), demo_plugin)
