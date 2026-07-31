@@ -26,6 +26,12 @@ pub use service::{
 mod credentials_tests;
 
 #[cfg(test)]
+mod github_issues_errors_tests;
+
+#[cfg(test)]
+mod github_issues_tests;
+
+#[cfg(test)]
 mod interactions_tests;
 
 #[cfg(test)]
