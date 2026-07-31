@@ -46,6 +46,12 @@ pub async fn run_sync(ctx: &PluginContext, project_id: &str) -> Result<store::Ru
     result
 }
 
+/// Read access to the mutual-exclusion set for `GET /link`'s `running` field
+/// (routes.rs, task 19) — the route surface has no other way to answer it.
+pub fn is_running(project_id: &str) -> bool {
+    RUNNING.contains_key(project_id)
+}
+
 async fn run_sync_inner(ctx: &PluginContext, project_id: &str) -> Result<store::Run, RunError> {
     let mut link = store::read_link(ctx, project_id)
         .await?

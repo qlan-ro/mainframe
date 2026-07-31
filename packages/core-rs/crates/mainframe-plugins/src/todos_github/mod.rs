@@ -5,6 +5,7 @@
 pub mod labels;
 pub mod pairing;
 pub mod reconcile;
+pub mod routes;
 pub mod run;
 pub mod schema;
 pub mod store;
@@ -30,6 +31,9 @@ mod run_test_support;
 
 #[cfg(test)]
 mod run_tests;
+
+#[cfg(test)]
+mod routes_tests;
 
 #[cfg(test)]
 mod store_tests;
