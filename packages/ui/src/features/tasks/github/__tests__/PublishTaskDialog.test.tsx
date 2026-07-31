@@ -11,7 +11,8 @@
  *  1. Renders nothing when the store's dialog isn't a publish dialog.
  *  2. Header reads 'Publish task #{number} to {owner}/{repo}?'.
  *  3. Shows the exact Title/Body payload verbatim, and a Labels row listing only
- *     the syncable (non-workflow) labels.
+ *     the syncable (non-workflow) labels — asserted against the row, since the
+ *     withheld ones are named in the sentence covered by 4.
  *  4. Names withheld workflow labels with the exact count sentence (spec's own
  *     example) when the task carries any.
  *  5. Omits the withheld-labels sentence entirely when the task carries none.
@@ -93,11 +94,14 @@ describe('PublishTaskDialog — payload', () => {
 
   it('lists only the syncable label in the Labels row', () => {
     render(<PublishTaskDialog />);
-    const dialogEl = screen.getByTestId('tasks-github-publish-dialog');
-    expect(dialogEl.textContent).toContain('bug');
-    expect(dialogEl.textContent).not.toContain('route:no-spec');
-    expect(dialogEl.textContent).not.toContain('gate:brief');
-    expect(dialogEl.textContent).not.toContain('ready-for-agent');
+    // Scoped to the row: the dialog names the withheld labels elsewhere, in the
+    // sentence the next describe pins, so a whole-dialog assertion would
+    // contradict it.
+    const labelsRow = screen.getByTestId('tasks-github-publish-labels');
+    expect(labelsRow.textContent).toContain('bug');
+    expect(labelsRow.textContent).not.toContain('route:no-spec');
+    expect(labelsRow.textContent).not.toContain('gate:brief');
+    expect(labelsRow.textContent).not.toContain('ready-for-agent');
   });
 });
 
