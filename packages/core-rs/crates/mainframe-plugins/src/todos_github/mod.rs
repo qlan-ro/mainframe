@@ -5,6 +5,7 @@
 pub mod labels;
 pub mod schema;
 pub mod store;
+pub mod touch;
 
 #[cfg(test)]
 mod labels_tests;

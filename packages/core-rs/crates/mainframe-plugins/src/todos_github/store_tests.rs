@@ -274,15 +274,15 @@ async fn renumbering_keeps_the_pair_keyed_on_todo_id() {
         store::read_pair_by_todo(&h.ctx, &first_id)
             .await
             .unwrap()
-            .is_some(),
-        "the pair still resolves by the original todo_id"
+            .is_none(),
+        "deleting the todo cascades its pair away (AC24)"
     );
     assert!(
         store::read_pair_by_todo(&h.ctx, &second_id)
             .await
             .unwrap()
             .is_none(),
-        "the new todo that reused the number starts unpaired"
+        "the new todo that reused the number does not inherit the deleted todo's pair"
     );
 }
 

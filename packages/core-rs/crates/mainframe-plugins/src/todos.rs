@@ -356,9 +356,12 @@ pub(crate) async fn post_todo(
         text(to_json_string(&d.dependencies)),
         int(0),
         text(now.clone()),
-        text(now),
+        text(now.clone()),
     ];
     if let Err(err) = ctx.db.execute(insert.into(), params).await {
+        return server_error(err);
+    }
+    if let Err(err) = crate::todos_github::touch::stamp_create(&ctx, &id, &now).await {
         return server_error(err);
     }
     match fetch_row(&ctx, &id).await {
@@ -384,8 +387,9 @@ pub(crate) async fn patch_todo(
         .unwrap_or("")
         .to_string();
 
+    let now = now_iso8601();
     let mut sets = vec!["updated_at = ?".to_string()];
-    let mut vals = vec![text(now_iso8601())];
+    let mut vals = vec![text(now.clone())];
 
     macro_rules! set_text {
         ($key:literal, $col:literal) => {
@@ -466,6 +470,11 @@ pub(crate) async fn patch_todo(
     if let Err(err) = ctx.db.execute(sql, vals).await {
         return server_error(err);
     }
+    if let Err(err) =
+        crate::todos_github::touch::stamp_patch(&ctx, &id, &existing, &body, &now).await
+    {
+        return server_error(err);
+    }
 
     let row = match fetch_row(&ctx, &id).await {
         Ok(Some(row)) => row,
@@ -493,13 +502,28 @@ pub(crate) async fn move_todo(
     let Some(status) = parse_status_only(&body) else {
         return bad_request("Invalid status");
     };
+    let prev_status = match fetch_row(&ctx, &id).await {
+        Ok(Some(row)) => row
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        Ok(None) => return not_found(),
+        Err(err) => return server_error(err),
+    };
+    let now = now_iso8601();
     if let Err(err) = ctx
         .db
         .execute(
             "UPDATE todos SET status = ?, updated_at = ? WHERE id = ?".into(),
-            vec![text(status.clone()), text(now_iso8601()), text(id.clone())],
+            vec![text(status.clone()), text(now.clone()), text(id.clone())],
         )
         .await
+    {
+        return server_error(err);
+    }
+    if let Err(err) =
+        crate::todos_github::touch::stamp_move(&ctx, &id, &prev_status, &status, &now).await
     {
         return server_error(err);
     }
@@ -509,28 +533,40 @@ pub(crate) async fn move_todo(
         Err(err) => return server_error(err),
     };
     let todo = TodoView::from_row(&row);
-    if status == "done" && !todo.dependencies.is_empty() {
-        let open_deps = match load_dependencies(&ctx, &todo).await {
-            Ok(deps) => deps
-                .into_iter()
-                .filter(|d| d.status != "done")
-                .collect::<Vec<_>>(),
-            Err(err) => return server_error(err),
-        };
-        if !open_deps.is_empty() {
-            let names = open_deps
-                .iter()
-                .map(|d| format!("#{} {}", d.number, d.title))
-                .collect::<Vec<_>>()
-                .join(", ");
-            ctx.ui.notify(NotifyOptions {
-                title: format!("#{} {} has open dependencies", todo.number, todo.title),
-                body: names,
-                level: Some("warning".to_string()),
-            });
-        }
+    if let Err(err) = warn_open_dependencies(&ctx, &todo, &status).await {
+        return server_error(err);
     }
     json_response(StatusCode::OK, json!({ "todo": parse_todo(row) }))
+}
+
+/// Split from `move_todo` to keep it under the 50-line limit: the
+/// dependency-warning notify is a side effect independent of the response body.
+async fn warn_open_dependencies(
+    ctx: &PluginContext,
+    todo: &TodoView,
+    status: &str,
+) -> Result<(), PluginError> {
+    if status != "done" || todo.dependencies.is_empty() {
+        return Ok(());
+    }
+    let open_deps = load_dependencies(ctx, todo)
+        .await?
+        .into_iter()
+        .filter(|d| d.status != "done")
+        .collect::<Vec<_>>();
+    if !open_deps.is_empty() {
+        let names = open_deps
+            .iter()
+            .map(|d| format!("#{} {}", d.number, d.title))
+            .collect::<Vec<_>>()
+            .join(", ");
+        ctx.ui.notify(NotifyOptions {
+            title: format!("#{} {} has open dependencies", todo.number, todo.title),
+            body: names,
+            level: Some("warning".to_string()),
+        });
+    }
+    Ok(())
 }
 
 fn parse_status_only(body: &Value) -> Option<String> {
@@ -544,6 +580,19 @@ pub(crate) async fn delete_todo(
     State(ctx): State<Arc<PluginContext>>,
     Path(id): Path<String>,
 ) -> Response {
+    if let Err(err) = crate::todos_github::touch::clear_for_todo(&ctx, &id).await {
+        return server_error(err);
+    }
+    if let Err(err) = ctx
+        .db
+        .execute(
+            "DELETE FROM github_pairs WHERE todo_id = ?".into(),
+            vec![text(id.clone())],
+        )
+        .await
+    {
+        return server_error(err);
+    }
     match ctx
         .db
         .execute("DELETE FROM todos WHERE id = ?".into(), vec![text(id)])
