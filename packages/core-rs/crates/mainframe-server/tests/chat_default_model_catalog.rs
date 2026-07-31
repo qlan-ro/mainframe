@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use mainframe_adapter_api::{Adapter, AdapterRegistry};
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_db::DatabaseManager;
 use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
@@ -141,6 +142,7 @@ fn harness(saved_default: Option<&str>, chat_adapter_id: &str) -> Harness {
         Arc::new(NoopLaunchStopper),
         Arc::new(NoopScopeTunnelStopper),
         quota,
+        Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
     );
 
