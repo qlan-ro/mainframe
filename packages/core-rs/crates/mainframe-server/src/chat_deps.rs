@@ -58,6 +58,7 @@ use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{
     AdapterModel, DetectedPr, DetectedPrSource, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
+use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, MessageContentNode, Project,
     ResolvedTuning, TodoItem,
@@ -347,11 +348,14 @@ impl ChatManagerDeps for DaemonChatDeps {
             .map(|p| p.path)
     }
 
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         let pid = project_id.to_string();
-        if let Err(err) = self.db.call_blocking(move |d| d.projects.remove(&pid)) {
-            tracing::warn!(%err, project_id, "projects.remove failed");
-        }
+        self.db
+            .call_blocking(move |d| d.projects.remove(&pid))
+            .map_err(|err| {
+                tracing::warn!(%err, project_id, "projects.remove failed");
+                err.to_string()
+            })
     }
 
     fn write_workspace_trust<'a>(
@@ -576,17 +580,24 @@ impl ChatManagerDeps for DaemonChatDeps {
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
         // Adapter-aware (#430): route to the owning adapter's `generateTitle`;
-        // adapters without a cheap one-shot title model return `None` and the
-        // caller keeps the deterministic truncated title.
-        let adapter = self.adapters.get(adapter_id);
+        // an unregistered adapter id and an adapter error are logged
+        // separately (#287) so an operator can tell the two apart.
+        let Some(adapter) = self.adapters.get(adapter_id) else {
+            tracing::warn!(
+                adapter_id,
+                reason = "unknown_adapter",
+                "title generation skipped"
+            );
+            return Box::pin(async { None });
+        };
         let content = content.to_string();
         let binary = binary.to_string();
+        let adapter_id = adapter_id.to_string();
         Box::pin(async move {
-            let adapter = adapter?;
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {
-                    tracing::warn!(%err, "title generation failed");
+                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
                     None
                 }
             }
@@ -664,6 +675,14 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn tracker_remove_chat(&self, chat_id: &str) {
         self.background_tasks.remove_chat(chat_id);
+    }
+
+    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask> {
+        self.background_tasks.list_live(chat_id)
+    }
+
+    fn tracker_end_all_running(&self, chat_id: &str) {
+        self.background_tasks.end_all_running(chat_id);
     }
 }
 
@@ -1101,13 +1120,16 @@ mod scan_loaded_history_tests {
     use std::sync::Mutex as StdMutex;
 
     use mainframe_adapter_api::{AdapterError, ContextFiles, ImageInput, SessionSink};
-    use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+    use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
     use mainframe_db::DatabaseManager;
     use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
+    use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
     use mainframe_types::context::MentionKind;
 
     use super::*;
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
+
+    use mainframe_runtime::log_capture::LogCapture;
 
     fn text_msg(id: &str, r#type: ChatMessageType, text: &str) -> ChatMessage {
         ChatMessage {
@@ -1316,6 +1338,44 @@ mod scan_loaded_history_tests {
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
         }
+    }
+
+    #[tokio::test]
+    async fn unknown_adapter_id_logs_and_returns_none() {
+        let deps = test_deps();
+        let (subscriber, events) = LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let result =
+            ChatManagerDeps::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
+
+        assert_eq!(result, None);
+        assert_eq!(
+            LogCapture::events_with_reason(&events),
+            vec![(tracing::Level::WARN, "unknown_adapter".to_string())]
+        );
+    }
+
+    #[test]
+    fn tracker_end_all_running_delegates_to_the_background_task_tracker() {
+        let deps = test_deps();
+        deps.background_tasks.start(
+            "c-live",
+            TaskSeed {
+                id: "a-1".to_string(),
+                kind: BackgroundWorkKind::Agent,
+                tool_name: BackgroundTaskToolName::Monitor,
+                tool_use_id: "tu-a-1".to_string(),
+                command: "cmd".to_string(),
+                description: "reviewer".to_string(),
+            },
+            "/tmp/mf-273-a-1.log".to_string(),
+        );
+        assert_eq!(deps.background_tasks.list_live("c-live").len(), 1);
+
+        deps.tracker_end_all_running("c-live");
+
+        assert!(deps.background_tasks.list_live("c-live").is_empty());
     }
 
     #[test]

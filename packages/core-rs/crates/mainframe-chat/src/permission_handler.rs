@@ -100,6 +100,20 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         chat_id: &str,
         response: ControlResponse,
     ) -> Result<(), PermissionError> {
+        if self
+            .permissions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .was_cancelled(chat_id, &response.request_id)
+        {
+            info!(
+                chat_id,
+                request_id = response.request_id,
+                "respondToPermission: request was cancelled by the CLI, dropping the answer"
+            );
+            return Ok(());
+        }
+
         let active = self.deps.get_active_chat(chat_id);
 
         // Guard: reject stale/duplicate responses (only when a permission is queued).
@@ -282,7 +296,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             .permissions
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .shift(chat_id);
+            .shift(chat_id, &response.request_id);
         if let Some(next_request) = next_request {
             let notify = self
                 .deps
@@ -335,6 +349,9 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     }
 }
 
+#[cfg(test)]
+mod cancelled_guard_tests;
+
 // PORT STATUS: src/chat/permission-handler.ts (156 lines)
 // confidence: medium
 // notes: TS `PermissionHandlerDeps` DI bag → `PermissionHandlerDeps` trait; the
@@ -346,4 +363,8 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 // notes: the ActiveChat cell and awaited outside the lock (CONCURRENCY rule 4).
 // notes: warn/info strings + the "No session for chat {id}" throw copied verbatim.
 // notes: No dedicated TS test file (exercised via chat-manager + plan-mode paths).
+// notes: (#284) `respond_to_permission`'s leading `was_cancelled` guard is a
+// notes: Rust-side addition with no TS original: it drops an answer naming a
+// notes: request the CLI already withdrew via `control_cancel_request`, before
+// notes: even checking for an active session. See `cancelled_guard_tests.rs`.
 // todos: 0

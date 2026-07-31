@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addRunTab, moveTabToRun, terminalIdsInPane, terminalIdsInRun, type RunTab } from '../run-pane';
+import { addRunTab, moveTabToRun, tabIdsInPane, tabIdsInRun, type RunTab } from '../run-pane';
 import { useLayoutStore, type SurfaceId } from '../layout';
 
 const tab = (id: string): RunTab => ({ id, kind: 'terminal', title: id });
@@ -69,7 +69,7 @@ describe('terminal id collectors', () => {
   const term = (id: string): RunTab => ({ id, kind: 'terminal', title: id });
   const code = (id: string): RunTab => ({ id, kind: 'code', title: id });
 
-  it('terminalIdsInRun returns every terminal tab id across panes', () => {
+  it('tabIdsInRun returns every terminal tab id across panes', () => {
     const run = {
       dir: 'v' as const,
       flex: [1, 1],
@@ -78,10 +78,10 @@ describe('terminal id collectors', () => {
         { id: 'p2', tabs: [term('t2')], active: 't2' },
       ],
     };
-    expect(terminalIdsInRun(run).sort()).toEqual(['t1', 't2']);
+    expect(tabIdsInRun(run, 'terminal').sort()).toEqual(['t1', 't2']);
   });
 
-  it('terminalIdsInPane returns only that pane terminal ids', () => {
+  it('tabIdsInPane returns only that pane terminal ids', () => {
     const run = {
       dir: 'v' as const,
       flex: [1, 1],
@@ -90,12 +90,12 @@ describe('terminal id collectors', () => {
         { id: 'p2', tabs: [term('t2')], active: 't2' },
       ],
     };
-    expect(terminalIdsInPane(run, 'p1')).toEqual(['t1']);
-    expect(terminalIdsInPane(run, 'p2')).toEqual(['t2']);
-    expect(terminalIdsInPane(run, 'nope')).toEqual([]);
+    expect(tabIdsInPane(run, 'p1', 'terminal')).toEqual(['t1']);
+    expect(tabIdsInPane(run, 'p2', 'terminal')).toEqual(['t2']);
+    expect(tabIdsInPane(run, 'nope', 'terminal')).toEqual([]);
   });
 
-  it('terminalIdsInRun on null is empty', () => {
-    expect(terminalIdsInRun(null)).toEqual([]);
+  it('tabIdsInRun on null is empty', () => {
+    expect(tabIdsInRun(null, 'terminal')).toEqual([]);
   });
 });

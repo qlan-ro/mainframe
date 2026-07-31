@@ -4,8 +4,9 @@
  * The trigger engine calls `search(body)` where `body` is the text after `@`
  * (whitespace-bounded, slashes included). We classify it the same way
  * desktop's `parseAtToken` does:
- *   - no slash → FUZZY: agents (from the preloaded provider list) + project
- *     file fuzzy-search (`searchFiles`).
+ *   - no slash → FUZZY: agents (from the preloaded provider list) +
+ *     referenceable sessions (from the caller) + project file fuzzy-search
+ *     (`searchFiles`).
  *   - `dir/leaf` where dir is `/…` or `~…` → FILESYSTEM autocomplete
  *     (`browseFilesystem`) — browses the real filesystem.
  *   - `dir/leaf` otherwise → PROJECT-TREE autocomplete (`getFileTree`).
@@ -132,8 +133,22 @@ export function createMentionCache(deps: MentionCacheDeps): MentionCache {
 // Adapter
 // ---------------------------------------------------------------------------
 
-/** Search-first adapter (no categories) merging agents (fuzzy mode only) with the cached file/dir results. */
-export function buildMentionTriggerAdapter(cache: MentionCache, agents: AgentConfig[]): TriggerAdapter {
+/** Stable identity — an inline `[]` default would churn the adapter memo every render. */
+export const NO_SESSIONS: readonly TriggerItem[] = [];
+
+/**
+ * Search-first adapter (no categories) merging agents and referenceable sessions
+ * (fuzzy mode only) with the cached file/dir results.
+ *
+ * Sessions arrive pre-ordered and pre-disambiguated by their source hook, so the
+ * adapter filters them but never re-sorts: the order the picker shows is the one
+ * the labels were made unique against.
+ */
+export function buildMentionTriggerAdapter(
+  cache: MentionCache,
+  agents: AgentConfig[],
+  sessions: readonly TriggerItem[] = NO_SESSIONS,
+): TriggerAdapter {
   const items = (body: string): TriggerItem[] => {
     cache.request(body);
     const cached = cache.getItems(body);
@@ -141,7 +156,8 @@ export function buildMentionTriggerAdapter(cache: MentionCache, agents: AgentCon
     if (c.mode !== 'fuzzy') return cached;
     const q = c.query.toLowerCase();
     const matched = agents.filter((a) => !q || a.name.toLowerCase().includes(q)).map(agentItem);
-    return [...matched, ...cached];
+    const matchedSessions = sessions.filter((s) => !q || s.label.toLowerCase().includes(q));
+    return [...matched, ...matchedSessions, ...cached];
   };
   return {
     categories: () => [],

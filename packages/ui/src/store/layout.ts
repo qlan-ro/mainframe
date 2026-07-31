@@ -7,9 +7,10 @@ import {
   closeRunTab as closeRunTabReducer,
   moveTabToRun as moveTabToRunReducer,
   releaseRunScope as releaseRunScopeReducer,
-  terminalIdsForScope,
-  terminalIdsInPane,
-  terminalIdsInRun,
+  retargetUrlTab as retargetUrlTabReducer,
+  tabIdsForScope,
+  tabIdsInPane,
+  tabIdsInRun,
   type RunDropEdge,
   type RunState,
   type RunTab,
@@ -17,109 +18,25 @@ import {
 import { useTabsStore } from './tabs';
 import { useActiveBasesStore } from './active-bases-store';
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
+import { releaseUrlTunnels } from './url-tunnel-cleanup';
 import { layoutPersistOptions, prunePersistedSessions } from './layout-persist';
+import {
+  isSurfaceFloor,
+  placeInLayout,
+  removeSurface,
+  repositionInLayout,
+  type RepositionTarget,
+  type SurfaceId,
+  type WorkspaceLayout,
+} from './layout-placement';
 
-export type SurfaceId = 'chat' | 'files' | 'run';
-
-/** Where a dragged surface lands when repositioned. */
-export type RepositionTarget = 'top-left' | 'top-right' | 'bottom';
-
-export interface WorkspaceLayout {
-  /** 1 or 2 surfaces in the main horizontal row. Chat always lives here. */
-  top: SurfaceId[];
-  /** Optional single surface in a strip below the top row. */
-  bottom: SurfaceId | null;
-  /** Flex weights for the top-row surfaces (default 1 each, set by drag). */
-  topFlex: Partial<Record<SurfaceId, number>>;
-  /** Flex weights for top-row vs bottom-strip (set by drag). */
-  vFlex: { top: number; bottom: number };
-}
+export type { RepositionTarget, SurfaceId, WorkspaceLayout } from './layout-placement';
+export { isSurfaceFloor, layoutCanSplit, litSurfaceCount } from './layout-placement';
 
 /** A single session's remembered workspace (surface placement + Run panes). */
 export interface SessionWorkspace {
   layout: WorkspaceLayout;
   run: RunState | null;
-}
-
-// ── placement helpers (mirror 04-engine.jsx placeInLayout / removeSurface) ──
-
-function insertTop(top: SurfaceId[], s: SurfaceId): SurfaceId[] {
-  if (s === 'chat') return ['chat', ...top.filter((x) => x !== 'chat')];
-  // Non-chat: keep chat leftmost, append new surface after existing ones.
-  return [...top, s];
-}
-
-function placeInLayout(layout: WorkspaceLayout, s: SurfaceId): WorkspaceLayout {
-  const { top, bottom } = layout;
-  if (top.includes(s) || bottom === s) return layout;
-
-  const newTop = [...top];
-  let newBottom = bottom;
-
-  if (s === 'chat') {
-    // Demote the most-recent top surface to bottom if the row is full.
-    if (newTop.length >= 2 && !newBottom) newBottom = newTop.pop()!;
-    return { ...layout, top: insertTop(newTop, 'chat'), bottom: newBottom };
-  }
-
-  if (newTop.length < 2) return { ...layout, top: insertTop(newTop, s) };
-  if (!newBottom) return { ...layout, bottom: s };
-  return layout; // all 3 slots already filled
-}
-
-function removeSurface(layout: WorkspaceLayout, s: SurfaceId): WorkspaceLayout {
-  let top = layout.top.filter((x) => x !== s);
-  let bottom = layout.bottom === s ? null : layout.bottom;
-
-  // Compact: never leave a lone bottom strip — promote it to the top row.
-  if (bottom && top.length < 2) {
-    top = insertTop(top, bottom);
-    bottom = null;
-  }
-
-  // Floor: never zero surfaces — restore chat.
-  if (top.length === 0) top = ['chat'];
-
-  return { ...layout, top, bottom };
-}
-
-/** Manual-drag reposition. Chat may be reordered within the top row but never sent to the strip. */
-function repositionInLayout(layout: WorkspaceLayout, s: SurfaceId, target: RepositionTarget): WorkspaceLayout {
-  let top = layout.top.filter((x) => x !== s);
-  let bottom = layout.bottom === s ? null : layout.bottom;
-
-  if (target === 'bottom') {
-    if (s === 'chat') return layout; // chat never goes to the strip
-    if (bottom) top = insertTop(top, bottom);
-    bottom = s;
-  } else if (target === 'top-left') {
-    top = [s, ...top];
-  } else {
-    top = [...top, s];
-  }
-
-  if (top.length === 0) top = ['chat'];
-  return { ...layout, top, bottom };
-}
-
-/** True when at least one of files/run is not yet in the layout. */
-export function layoutCanSplit(layout: WorkspaceLayout): boolean {
-  return (['files', 'run'] as SurfaceId[]).some((s) => !layout.top.includes(s) && layout.bottom !== s);
-}
-
-/** Number of surfaces currently shown (top row + optional bottom strip). */
-export function litSurfaceCount(layout: WorkspaceLayout): number {
-  return layout.top.length + (layout.bottom ? 1 : 0);
-}
-
-/**
- * The dynamic floor: a lit surface that is the ONLY one shown is non-dismissable
- * (mirrors `04-engine.jsx` `isFloor = lit && litCount === 1`). Not a hardcoded
- * chat floor — whichever surface is last-lit becomes the floor.
- */
-export function isSurfaceFloor(layout: WorkspaceLayout, id: SurfaceId): boolean {
-  const lit = layout.top.includes(id) || layout.bottom === id;
-  return lit && litSurfaceCount(layout) === 1;
 }
 
 /** Build a RunTab guest from a Files editor tab, stamped with the active scope. */
@@ -168,6 +85,8 @@ export interface LayoutStore {
    */
   addRunTab: (tab: RunTab, paneId?: string) => boolean;
   activateRunTab: (paneId: string, tabId: string) => void;
+  /** Point a URL tab at a newly committed URL. The tab's id — and its webview — survive. */
+  setUrlTabTarget: (tabId: string, url: string, title: string) => void;
   closeRunTab: (paneId: string, tabId: string) => void;
   closePane: (paneId: string) => void;
   /** Release a launch scope: dispose its terminals and drop its Run tabs. */
@@ -211,9 +130,10 @@ export const useLayoutStore = create<LayoutStore>()(
         if (isSurfaceFloor(layout, surface)) return;
         const isActive = layout.top.includes(surface) || layout.bottom === surface;
         const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
-        // Toggling Run off kills any live PTYs before discarding the panes.
+        // Toggling Run off kills any live PTYs and releases URL tabs' tunnels before discarding the panes.
         if (surface === 'run' && isActive) {
-          killAndDisposeCachedTerminals(terminalIdsInRun(run));
+          killAndDisposeCachedTerminals(tabIdsInRun(run, 'terminal'));
+          releaseUrlTunnels(tabIdsInRun(run, 'url'));
         }
         writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
       },
@@ -276,11 +196,19 @@ export const useLayoutStore = create<LayoutStore>()(
         writeWorkspace({ layout, run: activateRunTabReducer(run, paneId, tabId) });
       },
 
+      setUrlTabTarget(tabId, url, title) {
+        const { layout, run } = get();
+        if (!run) return;
+        const nextRun = retargetUrlTabReducer(run, tabId, url, title);
+        if (nextRun !== run) writeWorkspace({ layout, run: nextRun });
+      },
+
       closeRunTab(paneId, tabId) {
         const { layout, run } = get();
         if (!run) return;
         const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
         if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
+        if (tab?.kind === 'url') releaseUrlTunnels([tabId]);
         // Preview destruction is handled by the PreviewInstance lifecycle hook's
         // cleanup effect when the component unmounts after the tab is removed.
         const nextRun = closeRunTabReducer(run, paneId, tabId);
@@ -290,7 +218,8 @@ export const useLayoutStore = create<LayoutStore>()(
       closePane(paneId) {
         const { layout, run } = get();
         if (!run) return;
-        killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
+        killAndDisposeCachedTerminals(tabIdsInPane(run, paneId, 'terminal'));
+        releaseUrlTunnels(tabIdsInPane(run, paneId, 'url'));
         // Preview destruction is handled by the PreviewInstance lifecycle hook's
         // cleanup effect when components unmount after the pane is removed.
         const nextRun = closePaneReducer(run, paneId);
@@ -300,7 +229,8 @@ export const useLayoutStore = create<LayoutStore>()(
       releaseRunScope(scopeKey) {
         const { layout, run } = get();
         if (!run) return;
-        killAndDisposeCachedTerminals(terminalIdsForScope(run, scopeKey));
+        killAndDisposeCachedTerminals(tabIdsForScope(run, scopeKey, 'terminal'));
+        releaseUrlTunnels(tabIdsForScope(run, scopeKey, 'url'));
         // Preview/console bodies tear down via their unmount cleanup once the
         // tabs are removed (PreviewInstance destroys its webview).
         const nextRun = releaseRunScopeReducer(run, scopeKey);

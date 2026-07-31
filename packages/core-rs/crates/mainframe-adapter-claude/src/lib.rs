@@ -5,8 +5,8 @@
 //! `index.ts` re-exports collapse into this `lib.rs`). The stream-json event
 //! shapes, spawn args, stdin `control_request` envelopes, SIGTERM→SIGKILL + 10s
 //! SIGINT interrupt semantics, and JSONL history formats are copied exactly from
-//! the TS source and its tests; unknown inbound event types are logged once per
-//! type and skipped — never a hard error.
+//! the TS source and its tests; unknown inbound event types are logged at debug
+//! on every occurrence and skipped — never a hard error.
 //!
 //! Task 4.1 pre-created these module files so parallel port agents never touch a
 //! shared `lib.rs`. Each module is an empty skeleton pending its per-file port.
@@ -15,6 +15,7 @@
 
 pub mod adapter;
 pub mod assistant_event;
+pub mod cliproxy;
 pub mod constants;
 pub mod context_files;
 pub mod events;
@@ -28,6 +29,8 @@ pub mod history_converters;
 pub mod history_subagents;
 pub mod history_tool_result;
 pub mod messages;
+pub mod models;
+pub mod permission_updates;
 pub mod plan_mode_handler;
 pub mod pr_detection;
 pub mod probe_models;

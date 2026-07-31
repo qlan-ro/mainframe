@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-types';
+import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useTheme } from '@/store/theme';
@@ -17,11 +17,11 @@ interface PreviewGeometryProps {
    */
   containerRef: RefObject<HTMLDivElement | null>;
   active: boolean;
-  /** Re-attach the observer when the anchor (un)mounts on a status transition. */
-  status: LaunchProcessStatus | null;
+  /** Re-attach the observer when the anchor (un)mounts — i.e. when a webview is mounted. */
+  mounted: boolean;
 }
 
-export function usePreviewGeometry({ handle, anchorRef, containerRef, active, status }: PreviewGeometryProps): void {
+export function usePreviewGeometry({ handle, anchorRef, containerRef, active, mounted }: PreviewGeometryProps): void {
   const rafRef = useRef<number | null>(null);
 
   function scheduleRefit() {
@@ -64,5 +64,5 @@ export function usePreviewGeometry({ handle, anchorRef, containerRef, active, st
       window.removeEventListener('resize', onWindowResize);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [anchorRef, containerRef, status, handle]);
+  }, [anchorRef, containerRef, mounted, handle]);
 }

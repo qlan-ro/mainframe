@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { releaseRunScope, terminalIdsForScope, type RunState } from '../run-pane';
+import { releaseRunScope, tabIdsForScope, type RunState } from '../run-pane';
 
 const SCOPE = 'p:/a';
 const OTHER = 'p:/b';
@@ -27,12 +27,12 @@ function run(): RunState {
   };
 }
 
-describe('terminalIdsForScope', () => {
+describe('tabIdsForScope', () => {
   it('returns only terminal tab ids of the target scope', () => {
-    expect(terminalIdsForScope(run(), SCOPE)).toEqual(['t2', 't4']);
+    expect(tabIdsForScope(run(), SCOPE, 'terminal')).toEqual(['t2', 't4']);
   });
   it('returns [] for null run', () => {
-    expect(terminalIdsForScope(null, SCOPE)).toEqual([]);
+    expect(tabIdsForScope(null, SCOPE, 'terminal')).toEqual([]);
   });
 });
 

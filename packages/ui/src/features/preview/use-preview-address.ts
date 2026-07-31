@@ -3,23 +3,26 @@ import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { normalizePreviewUrl } from './normalize-url';
 
 /**
- * Address-bar state for the preview tab.
+ * Address-bar state for a webview tab.
  *
- * - Seeds `currentUrl` to `http://localhost:{port}` and re-seeds on port change
- *   / server (re)start — the typed URL is intentionally NOT persisted.
+ * - Seeds `currentUrl` from `seedUrl` and re-seeds when it changes (a preview
+ *   tab passes `http://localhost:{port}`, a URL tab its committed address) —
+ *   the typed URL is intentionally NOT persisted.
  * - Reflects in-webview navigation via `handle.onNavigate` (two-way).
  * - `navigateTo` normalizes input, navigates the webview, and optimistically
  *   sets `currentUrl`. Returns false for invalid input (caller shows an error).
  */
 export function usePreviewAddress(
   handle: PreviewHandle | null,
-  port: number | null,
+  seedUrl: string | null,
 ): { currentUrl: string; navigateTo: (input: string) => boolean } {
   const [currentUrl, setCurrentUrl] = useState('');
 
+  // A null seed leaves the last address up: a stopped process or a torn-down
+  // tunnel should not blank the bar the user types their way out of.
   useEffect(() => {
-    if (port !== null) setCurrentUrl(`http://localhost:${port}`);
-  }, [port]);
+    if (seedUrl !== null) setCurrentUrl(seedUrl);
+  }, [seedUrl]);
 
   useEffect(() => {
     if (!handle) return;

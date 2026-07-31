@@ -9,11 +9,13 @@ use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, ExternalSessionPage, SessionOptions,
 };
 use mainframe_types::display::ToolCategories;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::external_sessions::list_external_sessions;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
-use crate::transcript::is_codex_transcript_present;
+use crate::title_generator::generate_codex_title;
+use crate::transcript::{is_codex_transcript_present, locate_codex_transcript};
 use crate::types::{ModelInfo, ModelListResult};
 
 pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
@@ -24,6 +26,8 @@ pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
         resolved_model: None,
         context_window: None,
         is_default: None,
+        is_older: None,
+        group: None,
         supported_efforts: None,
         default_effort: None,
         supports_fast: None,
@@ -220,6 +224,15 @@ impl Adapter for CodexAdapter {
         })
     }
 
+    fn generate_title(
+        &self,
+        content: String,
+        binary: String,
+    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        let path = self.resolved_path.clone();
+        Box::pin(async move { generate_codex_title(&content, &binary, path.as_str()).await })
+    }
+
     /// `isTranscriptPresent(sessionId)` — Codex resolves presence from its state DB
     /// via the thread registry, so `project_path`/`session_file_path` are unused.
     fn is_transcript_present(
@@ -229,6 +242,17 @@ impl Adapter for CodexAdapter {
         _session_file_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
         Box::pin(async move { Ok(is_codex_transcript_present(&session_id, None).await) })
+    }
+
+    /// `locateTranscript(sessionId)` — same state-DB resolution as `is_transcript_present`,
+    /// re-expressed as a location instead of a bool.
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        _project_path: String,
+        _session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        Box::pin(async move { Ok(locate_codex_transcript(&session_id, None).await) })
     }
 
     fn get_tool_categories(&self) -> Option<ToolCategories> {

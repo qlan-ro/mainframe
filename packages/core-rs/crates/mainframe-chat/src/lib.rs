@@ -23,6 +23,7 @@ pub mod external_session_service;
 pub mod idle_scanner;
 pub mod lifecycle_manager;
 pub mod message_cache;
+pub mod message_markers;
 pub mod permission_handler;
 pub mod permission_manager;
 pub mod plan_mode_actions;

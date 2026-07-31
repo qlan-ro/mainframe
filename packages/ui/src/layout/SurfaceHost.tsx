@@ -7,6 +7,7 @@ import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
+import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
 import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
 import { FilesSurface } from './surfaces/FilesSurface';
@@ -68,6 +69,11 @@ function SurfaceHostImpl({ port }: Props) {
     return subscribeToTerminalIntents();
   }, []);
 
+  // Subscribe to open-url-tab intents — normalizes the URL and adds the Run tab.
+  useEffect(() => {
+    return subscribeToUrlTabIntents();
+  }, []);
+
   // Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -120,13 +126,7 @@ function SurfaceHostImpl({ port }: Props) {
       {/* Vertical divider + bottom strip. */}
       {bottom && (
         <>
-          <SurfDivider
-            axis="y"
-            containerRef={outerRef}
-            onFrac={setVFrac}
-            lineClass={geo.divider}
-            gutter={geo.gutter}
-          />
+          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} lineClass={geo.divider} gutter={geo.gutter} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${panelCls}`}>
               <SurfaceView name={bottom} port={port} />

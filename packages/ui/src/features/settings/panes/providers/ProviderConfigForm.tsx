@@ -7,6 +7,7 @@ import { ConfigConflictsWarning } from './ConfigConflictsWarning';
 import { ModelDropdown } from './ModelDropdown';
 import { ProviderTuningDefaults } from './ProviderTuningDefaults';
 import { CodexTuningDefaults } from './CodexTuningDefaults';
+import { CliProxyStatus } from './CliProxyStatus';
 import { Checkbox } from '../../../../components/ui/checkbox';
 
 const EMPTY_CONFIG: ProviderConfig = {};
@@ -134,6 +135,10 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
       )}
 
       <SessionModeRadio adapterId={adapterId} config={config} onChange={update} />
+
+      {adapterId === 'claude' && (
+        <CliProxyStatus adapterId={adapterId} models={adapter.models} config={config} onChange={update} />
+      )}
     </div>
   );
 }

@@ -86,8 +86,9 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
         return { remoteId: controller.getDaemonId(), externalId: undefined };
       }
       const { remoteId } = await createForLocal(threadId, port);
-      // Stamp the controller so a LATER onNew sees the id and skips creating.
-      controller.setRemoteId(remoteId);
+      // Stamp the controller so a LATER onNew sees the id and skips creating,
+      // and key it under the remote id for the first-send handoff.
+      chatControllerRegistry.adopt(controller, remoteId);
       return { remoteId, externalId: undefined };
     },
     generateTitle(): Promise<ReadableStream<AssistantStreamChunk>> {

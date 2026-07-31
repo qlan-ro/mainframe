@@ -31,4 +31,24 @@ describe('normalizePreviewUrl', () => {
     expect(normalizePreviewUrl('http://')).toBeNull();
     expect(normalizePreviewUrl('::::')).toBeNull();
   });
+
+  it('normalizes the scheme to lowercase', () => {
+    expect(normalizePreviewUrl('HTTP://Example.com')).toBe('http://example.com/');
+  });
+
+  it('rejects a file: URL', () => {
+    expect(normalizePreviewUrl('file:///etc/passwd')).toBeNull();
+  });
+
+  it('rejects a javascript: URL', () => {
+    expect(normalizePreviewUrl('javascript://x')).toBeNull();
+  });
+
+  it('rejects an ssh: URL', () => {
+    expect(normalizePreviewUrl('ssh://host')).toBeNull();
+  });
+
+  it('rejects a data: URL', () => {
+    expect(normalizePreviewUrl('data:text/html,x')).toBeNull();
+  });
 });

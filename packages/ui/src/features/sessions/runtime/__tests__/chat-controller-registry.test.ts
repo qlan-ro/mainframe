@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 // keeps the same shape ({ chatId, dispose: vi.fn() }) and is `new`-safe.
 vi.mock('../../../chat/controller/chat-thread-controller', () => ({
   ChatThreadController: vi.fn().mockImplementation(function (chatId: string) {
-    return { chatId, dispose: vi.fn() };
+    return { chatId, dispose: vi.fn(), setRemoteId: vi.fn() };
   }),
 }));
 
@@ -23,6 +23,15 @@ function chatId(ctrl: unknown): string {
 }
 function disposeSpyOf(ctrl: unknown): ReturnType<typeof vi.fn> {
   return (ctrl as { dispose: ReturnType<typeof vi.fn> }).dispose;
+}
+function setRemoteIdSpyOf(ctrl: unknown): ReturnType<typeof vi.fn> {
+  return (ctrl as { setRemoteId: ReturnType<typeof vi.fn> }).setRemoteId;
+}
+
+// The registry only accepts real ChatThreadControllers; the mock factory returns
+// a structural stand-in, so adopt() takes it through an unknown cast.
+function adopt(ctrl: unknown, remoteId: string): void {
+  chatControllerRegistry.adopt(ctrl as ChatThreadController, remoteId);
 }
 
 afterEach(() => {
@@ -80,5 +89,64 @@ describe('chatControllerRegistry', () => {
 
   it('disposeAll on an already-empty registry is a no-op', () => {
     expect(() => chatControllerRegistry.disposeAll()).not.toThrow();
+  });
+});
+
+// #275 — the first-send handoff. The draft controller holds the optimistic user
+// message and the live WS sub; the session router then switches onto the
+// canonical remote item, a DIFFERENT thread id. Without the second key that
+// lookup builds a blank controller and the first message disappears.
+describe('chatControllerRegistry.adopt — the first-send handoff', () => {
+  it('makes the adopted controller reachable under the remote id', () => {
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+
+    expect(chatControllerRegistry.getOrCreate('chat-9', 31415)).toBe(draft);
+    expect(MockCtor).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the draft key pointing at the same controller', () => {
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+
+    expect(chatControllerRegistry.getOrCreate('__LOCALID_a', 31415)).toBe(draft);
+  });
+
+  it('stamps the daemon id onto the controller exactly once', () => {
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+
+    expect(setRemoteIdSpyOf(draft)).toHaveBeenCalledTimes(1);
+    expect(setRemoteIdSpyOf(draft)).toHaveBeenCalledWith('chat-9');
+  });
+
+  it('disposes a stale controller already parked under the remote id', () => {
+    const stale = chatControllerRegistry.getOrCreate('chat-9', 31415);
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+
+    expect(disposeSpyOf(stale)).toHaveBeenCalledTimes(1);
+    expect(chatControllerRegistry.getOrCreate('chat-9', 31415)).toBe(draft);
+  });
+
+  it('re-adopting the same id does not dispose the adopted controller', () => {
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+    adopt(draft, 'chat-9');
+
+    expect(disposeSpyOf(draft)).not.toHaveBeenCalled();
+    expect(chatControllerRegistry.getOrCreate('chat-9', 31415)).toBe(draft);
+  });
+
+  it('dispose by either key evicts BOTH so no alias resurrects a disposed controller', () => {
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+
+    chatControllerRegistry.dispose('chat-9');
+    expect(disposeSpyOf(draft)).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    expect(chatControllerRegistry.getOrCreate('__LOCALID_a', 31415)).not.toBe(draft);
+    expect(MockCtor).toHaveBeenCalledTimes(1);
   });
 });

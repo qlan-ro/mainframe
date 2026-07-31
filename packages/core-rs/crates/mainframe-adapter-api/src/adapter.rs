@@ -24,6 +24,7 @@ use mainframe_types::chat::{ChatMessage, MessageContent, ResolvedTuning, TodoIte
 use mainframe_types::context::{ContextFile, SkillFileEntry};
 use mainframe_types::display::ToolCategories;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::transcript::TranscriptLocation;
 use serde::{Deserialize, Serialize};
 
 use crate::{AdapterError, BoxFuture};
@@ -71,6 +72,11 @@ pub trait SessionSink: Send + Sync {
     fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>);
     fn on_tool_result(&self, content: Vec<MessageContent>);
     fn on_permission(&self, request: ControlRequest);
+    /// The CLI withdrew a control request it already sent
+    /// (`control_cancel_request`). Implementations remove the named pending
+    /// permission and must never treat it as an answer. Default no-op: adapters
+    /// whose CLI has no cancel frame need not implement it.
+    fn on_permission_cancelled(&self, _request_id: &str) {}
     fn on_result(&self, data: SessionResult);
     fn on_exit(&self, code: Option<i32>);
     fn on_error(&self, error: AdapterError);
@@ -217,11 +223,19 @@ pub trait Adapter: Send + Sync {
     /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
     /// callers then keep the deterministic truncated title. Owned `String` args to
     /// match this trait's async-method convention (`send_message`/`set_model`).
+    /// The default fires a `debug` log once per attempt — expected today for Codex,
+    /// which has no title model — so it reads as "no title model" in the log
+    /// instead of being indistinguishable from an adapter that tried and failed.
     fn generate_title(
         &self,
         content: String,
         binary: String,
     ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        tracing::debug!(
+            adapter_id = self.id(),
+            reason = "adapter_has_no_title_model",
+            "title generation skipped"
+        );
         let _ = (content, binary);
         Box::pin(async { Ok(None) })
     }
@@ -236,6 +250,19 @@ pub trait Adapter: Send + Sync {
         project_path: String,
         session_file_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
+        let _ = (session_id, project_path, session_file_path);
+        Box::pin(async { Ok(None) })
+    }
+
+    /// Absolute on-disk location of the CLI transcript for `session_id`.
+    /// `Ok(None)` = the adapter cannot determine the layout — callers MUST treat
+    /// it as "unknown" and hide the session, never as "missing".
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
         let _ = (session_id, project_path, session_file_path);
         Box::pin(async { Ok(None) })
     }
@@ -258,3 +285,5 @@ pub trait Adapter: Send + Sync {
 // session_id, project_path, session_file_path). Owned `String` params (not &str)
 // to stay consistent with this trait's async BoxFuture methods; `None` return =
 // "unsupported / cannot determine — don't flag".
+// notes: todo #240 adds a third optional method, locate_transcript, alongside
+// is_transcript_present — same default-Ok(None) shape, same owned-String args.

@@ -1,4 +1,7 @@
 //! Ported from `packages/core/src/chat/title-generator.ts`.
+//!
+//! Callers must hand these functions [`crate::message_markers::visible_message_text`]
+//! output, not a raw wire body — a title has to read like the message did.
 
 /// Deterministic fallback title: the first user message, cleaned and truncated at
 /// a word boundary.
@@ -15,6 +18,16 @@ pub fn derive_title_from_message(content: &str) -> String {
         _ => truncated.iter().collect(),
     };
     format!("{head}\u{2026}")
+}
+
+/// Which CLI generates the title for `adapter_id`. The `provider.<adapterId>.titleBinary`
+/// setting wins; otherwise each adapter titles with its own binary. It used to fall back
+/// to `claude` for every adapter, which asked a Codex-only user's machine to shell out to
+/// a CLI it may not have installed (#275).
+pub fn resolve_title_binary(setting: Option<String>, adapter_id: &str) -> String {
+    setting
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| adapter_id.to_string())
 }
 
 /// `content.replace(/\s+/g, ' ').trim()` — collapse whitespace runs to a single
@@ -39,6 +52,21 @@ fn collapse_whitespace(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_binary_defaults_to_the_chats_own_adapter() {
+        assert_eq!(resolve_title_binary(None, "codex"), "codex");
+        assert_eq!(resolve_title_binary(None, "claude"), "claude");
+    }
+
+    #[test]
+    fn title_binary_setting_wins_when_non_empty() {
+        assert_eq!(
+            resolve_title_binary(Some("/custom/bin".to_string()), "codex"),
+            "/custom/bin"
+        );
+        assert_eq!(resolve_title_binary(Some(String::new()), "codex"), "codex");
+    }
 
     #[test]
     fn short_message_is_returned_verbatim_after_collapse() {

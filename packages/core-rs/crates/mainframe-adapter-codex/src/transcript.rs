@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use mainframe_types::transcript::TranscriptLocation;
+
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
 
 /// Registry lookup — injectable for tests; defaults to Codex's state DB.
@@ -23,15 +25,15 @@ fn default_sessions_root() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".codex").join("sessions"))
 }
 
-/// Whether the Codex rollout transcript for `thread_id` still exists on disk.
-/// Returns `None` (cannot determine — don't flag) when the state DB has no row,
-/// the row carries no rollout path, or the path escapes `~/.codex/sessions`
-/// (untrusted input, mirrors rollout-reader.rs containment). `Some(false)` when
-/// the rollout file was deleted, `Some(true)` when it is present and contained.
-pub async fn is_codex_transcript_present(
+/// Codex's transcript location for `thread_id`. Returns `None` (cannot
+/// determine — don't flag) when the state DB has no row, the row carries no
+/// rollout path, or the path escapes `~/.codex/sessions` (untrusted input,
+/// mirrors rollout-reader.rs containment). `Some(Missing)` when the rollout
+/// file was deleted, `Some(Present(path))` when it is present and contained.
+pub async fn locate_codex_transcript(
     thread_id: &str,
     deps: Option<&CodexTranscriptDeps<'_>>,
-) -> Option<bool> {
+) -> Option<TranscriptLocation> {
     let ids = [thread_id.to_string()];
     let metadata = match deps.and_then(|d| d.lookup) {
         Some(lookup) => lookup(&ids),
@@ -46,7 +48,7 @@ pub async fn is_codex_transcript_present(
     let resolved = match tokio::fs::canonicalize(&rollout_path).await {
         Ok(p) => p,
         // Expected: rollout file deleted.
-        Err(_) => return Some(false),
+        Err(_) => return Some(TranscriptLocation::Missing),
     };
 
     let root_base = deps
@@ -59,7 +61,23 @@ pub async fn is_codex_transcript_present(
     if !resolved.starts_with(&root_resolved) {
         return None;
     }
-    Some(true)
+    Some(TranscriptLocation::Present(
+        resolved.to_string_lossy().into_owned(),
+    ))
+}
+
+/// Whether the Codex rollout transcript for `thread_id` still exists on disk —
+/// re-expressed as a single `locate_codex_transcript` probe so presence and
+/// location never drift out of sync.
+pub async fn is_codex_transcript_present(
+    thread_id: &str,
+    deps: Option<&CodexTranscriptDeps<'_>>,
+) -> Option<bool> {
+    match locate_codex_transcript(thread_id, deps).await {
+        None => None,
+        Some(TranscriptLocation::Missing) => Some(false),
+        Some(TranscriptLocation::Present(_)) => Some(true),
+    }
 }
 
 #[cfg(test)]
@@ -173,6 +191,68 @@ mod tests {
             is_codex_transcript_present(THREAD_ID, Some(&deps)).await,
             None
         );
+    }
+
+    #[tokio::test]
+    async fn locate_returns_present_when_the_rollout_exists_inside_root() {
+        let (root, rollout) = make_root();
+        let lookup = lookup_with(Some(rollout.to_string_lossy().into_owned()));
+        let deps = CodexTranscriptDeps {
+            lookup: Some(&lookup),
+            sessions_root: Some(root.path().to_path_buf()),
+        };
+        let resolved = tokio::fs::canonicalize(&rollout).await.unwrap();
+        assert_eq!(
+            locate_codex_transcript(THREAD_ID, Some(&deps)).await,
+            Some(TranscriptLocation::Present(
+                resolved.to_string_lossy().into_owned()
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn locate_returns_missing_when_the_rollout_was_deleted() {
+        let (root, _rollout) = make_root();
+        let gone = root
+            .path()
+            .join("2026")
+            .join("07")
+            .join("08")
+            .join(format!("rollout-gone-{THREAD_ID}.jsonl"));
+        let lookup = lookup_with(Some(gone.to_string_lossy().into_owned()));
+        let deps = CodexTranscriptDeps {
+            lookup: Some(&lookup),
+            sessions_root: Some(root.path().to_path_buf()),
+        };
+        assert_eq!(
+            locate_codex_transcript(THREAD_ID, Some(&deps)).await,
+            Some(TranscriptLocation::Missing)
+        );
+    }
+
+    #[tokio::test]
+    async fn locate_returns_none_when_registry_has_no_row() {
+        let (root, _rollout) = make_root();
+        let lookup = |_ids: &[String]| HashMap::new();
+        let deps = CodexTranscriptDeps {
+            lookup: Some(&lookup),
+            sessions_root: Some(root.path().to_path_buf()),
+        };
+        assert_eq!(locate_codex_transcript(THREAD_ID, Some(&deps)).await, None);
+    }
+
+    #[tokio::test]
+    async fn locate_returns_none_when_rollout_resolves_outside_root() {
+        let (root, _rollout) = make_root();
+        let outside = tempdir().unwrap();
+        let outside_file = outside.path().join("rollout-x.jsonl");
+        fs::write(&outside_file, "x\n").unwrap();
+        let lookup = lookup_with(Some(outside_file.to_string_lossy().into_owned()));
+        let deps = CodexTranscriptDeps {
+            lookup: Some(&lookup),
+            sessions_root: Some(root.path().to_path_buf()),
+        };
+        assert_eq!(locate_codex_transcript(THREAD_ID, Some(&deps)).await, None);
     }
 }
 

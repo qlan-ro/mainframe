@@ -42,6 +42,7 @@ use crate::lifecycle_manager::{
     ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
 };
 use crate::message_cache::MessageCache;
+use crate::message_markers::visible_message_text;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
 use crate::permission_manager::PermissionManager;
 use crate::title_generator::derive_title_from_message;
@@ -49,6 +50,8 @@ use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
 use crate::worktree_offer::{OfferError, WorktreeOfferDeps, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
+
+mod send;
 
 /// Result of `processAttachments` (attachment-processor.ts is a separate port
 /// target; the shape is mirrored here for the sendMessage seam).
@@ -160,7 +163,7 @@ pub trait ChatManagerDeps: Send + Sync {
     /// returns is unused by `addMention` (it always emits `context.updated`).
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    fn projects_remove(&self, project_id: &str);
+    fn projects_remove(&self, project_id: &str) -> Result<(), String>;
     /// `writeWorkspaceTrust(projectPath)` — persists workspace trust to the
     /// Claude CLI's `~/.claude.json` (injected so this crate does not depend on
     /// `mainframe-adapter-claude`). Backs `trust_workspace`.
@@ -255,10 +258,15 @@ pub trait ChatManagerDeps: Send + Sync {
     fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool;
     fn tracker_remove_chat(&self, chat_id: &str);
     /// `tracker.listLive(chatId)` — live (running) background tasks, for enrichChat's
-    /// backgroundActivity + widened working state. Default empty.
-    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
-        Vec::new()
-    }
+    /// backgroundActivity + widened working state. Required, not defaulted: an
+    /// implementation that silently inherited an empty default blanked
+    /// backgroundActivity for every chat (#273).
+    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask>;
+    /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
+    /// exit. Required, not defaulted: an implementation that silently inherited an
+    /// empty default left orphaned tasks Running forever, pinning `displayStatus:
+    /// working` and `backgroundActivity` with no recovery path (#273).
+    fn tracker_end_all_running(&self, chat_id: &str);
     /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
     /// Required (not a no-op default): `continue-here` relies on it persisting.
     fn chats_clear_session(&self, chat_id: &str);
@@ -480,6 +488,9 @@ impl EventHandlerDeps for EhDeps {
     }
     fn on_worktree_trigger(&self, chat_id: &str) {
         self.worktree_offers.on_trigger(chat_id);
+    }
+    fn tracker_end_all_running(&self, chat_id: &str) {
+        self.deps.tracker_end_all_running(chat_id);
     }
 }
 
@@ -1741,8 +1752,7 @@ impl ChatManager {
     }
 
     /// Remove a project and all its chats' live resources.
-    pub async fn remove_project(&self, project_id: &str) {
-        info!(project_id, "project removed");
+    pub async fn remove_project(&self, project_id: &str) -> Result<(), String> {
         let chats = self.deps.chats_list(project_id);
         for chat in chats {
             let cell = self.get_active(&chat.id);
@@ -1769,11 +1779,13 @@ impl ChatManager {
             self.permissions
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .clear(&chat.id);
+                .forget(&chat.id);
             self.deps.tracker_remove_chat(&chat.id);
             self.event_handler.clear_display_cache(&chat.id);
         }
-        self.deps.projects_remove(project_id);
+        self.deps.projects_remove(project_id)?;
+        info!(project_id, "project removed");
+        Ok(())
     }
 
     // ── the message send path + CLI-owned queue ──────────────────────────────
@@ -1870,208 +1882,12 @@ impl ChatManager {
             .turn_started_at = Some(now_ms());
 
         if let Some(cmd) = command {
-            let user_message = self
-                .messages
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .create_transient_message(
-                    chat_id,
-                    ChatMessageType::User,
-                    vec![MessageContent::Leaf(LeafContent::Text {
-                        text: content.to_string(),
-                        parent_tool_use_id: None,
-                    })],
-                    None,
-                );
-            self.messages
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .append(chat_id, user_message.clone());
-            self.emit(DaemonEvent::MessageAdded {
-                chat_id: chat_id.to_string(),
-                message: user_message,
-            });
-            self.event_handler.emit_display(chat_id);
-
-            if cmd.source == "mainframe" {
-                let resolved_args = cmd
-                    .args
-                    .clone()
-                    .or_else(|| find_mainframe_command(&cmd.name).and_then(|c| c.prompt_template));
-                let wrapped = wrap_mainframe_command(&cmd.name, content, resolved_args.as_deref());
-                session.send_message(wrapped, Vec::new(), None).await?;
-            } else {
-                session
-                    .send_command(cmd.name.clone(), cmd.args.clone())
-                    .await?;
-            }
-            let now = now_iso8601();
-            self.set_working(&post, chat_id, &now);
-            let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
-            return Ok(());
+            return self
+                .dispatch_command(cmd, &post, &session, chat_id, content)
+                .await;
         }
-
-        let processed = match attachment_ids {
-            Some(ids) if !ids.is_empty() => self.deps.process_attachments(chat_id, ids).await,
-            _ => ProcessedAttachments::default(),
-        };
-        let mut message_content = processed.message_content;
-        if !content.is_empty() {
-            message_content.push(MessageContent::Leaf(LeafContent::Text {
-                text: content.to_string(),
-                parent_tool_use_id: None,
-            }));
-        }
-        let outgoing_content = if !processed.text_prefix.is_empty() {
-            if content.is_empty() {
-                processed.text_prefix.join("\n")
-            } else {
-                format!("{}\n\n{}", processed.text_prefix.join("\n"), content)
-            }
-        } else {
-            content.to_string()
-        };
-
-        let adapter_acks_replay = session.supports_replay_ack();
-        let is_queued = adapter_acks_replay
-            && post
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .process_state
-                == Some(Some(ProcessState::Working));
-        let mut transient_metadata: HashMap<String, serde_json::Value> = HashMap::new();
-        if is_queued {
-            transient_metadata.insert("queued".to_string(), serde_json::json!(true));
-        }
-        if !processed.attachment_previews.is_empty() {
-            transient_metadata.insert(
-                "attachments".to_string(),
-                serde_json::Value::Array(processed.attachment_previews.clone()),
-            );
-        }
-        let message_uuid = if is_queued {
-            Some(nanoid::nanoid!())
-        } else {
-            None
-        };
-        if let Some(u) = &message_uuid {
-            transient_metadata.insert("uuid".to_string(), serde_json::json!(u));
-        }
-        let message = self
-            .messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .create_transient_message(
-                chat_id,
-                ChatMessageType::User,
-                message_content,
-                if transient_metadata.is_empty() {
-                    None
-                } else {
-                    Some(transient_metadata)
-                },
-            );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .append(chat_id, message.clone());
-        self.emit(DaemonEvent::MessageAdded {
-            chat_id: chat_id.to_string(),
-            message: message.clone(),
-        });
-        self.event_handler.emit_display(chat_id);
-        if attachment_ids.map(|a| !a.is_empty()).unwrap_or(false) {
-            self.emit(DaemonEvent::ContextUpdated {
-                chat_id: chat_id.to_string(),
-                file_paths: None,
-            });
-        }
-
-        if self.deps.extract_mentions_from_text(chat_id, content) {
-            self.emit(DaemonEvent::ContextUpdated {
-                chat_id: chat_id.to_string(),
-                file_paths: None,
-            });
-        }
-
-        let title_empty = post
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .title
-            .as_deref()
-            .unwrap_or_default()
-            .is_empty();
-        if title_empty {
-            let title = derive_title_from_message(content);
-            {
-                let mut guard = post.lock().unwrap_or_else(|e| e.into_inner());
-                guard.chat.title = Some(title.clone());
-            }
-            self.deps.chats_update(
-                chat_id,
-                &ChatUpdate {
-                    title: Some(title),
-                    ..Default::default()
-                },
-            );
-            let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
-            // TS fires `doGenerateTitle(...).catch(...)` WITHOUT awaiting: title
-            // generation shells out to the CLI, so awaiting it here would both stall
-            // the send and shift its `chat.updated` ahead of the turn's result/
-            // contextUsage events. Spawn it so the emission lands after the turn,
-            // matching Node's stream ordering.
-            let lifecycle = self.lifecycle.clone();
-            let chat_id_owned = chat_id.to_string();
-            let content_owned = content.to_string();
-            tokio::spawn(async move {
-                lifecycle
-                    .do_generate_title(&chat_id_owned, &content_owned)
-                    .await;
-            });
-        }
-
-        let now = now_iso8601();
-        self.set_working(&post, chat_id, &now);
-        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
-
-        session
-            .send_message(
-                outgoing_content,
-                processed.images.clone(),
-                message_uuid.clone(),
-            )
-            .await?;
-
-        if let Some(uuid) = message_uuid {
-            let r = QueuedMessageRef {
-                message_id: message.id.clone(),
-                chat_id: chat_id.to_string(),
-                uuid: uuid.clone(),
-                content: content.to_string(),
-                attachment_ids: attachment_ids.filter(|a| !a.is_empty()).map(|a| a.to_vec()),
-                timestamp: message.timestamp.clone(),
-            };
-            self.queued_refs
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(uuid.clone(), r.clone());
-            self.emit(DaemonEvent::MessageQueued {
-                chat_id: chat_id.to_string(),
-                r#ref: r,
-            });
-            info!(
-                chat_id,
-                uuid,
-                message_id = message.id,
-                "message sent to CLI while busy (queued)"
-            );
-        }
-        Ok(())
+        self.send_plain_text(&post, &session, chat_id, content, attachment_ids)
+            .await
     }
 
     fn set_working(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, now: &str) {
@@ -2330,9 +2146,14 @@ mod tests;
 // notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. New defaulted ChatManagerDeps methods (chat_deps.rs must override):
-// notes: tracker_list_live, is_transcript_present, chats_clear_session/worktree,
-// notes: adapter_snapshot_models; generate_title gained an adapter_id arg (adapter-aware).
-// notes: Ported: chat-manager-background-activity (5, via direct enrich_chat) +
-// notes: chat-manager-degraded (3).
+// notes: spawned. New defaulted ChatManagerDeps methods still silently unoverridden
+// notes: in chat_deps.rs (filed as #289 is_transcript_present, #290
+// notes: adapter_snapshot_models): tracker_list_live and tracker_end_all_running
+// notes: are required, not defaulted (#273 — a silent default caused
+// notes: backgroundActivity to stay empty, then let orphaned tasks stay Running
+// notes: forever, in production); generate_title gained an adapter_id arg
+// notes: (adapter-aware).
+// notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
+// notes: production wiring is covered by mainframe-server's chat_background_activity
+// notes: integration test (#273). Also chat-manager-degraded (3).
 // todos: 2

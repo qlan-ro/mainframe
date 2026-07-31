@@ -209,6 +209,47 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     const projectId = await fetchChatProjectId(newChatId as string);
     expect(projectId).toBe(project.projectId);
   });
+
+  // Regression (#275, "first message is not visible"): the first send hands the
+  // draft off to the canonical remote row — a different thread id. The registry
+  // has to alias both ids onto the one controller that holds the optimistic
+  // message; keying only by thread id mounted a BLANK second controller whose
+  // sole seed was a REST history read.
+  //
+  // The forced-empty response is not a fake: the daemon persists the user
+  // message only AFTER spawning the CLI, so any read issued during a cold spawn
+  // legitimately returns an empty transcript. Pinning that losing side makes the
+  // race deterministic — before the fix the message vanished on every run.
+  test('the first user message stays visible when the history read predates persistence', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+
+    await page.route('**/api/chats/*/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { messages: [], transcriptMissing: false } }),
+      });
+    });
+
+    try {
+      await sidebar.newButton().click();
+      await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
+      await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
+
+      await composer(page).submit('e2e first-message visibility regression');
+
+      const userMessage = page.getByTestId('chat-user-message');
+      await expect(userMessage).toHaveCount(1, { timeout: 20_000 });
+      await expect(userMessage).toContainText('e2e first-message visibility regression');
+      // Hold past the handoff: the blank controller used to replace the
+      // transcript on its own seed, a beat after the row switched.
+      await page.waitForTimeout(2_000);
+      await expect(userMessage).toHaveCount(1);
+    } finally {
+      await page.unroute('**/api/chats/*/messages');
+    }
+  });
 });
 
 // ─── §sessions-draft — pill-active skip + no cross-project leak ──────────────

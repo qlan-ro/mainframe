@@ -36,6 +36,7 @@ pub mod session;
 pub(crate) mod thread_item_render;
 pub(crate) mod thread_item_variants;
 pub mod thread_registry;
+pub mod title_generator;
 pub mod transcript;
 pub mod turn_config;
 pub mod types;

@@ -1,8 +1,9 @@
 import { daemonWs } from './ws-client';
 import { chatControllerRegistry } from '../../features/sessions/runtime/chat-controller-registry';
 import { killAndDisposeCachedTerminals } from '../../store/terminal-cleanup';
+import { clearUrlTunnelConsumers } from '../../features/url-tab/tunnel-consumers';
 import { useLayoutStore } from '../../store/layout';
-import { terminalIdsInRun } from '../../store/run-pane';
+import { tabIdsInRun } from '../../store/run-pane';
 import { resetAdapters } from '../../store/adapters';
 import { invalidateSeedFetches } from '../../store/adapters-seed';
 
@@ -28,7 +29,7 @@ export function disposeDaemonSession(): void {
 
   try {
     const { run } = useLayoutStore.getState();
-    killAndDisposeCachedTerminals(terminalIdsInRun(run));
+    killAndDisposeCachedTerminals(tabIdsInRun(run, 'terminal'));
   } catch (err) {
     console.warn('[disposeDaemonSession] killAndDisposeCachedTerminals failed', err);
   }
@@ -38,5 +39,13 @@ export function disposeDaemonSession(): void {
     invalidateSeedFetches();
   } catch (err) {
     console.warn('[disposeDaemonSession] adapters reset failed', err);
+  }
+
+  try {
+    // Drop the registry only — never stop a tunnel here, or the stop would go
+    // to the daemon we're leaving, not the one it actually runs on.
+    clearUrlTunnelConsumers();
+  } catch (err) {
+    console.warn('[disposeDaemonSession] clearUrlTunnelConsumers failed', err);
   }
 }

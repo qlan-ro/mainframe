@@ -7,7 +7,7 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use mainframe_adapter_api::AdapterError;
+use mainframe_adapter_api::{AdapterError, finalize_title};
 use tokio::process::Command;
 
 const TITLE_TIMEOUT_MS: u64 = 30_000;
@@ -45,12 +45,14 @@ pub async fn generate_claude_title(
         .env("NO_COLOR", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .output();
 
     let output = match tokio::time::timeout(Duration::from_millis(TITLE_TIMEOUT_MS), run).await {
-        Ok(res) => res?,
+        Ok(res) => res.map_err(|err| {
+            AdapterError::Message(format!("failed to spawn title binary {binary}: {err}"))
+        })?,
         Err(_) => {
             return Err(AdapterError::Message(
                 "claude title generation timed out".into(),
@@ -58,51 +60,58 @@ pub async fn generate_claude_title(
         }
     };
 
-    Ok(finalize_title(&String::from_utf8_lossy(&output.stdout)))
+    interpret_output(output, binary)
 }
 
-/// `stdout.trim().replace(/^["']|["']$/g, '').trim()`, accepting only a 2..=80 char
-/// result (else `null`).
-fn finalize_title(stdout: &str) -> Option<String> {
-    let mut t = stdout.trim().to_string();
-    if t.starts_with('"') || t.starts_with('\'') {
-        t.remove(0);
+/// Turns a completed title-child `Output` into the accepted title, or an error
+/// that names the exit status and the CLI's own (bounded) stderr.
+fn interpret_output(
+    output: std::process::Output,
+    binary: &str,
+) -> Result<Option<String>, AdapterError> {
+    if !output.status.success() {
+        let status = output
+            .status
+            .code()
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let stderr = truncate_stderr(&output.stderr);
+        let stderr = if stderr.is_empty() {
+            "<no stderr>".to_string()
+        } else {
+            stderr
+        };
+        return Err(AdapterError::Message(format!(
+            "claude title generation exited with {status}: {stderr}"
+        )));
     }
-    if t.ends_with('"') || t.ends_with('\'') {
-        t.pop();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = stdout.trim();
+    let candidate_chars = stdout.chars().count();
+    let title = finalize_title(stdout);
+    if title.is_none() {
+        tracing::debug!(
+            adapter_id = "claude",
+            reason = "candidate_rejected",
+            binary,
+            candidate_chars,
+            "title generation skipped"
+        );
     }
-    let title = t.trim();
-    let len = title.chars().count();
-    if !title.is_empty() && (2..=80).contains(&len) {
-        Some(title.to_string())
-    } else {
-        None
-    }
+    Ok(title)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn strips_surrounding_quotes_and_trims() {
-        assert_eq!(
-            finalize_title("  \"Auth Refactor\"\n"),
-            Some("Auth Refactor".to_string())
-        );
-        assert_eq!(
-            finalize_title("'Fix Login Bug'"),
-            Some("Fix Login Bug".to_string())
-        );
+/// Bounds the CLI's stderr to 1024 *characters* (not bytes, so a multibyte code
+/// point is never split), appending `…` when the source was longer.
+fn truncate_stderr(raw: &[u8]) -> String {
+    let text = String::from_utf8_lossy(raw);
+    let text = text.trim();
+    let mut truncated: String = text.chars().take(1024).collect();
+    if text.chars().count() > 1024 {
+        truncated.push('…');
     }
-
-    #[test]
-    fn rejects_too_short_or_too_long() {
-        assert_eq!(finalize_title("a"), None);
-        assert_eq!(finalize_title("   "), None);
-        let long: String = "x".repeat(81);
-        assert_eq!(finalize_title(&long), None);
-    }
+    truncated
 }
 
 // PORT STATUS: src/plugins/builtin/claude/title-generator.ts (48 lines)
@@ -114,5 +123,7 @@ mod tests {
 // notes: (TS execFile rejects on timeout; callers keep the deterministic title). PATH
 // notes: threaded explicitly + NO_COLOR=1 (edition-2024 can't mutate process env).
 // notes: maxBuffer:8192 dropped (title output is a few words; unbounded read is safe).
-// notes: The quote-strip/length gate is factored into finalize_title and unit-tested
-// notes: (no TS test covers this module directly).
+// notes: stderr is piped (not nulled) and capped at 1024 chars in the returned error;
+// notes: a non-zero exit is now Err, not an empty Ok(None) (#287).
+// notes: The quote-strip/length gate moved to mainframe_adapter_api::finalize_title
+// notes: (#275) so the Codex generator can't drift from it; tests moved with it.

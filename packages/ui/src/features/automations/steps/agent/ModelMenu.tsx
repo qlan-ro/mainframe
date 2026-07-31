@@ -62,7 +62,12 @@ export function ModelMenu({ adapterId, model, onChange, testId }: ModelMenuProps
           <span className="truncate">{activeModel.label}</span>
         </ChipButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-testid={`${testId}-model-menu`} align="start" sideOffset={6} className="min-w-44">
+      <DropdownMenuContent
+        data-testid={`${testId}-model-menu`}
+        align="start"
+        sideOffset={6}
+        className="max-h-[320px] min-w-44 overflow-y-auto"
+      >
         {adapters.map((a) => (
           <div key={a.id}>
             <DropdownMenuLabel>{a.name}</DropdownMenuLabel>

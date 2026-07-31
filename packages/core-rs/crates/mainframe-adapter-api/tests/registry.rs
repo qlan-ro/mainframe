@@ -32,6 +32,8 @@ fn model(id: &str, label: &str) -> AdapterModel {
         resolved_model: None,
         context_window: None,
         is_default: None,
+        is_older: None,
+        group: None,
         supported_efforts: None,
         default_effort: None,
         supports_fast: None,
@@ -401,4 +403,17 @@ async fn skips_live_discovery_for_an_uninstalled_adapter() {
         reg.get_snapshots()[0].catalog_source,
         Some(CatalogSource::Fallback)
     );
+}
+
+// Regression pin for #287 mode 3 (`adapter_has_no_title_model`): FakeAdapter
+// never overrides `generate_title`, so this exercises the trait's own default
+// body directly rather than a concrete adapter that may grow its own title
+// model later (Codex did, in #275/#541, after this pin first targeted it).
+#[tokio::test]
+async fn default_generate_title_returns_no_title_for_an_adapter_without_a_title_model() {
+    let adapter = FakeAdapter::new();
+    let result = adapter
+        .generate_title("hello".to_string(), "claude".to_string())
+        .await;
+    assert_eq!(result.unwrap(), None);
 }

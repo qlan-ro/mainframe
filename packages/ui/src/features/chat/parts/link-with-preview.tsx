@@ -7,12 +7,12 @@
  * the whole component map.
  */
 import React, { useCallback, useState } from 'react';
-import { AlertTriangle, Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
+import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 
 /**
@@ -87,12 +87,7 @@ export function LinkWithPreview({
           </ContextMenuTrigger>
         </TooltipTrigger>
         <ContextMenuContent>
-          <ContextMenuItem data-testid="chat-link-copy" onSelect={handleMenuCopy}>
-            {menuStatus === 'copied' && <Check className="mr-2 size-3.5 text-mf-success" />}
-            {menuStatus === 'failed' && <AlertTriangle className="mr-2 size-3.5 text-destructive" />}
-            {menuStatus === 'idle' && <Copy className="mr-2 size-3.5" />}
-            {menuStatus === 'copied' ? 'Copied' : menuStatus === 'failed' ? 'Copy failed' : 'Copy link'}
-          </ContextMenuItem>
+          <CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />
           <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
             Open link
           </ContextMenuItem>
