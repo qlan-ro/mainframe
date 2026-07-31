@@ -305,8 +305,13 @@ Also refresh the lifecycle PORT STATUS note at `lifecycle_manager.rs:1385-1387` 
 seam is unwired; its current wording ("a saved default model is normalized against the live snapshot") becomes true
 with this change, so no edit is required unless the sentence reads as aspirational after Task 6.
 
-**Verify:** `cd packages/core-rs && cargo check -p mainframe-chat`; `grep -n "#290" packages/core-rs/crates/mainframe-chat/src/chat_manager.rs`
-returns only the new "now required and wired" sentence.
+**Verify:**
+- `cd packages/core-rs && cargo check -p mainframe-chat`
+- `grep -n "#290" packages/core-rs/crates/mainframe-chat/src/chat_manager.rs | grep "// notes:"` returns only the
+  rewritten "now required and wired" PORT STATUS sentence, and no line still reads "silently unoverridden".
+- The unfiltered `grep -n "#290" packages/core-rs/crates/mainframe-chat/src/chat_manager.rs` returns **two** hits, and
+  both are expected: the Task 4 trait doc comment (`… leaked into new chats (#290).`) and this ledger sentence. Do not
+  strip `(#290)` from the doc comment to make a single-hit grep pass — that rationale is what D2 requires.
 
 ---
 
@@ -338,8 +343,18 @@ Run, from `packages/core-rs`:
 - `cargo test -p mainframe-adapter-api` (proves the registry seeding path the test leans on is untouched)
 
 Then confirm each acceptance criterion by name:
-- AC 1 — `grep -rn "fn adapter_snapshot_models" packages/core-rs/crates/mainframe-chat/src/` shows two declarations,
-  neither with a body.
+- AC 1 — the criterion is "no trait default; the crate does not compile if an implementation omits it", so prove it by
+  compilation, not by counting occurrences:
+  1. `grep -rn "fn adapter_snapshot_models" packages/core-rs/crates/mainframe-chat/src/` returns **five** sites. Two
+     are the bodyless trait declarations this AC is about — `chat_manager.rs` (`ChatManagerDeps`, Task 4) and
+     `lifecycle_manager.rs` (`LifecycleManagerDeps`, Task 5); both must end in `;`. The other three are impls and
+     **must** have bodies: `chat_manager.rs:616` (`LcDeps`, pre-existing), `chat_manager/tests.rs` (`StoreDeps`,
+     Task 4 step 2), and `lifecycle_manager.rs` (`FakeDeps`, Task 5 step 2).
+  2. Comment out the method Task 3 added to `impl ChatManagerDeps for DaemonChatDeps` (`chat_deps.rs`) and run
+     `cargo check -p mainframe-server` → it must fail with `E0046: not all trait items implemented, missing:
+     adapter_snapshot_models`. Restore the method, re-run `cargo check -p mainframe-server` → exits 0, and confirm
+     `git diff origin/main -- packages/core-rs/crates/mainframe-server/src/chat_deps.rs` shows only the Task 3
+     addition, with the probe left behind nowhere.
 - AC 2/3/4 — the three cases in `chat_default_model_catalog.rs`.
 - AC 5 — `git diff origin/main -- packages/core-rs/crates/mainframe-services/src/settings/model_default.rs` is empty.
 - AC 6 — the changeset file.
