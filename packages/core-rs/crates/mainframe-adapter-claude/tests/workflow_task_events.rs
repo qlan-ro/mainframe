@@ -7,7 +7,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::Arc;
-use std::sync::mpsc;
 use std::time::Duration;
 
 use mainframe_adapter_api::adapter::SessionSink;
@@ -170,17 +169,23 @@ fn feed(session: &ClaudeSession, event: serde_json::Value) {
     handle_stdout(session, line.as_bytes(), &NoopSink);
 }
 
-/// Runs `f` on a worker thread and fails if it does not finish within one
+/// Runs `f` on a blocking worker and fails if it does not finish within one
 /// second — the signature of a helper re-locking the non-reentrant
-/// `ClaudeSessionState` mutex while its caller already holds it.
+/// `ClaudeSessionState` mutex while its caller already holds it. `spawn_blocking`
+/// rather than a raw thread so the dispatch keeps a runtime context: a bare
+/// thread would panic instead of deadlock if the path ever reached
+/// `spawn_terminal_reconcile`'s inner `tokio::spawn`.
 fn run_with_timeout<F: FnOnce() + Send + 'static>(f: F) {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        f();
-        let _ = tx.send(());
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("test runtime");
+    runtime.block_on(async {
+        tokio::time::timeout(Duration::from_secs(1), tokio::task::spawn_blocking(f))
+            .await
+            .expect("handle_stdout must not deadlock on ClaudeSessionState")
+            .expect("dispatch panicked");
     });
-    rx.recv_timeout(Duration::from_secs(1))
-        .expect("handle_stdout must not deadlock on ClaudeSessionState");
 }
 
 #[test]
