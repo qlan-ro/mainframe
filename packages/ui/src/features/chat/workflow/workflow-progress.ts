@@ -82,6 +82,11 @@ export function unavailableRun(launch: WorkflowLaunch): ClaudeWorkflowRun {
   };
 }
 
+/** Anchor and testid key: the run id once the CLI has reported one, else the task id (A1). */
+export function runKey(run: ClaudeWorkflowRun): string {
+  return run.runId ?? run.taskId;
+}
+
 export function formatRunTokens(tokens: number): string {
   return tokens < 1000 ? `${tokens} tok` : `${(tokens / 1000).toFixed(1)}k tok`;
 }
