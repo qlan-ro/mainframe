@@ -58,6 +58,7 @@ impl EventHandlerDeps for AttentionDeps {
     fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
     fn on_queued_cleared(&self, _chat_id: &str) {}
     fn tracker_end_all_running(&self, _chat_id: &str) {}
+    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
