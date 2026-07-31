@@ -2146,14 +2146,15 @@ mod tests;
 // notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. New defaulted ChatManagerDeps methods still silently unoverridden
-// notes: in chat_deps.rs (filed as #289 is_transcript_present, #290
-// notes: adapter_snapshot_models): tracker_list_live and tracker_end_all_running
-// notes: are required, not defaulted (#273 — a silent default caused
+// notes: spawned. One defaulted ChatManagerDeps method is still silently unoverridden
+// notes: in chat_deps.rs (filed as #290 adapter_snapshot_models): tracker_list_live,
+// notes: tracker_end_all_running, and is_transcript_present are all required, not
+// notes: defaulted (#273 for the tracker methods — a silent default caused
 // notes: backgroundActivity to stay empty, then let orphaned tasks stay Running
-// notes: forever, in production); generate_title gained an adapter_id arg
-// notes: (adapter-aware).
+// notes: forever, in production; #289 for is_transcript_present — a silent default
+// notes: left transcript-presence reconciliation permanently inert in production);
+// notes: generate_title gained an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity
 // notes: integration test (#273). Also chat-manager-degraded (3).
-// todos: 2
+// todos: 1

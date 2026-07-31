@@ -1600,7 +1600,7 @@ mod scan_loaded_history_tests {
 // PORT STATUS: (new — production ChatManagerDeps wiring for chat/chat-manager.ts
 // constructor injection + index.ts `new ChatManager(...)`)
 // confidence: medium
-// todos: 3
+// todos: 2
 // notes: The one production impl of ChatManagerDeps. DB accessors go through the
 // SYNC-DB BRIDGE (Db::call_blocking) — one WAL connection. notifications / per-chat
 // todos / push / mentions / tuning / title / kill / worktree-remove are wired to
@@ -1625,6 +1625,9 @@ mod scan_loaded_history_tests {
 // filter as a hardcoded {claude, codex} id allowlist intersected with what is
 // actually registered. `claude_external_session_cache` is the process-lifetime,
 // injected (not module-singleton) enrichment cache the Claude scan needs.
-// `reconcile_transcript` is left at the trait's own `None` default (no
-// ChatManager.reconcileTranscript wiring) — out of this gap's scope; the
-// transcript-presence sweep is a no-op until that lands.
+// `reconcile_transcript` upgrades a `Weak<ChatManager>` set into
+// `DaemonChatDeps.chat_manager` after construction (`build_chat_manager`) and
+// delegates to `ChatManager::reconcile_transcript`, so the periodic
+// external-session sweep now reconciles transcript presence for chats the user
+// isn't viewing (#289). The `Weak` avoids a reference cycle: the manager is
+// built from these deps, so a strong back-reference would leak both forever.
