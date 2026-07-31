@@ -49,15 +49,15 @@ pub(super) fn reconcile_labels(
     }
 
     let local_labels = keep_workflow_labels(local, &merged);
-    let local_write = if local_labels != *local {
+    let local_write = if same_label_set(&local_labels, local) {
+        None
+    } else {
         Some(local_labels)
-    } else {
-        None
     };
-    let remote_write = if merged != remote_syncable {
-        Some(merged.clone())
-    } else {
+    let remote_write = if same_label_set(&merged, &remote_syncable) {
         None
+    } else {
+        Some(merged.clone())
     };
 
     LabelOutcome {
@@ -65,4 +65,19 @@ pub(super) fn reconcile_labels(
         remote_labels: remote_write,
         next_labels: merged,
     }
+}
+
+/// GitHub returns an issue's labels in its own order regardless of what we
+/// send, and the merge above rebuilds order from scratch — comparing as
+/// ordered vectors would PATCH GitHub (and rewrite the local column) on
+/// every run even when nothing actually changed.
+fn same_label_set(a: &[String], b: &[String]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut a_sorted = a.to_vec();
+    let mut b_sorted = b.to_vec();
+    a_sorted.sort();
+    b_sorted.sort();
+    a_sorted == b_sorted
 }

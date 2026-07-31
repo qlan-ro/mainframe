@@ -62,6 +62,16 @@ pub(super) fn reconcile_state(
             next_state: remote.state.clone(),
             report_row: None,
         },
+        // Both sides moved off the baseline, but the open/closed set has only
+        // two members: if they landed on the same value there's no dispute to
+        // resolve, and picking a "winner" would fabricate a report row and
+        // fire a redundant write at the "loser".
+        (true, true) if local_projected == remote.state => StateOutcome {
+            local_status: None,
+            remote_state: None,
+            next_state: remote.state.clone(),
+            report_row: None,
+        },
         (true, true) => resolve_dispute(local, remote, touch),
     }
 }

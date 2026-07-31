@@ -48,6 +48,16 @@ pub(super) fn reconcile_scalar(input: ScalarInput<'_>) -> ScalarOutcome {
             remote_write: None,
             report_row: None,
         },
+        // Both sides edited the field since the baseline, but if they landed
+        // on the identical value there's nothing to resolve — a "winner"
+        // here would fabricate a report row (winning == replaced) and issue
+        // a redundant write to the other side.
+        (true, true) if input.local_value == input.remote_value => ScalarOutcome {
+            next_value: input.local_value.to_string(),
+            local_write: None,
+            remote_write: None,
+            report_row: None,
+        },
         (true, true) => resolve_dispute(input),
     }
 }

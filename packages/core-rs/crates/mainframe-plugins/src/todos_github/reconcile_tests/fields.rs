@@ -1,46 +1,6 @@
-use crate::todos_github::reconcile::{
-    Baseline, LocalTask, RemoteIssueView, ReportRowDraft, TouchTimes, reconcile,
-};
+use crate::todos_github::reconcile::{TouchTimes, reconcile};
 
-fn local(title: &str, body: &str, status: &str, labels: &[&str]) -> LocalTask {
-    LocalTask {
-        title: title.to_string(),
-        body: body.to_string(),
-        status: status.to_string(),
-        labels: labels.iter().map(|l| l.to_string()).collect(),
-    }
-}
-
-fn remote(
-    title: &str,
-    body: &str,
-    state: &str,
-    labels: &[&str],
-    updated_at: &str,
-) -> RemoteIssueView {
-    RemoteIssueView {
-        title: title.to_string(),
-        body: body.to_string(),
-        state: state.to_string(),
-        labels: labels.iter().map(|l| l.to_string()).collect(),
-        updated_at: updated_at.to_string(),
-        title_at: None,
-        state_at: None,
-    }
-}
-
-fn baseline(title: &str, body: &str, state: &str, labels: &[&str]) -> Baseline {
-    Baseline {
-        title: title.to_string(),
-        body: body.to_string(),
-        state: state.to_string(),
-        labels: labels.iter().map(|l| l.to_string()).collect(),
-    }
-}
-
-fn find_row<'a>(rows: &'a [ReportRowDraft], field: &str) -> Option<&'a ReportRowDraft> {
-    rows.iter().find(|r| r.field == field)
-}
+use super::{baseline, find_row, local, remote};
 
 #[test]
 fn one_sided_local_title_change_wins_regardless_of_timestamps() {
@@ -175,98 +135,28 @@ fn unresolvable_remote_stamp_ties_to_github_with_no_remote_at() {
 }
 
 #[test]
-fn labels_added_locally_survive() {
-    let local = local("t", "b", "open", &["feature"]);
-    let remote = remote("t", "b", "open", &[], "2026-07-31T00:00:00Z");
-    let baseline = baseline("t", "b", "open", &[]);
-
-    let plan = reconcile(&local, &remote, &baseline, &TouchTimes::default());
-
-    assert_eq!(plan.next_baseline.labels, vec!["feature".to_string()]);
-    assert_eq!(plan.remote_writes.labels, Some(vec!["feature".to_string()]));
-    assert!(
-        plan.report_rows.is_empty(),
-        "labels never produce a report row"
-    );
-}
-
-#[test]
-fn labels_removed_remotely_are_removed_locally() {
-    let local = local("t", "b", "open", &["feature"]);
-    let remote = remote("t", "b", "open", &[], "2026-07-31T00:00:00Z");
-    let baseline = baseline("t", "b", "open", &["feature"]);
-
-    let plan = reconcile(&local, &remote, &baseline, &TouchTimes::default());
-
-    assert!(plan.next_baseline.labels.is_empty());
-    assert_eq!(plan.local_writes.labels, Some(vec![]));
-    assert!(plan.report_rows.is_empty());
-}
-
-#[test]
-fn labels_removed_on_both_sides_stay_gone() {
-    let local = local("t", "b", "open", &[]);
-    let remote = remote("t", "b", "open", &[], "2026-07-31T00:00:00Z");
-    let baseline = baseline("t", "b", "open", &["feature"]);
-
-    let plan = reconcile(&local, &remote, &baseline, &TouchTimes::default());
-
-    assert!(plan.next_baseline.labels.is_empty());
-    assert_eq!(plan.local_writes, Default::default());
-    assert_eq!(plan.remote_writes, Default::default());
-}
-
-#[test]
-fn workflow_labels_never_cross_in_either_direction() {
-    let local = local("t", "b", "open", &["needs-triage", "route:full"]);
-    let remote = remote(
-        "t",
-        "b",
+fn both_sides_edit_title_to_the_identical_value_is_not_a_dispute() {
+    let local = local("Same new title", "body", "open", &[]);
+    let mut remote = remote(
+        "Same new title",
+        "body",
         "open",
-        &["needs-triage", "route:full"],
+        &[],
         "2026-07-31T00:00:00Z",
     );
-    let baseline = baseline("t", "b", "open", &[]);
+    remote.title_at = Some("2026-07-31T10:00:00Z".to_string());
+    let baseline = baseline("Original", "body", "open", &[]);
+    let touch = TouchTimes {
+        title_at: Some("2026-07-31T11:00:00Z".to_string()),
+        ..Default::default()
+    };
 
-    let plan = reconcile(&local, &remote, &baseline, &TouchTimes::default());
+    let plan = reconcile(&local, &remote, &baseline, &touch);
 
-    assert_eq!(
-        plan.local_writes.labels, None,
-        "workflow labels are already local, nothing to write"
-    );
-    assert_eq!(
-        plan.remote_writes.labels, None,
-        "workflow labels never go outbound"
-    );
-    assert!(plan.next_baseline.labels.is_empty());
-}
-
-#[test]
-fn in_progress_task_closed_remotely_reports_the_special_rule() {
-    let local = local("t", "b", "in_progress", &[]);
-    let remote = remote("t", "b", "closed", &[], "2026-07-31T00:00:00Z");
-    let baseline = baseline("t", "b", "open", &[]);
-
-    let plan = reconcile(&local, &remote, &baseline, &TouchTimes::default());
-
-    let row = find_row(&plan.report_rows, "state").unwrap();
-    assert_eq!(row.rule, "in-progress-close");
-    assert_eq!(row.local_at, None);
-    assert_eq!(row.remote_at, None);
-    assert_eq!(plan.local_writes.status.as_deref(), Some("done"));
-}
-
-#[test]
-fn in_progress_task_with_no_remote_change_writes_nothing() {
-    let local = local("t", "b", "in_progress", &[]);
-    let remote = remote("t", "b", "open", &[], "2026-07-31T00:00:00Z");
-    let baseline = baseline("t", "b", "open", &[]);
-
-    let plan = reconcile(&local, &remote, &baseline, &TouchTimes::default());
-
-    assert_eq!(plan.local_writes, Default::default());
-    assert_eq!(plan.remote_writes, Default::default());
-    assert!(plan.report_rows.is_empty());
+    assert_eq!(plan.local_writes.title, None);
+    assert_eq!(plan.remote_writes.title, None);
+    assert!(find_row(&plan.report_rows, "title").is_none());
+    assert_eq!(plan.next_baseline.title, "Same new title");
 }
 
 #[test]
