@@ -8,5 +8,6 @@
       "@/*": ["../*"]
     }
   },
-  "include": [".", "../vite-env.d.ts"]
+  "//include": "setup.ts is what pulls in the jest-dom matcher types; without it the LSP reports toHaveAttribute as missing on every v2 test (the package-wide `tsc` is unaffected).",
+  "include": [".", "../vite-env.d.ts", "../__tests__/setup.ts"]
 }

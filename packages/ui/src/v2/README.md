@@ -57,15 +57,45 @@ truth, and it is not in here.
 `src/v2/components/ui` against the v2 stylesheet:
 
 ```
-pnpm dlx shadcn@latest add sidebar -c packages/ui/src/v2
+pnpm dlx shadcn@latest add <component> -c packages/ui/src/v2
 ```
 
-Check the lockfile after — see the `shadcn-add-churns-lockfile` note; hand-add
-the Radix dependency to `packages/ui/package.json` if the CLI tries to install.
+The CLI stops on an interactive "Select a component library" prompt that `--yes`
+does not skip, so for anything non-trivial it is faster to fetch the registry
+JSON and port by hand. Check the lockfile either way — see the
+`shadcn-add-churns-lockfile` note; hand-add the Radix dependency to
+`packages/ui/package.json` if the CLI tries to install.
+
+## The sidebar
+
+`components/ui/sidebar/` is a port of the registry component, not a copy. Four
+things changed, and they are the same four any registry component will need:
+
+- **No `forwardRef`.** React 19; the repo's own primitives are plain functions.
+- **No mobile path.** The `Sheet` drawer, `useIsMobile` and every `md:` variant
+  are gone — this is a desktop app.
+- **A flex child, not a `fixed` overlay.** Upstream positions the panel `fixed`
+  and reserves its width with a sibling spacer, which assumes a page scrolling
+  behind it. Mainframe's shell is a row of floating panels, so `Sidebar` animates
+  its own width and the spacer disappears. The `data-state` / `data-collapsible`
+  / `data-side` attributes are kept verbatim — every descendant styles itself off
+  them, so keeping the contract keeps the family portable.
+- **`--sidebar-*` aliased onto the warm chrome** in `styles/globals.css`
+  (`--sidebar` → `--mf-glass`, accent → `--accent`, and so on). The primitives
+  keep upstream's class names, so they stay diffable against the registry, and
+  because each alias points at a token the six scheme blocks already redefine,
+  the panel tracks classic/ocean/velvet × light/dark with no per-scheme work.
+
+Persistence is the caller's: upstream writes a `sidebar_state` cookie, which a
+desktop app has no use for, so `SidebarProvider` takes `open`/`onOpenChange`
+instead. ⌘B is built in.
 
 ## Order of work
 
 1. ~~Project configuration~~
 2. ~~globals.css / themes~~
-3. App shell
-4. Features, sidebar first
+3. ~~App shell~~ — `app/V2Shell.tsx`; no runtime provider, no overlay hosts, no
+   session router. Those return with the surfaces they belong to.
+4. Features, sidebar first — the sessions sidebar renders off fixtures
+   (`features/sessions/fixtures.ts`). Swapping in the real thread list is a
+   source change, not a rewrite.

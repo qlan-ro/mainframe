@@ -82,6 +82,27 @@
   --text-hero--line-height: 1.15;
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+   SIDEBAR — shadcn's token family, aliased onto the warm chrome.
+
+   The sidebar primitives are written against `bg-sidebar`, `ring-sidebar-ring`
+   and friends. Aliasing rather than restyling keeps them diffable against
+   upstream, and because each alias points at a token the six scheme blocks
+   already redefine, the panel tracks classic/ocean/velvet × light/dark for free.
+
+   `--sidebar` is the glass panel, not `--background`: the sidebar is chrome.
+   ──────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --color-sidebar: var(--mf-glass);
+  --color-sidebar-foreground: var(--foreground);
+  --color-sidebar-accent: var(--accent);
+  --color-sidebar-accent-foreground: var(--accent-foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--ring);
+}
+
 /* The shipped file pins the document to the old 13px body rung. */
 body {
   font-size: 0.875rem;
