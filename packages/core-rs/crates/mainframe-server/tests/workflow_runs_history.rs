@@ -221,6 +221,25 @@ fn write_record(
     RemoveDirOnDrop(derived.project_dir)
 }
 
+/// A live `task_progress` snapshot payload — the in-memory counterpart of a
+/// record's `workflowProgress`.
+fn snapshot_entries() -> Vec<Value> {
+    vec![
+        json!({ "type": "workflow_phase", "index": 0, "title": "Plan" }),
+        json!({
+            "type": "workflow_agent",
+            "index": 0,
+            "label": "core-dev",
+            "phaseIndex": 0,
+            "agentId": "agent-alpha",
+            "state": "progress",
+            "tokens": 42,
+            "toolCalls": 1,
+            "durationMs": 2_000
+        }),
+    ]
+}
+
 fn record(run_id: &str, task_id: &str) -> Value {
     json!({
         "runId": run_id,
@@ -347,4 +366,32 @@ async fn a_retained_snapshot_with_no_record_surfaces_unchanged() {
     assert_eq!(runs[0]["taskId"], "task-3");
     assert_eq!(runs[0]["workflowName"], "deploy");
     assert_eq!(runs[0]["totalTokens"], 42);
+    assert_eq!(runs[0]["structureRevision"], 2_000);
+    assert_eq!(runs[0]["phases"], json!([]));
+    assert_eq!(runs[0]["agents"], json!([]));
+}
+
+#[tokio::test]
+async fn a_retained_snapshots_phases_and_agents_survive_the_route() {
+    let h = harness("sess-snapshot-structure").await;
+    h.store.seed(&h.chat_id, "task-4", None);
+    h.store.apply_progress(
+        &h.chat_id,
+        "task-4",
+        ProgressUsage {
+            total_tokens: 42,
+            duration_ms: 2_000,
+        },
+        Some(&snapshot_entries()),
+    );
+
+    let body = h.messages().await;
+    let runs = body["data"]["workflowRuns"].as_array().unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0]["source"], "snapshot");
+    assert_eq!(runs[0]["phases"].as_array().unwrap().len(), 1);
+    assert_eq!(runs[0]["phases"][0]["title"], "Plan");
+    assert_eq!(runs[0]["agents"].as_array().unwrap().len(), 1);
+    assert_eq!(runs[0]["agents"][0]["agentId"], "agent-alpha");
+    assert_eq!(runs[0]["agents"][0]["state"], "progress");
 }

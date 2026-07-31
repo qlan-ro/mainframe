@@ -251,7 +251,7 @@ fn stamp_status_completed_twice_is_idempotent() {
 }
 
 #[test]
-fn stamp_status_paused_freezes_duration() {
+fn stamp_status_paused_leaves_the_run_open_to_later_progress() {
     let store = ClaudeWorkflowStore::new();
     store.seed(CHAT, TASK, None);
     store.apply_progress(
@@ -264,9 +264,28 @@ fn stamp_status_paused_freezes_duration() {
         None,
     );
     store.stamp_status(CHAT, TASK, ClaudeWorkflowRunStatus::Paused);
-    let run = store.runs_for_chat(CHAT).into_iter().next().unwrap();
-    assert_eq!(run.status, ClaudeWorkflowRunStatus::Paused);
-    assert_eq!(run.duration_ms, 3_000);
+    let paused = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(paused.status, ClaudeWorkflowRunStatus::Paused);
+    assert_eq!(paused.duration_ms, 3_000);
+    assert_eq!(paused.terminal_at, None);
+
+    // A resume from the CLI's own TUI keeps feeding this run, so the pause
+    // freezes the CLI's clock — never the store's max-of-totals contract.
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 25,
+            duration_ms: 8_000,
+        },
+        Some(&snapshot("done", 25, 8_000)),
+    );
+
+    let resumed = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(resumed.status, ClaudeWorkflowRunStatus::Paused);
+    assert_eq!(resumed.total_tokens, 25);
+    assert_eq!(resumed.duration_ms, 8_000);
+    assert_eq!(resumed.agents[0].state, ClaudeWorkflowAgentState::Done);
 }
 
 #[test]
@@ -399,6 +418,32 @@ async fn apply_record_twice_with_the_same_record_is_a_no_op_the_second_time() {
             .await
             .is_err()
     );
+}
+
+#[test]
+fn apply_record_with_an_empty_structure_keeps_the_retained_snapshots_phases_and_agents() {
+    let store = ClaudeWorkflowStore::new();
+    store.seed(CHAT, TASK, None);
+    store.apply_progress(
+        CHAT,
+        TASK,
+        ProgressUsage {
+            total_tokens: 10,
+            duration_ms: 4_000,
+        },
+        Some(&snapshot("done", 10, 4_000)),
+    );
+
+    store.apply_record(CHAT, record(TASK, Some("run-1"), true));
+
+    let run = store.runs_for_chat(CHAT).into_iter().next().unwrap();
+    assert_eq!(run.phases.len(), 1);
+    assert_eq!(run.agents.len(), 1);
+    assert_eq!(run.agents[0].agent_id, "agent-alpha");
+    assert_eq!(run.source, ClaudeWorkflowRunSource::Snapshot);
+    assert_eq!(run.structure_revision, Some(4_000));
+    assert_eq!(run.status, ClaudeWorkflowRunStatus::Completed);
+    assert_eq!(run.run_id, Some("run-1".to_string()));
 }
 
 #[test]

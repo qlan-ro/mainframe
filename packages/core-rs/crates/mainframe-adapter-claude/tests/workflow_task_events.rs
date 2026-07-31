@@ -14,11 +14,15 @@ use mainframe_adapter_api::adapter::SessionSink;
 use mainframe_adapter_claude::events::handle_stdout;
 use mainframe_adapter_claude::session::ClaudeSession;
 use mainframe_adapter_claude::task_events::map_task_kind;
+use mainframe_adapter_claude::transcript::get_session_jsonl_path;
 use mainframe_adapter_claude::workflow_events::{parse_launch_result, task_updated_payload};
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_types::adapter::SessionOptions;
 use mainframe_types::background_task::BackgroundWorkKind;
+use mainframe_types::claude_workflow::{
+    ClaudeWorkflowRun, ClaudeWorkflowRunSource, ClaudeWorkflowRunStatus,
+};
 use serde_json::json;
 
 // ---- pure functions (green at Task 17) ----
@@ -138,10 +142,19 @@ fn session_with_store(
     tracker: Arc<BackgroundTaskTracker>,
     store: Arc<ClaudeWorkflowStore>,
 ) -> Arc<ClaudeSession> {
+    session_with_options(tracker, store, "/tmp", None)
+}
+
+fn session_with_options(
+    tracker: Arc<BackgroundTaskTracker>,
+    store: Arc<ClaudeWorkflowStore>,
+    project_path: &str,
+    chat_id: Option<String>,
+) -> Arc<ClaudeSession> {
     let s = Arc::new(ClaudeSession::new(
         SessionOptions {
-            project_path: "/tmp".to_string(),
-            chat_id: None,
+            project_path: project_path.to_string(),
+            chat_id,
             mainframe_chat_id: CHAT.to_string(),
         },
         None,
@@ -278,4 +291,117 @@ fn workflow_tool_result_links_the_tracker_and_the_workflow_store_without_deadloc
         .find(|r| r.task_id == "task-9")
         .unwrap();
     assert_eq!(run.run_id, Some("run-42".to_string()));
+}
+
+// ---- terminal reconciliation (`record_location` resolves a session id) ----
+
+/// `get_session_jsonl_path` derives under the real `~/.claude/projects` tree, so
+/// the record goes there under a tempdir-unique encoded name and the guard
+/// removes it on drop, even on panic.
+struct RemoveDirOnDrop(String);
+impl Drop for RemoveDirOnDrop {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn write_record(project_path: &str, session_id: &str, task_id: &str) -> RemoveDirOnDrop {
+    let derived = get_session_jsonl_path(session_id, project_path);
+    let workflows_dir = std::path::Path::new(&derived.project_dir)
+        .join(session_id)
+        .join("workflows");
+    std::fs::create_dir_all(&workflows_dir).unwrap();
+    let record = json!({
+        "runId": "run-42",
+        "taskId": task_id,
+        "workflowName": "todo-lane",
+        "status": "completed",
+        "durationMs": 45_000,
+        "totalTokens": 5_500,
+        "workflowProgress": [
+            { "type": "workflow_phase", "index": 0, "title": "Plan" },
+            {
+                "type": "workflow_agent",
+                "index": 0,
+                "label": "core-dev",
+                "phaseIndex": 0,
+                "agentId": "agent-alpha",
+                "state": "done",
+                "tokens": 5_500,
+                "toolCalls": 3,
+                "durationMs": 45_000
+            }
+        ]
+    });
+    std::fs::write(
+        workflows_dir.join("wf_run-42.json"),
+        serde_json::to_string(&record).unwrap(),
+    )
+    .unwrap();
+    RemoveDirOnDrop(derived.project_dir)
+}
+
+async fn await_record_source(store: &ClaudeWorkflowStore, task_id: &str) -> ClaudeWorkflowRun {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let run = store
+            .runs_for_chat(CHAT)
+            .into_iter()
+            .find(|r| r.task_id == task_id);
+        if let Some(run) = run
+            && run.source == ClaudeWorkflowRunSource::Record
+        {
+            return run;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "terminal reconcile never applied the on-disk record"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// `spawn_terminal_reconcile` only runs when `record_location` resolves, which
+/// needs a CLI session id — the `chat_id: None` sessions above never reach it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_terminal_notification_reconciles_the_on_disk_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let project_path = dir.path().to_string_lossy().into_owned();
+    let _cleanup = write_record(&project_path, "sess-wf-1", "task-9");
+
+    let tracker = Arc::new(BackgroundTaskTracker::new());
+    let store = Arc::new(ClaudeWorkflowStore::new());
+    let session = session_with_options(
+        tracker,
+        store.clone(),
+        &project_path,
+        Some("sess-wf-1".to_string()),
+    );
+    feed(
+        &session,
+        json!({ "type": "system", "subtype": "task_started", "task_id": "task-9", "task_type": "local_workflow", "description": "todo lane" }),
+    );
+
+    // `spawn_blocking` keeps the dispatch off the async worker while staying in
+    // the runtime `spawn_terminal_reconcile` needs; the timeout is the same
+    // non-reentrant-mutex guard the tests above use.
+    let dispatch = tokio::task::spawn_blocking({
+        let session = session.clone();
+        move || {
+            feed(
+                &session,
+                json!({ "type": "system", "subtype": "task_notification", "task_id": "task-9", "status": "completed", "summary": "ok" }),
+            );
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(1), dispatch)
+        .await
+        .expect("handle_stdout must not deadlock on ClaudeSessionState")
+        .unwrap();
+
+    let run = await_record_source(&store, "task-9").await;
+    assert_eq!(run.run_id, Some("run-42".to_string()));
+    assert_eq!(run.phases.len(), 1);
+    assert_eq!(run.agents.len(), 1);
+    assert_eq!(run.status, ClaudeWorkflowRunStatus::Completed);
 }
