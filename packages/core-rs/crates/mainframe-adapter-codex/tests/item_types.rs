@@ -26,8 +26,22 @@ fn sub_agent_activity_round_trips() {
             assert_eq!(a.id, "sa1");
             assert_eq!(a.kind, "started");
             assert_eq!(a.agent_thread_id, "child_1");
-            assert_eq!(a.agent_path, "agents/reviewer");
+            assert_eq!(a.agent_path, Some("agents/reviewer".to_string()));
         }
+        other => panic!("expected SubAgentActivity, got {other:?}"),
+    }
+}
+
+#[test]
+fn sub_agent_activity_defaults_agent_path_when_omitted() {
+    let item = parse(json!({
+        "id": "sa1",
+        "type": "subAgentActivity",
+        "kind": "interrupted",
+        "agentThreadId": "child_1",
+    }));
+    match item {
+        ThreadItem::SubAgentActivity(a) => assert_eq!(a.agent_path, None),
         other => panic!("expected SubAgentActivity, got {other:?}"),
     }
 }

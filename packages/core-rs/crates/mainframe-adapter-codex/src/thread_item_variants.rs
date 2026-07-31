@@ -207,7 +207,8 @@ pub struct SubAgentActivityItem {
     pub id: String,
     pub kind: String,
     pub agent_thread_id: String,
-    pub agent_path: String,
+    #[serde(default)]
+    pub agent_path: Option<String>,
 }
 
 /// One block of a `dynamicToolCall`'s `contentItems`.
