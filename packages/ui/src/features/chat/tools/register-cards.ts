@@ -25,6 +25,7 @@ import { SlashCommandCard } from './cards/SlashCommandCard';
 import { TaskCard } from './cards/TaskCard';
 import { TaskProgressCard } from './cards/TaskProgressCard';
 import { WebFetchCard } from './cards/WebFetchCard';
+import { WorkflowLauncherRow } from '../workflow/WorkflowLauncherRow';
 
 Object.assign(TOOL_REGISTRY, {
   // file-mutating
@@ -51,6 +52,9 @@ Object.assign(TOOL_REGISTRY, {
   EnterWorktree: EnterWorktreeCard,
   ExitWorktree: ExitWorktreeCard,
   Skill: SlashCommandCard,
+  // workflow launcher (the run panel opens from the row, never in place)
+  Workflow: WorkflowLauncherRow,
+  RunWorkflow: WorkflowLauncherRow,
   // subagent + progress
   Task: TaskCard,
   _TaskProgress: TaskProgressCard,
