@@ -8,6 +8,7 @@ mod support;
 use reqwest::StatusCode;
 use serde_json::json;
 use support::spawn_test_server;
+use tempfile::TempDir;
 
 #[tokio::test]
 async fn list_starts_empty() {
@@ -144,4 +145,95 @@ async fn delete_is_phase4_seam_returns_500() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+// ── availability (todo #295) ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn list_marks_a_project_whose_directory_is_gone_unavailable() {
+    let server = spawn_test_server(None).await;
+    let client = reqwest::Client::new();
+
+    let live_dir = TempDir::new().unwrap();
+    let live_path = live_dir.path().to_string_lossy().to_string();
+
+    let dead_dir = TempDir::new().unwrap();
+    let dead_path = dead_dir.path().to_string_lossy().to_string();
+    drop(dead_dir); // directory no longer exists on disk
+
+    client
+        .post(server.http_url("/api/projects"))
+        .json(&json!({ "path": live_path }))
+        .send()
+        .await
+        .unwrap();
+    client
+        .post(server.http_url("/api/projects"))
+        .json(&json!({ "path": dead_path }))
+        .send()
+        .await
+        .unwrap();
+
+    let body: serde_json::Value = reqwest::get(server.http_url("/api/projects"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let projects = body["data"].as_array().unwrap();
+
+    let live_entry = projects
+        .iter()
+        .find(|p| p["path"] == json!(live_path))
+        .expect("live project present in list");
+    let dead_entry = projects
+        .iter()
+        .find(|p| p["path"] == json!(dead_path))
+        .expect("dead project present in list");
+
+    assert_eq!(live_entry["available"], true);
+    assert_eq!(dead_entry["available"], false);
+}
+
+#[tokio::test]
+async fn get_one_carries_availability() {
+    let server = spawn_test_server(None).await;
+    let client = reqwest::Client::new();
+
+    let dead_dir = TempDir::new().unwrap();
+    let dead_path = dead_dir.path().to_string_lossy().to_string();
+    drop(dead_dir);
+    let dead_id = server.create_project(&dead_path).await;
+
+    let dead_fetched: serde_json::Value =
+        reqwest::get(server.http_url(&format!("/api/projects/{dead_id}")))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(dead_fetched["data"]["available"], false);
+
+    let live_dir = TempDir::new().unwrap();
+    let live_id = client
+        .post(server.http_url("/api/projects"))
+        .json(&json!({ "path": live_dir.path().to_string_lossy() }))
+        .send()
+        .await
+        .unwrap()
+        .json::<serde_json::Value>()
+        .await
+        .unwrap()["data"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let live_fetched: serde_json::Value =
+        reqwest::get(server.http_url(&format!("/api/projects/{live_id}")))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(live_fetched["data"]["available"], true);
 }

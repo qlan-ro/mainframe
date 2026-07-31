@@ -489,6 +489,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         notify.notify_waiters();
         if let Err(err) = result {
             warn!(?err, chat_id, "startChat failed");
+            self.deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.to_string()),
+                error: err.to_string(),
+            });
         }
     }
 
@@ -940,6 +944,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .ok_or_else(|| {
                 LifecycleError::Message(format!("Project {} not found", chat.project_id))
             })?;
+        if chat.worktree_path.is_none() && !self.deps.path_exists(&project_path) {
+            return Err(LifecycleError::Message(format!(
+                "Project directory does not exist or is not accessible: {project_path}"
+            )));
+        }
 
         let session = self
             .deps
@@ -1003,6 +1012,7 @@ mod title_logging_tests;
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
+    use std::collections::HashSet;
 
     pub(super) fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
         let mut c = test_chat(id);
@@ -1072,6 +1082,7 @@ mod tests {
         pub(super) events: Mutex<Vec<DaemonEvent>>,
         stop_calls: Mutex<Vec<(String, String)>>,
         tunnel_stop_calls: Mutex<Vec<(String, String)>>,
+        present_paths: Mutex<Option<HashSet<String>>>,
         /// `false` reproduces a scope that never ran a launch config, where
         /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it.
         has_launches: bool,
@@ -1110,10 +1121,16 @@ mod tests {
                 events: Mutex::new(Vec::new()),
                 stop_calls: Mutex::new(Vec::new()),
                 tunnel_stop_calls: Mutex::new(Vec::new()),
+                present_paths: Mutex::new(None),
                 has_launches,
                 title_updates: Mutex::new(Vec::new()),
                 disabled,
             })
+        }
+
+        fn set_present_paths(&self, paths: &[&str]) {
+            let paths = paths.iter().map(|path| (*path).to_string()).collect();
+            *self.present_paths.lock().unwrap() = Some(paths);
         }
     }
 
@@ -1229,8 +1246,12 @@ mod tests {
         fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
             Box::pin(async { false })
         }
-        fn path_exists(&self, _path: &str) -> bool {
-            true
+        fn path_exists(&self, path: &str) -> bool {
+            self.present_paths
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_none_or(|paths| paths.contains(path))
         }
     }
 
@@ -1366,6 +1387,72 @@ mod tests {
         assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
             e,
             DaemonEvent::LaunchScopeReleased { effective_path, .. } if effective_path == "/proj"
+        )));
+    }
+
+    #[tokio::test]
+    async fn start_chat_emits_a_chat_scoped_error_when_the_project_directory_is_gone() {
+        let chat = chat_over("c1", None, ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_present_paths(&[]);
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        let events = deps.events.lock().unwrap();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            DaemonEvent::Error { chat_id: Some(chat_id), error }
+                if chat_id == "c1"
+                    && error.contains("Project directory does not exist or is not accessible")
+                    && error.contains("/proj")
+        )));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, DaemonEvent::ProcessStarted { .. }))
+        );
+    }
+
+    #[tokio::test]
+    async fn start_chat_emits_a_chat_scoped_error_when_the_worktree_is_gone() {
+        let chat = chat_over("c1", Some("/wt/gone"), ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_present_paths(&["/proj"]);
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        let events = deps.events.lock().unwrap();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            DaemonEvent::Error { chat_id: Some(chat_id), error }
+                if chat_id == "c1"
+                    && error.contains("Worktree directory does not exist")
+                    && error.contains("/wt/gone")
+        )));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, DaemonEvent::ProcessStarted { .. }))
+        );
+    }
+
+    #[tokio::test]
+    async fn start_chat_proceeds_when_the_worktree_is_live_and_the_project_path_is_gone() {
+        let chat = chat_over("c1", Some("/wt/live"), ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_present_paths(&["/wt/live"]);
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        let events = deps.events.lock().unwrap();
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            DaemonEvent::Error { error, .. }
+                if error.contains("Project directory does not exist or is not accessible")
+                    && error.contains("/proj")
         )));
     }
 

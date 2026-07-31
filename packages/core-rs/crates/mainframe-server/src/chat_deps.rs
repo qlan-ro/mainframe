@@ -1108,6 +1108,8 @@ pub(crate) fn fallback_chat(
         display_status: None,
         is_running: None,
         worktree_missing: None,
+        directory_missing: None,
+        missing_directory_path: None,
         todos: None,
         pinned: None,
         effort: None,

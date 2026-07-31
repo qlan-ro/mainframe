@@ -42,6 +42,5 @@ export function synthesizeDraftChat(id: string, d: DraftCfg): Chat {
     // titlebar chip reflect the choice before the chat exists (todo #223).
     worktreePath: d.worktreePath,
     branchName: d.branchName,
-    worktreeMissing: false,
   };
 }
