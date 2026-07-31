@@ -9,14 +9,14 @@
 
 use std::sync::Arc;
 
-use crate::github_port::IssueState;
+use crate::github_port::{IssueFieldTimes, IssueState};
 use crate::todos_github::fake_github::{Call, FakeGitHub};
 use crate::todos_github::run::{RunError, run_sync};
 use crate::todos_github::run_test_support::{
     insert_pair, insert_todo, issue, link_project, todo_title,
 };
-use crate::todos_github::store;
 use crate::todos_github::test_support::setup;
+use crate::todos_github::{store, touch};
 
 #[tokio::test]
 async fn reconciles_the_pair_and_writes_a_new_baseline() {
@@ -163,6 +163,85 @@ async fn field_times_are_not_fetched_when_only_one_side_changed_the_title() {
 
     let calls = fake.calls.lock().unwrap();
     assert!(!calls.iter().any(|c| matches!(c, Call::IssueFieldTimes(_))));
+}
+
+#[tokio::test]
+async fn a_run_that_resolves_a_dispute_marks_the_pair_overwritten() {
+    let project = "p-pair-state-overwritten";
+    let fake = Arc::new(
+        FakeGitHub::default()
+            .with_issue(issue(1, "Remote title", "body", IssueState::Open, &[]))
+            .with_field_times(
+                1,
+                IssueFieldTimes {
+                    title_at: Some("2026-01-05T00:00:00Z".to_string()),
+                    state_at: None,
+                },
+            ),
+    );
+    let harness = setup(fake).await;
+    let ctx = &harness.ctx;
+
+    insert_todo(ctx, "t1", project, "Local title", "body", "open", &[]).await;
+    touch::stamp_create(ctx, "t1", "2026-01-10T00:00:00Z")
+        .await
+        .unwrap();
+    link_project(ctx, project).await;
+    insert_pair(
+        ctx,
+        "t1",
+        project,
+        1,
+        "2026-01-01T00:00:00Z",
+        "Old title",
+        "body",
+        "open",
+        &[],
+    )
+    .await;
+
+    run_sync(ctx, project).await.unwrap();
+
+    let pair = store::read_pair_by_todo(ctx, "t1").await.unwrap().unwrap();
+    assert_eq!(pair.pair_state, "overwritten");
+}
+
+#[tokio::test]
+async fn a_clean_run_recovers_a_pair_from_a_previous_error() {
+    let project = "p-pair-state-recovers";
+    let fake = Arc::new(FakeGitHub::default().with_issue(issue(
+        1,
+        "Same title",
+        "body",
+        IssueState::Open,
+        &[],
+    )));
+    let harness = setup(fake).await;
+    let ctx = &harness.ctx;
+
+    insert_todo(ctx, "t1", project, "Same title", "body", "open", &[]).await;
+    link_project(ctx, project).await;
+    insert_pair(
+        ctx,
+        "t1",
+        project,
+        1,
+        "2026-01-01T00:00:00Z",
+        "Same title",
+        "body",
+        "open",
+        &[],
+    )
+    .await;
+    store::set_pair_state(ctx, "t1", "errored", Some("previous network error"))
+        .await
+        .unwrap();
+
+    run_sync(ctx, project).await.unwrap();
+
+    let pair = store::read_pair_by_todo(ctx, "t1").await.unwrap().unwrap();
+    assert_eq!(pair.pair_state, "clean");
+    assert_eq!(pair.state_reason, None);
 }
 
 #[tokio::test]

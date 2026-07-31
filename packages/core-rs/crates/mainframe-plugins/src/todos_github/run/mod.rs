@@ -192,6 +192,18 @@ async fn reconcile_pair(
     .await
     .map_err(internal)?;
 
+    // The state reflects the *last* run, not history: a clean run clears any
+    // earlier `errored`/`remotely-unlinked` mark, and only a run that
+    // actually replaced something on either side earns the amber glyph.
+    let pair_state = if plan.report_rows.is_empty() {
+        "clean"
+    } else {
+        "overwritten"
+    };
+    store::set_pair_state(ctx, &pair.todo_id, pair_state, None)
+        .await
+        .map_err(internal)?;
+
     for row in plan.report_rows {
         report_rows.push(store::ReportRow {
             id: nanoid::nanoid!(),
