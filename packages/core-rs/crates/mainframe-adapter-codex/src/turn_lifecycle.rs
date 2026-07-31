@@ -73,9 +73,16 @@ pub(crate) fn handle_turn_completed(
 }
 
 pub(crate) fn handle_token_usage(params: TokenUsageUpdatedParams, state: &mut CodexSessionState) {
+    let Some(usage) = params.resolved_usage() else {
+        tracing::debug!(
+            module = "codex:events",
+            "codex: tokenUsage/updated carried neither usage nor tokenUsage — skipped"
+        );
+        return;
+    };
     state.last_usage = Some(LastUsage {
-        input_tokens: params.usage.input_tokens,
-        output_tokens: params.usage.output_tokens,
-        cache_read_input_tokens: params.usage.cached_input_tokens,
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_read_input_tokens: usage.cached_input_tokens,
     });
 }

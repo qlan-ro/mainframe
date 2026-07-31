@@ -209,12 +209,52 @@ pub struct TurnCompletedParams {
     pub turn: TurnCompleted,
 }
 
+/// Codex 0.144.3 wraps usage in `tokenUsage: { last, total }` (camelCase);
+/// older builds still send a top-level `usage` (snake_case, see `Usage` below).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CamelUsage {
+    pub input_tokens: i64,
+    #[serde(default)]
+    pub cached_input_tokens: Option<i64>,
+    pub output_tokens: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsageEnvelope {
+    #[serde(default)]
+    pub total: Option<CamelUsage>,
+    #[serde(default)]
+    pub last: Option<CamelUsage>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsageUpdatedParams {
     #[serde(default)]
     pub thread_id: Option<String>,
-    pub usage: Usage,
+    #[serde(default)]
+    pub usage: Option<Usage>,
+    #[serde(default)]
+    pub token_usage: Option<TokenUsageEnvelope>,
+}
+
+impl TokenUsageUpdatedParams {
+    /// Resolves the usage to report, preferring the legacy top-level `usage`,
+    /// then the capture's `tokenUsage.last`, then `tokenUsage.total`.
+    pub fn resolved_usage(&self) -> Option<Usage> {
+        if let Some(usage) = &self.usage {
+            return Some(usage.clone());
+        }
+        let envelope = self.token_usage.as_ref()?;
+        let camel = envelope.last.as_ref().or(envelope.total.as_ref())?;
+        Some(Usage {
+            input_tokens: camel.input_tokens,
+            cached_input_tokens: camel.cached_input_tokens,
+            output_tokens: camel.output_tokens,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -432,6 +472,45 @@ mod tests {
         assert!(!is_json_rpc_response(&obj(
             json!({ "method": "turn/started", "params": {} })
         )));
+    }
+
+    // --- resolved_usage (Codex 0.144.3 camelCase tokenUsage envelope) ---
+
+    #[test]
+    fn resolved_usage_prefers_the_captures_token_usage_last() {
+        let params: TokenUsageUpdatedParams = serde_json::from_value(json!({
+            "threadId": "thr_1",
+            "tokenUsage": {
+                "last": { "inputTokens": 10, "cachedInputTokens": 2, "outputTokens": 5 },
+                "total": { "inputTokens": 100, "outputTokens": 50 }
+            }
+        }))
+        .expect("parses");
+        let usage = params.resolved_usage().expect("some usage");
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.cached_input_tokens, Some(2));
+        assert_eq!(usage.output_tokens, 5);
+    }
+
+    #[test]
+    fn resolved_usage_falls_back_to_legacy_top_level_usage() {
+        let params: TokenUsageUpdatedParams = serde_json::from_value(json!({
+            "threadId": "thr_1",
+            "usage": { "input_tokens": 7, "output_tokens": 3 }
+        }))
+        .expect("parses");
+        let usage = params.resolved_usage().expect("some usage");
+        assert_eq!(usage.input_tokens, 7);
+        assert_eq!(usage.output_tokens, 3);
+    }
+
+    #[test]
+    fn resolved_usage_is_none_when_neither_shape_is_present() {
+        let params: TokenUsageUpdatedParams = serde_json::from_value(json!({
+            "threadId": "thr_1"
+        }))
+        .expect("parses");
+        assert_eq!(params.resolved_usage(), None);
     }
 }
 
