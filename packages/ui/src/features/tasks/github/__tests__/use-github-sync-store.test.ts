@@ -45,7 +45,7 @@ vi.mock('@/lib/api/todos-github', () => ({
 }));
 
 const mockTodosLoad = vi.fn();
-vi.mock('../use-todos-store', () => ({
+vi.mock('../../use-todos-store', () => ({
   useTodosStore: { getState: () => ({ load: mockTodosLoad }) },
 }));
 
