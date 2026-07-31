@@ -48,15 +48,31 @@ export function staleAgents(agents: readonly ViewAgent[]): ViewAgent[] {
   return agents.filter((agent) => agent.staleNote !== undefined);
 }
 
+export type DetailKind = 'stale' | 'error' | 'result' | 'tool';
+
+/** Which of the four detail sources wins for this agent — the row inks the line by kind. */
+export function agentDetailKind(agent: ViewAgent): DetailKind | null {
+  if (agent.staleNote) return 'stale';
+  if (agent.error) return 'error';
+  if (agent.resultPreview) return 'result';
+  if (agent.lastToolName) return 'tool';
+  return null;
+}
+
 /** The single detail line under an agent's name, by precedence (AC 11). */
 export function agentDetailLine(agent: ViewAgent, _run: ClaudeWorkflowRun): string | null {
-  if (agent.staleNote) return agent.staleNote;
-  if (agent.error) return agent.error;
-  if (agent.resultPreview) return agent.resultPreview;
-  if (agent.lastToolName) {
-    return agent.lastToolSummary ? `${agent.lastToolName} · ${agent.lastToolSummary}` : agent.lastToolName;
+  switch (agentDetailKind(agent)) {
+    case 'stale':
+      return agent.staleNote ?? null;
+    case 'error':
+      return agent.error ?? null;
+    case 'result':
+      return agent.resultPreview ?? null;
+    case 'tool':
+      return agent.lastToolSummary ? `${agent.lastToolName} · ${agent.lastToolSummary}` : (agent.lastToolName ?? null);
+    default:
+      return null;
   }
-  return null;
 }
 
 export function agentDotTone(agent: ViewAgent): OutcomeTone {
