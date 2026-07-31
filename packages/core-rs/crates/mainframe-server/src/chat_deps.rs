@@ -763,6 +763,17 @@ impl ExternalSessionDeps for DaemonChatDeps {
         <Self as ChatManagerDeps>::emit_event(self, event)
     }
 
+    /// Wires the periodic external-session sweep to `ChatManager::reconcile_transcript`
+    /// via the weak back-reference set in `build_chat_manager`; `None` (no manager yet,
+    /// or a harness with no manager at all) means the sweep skips this chat.
+    fn reconcile_transcript<'a>(&'a self, chat: &'a Chat) -> Option<BoxFuture<'a, bool>> {
+        let manager = self.chat_manager.get()?.upgrade()?;
+        let mut chat = chat.clone();
+        Some(Box::pin(async move {
+            manager.reconcile_transcript(&mut chat).await
+        }))
+    }
+
     fn generate_title<'a>(
         &'a self,
         adapter_id: &'a str,
