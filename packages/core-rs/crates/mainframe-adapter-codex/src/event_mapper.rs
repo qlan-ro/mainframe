@@ -9,15 +9,14 @@ use std::sync::Arc;
 use mainframe_adapter_api::SessionSink;
 use serde_json::Value;
 
+use crate::collab_render::{emit_collab_task_group_start, stash_spawn_prompts};
 use crate::item_types::ThreadItem;
 pub(crate) use crate::parent_id_sink::ParentIdSink;
 use crate::quota_rate_limit::{
     has_recognized_window, normalize_rate_limit_snapshot, snapshot_has_window,
 };
 pub use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
-use crate::thread_item_render::{
-    emit_collab_task_group_start, render_completed_item, stash_spawn_prompts,
-};
+use crate::thread_item_render::render_completed_item;
 use crate::turn_lifecycle::{
     handle_plan_delta, handle_token_usage, handle_turn_completed, handle_turn_started,
 };
@@ -163,7 +162,7 @@ fn handle_item_completed(
     let parent_tool_use_id = params
         .thread_id
         .as_ref()
-        .and_then(|tid| state.collab_child_threads.get(tid).cloned());
+        .and_then(|tid| state.card_for_thread(tid).map(|c| c.card_id.clone()));
     let wrapped: Arc<dyn SessionSink>;
     let sink: &Arc<dyn SessionSink> = if let Some(pid) = parent_tool_use_id {
         wrapped = Arc::new(ParentIdSink::new(sink.clone(), pid));
