@@ -1235,6 +1235,7 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-background-tasks",
+ "mainframe-claude-workflows",
  "mainframe-display",
  "mainframe-runtime",
  "mainframe-services",
@@ -1346,6 +1347,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-claude-workflows"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "dashmap",
+ "mainframe-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mainframe-daemon"
 version = "0.0.0"
 dependencies = [
@@ -1357,6 +1373,7 @@ dependencies = [
  "mainframe-adapter-codex",
  "mainframe-adapter-mock",
  "mainframe-background-tasks",
+ "mainframe-claude-workflows",
  "mainframe-db",
  "mainframe-launch",
  "mainframe-lsp",
@@ -1503,6 +1520,7 @@ dependencies = [
  "mainframe-automations",
  "mainframe-background-tasks",
  "mainframe-chat",
+ "mainframe-claude-workflows",
  "mainframe-db",
  "mainframe-git",
  "mainframe-launch",
@@ -1522,6 +1540,7 @@ dependencies = [
  "toml",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

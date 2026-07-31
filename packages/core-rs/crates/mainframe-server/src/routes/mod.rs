@@ -16,6 +16,7 @@ pub(crate) mod automations_test_support;
 pub mod background_tasks;
 pub mod chat_commands;
 pub mod chat_recovery;
+pub mod chat_workflow_runs;
 pub mod chats;
 pub mod commands;
 pub mod context;

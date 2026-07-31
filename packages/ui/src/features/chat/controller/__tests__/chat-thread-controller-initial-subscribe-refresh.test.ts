@@ -29,7 +29,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
 }));
 
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] }),
   getChat: vi.fn().mockResolvedValue({ id: 'chat', adapterId: 'claude' }),
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
@@ -122,6 +122,7 @@ describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-1', 'first')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     const { fakeClient, pushEvent } = makeFakeWs();
@@ -145,6 +146,7 @@ describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-1', 'first'), userDisplayMsg('srv-2', 'arrived while backgrounded')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     // Switch back — a fresh sub attaches. The user was only reading, so there is
@@ -161,7 +163,7 @@ describe('reactivation after dormancy — re-seeds on the reattach ack', () => {
 describe('initial subscribe:ack — recovers a missed handoff event', () => {
   it('refreshes history on the first ack so the optimistic pending is reconciled', async () => {
     // The just-created chat is empty when the first load + send happen.
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
@@ -179,6 +181,7 @@ describe('initial subscribe:ack — recovers a missed handoff event', () => {
     vi.mocked(getChatMessages).mockResolvedValue({
       messages: [userDisplayMsg('srv-1', 'which model are you?')],
       transcriptMissing: false,
+      workflowRuns: [],
     });
 
     // The subscription finally attaches and acks (initial, not a reconnect).

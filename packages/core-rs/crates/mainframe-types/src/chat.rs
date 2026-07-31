@@ -169,6 +169,14 @@ pub struct Chat {
     pub background_activity: Option<BackgroundActivity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worktree_missing: Option<bool>,
+    /// Derived per response over the chat's effective working directory
+    /// (`worktree_path` when set, otherwise the owning project's path); generalizes
+    /// `worktree_missing`, never persisted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory_missing: Option<bool>,
+    /// The absent directory. Set only when `directory_missing` is true.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing_directory_path: Option<String>,
     /// True when the CLI's transcript file for this session was deleted from disk
     /// (persisted flag).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -226,6 +234,10 @@ pub struct Project {
         skip_serializing_if = "Option::is_none"
     )]
     pub parent_project_id: Option<Option<String>>,
+    /// Derived on read by stat-ing `path`; never persisted, absent on responses that
+    /// do not derive it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

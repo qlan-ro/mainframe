@@ -12,6 +12,7 @@ pub mod api;
 pub mod automation;
 pub mod background_task;
 pub mod chat;
+pub mod claude_workflow;
 pub mod command;
 pub mod content;
 pub mod context;

@@ -5,6 +5,8 @@ import type { LaunchProcessStatus } from './launch.js';
 import type { AutomationRunSummary, AutomationInteractionSummary } from './automation.js';
 import type { WorktreeSwitchOffer, WorktreeOfferOutcome } from './worktree-offer.js';
 
+export type ChatNotificationKind = 'task_complete' | 'session_error' | 'attention_request';
+
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
   | { type: 'chat.created'; chat: Chat; source?: 'import' }
@@ -61,7 +63,14 @@ export type DaemonEvent =
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
   | { type: 'message.queued.cleared'; chatId: string }
   | { type: 'message.queued.snapshot'; chatId: string; refs: QueuedMessageRef[] }
-  | { type: 'chat.notification'; chatId: string; title: string; body: string; level: 'success' | 'error' }
+  | {
+      type: 'chat.notification';
+      chatId: string;
+      title: string;
+      body: string;
+      level: 'success' | 'error';
+      kind?: ChatNotificationKind;
+    }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
   | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number }
@@ -96,6 +105,8 @@ export type DaemonEvent =
   | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask }
+  // Distinct from 'automation.run.updated' below — this carries a Claude CLI /workflows run, not an Automations run.
+  | { type: 'claude_workflow.run.updated'; chatId: string; run: import('./claude-workflow.js').ClaudeWorkflowRun }
   | { type: 'automation.run.updated'; run: AutomationRunSummary }
   | { type: 'automation.interaction.created'; interaction: AutomationInteractionSummary }
   | { type: 'automation.interaction.resolved'; interactionId: string; runId: string }

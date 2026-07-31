@@ -1,10 +1,10 @@
 /**
- * SessionRowHoverActions — pin / tag / archive icon buttons revealed on row
- * hover (artboard SessionRowDense `.tw-row-actions` shown on `:hover`,
- * swapping out the time). Extracted out of SessionRow.tsx to keep it under
- * the file-size limit. Each click stops propagation so it doesn't also
- * select the row, and wires to the same handlers the right-click context
- * menu uses.
+ * SessionRowHoverActions — pin / tag / archive icon buttons. Rendered
+ * unconditionally; SessionRowTrailingSlot owns showing/hiding and positioning
+ * them over the row's reserved trailing region on hover, so this component
+ * itself never affects row layout. Each click stops propagation so it
+ * doesn't also select the row, and wires to the same handlers the
+ * right-click context menu uses.
  *
  * Pin/Unpin lives here AND in the context menu (this is the primary-interface
  * entry point — the persistent pin glyph shown on a pinned row is an
@@ -37,7 +37,7 @@ export function RowHoverActions({
     fn();
   };
   return (
-    <div className="hidden flex-shrink-0 items-center group-hover:flex">
+    <div className="flex items-center">
       <Hint label={pinned ? 'Unpin' : 'Pin'}>
         <button
           data-testid="sessions-row-action-pin"

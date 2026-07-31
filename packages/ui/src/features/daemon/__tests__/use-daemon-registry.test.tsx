@@ -13,6 +13,8 @@ import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { setHostForTesting, resetHostForTesting } from '@/lib/host';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
+import { disposeDaemonSession } from '@/lib/daemon/dispose-daemon-session';
+import { markAuthFailure, clearAuthFailure, hasAuthFailure } from '@/lib/daemon/auth-failure-store';
 import { ActiveDaemonProvider, useActiveDaemon } from '../active-daemon-context';
 import { useDaemonRegistry } from '../use-daemon-registry';
 
@@ -99,6 +101,7 @@ beforeEach(async () => {
 afterEach(() => {
   resetHostForTesting();
   vi.clearAllMocks();
+  clearAuthFailure('studio');
 });
 
 // ---------------------------------------------------------------------------
@@ -312,6 +315,74 @@ const REMOTE_DEVBOX: DaemonMeta = {
   label: 'Devbox',
   host: 'devbox.example.com:9443',
 };
+
+// ---------------------------------------------------------------------------
+// Behavior 5 — retoken() swaps the active target's token in place after a
+// re-pair, without the teardown/reconnect switchTo performs (todo #219).
+// ---------------------------------------------------------------------------
+
+describe('useDaemonRegistry — retoken', () => {
+  async function renderActiveStudio() {
+    const rendered = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeWrapper(fakeHost),
+    });
+    await act(async () => {});
+    await act(async () => {
+      await rendered.result.current.registry.switchTo('studio');
+    });
+    vi.mocked(disposeDaemonSession).mockClear();
+    return rendered;
+  }
+
+  it('re-reads the stored token into the active target', async () => {
+    const { result } = await renderActiveStudio();
+    expect(result.current.daemon.target.token).toBe(REMOTE_TOKEN);
+
+    await fakeHost.daemons.setToken('studio', 'repaired-token');
+    await act(async () => {
+      await result.current.registry.retoken('studio');
+    });
+
+    expect(result.current.daemon.target.token).toBe('repaired-token');
+    expect(result.current.daemon.target.baseUrl).toBe('https://studio.example.com');
+  });
+
+  it('clears the daemon auth-failure marker', async () => {
+    const { result } = await renderActiveStudio();
+    markAuthFailure('studio');
+
+    await fakeHost.daemons.setToken('studio', 'repaired-token');
+    await act(async () => {
+      await result.current.registry.retoken('studio');
+    });
+
+    expect(hasAuthFailure('studio')).toBe(false);
+  });
+
+  it('does not tear the session down', async () => {
+    const { result } = await renderActiveStudio();
+
+    await fakeHost.daemons.setToken('studio', 'repaired-token');
+    await act(async () => {
+      await result.current.registry.retoken('studio');
+    });
+
+    expect(disposeDaemonSession).not.toHaveBeenCalled();
+  });
+
+  it('warns and leaves the target alone when no token is stored', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { result } = await renderActiveStudio();
+
+    await act(async () => {
+      await result.current.registry.retoken('laptop');
+    });
+
+    expect(warn).toHaveBeenCalled();
+    expect(result.current.daemon.target.token).toBe(REMOTE_TOKEN);
+    warn.mockRestore();
+  });
+});
 
 describe('useDaemonRegistry — switchTo("local") with a dynamic (active-daemon-derived) port provider', () => {
   it('restores the true local port, not the remote port left behind in context', async () => {

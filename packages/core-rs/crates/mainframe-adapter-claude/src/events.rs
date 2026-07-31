@@ -17,7 +17,6 @@ use crate::quota_rate_limit::normalize_rate_limit_event;
 use crate::session::ClaudeSession;
 use crate::task_events::{
     TaskNotificationPayload, TaskNotificationUsage, TaskStartedCtx, TaskStartedPayload,
-    TaskUpdatedPayload,
 };
 use crate::user_event::handle_user_event;
 
@@ -146,6 +145,10 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
                             .get("task_type")
                             .and_then(Value::as_str)
                             .map(str::to_string),
+                        workflow_name: event
+                            .get("workflow_name")
+                            .and_then(Value::as_str)
+                            .map(str::to_string),
                     },
                     TaskStartedCtx {
                         claude_session_id,
@@ -158,20 +161,11 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
             let st = session.state.lock().unwrap_or_else(|e| e.into_inner());
             if !st.mainframe_chat_id.is_empty() {
                 let chat_id = st.mainframe_chat_id.clone();
+                let loc = crate::workflow_events::record_location(&st);
                 st.task_events.handle_task_updated(
                     &chat_id,
-                    TaskUpdatedPayload {
-                        task_id: event
-                            .get("task_id")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string(),
-                        status: event
-                            .get("status")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string(),
-                    },
+                    crate::workflow_events::task_updated_payload(event),
+                    loc,
                 );
             }
         }
@@ -190,6 +184,7 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
                     tool_uses: u.get("tool_uses").and_then(Value::as_i64).unwrap_or(0),
                     duration_ms: u.get("duration_ms").and_then(Value::as_i64).unwrap_or(0),
                 });
+                let loc = crate::workflow_events::record_location(&st);
                 st.task_events.handle_task_notification(
                     &chat_id,
                     TaskNotificationPayload {
@@ -209,11 +204,16 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
                             .map(str::to_string),
                         usage,
                     },
+                    loc,
                 );
             }
         }
         Some("status") if event.get("status").and_then(Value::as_str) == Some("compacting") => {
             sink.on_compact_start();
+        }
+        Some("task_progress") => {
+            let st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+            crate::workflow_events::handle_task_progress(&st, event);
         }
         _ => {}
     }
@@ -453,6 +453,7 @@ mod tests {
     use super::*;
     use crate::session::ClaudeSession;
     use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+    use mainframe_claude_workflows::store::ClaudeWorkflowStore;
     use mainframe_types::adapter::SessionOptions;
     use mainframe_types::adapter::{ContextUsage, ControlRequest, DetectedPr, MessageMetadata};
     use mainframe_types::chat::{MessageContent, TodoItem};
@@ -481,6 +482,7 @@ mod tests {
         permissions: Vec<ControlRequest>,
         cancelled: Vec<String>,
         provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
+        attention_requests: Vec<String>,
     }
 
     #[derive(Default)]
@@ -562,6 +564,9 @@ mod tests {
                 .provider_quota
                 .push((adapter_id.to_string(), quota));
         }
+        fn on_attention_request(&self, message: &str) {
+            self.r().attention_requests.push(message.to_string());
+        }
     }
 
     fn session_at(path: &str, tracker: Arc<BackgroundTaskTracker>) -> Arc<ClaudeSession> {
@@ -573,6 +578,7 @@ mod tests {
             },
             None,
             tracker,
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1130,6 +1136,68 @@ mod tests {
         assert!(sink.r().messages >= 1);
     }
 
+    // ---- PushNotification (todo #293) ----
+    #[test]
+    fn push_notification_tool_call_fires_one_attention_request() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "tu_1", "name": "PushNotification", "input": { "message": "need your input" } }
+            ] } }),
+        );
+        assert_eq!(sink.r().attention_requests, vec!["need your input"]);
+    }
+
+    #[test]
+    fn subagent_push_notification_is_recorded_too() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "assistant",
+                "parent_tool_use_id": "toolu_parent_agent",
+                "message": { "content": [
+                    { "type": "tool_use", "id": "tu_1", "name": "PushNotification", "input": { "message": "subagent needs input" } }
+                ] }
+            }),
+        );
+        assert_eq!(sink.r().attention_requests, vec!["subagent needs input"]);
+    }
+
+    #[test]
+    fn push_notification_without_a_string_message_records_nothing_but_still_messages() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "tu_1", "name": "PushNotification", "input": { "message": 42 } }
+            ] } }),
+        );
+        assert!(sink.r().attention_requests.is_empty());
+        assert!(sink.r().messages >= 1);
+    }
+
+    #[test]
+    fn no_push_notification_tool_records_nothing() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "tu_1", "name": "Read", "input": { "file_path": "/foo.ts" } }
+            ] } }),
+        );
+        assert!(sink.r().attention_requests.is_empty());
+    }
+
     // ---- task-events-integration (mainframe chat id) ----
     #[test]
     fn task_started_lands_in_tracker_under_mainframe_chat_id() {
@@ -1142,6 +1210,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1162,8 +1231,8 @@ mod tests {
         assert!(tracker.list("claude-session-abc").is_empty());
     }
 
-    #[test]
-    fn task_notification_reflects_completion_under_mainframe_chat_id() {
+    #[tokio::test]
+    async fn task_notification_reflects_completion_under_mainframe_chat_id() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
         let s = Arc::new(ClaudeSession::new(
             SessionOptions {
@@ -1173,6 +1242,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1212,6 +1282,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1232,8 +1303,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn task_updated_with_a_terminal_status_ends_the_task() {
+    #[tokio::test]
+    async fn task_updated_with_a_terminal_status_ends_the_task() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
         let s = Arc::new(ClaudeSession::new(
             SessionOptions {
@@ -1243,6 +1314,7 @@ mod tests {
             },
             None,
             tracker.clone(),
+            Arc::new(ClaudeWorkflowStore::new()),
             mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();
@@ -1260,7 +1332,7 @@ mod tests {
         feed(
             &s,
             &sink,
-            serde_json::json!({ "type": "system", "subtype": "task_updated", "task_id": "task-u", "status": "failed" }),
+            serde_json::json!({ "type": "system", "subtype": "task_updated", "task_id": "task-u", "status": "running", "patch": { "status": "failed" } }),
         );
         assert_eq!(
             tracker.get("mf-chat-8", "task-u").unwrap().status,

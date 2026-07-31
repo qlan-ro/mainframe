@@ -114,4 +114,43 @@ describe('handleDaemonEvent — background_task.*', () => {
       },
     });
   });
+
+  it('a tracker update that learns workflowName/runId projects both into background.upsert', () => {
+    const started = handleDaemonEvent(
+      { type: 'background_task.started', chatId: CHAT_ID, task: makeTask({ id: 'w-1', kind: 'workflow' }) },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+    expect(started).toEqual({
+      kind: 'event',
+      event: {
+        type: 'background.upsert',
+        task: { id: 'w-1', kind: 'workflow', description: 'reviewer subagent', startedAt: 4200 },
+      },
+    });
+
+    const updated = handleDaemonEvent(
+      {
+        type: 'background_task.updated',
+        chatId: CHAT_ID,
+        task: makeTask({ id: 'w-1', kind: 'workflow', workflowName: 'deploy', runId: 'run_1' }),
+      },
+      CHAT_ID,
+      EMPTY_MSGS,
+    );
+    expect(updated).toEqual({
+      kind: 'event',
+      event: {
+        type: 'background.upsert',
+        task: {
+          id: 'w-1',
+          kind: 'workflow',
+          description: 'reviewer subagent',
+          startedAt: 4200,
+          workflowName: 'deploy',
+          runId: 'run_1',
+        },
+      },
+    });
+  });
 });

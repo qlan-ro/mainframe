@@ -67,6 +67,9 @@ impl EventHandlerDeps for TriggerDeps {
     fn notify_session_error(&self) -> bool {
         false
     }
+    fn notify_attention_request(&self) -> bool {
+        true
+    }
     fn on_worktree_trigger(&self, chat_id: &str) {
         self.trigger_count.fetch_add(1, Ordering::SeqCst);
         self.triggered_chat_ids
@@ -76,6 +79,8 @@ impl EventHandlerDeps for TriggerDeps {
     }
     /// Empty on purpose: this suite exercises worktree triggers, not on_exit.
     fn tracker_end_all_running(&self, _chat_id: &str) {}
+    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
 }
 
 fn cell() -> Arc<Mutex<ActiveChat>> {

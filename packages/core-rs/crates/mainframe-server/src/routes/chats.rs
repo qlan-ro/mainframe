@@ -145,7 +145,10 @@ async fn messages(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Res
         tracing::warn!(chat_id = %id, "getDisplayMessages needs ChatManager (unwired)");
         return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
     };
-    ok(cm.get_display_messages(&id).await)
+    let mut payload = cm.get_display_messages(&id).await;
+    payload.workflow_runs =
+        crate::routes::chat_workflow_runs::workflow_runs_for_chat(&ctx, &id).await;
+    ok(payload)
 }
 
 async fn pending_permission(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {

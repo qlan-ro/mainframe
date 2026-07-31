@@ -7,16 +7,20 @@
  *  - Active daemon: derived from useConnectionStatus().state.
  *  - Inactive daemons: optimistically 'connected' (no live polling — documented
  *    known simplification; a fast-follow could poll /health for inactive ones).
+ *  - Any daemon a REST 401/403 marked: 'needs-repair', which is what makes the
+ *    picker's Re-pair… row reachable. The connection state can't see this — the
+ *    WebSocket is authenticated once at connect and never revalidated.
  *
  * Visual spec: 17-daemon.jsx DaemonFooterStatus + task-B9-brief.md.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useSyncExternalStore } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { ConnectionOverlay } from '@/app/ConnectionOverlay';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
+import { hasAuthFailure, subscribeAuthFailures, getAuthFailureSnapshot } from '@/lib/daemon/auth-failure-store';
 import { DaemonPicker } from './DaemonPicker';
 import { ConnDot, DaemonGlyph, DAEMON_STATUS } from './DaemonRow';
 import type { DaemonStatus } from './DaemonRow';
@@ -66,15 +70,21 @@ export function DaemonFooterStatus() {
   // singleton during the async-load gap so the label/kind are never stale.
   const activeMeta = registry.daemons.find((d) => d.id === registry.activeId) ?? targetToMeta(activeTarget);
 
+  // Re-derive every status whenever an auth-failure marker flips; the snapshot
+  // itself carries no data, statusOf reads the marker per id.
+  const authSnapshot = useSyncExternalStore(subscribeAuthFailures, getAuthFailureSnapshot);
+
   // V1 status model — see module doc.
   const statusOf = useCallback(
     (id: string): DaemonStatus => {
-      if (id !== registry.activeId) return 'connected';
-      if (connState === 'connected') return 'connected';
-      if (connState === 'connecting') return 'connecting';
-      return 'unreachable';
+      const isActive = id === registry.activeId;
+      // A dead socket outranks a stale token: re-pairing can't reach the daemon.
+      if (isActive && connState === 'disconnected') return 'unreachable';
+      if (hasAuthFailure(id)) return 'needs-repair';
+      if (!isActive) return 'connected';
+      return connState === 'connected' ? 'connected' : 'connecting';
     },
-    [registry.activeId, connState],
+    [registry.activeId, connState, authSnapshot],
   );
 
   const handleSwitch = useCallback(
