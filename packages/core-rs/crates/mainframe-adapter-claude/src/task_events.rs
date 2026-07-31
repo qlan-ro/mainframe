@@ -246,15 +246,15 @@ impl ClaudeTaskEvents {
             return;
         };
         self.workflow_store.stamp_status(chat_id, task_id, status);
-        if status.is_terminal() {
-            if let Some(loc) = loc {
-                spawn_terminal_reconcile(
-                    Arc::clone(&self.workflow_store),
-                    chat_id.to_string(),
-                    task_id.to_string(),
-                    loc,
-                );
-            }
+        if status.is_terminal()
+            && let Some(loc) = loc
+        {
+            spawn_terminal_reconcile(
+                Arc::clone(&self.workflow_store),
+                chat_id.to_string(),
+                task_id.to_string(),
+                loc,
+            );
         }
     }
 
