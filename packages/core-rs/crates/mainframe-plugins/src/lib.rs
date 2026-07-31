@@ -22,6 +22,7 @@ pub mod manager;
 pub mod security;
 pub mod services;
 pub mod todos;
+pub mod todos_github;
 pub mod ui_context;
 
 #[cfg(test)]
