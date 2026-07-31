@@ -92,7 +92,7 @@ fn both_changed_title_local_newer_wins() {
 
     let row = find_row(&plan.report_rows, "title").unwrap();
     assert_eq!(row.winner, "local");
-    assert_eq!(row.rule, "local-newer");
+    assert_eq!(row.rule, "recency");
     assert_eq!(plan.remote_writes.title.as_deref(), Some("Local title"));
     assert_eq!(plan.local_writes.title, None);
 }
@@ -112,7 +112,7 @@ fn both_changed_title_remote_newer_wins() {
 
     let row = find_row(&plan.report_rows, "title").unwrap();
     assert_eq!(row.winner, "github");
-    assert_eq!(row.rule, "remote-newer");
+    assert_eq!(row.rule, "recency");
     assert_eq!(plan.local_writes.title.as_deref(), Some("Remote title"));
     assert_eq!(plan.remote_writes.title, None);
 }

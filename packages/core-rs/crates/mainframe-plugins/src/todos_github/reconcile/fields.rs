@@ -89,7 +89,9 @@ fn resolve_dispute(input: ScalarInput<'_>) -> ScalarOutcome {
 }
 
 /// Whole-second comparison; ties and an unresolvable remote stamp both
-/// default to GitHub, per the plan's D-series tie-break rule.
+/// default to GitHub, per the plan's D-series tie-break rule. The wire enum
+/// (plan line 179) only names three rules — `recency` covers both directions,
+/// disambiguated by the report row's separate `winner` field.
 pub(super) fn decide_winner(
     local_at: Option<&str>,
     remote_at: Option<&str>,
@@ -99,9 +101,9 @@ pub(super) fn decide_winner(
             let l = truncate_to_seconds(l);
             let r = truncate_to_seconds(r);
             if l > r {
-                (true, "local-newer")
+                (true, "recency")
             } else if r > l {
-                (false, "remote-newer")
+                (false, "recency")
             } else {
                 (false, "tie")
             }
