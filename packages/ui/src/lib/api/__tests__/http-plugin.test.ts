@@ -148,10 +148,12 @@ describe('requestPlugin — throws on HTTP error', () => {
     ).rejects.toThrow('validation failed');
   });
 
-  it('throws "HTTP <status>" when the error body is not JSON', async () => {
+  it('throws a human sentence when the error body is not JSON', async () => {
     mockFetchHttpErrorNonJson(503);
 
-    await expect(requestPlugin('GET', 'http://127.0.0.1:31415/api/plugins/todos/todos')).rejects.toThrow('HTTP 503');
+    await expect(requestPlugin('GET', 'http://127.0.0.1:31415/api/plugins/todos/todos')).rejects.toThrow(
+      'The daemon failed to handle this request (HTTP 503).',
+    );
   });
 });
 

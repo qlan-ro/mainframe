@@ -7,7 +7,9 @@
  *   surgically patching custom because @assistant-ui/react@0.14.14 exposes no
  *   mutate-one-thread API (D6 deviation — see plan Phase 7 header).
  * chat.notification / permission.requested / waiting-or-terminal chat.updated
- * → markUnread.
+ * → markUnread. A chat.notification carrying kind 'attention_request' (Claude's
+ *   PushNotification tool) additionally raises an OS notification via onOsNotify;
+ *   the other kinds keep their unread-only behavior.
  * permission.resolved is a no-op: the subsequent chat.updated → reload re-carries
  *   displayStatus and clears the "waiting" badge (Spike 0.3 / S4). If 0.3 shows
  *   the daemon does NOT re-emit chat.updated, add `case 'permission.resolved':
@@ -33,6 +35,12 @@ export interface SessionListRouterDeps {
    * onReload (the corrected contract still reloads — see the D6 deviation).
    */
   onChatUpdated?: (chat: Chat) => void;
+  /**
+   * OS-notification handler for attention requests. Fires once per connected
+   * client and is deliberately NOT deduped here — the daemon already deduped at
+   * the source (plan D8), so a second raise here would only drop legitimate ones.
+   */
+  onOsNotify?: (title: string, body: string) => void;
 }
 
 export interface SessionListRouterHandle {
@@ -72,6 +80,7 @@ export class SessionListRouter {
         return;
 
       case 'chat.notification':
+        if (event.kind === 'attention_request') this.deps.onOsNotify?.(event.title, event.body);
         this.deps.onMarkUnread(event.chatId);
         return;
 

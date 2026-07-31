@@ -87,6 +87,10 @@ export function createAttachmentAdapter(): AttachmentAdapter {
  * this status flip. Exported so `use-submit-composition.ts` can produce the
  * `CompleteAttachment[]` the native `append()` type requires without an
  * adapter round-trip (composer.send() is bypassed there — see its docstring).
+ *
+ * The `File` rides through the flip so a failed send can re-add the exact same
+ * files to the composer (use-chat-thread-runtime's restore) without stashing
+ * the bytes anywhere.
  */
 function isCompleteAttachment(attachment: PendingAttachment | CompleteAttachment): attachment is CompleteAttachment {
   return attachment.status.type === 'complete';
@@ -101,5 +105,6 @@ export function toCompleteAttachment(attachment: PendingAttachment | CompleteAtt
     contentType: attachment.contentType,
     content: attachment.content ?? [],
     status: { type: 'complete' },
+    ...(attachment.file ? { file: attachment.file } : {}),
   };
 }

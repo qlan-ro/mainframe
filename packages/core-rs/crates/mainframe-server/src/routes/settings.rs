@@ -41,6 +41,8 @@ struct ChatPartial {
     task_complete: Option<bool>,
     #[serde(rename = "sessionError")]
     session_error: Option<bool>,
+    #[serde(rename = "attentionRequest")]
+    attention_request: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -96,6 +98,7 @@ fn parse_notifications(raw: Option<&str>) -> NotificationConfig {
         chat: NotificationChatConfig {
             task_complete: chat.task_complete.unwrap_or(d.chat.task_complete),
             session_error: chat.session_error.unwrap_or(d.chat.session_error),
+            attention_request: chat.attention_request.unwrap_or(d.chat.attention_request),
         },
         permission: NotificationPermissionConfig {
             tool_request: permission.tool_request.unwrap_or(d.permission.tool_request),
@@ -128,6 +131,11 @@ fn merge_notifications(
                 .as_ref()
                 .and_then(|c| c.session_error)
                 .unwrap_or(existing.chat.session_error),
+            attention_request: patch
+                .chat
+                .as_ref()
+                .and_then(|c| c.attention_request)
+                .unwrap_or(existing.chat.attention_request),
         },
         permission: NotificationPermissionConfig {
             tool_request: patch

@@ -16,7 +16,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { sendNotification } from '@tauri-apps/plugin-notification';
+import { sendNotification, isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification';
 
 /** Tauri injects this global into its webview; absent in a plain browser. */
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -138,9 +138,18 @@ export async function readFileBase64(path: string): Promise<string | null> {
 
 /**
  * Shows an OS-native notification. No-op in browser dev mode.
+ *
+ * Permission is requested on first use: `sendNotification` silently does nothing
+ * on a machine that never granted it, so a send without this gate is invisible.
  */
 export async function showNotification(title: string, body?: string): Promise<void> {
   if (!IS_TAURI) return;
+  let granted = await isPermissionGranted();
+  if (!granted) granted = (await requestPermission()) === 'granted';
+  if (!granted) {
+    console.warn('[tauri/bridge] notification permission denied; skipping', title);
+    return;
+  }
   sendNotification({ title, body });
 }
 

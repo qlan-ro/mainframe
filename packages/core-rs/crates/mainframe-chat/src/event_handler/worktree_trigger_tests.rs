@@ -67,6 +67,9 @@ impl EventHandlerDeps for TriggerDeps {
     fn notify_session_error(&self) -> bool {
         false
     }
+    fn notify_attention_request(&self) -> bool {
+        true
+    }
     fn on_worktree_trigger(&self, chat_id: &str) {
         self.trigger_count.fetch_add(1, Ordering::SeqCst);
         self.triggered_chat_ids

@@ -1,10 +1,14 @@
 /**
  * pairing-shared — shared primitives for AddRemoteDialog.
  *
- * Exported: StepRail, NoticeCard, UrlChip, UrlAdornment and their prop types.
+ * Exported: DialogMode, StepRail, NoticeCard, UrlChip, UrlAdornment and their
+ * prop types.
  */
 import { Globe, Check, AlertTriangle, Lock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+/** Lives here, not in AddRemoteDialog, so apply-pairing can read it without a cycle. */
+export type DialogMode = 'add' | 'repair';
 
 // ---------------------------------------------------------------------------
 // StepRail

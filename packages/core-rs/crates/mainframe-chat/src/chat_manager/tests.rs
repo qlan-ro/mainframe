@@ -30,6 +30,8 @@ struct StoreDeps {
     /// When `Some`, `write_workspace_trust` fails with this message instead of
     /// recording the call.
     fail_trust_write: Mutex<Option<String>>,
+    /// When `Some`, `projects_remove` records the id and then fails with this message.
+    fail_project_remove: Mutex<Option<String>>,
     /// What `generate_title` returns.
     generated_title: Mutex<Option<String>>,
     /// The `content` of every `generate_title` call, in order.
@@ -144,11 +146,15 @@ impl ChatManagerDeps for StoreDeps {
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         Some("/tmp/test".to_string())
     }
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         self.project_removed
             .lock()
             .unwrap()
             .push(project_id.to_string());
+        match self.fail_project_remove.lock().unwrap().clone() {
+            Some(msg) => Err(msg),
+            None => Ok(()),
+        }
     }
     fn write_workspace_trust<'a>(
         &'a self,
@@ -300,6 +306,9 @@ impl ChatManagerDeps for StoreDeps {
     }
     fn notify_session_error(&self) -> bool {
         false
+    }
+    fn notify_attention_request(&self) -> bool {
+        true
     }
     fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
         *self.mentions_found.lock().unwrap()
@@ -1337,12 +1346,38 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
     seed_active(&mgr, "c1", c1, s1);
     seed_active(&mgr, "c2", c2, s2);
 
-    mgr.remove_project("p1").await;
+    assert!(mgr.remove_project("p1").await.is_ok());
 
     let order = order.lock().unwrap();
     let idx = |s: &str| order.iter().position(|x| x == s);
     assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert!(idx("kill:c2:no-wt").unwrap() < idx("sess.kill:c2").unwrap());
+    assert_eq!(
+        deps.project_removed.lock().unwrap().as_slice(),
+        &["p1".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn remove_project_propagates_a_row_delete_failure() {
+    let mut c1 = test_chat("c1");
+    c1.project_id = "p1".to_string();
+    c1.worktree_path = Some("/wt/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    let order = deps.order.clone();
+    *deps.fail_project_remove.lock().unwrap() = Some("database is locked".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let s1 = RecSession::with_order("c1", order.clone());
+    seed_active(&mgr, "c1", c1, s1);
+
+    let result = mgr.remove_project("p1").await;
+    assert_eq!(result, Err("database is locked".to_string()));
+
+    let order = order.lock().unwrap();
+    let idx = |s: &str| order.iter().position(|x| x == s);
+    assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert_eq!(
         deps.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
@@ -1502,7 +1537,7 @@ mod background_activity {
     #[test]
     fn main_only_working_no_background() {
         let mut chat = working_chat("c-working", None, true);
-        super::enrich_chat(&mut chat, false, &[]);
+        super::enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(chat.background_activity, None);
@@ -1515,7 +1550,7 @@ mod background_activity {
             bg_task("a-1", BackgroundWorkKind::Agent, "reviewer"),
             bg_task("b-1", BackgroundWorkKind::Bash, "dev server"),
         ];
-        super::enrich_chat(&mut chat, false, &tasks);
+        super::enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(false));
         let by_kind = HashMap::from([
@@ -1539,7 +1574,7 @@ mod background_activity {
     fn both_main_turn_and_background() {
         let mut chat = working_chat("c-working", None, true);
         let tasks = vec![bg_task("w-1", BackgroundWorkKind::Workflow, "deploy")];
-        super::enrich_chat(&mut chat, false, &tasks);
+        super::enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(
@@ -1556,7 +1591,7 @@ mod background_activity {
     fn terminal_tasks_do_not_count() {
         // Ended tasks never appear in listLive → an empty slice here.
         let mut chat = working_chat("c-idle", None, false);
-        super::enrich_chat(&mut chat, false, &[]);
+        super::enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
         assert_eq!(chat.background_activity, None);
     }
@@ -1565,11 +1600,77 @@ mod background_activity {
     fn pending_permission_wins_over_background_activity() {
         let mut chat = working_chat("c-idle", None, false);
         let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
-        super::enrich_chat(&mut chat, true, &tasks);
+        super::enrich_chat(&mut chat, true, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Waiting));
         assert_eq!(chat.is_running, Some(false));
         // The chip still shows the live background work while the gate is up.
         assert_eq!(chat.background_activity.map(|a| a.total), Some(1));
+    }
+
+    #[test]
+    fn worktree_present_marks_directory_present() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        let mut chat = working_chat("c-wt-live", None, false);
+        chat.worktree_path = Some(dir.path().to_string_lossy().into_owned());
+
+        super::enrich_chat(&mut chat, false, &[], None);
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(false));
+        assert_eq!(chat.missing_directory_path, None);
+    }
+
+    #[test]
+    fn worktree_gone_marks_directory_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("missing-worktree");
+        let path = path.to_str().unwrap().to_string();
+        let mut chat = working_chat("c-wt-gone", None, false);
+        chat.worktree_path = Some(path.clone());
+
+        super::enrich_chat(&mut chat, false, &[], Some("/project"));
+
+        assert_eq!(chat.worktree_missing, Some(true));
+        assert_eq!(chat.directory_missing, Some(true));
+        assert_eq!(chat.missing_directory_path, Some(path));
+    }
+
+    #[test]
+    fn project_path_gone_marks_directory_missing_without_worktree_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("missing-project");
+        let path = path.to_str().unwrap().to_string();
+        let mut chat = working_chat("c-project-gone", None, false);
+
+        super::enrich_chat(&mut chat, false, &[], Some(&path));
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(true));
+        assert_eq!(chat.missing_directory_path, Some(path));
+    }
+
+    #[test]
+    fn project_path_present_marks_directory_present() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut chat = working_chat("c-project-live", None, false);
+
+        super::enrich_chat(&mut chat, false, &[], dir.path().to_str());
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(false));
+        assert_eq!(chat.missing_directory_path, None);
+    }
+
+    #[test]
+    fn missing_project_row_is_not_a_missing_directory() {
+        let mut chat = working_chat("c-project-row-gone", None, false);
+
+        super::enrich_chat(&mut chat, false, &[], None);
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(false));
+        assert_eq!(chat.missing_directory_path, None);
     }
 }
 
@@ -1767,6 +1868,7 @@ async fn with_external_sessions_wires_scan_page_through_the_facade() {
         created_at: "now".into(),
         last_opened_at: "now".into(),
         parent_project_id: None,
+        available: None,
     });
     ext.sessions.lock().unwrap().push(external_session("s1"));
     let service = Arc::new(ExternalSessionService::new(ext));

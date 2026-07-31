@@ -361,3 +361,70 @@ describe('ChatThreadController.sendMessage — role guard', () => {
     expect(uploadAttachments).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. Which stage failed — upload vs send (todo #219)
+// ---------------------------------------------------------------------------
+
+describe('ChatThreadController.sendMessage — failure stage', () => {
+  it("records stage 'upload' when the attachment upload is what rejected", async () => {
+    vi.mocked(uploadAttachments).mockRejectedValueOnce(new Error('Unauthorized'));
+
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+
+    await ctrl
+      .sendMessage(makeMsg({ text: 'with attachment', attachments: [makeCompleteAttachment('a.png')] }))
+      .catch(() => {});
+
+    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.stage).toBe('upload');
+  });
+
+  it("records stage 'send' when the upload succeeded and the WS frame is what threw", async () => {
+    vi.mocked(uploadAttachments).mockResolvedValueOnce(['id-1']);
+
+    const { fakeClient } = makeFakeWs();
+    vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {
+      throw new Error('socket closed');
+    });
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+
+    await ctrl
+      .sendMessage(makeMsg({ text: 'with attachment', attachments: [makeCompleteAttachment('a.png')] }))
+      .catch(() => {});
+
+    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.stage).toBe('send');
+  });
+
+  it('records an actual restore for an attachment send whose upload succeeded but WS send threw', async () => {
+    vi.mocked(uploadAttachments).mockResolvedValueOnce(['id-1']);
+
+    const sendError = new Error('socket closed');
+    const { fakeClient } = makeFakeWs();
+    vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {
+      throw sendError;
+    });
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+
+    await ctrl
+      .sendMessage(makeMsg({ text: 'with attachment', attachments: [makeCompleteAttachment('a.png')] }))
+      .catch(() => {});
+    ctrl.markAttachmentsRestoredForFailure(sendError);
+
+    const pending = Object.values(ctrl.getState().pendingUserMessages)[0]!;
+    expect(pending.stage).toBe('send');
+    expect(pending.attachmentsRestored).toBe(true);
+  });
+
+  it("records stage 'send' for a text-only message whose WS frame threw", async () => {
+    const { fakeClient } = makeFakeWs();
+    vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {
+      throw new Error('socket closed');
+    });
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+
+    await ctrl.sendMessage(makeMsg({ text: 'text only' })).catch(() => {});
+
+    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.stage).toBe('send');
+  });
+});

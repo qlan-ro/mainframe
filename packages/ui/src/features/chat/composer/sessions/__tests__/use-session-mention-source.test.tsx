@@ -55,7 +55,6 @@ function makeEntry(overrides: {
       displayStatus: 'idle',
       hasPending: false,
       detectedPrs: [],
-      worktreeMissing: false,
       transcriptMissing: false,
       updatedAt: overrides.updatedAt ?? 100,
     },

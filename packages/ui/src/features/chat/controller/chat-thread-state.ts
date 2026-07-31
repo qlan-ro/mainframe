@@ -38,6 +38,8 @@ export interface PendingUserMessage {
   createdAt: number;
   status: 'pending' | 'failed';
   error?: unknown;
+  stage?: 'upload' | 'send';
+  attachmentsRestored?: boolean;
 }
 
 export interface ChatPermissionEntry {
@@ -140,7 +142,8 @@ export type ChatStateEvent =
   | { type: 'queued.snapshot'; refs: QueuedMessageRef[] }
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
-  | { type: 'local.message.failed'; clientId: string; error: unknown }
+  | { type: 'local.message.failed'; clientId: string; error: unknown; stage?: 'upload' | 'send' }
+  | { type: 'local.message.attachments_restored'; clientId: string }
   | { type: 'local.message.retrying'; clientId: string }
   | { type: 'chat.config.updated'; chat: Chat }
   | { type: 'chat.id.adopted'; chatId: string }
@@ -227,6 +230,8 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.ultracode === b.ultracode &&
     a.adaptiveThinking === b.adaptiveThinking &&
     a.worktreeMissing === b.worktreeMissing &&
+    a.directoryMissing === b.directoryMissing &&
+    a.missingDirectoryPath === b.missingDirectoryPath &&
     a.transcriptMissing === b.transcriptMissing &&
     a.worktreePath === b.worktreePath &&
     a.branchName === b.branchName
@@ -494,16 +499,28 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         ...state,
         pendingUserMessages: {
           ...state.pendingUserMessages,
-          [event.clientId]: { ...current, status: 'failed', error: event.error },
+          [event.clientId]: { ...current, status: 'failed', error: event.error, stage: event.stage },
         },
         runState: { type: 'error', error: event.error },
+      };
+    }
+
+    case 'local.message.attachments_restored': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current || current.attachmentsRestored) return state;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...current, attachmentsRestored: true },
+        },
       };
     }
 
     case 'local.message.retrying': {
       const current = state.pendingUserMessages[event.clientId];
       if (!current) return state;
-      const { error: _dropped, ...rest } = current;
+      const { error: _dropped, stage: _dropped2, attachmentsRestored: _dropped3, ...rest } = current;
       return {
         ...state,
         pendingUserMessages: {

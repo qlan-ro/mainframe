@@ -482,6 +482,7 @@ mod tests {
         permissions: Vec<ControlRequest>,
         cancelled: Vec<String>,
         provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
+        attention_requests: Vec<String>,
     }
 
     #[derive(Default)]
@@ -562,6 +563,9 @@ mod tests {
             self.r()
                 .provider_quota
                 .push((adapter_id.to_string(), quota));
+        }
+        fn on_attention_request(&self, message: &str) {
+            self.r().attention_requests.push(message.to_string());
         }
     }
 
@@ -1130,6 +1134,68 @@ mod tests {
         );
         assert!(sink.r().todos.is_empty());
         assert!(sink.r().messages >= 1);
+    }
+
+    // ---- PushNotification (todo #293) ----
+    #[test]
+    fn push_notification_tool_call_fires_one_attention_request() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "tu_1", "name": "PushNotification", "input": { "message": "need your input" } }
+            ] } }),
+        );
+        assert_eq!(sink.r().attention_requests, vec!["need your input"]);
+    }
+
+    #[test]
+    fn subagent_push_notification_is_recorded_too() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "assistant",
+                "parent_tool_use_id": "toolu_parent_agent",
+                "message": { "content": [
+                    { "type": "tool_use", "id": "tu_1", "name": "PushNotification", "input": { "message": "subagent needs input" } }
+                ] }
+            }),
+        );
+        assert_eq!(sink.r().attention_requests, vec!["subagent needs input"]);
+    }
+
+    #[test]
+    fn push_notification_without_a_string_message_records_nothing_but_still_messages() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "tu_1", "name": "PushNotification", "input": { "message": 42 } }
+            ] } }),
+        );
+        assert!(sink.r().attention_requests.is_empty());
+        assert!(sink.r().messages >= 1);
+    }
+
+    #[test]
+    fn no_push_notification_tool_records_nothing() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({ "type": "assistant", "message": { "content": [
+                { "type": "tool_use", "id": "tu_1", "name": "Read", "input": { "file_path": "/foo.ts" } }
+            ] } }),
+        );
+        assert!(sink.r().attention_requests.is_empty());
     }
 
     // ---- task-events-integration (mainframe chat id) ----

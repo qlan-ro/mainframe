@@ -3,6 +3,7 @@
  */
 import type { Project } from '@qlan-ro/mainframe-types';
 import { apiBase, authHeaders, request, requestNoContent } from './http';
+import { describeHttpFailure } from './http-failure';
 
 export const getProjects = (port: number): Promise<Project[]> =>
   request<Project[]>('GET', `${apiBase(port)}/api/projects`);
@@ -33,7 +34,7 @@ export async function createProject(
     return { project: body.data, alreadyExists: true };
   }
   if (!res.ok) {
-    let message = `HTTP ${res.status}`;
+    let message = describeHttpFailure(res.status);
     try {
       const body = (await res.json()) as { error?: string };
       if (typeof body.error === 'string') message = body.error;

@@ -81,6 +81,9 @@ impl EventHandlerDeps for CancelDeps {
     fn notify_session_error(&self) -> bool {
         false
     }
+    fn notify_attention_request(&self) -> bool {
+        true
+    }
 }
 
 fn cell() -> Arc<Mutex<ActiveChat>> {

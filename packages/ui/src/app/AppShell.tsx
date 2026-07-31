@@ -13,7 +13,7 @@ import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
-import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
+import { ConfirmDialogHost } from '../components/overlays/ConfirmDialogHost';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SpotlightPalette } from '../features/palette/SpotlightPalette';
 import { FindInPathModal } from '../components/overlays/FindInPathModal';
@@ -191,7 +191,7 @@ function RuntimeBody({ port }: { port: number }) {
           tree stays on disk until Phase 7 deletes it. */}
       <AutomationsHost />
       <SetupAdvisorHost />
-      <GitConfirmDialog />
+      <ConfirmDialogHost />
       <SettingsDialog port={port} />
       {showTour && <TutorialOverlay />}
     </div>

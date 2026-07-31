@@ -625,7 +625,7 @@ describe('SessionRow — compact worktree/PR glyphs render inline', () => {
     expect(screen.getByTestId('sessions-row-meta-icon-worktree')).toBeTruthy();
   });
 
-  it('renders sessions-row-meta-icon-pr with "#42" when a PR is detected', () => {
+  it('renders sessions-row-meta-icon-pr-42 with "#42" when a PR is detected', () => {
     render(
       <SessionRow
         item={makeItem({
@@ -635,6 +635,6 @@ describe('SessionRow — compact worktree/PR glyphs render inline', () => {
         })}
       />,
     );
-    expect(screen.getByTestId('sessions-row-meta-icon-pr').textContent).toBe('#42');
+    expect(screen.getByTestId('sessions-row-meta-icon-pr-42').textContent).toBe('#42');
   });
 });
