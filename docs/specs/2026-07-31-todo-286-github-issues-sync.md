@@ -110,7 +110,9 @@ projection: `done` is closed; `open` and `in_progress` are both open. The baseli
 - An issue closed on GitHub sets its task to `done`. The task is never deleted.
 - An issue reopened on GitHub sets its task to `open` when the task was `done`.
 - Moving a task between `open` and `in_progress` changes no projection: it writes nothing, counts as no state
-  change, and a following run with nothing else changed produces no request at all.
+  change, and a following run with nothing else changed sends GitHub no write of any kind. That run still reads the
+  issue — the three-way comparison is how it learns nothing changed — so the traffic that must be absent is
+  outbound writes, not reads.
 - A close arriving from GitHub for an `in_progress` task is a one-sided remote change against the projection, so it
   applies immediately and the task becomes `done`. Nothing blocks and nothing waits. Because that write discards
   local information GitHub could not see, it is always recorded in the report.
@@ -129,7 +131,9 @@ default colour.
 
 ### Pair state on the board
 
-Task rows are otherwise unchanged — no new column, no shifted anatomy. Sync shows as the trailing glyph only:
+Task rows are otherwise unchanged — no new column, no shifted anatomy. At rest, sync shows as the trailing glyph
+only; on hover, the row's existing action cluster carries one sync action (publish when unpaired, unlink when
+paired):
 
 | Pair state | Trailing glyph |
 |---|---|
@@ -164,6 +168,11 @@ An expanded row carries exactly two things:
    three rules render as fixed strings: recency → "more recent change won", tie → "tie — remote wins",
    in-progress close → "remote close applied to an in-progress todo". When the remote stamp is the issue's coarse
    modification time (the body case), the line appends "(issue timestamp, to the minute)".
+
+   A row shows the timestamps its decision compared and no others. Recency shows both. A tie shows both when the
+   stamps were equal, and the local stamp alone — followed by "GitHub timestamp unavailable" — when the remote one
+   could not be resolved. An in-progress close compared nothing and shows no timestamp at all; the row stores both
+   as absent rather than substituting the run's own clock.
 2. **The replaced value only.** A "Now" line states what the field holds today — the literal value for title and
    state, and "the body shown on task #N" for a body, which is already on screen elsewhere. Beneath it, the
    replaced value verbatim in an amber block, scrolling past a few lines and sized to short values rather than
@@ -188,9 +197,14 @@ contains credential material.
 ### Deletion
 
 Deleting a task deletes its pairing and sends nothing to GitHub. The issue is untouched and simply becomes
-unpaired; it can be imported again later as a new task with a new number. Unlinking a single pair — available from
-the task's row menu — drops the pairing and baseline only: no field is written on either side, the task stays, and
-the issue stays.
+unpaired; it can be imported again later as a new task with a new number. Unlinking a single pair drops the pairing
+and baseline only: no field is written on either side, the task stays, and the issue stays.
+
+The unlink action is an icon button in the task's existing hover-revealed action cluster — the same cluster that
+carries start, edit, and delete on a list row and on a board card, and the same one that carries the publish action
+while the task is unpaired. A paired task shows unlink where an unpaired task shows publish; the two never appear
+together, so the cluster grows by one control at most and the row's resting anatomy is unchanged. There is no
+per-task menu on this board and this feature does not introduce one.
 
 ## Not Included
 
@@ -276,14 +290,18 @@ the issue stays.
 18. Each of the four state directions has a test: local `done` closes the issue as completed, local move off `done`
     reopens it, a remote close sets the task to `done`, and a remote reopen sets a `done` task to `open`.
 19. An outbound run for an `in_progress` task issues no state write and leaves the issue open; a move between
-    `open` and `in_progress` records no state change; a following run with nothing else changed produces no
-    request.
+    `open` and `in_progress` records no state change; a following run with nothing else changed issues zero
+    outbound writes to GitHub (issue create, issue update, state change, label change) — reads are expected and are
+    not counted by this test.
 20. A remote close arriving for an `in_progress` task resolves to `done` in the same run, with no blocking and no
     prompt, and the report records that the local `in_progress` status was replaced by a remote close.
 21. Every automatic overwrite produces a report row carrying the pair, the field family, the winning side, the
-    replaced value in full, the winning value, both compared timestamps, and the deciding rule as one of the three
-    enum values (`recency`, `tie`, `in-progress-close`) — never prose assembled in the UI. A test asserts a
-    replaced body is stored verbatim and is recoverable from the report.
+    replaced value in full, the winning value, the deciding rule as one of the three enum values (`recency`, `tie`,
+    `in-progress-close`), and only the timestamps the decision actually compared — never prose assembled in the
+    UI. A test covers each rule's timestamp pair: `recency` and a `tie` decided by equal stamps carry both stamps;
+    a `tie` decided by an unresolvable remote stamp carries the local stamp and records the remote one as absent;
+    `in-progress-close` records both as absent. A row never carries a timestamp that was not compared. A further
+    test asserts a replaced body is stored verbatim and is recoverable from the report.
 22. A run that overwrote nothing produces an empty report; one-sided applications and label merges produce no
     report rows.
 23. Reports older than the last ten runs for a project are removed at the end of a run, proven by a test.
@@ -292,7 +310,9 @@ the issue stays.
     follows a transfer redirect, is excluded from following runs' writes, and is surfaced as a pair state distinct
     from any report row.
 26. Unlinking a single pair drops the pairing and baseline only, with a test asserting no field write on either
-    side.
+    side. The control is a hover-revealed icon button in the task's existing action cluster on both the list row
+    and the board card; it is present only for a paired task, the publish button is present only for an unpaired
+    one, and no dropdown menu is added to a task row or card.
 27. No workflow label — the seven declared prefixes or the seven declared exact labels — appears in any outbound
     request, and no label arriving from GitHub introduces one locally. Tests cover both directions and read the
     single declared constant.
@@ -368,8 +388,15 @@ the issue stays.
 - **The clean-state trailing glyph is the GitHub issue number as static text, not a link.** The row already carries
   the task number, and the design direction reserves clickability for the amber overwritten state; opening the
   issue in a browser is deferred. `reversible`
-- **Unlinking a pair is offered from the task row's menu.** The design direction names four surfaces and does not
-  place per-pair unlink; the row menu is where every other per-task action already lives. `reversible`
+- **Unlinking a pair is an icon button in the task's existing hover-revealed action cluster, not a menu item.** The
+  design direction names four surfaces and does not place per-pair unlink. Verified in the code: `TaskListRow.tsx`
+  and `TaskCard.tsx` render start, edit, and delete as icon buttons in one `opacity-0 group-hover:opacity-100`
+  cluster, and the tasks feature has no per-task dropdown — `DropdownMenu` appears there only in the board-level
+  `FilterMenu`. Reusing that cluster keeps the resting row unchanged and commissions no new control type on a
+  `needs-ui` surface. `reversible`
+- **A report row stores only the timestamps its decision compared; the two no-comparison paths store none.** An
+  in-progress close and a tie on an unresolvable remote stamp consulted no remote clock, so recording one would
+  invent a comparison that never happened. `reversible`
 - **A pair that fails on its own is marked errored and the run continues; only run-wide failures stop a run.** One
   bad issue should not strand the rest of the project. `reversible`
 - **Validation is typed deserialization plus explicit checks, not Zod, and there is no second runtime to keep in
