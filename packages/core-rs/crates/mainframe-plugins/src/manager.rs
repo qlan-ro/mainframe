@@ -206,6 +206,7 @@ impl PluginManager {
             daemon_bus: Arc::clone(&self.daemon_bus),
             emit,
             adapters: self.adapters.clone(),
+            github: None,
         })?;
         let router = activate(Arc::clone(&ctx)).await?;
         let id = manifest.id.clone();

@@ -948,6 +948,7 @@ mod tests {
             daemon_bus: Arc::new(PublicDaemonBus::new()),
             emit,
             adapters: None,
+            github: None,
         })
         .unwrap();
         run_migrations(&ctx).await.unwrap();
