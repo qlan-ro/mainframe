@@ -82,7 +82,7 @@ fn parse_todo(mut row: Row) -> Value {
 
 /// Parse a JSON array column defensively — historical double-encoded values
 /// (e.g. `[\"a\"]`) crash `JSON.parse`; a single bad row falls back to `[]`.
-fn safe_json_array(raw: &str, column: &str, todo_id: &str) -> Vec<Value> {
+pub(crate) fn safe_json_array(raw: &str, column: &str, todo_id: &str) -> Vec<Value> {
     let source = if raw.is_empty() { "[]" } else { raw };
     match serde_json::from_str::<Value>(source) {
         Ok(Value::Array(items)) => items,
@@ -328,7 +328,10 @@ async fn get_todos(
     }
 }
 
-async fn post_todo(State(ctx): State<Arc<PluginContext>>, Json(body): Json<Value>) -> Response {
+pub(crate) async fn post_todo(
+    State(ctx): State<Arc<PluginContext>>,
+    Json(body): Json<Value>,
+) -> Response {
     let Some(d) = parse_create(&body) else {
         return bad_request("Invalid input");
     };
@@ -365,7 +368,7 @@ async fn post_todo(State(ctx): State<Arc<PluginContext>>, Json(body): Json<Value
     }
 }
 
-async fn patch_todo(
+pub(crate) async fn patch_todo(
     State(ctx): State<Arc<PluginContext>>,
     Path(id): Path<String>,
     Json(body): Json<Value>,
@@ -482,7 +485,7 @@ async fn patch_todo(
     json_response(StatusCode::OK, json!({ "todo": parse_todo(row) }))
 }
 
-async fn move_todo(
+pub(crate) async fn move_todo(
     State(ctx): State<Arc<PluginContext>>,
     Path(id): Path<String>,
     Json(body): Json<Value>,
@@ -537,7 +540,10 @@ fn parse_status_only(body: &Value) -> Option<String> {
     }
 }
 
-async fn delete_todo(State(ctx): State<Arc<PluginContext>>, Path(id): Path<String>) -> Response {
+pub(crate) async fn delete_todo(
+    State(ctx): State<Arc<PluginContext>>,
+    Path(id): Path<String>,
+) -> Response {
     match ctx
         .db
         .execute("DELETE FROM todos WHERE id = ?".into(), vec![text(id)])
@@ -828,7 +834,7 @@ pub async fn activate(ctx: Arc<PluginContext>) -> Result<Router<()>, PluginError
 // initialMessage }. Migrations mirror the additive ALTER-COLUMN backfill.
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::context::{PluginContextDeps, PluginHostDb, build_plugin_context};
     use crate::event_bus::PublicDaemonBus;
@@ -902,14 +908,14 @@ mod tests {
         }
     }
 
-    struct Harness {
+    pub(crate) struct Harness {
         _dir: tempfile::TempDir,
-        ctx: Arc<PluginContext>,
+        pub(crate) ctx: Arc<PluginContext>,
         host: Arc<FakeHostDb>,
         events: Arc<Mutex<Vec<DaemonEvent>>>,
     }
 
-    async fn setup() -> Harness {
+    pub(crate) async fn setup() -> Harness {
         setup_with_settings(&[]).await
     }
 
@@ -960,7 +966,7 @@ mod tests {
         }
     }
 
-    async fn read(resp: Response) -> (StatusCode, Value) {
+    pub(crate) async fn read(resp: Response) -> (StatusCode, Value) {
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (
@@ -969,11 +975,11 @@ mod tests {
         )
     }
 
-    fn state(h: &Harness) -> State<Arc<PluginContext>> {
+    pub(crate) fn state(h: &Harness) -> State<Arc<PluginContext>> {
         State(Arc::clone(&h.ctx))
     }
 
-    async fn create_todo(h: &Harness, body: Value) -> Value {
+    pub(crate) async fn create_todo(h: &Harness, body: Value) -> Value {
         let (status, out) = read(post_todo(state(h), Json(body)).await).await;
         assert_eq!(status, StatusCode::CREATED);
         out["todo"].clone()
