@@ -94,6 +94,25 @@ pub async fn read_pair_by_issue(
     Ok(row.map(row_to_pair))
 }
 
+/// Every pair still eligible for reconciliation, oldest first. A
+/// `remotely-unlinked` pair is excluded so a following run never re-fetches a
+/// pairing already known to be broken (AC25).
+pub async fn pairs_for_project(
+    ctx: &PluginContext,
+    project_id: &str,
+) -> Result<Vec<Pair>, PluginError> {
+    let rows = ctx
+        .db
+        .query_all(
+            "SELECT * FROM github_pairs WHERE project_id = ? AND pair_state != 'remotely-unlinked'
+             ORDER BY created_at, todo_id"
+                .into(),
+            vec![text(project_id.to_string())],
+        )
+        .await?;
+    Ok(rows.into_iter().map(row_to_pair).collect())
+}
+
 /// Overwrites the 3-way-diff baseline after a run reconciles this pair.
 pub async fn write_baseline(
     ctx: &PluginContext,

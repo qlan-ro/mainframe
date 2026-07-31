@@ -4,9 +4,13 @@
 
 pub mod labels;
 pub mod reconcile;
+pub mod run;
 pub mod schema;
 pub mod store;
 pub mod touch;
+
+#[cfg(test)]
+mod fake_github;
 
 #[cfg(test)]
 mod labels_tests;
@@ -15,7 +19,19 @@ mod labels_tests;
 mod reconcile_tests;
 
 #[cfg(test)]
+mod run_failure_tests;
+
+#[cfg(test)]
+mod run_test_support;
+
+#[cfg(test)]
+mod run_tests;
+
+#[cfg(test)]
 mod store_tests;
+
+#[cfg(test)]
+mod test_support;
 
 #[cfg(test)]
 mod touch_tests;

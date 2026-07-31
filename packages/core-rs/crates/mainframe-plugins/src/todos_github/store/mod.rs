@@ -9,8 +9,8 @@ mod runs;
 
 pub use link::{Link, delete_link, insert_link, read_link};
 pub use pairs::{
-    Pair, delete_pair, insert_pair, read_pair_by_issue, read_pair_by_todo, set_pair_state,
-    write_baseline,
+    Pair, delete_pair, insert_pair, pairs_for_project, read_pair_by_issue, read_pair_by_todo,
+    set_pair_state, write_baseline,
 };
 pub use runs::{
     ReportRow, Run, insert_report_rows, insert_run, latest_run, prune_runs, read_report,
