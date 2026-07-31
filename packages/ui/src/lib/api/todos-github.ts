@@ -86,10 +86,17 @@ export interface Report {
   rows: ReportRow[];
 }
 
+/** The daemon's reserved-label denylist — see `todos_github::labels` (the sole source). */
+export interface WorkflowLabelSet {
+  prefixes: string[];
+  labels: string[];
+}
+
 export interface LinkStatus {
   link: Link | null;
   running: boolean;
   latestRunId: string | null;
+  workflowLabels: WorkflowLabelSet;
 }
 
 export interface ImportResult {

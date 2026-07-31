@@ -1,24 +1,14 @@
 /**
- * Mainframe's own pipeline vocabulary, mirrored from the daemon's denylist
- * (`todos_github/labels.rs`) so the publish dialog can show the exact payload
- * before anything is created. The daemon remains authoritative — this copy only
- * previews what it will send.
+ * Mainframe's own pipeline vocabulary, partitioned out of a task's labels
+ * before publishing. The denylist itself is NOT restated here — it's fetched
+ * from the daemon (`todos_github::labels`, the sole source) via `GET /link`'s
+ * `workflowLabels` field and threaded in by the caller, so the publish
+ * dialog's preview can never drift from what a sync run actually withholds.
  */
+import type { WorkflowLabelSet } from '@/lib/api/todos-github';
 
-const WORKFLOW_LABEL_PREFIXES = ['route:', 'gate:', 'approved:', 'rework:', 'pipeline:', 'pr:', 'wayfinder:'];
-
-const WORKFLOW_LABELS = [
-  'needs-triage',
-  'needs-info',
-  'ready-for-agent',
-  'ready-for-human',
-  'wontfix',
-  'parked',
-  'dispatched',
-];
-
-export function isWorkflowLabel(label: string): boolean {
-  return WORKFLOW_LABELS.includes(label) || WORKFLOW_LABEL_PREFIXES.some((prefix) => label.startsWith(prefix));
+export function isWorkflowLabel(label: string, set: WorkflowLabelSet): boolean {
+  return set.labels.includes(label) || set.prefixes.some((prefix) => label.startsWith(prefix));
 }
 
 export interface PartitionedLabels {
@@ -26,10 +16,10 @@ export interface PartitionedLabels {
   withheld: string[];
 }
 
-export function partitionLabels(labels: string[]): PartitionedLabels {
+export function partitionLabels(labels: string[], set: WorkflowLabelSet): PartitionedLabels {
   const syncable: string[] = [];
   const withheld: string[] = [];
-  for (const label of labels) (isWorkflowLabel(label) ? withheld : syncable).push(label);
+  for (const label of labels) (isWorkflowLabel(label, set) ? withheld : syncable).push(label);
   return { syncable, withheld };
 }
 

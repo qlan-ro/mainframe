@@ -23,7 +23,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Todo } from '@/lib/api/todos';
-import type { Link } from '@/lib/api/todos-github';
+import type { Link, WorkflowLabelSet } from '@/lib/api/todos-github';
 
 const TODO: Todo = {
   id: 'todo-a',
@@ -51,6 +51,14 @@ const LINK_FIXTURE: Link = {
   lastSyncedAt: null,
 };
 
+// Fetched from the daemon (`GET /link`'s `workflowLabels`) rather than
+// hardcoded here — proves the dialog partitions using whatever the store
+// hands it, not a UI-local copy of the denylist.
+const WORKFLOW_LABELS_FIXTURE: WorkflowLabelSet = {
+  prefixes: ['route:', 'gate:'],
+  labels: ['ready-for-agent'],
+};
+
 const publish = vi.fn();
 const closeDialog = vi.fn();
 
@@ -58,7 +66,7 @@ let dialog: null | { kind: 'publish'; todo: Todo } | { kind: 'link' };
 let link: Link | null;
 
 vi.mock('../use-github-sync-store', () => ({
-  useGitHubSyncStore: () => ({ dialog, link, publish, closeDialog }),
+  useGitHubSyncStore: () => ({ dialog, link, workflowLabels: WORKFLOW_LABELS_FIXTURE, publish, closeDialog }),
 }));
 
 const { PublishTaskDialog } = await import('../PublishTaskDialog');

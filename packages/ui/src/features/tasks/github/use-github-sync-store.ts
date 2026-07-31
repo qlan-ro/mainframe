@@ -32,6 +32,7 @@ import {
   type RemoteIssue,
   type Report,
   type RunSummary,
+  type WorkflowLabelSet,
 } from '@/lib/api/todos-github';
 import type { Todo } from '@/lib/api/todos';
 import { useTodosStore } from '../use-todos-store';
@@ -43,6 +44,8 @@ interface GitHubSyncState {
   port: number | null;
   projectId: string | null;
   link: Link | null;
+  /** The reserved-label denylist, fetched from the daemon — see `workflow-labels.ts`. */
+  workflowLabels: WorkflowLabelSet;
   /** Keyed by todoId — the pairing key is never the reusable task number. */
   pairs: Record<string, Pair>;
   running: boolean;
@@ -71,6 +74,8 @@ interface GitHubSyncState {
 // Monotonic counter — lives outside React/Zustand so it persists across renders.
 let _loadSeq = 0;
 
+const EMPTY_WORKFLOW_LABELS: WorkflowLabelSet = { prefixes: [], labels: [] };
+
 const messageOf = (err: unknown, fallback: string): string => (err instanceof Error ? err.message : fallback);
 
 export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
@@ -88,6 +93,7 @@ export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
     port: null,
     projectId: null,
     link: null,
+    workflowLabels: EMPTY_WORKFLOW_LABELS,
     pairs: {},
     running: false,
     lastRun: null,
@@ -111,6 +117,7 @@ export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
         set({
           link: status.link,
           running: status.running,
+          workflowLabels: status.workflowLabels,
           pairs: Object.fromEntries(pairs.map((pair) => [pair.todoId, pair])),
           loading: false,
         });

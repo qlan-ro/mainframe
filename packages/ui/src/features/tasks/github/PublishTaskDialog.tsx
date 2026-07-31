@@ -22,12 +22,12 @@ function PayloadRow({ label, children }: { label: string; children: React.ReactN
 }
 
 export function PublishTaskDialog(): React.ReactElement | null {
-  const { dialog, link, publish, closeDialog } = useGitHubSyncStore();
+  const { dialog, link, workflowLabels, publish, closeDialog } = useGitHubSyncStore();
 
   if (dialog?.kind !== 'publish' || link === null) return null;
 
   const { todo } = dialog;
-  const { syncable, withheld } = partitionLabels(todo.labels);
+  const { syncable, withheld } = partitionLabels(todo.labels, workflowLabels);
   const withheldSentence = withheldLabelsSentence(withheld);
 
   const runPublish = (): Promise<void> =>
