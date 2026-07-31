@@ -13,7 +13,8 @@
  *  P3 — position=2, total=3          → "2nd in line"
  *  P4 — position=3, total=3          → "3rd in line"
  *  P5 — position=4, total=4          → "4th in line"
- *  S1 — bubble ghost treatment       → dashed border class present, opacity-[0.82]
+ *  S1 — bubble ghost treatment       → chat-queued-bubble testid, dashed border,
+ *                                       opacity-[0.82], break-words (todo #298)
  *  A1 — QueuedAction has ghost border classes (border + border-transparent + hover:border-border)
  *  A2 — actions container has translate-x slide-in classes
  */
@@ -106,12 +107,14 @@ describe('QueuedUserTurn — Q1: root data-queued-id', () => {
 
 describe('QueuedUserTurn — hover-reveal ghost treatment', () => {
   it('bubble, Edit/Cancel actions, action-row gap, and slide-in classes are all present', () => {
-    const { container } = renderQueued({ content: 'some text' });
+    renderQueued({ content: 'some text' });
 
-    // S1 — bubble ghost treatment: dashed border + opacity
-    const bubble = container.querySelector('.border-dashed');
+    // S1 — bubble ghost treatment: dashed border + opacity + word-break containment
+    const bubble = screen.getByTestId('chat-queued-bubble');
     expect(bubble).toBeInTheDocument();
-    expect(bubble!.className).toContain('opacity-[0.82]');
+    expect(bubble.className).toContain('border-dashed');
+    expect(bubble.className).toContain('opacity-[0.82]');
+    expect(bubble.className).toContain('break-words');
 
     // A1 — QueuedAction ghost border classes (+ Edit-specific gap/radius)
     const editBtn = screen.getByTestId('chat-queued-edit');
