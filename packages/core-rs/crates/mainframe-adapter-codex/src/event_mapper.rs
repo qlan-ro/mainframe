@@ -4,72 +4,27 @@
 //! notification method is dispatched identically to the TS `handleNotification`;
 //! unknown methods are logged at debug and skipped (never a hard error).
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
-use mainframe_types::adapter::{MessageMetadata, MessageUsage, SessionResult};
-use mainframe_types::chat::{MessageContent, TodoItem};
 use serde_json::Value;
 
-use crate::history::with_parent;
 use crate::item_types::ThreadItem;
+pub(crate) use crate::parent_id_sink::ParentIdSink;
 use crate::quota_rate_limit::{
     has_recognized_window, normalize_rate_limit_snapshot, snapshot_has_window,
 };
+pub use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
 use crate::thread_item_render::{
     emit_collab_task_group_start, render_completed_item, stash_spawn_prompts,
+};
+use crate::turn_lifecycle::{
+    handle_plan_delta, handle_token_usage, handle_turn_completed, handle_turn_started,
 };
 use crate::types::{
     AccountRateLimitsUpdatedParams, ItemCompletedParams, ItemStartedParams, PlanDeltaParams,
     ThreadStartedParams, TokenUsageUpdatedParams, TurnCompletedParams, TurnStartedParams,
 };
-
-/// The `{ id, text }` plan captured incrementally across a turn.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CurrentTurnPlan {
-    pub id: String,
-    pub text: String,
-}
-
-/// Last token-usage snapshot, carried into the terminal `turn/completed` result.
-#[derive(Debug, Clone, PartialEq)]
-pub struct LastUsage {
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub cache_read_input_tokens: Option<i64>,
-}
-
-/// Per-session mutable state driven by the notification stream (SINGLE_TASK per
-/// CONCURRENCY.tsv row 95 — owned by the session actor). The lazily-created TS
-/// `Set`/`Map` fields become always-present empty collections here.
-#[derive(Debug, Default)]
-pub struct CodexSessionState {
-    pub thread_id: Option<String>,
-    pub current_turn_id: Option<String>,
-    pub current_turn_plan: Option<CurrentTurnPlan>,
-    pub last_usage: Option<LastUsage>,
-    /// collabAgentToolCall item ids that already had a CollabAgent tool_use emitted.
-    pub open_collab_cards: HashSet<String>,
-    /// child thread id → parent CollabAgent tool_use id.
-    pub collab_child_threads: HashMap<String, String>,
-    /// child thread id → spawn prompt (captured from `spawnAgent` items).
-    pub spawn_prompts: HashMap<String, String>,
-    /// Per-turn dedupe: compact-done already emitted (item or legacy `thread/compacted` path).
-    pub compaction_emitted: bool,
-    /// CollabAgent tool_use ids already resolved to an errored state by an
-    /// `interrupted` `subAgentActivity` ping, ahead of the card's own completion.
-    pub errored_collab_cards: HashSet<String>,
-    /// child thread id → the live rollout-tail task streaming that child's work
-    /// into the TaskCard, plus its cancellation handle (stopped on wait completion).
-    pub child_tails: HashMap<
-        String,
-        (
-            tokio::task::JoinHandle<()>,
-            tokio_util::sync::CancellationToken,
-        ),
-    >,
-}
 
 pub fn handle_notification(
     method: &str,
@@ -175,21 +130,6 @@ fn handle_account_rate_limits_updated(
     sink.on_provider_quota("codex", quota);
 }
 
-fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
-    state.current_turn_plan = None;
-    state.current_turn_id = Some(params.turn.id);
-    state.compaction_emitted = false;
-}
-
-fn handle_plan_delta(params: PlanDeltaParams, state: &mut CodexSessionState) {
-    let PlanDeltaParams { item_id, delta } = params;
-    let text = match &state.current_turn_plan {
-        Some(prev) if prev.id == item_id => format!("{}{}", prev.text, delta),
-        _ => delta,
-    };
-    state.current_turn_plan = Some(CurrentTurnPlan { id: item_id, text });
-}
-
 fn handle_item_started(
     params: ItemStartedParams,
     sink: &Arc<dyn SessionSink>,
@@ -233,7 +173,7 @@ fn handle_item_completed(
     };
 
     if let Some((id, text)) = plan_item_fields(&params.item) {
-        state.current_turn_plan = Some(CurrentTurnPlan { id, text });
+        state.current_turn_plan = Some(crate::session_state::CurrentTurnPlan { id, text });
         return;
     }
 
@@ -264,152 +204,6 @@ fn plan_item_fields(item: &Value) -> Option<(String, String)> {
     Some((id, text))
 }
 
-fn handle_turn_completed(
-    params: TurnCompletedParams,
-    sink: &Arc<dyn SessionSink>,
-    state: &mut CodexSessionState,
-) {
-    state.current_turn_plan = None;
-    state.current_turn_id = None;
-    let turn = params.turn;
-    let is_error = turn.status == "failed" || turn.status == "interrupted";
-
-    if is_error {
-        tracing::warn!(
-            module = "codex:events",
-            turn_id = %turn.id,
-            status = %turn.status,
-            reason = turn.error.as_ref().map(|e| e.message.as_str()).unwrap_or(""),
-            "codex: turn ended in error"
-        );
-    }
-
-    let usage = state.last_usage.as_ref().map(|lu| MessageUsage {
-        input_tokens: Some(lu.input_tokens),
-        output_tokens: Some(lu.output_tokens),
-        cache_creation_input_tokens: None,
-        cache_read_input_tokens: lu.cache_read_input_tokens,
-    });
-    sink.on_result(SessionResult {
-        total_cost_usd: Some(0.0),
-        usage,
-        // Codex has no distinct per-turn context total (#423 is Claude-only), so it
-        // resolves the sink's `contextTokens === undefined → fall back to usage`
-        // path (event-handler.ts:366) at the adapter boundary: report this turn's
-        // raw input usage as the context size. None (no usage yet) keeps the stored
-        // size. Option<i64> can't carry the TS undefined/null distinction downstream.
-        context_tokens: state.last_usage.as_ref().map(|lu| lu.input_tokens),
-        subtype: if is_error {
-            Some("error_during_execution".to_string())
-        } else {
-            None
-        },
-        is_error: Some(is_error),
-        result: turn.error.map(|e| e.message),
-    });
-    state.last_usage = None;
-}
-
-fn handle_token_usage(params: TokenUsageUpdatedParams, state: &mut CodexSessionState) {
-    state.last_usage = Some(LastUsage {
-        input_tokens: params.usage.input_tokens,
-        output_tokens: params.usage.output_tokens,
-        cache_read_input_tokens: params.usage.cached_input_tokens,
-    });
-}
-
-/// Wraps a sink to tag every emitted block with `parentToolUseId` (mirrors the TS
-/// `wrapSinkWithParentId`). Only `on_message`/`on_tool_result` are transformed;
-/// every other callback delegates unchanged. `pub(crate)` so `child_tail.rs` can
-/// wrap a raw sink before streaming reconstructed child items into it.
-pub(crate) struct ParentIdSink {
-    inner: Arc<dyn SessionSink>,
-    parent: String,
-}
-
-impl ParentIdSink {
-    pub(crate) fn new(inner: Arc<dyn SessionSink>, parent: String) -> Self {
-        Self { inner, parent }
-    }
-}
-
-impl SessionSink for ParentIdSink {
-    fn on_init(&self, session_id: &str) {
-        self.inner.on_init(session_id);
-    }
-    fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
-        self.inner.on_message(
-            content
-                .into_iter()
-                .map(|b| with_parent(b, &self.parent))
-                .collect(),
-            metadata,
-        );
-    }
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
-        self.inner.on_tool_result(
-            content
-                .into_iter()
-                .map(|b| with_parent(b, &self.parent))
-                .collect(),
-        );
-    }
-    fn on_permission(&self, request: mainframe_adapter_api::ControlRequest) {
-        self.inner.on_permission(request);
-    }
-    fn on_permission_cancelled(&self, request_id: &str) {
-        self.inner.on_permission_cancelled(request_id);
-    }
-    fn on_result(&self, data: SessionResult) {
-        self.inner.on_result(data);
-    }
-    fn on_exit(&self, code: Option<i32>) {
-        self.inner.on_exit(code);
-    }
-    fn on_error(&self, error: mainframe_adapter_api::AdapterError) {
-        self.inner.on_error(error);
-    }
-    fn on_compact(&self) {
-        self.inner.on_compact();
-    }
-    fn on_compact_start(&self) {
-        self.inner.on_compact_start();
-    }
-    fn on_context_usage(&self, usage: mainframe_types::adapter::ContextUsage) {
-        self.inner.on_context_usage(usage);
-    }
-    fn on_plan_file(&self, file_path: &str) {
-        self.inner.on_plan_file(file_path);
-    }
-    fn on_skill_file(&self, entry: mainframe_types::context::SkillFileEntry) {
-        self.inner.on_skill_file(entry);
-    }
-    fn on_queued_processed(&self, uuid: &str) {
-        self.inner.on_queued_processed(uuid);
-    }
-    fn on_todo_update(&self, todos: Vec<TodoItem>) {
-        self.inner.on_todo_update(todos);
-    }
-    fn on_pr_detected(&self, pr: mainframe_types::adapter::DetectedPr) {
-        self.inner.on_pr_detected(pr);
-    }
-    fn on_cli_message(&self, text: &str) {
-        self.inner.on_cli_message(text);
-    }
-    fn on_skill_loaded(&self, entry: mainframe_adapter_api::LoadedSkill) {
-        self.inner.on_skill_loaded(entry);
-    }
-    fn on_subagent_child(&self, parent_tool_use_id: &str, blocks: Vec<MessageContent>) {
-        self.inner.on_subagent_child(parent_tool_use_id, blocks);
-    }
-    fn on_trust_required(&self, project_path: &str) {
-        self.inner.on_trust_required(project_path);
-    }
-}
-
-#[cfg(test)]
-mod parent_id_sink_tests;
-
 // PORT STATUS: src/plugins/builtin/codex/event-mapper.ts (395 lines)
 // confidence: medium
 // todos: 0
@@ -432,3 +226,7 @@ mod parent_id_sink_tests;
 // notes: normalizes via quota_rate_limit and calls sink.on_provider_quota (no `?.`
 // notes: needed — the trait's default no-op body covers sinks that don't override
 // notes: it). Tested in tests/quota_notification.rs.
+// notes: task 1 (todo #247) carved CodexSessionState/CurrentTurnPlan/LastUsage into
+// notes: session_state.rs, ParentIdSink into parent_id_sink.rs, and the four turn/
+// notes: usage/plan handlers into turn_lifecycle.rs; re-exported here so external
+// notes: `event_mapper::X` call sites keep compiling.
