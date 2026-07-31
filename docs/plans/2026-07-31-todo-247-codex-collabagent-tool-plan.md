@@ -44,9 +44,14 @@ These are load-bearing; the lane review should challenge them if wrong.
    `receiverThreadIds` (legacy shape), the card id stays that `wait` item's id, preserving
    today's behavior and the existing tests. Registration is keyed by **child thread id**, so
    a child named by both routes gets exactly one card (spec criterion 9).
-2. **A `wait` with an empty `receiverThreadIds` applies to every card open at that moment.**
+2. **A `wait` with an empty `receiverThreadIds` can only fail cards, never complete them.**
    The spec says a `failed` wait resolves "its card", but the shipping build names no
-   receivers. Named receivers scope the effect; an empty list falls back to all open cards.
+   receivers, so an unnamed failure applies to every card open at that moment. Success never
+   travels this route: Codex returns an empty status when the wait times out (spec Edge
+   cases §"Wait times out"), which would otherwise classify as `Unknown` and resolve every
+   open card while its sub-agent is still running. Completion therefore comes only from the
+   sub-agent's own `turn/completed` and from the parent-turn-end backstop. Named receivers
+   keep both outcomes — that shape is the one that carries `agentsStates` (spec criterion 8).
 3. **The live rollout tail is deleted.** Spec decision 9 makes the live stream the sole
    in-run source and criterion 17 forbids two sources feeding one card. Once child items
    nest via the activity route, `src/child_tail.rs` and `tests/child_tail.rs` are dead code
@@ -211,6 +216,11 @@ remaining new modules in `.../src/lib.rs`.
 Written against the target behavior; expected to fail (or fail to compile against
 not-yet-written `collab_card` functions) until groups 3 and 4 land.
 
+**Run these tasks in order, not in parallel.** Tasks 12, 13 and 14 all consume the harness
+task 11 adds to `tests/common/mod.rs` (`replay_capture`, `capture_path`, `temp_registry`,
+`Recorder::nested_blocks`, `Recorder::top_level_blocks`), none of which exists today. Started
+concurrently, they fail to compile instead of failing red.
+
 **Task 11.** Extend `.../tests/common/mod.rs` with the replay and registry harness.
 - `pub fn replay_capture(path: &str, rec: &Recorder, state: &mut CodexSessionState)`: reads
   a JSONL file, and for each line dispatches `handle_notification(line["method"],
@@ -274,6 +284,11 @@ behavior being replaced, and add:
   still leaves the card errored and emits no second result. Assert by grep in the same test
   file that no test string literal compares a collab-call status to `"interrupted"`
   (criterion 12) — the production comparison is removed in task 15.
+- `an_unnamed_completed_wait_leaves_open_cards_running`: two `started` activities open two
+  cards; a `wait` `item/completed` with an empty `receiverThreadIds` and an empty `status`
+  emits zero `tool_result` blocks and leaves both cards open. A `failed` wait with the same
+  empty receiver list resolves both as errors (spec Edge cases §"Wait times out"; design
+  decision 2).
 - `unknown_thread_items_are_dropped_and_untagged_items_go_to_the_parent`: an
   `item/completed` with `threadId: "grandchild_thread"` produces no message and no
   tool_result; the same item with `threadId` absent produces one top-level message
@@ -329,14 +344,21 @@ lib.rs").
 - `pub(crate) fn on_collab_tool_call(item: &CollabAgentToolCallItem, phase: Phase, sink,
   state)`: `classify_collab_tool` drives the switch. `SpawnAgent` → `stash_spawn_prompts`
   only. `SendInput | ResumeAgent` → `reopen_card` for each named receiver, nothing else.
-  `CloseAgent | Unknown` → debug-log only. `Wait` on `Phase::Completed` → for each target
-  thread (its `receiverThreadIds`, or every open card when the list is empty — design
-  decision 2) resolve with `classify_collab_status(&item.status)`: `Failed` → error whose
-  content is `agentsStates[child].message` when present else `"Sub-agent failed"`;
-  `Completed | InProgress | Unknown` → success carrying
-  `agentsStates[child].message` → `last_message` → `"Sub-agent completed"`. `Wait` on
-  `Phase::Started` → for each named receiver, `open_card` keyed by the wait item's id
-  (legacy route); with an empty receiver list, nothing.
+  `CloseAgent | Unknown` → debug-log only. `Wait` on `Phase::Completed` → branch on the
+  receiver list (design decision 2):
+  - **`receiverThreadIds` non-empty** — for each named receiver, resolve with
+    `classify_collab_status(&item.status)`: `Failed` → error whose content is
+    `agentsStates[child].message` when present else `"Sub-agent failed"`;
+    `Completed | InProgress | Unknown` → success carrying `agentsStates[child].message` →
+    `last_message` → `"Sub-agent completed"`.
+  - **`receiverThreadIds` empty** — only `Failed` resolves, and it resolves every open card
+    as an error. `Completed | InProgress | Unknown` resolves nothing and debug-logs: a
+    timed-out wait returns an empty status, so a completed wait is not proof any sub-agent
+    finished (spec Edge cases §"Wait times out", spec decision 5). Success on this route
+    arrives from `on_sub_agent_turn_completed` or `resolve_open_cards_on_parent_turn_end`.
+
+  `Wait` on `Phase::Started` → for each named receiver, `open_card` keyed by the wait item's
+  id (legacy route); with an empty receiver list, nothing.
 - `pub(crate) fn on_sub_agent_turn_completed(child_thread_id: &str, status: &str, sink,
   state)`: `"failed" | "interrupted"` → `resolve_card` as an error; anything else →
   `resolve_card` as success (spec decision 5).
@@ -385,6 +407,10 @@ lib.rs").
 
 ### Group 4 — Reload path (core)
 
+Runs after group 3. The files are disjoint, but every task here verifies with `cargo test`,
+which compiles the whole crate — including the live-path modules group 3 rewrites — so a
+concurrent group 3 turns this group's gates red on code it does not own.
+
 **Task 19.** Teach `.../src/history_convert.rs` the activity route.
 - `convert_thread_items` keeps a local `open_cards: HashMap<String /* child thread id */,
   String /* card id */>` alongside `spawn_prompts`.
@@ -393,8 +419,10 @@ lib.rs").
   `Interrupted` → emit the errored closing `tool_result` for that card and mark it resolved;
   `Unknown` → skip.
 - The `ThreadItem::CollabAgentToolCall` arm switches on `classify_collab_tool`: `SpawnAgent`
-  stashes prompts as today; `Wait` resolves the cards for its receivers, or all still-open
-  cards when the list is empty; `SendInput | ResumeAgent | CloseAgent | Unknown` are skipped.
+  stashes prompts as today; `Wait` resolves the cards of its named receivers, and with an
+  empty receiver list resolves every still-open card only when its status is `failed` —
+  the same rule as the live path (design decision 2), so reload and live agree on the
+  capture; `SendInput | ResumeAgent | CloseAgent | Unknown` are skipped.
 - After the loop, resolve any card left open (the stored transcript's backstop, mirroring
   the live parent-turn-end rule).
 - Verify: `cargo test -p mainframe-adapter-codex --test collab_reload`.
@@ -418,7 +446,10 @@ lib.rs").
 - Walk `all_items` for `ThreadItem::SubAgentActivity` (any kind) collecting
   `agent_thread_id`, in addition to today's `wait` `receiver_thread_ids` sweep; dedupe.
 - Leave the rollout-preferred / `thread/read`-fallback child fetch unchanged.
-- Verify: `cargo check -p mainframe-adapter-codex`; `cargo test -p mainframe-adapter-codex`.
+- Verify: `cargo check -p mainframe-adapter-codex`; `cargo test -p mainframe-adapter-codex
+  --test collab_reload --test history --test item_types`. Scoped to this group's own test
+  binaries on purpose — a bare `cargo test -p` also runs group 3's `collab_delegation` and
+  the rewritten collab section of `event_mapper`, which this task does not own.
 
 ### Group 5 — Release hygiene (test)
 
