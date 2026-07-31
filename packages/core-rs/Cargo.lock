@@ -1235,6 +1235,7 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-background-tasks",
+ "mainframe-claude-workflows",
  "mainframe-display",
  "mainframe-runtime",
  "mainframe-services",
