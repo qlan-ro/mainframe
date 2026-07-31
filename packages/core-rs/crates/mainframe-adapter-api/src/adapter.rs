@@ -223,11 +223,19 @@ pub trait Adapter: Send + Sync {
     /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
     /// callers then keep the deterministic truncated title. Owned `String` args to
     /// match this trait's async-method convention (`send_message`/`set_model`).
+    /// The default fires a `debug` log once per attempt — expected today for Codex,
+    /// which has no title model — so it reads as "no title model" in the log
+    /// instead of being indistinguishable from an adapter that tried and failed.
     fn generate_title(
         &self,
         content: String,
         binary: String,
     ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        tracing::debug!(
+            adapter_id = self.id(),
+            reason = "adapter_has_no_title_model",
+            "title generation skipped"
+        );
         let _ = (content, binary);
         Box::pin(async { Ok(None) })
     }

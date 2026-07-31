@@ -46,3 +46,4 @@ reqwest = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+mainframe-runtime = { workspace = true, features = ["test-support"] }
