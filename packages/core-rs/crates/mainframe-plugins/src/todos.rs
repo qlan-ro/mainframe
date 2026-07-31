@@ -790,6 +790,7 @@ pub fn routes() -> Router<Arc<PluginContext>> {
             "/todos/{id}/attachments/{attachmentId}",
             get(get_attachment).delete(delete_attachment),
         )
+        .nest("/github", crate::todos_github::routes::router())
 }
 
 async fn run_migrations(ctx: &PluginContext) -> Result<(), PluginError> {
