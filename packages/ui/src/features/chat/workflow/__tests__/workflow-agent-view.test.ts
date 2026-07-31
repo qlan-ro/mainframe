@@ -57,7 +57,7 @@ describe('neutralizeStaleAgents', () => {
   for (const status of terminalStatuses) {
     it(`neutralizes a 'progress' agent into 'unknown' with a note when the run is ${status}`, () => {
       const r = run({ status, terminalAt: 200_000, agents: [agent({ state: 'progress', lastProgressAt: 190_000 })] });
-      const [result] = neutralizeStaleAgents(r, NOW);
+      const result = neutralizeStaleAgents(r, NOW)[0]!;
       expect(result.state).toBe('unknown');
       expect(result.tokens).toBe(222);
       expect(result.durationMs).toBe(5_555);
@@ -71,20 +71,20 @@ describe('neutralizeStaleAgents', () => {
       terminalAt: 200_000,
       agents: [agent({ state: 'start', lastProgressAt: 190_000 })],
     });
-    const [result] = neutralizeStaleAgents(r, NOW);
+    const result = neutralizeStaleAgents(r, NOW)[0]!;
     expect(result.state).toBe('unknown');
     expect(result.staleNote).toBeDefined();
   });
 
   it('leaves a done agent untouched under a terminal status', () => {
     const r = run({ status: 'completed', agents: [agent({ state: 'done', tokens: 50, durationMs: 1_000 })] });
-    const [result] = neutralizeStaleAgents(r, NOW);
+    const result = neutralizeStaleAgents(r, NOW)[0]!;
     expect(result).toEqual({ ...agent({ state: 'done', tokens: 50, durationMs: 1_000 }), staleNote: undefined });
   });
 
   it('leaves an error agent untouched under a terminal status', () => {
     const r = run({ status: 'failed', agents: [agent({ state: 'error', error: 'boom' })] });
-    const [result] = neutralizeStaleAgents(r, NOW);
+    const result = neutralizeStaleAgents(r, NOW)[0]!;
     expect(result).toEqual({ ...agent({ state: 'error', error: 'boom' }), staleNote: undefined });
   });
 
@@ -106,7 +106,7 @@ describe('neutralizeStaleAgents', () => {
       terminalAt: 200_000,
       agents: [agent({ state: 'progress', lastProgressAt: 190_000 })],
     });
-    const [result] = neutralizeStaleAgents(r, NOW);
+    const result = neutralizeStaleAgents(r, NOW)[0]!;
     expect(result.staleNote).toBe('Last observed 10s before the run stopped');
   });
 
@@ -116,7 +116,7 @@ describe('neutralizeStaleAgents', () => {
       terminalAt: 200_000,
       agents: [agent({ state: 'progress', lastProgressAt: 190_000 })],
     });
-    const [result] = neutralizeStaleAgents(r, NOW);
+    const result = neutralizeStaleAgents(r, NOW)[0]!;
     expect(result.staleNote).toBe('Last observed 10s before the run ended');
   });
 
@@ -126,7 +126,7 @@ describe('neutralizeStaleAgents', () => {
       terminalAt: 200_000,
       agents: [agent({ state: 'progress', lastProgressAt: 190_000 })],
     });
-    const [result] = neutralizeStaleAgents(r, NOW);
+    const result = neutralizeStaleAgents(r, NOW)[0]!;
     expect(result.staleNote).toBe('Last observed 10s before the run ended');
   });
 });

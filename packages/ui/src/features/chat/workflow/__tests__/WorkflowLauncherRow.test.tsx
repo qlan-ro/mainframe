@@ -54,7 +54,7 @@ const baseProps = {
   toolName: 'Workflow',
   toolCallId: 'tc-wf-1',
   argsText: '',
-  args: {} as Record<string, unknown>,
+  args: {},
   addResult: noop,
   resume: noop,
   respondToApproval: noop,
