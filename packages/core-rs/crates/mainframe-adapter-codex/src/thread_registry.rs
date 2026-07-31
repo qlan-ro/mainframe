@@ -24,16 +24,32 @@ fn db_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".codex").join("state_5.sqlite"))
 }
 
+/// Test seam for `lookup_agent_metadata_with`: overrides where the registry DB
+/// is read from.
+#[derive(Debug, Clone, Default)]
+pub struct ThreadRegistryDeps {
+    pub db_path: Option<PathBuf>,
+}
+
 /// Look up agent_nickname/agent_role/rollout_path for the given Codex thread ids.
 /// Returns a map keyed by threadId; missing rows are simply absent. Safe to call
 /// when the DB doesn't exist (returns an empty map and logs once).
 pub fn lookup_agent_metadata(thread_ids: &[String]) -> HashMap<String, AgentMetadata> {
+    lookup_agent_metadata_with(thread_ids, None)
+}
+
+/// As `lookup_agent_metadata`, but reads `deps.db_path` when given (tests
+/// inject a seeded sqlite file instead of the real `~/.codex/state_5.sqlite`).
+pub fn lookup_agent_metadata_with(
+    thread_ids: &[String],
+    deps: Option<&ThreadRegistryDeps>,
+) -> HashMap<String, AgentMetadata> {
     let mut result: HashMap<String, AgentMetadata> = HashMap::new();
     if thread_ids.is_empty() {
         return result;
     }
 
-    let Some(path) = db_path() else {
+    let Some(path) = deps.and_then(|d| d.db_path.clone()).or_else(db_path) else {
         return result;
     };
     if std::fs::metadata(&path).is_err() {
@@ -99,6 +115,46 @@ pub fn describe_agent(meta: Option<&AgentMetadata>) -> Option<String> {
 pub fn agent_title(meta: Option<&AgentMetadata>) -> Option<String> {
     let meta = meta?;
     meta.nickname.clone().or_else(|| meta.role.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seeded_db() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("state_5.sqlite");
+        let db = Connection::open(&path).expect("open");
+        db.execute(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, agent_nickname TEXT, agent_role TEXT, rollout_path TEXT)",
+            [],
+        )
+        .expect("create table");
+        db.execute(
+            "INSERT INTO threads (id, agent_nickname, agent_role, rollout_path) VALUES ('t1', 'Maxwell', 'explorer', '/tmp/rollout.jsonl')",
+            [],
+        )
+        .expect("insert row");
+        (dir, path)
+    }
+
+    #[test]
+    fn lookup_agent_metadata_with_reads_the_injected_db_path() {
+        let (_dir, path) = seeded_db();
+        let deps = ThreadRegistryDeps {
+            db_path: Some(path),
+        };
+        let result = lookup_agent_metadata_with(&["t1".to_string()], Some(&deps));
+        let meta = result.get("t1").expect("row present");
+        assert_eq!(meta.nickname.as_deref(), Some("Maxwell"));
+        assert_eq!(meta.role.as_deref(), Some("explorer"));
+    }
+
+    #[test]
+    fn lookup_agent_metadata_with_defaults_to_none_deps() {
+        let result = lookup_agent_metadata_with(&[], None);
+        assert!(result.is_empty());
+    }
 }
 
 // PORT STATUS: src/plugins/builtin/codex/thread-registry.ts (72 lines)
