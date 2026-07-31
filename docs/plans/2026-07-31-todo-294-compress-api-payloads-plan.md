@@ -90,9 +90,15 @@ Every claim below was read, not assumed.
   `ureq = { version = "2", default-features = false, features = ["json"] }`.
   Without the `gzip` feature ureq advertises no `Accept-Encoding`, so it keeps
   receiving identity bytes. Everything else is a `fetch`-family client.
-- **E2E** — every `page.route()` in `packages/e2e` either `fulfill`s a synthetic
-  body or `abort`s; none passes through and inspects a real daemon response
-  body, so no spec observes `Content-Encoding`.
+- **E2E** — 16 `page.route()` handlers exist in `packages/e2e`. Thirteen either
+  `fulfill` a synthetic body or `abort`. Three call `route.continue()`:
+  `tests-tauri/sessions.spec.ts:574` (fulfills a synthetic 500 on the first GET,
+  then continues), `tests-tauri/settings.spec.ts:228` (delays and aborts the
+  `PUT`, continues everything else), and
+  `tests-tauri/directory-picker.spec.ts:263` (delays, then continues). A
+  continued request's response goes straight to the browser; none of the three
+  handlers reads a response body, so no spec observes `Content-Encoding` or a
+  decoded payload.
 - **CI gate** — `.github/workflows/rust-port.yml` runs `cargo fmt --check`,
   `cargo clippy --all-targets -- -D warnings`, `cargo test`, and
   `tools/verify-gate.sh` for any change under `packages/core-rs/**`. The verify
@@ -110,7 +116,9 @@ Every claim below was read, not assumed.
   `http.rs` is at 172 lines; the layer's construction goes in its own module to
   keep `http.rs` about app assembly.
 - No `unwrap`/`expect`/`panic!` outside `#[cfg(test)]`; test files keep the
-  existing `#![allow(clippy::unwrap_used, clippy::expect_used)]` header.
+  existing `#![allow(clippy::unwrap_used, clippy::expect_used)]` header. Modules
+  that define helpers ahead of their callers also need `dead_code` in that allow
+  list — `tests/support/mod.rs:5` carries it for exactly this reason.
 - `cargo clippy --all-targets -- -D warnings` must stay clean.
 - Every new daemon behavior gets a test (repo Code Rules); the brief requires
   the tests run against the router as assembled by `build_app`, not a bespoke
@@ -200,9 +208,12 @@ Owns: `packages/core-rs/Cargo.toml`, `packages/core-rs/Cargo.lock`,
 `packages/core-rs/crates/mainframe-server/tests/http_compression.rs` (new),
 `docs/rust-port/PORTING.md`.
 
-Tasks A2–A4 are red-phase: they must be observed **failing** before Group B
-exists. Task A5 is a guard test that passes in both phases; it is labelled as
-such so nobody reports a false red.
+A2 is scaffolding. A3 and A4 carry the red-phase evidence, but only some of
+their tests are red: A3.1, A3.3, A3.4, A4.1, and A4.3 must be observed **failing**
+before Group B exists, while A3.2, A3.5, A3.6, A4.2, and all of A5 are identity
+and regression guards that pass in both phases. Each task states which of its
+tests are which, so nobody reports a false red or chases a guard that "won't
+fail".
 
 ### Task A1 — turn on the compression features and add the test decoders
 
@@ -247,10 +258,19 @@ Files: `packages/core-rs/crates/mainframe-server/tests/http_compression.rs`
 (new), `packages/core-rs/crates/mainframe-server/tests/support/mod.rs`.
 
 1. Create `tests/http_compression.rs` with the crate's standard test header —
-   a `//!` doc comment, `#![allow(clippy::unwrap_used, clippy::expect_used)]`,
-   and `mod support;`. The doc comment states what the module covers and records
+   a `//!` doc comment,
+   `#![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]`, and
+   `mod support;`. The doc comment states what the module covers and records
    Decision D4 verbatim in two sentences, so the next reader knows why the large
    payload comes from the file-content route.
+
+   `dead_code` is required at this task's boundary, not optional style: all four
+   helpers below are defined here and first called in Task A3, so without the
+   allow, `cargo clippy --all-targets -- -D warnings` fails on this task's own
+   verification. `tests/support/mod.rs:5` carries the same three-lint allow for
+   the same reason. Task A3 gives every helper a caller and **must** delete
+   `dead_code` from the list when it does — leaving it behind is a leftover that
+   would mask a genuinely unused helper later.
 2. Add these private helpers to the test module:
    - `async fn spawn_project_with_big_file() -> (support::TestServer, String, TempDir)`
      — mirror `project_server()` in `tests/routes_files.rs`: make a tempdir,
@@ -284,9 +304,20 @@ Verification:
 
 File: `packages/core-rs/crates/mainframe-server/tests/http_compression.rs`.
 
-Add these `#[tokio::test]`s. Each must fail against `main`'s uncompressed
-daemon, and the failure must be the missing `content-encoding`, not a panic in
-the harness — run them and record the failure message.
+First delete `dead_code` from the module's `#![allow(...)]` header (Task A2
+added it because the helpers had no callers yet; these tests are the callers).
+
+Add these `#[tokio::test]`s. They split into two kinds, and mistaking one for
+the other is the easy way to waste an hour here:
+
+- **Red-phase evidence — tests 1, 3, and 4.** Each must fail against `main`'s
+  uncompressed daemon, and the failure must be the missing `content-encoding`,
+  not a panic in the harness. Run them and record the failure message.
+- **Identity guards — tests 2, 5, and 6.** These assert that a response is
+  *not* compressed, which is already true today, so they pass in both phases by
+  design. They exist to catch Group B over-reaching (compressing when nothing
+  was advertised, compressing below the floor, or altering the chat-history
+  bytes). Do not contort them into failing.
 
 1. `gzip_negotiation_returns_a_body_identical_to_the_identity_response` — fetch
    `/api/projects/{id}/files?path=big.txt` twice, once with
@@ -322,12 +353,14 @@ the harness — run them and record the failure message.
    job is byte-identity, not compression (Decision D4).
 
 Verification:
-- All six fail before Group B. Tests 2, 5, and 6 will *pass* pre-implementation
-  because identity is the current behavior — that is expected and correct; the
-  red-phase evidence is tests 1, 3, and 4.
-- Record the pre-implementation output of
-  `cargo test -p mainframe-server --test http_compression` in the task's
-  completion note.
+- Pre-implementation, `cargo test -p mainframe-server --test http_compression`
+  reports exactly three failures — tests 1, 3, and 4 — each on the missing
+  `content-encoding` header. Tests 2, 5, and 6 pass. Any other split is a
+  defect: a fourth failure means a harness bug, and a passing test 1/3/4 means
+  the assertion is not actually reading the header.
+- `cargo clippy --all-targets -- -D warnings` is clean with `dead_code` removed
+  from the header, which also proves every A2 helper now has a caller.
+- Record the pre-implementation test output in the task's completion note.
 
 ### Task A4 — red-phase: CORS and attachments under compression
 
@@ -390,8 +423,20 @@ File: `docs/rust-port/PORTING.md`.
    `` `flate2`, `brotli` `` | **dev-dependency only** — decode compressed
    responses in the server compression tests | in workspace.
 
-Verification: the §8 table matches `packages/core-rs/Cargo.toml` exactly —
-every crate and feature declared there appears in the table and vice versa.
+Verification, scoped to the two rows this task touches:
+- The `tower-http` row lists all four features exactly as
+  `packages/core-rs/Cargo.toml:14` declares them after A1.
+- The new `flate2` / `brotli` row exists, is marked dev-dependency-only, and
+  names the same two crates A1 added to `[workspace.dependencies]`.
+
+Do **not** attempt a full table-to-manifest reconciliation as part of this task.
+§8 has drifted independently of this change and fixing it is separate work:
+the manifest declares `tokio-util`, `toml`, `croner`, `chrono-tz`, `wiremock`,
+`ignore`/`grep-searcher`/`grep-regex`/`grep-matcher`, and 16 internal path
+crates that the table never mentions, while the table still lists `serde_yaml`,
+`cron`, `jsonata-rs`, and `futures` as deferred though the manifest declares
+none of them. Record that drift in the completion note so it can be filed as its
+own todo; leave it in place here.
 
 ---
 
@@ -513,7 +558,14 @@ Verification:
 - `cargo test -p mainframe-server` — the whole server suite passes, in
   particular `http_integration`, `ws_integration`, `routes_attachments`, and
   `routes_files`.
-- `http.rs` stays under 300 lines and `build_app` under 50.
+- `http.rs` stays under 300 lines.
+- **Do not gate on `build_app` being under 50 lines, and do not decompose it.**
+  It already spans `http.rs:33–106` — 72 lines of body — before this change, so
+  the 50-line rule is violated on arrival; this task adds roughly four more.
+  The body is a flat 30-route `.merge()` assembly with no branching, splitting
+  it is scope expansion inside a transport-layer todo, and the Codex reviewer
+  concurred on both points. Record the pre-existing violation in the completion
+  note as known and out of scope.
 
 ### Task B4 — full daemon verification
 
@@ -525,14 +577,19 @@ No file changes. Run from `packages/core-rs`:
 - `tools/verify-gate.sh`
 
 Then confirm the two cross-package facts this change depends on, and record the
-result in the completion note (read-only; no edits):
+result in the completion note. Both are read-only, and both run **from the
+repository root**, not from `packages/core-rs` — the paths are root-relative:
 
 - `packages/app-tauri/src-tauri/Cargo.toml` still declares
   `ureq = { version = "2", default-features = false, features = ["json"] }` — no
   `gzip` feature — so `presence.rs`'s `POST /api/device/activity` keeps
   advertising nothing and keeps receiving identity bytes.
-- `grep -rn "page.route(" packages/e2e --include="*.ts"` still shows only
-  `fulfill`/`abort` handlers, so no E2E spec reads a real compressed body.
+- `grep -rn "route.continue()" packages/e2e --include="*.ts"` still returns
+  exactly the three known handlers — `tests-tauri/sessions.spec.ts`,
+  `tests-tauri/settings.spec.ts`, `tests-tauri/directory-picker.spec.ts` — and
+  none of them reads a response body. A fourth continuing handler, or one of
+  these three growing a `route.fetch()` / body read, is the only way an E2E spec
+  could start observing a compressed payload; that is what this check guards.
 
 ### Task B5 — changeset
 
