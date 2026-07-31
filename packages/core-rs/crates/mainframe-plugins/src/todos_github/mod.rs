@@ -12,6 +12,9 @@ pub mod store;
 pub mod touch;
 
 #[cfg(test)]
+mod acceptance_tests;
+
+#[cfg(test)]
 mod fake_github;
 
 #[cfg(test)]
