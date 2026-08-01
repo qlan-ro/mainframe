@@ -48,6 +48,8 @@ use crate::message_cache::MessageCache;
 use crate::message_markers::visible_message_text;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
 use crate::permission_manager::PermissionManager;
+use crate::plan_mode_actions::{ChatPlanModeCtx, PlanHost};
+use crate::plan_mode_handler::PlanModeHandler;
 use crate::title_generator::derive_title_from_message;
 use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
@@ -661,12 +663,59 @@ impl LifecycleManagerDeps for LcDeps {
     }
 }
 
+/// Implements `PlanHost` for the plan-mode action context — the seam back into
+/// `ChatManager`'s privately-typed event/lifecycle pieces. `send_message` needs a
+/// live `ChatManager` (the clear-context path's follow-up "Implement the
+/// following plan:" send), so it upgrades a weak self-reference rather than
+/// re-implementing the send path (T5 wires `self_ref`; see `attach_self`).
+struct PlanHostImpl {
+    event_handler: Arc<EventHandler<EhDeps>>,
+    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    deps: Arc<dyn ChatManagerDeps>,
+    permissions: Arc<Mutex<PermissionManager>>,
+    self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
+}
+
+impl PlanHost for PlanHostImpl {
+    fn emit_event(&self, event: DaemonEvent) {
+        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+    }
+    fn clear_display_cache(&self, chat_id: &str) {
+        self.event_handler.clear_display_cache(chat_id);
+    }
+    fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async move { self.lifecycle.start_chat(chat_id).await })
+    }
+    fn send_message<'a>(
+        &'a self,
+        chat_id: &'a str,
+        content: &'a str,
+    ) -> BoxFuture<'a, Result<(), AdapterError>> {
+        Box::pin(async move {
+            let Some(manager) = self.self_ref.get().and_then(std::sync::Weak::upgrade) else {
+                tracing::warn!(
+                    chat_id,
+                    "plan-mode follow-up send has no ChatManager — attach_self was never called"
+                );
+                return Err(AdapterError::Message(
+                    "plan-mode follow-up send has no ChatManager".to_string(),
+                ));
+            };
+            manager
+                .send_message(chat_id, content, None, None)
+                .await
+                .map_err(|e| AdapterError::Message(e.0))
+        })
+    }
+}
+
 struct PhDeps {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
 }
 
 impl PermissionHandlerDeps for PhDeps {
@@ -715,31 +764,35 @@ impl PermissionHandlerDeps for PhDeps {
     }
     fn plan_mode_handle_no_process(
         &self,
-        _chat_id: &str,
-        _active: &Arc<Mutex<ActiveChat>>,
-        _response: &ControlResponse,
+        chat_id: &str,
+        active: &Arc<Mutex<ActiveChat>>,
+        response: &ControlResponse,
     ) {
-        // TODO(port): forward to PlanModeHandler.handle_no_process once plan_mode
-        // is wired (needs the adapter's createPlanModeHandler, deferred on the
-        // Adapter trait). No-op preserves the non-plan permission path.
+        self.plan_mode.handle_no_process(chat_id, active, response);
     }
     fn plan_mode_handle_clear_context<'a>(
         &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
+        chat_id: &'a str,
+        active: Arc<Mutex<ActiveChat>>,
+        response: ControlResponse,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        // TODO(port): forward to PlanModeHandler.handle_clear_context.
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            self.plan_mode
+                .handle_clear_context(chat_id, &active, response)
+                .await
+        })
     }
     fn plan_mode_handle_escalation<'a>(
         &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
+        chat_id: &'a str,
+        active: Arc<Mutex<ActiveChat>>,
+        response: ControlResponse,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        // TODO(port): forward to PlanModeHandler.handle_escalation.
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            self.plan_mode
+                .handle_escalation(chat_id, &active, response)
+                .await
+        })
     }
 }
 
@@ -1101,12 +1154,33 @@ impl ChatManager {
             permissions.clone(),
         ));
 
+        // Unwired until T5's `attach_self()` sets it (called from
+        // `build_chat_manager`); until then plan-mode's clear-context follow-up
+        // send fails closed with a warning rather than silently no-oping.
+        let plan_self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>> =
+            Arc::new(std::sync::OnceLock::new());
+        let plan_host: Arc<dyn PlanHost> = Arc::new(PlanHostImpl {
+            event_handler: event_handler.clone(),
+            lifecycle: lifecycle.clone(),
+            deps: deps.clone(),
+            permissions: permissions.clone(),
+            self_ref: plan_self_ref,
+        });
+        let plan_mode = Arc::new(PlanModeHandler::new(ChatPlanModeCtx {
+            deps: deps.clone(),
+            active_chats: active_chats.clone(),
+            messages: messages.clone(),
+            permissions: permissions.clone(),
+            host: plan_host,
+        }));
+
         let ph_deps = PhDeps {
             deps: deps.clone(),
             active_chats: active_chats.clone(),
             permissions: permissions.clone(),
             event_handler: event_handler.clone(),
             lifecycle: lifecycle.clone(),
+            plan_mode,
         };
         let permission_handler =
             ChatPermissionHandler::new(permissions.clone(), messages.clone(), ph_deps);

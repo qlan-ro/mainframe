@@ -15,8 +15,8 @@ use crate::types::ActiveChat;
 /// The TS `buildActionContext` assembles a `PlanActionContext` from
 /// `db`/`messages`/`permissions`/`active.session`; here that assembly is provided
 /// by `action_context` (chat_manager implements it — it owns those pieces). The
-/// adapter's `createPlanModeHandler()` (not yet on the ported Adapter trait —
-/// deferred in adapter-api) is abstracted behind `resolve_plan_mode_handler`.
+/// adapter's `createPlanModeHandler()` is abstracted behind
+/// `resolve_plan_mode_handler`, backed by `Adapter::create_plan_mode_handler`.
 pub trait PlanModeContext: Send + Sync {
     /// `db.chats.update(chatId, { permissionMode, planMode })`.
     fn chats_update(&self, chat_id: &str, permission_mode: ExecutionMode, plan_mode: bool);
@@ -24,8 +24,11 @@ pub trait PlanModeContext: Send + Sync {
     /// `adapter?.createPlanModeHandler()` — `None` when the adapter has no handler.
     fn resolve_plan_mode_handler(&self, adapter_id: &str)
     -> Option<Arc<dyn PlanModeActionHandler>>;
-    /// `buildActionContext(chatId, active)`.
-    fn action_context(&self, chat_id: &str) -> Arc<dyn PlanActionContext>;
+    /// `buildActionContext(chatId, active)`. `request_id` is threaded through so
+    /// `PlanActionContext::permissions_shift` can pop on a front match
+    /// (`PermissionManager::shift(chat_id, request_id)`, #284) — the TS bag
+    /// captured it via closure instead.
+    fn action_context(&self, chat_id: &str, request_id: &str) -> Arc<dyn PlanActionContext>;
 }
 
 /// Adapter-agnostic dispatcher for plan-mode actions.
@@ -87,7 +90,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
             warn!(chat_id, adapter_id, "no plan-mode handler for adapter");
             return Ok(());
         };
-        let action_ctx = self.ctx.action_context(chat_id);
+        let action_ctx = self.ctx.action_context(chat_id, &response.request_id);
         handler
             .on_approve_and_clear_context(response, action_ctx.as_ref())
             .await
@@ -110,7 +113,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
             warn!(chat_id, adapter_id, "no plan-mode handler for adapter");
             return Ok(());
         };
-        let action_ctx = self.ctx.action_context(chat_id);
+        let action_ctx = self.ctx.action_context(chat_id, &response.request_id);
         handler.on_approve(response, action_ctx.as_ref()).await
     }
 }
@@ -119,12 +122,13 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
 // confidence: medium
 // todos: 0
 // notes: TS `PlanModeContext` DI bag → `PlanModeContext` trait. `resolveHandler`
-// notes: (`adapter.createPlanModeHandler()`) → `resolve_plan_mode_handler` — the
-// notes: adapter method is deferred on the ported Adapter trait (adapter-api TODO),
-// notes: so it is abstracted here. `buildActionContext(chatId, active)` →
-// notes: `action_context(chat_id)` (chat_manager owns the db/messages/permissions/
-// notes: session pieces the PlanActionContext exposes; it re-resolves `active` by id
-// notes: — minor deviation from passing it in). handleNoProcess mutates the shared
+// notes: (`adapter.createPlanModeHandler()`) → `resolve_plan_mode_handler`, backed
+// notes: by `Adapter::create_plan_mode_handler` via `ChatManagerDeps`.
+// notes: `buildActionContext(chatId, active)` → `action_context(chat_id, request_id)`
+// notes: (chat_manager owns the db/messages/permissions/session pieces the
+// notes: PlanActionContext exposes; it re-resolves `active` by id — minor
+// notes: deviation from passing it in; `request_id` threaded in for
+// notes: `permissions_shift`, decision 3). handleNoProcess mutates the shared
 // notes: ActiveChat cell under a short lock and emits after drop (CONCURRENCY rule 3);
 // notes: warn strings copied verbatim (logger name `chat:plan-mode` → tracing target).
 // notes: on_approve* errors propagate (TS awaits them). No TS test file.
