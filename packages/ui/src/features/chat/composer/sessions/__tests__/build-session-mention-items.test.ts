@@ -29,11 +29,10 @@ function session(overrides: { remoteId: string; title?: string; custom?: Partial
       displayStatus: 'idle',
       hasPending: false,
       detectedPrs: [],
-      worktreeMissing: false,
       transcriptMissing: false,
       updatedAt: 1000,
       ...overrides.custom,
-    },
+    } as SessionCustom,
   };
 }
 

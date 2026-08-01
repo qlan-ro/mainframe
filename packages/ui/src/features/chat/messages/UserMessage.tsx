@@ -246,20 +246,30 @@ function UserMessageImpl() {
       )}
 
       {sendError != null && (
-        <div className="flex items-center gap-2">
-          <span data-testid="chat-user-message-send-failed" className="text-label text-destructive">
-            Failed to send
-          </span>
-          {retryClientId && chatExtras && (
-            <button
-              type="button"
-              data-testid="chat-user-message-retry"
-              onClick={() => void chatExtras.retryMessage(retryClientId)}
-              className="text-label font-medium text-primary hover:underline"
-            >
-              Retry
-            </button>
-          )}
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2">
+            <span data-testid="chat-user-message-send-failed" className="text-label text-destructive">
+              Failed to send
+            </span>
+            {/* Retry re-sends the text only, so it would silently drop the
+                attachments the runtime just put back into the composer. */}
+            {retryClientId && chatExtras && !meta.attachmentsRestored && (
+              <button
+                type="button"
+                data-testid="chat-user-message-retry"
+                onClick={() => void chatExtras.retryMessage(retryClientId)}
+                className="text-label font-medium text-primary hover:underline"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+          <p
+            data-testid="chat-user-message-send-error"
+            className="max-w-[470px] text-right text-label text-muted-foreground"
+          >
+            {sendError}
+          </p>
         </div>
       )}
     </MessagePrimitive.Root>

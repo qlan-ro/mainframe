@@ -155,6 +155,61 @@ describe('ProjectFilterPillBar — project name color signals unread, not rest s
   });
 });
 
+describe('ProjectFilterPillBar — unavailable project state', () => {
+  const liveProject = { ...project('live', 'live-dir'), available: true };
+  const unknownProject = { ...project('unknown', 'unknown-dir'), available: undefined };
+  const unavailableProject = { ...project('missing', 'missing-dir'), available: false };
+
+  it('badges only projects whose availability is false', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={[liveProject, unknownProject, unavailableProject]}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId('sessions-filter-pill-unavailable-missing')).toHaveTextContent('Unavailable');
+    expect(screen.queryByTestId('sessions-filter-pill-unavailable-live')).toBeNull();
+    expect(screen.queryByTestId('sessions-filter-pill-unavailable-unknown')).toBeNull();
+  });
+
+  it('renders an unavailable name muted without foreground, primary, or opacity classes even when active with unread', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={[unavailableProject]}
+        filterProjectId="missing"
+        attentionCounts={{ missing: 4 }}
+        onSelect={() => undefined}
+      />,
+    );
+
+    const className = screen.getByText('missing-dir').className;
+    expect(className).toContain('text-muted-foreground');
+    expect(className).not.toContain('text-foreground');
+    expect(className).not.toContain('text-primary');
+    expect(className).not.toMatch(/opacity-/);
+  });
+
+  it('keeps an unavailable project selectable', async () => {
+    const handleSelect = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={[unavailableProject]}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={handleSelect}
+      />,
+    );
+
+    const button = screen.getByTestId('sessions-filter-pill-missing');
+    expect(button).not.toBeDisabled();
+    await userEvent.click(button);
+    expect(handleSelect).toHaveBeenCalledWith('missing');
+  });
+});
+
 describe('ProjectFilterPillBar — single-select click semantics', () => {
   it('clicking an inactive project row calls onSelect with its id', async () => {
     const handleSelect = vi.fn();

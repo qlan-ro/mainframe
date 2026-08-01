@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   BackgroundWorkKindSchema,
   BackgroundActivitySchema,
+  BackgroundActivityTaskSchema,
   toActivityTask,
   deriveBackgroundActivity,
   type BackgroundTask,
@@ -49,6 +50,8 @@ describe('toActivityTask', () => {
       kind: 'bash',
       description: 'dev server',
       startedAt: 1000,
+      workflowName: undefined,
+      runId: undefined,
     });
   });
 
@@ -58,7 +61,24 @@ describe('toActivityTask', () => {
       kind: 'bash',
       description: 'pnpm dev',
       startedAt: 1000,
+      workflowName: undefined,
+      runId: undefined,
     });
+  });
+
+  it('carries workflowName and runId through when the task is linked', () => {
+    const activity = toActivityTask(
+      makeTask({ id: 'w-1', kind: 'workflow', description: 'deploy', workflowName: 'deploy', runId: 'run_1' }),
+    );
+    expect(activity).toEqual({
+      id: 'w-1',
+      kind: 'workflow',
+      description: 'deploy',
+      startedAt: 1000,
+      workflowName: 'deploy',
+      runId: 'run_1',
+    });
+    expect(BackgroundActivityTaskSchema.parse(activity)).toEqual(activity);
   });
 });
 

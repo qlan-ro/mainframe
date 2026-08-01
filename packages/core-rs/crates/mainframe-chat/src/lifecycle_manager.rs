@@ -11,7 +11,7 @@ use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -77,9 +77,11 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
     /// `adapters.getSnapshots().find((s) => s.id === adapterId)?.models ?? []` —
     /// the live probed catalog used to normalize a saved default-model id.
-    fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
-        Vec::new()
-    }
+    /// Required, not defaulted: an implementation that silently inherited the
+    /// empty default made `normalize_saved_default_model`'s probe-failure
+    /// short-circuit fire on every chat creation, so a retired saved default
+    /// leaked into new chats (#290).
+    fn adapter_snapshot_models(&self, adapter_id: &str) -> Vec<AdapterModel>;
     /// Record the worktrees that already existed when the chat activated, so a
     /// switch offer only ever names one registered since.
     fn seed_worktree_baseline<'a>(
@@ -303,6 +305,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             {
                 let models = self.deps.adapter_snapshot_models(adapter_id);
                 effective_model = normalize_saved_default_model(Some(&m), &models);
+                if effective_model.is_none() {
+                    warn!(
+                        adapter_id,
+                        configured_model = %m,
+                        "saved default model is not in the adapter catalog; new chat falls back to the adapter default"
+                    );
+                }
             }
             if effective_mode.is_none()
                 && let Some(m) = default_mode
@@ -489,6 +498,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         notify.notify_waiters();
         if let Err(err) = result {
             warn!(?err, chat_id, "startChat failed");
+            self.deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.to_string()),
+                error: err.to_string(),
+            });
         }
     }
 
@@ -752,23 +765,37 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub async fn do_generate_title(&self, chat_id: &str, content: &str) {
+        // The title task is spawned, so it can outlive the chat it was
+        // spawned for (#287): a bare unlogged return here was indistinguishable
+        // from every other silent title-generation outcome.
         let Some(cell) = self.get_active(chat_id) else {
+            debug!(
+                chat_id,
+                reason = "chat_not_active",
+                "title generation skipped"
+            );
             return;
         };
-        if self
-            .deps
-            .settings_get("general", "titleGeneration.disabled")
-            .as_deref()
-            == Some("true")
-        {
-            return;
-        }
         let adapter_id = cell
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .chat
             .adapter_id
             .clone();
+        if self
+            .deps
+            .settings_get("general", "titleGeneration.disabled")
+            .as_deref()
+            == Some("true")
+        {
+            debug!(
+                chat_id,
+                adapter_id = %adapter_id,
+                reason = "disabled_by_setting",
+                "title generation skipped"
+            );
+            return;
+        }
         let binary = resolve_title_binary(
             self.deps
                 .settings_get("provider", &format!("{adapter_id}.titleBinary")),
@@ -780,21 +807,32 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .generate_title(&adapter_id, content, &binary)
             .await
         {
-            let chat = {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-                guard.chat.title = Some(title.clone());
-                guard.chat.clone()
-            };
-            self.deps.chats_update(
+            self.apply_generated_title(chat_id, &cell, title);
+        } else {
+            debug!(
                 chat_id,
-                &LifecycleChatUpdate {
-                    title: Some(title),
-                    ..Default::default()
-                },
+                adapter_id = %adapter_id,
+                reason = "no_title",
+                "title generation produced no title"
             );
-            self.deps
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         }
+    }
+
+    fn apply_generated_title(&self, chat_id: &str, cell: &Arc<Mutex<ActiveChat>>, title: String) {
+        let chat = {
+            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            guard.chat.title = Some(title.clone());
+            guard.chat.clone()
+        };
+        self.deps.chats_update(
+            chat_id,
+            &LifecycleChatUpdate {
+                title: Some(title),
+                ..Default::default()
+            },
+        );
+        self.deps
+            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
     async fn do_load_chat(&self, chat_id: &str) {
@@ -915,6 +953,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .ok_or_else(|| {
                 LifecycleError::Message(format!("Project {} not found", chat.project_id))
             })?;
+        if chat.worktree_path.is_none() && !self.deps.path_exists(&project_path) {
+            return Err(LifecycleError::Message(format!(
+                "Project directory does not exist or is not accessible: {project_path}"
+            )));
+        }
 
         let session = self
             .deps
@@ -972,11 +1015,15 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 }
 
 #[cfg(test)]
+mod title_logging_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
+    use std::collections::HashSet;
 
-    fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
+    pub(super) fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
         let mut c = test_chat(id);
         c.worktree_path = worktree.map(str::to_string);
         c.status = status;
@@ -1037,28 +1084,45 @@ mod tests {
     }
 
     // ── archiveChat (kills-tasks + releases-scope) ───────────────────────────
-    struct FakeDeps {
+    pub(super) struct FakeDeps {
         chat: Chat,
         siblings: Vec<Chat>,
         order: Mutex<Vec<String>>,
-        events: Mutex<Vec<DaemonEvent>>,
+        pub(super) events: Mutex<Vec<DaemonEvent>>,
         stop_calls: Mutex<Vec<(String, String)>>,
         tunnel_stop_calls: Mutex<Vec<(String, String)>>,
+        present_paths: Mutex<Option<HashSet<String>>>,
         /// `false` reproduces a scope that never ran a launch config, where
         /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it.
         has_launches: bool,
+        /// Titles the deps observed `chats_update` writing (only when
+        /// `patch.title.is_some()`, so unrelated lifecycle updates don't pollute
+        /// title-logging assertions).
+        pub(super) title_updates: Mutex<Vec<String>>,
+        /// When `true`, `settings_get("general", "titleGeneration.disabled")`
+        /// answers `Some("true")`.
+        disabled: bool,
     }
 
     impl FakeDeps {
-        fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, true)
+        pub(super) fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
+            Self::build(chat, siblings, true, false)
         }
 
         fn launchless(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, false)
+            Self::build(chat, siblings, false, false)
         }
 
-        fn build(chat: Chat, siblings: Vec<Chat>, has_launches: bool) -> Arc<Self> {
+        pub(super) fn title_disabled(chat: Chat) -> Arc<Self> {
+            Self::build(chat, Vec::new(), true, true)
+        }
+
+        pub(super) fn build(
+            chat: Chat,
+            siblings: Vec<Chat>,
+            has_launches: bool,
+            disabled: bool,
+        ) -> Arc<Self> {
             Arc::new(Self {
                 chat,
                 siblings,
@@ -1066,8 +1130,16 @@ mod tests {
                 events: Mutex::new(Vec::new()),
                 stop_calls: Mutex::new(Vec::new()),
                 tunnel_stop_calls: Mutex::new(Vec::new()),
+                present_paths: Mutex::new(None),
                 has_launches,
+                title_updates: Mutex::new(Vec::new()),
+                disabled,
             })
+        }
+
+        fn set_present_paths(&self, paths: &[&str]) {
+            let paths = paths.iter().map(|path| (*path).to_string()).collect();
+            *self.present_paths.lock().unwrap() = Some(paths);
         }
     }
 
@@ -1085,7 +1157,11 @@ mod tests {
         ) -> Chat {
             self.chat.clone()
         }
-        fn chats_update(&self, _chat_id: &str, _patch: &LifecycleChatUpdate) {}
+        fn chats_update(&self, _chat_id: &str, patch: &LifecycleChatUpdate) {
+            if let Some(title) = &patch.title {
+                self.title_updates.lock().unwrap().push(title.clone());
+            }
+        }
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
             let mut all = vec![self.chat.clone()];
             all.extend(self.siblings.clone());
@@ -1094,8 +1170,15 @@ mod tests {
         fn projects_get_path(&self, _project_id: &str) -> Option<String> {
             Some("/proj".to_string())
         }
-        fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-            None
+        fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
+            if self.disabled && ns == "general" && key == "titleGeneration.disabled" {
+                Some("true".to_string())
+            } else {
+                None
+            }
+        }
+        fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
+            Vec::new()
         }
         fn create_session(&self, _a: &str, _o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             None
@@ -1175,12 +1258,16 @@ mod tests {
         fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
             Box::pin(async { false })
         }
-        fn path_exists(&self, _path: &str) -> bool {
-            true
+        fn path_exists(&self, path: &str) -> bool {
+            self.present_paths
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_none_or(|paths| paths.contains(path))
         }
     }
 
-    fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
+    pub(super) fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
         ChatLifecycleManager::new(
             deps,
             Arc::new(DashMap::new()),
@@ -1312,6 +1399,72 @@ mod tests {
         assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
             e,
             DaemonEvent::LaunchScopeReleased { effective_path, .. } if effective_path == "/proj"
+        )));
+    }
+
+    #[tokio::test]
+    async fn start_chat_emits_a_chat_scoped_error_when_the_project_directory_is_gone() {
+        let chat = chat_over("c1", None, ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_present_paths(&[]);
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        let events = deps.events.lock().unwrap();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            DaemonEvent::Error { chat_id: Some(chat_id), error }
+                if chat_id == "c1"
+                    && error.contains("Project directory does not exist or is not accessible")
+                    && error.contains("/proj")
+        )));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, DaemonEvent::ProcessStarted { .. }))
+        );
+    }
+
+    #[tokio::test]
+    async fn start_chat_emits_a_chat_scoped_error_when_the_worktree_is_gone() {
+        let chat = chat_over("c1", Some("/wt/gone"), ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_present_paths(&["/proj"]);
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        let events = deps.events.lock().unwrap();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            DaemonEvent::Error { chat_id: Some(chat_id), error }
+                if chat_id == "c1"
+                    && error.contains("Worktree directory does not exist")
+                    && error.contains("/wt/gone")
+        )));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, DaemonEvent::ProcessStarted { .. }))
+        );
+    }
+
+    #[tokio::test]
+    async fn start_chat_proceeds_when_the_worktree_is_live_and_the_project_path_is_gone() {
+        let chat = chat_over("c1", Some("/wt/live"), ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_present_paths(&["/wt/live"]);
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        let events = deps.events.lock().unwrap();
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            DaemonEvent::Error { error, .. }
+                if error.contains("Project directory does not exist or is not accessible")
+                    && error.contains("/proj")
         )));
     }
 

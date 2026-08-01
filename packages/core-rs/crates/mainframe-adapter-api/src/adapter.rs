@@ -101,6 +101,10 @@ pub trait SessionSink: Send + Sync {
     /// Account-wide provider plan quota (`onProviderQuota?`) — optional in TS,
     /// default no-op; no chatId, mirrors `on_context_usage`.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
+    /// Claude's `PushNotification` tool call, forwarded raw; the sink owns
+    /// trimming, truncation and dedupe (todo #293). Default no-op: adapters
+    /// with no such tool need not implement it.
+    fn on_attention_request(&self, _message: &str) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored
@@ -223,11 +227,19 @@ pub trait Adapter: Send + Sync {
     /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
     /// callers then keep the deterministic truncated title. Owned `String` args to
     /// match this trait's async-method convention (`send_message`/`set_model`).
+    /// The default fires a `debug` log once per attempt — expected today for Codex,
+    /// which has no title model — so it reads as "no title model" in the log
+    /// instead of being indistinguishable from an adapter that tried and failed.
     fn generate_title(
         &self,
         content: String,
         binary: String,
     ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        tracing::debug!(
+            adapter_id = self.id(),
+            reason = "adapter_has_no_title_model",
+            "title generation skipped"
+        );
         let _ = (content, binary);
         Box::pin(async { Ok(None) })
     }

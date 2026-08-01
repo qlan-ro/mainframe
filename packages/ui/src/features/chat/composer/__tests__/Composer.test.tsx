@@ -1,9 +1,7 @@
 /**
- * Composer — behavior tests for the worktreeMissing guard.
+ * Composer — behavior tests for the native composer shell.
  *
  * Strategy:
- *  - Mock `../runtime/use-chat-thread-runtime` to control what `useChatExtras`
- *    returns (worktreeMissing:true/false, worktreePath present/absent, undefined).
  *  - Mock `@assistant-ui/react` with lightweight stub primitives:
  *      ComposerPrimitive.Root → passthrough div
  *      ComposerPrimitive.AttachmentDropzone → passthrough div
@@ -18,17 +16,6 @@
  *  - Mock `./config-toolbar/ComposerToolbar` and `@/components/ui/assistant-ui/attachment`
  *    to plain no-op stubs so their internal hooks don't run.
  *  - All assertions use hardcoded expected values.
- *
- * Behaviors covered:
- *  1. worktreeMissing=true
- *       → NO composer banner (recovery lives in the thread-level DegradedChatCard)
- *       → input has the `disabled` attribute
- *       → send button has the `disabled` attribute
- *  2. worktreeMissing=false
- *       → NO banner
- *       → input NOT disabled
- *  3. chatConfig undefined (useChatExtras returns undefined)
- *       → no banner, no crash
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, createEvent, fireEvent } from '@testing-library/react';
@@ -40,14 +27,6 @@ const THREAD_ID = 'thread-1';
 // ---------------------------------------------------------------------------
 // Mocks (hoisted — vi.mock is hoisted to the top of the file by Vitest)
 // ---------------------------------------------------------------------------
-
-// Control what useChatExtras returns in each test via this mutable cell.
-// true = return undefined (no extras); object = return { state: { chatConfig: value } }
-let __extrasReturn: 'none' | { worktreeMissing?: boolean; worktreePath?: string } = 'none';
-
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
-  useChatExtras: () => (__extrasReturn === 'none' ? undefined : { state: { chatConfig: __extrasReturn } }),
-}));
 
 // Mutable state for @assistant-ui/react mocks — mutated per-test via helpers below.
 // `__isRunning` controls the value that useAuiState returns when the selector
@@ -158,71 +137,23 @@ function renderComposer() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Composer — worktreeMissing=true disables input/send (banner replaced by the degraded card)', () => {
+describe('Composer — healthy shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
     __appendSpy = vi.fn();
   });
 
-  it('does NOT render the old worktree-missing banner (the thread-level DegradedChatCard owns recovery)', () => {
-    __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
-    renderComposer();
-
-    expect(screen.queryByTestId('chat-composer-worktree-missing')).not.toBeInTheDocument();
-  });
-
-  it('input (chat-composer-input) has the disabled attribute', () => {
-    __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
-    renderComposer();
-
-    expect(screen.getByTestId('chat-composer-input')).toBeDisabled();
-  });
-
-  it('send button (chat-composer-send) has the disabled attribute', () => {
-    __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
-    renderComposer();
-
-    expect(screen.getByTestId('chat-composer-send')).toBeDisabled();
-  });
-});
-
-describe('Composer — worktreeMissing=false has no banner and enabled input', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __isRunning = false;
-    __appendSpy = vi.fn();
-  });
-
-  it('does NOT render the worktree-missing banner', () => {
-    __extrasReturn = { worktreeMissing: false };
+  it('does NOT render the old worktree-missing banner', () => {
     renderComposer();
 
     expect(screen.queryByTestId('chat-composer-worktree-missing')).not.toBeInTheDocument();
   });
 
   it('input (chat-composer-input) is NOT disabled', () => {
-    __extrasReturn = { worktreeMissing: false };
     renderComposer();
 
     expect(screen.getByTestId('chat-composer-input')).not.toBeDisabled();
-  });
-});
-
-describe('Composer — chatConfig undefined (extras not available)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __isRunning = false;
-    __appendSpy = vi.fn();
-  });
-
-  it('renders without crashing and shows no banner when extras is undefined', () => {
-    __extrasReturn = 'none';
-    renderComposer();
-
-    expect(screen.queryByTestId('chat-composer-worktree-missing')).not.toBeInTheDocument();
-    // The composer root should still be present
-    expect(screen.getByTestId('chat-composer')).toBeInTheDocument();
   });
 });
 
@@ -230,11 +161,10 @@ describe('Composer — chatConfig undefined (extras not available)', () => {
 // Mid-run Enter-to-queue interception (handleInputKeyDown)
 // ---------------------------------------------------------------------------
 //
-// When isRunning=true and worktreeMissing=false, pressing plain Enter on the
-// composer input must call submit() → aui.thread().append() exactly once (the
-// daemon-backed queue path) and prevent the default browser action. Every
-// other combination must leave appendSpy uncalled so the native path handles
-// the event.
+// When isRunning=true, pressing plain Enter on the composer input must call
+// submit() → aui.thread().append() exactly once (the daemon-backed queue path)
+// and prevent the default browser action. Every other combination must leave
+// appendSpy uncalled so the native path handles the event.
 
 describe('Composer — mid-run Enter-to-queue interception', () => {
   beforeEach(() => {
@@ -242,9 +172,8 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
     __appendSpy = vi.fn();
   });
 
-  it('calls append() once and prevents default when isRunning=true and worktreeMissing=false', () => {
+  it('calls append() once and prevents default when isRunning=true', () => {
     __isRunning = true;
-    __extrasReturn = { worktreeMissing: false };
     renderComposer();
 
     const input = screen.getByTestId('chat-composer-input');
@@ -258,7 +187,6 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
 
   it('does NOT call append() when Shift+Enter is pressed (isRunning=true)', () => {
     __isRunning = true;
-    __extrasReturn = { worktreeMissing: false };
     renderComposer();
 
     const input = screen.getByTestId('chat-composer-input');
@@ -269,18 +197,6 @@ describe('Composer — mid-run Enter-to-queue interception', () => {
 
   it('does NOT call append() when isRunning=false (idle — native path handles submit)', () => {
     __isRunning = false;
-    __extrasReturn = { worktreeMissing: false };
-    renderComposer();
-
-    const input = screen.getByTestId('chat-composer-input');
-    fireEvent.keyDown(input, { key: 'Enter' });
-
-    expect(__appendSpy).not.toHaveBeenCalled();
-  });
-
-  it('does NOT call append() when isRunning=true but worktreeMissing=true', () => {
-    __isRunning = true;
-    __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
     renderComposer();
 
     const input = screen.getByTestId('chat-composer-input');
@@ -304,7 +220,6 @@ describe('Composer — highlight overlay wired + input is text-transparent', () 
     vi.clearAllMocks();
     __isRunning = false;
     __appendSpy = vi.fn();
-    __extrasReturn = { worktreeMissing: false };
   });
 
   it('mounts the composer-prompt-highlight overlay', () => {
@@ -338,7 +253,6 @@ describe('Composer — placeholder copy switches on pending-quote state', () => 
     vi.clearAllMocks();
     __isRunning = false;
     __appendSpy = vi.fn();
-    __extrasReturn = { worktreeMissing: false };
     useComposerSegments.setState({ byThread: {} });
   });
 

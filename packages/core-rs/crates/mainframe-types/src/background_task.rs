@@ -58,6 +58,12 @@ pub struct BackgroundTask {
     /// live CLI session. Optional; the TS type only ever holds `true`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovered: Option<bool>,
+    /// Set when this task is a Claude CLI workflow launch. `run_id` starts
+    /// `None` and is learned later from the `Workflow` tool result.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +95,10 @@ pub struct BackgroundActivityTask {
     pub kind: BackgroundWorkKind,
     pub description: String,
     pub started_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
 }
 
 /// Live background work for a chat — derived from the tracker, never persisted.
@@ -113,6 +123,8 @@ pub fn to_activity_task(task: &BackgroundTask) -> BackgroundActivityTask {
             task.description.clone()
         },
         started_at: task.started_at,
+        workflow_name: task.workflow_name.clone(),
+        run_id: task.run_id.clone(),
     }
 }
 
@@ -153,6 +165,8 @@ mod tests {
             summary: None,
             usage: None,
             recovered: None,
+            workflow_name: None,
+            run_id: None,
         }
     }
 
@@ -183,13 +197,17 @@ mod tests {
             summary: None,
             usage: None,
             recovered: None,
+            workflow_name: None,
+            run_id: None,
         };
         let s = serde_json::to_string(&task).unwrap();
         assert!(s.contains(r#""outputPath":null"#));
         assert!(s.contains(r#""endedAt":null"#));
         assert!(s.contains(r#""usage":null"#));
-        // `recovered` is the only skip-when-absent field.
+        // `recovered`, `workflowName`, `runId` are the skip-when-absent fields.
         assert!(!s.contains("recovered"));
+        assert!(!s.contains("workflowName"));
+        assert!(!s.contains("runId"));
     }
 
     #[test]
@@ -232,6 +250,8 @@ mod tests {
                 kind: BackgroundWorkKind::Bash,
                 description: "dev server".to_string(),
                 started_at: 1000,
+                workflow_name: None,
+                run_id: None,
             }
         );
     }
@@ -247,8 +267,21 @@ mod tests {
                 kind: BackgroundWorkKind::Bash,
                 description: "pnpm dev".to_string(),
                 started_at: 1000,
+                workflow_name: None,
+                run_id: None,
             }
         );
+    }
+
+    #[test]
+    fn to_activity_task_carries_workflow_link_through() {
+        let mut task = make_task();
+        task.kind = BackgroundWorkKind::Workflow;
+        task.workflow_name = Some("deploy".to_string());
+        task.run_id = Some("run_1".to_string());
+        let activity = to_activity_task(&task);
+        assert_eq!(activity.workflow_name, Some("deploy".to_string()));
+        assert_eq!(activity.run_id, Some("run_1".to_string()));
     }
 
     #[test]
@@ -263,6 +296,8 @@ mod tests {
             kind,
             description: description.to_string(),
             started_at: 1000,
+            workflow_name: None,
+            run_id: None,
         };
         let tasks = vec![
             mk("a-1", BackgroundWorkKind::Agent, "reviewer"),

@@ -14,6 +14,7 @@ use mainframe_adapter_api::{Adapter, AdapterError, AdapterRegistry, AdapterSessi
 use mainframe_adapter_mock::ReplaySession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_db::DatabaseManager;
 use mainframe_db::chats::ChatUpdate;
 use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
@@ -179,6 +180,7 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
         Arc::new(NoopLaunchStopper),
         Arc::new(NoopScopeTunnelStopper),
         quota,
+        Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
     );
 

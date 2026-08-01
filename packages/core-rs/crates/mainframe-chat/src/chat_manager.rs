@@ -16,6 +16,7 @@ use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, ImageInput,
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
+use mainframe_services::workspace::worktree::is_directory_present;
 use mainframe_types::adapter::{
     ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
@@ -163,7 +164,7 @@ pub trait ChatManagerDeps: Send + Sync {
     /// returns is unused by `addMention` (it always emits `context.updated`).
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    fn projects_remove(&self, project_id: &str);
+    fn projects_remove(&self, project_id: &str) -> Result<(), String>;
     /// `writeWorkspaceTrust(projectPath)` — persists workspace trust to the
     /// Claude CLI's `~/.claude.json` (injected so this crate does not depend on
     /// `mainframe-adapter-claude`). Backs `trust_workspace`.
@@ -245,6 +246,10 @@ pub trait ChatManagerDeps: Send + Sync {
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool;
     fn notify_task_complete(&self) -> bool;
     fn notify_session_error(&self) -> bool;
+    /// Gates `notifications.chat.attentionRequest`. Not defaulted — a
+    /// defaulted trait method silently inherited the wrong behavior once
+    /// before (bug class #273), so every deps impl must state its answer.
+    fn notify_attention_request(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
 
     /// `onProviderQuota(adapterId, quota)` — account-wide provider-plan quota pushed
@@ -267,6 +272,9 @@ pub trait ChatManagerDeps: Send + Sync {
     /// empty default left orphaned tasks Running forever, pinning `displayStatus:
     /// working` and `backgroundActivity` with no recovery path (#273).
     fn tracker_end_all_running(&self, chat_id: &str);
+    /// D5 (#273) — the workflow-run store's counterpart to
+    /// `tracker_end_all_running`, delegated to `EventHandlerDeps` below.
+    fn workflow_runs_stop_all(&self, chat_id: &str);
     /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
     /// Required (not a no-op default): `continue-here` relies on it persisting.
     fn chats_clear_session(&self, chat_id: &str);
@@ -285,14 +293,15 @@ pub trait ChatManagerDeps: Send + Sync {
         project_path: &'a str,
         session_file_path: Option<&'a str>,
     ) -> BoxFuture<'a, Option<bool>>;
-    /// `adapters.getSnapshots().find(id)?.models ?? []` — for the lifecycle default-
-    /// model normalization. Default empty.
+    /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
+    /// the lifecycle default-model normalization. Required, not defaulted: an
+    /// implementation that silently inherited the empty default made
+    /// `normalize_saved_default_model`'s probe-failure short-circuit fire on every
+    /// chat creation, so a retired saved default leaked into new chats (#290).
     fn adapter_snapshot_models(
         &self,
-        _adapter_id: &str,
-    ) -> Vec<mainframe_types::adapter::AdapterModel> {
-        Vec::new()
-    }
+        adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel>;
 }
 
 /// Object-safe facade over `ExternalSessionService<D>` (`ctx.chats.
@@ -371,9 +380,14 @@ fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
 }
 
-/// `enrichChat` — set displayStatus/isRunning/backgroundActivity/worktreeMissing
-/// (mutates in place). `live_tasks` is `tracker.listLive(chat.id)`.
-fn enrich_chat(chat: &mut Chat, has_pending: bool, live_tasks: &[BackgroundTask]) {
+/// `enrichChat` — set displayStatus/isRunning/backgroundActivity/directory signals.
+/// Mutates in place. `live_tasks` is `tracker.listLive(chat.id)`.
+fn enrich_chat(
+    chat: &mut Chat,
+    has_pending: bool,
+    live_tasks: &[BackgroundTask],
+    project_path: Option<&str>,
+) {
     let working = is_working(chat);
     // Live background work broadens the sidebar 'working' state, but never
     // isRunning — the composer/thread indicator stays main-turn-only.
@@ -393,6 +407,13 @@ fn enrich_chat(chat: &mut Chat, has_pending: bool, live_tasks: &[BackgroundTask]
             .map(|p| !is_worktree_present(p))
             .unwrap_or(false),
     );
+    let missing_path = match chat.worktree_path.as_deref() {
+        Some(path) if !is_worktree_present(path) => Some(path),
+        Some(_) => None,
+        None => project_path.filter(|path| !is_directory_present(path)),
+    };
+    chat.directory_missing = Some(missing_path.is_some());
+    chat.missing_directory_path = missing_path.map(str::to_string);
 }
 
 /// Enrich chat.updated/chat.created then emit through the raw `onEvent`.
@@ -408,7 +429,8 @@ fn enrich_and_emit(
                 .unwrap_or_else(|e| e.into_inner())
                 .has_pending(&chat.id);
             let live = deps.tracker_list_live(&chat.id);
-            enrich_chat(chat, has_pending, &live);
+            let project_path = deps.projects_get_path(&chat.project_id);
+            enrich_chat(chat, has_pending, &live, project_path.as_deref());
         }
         _ => {}
     }
@@ -481,6 +503,9 @@ impl EventHandlerDeps for EhDeps {
     fn notify_session_error(&self) -> bool {
         self.deps.notify_session_error()
     }
+    fn notify_attention_request(&self) -> bool {
+        self.deps.notify_attention_request()
+    }
     fn send_push(&self, msg: PushOut) {
         self.deps.send_push(msg);
     }
@@ -492,6 +517,9 @@ impl EventHandlerDeps for EhDeps {
     }
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.deps.tracker_end_all_running(chat_id);
+    }
+    fn workflow_runs_stop_all(&self, chat_id: &str) {
+        self.deps.workflow_runs_stop_all(chat_id);
     }
 }
 
@@ -747,6 +775,7 @@ impl ConfigManagerDeps for CmDeps {
             created_at: String::new(),
             last_opened_at: String::new(),
             parent_project_id: None,
+            available: None,
         })
     }
     fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
@@ -1168,7 +1197,8 @@ impl ChatManager {
             .unwrap_or_else(|e| e.into_inner())
             .has_pending(chat_id);
         let live = self.deps.tracker_list_live(chat_id);
-        enrich_chat(&mut chat, has_pending, &live);
+        let project_path = self.deps.projects_get_path(&chat.project_id);
+        enrich_chat(&mut chat, has_pending, &live, project_path.as_deref());
         Some(chat)
     }
 
@@ -1183,7 +1213,8 @@ impl ChatManager {
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
                 let live = self.deps.tracker_list_live(&c.id);
-                enrich_chat(&mut c, hp, &live);
+                let project_path = self.deps.projects_get_path(&c.project_id);
+                enrich_chat(&mut c, hp, &live, project_path.as_deref());
                 c
             })
             .collect()
@@ -1200,7 +1231,8 @@ impl ChatManager {
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
                 let live = self.deps.tracker_list_live(&c.id);
-                enrich_chat(&mut c, hp, &live);
+                let project_path = self.deps.projects_get_path(&c.project_id);
+                enrich_chat(&mut c, hp, &live, project_path.as_deref());
                 c
             })
             .collect()
@@ -1417,7 +1449,8 @@ impl ChatManager {
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
                 let live = self.deps.tracker_list_live(&c.id);
-                enrich_chat(&mut c, hp, &live);
+                let project_path = self.deps.projects_get_path(&c.project_id);
+                enrich_chat(&mut c, hp, &live, project_path.as_deref());
                 c
             })
             .collect()
@@ -1585,6 +1618,7 @@ impl ChatManager {
         ChatHistoryPayload {
             messages,
             transcript_missing,
+            workflow_runs: Vec::new(),
         }
     }
 
@@ -1753,8 +1787,7 @@ impl ChatManager {
     }
 
     /// Remove a project and all its chats' live resources.
-    pub async fn remove_project(&self, project_id: &str) {
-        info!(project_id, "project removed");
+    pub async fn remove_project(&self, project_id: &str) -> Result<(), String> {
         let chats = self.deps.chats_list(project_id);
         for chat in chats {
             let cell = self.get_active(&chat.id);
@@ -1785,7 +1818,9 @@ impl ChatManager {
             self.deps.tracker_remove_chat(&chat.id);
             self.event_handler.clear_display_cache(&chat.id);
         }
-        self.deps.projects_remove(project_id);
+        self.deps.projects_remove(project_id)?;
+        info!(project_id, "project removed");
+        Ok(())
     }
 
     // ── the message send path + CLI-owned queue ──────────────────────────────
@@ -2146,13 +2181,16 @@ mod tests;
 // notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. One defaulted ChatManagerDeps method is still silently unoverridden
-// notes: in chat_deps.rs (filed as #290 adapter_snapshot_models): tracker_list_live,
-// notes: tracker_end_all_running, and is_transcript_present are all required, not
-// notes: defaulted (#273 for the tracker methods — a silent default caused
-// notes: backgroundActivity to stay empty, then let orphaned tasks stay Running
-// notes: forever, in production; #289 for is_transcript_present — a silent default
-// notes: left transcript-presence reconciliation permanently inert in production);
+// notes: spawned. No defaulted ChatManagerDeps method is left silently unoverridden in
+// notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, is_transcript_present
+// notes: and adapter_snapshot_models are all required, not defaulted (#273 for the
+// notes: tracker methods — a silent default caused backgroundActivity to stay empty,
+// notes: then let orphaned tasks stay Running forever, in production; #289 for
+// notes: is_transcript_present — a silent default left transcript-presence
+// notes: reconciliation permanently inert in production; #290 for
+// notes: adapter_snapshot_models — a silent default made
+// notes: normalize_saved_default_model's probe-failure short-circuit fire on every
+// notes: chat creation, leaking a retired saved default into new chats);
 // notes: generate_title gained an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity

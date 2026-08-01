@@ -20,9 +20,16 @@ use tokio::task::JoinHandle;
 use mainframe_background_tasks::encoding::encode_cwd_segment;
 use mainframe_background_tasks::spool_root::spool_root;
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
-use mainframe_types::background_task::{
-    BackgroundTaskStatus, BackgroundTaskToolName, BackgroundTaskUsage, BackgroundWorkKind,
+use mainframe_claude_workflows::reconcile::{RecordLocation, spawn_terminal_reconcile};
+use mainframe_claude_workflows::status::{
+    TaskUpdateAction, run_status, task_update_action, terminal_task_status,
 };
+use mainframe_claude_workflows::store::{ClaudeWorkflowStore, ProgressUsage};
+use mainframe_types::background_task::{
+    BackgroundTaskToolName, BackgroundTaskUsage, BackgroundWorkKind,
+};
+
+use crate::workflow_events::TaskUpdatedPayload;
 
 const METADATA_TTL_MS: u64 = 60_000;
 
@@ -37,12 +44,7 @@ pub struct TaskStartedPayload {
     pub tool_use_id: Option<String>,
     pub description: Option<String>,
     pub task_type: Option<String>,
-}
-
-/// `task_updated` payload subset.
-pub struct TaskUpdatedPayload {
-    pub task_id: String,
-    pub status: String,
+    pub workflow_name: Option<String>,
 }
 
 /// Context threaded from the session at `task_started` time.
@@ -89,21 +91,6 @@ pub fn map_task_kind(task_type: Option<&str>, has_bash_metadata: bool) -> Backgr
     }
 }
 
-fn map_status(s: &str) -> BackgroundTaskStatus {
-    match s {
-        "completed" => BackgroundTaskStatus::Completed,
-        "failed" => BackgroundTaskStatus::Failed,
-        "stopped" => BackgroundTaskStatus::Stopped,
-        _ => {
-            tracing::warn!(
-                status = %s,
-                "unknown task_notification status, defaulting to stopped"
-            );
-            BackgroundTaskStatus::Stopped
-        }
-    }
-}
-
 #[derive(Default)]
 struct Inner {
     metadata: HashMap<String, Metadata>,
@@ -112,15 +99,49 @@ struct Inner {
 
 pub struct ClaudeTaskEvents {
     tracker: Arc<BackgroundTaskTracker>,
+    workflow_store: Arc<ClaudeWorkflowStore>,
     inner: Arc<Mutex<Inner>>,
 }
 
 impl ClaudeTaskEvents {
-    pub fn new(tracker: Arc<BackgroundTaskTracker>) -> Self {
+    pub fn new(
+        tracker: Arc<BackgroundTaskTracker>,
+        workflow_store: Arc<ClaudeWorkflowStore>,
+    ) -> Self {
         Self {
             tracker,
+            workflow_store,
             inner: Arc::new(Mutex::new(Inner::default())),
         }
+    }
+
+    /// Learned from the `Workflow` tool result — updates the tracker and the
+    /// workflow-run store without either reaching back into
+    /// `ClaudeSessionState`.
+    pub fn link_run_id(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        run_id: &str,
+        workflow_name: Option<String>,
+    ) {
+        self.tracker
+            .link_run_id(chat_id, task_id, run_id, workflow_name.clone());
+        self.workflow_store
+            .link_run_id(chat_id, task_id, run_id, workflow_name);
+    }
+
+    /// `task_progress`: forwards cumulative usage and an optional structure
+    /// snapshot to the workflow-run store.
+    pub fn apply_workflow_progress(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        usage: ProgressUsage,
+        snapshot: Option<&[Value]>,
+    ) {
+        self.workflow_store
+            .apply_progress(chat_id, task_id, usage, snapshot);
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -178,6 +199,11 @@ impl ClaudeTaskEvents {
         ctx: TaskStartedCtx,
     ) {
         let meta = payload.tool_use_id.as_deref().and_then(|t| self.consume(t));
+        let kind = map_task_kind(payload.task_type.as_deref(), meta.is_some());
+        if kind == BackgroundWorkKind::Workflow {
+            self.workflow_store
+                .seed(chat_id, &payload.task_id, payload.workflow_name.clone());
+        }
         let output_path = format!(
             "{}/{}/{}/tasks/{}.output",
             spool_root().to_string_lossy(),
@@ -189,7 +215,7 @@ impl ClaudeTaskEvents {
             chat_id,
             TaskSeed {
                 id: payload.task_id.clone(),
-                kind: map_task_kind(payload.task_type.as_deref(), meta.is_some()),
+                kind,
                 tool_name: meta
                     .as_ref()
                     .map(|m| m.tool_name)
@@ -201,36 +227,76 @@ impl ClaudeTaskEvents {
                     .or_else(|| payload.description.clone())
                     .unwrap_or_else(|| "<unknown>".to_string()),
                 description: payload.description.unwrap_or_default(),
+                workflow_name: payload.workflow_name,
             },
             output_path,
         );
     }
 
+    /// Stamps the workflow-run store from a CLI status string, spawning the
+    /// terminal-reconcile read when the resulting run status is terminal.
+    fn stamp_run(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        cli_status: &str,
+        loc: Option<RecordLocation>,
+    ) {
+        let Some(status) = run_status(cli_status) else {
+            return;
+        };
+        self.workflow_store.stamp_status(chat_id, task_id, status);
+        if status.is_terminal()
+            && let Some(loc) = loc
+        {
+            spawn_terminal_reconcile(
+                Arc::clone(&self.workflow_store),
+                chat_id.to_string(),
+                task_id.to_string(),
+                loc,
+            );
+        }
+    }
+
     /// `task_updated` fires alongside `task_notification` (post-leak CLI addition).
     /// Only a terminal status closes the task — the tracker dedups when the
     /// notification already landed; non-terminal updates carry nothing we track.
-    pub fn handle_task_updated(&self, chat_id: &str, payload: TaskUpdatedPayload) {
-        if !matches!(payload.status.as_str(), "completed" | "failed" | "stopped") {
-            return;
+    pub fn handle_task_updated(
+        &self,
+        chat_id: &str,
+        payload: TaskUpdatedPayload,
+        loc: Option<RecordLocation>,
+    ) {
+        match task_update_action(&payload.status) {
+            TaskUpdateAction::Ignore => {}
+            TaskUpdateAction::End(status) => {
+                self.tracker.end(
+                    chat_id,
+                    &payload.task_id,
+                    TerminalUpdate {
+                        status,
+                        output_path: String::new(),
+                        summary: String::new(),
+                        usage: None,
+                    },
+                );
+            }
         }
-        self.tracker.end(
-            chat_id,
-            &payload.task_id,
-            TerminalUpdate {
-                status: map_status(&payload.status),
-                output_path: String::new(),
-                summary: String::new(),
-                usage: None,
-            },
-        );
+        self.stamp_run(chat_id, &payload.task_id, &payload.status, loc);
     }
 
-    pub fn handle_task_notification(&self, chat_id: &str, payload: TaskNotificationPayload) {
+    pub fn handle_task_notification(
+        &self,
+        chat_id: &str,
+        payload: TaskNotificationPayload,
+        loc: Option<RecordLocation>,
+    ) {
+        let status = terminal_task_status(&payload.status);
         self.tracker.end(
             chat_id,
             &payload.task_id,
             TerminalUpdate {
-                status: map_status(&payload.status),
+                status,
                 output_path: payload.output_file.unwrap_or_default(),
                 summary: payload.summary.unwrap_or_default(),
                 usage: payload.usage.map(|u| BackgroundTaskUsage {
@@ -240,6 +306,7 @@ impl ClaudeTaskEvents {
                 }),
             },
         );
+        self.stamp_run(chat_id, &payload.task_id, &payload.status, loc);
     }
 
     fn consume(&self, tool_use_id: &str) -> Option<Metadata> {
@@ -255,6 +322,7 @@ impl ClaudeTaskEvents {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mainframe_types::background_task::BackgroundTaskStatus;
 
     const SESS: &str = "sess-uuid";
     const CWD: &str = "/Users/x/proj";
@@ -272,13 +340,14 @@ mod tests {
             tool_use_id: Some(tool_use_id.to_string()),
             description: Some(description.to_string()),
             task_type: None,
+            workflow_name: None,
         }
     }
 
     #[tokio::test(start_paused = true)]
     async fn captures_bash_run_in_background_into_metadata_cache() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-1",
             "Bash",
@@ -294,7 +363,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn captures_monitor_tool_use() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-2",
             "Monitor",
@@ -310,7 +379,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn ignores_non_background_bash() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-x",
             "Bash",
@@ -325,7 +394,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn evicts_metadata_cache_after_60s_ttl() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-3",
             "Bash",
@@ -344,7 +413,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn handles_task_notification_with_all_fields() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-4",
             "Bash",
@@ -364,6 +433,7 @@ mod tests {
                     duration_ms: 500,
                 }),
             },
+            None,
         );
         let task = tracker.get("chat-a", "t-4").unwrap();
         assert_eq!(task.status, BackgroundTaskStatus::Completed);
@@ -377,7 +447,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn normalizes_empty_output_file_preserving_start_path() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-5",
             "Bash",
@@ -395,6 +465,7 @@ mod tests {
                 summary: Some("killed".to_string()),
                 usage: None,
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "t-5").unwrap().output_path,
@@ -405,7 +476,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_unknown_status_to_stopped() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-6",
             "Bash",
@@ -421,6 +492,7 @@ mod tests {
                 summary: Some(String::new()),
                 usage: None,
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "t-6").unwrap().status,
@@ -434,6 +506,7 @@ mod tests {
             tool_use_id: None,
             description: Some("x".to_string()),
             task_type: task_type.map(str::to_string),
+            workflow_name: None,
         }
     }
 
@@ -442,7 +515,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_local_bash_to_bash() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("b1", Some("local_bash")), ctx());
         assert_eq!(
             tracker.get("chat-a", "b1").unwrap().kind,
@@ -453,7 +526,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_local_agent_to_agent() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("a1", Some("local_agent")), ctx());
         assert_eq!(
             tracker.get("chat-a", "a1").unwrap().kind,
@@ -464,7 +537,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_remote_agents_and_teammates_to_agent() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("a2", Some("remote_agent")), ctx());
         te.handle_task_started("chat-a", started_typed("a3", Some("teammate")), ctx());
         assert_eq!(
@@ -480,7 +553,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_local_workflow_to_workflow() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("w1", Some("local_workflow")), ctx());
         assert_eq!(
             tracker.get("chat-a", "w1").unwrap().kind,
@@ -491,7 +564,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_unknown_task_type_to_other() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("o1", Some("local_quantum")), ctx());
         assert_eq!(
             tracker.get("chat-a", "o1").unwrap().kind,
@@ -502,7 +575,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn falls_back_to_bash_when_task_type_missing_but_bash_tool_use_captured() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.capture_tool_use(
             "tu-k",
             "Bash",
@@ -515,6 +588,7 @@ mod tests {
                 tool_use_id: Some("tu-k".to_string()),
                 description: Some("dev".to_string()),
                 task_type: None,
+                workflow_name: None,
             },
             ctx(),
         );
@@ -527,7 +601,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn maps_missing_task_type_with_no_captured_tool_use_to_other() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("k2", None), ctx());
         assert_eq!(
             tracker.get("chat-a", "k2").unwrap().kind,
@@ -540,7 +614,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn handle_task_updated_ends_the_task_on_a_terminal_status() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("u1", Some("local_agent")), ctx());
         te.handle_task_updated(
             "chat-a",
@@ -548,6 +622,7 @@ mod tests {
                 task_id: "u1".to_string(),
                 status: "completed".to_string(),
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "u1").unwrap().status,
@@ -558,7 +633,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn handle_task_updated_ignores_a_non_terminal_status() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started("chat-a", started_typed("u2", Some("local_agent")), ctx());
         te.handle_task_updated(
             "chat-a",
@@ -566,6 +641,7 @@ mod tests {
                 task_id: "u2".to_string(),
                 status: "running".to_string(),
             },
+            None,
         );
         assert_eq!(
             tracker.get("chat-a", "u2").unwrap().status,
@@ -576,13 +652,14 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn handle_task_updated_ignores_an_unknown_task_id() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_updated(
             "chat-a",
             TaskUpdatedPayload {
                 task_id: "ghost".to_string(),
                 status: "completed".to_string(),
             },
+            None,
         );
         assert!(tracker.get("chat-a", "ghost").is_none());
     }
@@ -590,7 +667,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn threads_deterministic_output_path_into_tracker_start() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let te = ClaudeTaskEvents::new(tracker.clone());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
         te.handle_task_started(
             "chat-a",
             TaskStartedPayload {
@@ -598,6 +675,7 @@ mod tests {
                 tool_use_id: Some("tu1".to_string()),
                 description: Some("d".to_string()),
                 task_type: None,
+                workflow_name: None,
             },
             ctx(),
         );

@@ -5,15 +5,18 @@
  * bare label, and the row fills the switcher list's width instead of
  * shrink-wrapping. Remove is offered twice — a hover-revealed button on the row
  * (the primary, discoverable entry point) and the right-click menu — both routed
- * through the same handler. `onRemoveProject` is optional: when omitted (no
- * remove handler wired up) the row renders bare, with neither affordance.
+ * through the same handler. Unavailable projects render muted with a badge
+ * but stay selectable. `onRemoveProject` is optional: when omitted (no remove
+ * handler wired up) the row renders bare, with neither affordance.
  */
 import type { Project } from '@qlan-ro/mainframe-types';
 import { forwardRef, type HTMLAttributes } from 'react';
 import { PencilIcon, Trash2Icon } from 'lucide-react';
+import { CHIP_BASE } from '@/components/ui/chip';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { CountBadge } from '@/components/ui/count-badge';
 import { DismissibleHint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { ProjectAvatar } from './ProjectAvatar';
 
@@ -51,6 +54,7 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
   // and "Add project" rows above); a project with unread sessions goes bold
   // foreground; active wins over both.
   const hasUnread = badgeCount > 0;
+  const unavailable = project.available === false;
   const containerClass = [
     'group flex h-[28px] w-full items-center rounded-md transition-colors',
     active ? 'bg-mf-selection' : 'hover:bg-accent',
@@ -59,11 +63,13 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
     .filter(Boolean)
     .join(' ');
 
-  const nameClass = active
-    ? 'text-primary font-medium'
-    : hasUnread
-      ? 'text-foreground font-bold'
-      : 'text-muted-foreground font-medium';
+  const nameClass = unavailable
+    ? 'text-muted-foreground font-medium'
+    : active
+      ? 'text-primary font-medium'
+      : hasUnread
+        ? 'text-foreground font-bold'
+        : 'text-muted-foreground font-medium';
 
   return (
     <div ref={ref} data-testid={`sessions-filter-pill-${project.id}-wrap`} className={containerClass} {...props}>
@@ -78,6 +84,17 @@ const ProjectRowBody = forwardRef<HTMLDivElement, ProjectRowBodyProps>(function 
           <ProjectAvatar name={project.name} color={avatarColor} />
         </span>
         <span className={`min-w-0 flex-1 truncate text-left ${nameClass}`}>{project.name}</span>
+        {unavailable && (
+          <span
+            data-testid={`sessions-filter-pill-unavailable-${project.id}`}
+            className={cn(
+              CHIP_BASE,
+              'h-[16px] max-w-none flex-shrink-0 px-[4px] font-sans text-caption text-muted-foreground',
+            )}
+          >
+            Unavailable
+          </span>
+        )}
         {badgeTestId != null && (
           <CountBadge count={badgeCount} variant="unread" onAccent={active} data-testid={badgeTestId} />
         )}

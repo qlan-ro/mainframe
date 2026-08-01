@@ -11,7 +11,7 @@ publish = false
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 axum = { version = "0.8", features = ["ws"] }
-tower-http = { version = "0.6", features = ["cors", "limit"] }
+tower-http = { version = "0.6", features = ["cors", "limit", "compression-gzip", "compression-br"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
@@ -44,6 +44,11 @@ tempfile = "3"
 chrono-tz = "0.10"
 # Test-only: HTTP mocking for automations action tests (use as a dev-dependency).
 wiremock = "0.6"
+# Test-only: decode the daemon's gzip/brotli responses in the compression
+# integration tests (use as dev-dependencies). Versions must match what
+# async-compression already pulls in, so no second copy compiles.
+flate2 = "1"
+brotli = "8"
 # Pure-Rust search (PR 1): pinned to the exact versions ripgrep 14.1.1 itself
 # vendors, so regex syntax and gitignore semantics match the search parity
 # oracle (search_with_ripgrep tests) that used to run against the real `rg`.
@@ -64,6 +69,7 @@ mainframe-adapter-mock = { path = "crates/mainframe-adapter-mock" }
 mainframe-plugins = { path = "crates/mainframe-plugins" }
 mainframe-chat = { path = "crates/mainframe-chat" }
 mainframe-background-tasks = { path = "crates/mainframe-background-tasks" }
+mainframe-claude-workflows = { path = "crates/mainframe-claude-workflows" }
 mainframe-launch = { path = "crates/mainframe-launch" }
 mainframe-lsp = { path = "crates/mainframe-lsp" }
 mainframe-automations = { path = "crates/mainframe-automations" }

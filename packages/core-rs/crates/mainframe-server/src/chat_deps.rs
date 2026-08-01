@@ -44,6 +44,7 @@ use mainframe_chat::external_session_service::{
     ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
 };
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::attachment::AttachmentStore;
@@ -135,6 +136,9 @@ pub struct DaemonChatDeps {
     /// `Weak`, set once after construction in [`build_chat_manager`] — the manager
     /// is built *from* these deps, so a strong reference here would cycle.
     chat_manager: OnceLock<Weak<ChatManager>>,
+    /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
+    /// per-chat workflow-run store (D5's CLI-exit sweep target).
+    claude_workflows: Arc<ClaudeWorkflowStore>,
 }
 
 impl DaemonChatDeps {
@@ -352,11 +356,14 @@ impl ChatManagerDeps for DaemonChatDeps {
             .map(|p| p.path)
     }
 
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         let pid = project_id.to_string();
-        if let Err(err) = self.db.call_blocking(move |d| d.projects.remove(&pid)) {
-            tracing::warn!(%err, project_id, "projects.remove failed");
-        }
+        self.db
+            .call_blocking(move |d| d.projects.remove(&pid))
+            .map_err(|err| {
+                tracing::warn!(%err, project_id, "projects.remove failed");
+                err.to_string()
+            })
     }
 
     fn write_workspace_trust<'a>(
@@ -431,6 +438,15 @@ impl ChatManagerDeps for DaemonChatDeps {
         self.adapters
             .get(adapter_id)
             .map(|adapter| adapter.create_session(options))
+    }
+
+    fn adapter_snapshot_models(&self, adapter_id: &str) -> Vec<AdapterModel> {
+        self.adapters
+            .get_snapshots()
+            .into_iter()
+            .find(|info| info.id == adapter_id)
+            .map(|info| info.models)
+            .unwrap_or_default()
     }
 
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
@@ -581,17 +597,24 @@ impl ChatManagerDeps for DaemonChatDeps {
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
         // Adapter-aware (#430): route to the owning adapter's `generateTitle`;
-        // adapters without a cheap one-shot title model return `None` and the
-        // caller keeps the deterministic truncated title.
-        let adapter = self.adapters.get(adapter_id);
+        // an unregistered adapter id and an adapter error are logged
+        // separately (#287) so an operator can tell the two apart.
+        let Some(adapter) = self.adapters.get(adapter_id) else {
+            tracing::warn!(
+                adapter_id,
+                reason = "unknown_adapter",
+                "title generation skipped"
+            );
+            return Box::pin(async { None });
+        };
         let content = content.to_string();
         let binary = binary.to_string();
+        let adapter_id = adapter_id.to_string();
         Box::pin(async move {
-            let adapter = adapter?;
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {
-                    tracing::warn!(%err, "title generation failed");
+                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
                     None
                 }
             }
@@ -664,6 +687,12 @@ impl ChatManagerDeps for DaemonChatDeps {
             .unwrap_or(true)
     }
 
+    fn notify_attention_request(&self) -> bool {
+        self.db
+            .call_blocking(|d| Ok(read_notification_config(d).chat.attention_request))
+            .unwrap_or(true)
+    }
+
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);
         let message = PushMessage {
@@ -705,6 +734,10 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.background_tasks.end_all_running(chat_id);
+    }
+
+    fn workflow_runs_stop_all(&self, chat_id: &str) {
+        self.claude_workflows.stop_all_running(chat_id);
     }
 }
 
@@ -863,6 +896,7 @@ pub fn build_chat_manager(
     launch: Arc<dyn LaunchStopper>,
     scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
+    claude_workflows: Arc<ClaudeWorkflowStore>,
     // Title generation is now adapter-aware (#430) — the resolved PATH lives with
     // the adapter's title spawn, so the ChatManager no longer needs it. The param
     // is retained for the boot call site (mainframe-daemon) until it drops the arg.
@@ -881,6 +915,7 @@ pub fn build_chat_manager(
         quota,
         claude_external_session_cache: new_external_session_cache(),
         chat_manager: OnceLock::new(),
+        claude_workflows,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
     let manager =
@@ -1139,6 +1174,8 @@ pub(crate) fn fallback_chat(
         display_status: None,
         is_running: None,
         worktree_missing: None,
+        directory_missing: None,
+        missing_directory_path: None,
         todos: None,
         pinned: None,
         effort: None,
@@ -1158,13 +1195,17 @@ mod scan_loaded_history_tests {
 
     use mainframe_adapter_api::{AdapterError, ContextFiles, ImageInput, SessionSink};
     use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
+    use mainframe_claude_workflows::store::ProgressUsage;
     use mainframe_db::DatabaseManager;
     use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
     use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
+    use mainframe_types::claude_workflow::ClaudeWorkflowRunStatus;
     use mainframe_types::context::MentionKind;
 
     use super::*;
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
+
+    use mainframe_runtime::log_capture::LogCapture;
 
     fn text_msg(id: &str, r#type: ChatMessageType, text: &str) -> ChatMessage {
         ChatMessage {
@@ -1373,7 +1414,24 @@ mod scan_loaded_history_tests {
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
             chat_manager: OnceLock::new(),
+            claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
         }
+    }
+
+    #[tokio::test]
+    async fn unknown_adapter_id_logs_and_returns_none() {
+        let deps = test_deps();
+        let (subscriber, events) = LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let result =
+            ChatManagerDeps::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
+
+        assert_eq!(result, None);
+        assert_eq!(
+            LogCapture::events_with_reason(&events),
+            vec![(tracing::Level::WARN, "unknown_adapter".to_string())]
+        );
     }
 
     #[test]
@@ -1388,6 +1446,7 @@ mod scan_loaded_history_tests {
                 tool_use_id: "tu-a-1".to_string(),
                 command: "cmd".to_string(),
                 description: "reviewer".to_string(),
+                workflow_name: None,
             },
             "/tmp/mf-273-a-1.log".to_string(),
         );
@@ -1396,6 +1455,37 @@ mod scan_loaded_history_tests {
         deps.tracker_end_all_running("c-live");
 
         assert!(deps.background_tasks.list_live("c-live").is_empty());
+    }
+
+    #[test]
+    fn workflow_runs_stop_all_delegates_to_the_workflow_store() {
+        let deps = test_deps();
+        deps.claude_workflows
+            .seed("c-live", "task-1", Some("todo-lane".to_string()));
+        deps.claude_workflows.apply_progress(
+            "c-live",
+            "task-1",
+            ProgressUsage {
+                total_tokens: 10,
+                duration_ms: 500,
+            },
+            Some(&[serde_json::json!({
+                "type": "workflow_phase",
+                "index": 0,
+                "title": "Plan"
+            })]),
+        );
+
+        deps.workflow_runs_stop_all("c-live");
+
+        let runs = deps.claude_workflows.runs_for_chat("c-live");
+        let run = runs.iter().find(|r| r.task_id == "task-1").unwrap();
+        assert_eq!(run.status, ClaudeWorkflowRunStatus::Stopped);
+        assert_eq!(
+            run.phases.len(),
+            1,
+            "AC 24: the snapshot must survive the stop"
+        );
     }
 
     #[test]

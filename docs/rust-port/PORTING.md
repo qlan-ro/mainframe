@@ -899,7 +899,7 @@ starts (raise a blocker if you need it sooner; do not add it locally).
 | Crate | Used for | Status |
 |---|---|---|
 | `tokio` (full) | async runtime, process, time, sync | in workspace |
-| `axum` (0.8, `ws`) + `tower-http` (`cors`, `limit`) | HTTP server, CORS, 30mb body limit, WS upgrade | in workspace |
+| `axum` (0.8, `ws`) + `tower-http` (`cors`, `limit`, `compression-gzip`, `compression-br`) | HTTP server, CORS, 30mb body limit, WS upgrade, negotiated gzip/brotli response compression | in workspace |
 | `serde`, `serde_json` | wire types + JSON | in workspace |
 | `rusqlite` (bundled) | SQLite storage | in workspace |
 | `tracing`, `tracing-subscriber`, `tracing-appender` | logging (daily rotation, 7-day purge) | in workspace |
@@ -913,6 +913,7 @@ starts (raise a blocker if you need it sooner; do not add it locally).
 | `dirs` | home-dir resolution (`os.homedir()` equivalent) | in workspace |
 | `reqwest` (rustls-tls, json) | HTTP client: push delivery (Phase 2), workflow HTTP connector (Phase 5) | in workspace |
 | `tempfile` | **dev-dependency only** — temp dirs/files in db/git/fs tests | in workspace |
+| `flate2`, `brotli` | **dev-dependency only** — decode compressed responses in the server compression tests | in workspace |
 | `qrcode` | pairing QR in the daemon `pair` subcommand | in workspace |
 | `anyhow` | **binary crate top level only** (verify gate exempts the `mainframe-daemon` crate, forbids it elsewhere) | in workspace |
 | `serde_yaml`, `cron`, `jsonata-rs` | workflow engine | **deferred indefinitely** — the TS workflows feature is not stable; `mainframe-workflows` stays an empty crate and `/api/workflows*` is a documented gap until it stabilizes |
