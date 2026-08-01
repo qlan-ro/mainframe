@@ -13,79 +13,20 @@ impl ChatManager {
         if let Some(chat) = &chat
             && chat.worktree_missing == Some(true)
         {
-            let error_msg = self.messages.lock().unwrap_or_else(|e| e.into_inner())
-                .create_transient_message(
-                    chat_id,
-                    ChatMessageType::Error,
-                    vec![MessageContent::Node(mainframe_types::chat::MessageContentNode::Error {
-                        message: format!(
-                            "Worktree directory no longer exists: {}. Archive this session or recreate the worktree.",
-                            chat.worktree_path.as_deref().unwrap_or_default()
-                        ),
-                        parent_tool_use_id: None,
-                    })],
-                    None,
-                );
-            self.messages
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .append(chat_id, error_msg.clone());
-            self.emit(DaemonEvent::MessageAdded {
-                chat_id: chat_id.to_string(),
-                message: error_msg,
-            });
-            self.event_handler.emit_display(chat_id);
+            self.emit_worktree_missing_error(chat_id, chat);
             return Ok(());
         }
 
-        // Transcript gone + no live CLI: `--resume` would target a dead session id.
-        // Apply the same reset as the card's "Continue here" so this send spawns fresh.
-        let transcript_missing = chat
-            .as_ref()
-            .and_then(|c| c.transcript_missing)
-            .unwrap_or(false);
-        let spawned_now = self
-            .get_active(chat_id)
-            .map(|c| {
-                c.lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .session
-                    .as_ref()
-                    .is_some_and(|s| s.is_spawned())
-            })
-            .unwrap_or(false);
-        if transcript_missing && !spawned_now {
-            self.continue_here(chat_id)
-                .await
-                .map_err(|e| SendError(e.to_string()))?;
-        }
+        self.reset_transcript_if_orphaned(chat_id, chat.as_ref())
+            .await?;
 
         self.lifecycle.wait_for_interrupt(chat_id).await;
 
-        let spawned = self
-            .get_active(chat_id)
-            .map(|c| {
-                c.lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .session
-                    .as_ref()
-                    .is_some_and(|s| s.is_spawned())
-            })
-            .unwrap_or(false);
-        if !spawned {
+        if !self.session_is_spawned(chat_id) {
             self.lifecycle.start_chat(chat_id).await;
         }
 
-        let post = self
-            .get_active(chat_id)
-            .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;
-        let session = {
-            let guard = post.lock().unwrap_or_else(|e| e.into_inner());
-            match guard.session.clone() {
-                Some(s) if s.is_spawned() => s,
-                _ => return Err(SendError(format!("Chat {chat_id} not running"))),
-            }
-        };
+        let (post, session) = self.require_live_session(chat_id)?;
         info!(chat_id, "user message sent");
 
         // Stamp turn start right before dispatch (for onResult turnDurationMs).
@@ -100,6 +41,76 @@ impl ChatManager {
         }
         self.send_plain_text(&post, &session, chat_id, content, attachment_ids)
             .await
+    }
+
+    fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {
+        let error_msg = self.messages.lock().unwrap_or_else(|e| e.into_inner())
+            .create_transient_message(
+                chat_id,
+                ChatMessageType::Error,
+                vec![MessageContent::Node(mainframe_types::chat::MessageContentNode::Error {
+                    message: format!(
+                        "Worktree directory no longer exists: {}. Archive this session or recreate the worktree.",
+                        chat.worktree_path.as_deref().unwrap_or_default()
+                    ),
+                    parent_tool_use_id: None,
+                })],
+                None,
+            );
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .append(chat_id, error_msg.clone());
+        self.emit(DaemonEvent::MessageAdded {
+            chat_id: chat_id.to_string(),
+            message: error_msg,
+        });
+        self.event_handler.emit_display(chat_id);
+    }
+
+    fn session_is_spawned(&self, chat_id: &str) -> bool {
+        self.get_active(chat_id)
+            .map(|c| {
+                c.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .session
+                    .as_ref()
+                    .is_some_and(|s| s.is_spawned())
+            })
+            .unwrap_or(false)
+    }
+
+    // Transcript gone + no live CLI: `--resume` would target a dead session id.
+    // Apply the same reset as the card's "Continue here" so this send spawns fresh.
+    async fn reset_transcript_if_orphaned(
+        &self,
+        chat_id: &str,
+        chat: Option<&Chat>,
+    ) -> Result<(), SendError> {
+        let transcript_missing = chat.and_then(|c| c.transcript_missing).unwrap_or(false);
+        if transcript_missing && !self.session_is_spawned(chat_id) {
+            self.continue_here(chat_id)
+                .await
+                .map_err(|e| SendError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn require_live_session(
+        &self,
+        chat_id: &str,
+    ) -> Result<(Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>), SendError> {
+        let post = self
+            .get_active(chat_id)
+            .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;
+        let session = {
+            let guard = post.lock().unwrap_or_else(|e| e.into_inner());
+            match guard.session.clone() {
+                Some(s) if s.is_spawned() => s,
+                _ => return Err(SendError(format!("Chat {chat_id} not running"))),
+            }
+        };
+        Ok((post, session))
     }
 
     pub(super) fn set_working(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, now: &str) {
