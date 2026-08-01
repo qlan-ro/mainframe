@@ -16,6 +16,13 @@ import { cn } from '@v2/lib/utils';
 
 const MAX_ROW_TAG_DOTS = 3;
 
+/**
+ * A session can accumulate a whole branch's worth of PRs — one row here carried
+ * eight, and since the cluster never shrinks that squeezed the title to nothing.
+ * The overflow is a count; the hover card still lists every link.
+ */
+const MAX_ROW_PRS = 2;
+
 interface SessionRowMetaIconsProps {
   worktreePath?: string;
   /** Flips the worktree glyph destructive — the only glanceable signal on the
@@ -34,6 +41,8 @@ export function SessionRowMetaIcons({
   colorOf,
 }: SessionRowMetaIconsProps) {
   const visibleTags = colorOf != null ? tags.slice(0, MAX_ROW_TAG_DOTS) : [];
+  const visiblePrs = detectedPrs.slice(0, MAX_ROW_PRS);
+  const hiddenPrs = detectedPrs.length - visiblePrs.length;
   const hasContent = worktreePath != null || detectedPrs.length > 0 || visibleTags.length > 0;
   if (!hasContent) return null;
 
@@ -53,7 +62,7 @@ export function SessionRowMetaIcons({
           </span>
         </Hint>
       )}
-      {detectedPrs.map((pr) => (
+      {visiblePrs.map((pr) => (
         <a
           key={pr.number}
           data-testid="sessions-row-meta-icon-pr"
@@ -66,6 +75,13 @@ export function SessionRowMetaIcons({
           #{pr.number}
         </a>
       ))}
+      {hiddenPrs > 0 && (
+        <Hint label={detectedPrs.map((pr) => `#${pr.number}`).join(' · ')}>
+          <span data-testid="sessions-row-meta-icon-pr-overflow" className="font-mono text-xs">
+            +{hiddenPrs}
+          </span>
+        </Hint>
+      )}
       {visibleTags.length > 0 && colorOf != null && (
         <Hint label={tags.join(' · ')}>
           <span data-testid="sessions-row-meta-icon-tag-dots" className="inline-flex items-center gap-0.5">

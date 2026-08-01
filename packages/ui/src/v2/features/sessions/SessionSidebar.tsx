@@ -7,7 +7,7 @@
  * rebuild, so every non-visual module is imported from `@/features/sessions`.
  */
 import { useMemo } from 'react';
-import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
+import { useAuiState } from '@assistant-ui/react';
 import { PanelLeftIcon, PlusIcon, SearchIcon, SettingsIcon, ZapIcon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import {
@@ -60,9 +60,7 @@ function HeaderActions() {
 }
 
 export function SessionSidebar({ className }: { className?: string }) {
-  const runtime = useAssistantRuntime();
   const threadItems = useAuiState((s) => s.threads.threadItems);
-  const activeId = useAuiState((s) => s.threads.mainThreadId);
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
@@ -88,6 +86,12 @@ export function SessionSidebar({ className }: { className?: string }) {
     () => arrangeSessions(filteredItems, sortMode, Date.now(), sortedProjects),
     [filteredItems, sortMode, sortedProjects],
   );
+
+  const projectNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const project of sortedProjects) map[project.id] = project.name;
+    return map;
+  }, [sortedProjects]);
 
   return (
     <Sidebar collapsible="offcanvas" className={className}>
@@ -118,12 +122,7 @@ export function SessionSidebar({ className }: { className?: string }) {
           onSelect={setFilterProjectId}
         />
         <SidebarSeparator />
-        <SessionList
-          groups={groups}
-          activeId={activeId}
-          isUnread={isUnread}
-          onSelect={(id) => void runtime.threads.switchToThread(id)}
-        />
+        <SessionList groups={groups} projectNames={projectNames} />
       </SidebarContent>
 
       <SidebarFooter className="text-xs text-muted-foreground">

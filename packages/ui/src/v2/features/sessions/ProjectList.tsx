@@ -12,6 +12,7 @@ import {
 } from '@v2/components/ui/sidebar';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
+import { ProjectAvatar } from './ProjectAvatar';
 
 /** Past this many, the tail collapses behind a "Show N more" row. */
 const VISIBLE_LIMIT = 5;
@@ -58,15 +59,7 @@ export function ProjectList({ projects, attention, activeId, onSelect }: Project
                 tooltip={project.name}
                 onClick={() => onSelect(project.id)}
               >
-                {/* Inline style, not a utility: the ten-hue project palette is
-                    computed per id, so it has no token to name. */}
-                <span
-                  aria-hidden
-                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-xs leading-none font-semibold text-white uppercase"
-                  style={{ background: projectColor(project.id) }}
-                >
-                  {project.name[0]}
-                </span>
+                <ProjectAvatar name={project.name} color={projectColor(project.id)} />
                 <span>{project.name}</span>
               </SidebarMenuButton>
               {(attention[project.id] ?? 0) > 0 && (
