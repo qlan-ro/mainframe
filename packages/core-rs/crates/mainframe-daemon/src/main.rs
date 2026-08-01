@@ -14,8 +14,12 @@
 
 mod builtin_plugins;
 mod cli;
+mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+
+#[cfg(test)]
+mod github_issues_port_tests;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -55,7 +59,7 @@ use mainframe_launch::{
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::event_bus::PublicDaemonBus;
 use mainframe_plugins::manager::PluginManagerDeps;
-use mainframe_plugins::{EmitSink, PluginHostDb, PluginManager};
+use mainframe_plugins::{EmitSink, GitHubIssues, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
@@ -333,11 +337,27 @@ async fn run_daemon() {
         let _ = plugin_emit_bcast.send(event);
     });
     let plugin_host_db: Arc<dyn PluginHostDb> = Arc::new(DaemonPluginHostDb::new(db.clone()));
+    // GitHub Issues port (task 5c): built over the automations engine's own
+    // credential store so a token connected via the link dialog after boot
+    // resolves without a restart (task 5a/5b). `None` when the engine failed
+    // to start, or when the HTTP client cannot be built — the plugin context
+    // then answers every call with the engine-unavailable guard (task 4)
+    // instead of this composition root treating it as fatal.
+    let github: Option<Arc<dyn GitHubIssues>> = automations.as_ref().and_then(|automations| {
+        match github_issues_port::DaemonGitHubIssuesPort::new(automations.credentials()) {
+            Ok(port) => Some(Arc::new(port) as Arc<dyn GitHubIssues>),
+            Err(err) => {
+                tracing::error!(%err, "github issues port unavailable: HTTP client build failed");
+                None
+            }
+        }
+    });
     let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
         host_db: plugin_host_db,
         daemon_bus,
         emit: plugin_emit,
         adapters: None,
+        github,
     }));
     if let Err(err) = builtin_plugins::load_builtin_plugins(&plugin_manager, &data_dir).await {
         tracing::error!(%err, "failed to load builtin plugins");

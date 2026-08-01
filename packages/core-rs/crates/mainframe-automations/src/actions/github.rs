@@ -11,18 +11,14 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::engine::BoxFuture;
+use crate::github_http::{GITHUB_API, github_headers};
 use crate::tokens::TokenValue;
 
 use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
 
-const GITHUB_API: &str = "https://api.github.com";
-const API_VERSION: &str = "2022-11-28";
-
 fn with_auth(request: RequestBuilder, ctx: &ActionCtx) -> RequestBuilder {
-    let request = request
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", API_VERSION);
+    let request = github_headers(request);
     match &ctx.creds {
         Some(creds) => request.bearer_auth(&creds.token),
         None => request,
@@ -82,7 +78,7 @@ impl GithubCreatePrAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 }
@@ -195,7 +191,7 @@ impl GithubListPrsAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 }

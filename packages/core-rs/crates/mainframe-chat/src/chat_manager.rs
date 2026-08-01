@@ -12,7 +12,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
-use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, ImageInput, SessionSink};
+use mainframe_adapter_api::{
+    AdapterError, AdapterSession, BoxFuture, ImageInput, PlanModeActionHandler, SessionSink,
+};
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
@@ -46,6 +48,8 @@ use crate::message_cache::MessageCache;
 use crate::message_markers::visible_message_text;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
 use crate::permission_manager::PermissionManager;
+use crate::plan_mode_actions::{ChatPlanModeCtx, PlanHost};
+use crate::plan_mode_handler::PlanModeHandler;
 use crate::title_generator::derive_title_from_message;
 use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
@@ -190,6 +194,10 @@ pub trait ChatManagerDeps: Send + Sync {
         options: mainframe_types::adapter::SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>>;
 
+    /// `adapters.get(adapterId)?.createPlanModeHandler()` — required (not
+    /// defaulted), per the #273 rule that every deps impl states its answer.
+    fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>>;
+
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
     fn process_attachments<'a>(
         &'a self,
@@ -283,15 +291,16 @@ pub trait ChatManagerDeps: Send + Sync {
     fn chats_clear_worktree(&self, chat_id: &str);
     /// `adapters.get(adapterId)?.isTranscriptPresent(sessionId, projectPath, sessionFilePath)`.
     /// `None` = presence cannot be determined (missing predicate / null / error).
+    /// Required, not defaulted: an implementation that silently inherited a `None`
+    /// default left transcript-presence reconciliation permanently inert in
+    /// production — same class as #273 (#289).
     fn is_transcript_present<'a>(
         &'a self,
-        _adapter_id: &'a str,
-        _session_id: &'a str,
-        _project_path: &'a str,
-        _session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
-        Box::pin(async { None })
-    }
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>>;
     /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
     /// the lifecycle default-model normalization. Required, not defaulted: an
     /// implementation that silently inherited the empty default made
@@ -655,12 +664,59 @@ impl LifecycleManagerDeps for LcDeps {
     }
 }
 
+/// Implements `PlanHost` for the plan-mode action context — the seam back into
+/// `ChatManager`'s privately-typed event/lifecycle pieces. `send_message` needs a
+/// live `ChatManager` (the clear-context path's follow-up "Implement the
+/// following plan:" send), so it upgrades a weak self-reference rather than
+/// re-implementing the send path (T5 wires `self_ref`; see `attach_self`).
+struct PlanHostImpl {
+    event_handler: Arc<EventHandler<EhDeps>>,
+    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    deps: Arc<dyn ChatManagerDeps>,
+    permissions: Arc<Mutex<PermissionManager>>,
+    self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
+}
+
+impl PlanHost for PlanHostImpl {
+    fn emit_event(&self, event: DaemonEvent) {
+        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+    }
+    fn clear_display_cache(&self, chat_id: &str) {
+        self.event_handler.clear_display_cache(chat_id);
+    }
+    fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async move { self.lifecycle.start_chat(chat_id).await })
+    }
+    fn send_message<'a>(
+        &'a self,
+        chat_id: &'a str,
+        content: &'a str,
+    ) -> BoxFuture<'a, Result<(), AdapterError>> {
+        Box::pin(async move {
+            let Some(manager) = self.self_ref.get().and_then(std::sync::Weak::upgrade) else {
+                tracing::warn!(
+                    chat_id,
+                    "plan-mode follow-up send has no ChatManager — attach_self was never called"
+                );
+                return Err(AdapterError::Message(
+                    "plan-mode follow-up send has no ChatManager".to_string(),
+                ));
+            };
+            manager
+                .send_message(chat_id, content, None, None)
+                .await
+                .map_err(|e| AdapterError::Message(e.0))
+        })
+    }
+}
+
 struct PhDeps {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
 }
 
 impl PermissionHandlerDeps for PhDeps {
@@ -709,31 +765,35 @@ impl PermissionHandlerDeps for PhDeps {
     }
     fn plan_mode_handle_no_process(
         &self,
-        _chat_id: &str,
-        _active: &Arc<Mutex<ActiveChat>>,
-        _response: &ControlResponse,
+        chat_id: &str,
+        active: &Arc<Mutex<ActiveChat>>,
+        response: &ControlResponse,
     ) {
-        // TODO(port): forward to PlanModeHandler.handle_no_process once plan_mode
-        // is wired (needs the adapter's createPlanModeHandler, deferred on the
-        // Adapter trait). No-op preserves the non-plan permission path.
+        self.plan_mode.handle_no_process(chat_id, active, response);
     }
     fn plan_mode_handle_clear_context<'a>(
         &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
+        chat_id: &'a str,
+        active: Arc<Mutex<ActiveChat>>,
+        response: ControlResponse,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        // TODO(port): forward to PlanModeHandler.handle_clear_context.
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            self.plan_mode
+                .handle_clear_context(chat_id, &active, response)
+                .await
+        })
     }
     fn plan_mode_handle_escalation<'a>(
         &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
+        chat_id: &'a str,
+        active: Arc<Mutex<ActiveChat>>,
+        response: ControlResponse,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        // TODO(port): forward to PlanModeHandler.handle_escalation.
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            self.plan_mode
+                .handle_escalation(chat_id, &active, response)
+                .await
+        })
     }
 }
 
@@ -1054,6 +1114,7 @@ pub struct ChatManager {
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
+    self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 }
 
 impl ChatManager {
@@ -1095,12 +1156,33 @@ impl ChatManager {
             permissions.clone(),
         ));
 
+        // Unset until `attach_self()` runs (called from `build_chat_manager` once
+        // the manager is behind an `Arc`); until then plan-mode's clear-context
+        // follow-up send fails closed with a warning rather than silently no-oping.
+        let self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>> =
+            Arc::new(std::sync::OnceLock::new());
+        let plan_host: Arc<dyn PlanHost> = Arc::new(PlanHostImpl {
+            event_handler: event_handler.clone(),
+            lifecycle: lifecycle.clone(),
+            deps: deps.clone(),
+            permissions: permissions.clone(),
+            self_ref: self_ref.clone(),
+        });
+        let plan_mode = Arc::new(PlanModeHandler::new(ChatPlanModeCtx {
+            deps: deps.clone(),
+            active_chats: active_chats.clone(),
+            messages: messages.clone(),
+            permissions: permissions.clone(),
+            host: plan_host,
+        }));
+
         let ph_deps = PhDeps {
             deps: deps.clone(),
             active_chats: active_chats.clone(),
             permissions: permissions.clone(),
             event_handler: event_handler.clone(),
             lifecycle: lifecycle.clone(),
+            plan_mode,
         };
         let permission_handler =
             ChatPermissionHandler::new(permissions.clone(), messages.clone(), ph_deps);
@@ -1129,6 +1211,7 @@ impl ChatManager {
             idle_scanner: Mutex::new(idle_scanner),
             external_sessions: None,
             worktree_offers,
+            self_ref,
         }
     }
 
@@ -1138,6 +1221,14 @@ impl ChatManager {
     pub fn with_external_sessions(mut self, service: Arc<dyn ExternalSessionFacade>) -> Self {
         self.external_sessions = Some(service);
         self
+    }
+
+    /// Lets `PlanHostImpl::send_message` reach back into this manager for the
+    /// clear-context follow-up send. Must run once, after the manager is behind
+    /// an `Arc` (can't use `Arc::new_cyclic` without touching every `ChatManager::new`
+    /// call site); idempotent, so a second call is a harmless no-op.
+    pub fn attach_self(self: &Arc<Self>) {
+        let _ = self.self_ref.set(Arc::downgrade(self));
     }
 
     /// `ctx.chats.getExternalSessionService()` — `None` when the manager was
@@ -2132,7 +2223,7 @@ fn now_ms() -> i64 {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 // PORT STATUS: src/chat/chat-manager.ts (787 lines)
 // confidence: medium
@@ -2180,16 +2271,18 @@ mod tests;
 // notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. A defaulted ChatManagerDeps method is still silently unoverridden
-// notes: in chat_deps.rs (filed as #289 is_transcript_present); adapter_snapshot_models
-// notes: is now required and wired in chat_deps.rs (#290 — a silent default made
+// notes: spawned. No defaulted ChatManagerDeps method is left silently unoverridden in
+// notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, is_transcript_present
+// notes: and adapter_snapshot_models are all required, not defaulted (#273 for the
+// notes: tracker methods — a silent default caused backgroundActivity to stay empty,
+// notes: then let orphaned tasks stay Running forever, in production; #289 for
+// notes: is_transcript_present — a silent default left transcript-presence
+// notes: reconciliation permanently inert in production; #290 for
+// notes: adapter_snapshot_models — a silent default made
 // notes: normalize_saved_default_model's probe-failure short-circuit fire on every
-// notes: chat creation, leaking a retired saved default into new chats).
-// notes: tracker_list_live and tracker_end_all_running are required, not defaulted
-// notes: (#273 — a silent default caused backgroundActivity to stay empty, then let
-// notes: orphaned tasks stay Running forever, in production); generate_title gained
-// notes: an adapter_id arg (adapter-aware).
+// notes: chat creation, leaking a retired saved default into new chats);
+// notes: generate_title gained an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity
 // notes: integration test (#273). Also chat-manager-degraded (3).
-// todos: 2
+// todos: 1

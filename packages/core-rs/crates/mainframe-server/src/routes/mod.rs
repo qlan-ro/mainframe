@@ -25,6 +25,7 @@ pub mod external_sessions;
 pub mod files;
 pub mod git;
 pub mod git_chat;
+pub mod git_remotes;
 pub mod git_write;
 pub mod health;
 pub mod launch;

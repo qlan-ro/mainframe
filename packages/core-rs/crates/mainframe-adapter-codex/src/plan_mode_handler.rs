@@ -1,21 +1,22 @@
 //! Port target for `packages/core/src/plugins/builtin/codex/plan-mode-handler.ts`.
 //!
-//! BLOCKED (see the crate's task blockers): the TS `CodexPlanModeHandler`
-//! implements `PlanModeActionHandler` over a `PlanActionContext`, both defined in
-//! `packages/core/src/chat/plan-mode-actions.ts` → `mainframe_chat::plan_mode_actions`
-//! — which is still a skeleton (owned by the mainframe-chat port task, not this one).
-//! Until that trait + context land there is no trait slot to implement against
-//! (the `mainframe_adapter_api::Adapter` trait also has no `createPlanModeHandler`
-//! seam yet — it is in that crate's `TODO(port)`).
-//!
-//! We ship the handler as a unit type now so `CodexAdapter::create_plan_mode_handler`
-//! has something to return; the four action methods (onApprove /
+//! The `PlanModeActionHandler`/`PlanActionContext` traits and the `Adapter::
+//! create_plan_mode_handler` seam this handler needs now all exist
+//! (`mainframe_adapter_api::plan_mode_actions`, wired for Claude in
+//! `mainframe-chat`). What remains is behavioral, not structural: this type
+//! doesn't implement `PlanModeActionHandler` yet, so `CodexAdapter` deliberately
+//! keeps the trait's default `create_plan_mode_handler` (`None`) rather than
+//! returning a handler with unported logic. The four action methods (onApprove /
 //! onApproveAndClearContext / onReject / onRevise) and `plan-mode-handler.test.ts`
-//! are deferred to the phase that ports `mainframe-chat::plan_mode_actions`.
+//! are still an unported behavioral TODO.
+//!
+//! `CodexAdapter::create_plan_mode_handler` (an inherent method, not the trait
+//! override) already returns this unit type — wiring it into the trait is part of
+//! the same deferred phase.
 
-/// Codex plan-mode handler. See the module blocker note — the behavioral port is
-/// deferred until `mainframe_chat::plan_mode_actions::{PlanModeActionHandler,
-/// PlanActionContext}` exist.
+/// Codex plan-mode handler. See the module note — the behavioral port (the four
+/// `PlanModeActionHandler` methods) is still deferred; `CodexAdapter` does not yet
+/// expose this via the `Adapter::create_plan_mode_handler` trait method.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CodexPlanModeHandler;
 
@@ -28,9 +29,10 @@ impl CodexPlanModeHandler {
 // PORT STATUS: src/plugins/builtin/codex/plan-mode-handler.ts (84 lines)
 // confidence: low
 // todos: 1
-// notes: BLOCKER — depends on mainframe_chat::plan_mode_actions (PlanModeActionHandler
-// notes: trait + PlanActionContext), currently a skeleton owned by the mainframe-chat
-// notes: task; and on a `createPlanModeHandler` seam on mainframe_adapter_api::Adapter
-// notes: (that crate's own TODO(port)). Ships as a unit struct so the adapter can
-// notes: return it; onApprove/onApproveAndClearContext/onReject/onRevise + the
-// notes: plan-mode-handler.test.ts port are deferred to that phase. TODO(port).
+// notes: structural blocker (the PlanModeActionHandler/PlanActionContext traits and
+// notes: the Adapter::create_plan_mode_handler seam) is resolved — both now exist and
+// notes: are exercised by mainframe-chat's Claude wiring. Remaining gap is purely
+// notes: behavioral: onApprove/onApproveAndClearContext/onReject/onRevise + the
+// notes: plan-mode-handler.test.ts port. Ships as a unit struct returned by the
+// notes: inherent CodexAdapter::create_plan_mode_handler; the Adapter trait override
+// notes: stays on its default (None) until the four methods land. TODO(port).

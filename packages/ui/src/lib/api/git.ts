@@ -233,3 +233,19 @@ export interface BranchDiffResponse {
 
 export const getBranchDiffs = (port: number, projectId: string, chatId?: string): Promise<BranchDiffResponse> =>
   request('GET', `${projGit(port, projectId)}/branch-diffs${chatQs(chatId)}`);
+
+// ---------------------------------------------------------------------------
+// GitHub remotes (Tasks board — repository linking)
+// ---------------------------------------------------------------------------
+
+/** A configured remote whose URL yields a valid GitHub `owner/repo`. */
+export interface GitHubRemote {
+  name: string;
+  owner: string;
+  repo: string;
+}
+
+/** Remotes of the project repo that resolve to a GitHub `owner/repo`; others are omitted. */
+export const listGitHubRemotes = async (port: number, projectId: string, chatId?: string): Promise<GitHubRemote[]> =>
+  (await request<{ remotes: GitHubRemote[] }>('GET', `${projGit(port, projectId)}/github-remotes${chatQs(chatId)}`))
+    .remotes;
