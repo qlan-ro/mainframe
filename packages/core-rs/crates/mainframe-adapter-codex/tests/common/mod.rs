@@ -170,12 +170,13 @@ pub fn replay_capture(path: &str, rec: &Recorder, state: &mut CodexSessionState)
     }
 }
 
+/// A `threads` row for `temp_registry`: `(id, agent_nickname, agent_role,
+/// rollout_path)`.
+pub type RegistryRow<'a> = (&'a str, Option<&'a str>, Option<&'a str>, Option<&'a str>);
+
 /// Seed a throwaway `threads` table shaped like Codex's `state_5.sqlite` and
-/// return `ThreadRegistryDeps` pointing at it. `rows` are `(id, agent_nickname,
-/// agent_role, rollout_path)`.
-pub fn temp_registry(
-    rows: &[(&str, Option<&str>, Option<&str>, Option<&str>)],
-) -> (tempfile::TempDir, ThreadRegistryDeps) {
+/// return `ThreadRegistryDeps` pointing at it.
+pub fn temp_registry(rows: &[RegistryRow<'_>]) -> (tempfile::TempDir, ThreadRegistryDeps) {
     let dir = tempfile::tempdir().expect("tempdir");
     let path: PathBuf = dir.path().join("state_5.sqlite");
     let db = rusqlite::Connection::open(&path).expect("open sqlite");
