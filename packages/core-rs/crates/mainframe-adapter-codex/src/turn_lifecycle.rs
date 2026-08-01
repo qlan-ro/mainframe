@@ -6,12 +6,23 @@ use std::sync::Arc;
 use mainframe_adapter_api::SessionSink;
 use mainframe_types::adapter::{MessageUsage, SessionResult};
 
+use crate::collab_card;
+use crate::event_mapper::{Owner, resolve_owner};
 use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
 use crate::types::{
-    PlanDeltaParams, TokenUsageUpdatedParams, TurnCompletedParams, TurnStartedParams,
+    PlanDeltaParams, TokenUsageUpdatedParams, TurnCompleted, TurnCompletedParams, TurnStartedParams,
 };
 
+/// Turn/usage bookkeeping describes the parent's own turn only — a spawned
+/// child runs its own turns on its own thread, and must not overwrite or clear
+/// the parent's state (todo #247 task 18).
 pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
+    if !matches!(
+        resolve_owner(params.thread_id.as_deref(), state),
+        Owner::Parent
+    ) {
+        return;
+    }
     state.current_turn_plan = None;
     state.current_turn_id = Some(params.turn.id);
     state.compaction_emitted = false;
@@ -31,9 +42,35 @@ pub(crate) fn handle_turn_completed(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
+    match resolve_owner(params.thread_id.as_deref(), state) {
+        Owner::Child(t) => {
+            collab_card::on_sub_agent_turn_completed(&t, &params.turn.status, sink, state);
+            return;
+        }
+        Owner::Unknown => {
+            tracing::debug!(
+                module = "codex:events",
+                "codex: dropping turn/completed from an unregistered thread"
+            );
+            return;
+        }
+        Owner::Parent => {}
+    }
+
+    // A card the child never resolved itself (no `wait`, no own `turn/completed`)
+    // closes here so it does not stay open forever once the parent moves on.
+    collab_card::resolve_open_cards_on_parent_turn_end(sink, state);
+
     state.current_turn_plan = None;
     state.current_turn_id = None;
-    let turn = params.turn;
+    emit_parent_turn_result(params.turn, sink, state);
+}
+
+fn emit_parent_turn_result(
+    turn: TurnCompleted,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
     let is_error = turn.status == "failed" || turn.status == "interrupted";
 
     if is_error {
@@ -73,6 +110,12 @@ pub(crate) fn handle_turn_completed(
 }
 
 pub(crate) fn handle_token_usage(params: TokenUsageUpdatedParams, state: &mut CodexSessionState) {
+    if !matches!(
+        resolve_owner(params.thread_id.as_deref(), state),
+        Owner::Parent
+    ) {
+        return;
+    }
     let Some(usage) = params.resolved_usage() else {
         tracing::debug!(
             module = "codex:events",
