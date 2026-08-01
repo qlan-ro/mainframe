@@ -222,6 +222,17 @@ impl WsClient {
         target: &str,
         forwarded_for: Option<&str>,
     ) -> Result<Self, u16> {
+        Self::connect_with(addr, target, forwarded_for, &[]).await
+    }
+
+    /// Same as `connect`, plus arbitrary extra headers on the upgrade request
+    /// (e.g. `Accept-Encoding`, to prove compression never reaches the WS path).
+    pub async fn connect_with(
+        addr: SocketAddr,
+        target: &str,
+        forwarded_for: Option<&str>,
+        extra_headers: &[(&str, &str)],
+    ) -> Result<Self, u16> {
         let stream = TcpStream::connect(addr).await.unwrap();
         let mut stream = stream;
         let mut request = format!(
@@ -230,6 +241,9 @@ impl WsClient {
         );
         if let Some(xff) = forwarded_for {
             request.push_str(&format!("X-Forwarded-For: {xff}\r\n"));
+        }
+        for (name, value) in extra_headers {
+            request.push_str(&format!("{name}: {value}\r\n"));
         }
         request.push_str("\r\n");
         stream.write_all(request.as_bytes()).await.unwrap();

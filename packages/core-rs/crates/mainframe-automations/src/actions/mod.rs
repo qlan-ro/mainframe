@@ -63,6 +63,26 @@ pub trait Action: Send + Sync {
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>>;
 }
 
+/// GitHub's REST API answers 403 "Request forbidden by administrative rules"
+/// to any request without a `User-Agent`, and reqwest sends none by default.
+/// No version suffix: the Rust crates are all pinned at the workspace's
+/// placeholder `0.0.0`, so one would advertise a number that never moves.
+pub(crate) const USER_AGENT: &str = "mainframe";
+
+/// The one client every connector builds from, so no future connector can
+/// reach an API with a bare `reqwest::Client::new()` again.
+pub(crate) fn http_client() -> reqwest::Client {
+    match reqwest::Client::builder().user_agent(USER_AGENT).build() {
+        Ok(client) => client,
+        Err(err) => {
+            // Only the TLS backend can fail here, and that fails every request
+            // anyway — so log and let the call site report the real failure.
+            tracing::error!(%err, "automations: HTTP client built without a User-Agent");
+            reqwest::Client::new()
+        }
+    }
+}
+
 const ERROR_BODY_SNIPPET_CHARS: usize = 500;
 
 /// Connector HTTP failure (Node's `<op> failed (<status>): <500-char body>`),
@@ -155,6 +175,9 @@ mod registry_tests;
 
 #[cfg(test)]
 mod run_command_tests;
+
+#[cfg(test)]
+mod user_agent_tests;
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2-T7.3), not a TS port
 // confidence: high
