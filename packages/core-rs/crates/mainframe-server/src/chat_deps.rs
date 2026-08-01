@@ -18,7 +18,7 @@
 //!      routing each call back through `Db::call_blocking`.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::{AdapterError, AdapterRegistry, AdapterSession, BoxFuture};
 use mainframe_adapter_claude::external_session_cache::{
@@ -98,6 +98,7 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
         process_state: patch.process_state,
         updated_at: patch.updated_at.clone(),
         plan_mode: patch.plan_mode,
+        transcript_missing: patch.transcript_missing,
         ..Default::default()
     }
 }
@@ -132,6 +133,9 @@ pub struct DaemonChatDeps {
     /// (not a module-level singleton, forbidden by PORTING.md §5) and threaded
     /// into every `list_external_sessions("claude", ...)` call.
     claude_external_session_cache: ExternalSessionCache,
+    /// `Weak`, set once after construction in [`build_chat_manager`] — the manager
+    /// is built *from* these deps, so a strong reference here would cycle.
+    chat_manager: OnceLock<Weak<ChatManager>>,
     /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
     /// per-chat workflow-run store (D5's CLI-exit sweep target).
     claude_workflows: Arc<ClaudeWorkflowStore>,
@@ -617,6 +621,34 @@ impl ChatManagerDeps for DaemonChatDeps {
         })
     }
 
+    fn is_transcript_present<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>> {
+        let adapter = self.adapters.get(adapter_id);
+        let (session_id, project_path) = (session_id.to_string(), project_path.to_string());
+        let session_file_path = session_file_path.map(str::to_string);
+        Box::pin(async move {
+            let Some(adapter) = adapter else {
+                tracing::warn!(adapter_id, "transcript presence: no adapter registered");
+                return None;
+            };
+            match adapter
+                .is_transcript_present(session_id, project_path, session_file_path)
+                .await
+            {
+                Ok(present) => present,
+                Err(err) => {
+                    tracing::warn!(%err, adapter_id, "transcript presence check failed");
+                    None
+                }
+            }
+        })
+    }
+
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             match self.git.for_project(project_path).status_raw().await {
@@ -764,6 +796,17 @@ impl ExternalSessionDeps for DaemonChatDeps {
         <Self as ChatManagerDeps>::emit_event(self, event)
     }
 
+    /// Wires the periodic external-session sweep to `ChatManager::reconcile_transcript`
+    /// via the weak back-reference set in `build_chat_manager`; `None` (no manager yet,
+    /// or a harness with no manager at all) means the sweep skips this chat.
+    fn reconcile_transcript<'a>(&'a self, chat: &'a Chat) -> Option<BoxFuture<'a, bool>> {
+        let manager = self.chat_manager.get()?.upgrade()?;
+        let mut chat = chat.clone();
+        Some(Box::pin(async move {
+            manager.reconcile_transcript(&mut chat).await
+        }))
+    }
+
     fn generate_title<'a>(
         &'a self,
         adapter_id: &'a str,
@@ -871,10 +914,14 @@ pub fn build_chat_manager(
         scope_tunnels,
         quota,
         claude_external_session_cache: new_external_session_cache(),
+        chat_manager: OnceLock::new(),
         claude_workflows,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
-    Arc::new(ChatManager::new(deps).with_external_sessions(external_sessions))
+    let manager =
+        Arc::new(ChatManager::new(deps.clone()).with_external_sessions(external_sessions));
+    let _ = deps.chat_manager.set(Arc::downgrade(&manager));
+    manager
 }
 
 /// Bridge `Arc<dyn AdapterSession>` → the `SessionLike` the kill sweep wants.
@@ -1366,6 +1413,7 @@ mod scan_loaded_history_tests {
             scope_tunnels: Arc::new(NoopScopeTunnelStopper),
             quota: Arc::new(quota),
             claude_external_session_cache: new_external_session_cache(),
+            chat_manager: OnceLock::new(),
             claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
         }
     }
@@ -1642,7 +1690,7 @@ mod scan_loaded_history_tests {
 // PORT STATUS: (new — production ChatManagerDeps wiring for chat/chat-manager.ts
 // constructor injection + index.ts `new ChatManager(...)`)
 // confidence: medium
-// todos: 3
+// todos: 2
 // notes: The one production impl of ChatManagerDeps. DB accessors go through the
 // SYNC-DB BRIDGE (Db::call_blocking) — one WAL connection. notifications / per-chat
 // todos / push / mentions / tuning / title / kill / worktree-remove are wired to
@@ -1667,6 +1715,9 @@ mod scan_loaded_history_tests {
 // filter as a hardcoded {claude, codex} id allowlist intersected with what is
 // actually registered. `claude_external_session_cache` is the process-lifetime,
 // injected (not module-singleton) enrichment cache the Claude scan needs.
-// `reconcile_transcript` is left at the trait's own `None` default (no
-// ChatManager.reconcileTranscript wiring) — out of this gap's scope; the
-// transcript-presence sweep is a no-op until that lands.
+// `reconcile_transcript` upgrades a `Weak<ChatManager>` set into
+// `DaemonChatDeps.chat_manager` after construction (`build_chat_manager`) and
+// delegates to `ChatManager::reconcile_transcript`, so the periodic
+// external-session sweep now reconciles transcript presence for chats the user
+// isn't viewing (#289). The `Weak` avoids a reference cycle: the manager is
+// built from these deps, so a strong back-reference would leak both forever.
