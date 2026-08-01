@@ -236,7 +236,14 @@ not open at all, for either section.
 20. Every file touched or added by this change is under 300 lines and every function under 50.
 21. `cargo test -p mainframe-server` and the touched UI test files pass; the UI package
     typechecks. `packages/core-rs` is the only daemon runtime touched.
-22. The PR includes a changeset.
+22. Neither `.claude/skills/mainframe-design-system/SKILL.md` nor
+    `.claude/skills/mainframe-design-system/references/recipes.md` names `MainToolbar` on a line
+    mentioning `CHIP_BASE` or in the heading of the block that defines it; both name
+    `components/ui/chip.ts` as the chip recipe's home. `ICON_BTN` still resolves to
+    `layout/MainToolbar.tsx` in `recipes.md`, and `grep -rn CHIP_BASE packages/ui/src` shows no
+    definition outside `components/ui/chip.ts`, `TagFilterBar.tsx` and automations'
+    `ChipButton.tsx`.
+23. The PR includes a changeset.
 
 ## Decisions
 
@@ -323,9 +330,18 @@ Hard-to-reverse first.
     a third skills consumer the brief missed — does not subscribe.** `reversible` — verified in
     the codebase; it fetches when its editor field mounts and is never on screen behind the
     advisor's modal dialog, so a subscription would buy nothing.
-23. **The toolbar chip-recipe extraction listed as reusable work is dropped from scope: it has
-    already landed on main.** `reversible` — verified; the shared chip module and the two
-    design-system doc pointers are already in place, so re-doing it would be a no-op diff.
+23. **Half of the toolbar chip-recipe extraction landed on main and is out of scope; the two
+    design-system doc pointers did not land, and this spec fixes them.** `reversible` — the
+    shared module exists (`components/ui/chip.ts` exports `CHIP_BASE`; `layout/MainToolbar.tsx`
+    now only imports it), so re-doing that half would be a no-op diff. Both doc pointers still
+    name `layout/MainToolbar.tsx` as the recipe's home — the skill's Chip / pill table row and
+    the `CHIP_BASE` block under its `Toolbar chrome — layout/MainToolbar.tsx` heading — so each
+    sends a reader to a file that no longer defines the recipe. That skill loads on every
+    `packages/ui` task, including this one, and this section renders chips on that recipe, so
+    the staleness costs on the first task that trusts it. The pointers are re-derived, not
+    lifted: the abandoned branch pointed them at `components/ui/chip-classes.ts`, a path that
+    does not exist on main. `ICON_BTN` genuinely still lives in `MainToolbar.tsx`, so only the
+    chip lines move.
 24. **The advisor's open action takes an optional section and normalizes anything else to
     Recommendations, and the toolbar's click handler is fixed to stop passing its click event
     as that argument.** `reversible` — the current handler is wired directly to the open
