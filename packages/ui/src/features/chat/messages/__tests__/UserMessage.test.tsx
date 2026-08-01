@@ -26,6 +26,10 @@
  *       present.
  *  PB — a clear-context "Implement the following plan:" message renders the
  *       shared PlanBubble instead of the plain cool-card body.
+ *  WB — the CoolCard shell (`chat-user-bubble`) and the send-failure detail
+ *       (`chat-user-message-send-error`) both carry `break-words`, so a
+ *       token longer than the card wraps instead of painting past the
+ *       border (todo #298).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -491,6 +495,31 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     const shell = screen.getByTestId('chat-queued-message');
     expect(shell).toHaveAttribute('data-position', '2');
     expect(shell).toHaveAttribute('data-total', '3');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — WB: word-breaking containment (todo #298)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — WB: word-breaking containment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('the user bubble opts into word breaking', () => {
+    __messageFixture = makeFixture();
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-bubble').className).toContain('break-words');
+    expect(screen.getByTestId('chat-user-bubble').className).toContain('max-w-[470px]');
+  });
+
+  it('the send-failure detail wraps long tokens', () => {
+    __messageFixture = makeFixture({
+      mainframe: { pending: true, clientId: 'c-1', error: 'Network timeout' },
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-message-send-error').className).toContain('break-words');
   });
 });
 
