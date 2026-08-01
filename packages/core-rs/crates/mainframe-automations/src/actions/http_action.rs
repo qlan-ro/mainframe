@@ -66,7 +66,7 @@ pub struct HttpRequestAction {
 impl HttpRequestAction {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 }
