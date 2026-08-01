@@ -44,6 +44,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::files::router())
         .merge(routes::search::router())
         .merge(routes::git::router())
+        .merge(routes::git_remotes::router())
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())

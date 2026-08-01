@@ -182,32 +182,50 @@ def is_test_dir_file(path: Path) -> bool:
     return "tests" in path.parts
 
 
-# A whole file is test-only when its owning module declares it under
-# `#[cfg(test)] mod <name>;`. The gate scans each `.rs` in isolation and cannot
-# see the parent's attribute, so resolve it: for `src/foo.rs`, look at the
-# sibling `mod.rs`/`lib.rs`/`main.rs` (or `<dir>.rs`) for a cfg(test)-gated
-# declaration of `mod foo;`. Idiomatic test-support files (e.g. a shared
-# `test_support.rs` behind `#[cfg(test)] mod test_support;`) are thus exempt
-# without weakening the ban for normal modules.
+# A whole file is test-only when its owning module — or any module above it —
+# declares it under `#[cfg(test)] mod <name>;`. The gate scans each `.rs` in
+# isolation and cannot see the parent's attribute, so resolve it: for
+# `src/foo.rs`, look at the sibling `mod.rs`/`lib.rs`/`main.rs` (or `<dir>.rs`)
+# for a cfg(test)-gated declaration of `mod foo;`. Idiomatic test-support files
+# (e.g. a shared `test_support.rs` behind `#[cfg(test)] mod test_support;`) are
+# thus exempt without weakening the ban for normal modules.
+#
+# The walk continues upward because a cfg(test) module may be a directory:
+# `#[cfg(test)] mod store_tests;` gates `store_tests/mod.rs` and every file it
+# declares, none of which carry an attribute of their own.
 _CFG_TEST_MOD = re.compile(r"#\[cfg\(test\)\]\s*(?:pub(?:\([a-z: ]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
 
 
-def is_cfg_test_module_file(path: Path) -> bool:
-    stem = path.stem
-    if stem in ("lib", "main", "mod"):
+def _owner_candidates(path: Path) -> tuple[list[Path], str]:
+    """The files that could declare `path`'s module, and that module's name.
+    `dir/mod.rs` is declared by `dir`'s own parent, not by a sibling."""
+    if path.stem == "mod":
+        name, holder = path.parent.name, path.parent.parent
+    else:
+        name, holder = path.stem, path.parent
+    return (
+        [
+            holder / "mod.rs",
+            holder / "lib.rs",
+            holder / "main.rs",
+            holder.with_suffix(".rs"),
+        ],
+        name,
+    )
+
+
+def is_cfg_test_module_file(path: Path, depth: int = 0) -> bool:
+    if path.stem in ("lib", "main") or depth > 16:
         return False
-    parents = [
-        path.with_name("mod.rs"),
-        path.with_name("lib.rs"),
-        path.with_name("main.rs"),
-        path.parent.with_suffix(".rs"),
-    ]
-    for owner in parents:
+    candidates, name = _owner_candidates(path)
+    for owner in candidates:
         if owner == path or not owner.is_file():
             continue
-        for name in _CFG_TEST_MOD.findall(owner.read_text(encoding="utf-8")):
-            if name == stem:
-                return True
+        if name in _CFG_TEST_MOD.findall(owner.read_text(encoding="utf-8")):
+            return True
+        # Declared plainly — but the owner may itself sit under a cfg(test) module.
+        if is_cfg_test_module_file(owner, depth + 1):
+            return True
     return False
 
 
