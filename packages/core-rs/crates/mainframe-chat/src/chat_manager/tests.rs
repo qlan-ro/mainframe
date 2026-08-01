@@ -3,7 +3,9 @@
 
 use super::*;
 use crate::test_support::test_chat;
-use mainframe_adapter_api::{ContextFiles, ImageInput, SessionSink, StopBackgroundTaskResult};
+use mainframe_adapter_api::{
+    ContextFiles, ImageInput, PlanModeActionHandler, SessionSink, StopBackgroundTaskResult,
+};
 use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
@@ -11,10 +13,12 @@ use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+mod plan_mode;
+
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct StoreDeps {
+pub(crate) struct StoreDeps {
     store: Mutex<HashMap<String, Chat>>,
     events: Mutex<Vec<DaemonEvent>>,
     updates: Mutex<Vec<(String, ChatUpdate)>>,
@@ -43,13 +47,16 @@ struct StoreDeps {
     attachments: Mutex<Option<ProcessedAttachments>>,
     /// What `extract_mentions_from_text` returns.
     mentions_found: Mutex<bool>,
+    /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
+    /// can inject a recorder (or leave `None` for the unresolved-handler path).
+    plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
 }
 
 impl StoreDeps {
-    fn arc() -> Arc<Self> {
+    pub(crate) fn arc() -> Arc<Self> {
         Arc::new(Self::default())
     }
-    fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
+    pub(crate) fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
         let d = Self::default();
         {
             let mut s = d.store.lock().unwrap();
@@ -199,6 +206,12 @@ impl ChatManagerDeps for StoreDeps {
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
+    }
+    fn create_plan_mode_handler(
+        &self,
+        _adapter_id: &str,
+    ) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.plan_handler.lock().unwrap().clone()
     }
     fn adapter_snapshot_models(
         &self,
@@ -366,6 +379,11 @@ struct RecSession {
     kills: AtomicUsize,
     /// `images.len()` from every `send_message` call, in order.
     images_calls: Mutex<Vec<usize>>,
+    /// Every `respond_to_permission` call, in order — pins the plan-mode escalation
+    /// double-send (decision 6).
+    responded_calls: Mutex<Vec<ControlResponse>>,
+    /// Every `set_permission_mode` call, in order.
+    permission_mode_calls: Mutex<Vec<ExecutionMode>>,
 }
 
 impl RecSession {
@@ -380,6 +398,8 @@ impl RecSession {
             order: Arc::new(Mutex::new(Vec::new())),
             kills: AtomicUsize::new(0),
             images_calls: Mutex::new(Vec::new()),
+            responded_calls: Mutex::new(Vec::new()),
+            permission_mode_calls: Mutex::new(Vec::new()),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -393,6 +413,8 @@ impl RecSession {
             order,
             kills: AtomicUsize::new(0),
             images_calls: Mutex::new(Vec::new()),
+            responded_calls: Mutex::new(Vec::new()),
+            permission_mode_calls: Mutex::new(Vec::new()),
         })
     }
 }
@@ -450,8 +472,9 @@ impl AdapterSession for RecSession {
     }
     fn respond_to_permission(
         &self,
-        _response: ControlResponse,
+        response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.responded_calls.lock().unwrap().push(response);
         ok()
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
@@ -460,7 +483,8 @@ impl AdapterSession for RecSession {
     fn set_model(&self, _model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         ok()
     }
-    fn set_permission_mode(&self, _mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
+    fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.permission_mode_calls.lock().unwrap().push(mode);
         ok()
     }
     fn set_plan_mode(&self, _on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {

@@ -44,6 +44,7 @@ export function GateHead({
   eyebrow,
   eyebrowClassName = 'text-muted-foreground',
   title,
+  subtitle,
   tileClassName,
   right,
 }: {
@@ -51,6 +52,7 @@ export function GateHead({
   eyebrow: string;
   eyebrowClassName?: string;
   title: string;
+  subtitle?: ReactNode;
   tileClassName?: string;
   right?: ReactNode;
 }) {
@@ -65,6 +67,7 @@ export function GateHead({
       <div className="flex min-w-0 flex-1 flex-col">
         <span className={cn('text-caption font-medium', eyebrowClassName)}>{eyebrow}</span>
         <span className="text-body font-semibold leading-tight text-foreground">{title}</span>
+        {subtitle != null && <span className="text-caption text-muted-foreground">{subtitle}</span>}
       </div>
       {right}
     </div>

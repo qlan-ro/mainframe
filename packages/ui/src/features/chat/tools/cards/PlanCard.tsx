@@ -22,12 +22,16 @@ import { cn } from '@/lib/utils';
 import { StatusDot, stripErrorXml } from '../shared';
 import { PlanBubble } from '../../messages/PlanBubble';
 import { parseApprovedPlanResult } from '../../messages/plan-message';
+import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { useAutoOpenOnTransition } from './use-auto-open-on-transition';
 
 // ── PlanCard ──────────────────────────────────────────────────────────────────
 
 export const PlanCard: ToolCallMessagePartComponent = (part) => {
   const { result, isError } = part;
+
+  // Read above the approved-plan early return so hook order stays stable.
+  const chatExtras = useChatExtras();
 
   const rawResultText = typeof result === 'string' ? result : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
@@ -40,7 +44,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
   // clear-context user turn). Non-approval results fall through to the card.
   const approvedPlan = parseApprovedPlanResult(resultText);
   if (approvedPlan) {
-    return <PlanBubble plan={approvedPlan} />;
+    return <PlanBubble plan={approvedPlan} executionMode={chatExtras?.state.chatConfig?.permissionMode} />;
   }
 
   return (

@@ -20,7 +20,9 @@
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, Weak};
 
-use mainframe_adapter_api::{AdapterError, AdapterRegistry, AdapterSession, BoxFuture};
+use mainframe_adapter_api::{
+    AdapterError, AdapterRegistry, AdapterSession, BoxFuture, PlanModeActionHandler,
+};
 use mainframe_adapter_claude::external_session_cache::{
     ExternalSessionCache, new_external_session_cache,
 };
@@ -438,6 +440,12 @@ impl ChatManagerDeps for DaemonChatDeps {
         self.adapters
             .get(adapter_id)
             .map(|adapter| adapter.create_session(options))
+    }
+
+    fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.adapters
+            .get(adapter_id)
+            .and_then(|adapter| adapter.create_plan_mode_handler())
     }
 
     fn adapter_snapshot_models(&self, adapter_id: &str) -> Vec<AdapterModel> {
@@ -920,6 +928,7 @@ pub fn build_chat_manager(
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
     let manager =
         Arc::new(ChatManager::new(deps.clone()).with_external_sessions(external_sessions));
+    manager.attach_self();
     let _ = deps.chat_manager.set(Arc::downgrade(&manager));
     manager
 }

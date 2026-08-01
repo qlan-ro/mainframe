@@ -5,7 +5,7 @@
  * approve + keep-planning revision, and the single-question ask-question submit flow. This
  * spec covers the REST of the gate surface: the permission details disclosure, the
  * ask-question wizard's "Other…" free-text + Skip affordances, and the plan gate's exec-mode
- * segmented control + clear-context checkbox reflected in the post-approve running footer.
+ * segmented control + clear-context checkbox.
  *
  * All tests run in E2E_MODE=mock against the recordings in fixtures/recordings/. Replay is
  * positional/content-agnostic (see mainframe-adapter-mock/README.md) — the mock does not branch on
@@ -20,7 +20,6 @@
  *   chat-question-back / -next        — wizard pagination (multi-question only)
  *   chat-plan-execmode-{default|acceptEdits|yolo} — plan gate exec-mode segmented control
  *   chat-plan-clear-context           — plan gate "Clear context" checkbox
- *   chat-plan-running-footer          — post-approve footer, text keyed off local execMode/clearContext state
  *   chat-gate-card                    — the shared gate card shell (width parity against chat-composer)
  */
 
@@ -262,52 +261,23 @@ test.describe('§plan gate exec-mode', () => {
     await closeTauriApp(app);
   });
 
-  // Previously: `chat-plan-running-footer` never mounted — approving a plan
-  // optimistically dropped the gate from the permission queue right away,
-  // unmounting `PlanGate` (and its local `approved` state) before the running
-  // footer could render. Fixed by the product-bug-fix campaign —
-  // `ChatGateMount` now retains the just-approved plan entry (same element
-  // type + position) until the run actually ends.
-  //
-  // FIXED (commit f1666315): the plan card was resetting to its pre-approval
-  // defaults instead of showing the running footer — a one-render gap where
-  // `ChatGateMount` unmounted `PlanGate` between the optimistic approve and
-  // `isRunning` catching up, losing its local state. `ChatGateMount` now
-  // retains the just-approved plan entry across that gap.
-  test('selecting Unattended + clear-context and approving shows a matching running footer', async () => {
+  // Approving unmounts the gate entirely (todo #296) — there is no post-approve state left on
+  // the gate itself to assert, since under E2E_MODE=mock the chat runs on `mock-cli`, which
+  // exposes no plan-mode handler, so an approval with `clearContext` never reaches
+  // `ClaudePlanModeHandler`. The post-approve surface is covered by
+  // tool-cards.spec.ts:363-372 (escalation path) and T12's live run.
+  test('selecting Unattended + clear-context marks both controls selected', async () => {
     const { page } = app;
     await sendMessage(page, 'Add `export function greet(name: string) { return "Hello " + name; }` to utils.ts');
     await page.locator('[data-testid="chat-plan-gate"]').waitFor({ timeout: 45_000 });
     await expectGateMatchesComposerWidth(page);
 
     await page.locator('[data-testid="chat-plan-execmode-yolo"]').click();
+    await expect(page.locator('[data-testid="chat-plan-execmode-yolo"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="chat-plan-execmode-default"]')).toHaveAttribute('aria-pressed', 'false');
+
     await page.locator('[data-testid="chat-plan-clear-context"]').click();
-    await page.locator('[data-testid="chat-plan-approve"]').click();
-
-    // The running footer's text is derived from local execMode/clearContext React state (not the
-    // mock's replayed content), so this is a real assertion of the control's effect, not a
-    // duplicate of chat.spec's plan-approve happy path. This is the behavior this test exists to
-    // cover, and it passes cleanly (verified in isolation) — the ChatGateMount retain fix works.
-    const footer = page.locator('[data-testid="chat-plan-running-footer"]');
-    await expect(footer).toBeVisible({ timeout: 5_000 });
-    await expect(footer).toContainText('Unattended');
-    await expect(footer).toContainText('context cleared');
-
-    // TODO(bug): approving with clearContext kills the mock CLI session and
-    // starts a fresh one (ClaudePlanModeHandler.onApproveAndClearContext:
-    // respondToPermission(deny) + session.kill() + startChat + a new
-    // "Implement the following plan…" sendMessage), which should replay
-    // plan-approval.1.ndjson's Edit permission gate on the fresh session.
-    // Verified in isolation (clean single-worker run, no port contention):
-    // `chat-permission-gate` never appears within 45s on either attempt — a
-    // residual gap in the clear-context kill+respawn+resend flow that this
-    // pass's fix (the running-footer retain in ChatGateMount) doesn't touch.
-    // Reported to the orchestrator; not re-investigated here (out of this
-    // pass's scope — would require product-code changes in packages/core).
-    test.skip(
-      true,
-      'TODO(bug): after approve+clearContext kills and respawns the mock session, the follow-up chat-permission-gate (plan-approval.1.ndjson) never appears within 45s — residual gap in the clear-context respawn flow',
-    );
+    await expect(page.locator('[data-testid="chat-plan-clear-context"]')).toHaveAttribute('data-state', 'checked');
   });
 });
 
