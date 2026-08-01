@@ -114,7 +114,9 @@ export function SessionSidebar({ className }: { className?: string }) {
 
       <SidebarSeparator />
 
-      <SidebarContent>
+      {/* overflow-hidden: the sessions list is windowed and owns the only
+          scroller, so the panel itself must not become a second one. */}
+      <SidebarContent className="overflow-hidden">
         <ProjectList
           projects={sortedProjects}
           attention={attention}

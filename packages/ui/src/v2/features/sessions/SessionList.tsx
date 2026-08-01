@@ -2,15 +2,13 @@
  * The grouped session list.
  *
  * Selection, the active highlight and the row actions are all native — this
- * only arranges the groups the view-model produced. Virtualization and sticky
- * headers land with the list group.
+ * only feeds the windowed list the groups the view-model produced.
  */
 import type { TagColor } from '@qlan-ro/mainframe-types';
-import { SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu } from '@v2/components/ui/sidebar';
+import { SidebarGroup, SidebarGroupContent } from '@v2/components/ui/sidebar';
 import type { SessionGroupResult } from '@/features/sessions/view-model/group-sessions';
+import { SessionListVirtuoso } from './SessionListVirtuoso';
 import { SessionRow } from './SessionRow';
-
-const PINNED_GROUP_LABEL = 'Pinned';
 
 interface SessionListProps {
   groups: SessionGroupResult[];
@@ -34,25 +32,16 @@ export function SessionList({ groups, projectNames, colorOf }: SessionListProps)
   }
 
   return (
-    <>
-      {groups.map((group) => (
-        <SidebarGroup key={group.label} className="py-0">
-          <SidebarGroupLabel className="pl-2">{group.label}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => (
-                <SessionRow
-                  key={item.id}
-                  item={item}
-                  colorOf={colorOf}
-                  inPinnedGroup={group.label === PINNED_GROUP_LABEL}
-                  projectName={item.custom.projectId ? projectNames?.[item.custom.projectId] : undefined}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      ))}
-    </>
+    <SessionListVirtuoso
+      groups={groups}
+      renderItem={(item, { inPinnedGroup }) => (
+        <SessionRow
+          item={item}
+          colorOf={colorOf}
+          inPinnedGroup={inPinnedGroup}
+          projectName={item.custom.projectId ? projectNames?.[item.custom.projectId] : undefined}
+        />
+      )}
+    />
   );
 }
