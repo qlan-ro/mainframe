@@ -170,8 +170,10 @@ Read these once; they are not repeated per task.
 5. **If rustc reports an unused import in the root** for something you just re-imported there, the item has no non-test
    consumer: delete the root line and import it by full path where it is used. `enrich_chat` is the one known case
    (finding 9, handled in Task 6).
-6. **If rustc reports E0624 (private method) or E0603 (private item),** add `pub(super)` to the definition. Do not
-   widen to `pub(crate)` or `pub`.
+6. **If rustc reports E0624 (private method), E0603 (private item), `error: type X is private`, or a
+   `private_interfaces` warning,** add `pub(super)` to the definition it names — including a *type* named in the
+   signature of an item that is itself already `pub(super)`. Do not widen to `pub(crate)` or `pub`. Rule 3 covers
+   fields only; it never justifies leaving a type name private.
 7. **Every task ends green.** `cd packages/core-rs && cargo check -p mainframe-chat` must exit 0 before the task's
    commit. Tasks that touch behavior-bearing code additionally run the crate's tests.
 
@@ -418,10 +420,15 @@ pub(super) fn build(
 
 1. Move `:934-1058` — the `// ── ChatManager facade ──` section comment stays in the root with the struct; take the
    `RecoveryWrapper` doc comment, the struct, `impl RecoveryWrapper` (`active_chat_mut`, `current_chat`),
-   `impl TranscriptPresenceDeps for RecoveryWrapper`, and `impl DegradedRecoveryDeps for RecoveryWrapper`.
+   `impl TranscriptPresenceDeps for RecoveryWrapper`, and `impl DegradedRecoveryDeps for RecoveryWrapper`. Declare it
+   `pub(super) struct RecoveryWrapper`; all five fields stay private.
 2. Also move `ChatManager::recovery_wrapper` (`:1743-1751`) into this file as its own
-   `impl ChatManager { pub(super) fn recovery_wrapper(&self) -> RecoveryWrapper { … } }` (finding 11). With its only
-   constructor in the same file, `RecoveryWrapper` and all five fields stay private — no `pub(super)` on the struct.
+   `impl ChatManager { pub(super) fn recovery_wrapper(&self) -> RecoveryWrapper { … } }` (finding 11). Keeping the only
+   constructor in this file is what keeps the five *fields* private (rule 3); it does not keep the *type name* private.
+   The four callers (`:1718, 1724, 1733, 1739`) move to `history.rs` in Task 16, so they bind a `RecoveryWrapper` local
+   and pass `&wrapper` to a generic — a `pub(super) fn` returning a private type is `error: type RecoveryWrapper is
+   private` at every call site, plus a `private_interfaces` warning that `-D warnings` turns into a failure. Hence
+   `pub(super)` on the struct in step 1.
 3. Root: `mod deps_recovery;`. No `use`, no re-export.
 
 **Verify:**
