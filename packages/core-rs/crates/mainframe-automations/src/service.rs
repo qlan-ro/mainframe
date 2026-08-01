@@ -202,8 +202,8 @@ impl AutomationsEngine {
             .await
     }
 
-    pub fn action_catalog(&self) -> Vec<ActionCatalogEntry> {
-        self.registry.wire_catalog()
+    pub async fn action_catalog(&self) -> Vec<ActionCatalogEntry> {
+        self.registry.wire_catalog().await
     }
 
     pub async fn credential_labels(&self) -> Vec<String> {

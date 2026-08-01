@@ -152,13 +152,19 @@ fn builtin_catalog_matches_the_contract_output_table() {
 
 /// T7.3 — the wire `ActionCatalogEntry` shape (GET /api/automation-actions):
 /// camelCase keys, `credentialLabelHint` omitted when absent, `idempotent`
-/// dropped (engine-internal).
-#[test]
-fn wire_catalog_projects_manifests_to_the_contract_shape() {
+/// dropped (engine-internal), `available` true for an action with no external
+/// prerequisite. The GitHub actions are registered on their own in
+/// github_tests — their availability probe would shell out to the developer's
+/// real `gh`.
+#[tokio::test]
+async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     let mut registry = ActionRegistry::new();
-    super::register_all_actions(&mut registry).unwrap();
+    super::register_builtin_actions(&mut registry).unwrap();
+    registry
+        .register(Box::new(super::notion::NotionAddRowAction::new()))
+        .unwrap();
 
-    let entries = registry.wire_catalog();
+    let entries = registry.wire_catalog().await;
     let json = serde_json::to_value(&entries).unwrap();
 
     // Launch catalog carries no mcp entries (contract §9).
@@ -170,32 +176,34 @@ fn wire_catalog_projects_manifests_to_the_contract_shape() {
     let run_command = &json[0];
     assert_eq!(run_command["id"], "run_command");
     assert_eq!(run_command["group"], "builtin");
+    assert_eq!(run_command["available"], true);
     assert!(
         run_command.get("credentialLabelHint").is_none(),
         "hint omitted when absent"
+    );
+    assert!(
+        run_command.get("unavailableReason").is_none(),
+        "reason omitted when the action is available"
     );
     assert!(
         run_command.get("idempotent").is_none(),
         "idempotent never crosses the wire"
     );
 
-    let create_pr = json
+    let add_row = json
         .as_array()
         .unwrap()
         .iter()
-        .find(|e| e["id"] == "github.create_pr")
+        .find(|e| e["id"] == "notion.add_row")
         .unwrap();
-    assert_eq!(create_pr["group"], "connector");
-    assert_eq!(create_pr["auth"], "token");
-    assert_eq!(create_pr["credentialLabelHint"], "github");
+    assert_eq!(add_row["group"], "connector");
+    assert_eq!(add_row["auth"], "token");
+    assert_eq!(add_row["credentialLabelHint"], "notion");
     assert_eq!(
-        create_pr["outputs"],
-        json!([
-            {"name": "prUrl", "type": "text"},
-            {"name": "prNumber", "type": "number"},
-        ])
+        add_row["outputs"],
+        json!([{"name": "pageUrl", "type": "text"}])
     );
-    assert!(create_pr["paramsSchema"].is_object());
+    assert!(add_row["paramsSchema"].is_object());
 }
 
 /// T7.3 — the MCP catalog-entry seam: an `mcp:<server>:<tool>` id with

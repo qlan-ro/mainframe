@@ -129,6 +129,12 @@ the wire; a no-output action has an empty outputs list.
 | `mcp:<server>:<tool>` | `result: text` (+ structured content when present) |
 | `ask_agent` (verb, not an action id) | `result: text`, `chatId: text`, plus any keys declared in `expects` |
 
+The two `github.*` actions run the [GitHub CLI](https://cli.github.com)
+(`gh api`, `gh search prs`), so they ask for no credential of their own —
+`gh` holds the token. Without `gh` installed and signed in, the catalog
+reports them `available: false` with the reason to show, and the editor
+mutes them.
+
 `run_command` spawns via `zsh -lc` (array args, never string-interpolated
 shell). Chips inside the script are never spliced into shell source: each
 becomes an `MF_<n>` environment variable and the script gets a quoted

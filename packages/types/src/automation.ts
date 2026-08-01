@@ -265,4 +265,13 @@ export interface ActionCatalogEntry {
   credentialLabelHint?: string;
   paramsSchema: unknown;
   outputs: Array<{ name: string; type: ActionOutputType }>;
+  /**
+   * False when a prerequisite is missing on this machine (the GitHub actions
+   * need the `gh` CLI installed and signed in). The editor mutes the action
+   * instead of letting a step be built on it. Optional so an older daemon's
+   * payload still reads as usable.
+   */
+  available?: boolean;
+  /** One sentence naming the prerequisite and its remedy, shown verbatim. */
+  unavailableReason?: string;
 }

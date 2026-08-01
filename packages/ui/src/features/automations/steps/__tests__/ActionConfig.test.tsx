@@ -208,12 +208,12 @@ describe('ActionConfig — picked, no credential (run_command)', () => {
   });
 });
 
-describe('ActionConfig — picked, credential required (github.create_pr)', () => {
+describe('ActionConfig — picked, credential required (notion.add_row)', () => {
   it('renders a CredentialConnect row using the catalog credentialLabelHint, patching step.credential', async () => {
     const user = userEvent.setup();
     useAutomationsStore.setState({ credentials: [] });
     const onChange = vi.fn();
-    const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'github.create_pr', params: {} };
+    const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'notion.add_row', params: {} };
     render(
       <ActionConfig
         step={step}
@@ -223,8 +223,23 @@ describe('ActionConfig — picked, credential required (github.create_pr)', () =
         testId="automations-action-a"
       />,
     );
-    expect(screen.getByTestId('automations-action-a-credential-connect')).toHaveTextContent('Connect GitHub…');
+    expect(screen.getByTestId('automations-action-a-credential-connect')).toHaveTextContent('Connect Notion…');
     await user.click(screen.getByTestId('automations-action-a-credential-connect'));
-    expect(onChange).toHaveBeenCalledWith({ ...step, credential: 'GitHub' });
+    expect(onChange).toHaveBeenCalledWith({ ...step, credential: 'Notion' });
+  });
+
+  it('asks for no credential on a GitHub action — the `gh` CLI holds that token', () => {
+    useAutomationsStore.setState({ credentials: [] });
+    const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'github.create_pr', params: {} };
+    render(
+      <ActionConfig
+        step={step}
+        onChange={vi.fn()}
+        tokens={[]}
+        catalog={ACTION_CATALOG_FIXTURE}
+        testId="automations-action-a"
+      />,
+    );
+    expect(screen.queryByTestId('automations-action-a-credential-connect')).not.toBeInTheDocument();
   });
 });

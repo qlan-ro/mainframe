@@ -72,4 +72,29 @@ describe('ActionCatalog', () => {
     await user.click(screen.getByTestId('automations-catalog-action-run_command'));
     expect(onPick).toHaveBeenCalledWith(ACTION_CATALOG_FIXTURE.find((a) => a.id === 'run_command'));
   });
+
+  describe('an action the daemon reported unavailable', () => {
+    const REASON = "The GitHub CLI isn't signed in. Run `gh auth login`.";
+    const muted = ACTION_CATALOG_FIXTURE.map((a) =>
+      a.id === 'github.create_pr' ? { ...a, available: false, unavailableReason: REASON } : a,
+    );
+
+    it('shows the reason in place of the blurb and refuses the pick', async () => {
+      const user = userEvent.setup();
+      const onPick = vi.fn();
+      render(<ActionCatalog catalog={muted} onPick={onPick} testId="automations-catalog" />);
+      const row = screen.getByTestId('automations-catalog-action-github.create_pr');
+      expect(row).toBeDisabled();
+      expect(row).toHaveTextContent('UNAVAILABLE');
+      expect(row).toHaveTextContent(REASON);
+      expect(row).not.toHaveTextContent('Open a pull request on GitHub.');
+      await user.click(row);
+      expect(onPick).not.toHaveBeenCalled();
+    });
+
+    it('leaves every other action pickable', () => {
+      render(<ActionCatalog catalog={muted} onPick={vi.fn()} testId="automations-catalog" />);
+      expect(screen.getByTestId('automations-catalog-action-github.list_prs')).toBeEnabled();
+    });
+  });
 });

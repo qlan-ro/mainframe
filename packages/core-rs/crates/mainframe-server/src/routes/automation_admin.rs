@@ -78,7 +78,7 @@ async fn respond(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: B
 
 async fn list_actions(State(ctx): State<Arc<AppCtx>>) -> Response {
     match engine(&ctx) {
-        Some(engine) => ok(engine.action_catalog()),
+        Some(engine) => ok(engine.action_catalog().await),
         None => unavailable(),
     }
 }
