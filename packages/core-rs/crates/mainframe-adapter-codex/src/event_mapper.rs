@@ -129,11 +129,39 @@ fn handle_account_rate_limits_updated(
     sink.on_provider_quota("codex", quota);
 }
 
+/// Which session a notification's `threadId` belongs to (task 17, todo #247):
+/// the parent's own thread (or untagged, or pre-`thread/started`), a registered
+/// child, or neither — an item from a thread nobody named must be dropped, not
+/// leaked to the parent's transcript.
+pub(crate) enum Owner {
+    Parent,
+    Child(String),
+    Unknown,
+}
+
+pub(crate) fn resolve_owner(thread_id: Option<&str>, state: &CodexSessionState) -> Owner {
+    if state.thread_id.is_none() {
+        return Owner::Parent;
+    }
+    match thread_id {
+        None => Owner::Parent,
+        Some(tid) if state.thread_id.as_deref() == Some(tid) => Owner::Parent,
+        Some(tid) if state.sub_agent_cards.contains_key(tid) => Owner::Child(tid.to_string()),
+        Some(_) => Owner::Unknown,
+    }
+}
+
 fn handle_item_started(
     params: ItemStartedParams,
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
+    let owner = resolve_owner(params.thread_id.as_deref(), state);
+    let Some(sink) = owner_sink(&owner, sink, state) else {
+        return;
+    };
+    let sink = &sink;
+
     match serde_json::from_value::<ThreadItem>(params.item) {
         Ok(ThreadItem::ContextCompaction(_)) => {
             crate::compaction::handle_compaction_started(sink);
@@ -151,21 +179,17 @@ fn handle_item_completed(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
-    // If this item came from a spawned sub-agent's thread, tag emitted blocks with
-    // the parent CollabAgent's tool_use id so the renderer nests them.
-    let parent_tool_use_id = params
-        .thread_id
-        .as_ref()
-        .and_then(|tid| state.card_for_thread(tid).map(|c| c.card_id.clone()));
-    let wrapped: Arc<dyn SessionSink>;
-    let sink: &Arc<dyn SessionSink> = if let Some(pid) = parent_tool_use_id {
-        wrapped = Arc::new(ParentIdSink::new(sink.clone(), pid));
-        &wrapped
-    } else {
-        sink
+    let owner = resolve_owner(params.thread_id.as_deref(), state);
+    let Some(sink) = owner_sink(&owner, sink, state) else {
+        return;
     };
+    let sink = &sink;
 
-    if let Some((id, text)) = plan_item_fields(&params.item) {
+    // Plan deltas only ever describe the parent's own turn — a child's plan item
+    // falls through to the unhandled-item-type debug log below instead.
+    if matches!(owner, Owner::Parent)
+        && let Some((id, text)) = plan_item_fields(&params.item)
+    {
         state.current_turn_plan = Some(crate::session_state::CurrentTurnPlan { id, text });
         return;
     }
@@ -183,6 +207,31 @@ fn handle_item_completed(
                 "codex: unhandled item type"
             );
         }
+    }
+}
+
+/// Resolves an `Owner` into the sink an item/turn should render through:
+/// `Unknown` drops the notification (returns `None`); `Child(t)` wraps `sink` in
+/// a `ParentIdSink` tagged with that child's card id; `Parent` passes `sink`
+/// through unchanged (cloning the `Arc`, not deep-copying the sink).
+fn owner_sink(
+    owner: &Owner,
+    sink: &Arc<dyn SessionSink>,
+    state: &CodexSessionState,
+) -> Option<Arc<dyn SessionSink>> {
+    match owner {
+        Owner::Unknown => {
+            tracing::debug!(
+                module = "codex:events",
+                "codex: dropping item from an unregistered thread"
+            );
+            None
+        }
+        Owner::Child(t) => {
+            let card_id = state.sub_agent_cards.get(t)?.card_id.clone();
+            Some(Arc::new(ParentIdSink::new(sink.clone(), card_id)))
+        }
+        Owner::Parent => Some(sink.clone()),
     }
 }
 
