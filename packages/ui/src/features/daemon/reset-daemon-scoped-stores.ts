@@ -25,6 +25,7 @@ import { resetQuota } from '@/store/quota';
 import { resetPortTunnels } from '@/store/port-tunnels';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { useSetupAdvisorStore } from '@/features/setup-advisor/use-setup-advisor-store';
+import { bumpSkillsRevalidation } from '@/features/skills/use-skills-revalidation';
 
 export function resetDaemonScopedStores(): void {
   useSessionTodosStore.setState({ byChat: {} });
@@ -69,4 +70,8 @@ export function resetDaemonScopedStores(): void {
     error: null,
     copiedByProject: {},
   });
+
+  // Bump, never zero: a nonce reset could equal a value a subscriber already
+  // saw and suppress the refetch the daemon switch requires.
+  bumpSkillsRevalidation();
 }
