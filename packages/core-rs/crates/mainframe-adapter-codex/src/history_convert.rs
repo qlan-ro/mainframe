@@ -10,7 +10,9 @@ use crate::history::{
     bash_input, file_change_input, is_exec_error, make_message, mcp_result_content, reasoning_text,
     text_block, thinking_block, tool_result_block, tool_use_block,
 };
-use crate::history_collab::emit_collab_agent;
+use crate::history_collab_resolve::{
+    CardMap, CollabCtx, handle_collab_tool_call, handle_sub_agent_activity, resolve_open_cards,
+};
 use crate::item_types::{PatchChangeKind, ThreadItem};
 use crate::thread_registry::AgentMetadata;
 use crate::unified_diff::parse_unified_diff;
@@ -25,6 +27,12 @@ pub fn convert_thread_items(
     // Stash spawnAgent prompts (keyed by child thread id) so the matching `wait`
     // item can use them as the TaskGroup card's description.
     let mut spawn_prompts: HashMap<String, String> = HashMap::new();
+    let mut cards: CardMap = HashMap::new();
+    let ctx = CollabCtx {
+        chat_id,
+        child_items_by_thread,
+        agent_meta_by_thread,
+    };
 
     for item in items {
         match item {
@@ -121,25 +129,10 @@ pub fn convert_thread_items(
                 ));
             }
             ThreadItem::CollabAgentToolCall(item) => {
-                // `spawnAgent` is dispatch metadata only — stash its prompt for the `wait` card.
-                if item.tool == "spawnAgent" {
-                    if let (Some(children), Some(prompt)) =
-                        (&item.receiver_thread_ids, &item.prompt)
-                    {
-                        for child_id in children {
-                            spawn_prompts.insert(child_id.clone(), prompt.clone());
-                        }
-                    }
-                    continue;
-                }
-                emit_collab_agent(
-                    &mut messages,
-                    chat_id,
-                    item,
-                    &mut spawn_prompts,
-                    child_items_by_thread,
-                    agent_meta_by_thread,
-                );
+                handle_collab_tool_call(item, &mut messages, &mut spawn_prompts, &mut cards, &ctx);
+            }
+            ThreadItem::SubAgentActivity(a) => {
+                handle_sub_agent_activity(a, &mut messages, &spawn_prompts, &mut cards, &ctx);
             }
             ThreadItem::ContextCompaction(c) => {
                 // Same "Context compacted" pill Claude's compact_boundary produces.
@@ -166,6 +159,11 @@ pub fn convert_thread_items(
             _ => {}
         }
     }
+
+    // Backstop: a card whose child never signals completion via `wait` or a
+    // `subAgentActivity` interruption still closes, mirroring the live path's
+    // parent-turn-end resolution.
+    resolve_open_cards(&mut messages, &mut cards, &ctx);
 
     messages
 }

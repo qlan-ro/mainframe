@@ -24,6 +24,7 @@ pub mod external_session_parse;
 pub mod external_sessions;
 pub mod history;
 pub(crate) mod history_collab;
+pub(crate) mod history_collab_resolve;
 pub(crate) mod history_convert;
 pub(crate) mod history_load;
 pub(crate) mod image_generation_history;

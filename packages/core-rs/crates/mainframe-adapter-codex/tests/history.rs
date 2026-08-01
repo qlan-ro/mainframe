@@ -366,3 +366,161 @@ fn sets_chat_id_on_all_messages() {
     );
     assert_eq!(out[0].chat_id, "my-chat");
 }
+
+// --- convertThreadItems — sub-agent cards on reload (todo #247, task 19/20) ---
+
+fn card_blocks(out: &[ChatMessage]) -> Vec<Value> {
+    out.iter()
+        .flat_map(|m| m.content.iter())
+        .map(|b| serde_json::to_value(b).unwrap())
+        .collect()
+}
+
+#[test]
+fn wait_naming_a_never_activated_child_opens_and_resolves_its_own_card() {
+    let out = convert(json!([
+        {
+            "id": "call_wait1",
+            "type": "collabAgentToolCall",
+            "tool": "wait",
+            "status": "completed",
+            "receiverThreadIds": ["child1"],
+            "agentsStates": { "child1": { "status": "completed", "message": "Found 3 files" } }
+        }
+    ]));
+    let blocks = card_blocks(&out);
+
+    let cards: Vec<&Value> = blocks
+        .iter()
+        .filter(|v| v["type"] == json!("tool_use") && v["name"] == json!("CollabAgent"))
+        .collect();
+    assert_eq!(cards.len(), 1, "expected exactly one card, got {cards:?}");
+    assert_eq!(cards[0]["input"]["subagent_type"], json!("Sub-agent"));
+
+    let results: Vec<&Value> = blocks
+        .iter()
+        .filter(|v| v["type"] == json!("tool_result") && v["toolUseId"] == json!("call_wait1"))
+        .collect();
+    assert_eq!(
+        results.len(),
+        1,
+        "expected exactly one closing result, got {results:?}"
+    );
+    assert_eq!(results[0]["content"], json!("Found 3 files"));
+    assert_eq!(results[0]["isError"], json!(false));
+}
+
+#[test]
+fn sub_agent_activity_interrupted_resolves_the_card_as_an_error() {
+    let out = convert(json!([
+        {
+            "id": "call_started2",
+            "type": "subAgentActivity",
+            "kind": "started",
+            "agentThreadId": "child2",
+            "agentPath": "/root/child2"
+        },
+        {
+            "id": "call_interrupted2",
+            "type": "subAgentActivity",
+            "kind": "interrupted",
+            "agentThreadId": "child2",
+            "agentPath": "/root/child2"
+        }
+    ]));
+    let blocks = card_blocks(&out);
+
+    let results: Vec<&Value> = blocks
+        .iter()
+        .filter(|v| v["type"] == json!("tool_result") && v["toolUseId"] == json!("call_started2"))
+        .collect();
+    assert_eq!(
+        results.len(),
+        1,
+        "expected exactly one closing result, got {results:?}"
+    );
+    assert_eq!(results[0]["content"], json!("Sub-agent interrupted"));
+    assert_eq!(results[0]["isError"], json!(true));
+}
+
+#[test]
+fn an_unnamed_failed_wait_resolves_every_open_card_as_an_error() {
+    let out = convert(json!([
+        {
+            "id": "call_started3",
+            "type": "subAgentActivity",
+            "kind": "started",
+            "agentThreadId": "child3",
+            "agentPath": "/root/child3"
+        },
+        {
+            "id": "call_started4",
+            "type": "subAgentActivity",
+            "kind": "started",
+            "agentThreadId": "child4",
+            "agentPath": "/root/child4"
+        },
+        {
+            "id": "call_wait2",
+            "type": "collabAgentToolCall",
+            "tool": "wait",
+            "status": "failed",
+            "receiverThreadIds": []
+        }
+    ]));
+    let blocks = card_blocks(&out);
+
+    for card_id in ["call_started3", "call_started4"] {
+        let results: Vec<&Value> = blocks
+            .iter()
+            .filter(|v| v["type"] == json!("tool_result") && v["toolUseId"] == json!(card_id))
+            .collect();
+        assert_eq!(
+            results.len(),
+            1,
+            "expected {card_id} resolved, got {results:?}"
+        );
+        assert_eq!(results[0]["content"], json!("Sub-agent failed"));
+        assert_eq!(results[0]["isError"], json!(true));
+    }
+}
+
+#[test]
+fn activity_and_receiver_route_naming_the_same_child_produce_one_card_on_reload() {
+    let out = convert(json!([
+        {
+            "id": "call_started5",
+            "type": "subAgentActivity",
+            "kind": "started",
+            "agentThreadId": "child5",
+            "agentPath": "/root/child5_thing"
+        },
+        {
+            "id": "call_wait3",
+            "type": "collabAgentToolCall",
+            "tool": "wait",
+            "status": "completed",
+            "receiverThreadIds": ["child5"],
+            "agentsStates": { "child5": { "status": "completed", "message": "5 done" } }
+        }
+    ]));
+    let blocks = card_blocks(&out);
+
+    let cards: Vec<&Value> = blocks
+        .iter()
+        .filter(|v| v["type"] == json!("tool_use") && v["name"] == json!("CollabAgent"))
+        .collect();
+    assert_eq!(cards.len(), 1, "expected exactly one card, got {cards:?}");
+    assert_eq!(cards[0]["input"]["subagent_type"], json!("child5 thing"));
+
+    let results: Vec<&Value> = blocks
+        .iter()
+        .filter(|v| v["type"] == json!("tool_result") && v["toolUseId"] == json!("call_started5"))
+        .collect();
+    assert_eq!(
+        results.len(),
+        1,
+        "expected the activity-route card resolved, got {results:?}"
+    );
+    assert_eq!(results[0]["content"], json!("5 done"));
+}
