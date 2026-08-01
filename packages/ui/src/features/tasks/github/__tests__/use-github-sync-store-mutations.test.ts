@@ -174,6 +174,27 @@ describe('useGitHubSyncStore.loadIssues', () => {
     expect(result.current.issues).toEqual([ISSUE_FIXTURE]);
     expect(mockTodosLoad).not.toHaveBeenCalled();
   });
+
+  it('clears a stale error from a previous failed attempt once a retry succeeds', async () => {
+    vi.mocked(githubApi.listIssues).mockRejectedValueOnce(new Error('no credential'));
+    vi.mocked(githubApi.listIssues).mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() => useGitHubSyncStore());
+    act(() => {
+      result.current.init(PORT, PROJECT_ID);
+    });
+
+    await act(async () => {
+      await result.current.loadIssues();
+    });
+    expect(result.current.error).toBe('no credential');
+
+    await act(async () => {
+      await result.current.loadIssues();
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.issues).toEqual([]);
+  });
 });
 
 describe('useGitHubSyncStore.importIssues', () => {

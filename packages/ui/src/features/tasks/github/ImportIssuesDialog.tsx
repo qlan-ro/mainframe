@@ -65,7 +65,7 @@ function IssueRow({ issue, selected, onToggle }: RowProps): React.ReactElement {
 }
 
 export function ImportIssuesDialog(): React.ReactElement | null {
-  const { dialog, issues, importIssues, closeDialog } = useGitHubSyncStore();
+  const { dialog, issues, error, importIssues, closeDialog } = useGitHubSyncStore();
   const [selected, setSelected] = React.useState<ReadonlySet<number>>(new Set());
   const isOpen = dialog?.kind === 'import';
 
@@ -112,7 +112,13 @@ export function ImportIssuesDialog(): React.ReactElement | null {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {issues.length === 0 ? (
-            <p className="px-2 py-4 text-body text-muted-foreground">No open issues to import.</p>
+            error !== null ? (
+              <p data-testid="tasks-github-import-error" className="px-2 py-4 text-body text-destructive">
+                {error}
+              </p>
+            ) : (
+              <p className="px-2 py-4 text-body text-muted-foreground">No open issues to import.</p>
+            )
           ) : (
             <>
               <label

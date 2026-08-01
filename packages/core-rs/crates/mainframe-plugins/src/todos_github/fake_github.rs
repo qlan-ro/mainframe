@@ -29,6 +29,7 @@ pub(crate) struct FakeGitHub {
     field_times: Mutex<HashMap<u64, IssueFieldTimes>>,
     get_errors: Mutex<HashMap<u64, GitHubPortError>>,
     list_error: Mutex<Option<GitHubPortError>>,
+    create_error: Mutex<Option<GitHubPortError>>,
     create_result: Mutex<Option<IssueSnapshot>>,
     next_number: Mutex<u64>,
 }
@@ -62,6 +63,11 @@ impl FakeGitHub {
     pub(crate) fn with_create_result(self, issue: IssueSnapshot) -> Self {
         *self.next_number.lock().unwrap() = issue.number;
         *self.create_result.lock().unwrap() = Some(issue);
+        self
+    }
+
+    pub(crate) fn with_create_error(self, error: GitHubPortError) -> Self {
+        *self.create_error.lock().unwrap() = Some(error);
         self
     }
 
@@ -129,6 +135,7 @@ impl GitHubIssues for FakeGitHub {
             .lock()
             .unwrap()
             .push(Call::CreateIssue(input.clone()));
+        let error = self.create_error.lock().unwrap().clone();
         let result = self
             .create_result
             .lock()
@@ -143,7 +150,7 @@ impl GitHubIssues for FakeGitHub {
                 html_url: String::new(),
                 updated_at: String::new(),
             });
-        Box::pin(async move { Ok(result) })
+        Box::pin(async move { error.map(Err).unwrap_or(Ok(result)) })
     }
 
     fn update_issue(

@@ -158,6 +158,7 @@ export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
     loadIssues: async () => {
       const { port, projectId } = get();
       if (port === null || projectId === null) return;
+      set({ error: null });
       try {
         set({ issues: await listIssues(port, projectId) });
       } catch (err) {

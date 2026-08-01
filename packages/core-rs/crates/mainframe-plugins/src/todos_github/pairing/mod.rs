@@ -48,6 +48,11 @@ pub enum PairingError {
     NotLinked,
     TodoNotFound,
     AlreadyPaired,
+    /// A classified GitHub-port failure (auth, rate limit, network, ...) —
+    /// kept as the original `GitHubPortError` rather than flattened into
+    /// `Failed` so the route layer can map it to a status other than 500,
+    /// the same way `run/mod.rs`'s `handle_port_error` does for sync runs.
+    Port(GitHubPortError),
     Failed(PluginError),
 }
 
@@ -58,7 +63,7 @@ impl From<PluginError> for PairingError {
 }
 
 fn port_err(err: GitHubPortError) -> PairingError {
-    PairingError::Failed(PluginError::Message(err.to_string()))
+    PairingError::Port(err)
 }
 
 pub async fn list_remote_issues(

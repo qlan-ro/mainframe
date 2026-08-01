@@ -36,9 +36,10 @@ const closeDialog = vi.fn();
 
 let dialog: null | { kind: 'import' } | { kind: 'link' };
 let issues: RemoteIssue[];
+let error: string | null;
 
 vi.mock('../use-github-sync-store', () => ({
-  useGitHubSyncStore: () => ({ dialog, issues, importIssues, closeDialog }),
+  useGitHubSyncStore: () => ({ dialog, issues, error, importIssues, closeDialog }),
 }));
 
 const { ImportIssuesDialog } = await import('../ImportIssuesDialog');
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   dialog = { kind: 'import' };
   issues = ISSUES;
+  error = null;
 });
 
 describe('ImportIssuesDialog — visibility', () => {
@@ -70,6 +72,24 @@ describe('ImportIssuesDialog — rows', () => {
     const pairedRow = screen.getByTestId('tasks-github-import-issue-103');
     expect(pairedRow.textContent).toContain('Already paired with task #219');
     expect(pairedRow.querySelector('input,button')).toBeDisabled();
+  });
+});
+
+describe('ImportIssuesDialog — load failure', () => {
+  it('shows the load error instead of the empty-state message when the fetch failed', () => {
+    issues = [];
+    error = "No GitHub credential is stored for 'github'. Link the repository again to connect one.";
+    render(<ImportIssuesDialog />);
+    expect(screen.getByTestId('tasks-github-import-error').textContent).toBe(error);
+    expect(screen.queryByText('No open issues to import.')).toBeNull();
+  });
+
+  it('still shows the empty-state message when there genuinely are no open issues', () => {
+    issues = [];
+    error = null;
+    render(<ImportIssuesDialog />);
+    expect(screen.getByText('No open issues to import.')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-github-import-error')).toBeNull();
   });
 });
 

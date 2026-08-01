@@ -4,7 +4,7 @@ use axum::extract::{Json, Path};
 use axum::http::StatusCode;
 use serde_json::json;
 
-use crate::github_port::IssueState;
+use crate::github_port::{GitHubPortError, IssueState};
 use crate::todos_github::fake_github::FakeGitHub;
 use crate::todos_github::routes::pairs;
 use crate::todos_github::run_test_support::{
@@ -143,6 +143,28 @@ async fn get_issues_lists_open_issues_annotated_with_pairing() {
     );
 }
 
+/// A missing credential must surface its own readable message, not a masked
+/// 500 that reads identically to a real server bug (QA S9).
+#[tokio::test]
+async fn get_issues_surfaces_the_auth_failure_instead_of_masking_it_as_a_server_error() {
+    let h = setup(FakeGitHub::default().with_list_error(GitHubPortError::Auth(
+        "No GitHub credential is stored for 'github'. Link the repository again to connect one."
+            .to_string(),
+    )))
+    .await;
+    link_project(&h.ctx, "p1").await;
+
+    let (status, body) =
+        read(pairs::get_issues(test_support::state(&h), qs(&[("projectId", "p1")])).await).await;
+    assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("No GitHub credential is stored")
+    );
+}
+
 #[tokio::test]
 async fn post_import_creates_todos_and_reports_skips() {
     let h = setup(FakeGitHub::default().with_issue(issue(
@@ -218,4 +240,32 @@ async fn post_publish_creates_pair_then_conflicts_on_second_publish() {
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
+}
+
+/// Same masking bug as `get_issues`, on the write side (QA S4).
+#[tokio::test]
+async fn post_publish_surfaces_the_auth_failure_instead_of_masking_it_as_a_server_error() {
+    let h = setup(FakeGitHub::default().with_create_error(GitHubPortError::Auth(
+        "No GitHub credential is stored for 'github'. Link the repository again to connect one."
+            .to_string(),
+    )))
+    .await;
+    link_project(&h.ctx, "p1").await;
+    insert_todo(&h.ctx, "t1", "p1", "New task", "body", "open", &[]).await;
+
+    let (status, body) = read(
+        pairs::post_publish(
+            test_support::state(&h),
+            Json(json!({ "projectId": "p1", "todoId": "t1" })),
+        )
+        .await,
+    )
+    .await;
+    assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("No GitHub credential is stored")
+    );
 }

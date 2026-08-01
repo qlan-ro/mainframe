@@ -18,6 +18,7 @@ use serde_json::{Value, json};
 
 use crate::PluginContext;
 use crate::PluginError;
+use crate::github_port::GitHubPortError;
 use crate::todos_github::store;
 
 pub fn router() -> Router<Arc<PluginContext>> {
@@ -63,6 +64,26 @@ pub(super) fn server_error(err: PluginError) -> Response {
     )
 }
 
+/// The local integration isn't ready to talk to GitHub at all (no stored
+/// credential, or a guard-rejected capability) — not a bug, so it's logged
+/// at `warn`, not `error`, and the message is the caller-readable one from
+/// `GitHubPortError`, not a generic string.
+fn service_unavailable(err: &GitHubPortError) -> Response {
+    tracing::warn!(err = %err, "todos_github: GitHub integration unavailable");
+    json_response(
+        StatusCode::SERVICE_UNAVAILABLE,
+        json!({ "error": err.to_string() }),
+    )
+}
+
+/// A live call to GitHub itself failed (bad response, rate limit, network) —
+/// this server is correctly configured but the upstream interaction didn't
+/// go through.
+fn bad_gateway(err: &GitHubPortError) -> Response {
+    tracing::warn!(err = %err, "todos_github: GitHub request failed");
+    json_response(StatusCode::BAD_GATEWAY, json!({ "error": err.to_string() }))
+}
+
 // ─── Request parsing ─────────────────────────────────────────────────────────
 
 // `Response` dwarfs the `Ok` payload, but every caller immediately returns
@@ -91,7 +112,23 @@ pub(super) fn pairing_error_response(err: crate::todos_github::pairing::PairingE
         PairingError::NotLinked => not_found("GitHub sync is not linked for this project."),
         PairingError::TodoNotFound => not_found("Task not found."),
         PairingError::AlreadyPaired => conflict("This task is already paired with a GitHub issue."),
+        PairingError::Port(err) => port_error_response(&err),
         PairingError::Failed(err) => server_error(err),
+    }
+}
+
+/// Mirrors `run/mod.rs`'s `handle_port_error` classification, adapted to a
+/// direct request/response instead of a stored run: `NotFound`/`Moved` name
+/// a resource that no longer exists at the paired location, the rest are
+/// this project's GitHub integration failing to reach or authenticate with
+/// GitHub itself.
+fn port_error_response(err: &GitHubPortError) -> Response {
+    match err {
+        GitHubPortError::NotFound | GitHubPortError::Moved => not_found(&err.to_string()),
+        GitHubPortError::Auth(_) | GitHubPortError::Unavailable(_) => service_unavailable(err),
+        GitHubPortError::RateLimited { .. }
+        | GitHubPortError::Network(_)
+        | GitHubPortError::Request { .. } => bad_gateway(err),
     }
 }
 

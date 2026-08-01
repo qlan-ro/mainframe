@@ -224,5 +224,5 @@ async fn listing_issues_surfaces_a_list_fetch_error() {
 
     let err = pairing::list_remote_issues(ctx, "p1").await.unwrap_err();
 
-    assert!(matches!(err, PairingError::Failed(_)));
+    assert!(matches!(err, PairingError::Port(_)));
 }
