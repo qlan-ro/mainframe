@@ -50,10 +50,16 @@ rebuilt on the shared gate shell with the execution mode as a caption.
    — `new_cyclic` would churn every `ChatManager::new` call site in the crate's tests. Missing/dead weak =
    `warn!` + `Err(AdapterError)`, never a silent no-op.
 6. **The escalation double-send is preserved and pinned by a test** (per the brief), with a live-verification
-   contingency in T11.
-7. **The record's execution-mode caption reads `extras.state.chatConfig.permissionMode`** — the durable,
-   server-authoritative value this very approval writes; nothing per-message records it. Known limitation:
-   the caption reflects the chat's *current* mode, so it goes stale if the user later changes the mode. The
+   contingency in T12.
+7. **The execution-mode caption is threaded into `PlanBubble` as an `executionMode` prop; `PlanBubble`
+   itself calls no hooks.** The value still originates from `extras.state.chatConfig.permissionMode` — the
+   durable, server-authoritative value this very approval writes; nothing per-message records it — but the
+   `useChatExtras()` read happens in the two call sites (`UserMessage`, `PlanCard`), which always render
+   inside the runtime tree. `useChatExtras` wraps `useAuiState` and **throws**
+   (`Error: You are using a component or hook that requires an AuiProvider.`) outside one, and three
+   existing suites render `PlanBubble` with no provider — reading it inside `PlanBubble` would break them
+   (T10 step 4 lists the fallout the two new call-site readers *do* cause). Known limitation: the caption
+   reflects the chat's *current* mode, so it goes stale if the user later changes the mode. The
    "· context cleared" half is exact, derived from the call site (only the clear-context path produces an
    `Implement the following plan:` user message).
 
@@ -127,7 +133,7 @@ into a `Mutex<Vec<String>>` and captures the `ControlResponse` it received. Then
 6. `answers the escalation on the wire exactly once via the permission handler and once via the handler`
    — pins decision 6: `RecSession` records `respond_to_permission` twice and `set_permission_mode` once, and
    `set_permission_mode` is recorded only when the session is spawned. Comment the assertion with the
-   "preserved deliberately, see T11" reason so a future reader does not silently 'fix' it.
+   "preserved deliberately, see T12" reason so a future reader does not silently 'fix' it.
 
 **Verify:** `cargo test -p mainframe-chat plan_mode` — all 6 FAIL (the `PhDeps` stubs are still no-ops). Record
 the failure output in the task hand-off; do not proceed until they are observed red.
@@ -251,20 +257,25 @@ and "clear context and implement" restarts the session with the plan.
 
 **Files:** `packages/ui/src/features/chat/messages/__tests__/PlanBubble.test.tsx`
 
-Rewrite against the target contract `PlanBubble({ plan: string; clearedContext?: boolean })`:
+Rewrite against the target contract
+`PlanBubble({ plan: string; executionMode?: ExecutionMode; clearedContext?: boolean })`:
 
 1. `renders the plan markdown inside the resolved gate shell` — `chat-plan-bubble` present, contains
    `gate-head-tile`, and the shell carries the resolved border (`border-border`, no accent shadow style).
 2. `shows the Plan eyebrow, the Implementing plan title and the Approved pill`.
-3. `omits the execution-mode caption when no chat config is available` — rendered bare (no runtime provider),
+3. `omits the execution-mode caption when no execution mode is passed` — `<PlanBubble plan="…" />`,
    `chat-plan-exec-mode` absent.
-4. `renders the execution-mode caption from the chat config` — with `permissionMode: 'acceptEdits'` mocked on
-   `useChatExtras`, `chat-plan-exec-mode` reads `Auto-edits`.
-5. `appends the cleared-context suffix only for the clear-context path` — `clearedContext` → `Auto-edits · context cleared`.
+4. `renders the execution-mode caption from the executionMode prop` — `executionMode="acceptEdits"` →
+   `chat-plan-exec-mode` reads `Auto-edits`.
+5. `appends the cleared-context suffix only for the clear-context path` — `executionMode="acceptEdits"`
+   `clearedContext` → `Auto-edits · context cleared`; with `clearedContext` but no `executionMode`,
+   `chat-plan-exec-mode` stays absent.
 6. `drops the user-message card treatment` — no `max-w-[530px]`, no `border-mf-um-edge`, no inline
    `--mf-um-card`/`--mf-shadow-user-card` style.
 
-Mock the config via `vi.mock('../../runtime/use-chat-thread-runtime')` returning a stub `useChatExtras`.
+No `vi.mock` and no providers: every case renders `PlanBubble` bare with props only. Keep the suite header's
+"Pure props component; no assistant-ui hooks or context needed" claim — it stays true, and T10 must not
+break it (decision 7).
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/messages/__tests__/PlanBubble.test.tsx`
 — all 6 FAIL. Observe and record the failure before Phase 2's implementation task starts.
@@ -276,9 +287,12 @@ Mock the config via `vi.mock('../../runtime/use-chat-thread-runtime')` returning
 `packages/ui/src/features/chat/messages/UserMessage.tsx`,
 `packages/ui/src/features/chat/tools/cards/PlanCard.tsx`,
 `packages/ui/src/features/chat/gates/PlanGate.tsx`,
+`packages/ui/src/features/chat/gates/PlanExecModeControl.tsx`,
 `packages/ui/src/features/chat/gates/ChatGateMount.tsx`,
 `packages/ui/src/features/chat/gates/__tests__/PlanGate.test.tsx`,
-`packages/ui/src/features/chat/gates/__tests__/ChatGateMount.test.tsx`
+`packages/ui/src/features/chat/gates/__tests__/ChatGateMount.test.tsx`,
+`packages/ui/src/features/chat/messages/__tests__/UserMessage.test.tsx`,
+`packages/ui/src/features/chat/tools/cards/__tests__/PlanCard.test.tsx`
 
 Load the `mainframe-design-system` skill first. Then:
 
@@ -288,34 +302,99 @@ Load the `mainframe-design-system` skill first. Then:
    `<SquareCheck className="size-[12px] text-mf-success" />`, eyebrow `Plan`, title `Implementing plan`,
    `right` = the existing Approved pill, `subtitle` = the exec-mode caption. Body = the current hairline-divided
    markdown block on the shared `markdownComponents`. Delete `CARD_STYLE`, `max-w-[530px]`, `border-mf-um-edge`,
-   `text-mf-um-ink`. Keep `data-testid="chat-plan-bubble"`. New prop `clearedContext?: boolean`. Caption:
-   `useChatExtras()?.state.chatConfig?.permissionMode` mapped through a module-level
+   `text-mf-um-ink`. Keep `data-testid="chat-plan-bubble"`. New props `executionMode?: ExecutionMode` (type-only
+   import from `@qlan-ro/mainframe-types`) and `clearedContext?: boolean`. The component stays **hook-free**
+   (decision 7). Caption: `executionMode` mapped through a module-level
    `{ default: 'Interactive', acceptEdits: 'Auto-edits', yolo: 'Unattended' }`, plus `' · context cleared'` when
-   `clearedContext`; render nothing when the mode is unknown. Testid `chat-plan-exec-mode`.
-3. `UserMessage.tsx:240` — `<PlanBubble plan={planBody} clearedContext />` (this call site *is* the clear-context
-   path). `PlanCard.tsx:43` — leave the default (`false`).
-4. `PlanGate.tsx` — delete the `approved` state, the `onApprove` prop and its doc comment, `EXEC_MODE_LABELS`, and
+   `clearedContext`; render nothing when `executionMode` is undefined. Testid `chat-plan-exec-mode`.
+3. Both call sites thread the mode down from their own runtime read:
+   - `UserMessage.tsx:240` —
+     `<PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />`
+     (this call site *is* the clear-context path). `chatExtras` is the existing `useChatExtras()` at
+     `UserMessage.tsx:120`; the read sits inside the `planBody` branch, so no non-plan render evaluates it.
+   - `PlanCard.tsx` — add `const chatExtras = useChatExtras();` (from `../../runtime/use-chat-thread-runtime`)
+     at the top of the component, **above** the approved-plan early return so hook order is stable, and render
+     `<PlanBubble plan={approvedPlan} executionMode={chatExtras?.state.chatConfig?.permissionMode} />` — no
+     `clearedContext`, this is the escalation path.
+4. Fallout of the two new `useChatExtras()` readers. `useChatExtras` wraps `useAuiState`
+   (`runtime/use-chat-thread-runtime.ts:218-221`) and throws `requires an AuiProvider` outside a runtime tree, so
+   every provider-less suite reaching a new reader must mock the module:
+   - `messages/__tests__/UserMessage.test.tsx:37-40` — the mock returns `{ retryMessage: retryMessageSpy }`, so
+     `?.state.chatConfig` TypeErrors (optional chaining on `chatExtras` does not protect the `.state` hop).
+     Change it to `{ retryMessage: retryMessageSpy, state: { chatConfig: null } }`, make `state` swappable from a
+     `vi.hoisted` fixture reset in `beforeEach`, and extend the PB case (line ~517) with one assertion: with
+     `chatConfig: { permissionMode: 'yolo' }`, `chat-plan-exec-mode` reads `Unattended · context cleared`.
+   - `tools/cards/__tests__/PlanCard.test.tsx` — add
+     `vi.mock('../../../runtime/use-chat-thread-runtime', () => ({ useChatExtras: () => ({ state: { chatConfig: { permissionMode: 'acceptEdits' } } }) }))`,
+     assert `chat-plan-exec-mode` reads `Auto-edits` (no ` · context cleared`) in the approved-plan case at
+     line ~232, and correct the header's "No external hook mocks needed" bullet to name this one mock and why.
+   - No edit needed, and none is allowed, in `smart-actions/__tests__/instruction-chip.test.tsx:53,243`
+     (renders `PlanBubble` bare under `TooltipProvider` — safe because `PlanBubble` stays hook-free) or in
+     `messages/__tests__/UserMessage-send-failure.test.tsx` / `UserMessage.session-chip.test.tsx` (their mocks also
+     omit `state`, but neither renders a plan-body message, so the guarded branch never runs). Say so in the T10
+     hand-off so a later reader does not "fix" them.
+5. `PlanGate.tsx` — delete the `approved` state, the `onApprove` prop and its doc comment, `EXEC_MODE_LABELS`, and
    the whole `chat-plan-running-footer` block; `ControlsPanel` and the action/revise rows render unconditionally.
    `handleApprove` becomes `void reply(buildPlanResponse(...))`.
-5. `ChatGateMount.tsx` — delete `approvedPlan`, `hasSeenRunningRef`, the `useEffect`, the `useAuiState`/`isRunning`
+6. `PlanExecModeControl.tsx` — add `aria-pressed={selected}` to the segmented-control button. The selected state
+   is currently class-only, and T11's rewritten E2E test needs a non-class assertion for it (it also makes the
+   toggle group announce correctly).
+7. `ChatGateMount.tsx` — delete `approvedPlan`, `hasSeenRunningRef`, the `useEffect`, the `useAuiState`/`isRunning`
    read, the trailing `if (approvedPlan != null)` branch, and the retention paragraphs of the doc comment (leave a
    two-line comment: one gate at a time, dispatched by `toolName`; answered gates unmount because the daemon
    shifts the pending). Drop the now-unused `useState`/`useEffect`/`useRef`/`ChatPermissionEntry` imports.
-6. `PlanGate.test.tsx` — remove the `chat-plan-running-footer` assertions (~230/243/255) and any `onApprove` prop
+8. `PlanGate.test.tsx` — remove the `chat-plan-running-footer` assertions (~230/243/255) and any `onApprove` prop
    usage; replace with `keeps the controls visible after approving (the gate is unmounted by the queue, not itself)`.
-7. `ChatGateMount.test.tsx` — replace the retention block (~155-266) with `unmounts the plan gate once the queue
+9. `ChatGateMount.test.tsx` — replace the retention block (~155-266) with `unmounts the plan gate once the queue
    front clears` and `still routes AskUserQuestion and permission gates by toolName`.
 
-**Verify:** the four specs individually via
-`pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` (T9's six now GREEN, including PlanCard's untouched
-suite), then `pnpm --filter @qlan-ro/mainframe-ui typecheck`. `rg -n "chat-plan-running-footer|onApprove|approvedPlan" packages/ui/src`
-returns nothing.
+**Verify:** run each of the six touched specs individually via
+`pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` — `PlanBubble.test.tsx` (T9's six now GREEN),
+`PlanGate.test.tsx`, `ChatGateMount.test.tsx`, `UserMessage.test.tsx`, `PlanCard.test.tsx`, and
+`smart-actions/__tests__/instruction-chip.test.tsx` (the one PlanBubble suite that must stay green *without* an
+edit) — then `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
+`rg -n "chat-plan-running-footer|onApprove|approvedPlan" packages/ui/src` returns nothing; the repo-wide sweep for
+the deleted testid is T11's (`packages/e2e` still references it until then).
 
 ---
 
-## Phase 3 — live verification (group `live-verify`)
+## Phase 3 — E2E spec (group `e2e-plan-gate`)
 
-### T11 — Live Claude CLI run of both approval paths
+### T11 — Retire the running-footer E2E assertions
+
+**Files:** `packages/e2e/tests-tauri/gates.spec.ts`, `packages/e2e/tests-tauri/stress-matrix.spec.ts`
+
+T10 deletes `chat-plan-running-footer`, and the design direction says its assertions go away rather than get
+re-pointed. The live (non-skipped, its `test.skip` fires only at the end of the body) test
+`selecting Unattended + clear-context and approving shows a matching running footer` (`gates.spec.ts:254`)
+asserts that testid at line 267 and would fail.
+
+1. `gates.spec.ts` — in the `§plan gate exec-mode` describe, rewrite that test as
+   `selecting Unattended + clear-context marks both controls selected`: click
+   `chat-plan-execmode-yolo`, expect `aria-pressed="true"` on it (T10 step 6) and `aria-pressed="false"` on
+   `chat-plan-execmode-default`; click `chat-plan-clear-context`, expect `data-state="checked"` on it (Radix
+   `Checkbox`). Delete the approve click, the three `footer` assertions (~267-270), the two stale history
+   comment blocks (~242-266), and the trailing `test.skip(true, 'TODO(bug): …')`. Replace them with one line
+   stating why the post-approve half is gone: under `E2E_MODE=mock` the chat runs on `mock-cli`, which exposes
+   no plan-mode handler (T1), so an approval with `clearContext` never reaches `ClaudePlanModeHandler` — the
+   post-approve surface is covered by `tool-cards.spec.ts:363-372` (escalation path) and T12's live run.
+2. `gates.spec.ts:8` — the header sentence ends "…reflected in the post-approve running footer"; end it at the
+   controls instead. `gates.spec.ts:23` — delete the `chat-plan-running-footer` testid-reference line.
+3. `stress-matrix.spec.ts:13` — drop the `chat-plan-running-footer (known bug, gates.spec.ts:242)` clause from
+   the "Deliberately NOT asserted" note, keeping the daemon-restart clause.
+
+**Verify:** `rg -n "chat-plan-running-footer" .` returns nothing repo-wide (the check T10 could not make — its
+grep was scoped to `packages/ui/src`). Then run the spec against an already-built bundle:
+`E2E_MODE=mock MF_E2E_SKIP_BUILD=1 pnpm --filter @qlan-ro/mainframe-e2e exec playwright test tests-tauri/gates.spec.ts`
+— the `§plan gate exec-mode` test passes and no test in the file is skipped for the plan gate. If no built
+bundle is available, build first with `pnpm --filter @qlan-ro/mainframe-e2e build:app:tauri`; do not report the
+task done on the grep alone.
+
+---
+
+## Phase 4 — live verification (group `live-verify`)
+
+### T12 — Live Claude CLI run of both approval paths
 
 **Files:** none expected (contingency below).
 
@@ -341,5 +420,6 @@ launch-isolation rule — never hijack `:31415`/`~/.mainframe`). With a real Cla
 ## Definition of done
 
 `cargo test -p mainframe-chat -p mainframe-adapter-claude -p mainframe-server` green ·
-`cargo clippy -p mainframe-chat -- -D warnings` clean · UI specs + `typecheck` green · no `TODO(port)` left on the
-plan-mode path · changeset present · T11's live checks recorded.
+`cargo clippy -p mainframe-chat -- -D warnings` clean · UI specs + `typecheck` green ·
+`gates.spec.ts` green under `E2E_MODE=mock` and `rg -n "chat-plan-running-footer" .` empty repo-wide ·
+no `TODO(port)` left on the plan-mode path · changeset present · T12's live checks recorded.
