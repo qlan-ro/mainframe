@@ -56,76 +56,12 @@ use crate::types::ActiveChat;
 use crate::worktree_offer::{OfferError, WorktreeOfferDeps, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
+mod errors;
 mod send;
+mod update;
 
-/// Result of `processAttachments` (attachment-processor.ts is a separate port
-/// target; the shape is mirrored here for the sendMessage seam).
-#[derive(Debug, Clone, Default)]
-pub struct ProcessedAttachments {
-    pub images: Vec<ImageInput>,
-    pub message_content: Vec<MessageContent>,
-    pub text_prefix: Vec<String>,
-    /// Opaque preview objects (`attachmentPreviews`), stored as JSON for the
-    /// transient metadata; their shape is owned by the attachment layer.
-    pub attachment_previews: Vec<serde_json::Value>,
-}
-
-/// Unified `db.chats.update` patch (superset of the sub-manager patch structs).
-/// Tri-state fields use `Some(None)` for an explicit null.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ChatUpdate {
-    pub adapter_id: Option<String>,
-    pub model: Option<String>,
-    pub permission_mode: Option<mainframe_types::settings::ExecutionMode>,
-    pub plan_mode: Option<bool>,
-    pub claude_session_id: Option<String>,
-    pub session_file_path: Option<String>,
-    pub worktree_path: Option<Option<String>>,
-    pub branch_name: Option<Option<String>>,
-    pub total_cost: Option<f64>,
-    pub total_tokens_input: Option<i64>,
-    pub total_tokens_output: Option<i64>,
-    pub last_context_tokens_input: Option<i64>,
-    pub last_context_total_tokens: Option<u64>,
-    pub last_context_max_tokens: Option<u64>,
-    pub process_state: Option<Option<ProcessState>>,
-    pub updated_at: Option<String>,
-    pub title: Option<String>,
-    pub status: Option<mainframe_types::chat::ChatStatus>,
-    pub transcript_missing: Option<bool>,
-}
-
-impl From<&EventChatUpdate> for ChatUpdate {
-    fn from(e: &EventChatUpdate) -> Self {
-        ChatUpdate {
-            claude_session_id: e.claude_session_id.clone(),
-            session_file_path: e.session_file_path.clone(),
-            plan_mode: e.plan_mode,
-            total_cost: e.total_cost,
-            total_tokens_input: e.total_tokens_input,
-            total_tokens_output: e.total_tokens_output,
-            last_context_tokens_input: e.last_context_tokens_input,
-            last_context_total_tokens: e.last_context_total_tokens,
-            last_context_max_tokens: e.last_context_max_tokens,
-            process_state: e.process_state,
-            updated_at: e.updated_at.clone(),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<&LifecycleChatUpdate> for ChatUpdate {
-    fn from(l: &LifecycleChatUpdate) -> Self {
-        ChatUpdate {
-            worktree_path: l.worktree_path.clone(),
-            branch_name: l.branch_name.clone(),
-            plan_mode: l.plan_mode,
-            title: l.title.clone(),
-            status: l.status,
-            ..Default::default()
-        }
-    }
-}
+pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
+pub use update::{ChatUpdate, ProcessedAttachments};
 
 /// The external dependency surface — everything the daemon injects into the
 /// ChatManager (db repos, adapters, attachments, launch, notifications, and the
@@ -2120,68 +2056,6 @@ impl ChatManager {
             .values()
             .find(|r| r.chat_id == chat_id && r.message_id == message_id)
             .cloned()
-    }
-}
-
-/// `metadata.command` for `sendMessage` (`{ name, source, args? }`).
-#[derive(Debug, Clone)]
-pub struct CommandMeta {
-    pub name: String,
-    pub source: String,
-    pub args: Option<String>,
-}
-
-/// Error surfaced by `sendMessage`/queue ops (message crosses the wire).
-#[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub struct SendError(pub String);
-
-impl From<AdapterError> for SendError {
-    fn from(e: AdapterError) -> Self {
-        SendError(e.to_string())
-    }
-}
-
-/// Error surfaced by `trust_workspace` (message crosses the wire as a 500 body,
-/// mirroring the TS `catch (err) { fail(res, 500, err.message) }`).
-#[derive(Debug, thiserror::Error)]
-pub enum TrustWorkspaceError {
-    #[error("Chat {0} not found")]
-    ChatNotFound(String),
-    #[error("Project {0} not found")]
-    ProjectNotFound(String),
-    #[error("{0}")]
-    Write(String),
-}
-
-/// Present-only partial for `sync_chat_fields` (mirrors the `Partial<Chat>` the
-/// tuning/pinned PATCH routes write). Tri-state fields (`Some(None)` = explicit
-/// null) match the DB tuning columns; `pinned` is a plain bool.
-#[derive(Debug, Clone, Default)]
-pub struct ChatFieldsPartial {
-    pub effort: Option<Option<EffortLevel>>,
-    pub fast: Option<Option<bool>>,
-    pub ultracode: Option<Option<bool>>,
-    pub adaptive_thinking: Option<Option<bool>>,
-    pub pinned: Option<bool>,
-}
-
-/// Error surfaced by `forkToWorktree` (the create step is fallible, the enable step
-/// too). `status_code()` mirrors the TS `err.statusCode ?? 500` (dirty tree → 409).
-#[derive(Debug, thiserror::Error)]
-pub enum ForkError {
-    #[error(transparent)]
-    Lifecycle(#[from] LifecycleError),
-    #[error(transparent)]
-    Config(#[from] ConfigError),
-}
-
-impl ForkError {
-    pub fn status_code(&self) -> u16 {
-        match self {
-            ForkError::Lifecycle(LifecycleError::DirtyWorkingTree) => 409,
-            _ => 500,
-        }
     }
 }
 
