@@ -102,11 +102,6 @@ impl ClaudeAdapter {
             resolved_path,
         }
     }
-
-    /// `createPlanModeHandler()` — the per-adapter plan-mode strategy.
-    pub fn create_plan_mode_handler(&self) -> Box<dyn PlanModeActionHandler> {
-        Box::new(ClaudePlanModeHandler)
-    }
 }
 
 impl Default for ClaudeAdapter {
@@ -318,6 +313,10 @@ impl Adapter for ClaudeAdapter {
             subagent: tool_category(&["Task", "Agent"]),
         })
     }
+
+    fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
+        Some(Arc::new(ClaudePlanModeHandler))
+    }
 }
 
 #[cfg(test)]
@@ -340,6 +339,12 @@ mod tests {
         assert_eq!(a.name(), "Claude Code");
         assert!(a.capabilities().plan_mode);
         assert!(a.has_probe_models());
+    }
+
+    #[test]
+    fn adapter_trait_resolves_a_plan_mode_handler() {
+        let a = ClaudeAdapter::default();
+        assert!(Adapter::create_plan_mode_handler(&a).is_some());
     }
 
     #[tokio::test]

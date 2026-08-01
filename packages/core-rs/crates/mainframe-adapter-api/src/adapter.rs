@@ -27,6 +27,7 @@ use mainframe_types::settings::ExecutionMode;
 use mainframe_types::transcript::TranscriptLocation;
 use serde::{Deserialize, Serialize};
 
+use crate::plan_mode_actions::PlanModeActionHandler;
 use crate::{AdapterError, BoxFuture};
 
 /// One inline image attachment for `sendMessage` (`{ mediaType, data }`).
@@ -271,18 +272,25 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
+    /// `createPlanModeHandler?()` — the adapter's plan-mode action strategy.
+    /// `None` = this adapter has no plan-mode strategy; the dispatcher warns and
+    /// no-ops rather than failing the permission response.
+    fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
+        None
+    }
+
     // TODO(port): the optional skill/agent/command/external-session CRUD methods
-    // and `createPlanModeHandler?` from adapter.ts are deferred to the phase that
-    // ports the concrete claude/codex adapters and their routes — their default
-    // wire semantics (unsupported vs empty) must be pinned against those callers,
-    // not guessed here. The registry + chat-session consumers do not need them.
+    // from adapter.ts are deferred to the phase that ports the concrete
+    // claude/codex adapters and their routes — their default wire semantics
+    // (unsupported vs empty) must be pinned against those callers, not guessed
+    // here. The registry + chat-session consumers do not need them.
 }
 
 // PORT STATUS: behavioral half of packages/types/src/adapter.ts (Adapter/
 // AdapterSession/SessionSink traits)
 // confidence: high
-// todos: 1 (skill/agent/command/external-session CRUD + createPlanModeHandler,
-//   deferred to the concrete-adapter phase — see the TODO above)
+// todos: 1 (skill/agent/command/external-session CRUD, deferred to the
+//   concrete-adapter phase — see the TODO above)
 // notes: Main catch-up (#424/#430) adds two OPTIONAL Adapter methods with default
 // `Ok(None)` bodies so existing adapters keep compiling and each concrete adapter
 // (Wave 1) overrides: generate_title(content, binary) and is_transcript_present(
