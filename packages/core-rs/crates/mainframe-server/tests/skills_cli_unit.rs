@@ -756,20 +756,40 @@ async fn tail_is_capped() {
     assert!(capped.chars().count() <= mainframe_server::skills_cli::run::TAIL_CHARS);
 }
 
+/// Verbatim shape of `skills add <source> --list` (CLI 1.x): a preamble of
+/// status glyphs, the `Available Skills` banner, then per-category blocks
+/// whose gutter lines indent the name 4 columns and the description 6.
+const PROBE_LISTING: &str = concat!(
+    "◇   claude-code_2-1-220_agent  Agent detected — installing non-interactively\n",
+    "◇  Source: https://github.com/anthropics/skills.git\n",
+    "◇  Repository cloned\n",
+    "◇  Found 2 skills\n",
+    "◇  Available Skills\n",
+    "Document Skills\n",
+    "│\n",
+    "│    docx\n",
+    "│\n",
+    "│      Use this skill whenever the user wants to edit Word documents.\n",
+    "│\n",
+    "│    pdf\n",
+    "\n",
+    "└  Use --skill <name> to install specific skills\n",
+);
+
 #[tokio::test]
-async fn probe_parse_reads_name_description_pairs_and_reports_unparseable_otherwise() {
-    let readable = "shadcn — Generate UI components with shadcn/ui\nplaywright — Browser automation and testing\n";
-    let outcome = mainframe_server::skills_cli::probe_parse::parse_probe(readable);
+async fn probe_parse_reads_the_listing_and_reports_unparseable_otherwise() {
+    let outcome = mainframe_server::skills_cli::probe_parse::parse_probe(PROBE_LISTING);
     let ProbeOutcome::Probed { skills } = outcome else {
         panic!("expected a probed outcome for readable output");
     };
     assert_eq!(skills.len(), 2);
-    assert_eq!(skills[0].name, "shadcn");
+    assert_eq!(skills[0].name, "docx");
     assert_eq!(
         skills[0].description.as_deref(),
-        Some("Generate UI components with shadcn/ui")
+        Some("Use this skill whenever the user wants to edit Word documents.")
     );
-    assert_eq!(skills[1].name, "playwright");
+    assert_eq!(skills[1].name, "pdf");
+    assert_eq!(skills[1].description, None);
 
     let garbage = "###@@@\n???\n";
     assert!(matches!(
@@ -779,17 +799,22 @@ async fn probe_parse_reads_name_description_pairs_and_reports_unparseable_otherw
 }
 
 #[tokio::test]
-async fn probe_parse_reads_a_bare_name_line_with_no_description() {
-    let bare_name_only = "shadcn\n";
-
-    let outcome = mainframe_server::skills_cli::probe_parse::parse_probe(bare_name_only);
-
+async fn probe_parse_never_offers_preamble_or_description_lines_as_skills() {
+    let outcome = mainframe_server::skills_cli::probe_parse::parse_probe(PROBE_LISTING);
     let ProbeOutcome::Probed { skills } = outcome else {
-        panic!("expected a probed outcome for a bare skill name");
+        panic!("expected a probed outcome for readable output");
     };
-    assert_eq!(skills.len(), 1);
-    assert_eq!(skills[0].name, "shadcn");
-    assert_eq!(skills[0].description, None);
+    for skill in &skills {
+        assert!(
+            !skill.name.contains(' '),
+            "preamble or description leaked into the picker: {}",
+            skill.name
+        );
+    }
+    assert_eq!(
+        skills.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+        vec!["docx", "pdf"]
+    );
 }
 
 #[tokio::test]
