@@ -38,20 +38,7 @@ pub(crate) async fn load_history_inner(
         .flat_map(|t| t.items)
         .collect();
 
-    // Collect spawned sub-agent thread ids referenced by `wait` collabAgentToolCall items.
-    let mut child_thread_ids: Vec<String> = Vec::new();
-    for item in &all_items {
-        if let ThreadItem::CollabAgentToolCall(c) = item
-            && c.tool == "wait"
-            && let Some(ids) = &c.receiver_thread_ids
-        {
-            for id in ids {
-                if !child_thread_ids.contains(id) {
-                    child_thread_ids.push(id.clone());
-                }
-            }
-        }
-    }
+    let child_thread_ids = collect_child_thread_ids(&all_items);
 
     let agent_meta_by_thread: HashMap<String, AgentMetadata> = if child_thread_ids.is_empty() {
         HashMap::new()
@@ -103,4 +90,73 @@ pub(crate) async fn load_history_inner(
         &child_items_by_thread,
         &agent_meta_by_thread,
     ))
+}
+
+/// Child thread ids to fetch and nest, from both naming routes (todo #247
+/// task 21): a `subAgentActivity` ping of any kind, and a `wait`'s
+/// `receiverThreadIds` (the legacy route). Deduped and order-preserving.
+fn collect_child_thread_ids(all_items: &[ThreadItem]) -> Vec<String> {
+    let mut child_thread_ids: Vec<String> = Vec::new();
+    let mut push_unique = |id: &str| {
+        if !child_thread_ids.iter().any(|existing| existing == id) {
+            child_thread_ids.push(id.to_string());
+        }
+    };
+    for item in all_items {
+        match item {
+            ThreadItem::SubAgentActivity(a) => push_unique(&a.agent_thread_id),
+            ThreadItem::CollabAgentToolCall(c) if c.tool == "wait" => {
+                for id in c.receiver_thread_ids.iter().flatten() {
+                    push_unique(id);
+                }
+            }
+            _ => {}
+        }
+    }
+    child_thread_ids
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::collect_child_thread_ids;
+    use crate::types::ThreadItem;
+
+    fn items(v: serde_json::Value) -> Vec<ThreadItem> {
+        serde_json::from_value(v).expect("items parse")
+    }
+
+    #[test]
+    fn collects_the_child_thread_id_from_a_started_activity_ping() {
+        let all = items(json!([
+            { "id": "s1", "type": "subAgentActivity", "kind": "started", "agentThreadId": "child-1", "agentPath": "/root/child" },
+        ]));
+        assert_eq!(collect_child_thread_ids(&all), vec!["child-1".to_string()]);
+    }
+
+    #[test]
+    fn collects_the_child_thread_id_from_a_waits_receiver_list() {
+        let all = items(json!([
+            { "id": "w1", "type": "collabAgentToolCall", "tool": "wait", "status": "completed", "receiverThreadIds": ["child-2"] },
+        ]));
+        assert_eq!(collect_child_thread_ids(&all), vec!["child-2".to_string()]);
+    }
+
+    #[test]
+    fn dedupes_a_child_named_by_both_routes() {
+        let all = items(json!([
+            { "id": "s1", "type": "subAgentActivity", "kind": "started", "agentThreadId": "child-3", "agentPath": "/root/child" },
+            { "id": "w1", "type": "collabAgentToolCall", "tool": "wait", "status": "completed", "receiverThreadIds": ["child-3"] },
+        ]));
+        assert_eq!(collect_child_thread_ids(&all), vec!["child-3".to_string()]);
+    }
+
+    #[test]
+    fn ignores_a_non_wait_collab_tool_call_and_a_started_ping_with_no_activity() {
+        let all = items(json!([
+            { "id": "sp1", "type": "collabAgentToolCall", "tool": "spawnAgent", "status": "completed", "receiverThreadIds": ["child-4"] },
+        ]));
+        assert_eq!(collect_child_thread_ids(&all), Vec::<String>::new());
+    }
 }
