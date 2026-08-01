@@ -8,7 +8,7 @@
  * carries `tail`/`exitCode` beyond the standard envelope.
  */
 import { describe, it, expect } from 'vitest';
-import { SkillsCliManifestSchema, SkillsCliProbeSchema, SkillsCliFailureSchema } from '../skills-cli';
+import { SkillsCliManifestSchema, SkillsCliProbeSchema, SkillsCliFailureSchema } from '../skills-cli.js';
 
 const AVAILABLE_MANIFEST = {
   status: 'available',
