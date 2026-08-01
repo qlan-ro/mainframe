@@ -2222,7 +2222,7 @@ fn now_ms() -> i64 {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 // PORT STATUS: src/chat/chat-manager.ts (787 lines)
 // confidence: medium

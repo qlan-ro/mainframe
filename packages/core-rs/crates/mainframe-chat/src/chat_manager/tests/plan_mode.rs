@@ -44,13 +44,24 @@ impl PlanModeActionHandler for RecordingHandler {
     fn on_approve_and_clear_context<'a>(
         &'a self,
         response: ControlResponse,
-        _ctx: &'a dyn PlanActionContext,
+        ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         self.calls
             .lock()
             .unwrap()
-            .push(("on_approve_and_clear_context", response));
-        Box::pin(async { Ok(()) })
+            .push(("on_approve_and_clear_context", response.clone()));
+        Box::pin(async move {
+            let plan = response
+                .updated_input
+                .as_ref()
+                .and_then(|m| m.get("plan"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            match plan {
+                Some(plan) => ctx.send_message(plan).await,
+                None => Ok(()),
+            }
+        })
     }
 
     fn on_reject<'a>(
@@ -209,4 +220,29 @@ async fn answers_the_escalation_on_the_wire_exactly_once_via_the_permission_hand
     // not "fix" it here without re-reading T12's live-verification contingency.
     assert_eq!(session.responded_calls.lock().unwrap().len(), 2);
     assert_eq!(session.permission_mode_calls.lock().unwrap().len(), 1);
+}
+
+/// T6's `PlanHostImpl`-specific case: `ChatManager::new` alone never calls
+/// `attach_self` (only `build_chat_manager` does), so a manager built the way
+/// this crate's tests build one is exactly the "never attached" state the
+/// clear-context follow-up send must fail closed against.
+#[tokio::test]
+async fn clear_context_follow_up_send_fails_closed_when_chatmanager_is_never_attached() {
+    let handler = RecordingHandler::arc();
+    let deps = StoreDeps::arc();
+    *deps.plan_handler.lock().unwrap() = Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
+    let mgr = ChatManager::new(deps);
+    let session = RecSession::new("s1", false, true);
+    seed_active(&mgr, "c1", test_chat("c1"), session);
+
+    let mut response = exit_plan_response("r1", Some(ExecutionMode::Default), Some(true));
+    let mut input = std::collections::HashMap::new();
+    input.insert(
+        "plan".to_string(),
+        serde_json::Value::String("do the thing".to_string()),
+    );
+    response.updated_input = Some(input);
+
+    let result = mgr.respond_to_permission("c1", response).await;
+    assert!(result.is_err());
 }

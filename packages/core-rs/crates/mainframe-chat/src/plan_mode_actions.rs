@@ -234,6 +234,9 @@ impl PlanActionContext for ChatPlanActionCtx {
     }
 }
 
+#[cfg(test)]
+mod tests;
+
 // PORT STATUS: src/chat/plan-mode-actions.ts — production context, no direct TS
 // counterpart file (the TS `buildActionContext` closure lived inline in
 // chat-manager.ts). See plan_mode_handler.rs's PORT STATUS for the handler port.

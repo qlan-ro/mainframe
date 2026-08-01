@@ -18,7 +18,7 @@ mod plan_mode;
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct StoreDeps {
+pub(crate) struct StoreDeps {
     store: Mutex<HashMap<String, Chat>>,
     events: Mutex<Vec<DaemonEvent>>,
     updates: Mutex<Vec<(String, ChatUpdate)>>,
@@ -53,10 +53,10 @@ struct StoreDeps {
 }
 
 impl StoreDeps {
-    fn arc() -> Arc<Self> {
+    pub(crate) fn arc() -> Arc<Self> {
         Arc::new(Self::default())
     }
-    fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
+    pub(crate) fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
         let d = Self::default();
         {
             let mut s = d.store.lock().unwrap();
