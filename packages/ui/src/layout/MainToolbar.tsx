@@ -236,7 +236,7 @@ export function MainToolbar({
             <button
               data-testid="automation-recommender-open"
               type="button"
-              onClick={openSetupAdvisor}
+              onClick={() => openSetupAdvisor()}
               className={ICON_BTN}
             >
               <ScanSearch size={14} />
