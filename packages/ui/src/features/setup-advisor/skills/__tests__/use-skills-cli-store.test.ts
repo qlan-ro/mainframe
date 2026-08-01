@@ -20,17 +20,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { SkillsCliEntry } from '@qlan-ro/mainframe-types';
 
-class SkillsCliError extends Error {
-  readonly tail?: string;
-  readonly exitCode?: number | null;
+// `vi.hoisted` because `vi.mock`'s factory is hoisted above the module body and
+// runs during the first import of the mocked module — a plain class declaration
+// here would still be in its temporal dead zone by then.
+const { SkillsCliError } = vi.hoisted(() => ({
+  SkillsCliError: class SkillsCliError extends Error {
+    readonly tail?: string;
+    readonly exitCode?: number | null;
 
-  constructor(message: string, tail?: string, exitCode?: number | null) {
-    super(message);
-    this.name = 'SkillsCliError';
-    this.tail = tail;
-    this.exitCode = exitCode;
-  }
-}
+    constructor(message: string, tail?: string, exitCode?: number | null) {
+      super(message);
+      this.name = 'SkillsCliError';
+      this.tail = tail;
+      this.exitCode = exitCode;
+    }
+  },
+}));
 
 vi.mock('@/lib/api/skills-cli', () => ({
   getSkillsCliManifest: vi.fn(),
