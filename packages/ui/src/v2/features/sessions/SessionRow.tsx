@@ -36,7 +36,7 @@ import { SessionRowRename } from './SessionRowRename';
 import { StatusDot } from './StatusDot';
 
 /** Rows sit one rung below their group header, on the stock indent scale. */
-const ROW_INDENT = 'pl-5';
+const ROW_INDENT = 'pl-8';
 
 /** Rows rendered outside the sidebar's tag registry still paint their dots. */
 const DEFAULT_COLOR_OF = (): TagColor => 'blue';

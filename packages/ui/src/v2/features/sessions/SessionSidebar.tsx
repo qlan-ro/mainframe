@@ -8,7 +8,7 @@
  */
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { PanelLeftIcon, PlusIcon, SearchIcon, SettingsIcon, ZapIcon } from 'lucide-react';
+import { PanelLeftIcon, SearchIcon, SettingsIcon, ZapIcon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import {
   Sidebar,
@@ -27,10 +27,12 @@ import { attentionCount } from '@/features/sessions/view-model/attention-counts'
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { useProjects } from '@/features/sessions/use-projects';
+import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
+import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 import { ProjectSection } from './ProjectSection';
-import { SessionList } from './SessionList';
+import { SessionsSection } from './SessionsSection';
 import { useRemoveProject } from './use-remove-project';
 
 /** Reserves the native macOS traffic-lights cluster (3 × 12px + gaps + inset). */
@@ -67,6 +69,7 @@ export function SessionSidebar({ className }: { className?: string }) {
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
 
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
+  const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const isUnread = useUnreadStore((s) => s.isUnread);
   const { projects, removeProjectFromList } = useProjects();
   const onRemoveProject = useRemoveProject(removeProjectFromList);
@@ -95,6 +98,9 @@ export function SessionSidebar({ className }: { className?: string }) {
     return map;
   }, [sortedProjects]);
 
+  const sessionCounts = useSessionCounts(allItems);
+  const draft = useDraftRow(allItems, filterProjectId);
+
   return (
     <Sidebar collapsible="offcanvas" className={className}>
       <SidebarHeader className="gap-2">
@@ -107,11 +113,6 @@ export function SessionSidebar({ className }: { className?: string }) {
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <SidebarInput data-testid="sidebar-search" placeholder="Search sessions" className="pl-8" />
         </div>
-
-        <Button data-testid="sidebar-new-session" size="sm" className="w-full justify-start">
-          <PlusIcon />
-          New session
-        </Button>
       </SidebarHeader>
 
       <SidebarSeparator />
@@ -127,7 +128,14 @@ export function SessionSidebar({ className }: { className?: string }) {
           onRemoveProject={onRemoveProject}
         />
         <SidebarSeparator />
-        <SessionList groups={groups} projectNames={projectNames} />
+        <SessionsSection
+          groups={groups}
+          projectNames={projectNames}
+          projects={sortedProjects}
+          sessionCounts={sessionCounts}
+          draft={draft}
+          hasFilters={hasFilters}
+        />
       </SidebarContent>
 
       <SidebarFooter className="text-xs text-muted-foreground">

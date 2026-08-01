@@ -15,7 +15,7 @@ import { SidebarGroupLabel } from '@v2/components/ui/sidebar';
 
 export function SessionGroupHeader({ label }: { label: string }) {
   return (
-    <SidebarGroupLabel data-testid={`sessions-group-header-${label}`} className="h-7 bg-sidebar pl-2">
+    <SidebarGroupLabel data-testid={`sessions-group-header-${label}`} className="h-7 bg-sidebar pl-5">
       {label}
     </SidebarGroupLabel>
   );

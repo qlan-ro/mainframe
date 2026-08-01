@@ -14,6 +14,8 @@ import { useSessionsThreadList } from '@/features/sessions/runtime/use-sessions-
 import { useSessionListRouter } from '@/features/sessions/ws/use-session-list-router';
 import { setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { daemonWs } from '@/lib/daemon/ws-client';
+import { installAdapterModelsSubscriber } from '@/store/adapters';
+import { seedAdaptersFor } from '@/store/adapters-seed';
 
 const DAEMON_PORT = Number((import.meta.env as Record<string, string | undefined>).VITE_DAEMON_PORT) || 31415;
 
@@ -48,6 +50,23 @@ export function V2Runtime({ children }: { children: ReactNode }) {
   useEffect(() => {
     daemonWs.setPort(DAEMON_PORT);
     daemonWs.connect();
+  }, []);
+
+  // The adapter catalog, seeded once and kept fresh off the WS. Without it a new
+  // draft can't resolve a model and dies at "adapter claude is unavailable" —
+  // the shipped app seeds it at the root, above every feature.
+  useEffect(() => {
+    seedAdaptersFor(DAEMON_PORT);
+    const unsubscribeModels = installAdapterModelsSubscriber();
+    // A same-port daemon restart never changes the port, so the seed above can't
+    // re-fire on its own; the reconnect signal is the only re-seed trigger.
+    const unsubscribeConnection = daemonWs.subscribeConnection(() => {
+      if (daemonWs.connected) seedAdaptersFor(DAEMON_PORT);
+    });
+    return () => {
+      unsubscribeModels();
+      unsubscribeConnection();
+    };
   }, []);
 
   return (
