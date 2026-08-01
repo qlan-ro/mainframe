@@ -23,6 +23,7 @@ import { useSessionFilters } from '@/store/session-filters';
 import { DraftSessionRow } from './DraftSessionRow';
 import { SessionList } from './SessionList';
 import { SessionSortMenu } from './SessionSortMenu';
+import { SessionsMoreMenu } from './SessionsMoreMenu';
 import { SessionsNewButton } from './SessionsNewButton';
 
 interface SessionsSectionProps {
@@ -69,8 +70,10 @@ export function SessionsSection({
             Sessions
           </CollapsibleTrigger>
         </SidebarGroupLabel>
-        {/* top-1.5 centres the action on the label of a py-0 group. */}
-        <SessionSortMenu mode={sortMode} onChange={setSortMode} className="top-1.5 right-3" />
+        {/* top-1.5 centres the action on the label of a py-0 group; the two
+            sit on a 20px pitch, more outermost. */}
+        <SessionSortMenu mode={sortMode} onChange={setSortMode} className="top-1.5 right-8" />
+        <SessionsMoreMenu className="top-1.5 right-3" />
 
         <CollapsibleContent className="flex min-h-0 flex-1 flex-col">
           <SidebarGroupContent className="flex min-h-0 flex-1 flex-col">
