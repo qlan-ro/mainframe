@@ -47,7 +47,7 @@ impl NotionAddRowAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: reqwest::Client::new(),
+            client: super::http_client(),
         }
     }
 }
