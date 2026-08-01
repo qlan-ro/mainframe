@@ -4,6 +4,9 @@
 //! interleaved with the new record types in the same rollout file.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod common;
+
+use common::capture_path;
 use mainframe_adapter_codex::item_types::{PatchChangeKind, ThreadItem};
 use mainframe_adapter_codex::rollout_reader::{RolloutReaderDeps, read_rollout_items};
 use serde_json::json;
@@ -288,4 +291,70 @@ async fn interleaved_record_kinds_reconstruct_without_cross_contamination() {
         other => panic!("expected McpToolCall, got {other:?}"),
     }
     assert!(matches!(&items[5], ThreadItem::AgentMessage(m) if m.text == "done"));
+}
+
+const FORK_CHILD_ID: &str = "019fafe0-42b0-7703-91ae-1900bf8f1805";
+
+fn session_meta_line(id: &str, session_id: &str, forked_from_id: Option<&str>) -> String {
+    let mut payload = json!({ "id": id, "session_id": session_id, "agent_path": "/root/child" });
+    if let Some(f) = forked_from_id {
+        payload["forked_from_id"] = json!(f);
+    }
+    json!({ "type": "session_meta", "payload": payload }).to_string()
+}
+
+/// Todo #247 QA defect: `fork_turns: "all"` seeds a spawned child's rollout
+/// with a copy of the parent's own history, so before the fix the parent's
+/// commentary ("I'm delegating...") rides along into the nested sub-agent
+/// card. Fixture derived from a real captured child rollout (see
+/// `tests/fixtures/collab-child-rollout-fork-0.144.3.jsonl`).
+#[tokio::test]
+async fn forked_child_rollout_drops_the_parent_prefix_before_the_new_task_handoff() {
+    let root = tempfile::tempdir().unwrap();
+    let raw = std::fs::read_to_string(capture_path("collab-child-rollout-fork-0.144.3.jsonl"))
+        .expect("read fixture");
+    let lines: Vec<String> = raw.lines().map(str::to_string).collect();
+    let path = write_rollout(&root, FORK_CHILD_ID, &lines);
+    let items = read_rollout_items(&path, Some(FORK_CHILD_ID), Some(&deps(&root))).await;
+
+    assert_eq!(
+        items.len(),
+        1,
+        "expected only the child's own answer, got {items:?}"
+    );
+    match &items[0] {
+        ThreadItem::AgentMessage(m) => assert_eq!(m.text, "4. Confirmed: 2 + 2 = 4."),
+        other => panic!("expected AgentMessage, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn forked_rollout_with_no_handoff_marker_falls_back_to_processing_everything() {
+    let root = tempfile::tempdir().unwrap();
+    let lines = vec![
+        session_meta_line("thread_fork_2", "thread_parent_2", Some("thread_parent_2")),
+        message_line("assistant", "parent commentary, no handoff ever arrives"),
+        message_line("assistant", "child's real answer"),
+    ];
+    let path = write_rollout(&root, "thread_fork_2", &lines);
+    let items = read_rollout_items(&path, Some("thread_fork_2"), Some(&deps(&root))).await;
+
+    assert_eq!(items.len(), 2, "expected no lines dropped, got {items:?}");
+    assert!(
+        matches!(&items[0], ThreadItem::AgentMessage(m) if m.text.contains("parent commentary"))
+    );
+}
+
+#[tokio::test]
+async fn non_forked_rollout_with_a_session_meta_line_is_unaffected() {
+    let root = tempfile::tempdir().unwrap();
+    let lines = vec![
+        session_meta_line("thread_plain_1", "thread_plain_1", None),
+        message_line("assistant", "ordinary reply"),
+    ];
+    let path = write_rollout(&root, "thread_plain_1", &lines);
+    let items = read_rollout_items(&path, Some("thread_plain_1"), Some(&deps(&root))).await;
+
+    assert_eq!(items.len(), 1);
+    assert!(matches!(&items[0], ThreadItem::AgentMessage(m) if m.text == "ordinary reply"));
 }

@@ -36,6 +36,7 @@ pub mod plan_mode_handler;
 pub mod quota_identity;
 pub mod quota_pull;
 pub mod quota_rate_limit;
+pub(crate) mod rollout_fork;
 pub mod rollout_reader;
 pub(crate) mod rollout_reconstruct;
 pub mod session;
