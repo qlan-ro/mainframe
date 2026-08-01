@@ -9,6 +9,7 @@
  * the rest of the custom layer — one geometry until a second one earns itself.
  */
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@v2/components/ui/sidebar';
+import { Toaster } from '@v2/components/ui/sonner';
 import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
 import { V2Runtime } from './V2Runtime';
 
@@ -43,6 +44,7 @@ export function V2Shell() {
             </div>
           </SidebarInset>
         </div>
+        <Toaster />
       </SidebarProvider>
     </V2Runtime>
   );

@@ -1,0 +1,97 @@
+/**
+ * The projects switcher section.
+ *
+ * Two independent collapses, as shipped: the section itself (persisted in
+ * ui-prefs, shared with the other sidebar sections) and a local "Show N more"
+ * tail past the first few projects. The list is vertical, so the tail is a
+ * plain count — no width measurement.
+ */
+import { useState } from 'react';
+import { ChevronRightIcon, LayoutGridIcon } from 'lucide-react';
+import type { Project } from '@qlan-ro/mainframe-types';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from '@v2/components/ui/sidebar';
+import { isSidebarSectionCollapsed, useUiPrefs } from '@/store/ui-prefs';
+import { AllProjectsRow, ProjectRow } from './ProjectRow';
+
+/** Past this many, the tail collapses behind a "Show N more" row. */
+const VISIBLE_LIMIT = 3;
+
+interface ProjectSectionProps {
+  projects: Project[];
+  /** Per-project count of sessions wanting attention; 0 hides the badge. */
+  attention: Record<string, number>;
+  activeId: string | null;
+  onSelect: (id: string | null) => void;
+  onRemoveProject?: (project: Project) => void;
+}
+
+export function ProjectSection({ projects, attention, activeId, onSelect, onRemoveProject }: ProjectSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+  const collapsedSections = useUiPrefs((s) => s.collapsedSidebarSections);
+  const toggleSection = useUiPrefs((s) => s.toggleSidebarSection);
+  const open = !isSidebarSectionCollapsed(collapsedSections, 'projects');
+
+  const collapsible = projects.length > VISIBLE_LIMIT;
+  const visible = expanded || !collapsible ? projects : projects.slice(0, VISIBLE_LIMIT);
+  const hidden = projects.length - visible.length;
+  const totalAttention = Object.values(attention).reduce((a, b) => a + b, 0);
+
+  return (
+    <Collapsible open={open} onOpenChange={() => toggleSection('projects')} className="group/projects">
+      <SidebarGroup className="py-0">
+        <SidebarGroupLabel asChild className="pl-2">
+          <CollapsibleTrigger data-testid="sidebar-projects-toggle">
+            <ChevronRightIcon className="transition-transform group-data-open/projects:rotate-90" />
+            Projects
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        {/* "Add project" is missing on purpose: it needs the directory-picker
+            overlay, which lands with the other root-mounted dialogs. */}
+
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <AllProjectsRow
+                active={activeId === null}
+                attention={totalAttention}
+                icon={<LayoutGridIcon className="size-3" />}
+                onSelect={() => onSelect(null)}
+              />
+              {visible.map((project) => (
+                <ProjectRow
+                  key={project.id}
+                  project={project}
+                  active={activeId === project.id}
+                  attention={attention[project.id] ?? 0}
+                  onSelect={() => onSelect(project.id)}
+                  onRemove={onRemoveProject == null ? undefined : () => onRemoveProject(project)}
+                />
+              ))}
+              {collapsible && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    data-testid="sidebar-project-more"
+                    size="sm"
+                    aria-expanded={expanded}
+                    className="pl-8 text-primary hover:bg-transparent hover:underline"
+                    onClick={() => setExpanded((value) => !value)}
+                  >
+                    {expanded ? 'Show less' : `Show ${hidden} more`}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+}

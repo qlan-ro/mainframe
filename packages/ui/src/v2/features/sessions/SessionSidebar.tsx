@@ -29,8 +29,9 @@ import { applySessionFilters } from '@/features/sessions/filter/apply-session-fi
 import { useProjects } from '@/features/sessions/use-projects';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
-import { ProjectList } from './ProjectList';
+import { ProjectSection } from './ProjectSection';
 import { SessionList } from './SessionList';
+import { useRemoveProject } from './use-remove-project';
 
 /** Reserves the native macOS traffic-lights cluster (3 × 12px + gaps + inset). */
 const TRAFFIC_LIGHTS_WIDTH = 80;
@@ -67,7 +68,8 @@ export function SessionSidebar({ className }: { className?: string }) {
 
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
-  const { projects } = useProjects();
+  const { projects, removeProjectFromList } = useProjects();
+  const onRemoveProject = useRemoveProject(removeProjectFromList);
 
   const filteredItems = useMemo(
     () => applySessionFilters(allItems, { filterProjectId, selectedTags, selectedSynthetic }),
@@ -117,11 +119,12 @@ export function SessionSidebar({ className }: { className?: string }) {
       {/* overflow-hidden: the sessions list is windowed and owns the only
           scroller, so the panel itself must not become a second one. */}
       <SidebarContent className="overflow-hidden">
-        <ProjectList
+        <ProjectSection
           projects={sortedProjects}
           attention={attention}
           activeId={filterProjectId}
           onSelect={setFilterProjectId}
+          onRemoveProject={onRemoveProject}
         />
         <SidebarSeparator />
         <SessionList groups={groups} projectNames={projectNames} />
