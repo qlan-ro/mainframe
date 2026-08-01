@@ -10,20 +10,24 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@v2/components/ui/sidebar';
-import { PROJECTS } from './fixtures';
+import type { Project } from '@qlan-ro/mainframe-types';
+import { projectColor } from '@/features/sessions/sidebar/project-color';
 
 /** Past this many, the tail collapses behind a "Show N more" row. */
 const VISIBLE_LIMIT = 5;
 
 interface ProjectListProps {
+  projects: Project[];
+  /** Per-project count of sessions wanting attention; 0 hides the badge. */
+  attention: Record<string, number>;
   activeId: string | null;
   onSelect: (id: string | null) => void;
 }
 
-export function ProjectList({ activeId, onSelect }: ProjectListProps) {
+export function ProjectList({ projects, attention, activeId, onSelect }: ProjectListProps) {
   const [expanded, setExpanded] = useState(false);
-  const overflow = PROJECTS.length - VISIBLE_LIMIT;
-  const visible = expanded ? PROJECTS : PROJECTS.slice(0, VISIBLE_LIMIT);
+  const overflow = projects.length - VISIBLE_LIMIT;
+  const visible = expanded ? projects : projects.slice(0, VISIBLE_LIMIT);
 
   return (
     <SidebarGroup>
@@ -54,18 +58,20 @@ export function ProjectList({ activeId, onSelect }: ProjectListProps) {
                 tooltip={project.name}
                 onClick={() => onSelect(project.id)}
               >
+                {/* Inline style, not a utility: the ten-hue project palette is
+                    computed per id, so it has no token to name. */}
                 <span
                   aria-hidden
                   className="flex size-4 shrink-0 items-center justify-center rounded-sm text-xs leading-none font-semibold text-white uppercase"
-                  style={{ background: project.color }}
+                  style={{ background: projectColor(project.id) }}
                 >
                   {project.name[0]}
                 </span>
                 <span>{project.name}</span>
               </SidebarMenuButton>
-              {project.attention > 0 && (
+              {(attention[project.id] ?? 0) > 0 && (
                 <SidebarMenuBadge data-testid={`sidebar-project-badge-${project.id}`}>
-                  {project.attention}
+                  {attention[project.id]}
                 </SidebarMenuBadge>
               )}
             </SidebarMenuItem>

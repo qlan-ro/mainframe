@@ -2,15 +2,15 @@
  * The v2 app shell — sidebar plus surface pane.
  *
  * Structure mirrors the shipped AppShell (window root → sidebar → surface
- * column) but drops everything that needs a live daemon: no runtime provider,
- * no overlay hosts, no session router. Those come back one at a time as the
- * surfaces they belong to are ported.
+ * column). The sessions runtime is live; the overlay hosts and the surfaces
+ * themselves come back one at a time as they are ported.
  *
  * The shipped app's three window styles (glass / unified / split) are gone with
  * the rest of the custom layer — one geometry until a second one earns itself.
  */
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@v2/components/ui/sidebar';
 import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
+import { V2Runtime } from './V2Runtime';
 
 function SurfacePlaceholder() {
   return (
@@ -26,22 +26,24 @@ function SurfacePlaceholder() {
 
 export function V2Shell() {
   return (
-    <SidebarProvider defaultOpen>
-      <div data-testid="v2-window-root" className="flex h-full flex-1 overflow-hidden font-sans text-foreground">
-        <SessionSidebar />
+    <V2Runtime>
+      <SidebarProvider defaultOpen>
+        <div data-testid="v2-window-root" className="flex h-full flex-1 overflow-hidden font-sans text-foreground">
+          <SessionSidebar />
 
-        <SidebarInset data-testid="v2-main-pane" className="overflow-hidden">
-          <header className="flex h-11 shrink-0 items-center gap-2 border-b px-2">
-            <SidebarTrigger />
-            <span className="text-sm font-medium">mainframe</span>
-            <span className="text-xs text-muted-foreground">design/ui-v2-clone</span>
-          </header>
+          <SidebarInset data-testid="v2-main-pane" className="overflow-hidden">
+            <header className="flex h-11 shrink-0 items-center gap-2 border-b px-2">
+              <SidebarTrigger />
+              <span className="text-sm font-medium">mainframe</span>
+              <span className="text-xs text-muted-foreground">design/ui-v2-clone</span>
+            </header>
 
-          <div className="flex min-h-0 flex-1 flex-col">
-            <SurfacePlaceholder />
-          </div>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <SurfacePlaceholder />
+            </div>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </V2Runtime>
   );
 }
