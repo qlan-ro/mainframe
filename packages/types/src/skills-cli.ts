@@ -9,13 +9,18 @@ import { z } from 'zod';
 export const SkillsCliScopeSchema = z.enum(['project', 'global']);
 export type SkillsCliScope = z.infer<typeof SkillsCliScopeSchema>;
 
+// The CLI's manifest and probe-source list both accept a bare skill name
+// with no source/description attached (`skills_cli/manifest.rs`'s
+// `parse_entries`, `skills_cli/probe_parse.rs`'s bare-name branch) — the
+// daemon serializes the absent field as JSON `null`, so these stay
+// `.nullish()` rather than `z.string()`.
 export const SkillsCliEntrySchema = z
   .object({
     name: z.string().min(1),
     scope: SkillsCliScopeSchema,
-    source: z.string(),
-    sourceType: z.string(),
-    skillPath: z.string(),
+    source: z.string().nullish(),
+    sourceType: z.string().nullish(),
+    skillPath: z.string().nullish(),
   })
   .loose();
 export type SkillsCliEntry = z.infer<typeof SkillsCliEntrySchema>;
@@ -44,7 +49,7 @@ export type SkillsCliManifest = z.infer<typeof SkillsCliManifestSchema>;
 export const ProbedSkillSchema = z
   .object({
     name: z.string().min(1),
-    description: z.string(),
+    description: z.string().nullish(),
   })
   .loose();
 export type ProbedSkill = z.infer<typeof ProbedSkillSchema>;

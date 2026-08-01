@@ -29,9 +29,11 @@ export function ManifestRow({ entry, running, disabled, onUninstall }: ManifestR
       className="flex items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-accent"
     >
       <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">{name}</span>
-      <span className={cn(CHIP_BASE, CHIP_TONE)}>
-        <span className="truncate">{source}</span>
-      </span>
+      {source ? (
+        <span className={cn(CHIP_BASE, CHIP_TONE)}>
+          <span className="truncate">{source}</span>
+        </span>
+      ) : null}
       <span className={cn(CHIP_BASE, CHIP_TONE)}>{scope}</span>
       <div className="flex w-[88px] shrink-0 justify-end">
         <Button

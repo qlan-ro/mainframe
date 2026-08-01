@@ -137,18 +137,23 @@ fn owned(names: &[&str]) -> Vec<String> {
     names.iter().map(|s| s.to_string()).collect()
 }
 
-const PROJECT_ID: &str = "p1";
 const PROJECT_PATH: &str = "/tmp/skills-cli-test-project";
 
+/// Every test below runs on its own `libtest` thread and shares
+/// [`mainframe_server::skills_cli::locks`]'s process-global guard set; giving
+/// each test a project id derived from its own name (rather than one shared
+/// literal) keeps overlapping runs from colliding on the same guard slot and
+/// spuriously losing the race with [`SkillsCliError::Busy`].
 #[tokio::test]
 async fn install_argv_is_add_with_explicit_skills_agent_and_yes() {
+    let project_id = "install-argv-is-add-with-explicit-skills-agent-and-yes";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
 
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a", "b"]),
@@ -174,18 +179,20 @@ async fn install_argv_is_add_with_explicit_skills_agent_and_yes() {
             "--yes"
         ]
     );
+    assert_eq!(recorded[0].program, "skills");
     assert_eq!(recorded[0].cwd, PROJECT_PATH);
 }
 
 #[tokio::test]
 async fn install_global_scope_adds_the_global_flag() {
+    let project_id = "install-global-scope-adds-the-global-flag";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
 
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -214,13 +221,14 @@ async fn install_global_scope_adds_the_global_flag() {
 
 #[tokio::test]
 async fn uninstall_argv_is_remove_with_skill_agent_scope_and_yes() {
+    let project_id = "uninstall-argv-is-remove-with-skill-agent-scope-and-yes";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
 
     mainframe_server::skills_cli::uninstall(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         &owned(&["a"]),
         Scope::Project,
@@ -235,11 +243,13 @@ async fn uninstall_argv_is_remove_with_skill_agent_scope_and_yes() {
         recorded[0].args,
         vec!["remove", "--skill", "a", "--agent", "claude-code", "--yes"]
     );
+    assert_eq!(recorded[0].program, "skills");
     assert_eq!(recorded[0].cwd, PROJECT_PATH);
 }
 
 #[tokio::test]
 async fn manifest_runs_list_json_twice_once_per_scope() {
+    let project_id = "manifest-runs-list-json-twice-once-per-scope";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::queued(vec![
         CliOutcome {
@@ -257,7 +267,7 @@ async fn manifest_runs_list_json_twice_once_per_scope() {
     ]);
 
     let result =
-        mainframe_server::skills_cli::manifest(&runner, &path, PROJECT_ID, PROJECT_PATH).await;
+        mainframe_server::skills_cli::manifest(&runner, &path, project_id, PROJECT_PATH).await;
 
     assert!(
         matches!(result, Ok(ManifestOutcome::Available { .. })),
@@ -273,11 +283,12 @@ async fn manifest_runs_list_json_twice_once_per_scope() {
 
 #[tokio::test]
 async fn probe_argv_is_add_source_list() {
+    let project_id = "probe-argv-is-add-source-list";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
 
     let result =
-        mainframe_server::skills_cli::probe(&runner, &path, PROJECT_ID, PROJECT_PATH, "owner/repo")
+        mainframe_server::skills_cli::probe(&runner, &path, project_id, PROJECT_PATH, "owner/repo")
             .await;
 
     assert!(matches!(
@@ -287,17 +298,19 @@ async fn probe_argv_is_add_source_list() {
     let recorded = runner.recorded();
     assert_eq!(recorded.len(), 1);
     assert_eq!(recorded[0].args, vec!["add", "owner/repo", "--list"]);
+    assert_eq!(recorded[0].program, "skills");
 }
 
 #[tokio::test]
 async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
+    let project_id = "no-argv-contains-a-telemetry-or-dangerously-accept-flag";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
 
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -309,7 +322,7 @@ async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -321,7 +334,7 @@ async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
     mainframe_server::skills_cli::uninstall(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         &owned(&["a"]),
         Scope::Project,
@@ -329,10 +342,10 @@ async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
     )
     .await
     .unwrap();
-    mainframe_server::skills_cli::manifest(&runner, &path, PROJECT_ID, PROJECT_PATH)
+    mainframe_server::skills_cli::manifest(&runner, &path, project_id, PROJECT_PATH)
         .await
         .unwrap();
-    mainframe_server::skills_cli::probe(&runner, &path, PROJECT_ID, PROJECT_PATH, "owner/repo")
+    mainframe_server::skills_cli::probe(&runner, &path, project_id, PROJECT_PATH, "owner/repo")
         .await
         .unwrap();
 
@@ -348,6 +361,7 @@ async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
 
 #[tokio::test]
 async fn no_argument_derived_from_user_input_starts_with_a_dash() {
+    let project_id = "no-argument-derived-from-user-input-starts-with-a-dash";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
     let known_flags = [
@@ -363,7 +377,7 @@ async fn no_argument_derived_from_user_input_starts_with_a_dash() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["my skill.v2"]),
@@ -387,13 +401,14 @@ async fn no_argument_derived_from_user_input_starts_with_a_dash() {
 
 #[tokio::test]
 async fn unknown_adapter_falls_back_to_claude_code() {
+    let project_id = "unknown-adapter-falls-back-to-claude-code";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
 
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -405,7 +420,7 @@ async fn unknown_adapter_falls_back_to_claude_code() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -435,6 +450,7 @@ async fn unknown_adapter_falls_back_to_claude_code() {
 
 #[tokio::test]
 async fn source_rejected_when_empty_dashed_local_path_or_off_allowlist() {
+    let project_id = "source-rejected-when-empty-dashed-local-path-or-off-allowlist";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::new();
     let invalid_sources = [
@@ -453,7 +469,7 @@ async fn source_rejected_when_empty_dashed_local_path_or_off_allowlist() {
         let result = mainframe_server::skills_cli::install(
             &runner,
             &path,
-            PROJECT_ID,
+            project_id,
             PROJECT_PATH,
             source,
             &owned(&["a"]),
@@ -509,6 +525,7 @@ async fn skill_name_allows_spaces_and_dots_and_rejects_dash_prefix_and_control_c
 
 #[tokio::test]
 async fn manifest_merges_project_and_global_entries() {
+    let project_id = "manifest-merges-project-and-global-entries";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::queued(vec![
         CliOutcome {
@@ -528,7 +545,7 @@ async fn manifest_merges_project_and_global_entries() {
     ]);
 
     let result =
-        mainframe_server::skills_cli::manifest(&runner, &path, PROJECT_ID, PROJECT_PATH).await;
+        mainframe_server::skills_cli::manifest(&runner, &path, project_id, PROJECT_PATH).await;
 
     let ManifestOutcome::Available { entries } = result.unwrap() else {
         panic!("expected an available manifest");
@@ -581,13 +598,28 @@ async fn manifest_parses_the_lockfile_shaped_object_and_the_array_shape() {
 }
 
 #[tokio::test]
+async fn manifest_parses_a_name_only_entry_keeping_source_fields_none_not_defaulted() {
+    let name_only = r#"[{"name":"no-source"}]"#;
+
+    let entries = mainframe_server::skills_cli::manifest::parse_entries(name_only, Scope::Project);
+
+    assert_eq!(entries.len(), 1);
+    let entry = &entries[0];
+    assert_eq!(entry.name, "no-source");
+    assert_eq!(entry.source, None);
+    assert_eq!(entry.source_type, None);
+    assert_eq!(entry.skill_path, None);
+}
+
+#[tokio::test]
 async fn manifest_reports_unavailable_when_neither_binary_resolves() {
+    let project_id = "manifest-reports-unavailable-when-neither-binary-resolves";
     let empty_dir = tempfile::tempdir().unwrap();
     let path = ResolvedPath::from_value(empty_dir.path().to_string_lossy().into_owned());
     let runner = RecordingRunner::new();
 
     let result =
-        mainframe_server::skills_cli::manifest(&runner, &path, PROJECT_ID, PROJECT_PATH).await;
+        mainframe_server::skills_cli::manifest(&runner, &path, project_id, PROJECT_PATH).await;
 
     assert!(
         matches!(
@@ -618,6 +650,7 @@ async fn manifest_prefers_the_skills_executable_over_the_package_runner() {
 
 #[tokio::test]
 async fn nonzero_exit_maps_to_a_failure_carrying_the_ansi_stripped_tail() {
+    let project_id = "nonzero-exit-maps-to-a-failure-carrying-the-ansi-stripped-tail";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::queued(vec![CliOutcome {
         started: true,
@@ -629,7 +662,7 @@ async fn nonzero_exit_maps_to_a_failure_carrying_the_ansi_stripped_tail() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -655,6 +688,7 @@ async fn nonzero_exit_maps_to_a_failure_carrying_the_ansi_stripped_tail() {
 
 #[tokio::test]
 async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
+    let project_id = "spawn-failure-and-timeout-map-to-failures-with-their-own-reasons";
     let (_dir, path) = fake_skills_binary();
 
     let spawn_failure_runner = RecordingRunner::queued(vec![CliOutcome {
@@ -666,7 +700,7 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
     let spawn_result = mainframe_server::skills_cli::install(
         &spawn_failure_runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -684,7 +718,7 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
     let timeout_result = mainframe_server::skills_cli::install(
         &timeout_runner,
         &path,
-        PROJECT_ID,
+        project_id,
         PROJECT_PATH,
         "owner/repo",
         &owned(&["a"]),
@@ -742,6 +776,20 @@ async fn probe_parse_reads_name_description_pairs_and_reports_unparseable_otherw
         mainframe_server::skills_cli::probe_parse::parse_probe(garbage),
         ProbeOutcome::Unparseable
     ));
+}
+
+#[tokio::test]
+async fn probe_parse_reads_a_bare_name_line_with_no_description() {
+    let bare_name_only = "shadcn\n";
+
+    let outcome = mainframe_server::skills_cli::probe_parse::parse_probe(bare_name_only);
+
+    let ProbeOutcome::Probed { skills } = outcome else {
+        panic!("expected a probed outcome for a bare skill name");
+    };
+    assert_eq!(skills.len(), 1);
+    assert_eq!(skills[0].name, "shadcn");
+    assert_eq!(skills[0].description, None);
 }
 
 #[tokio::test]

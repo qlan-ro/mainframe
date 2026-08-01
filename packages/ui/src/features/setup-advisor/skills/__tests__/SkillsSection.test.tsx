@@ -115,6 +115,19 @@ describe('SkillsSection — populated', () => {
     expect(running).toHaveAttribute('aria-busy', 'true');
   });
 
+  it('renders a name-only entry (no source) with no source chip, still keyed and uninstallable', async () => {
+    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
+      status: 'available',
+      entries: [{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }],
+    });
+
+    render(<SkillsSection projectId="proj-a" />);
+
+    const row = await screen.findByTestId('skills-section-row-project-no-source');
+    expect(row).toHaveTextContent('no-source');
+    expect(screen.getByTestId('skills-section-uninstall-project-no-source')).toBeInTheDocument();
+  });
+
   it('disables every row Uninstall while an install is in flight', async () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
       status: 'available',

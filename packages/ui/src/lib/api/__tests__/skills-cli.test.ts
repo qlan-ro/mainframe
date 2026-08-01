@@ -93,6 +93,20 @@ describe('getSkillsCliManifest', () => {
 
     expect(result.status).toBe('unavailable');
   });
+
+  it('resolves (does not throw) a name-only entry the daemon serialized with null source fields', async () => {
+    mockFetchOk({
+      status: 'available',
+      entries: [{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }],
+    });
+
+    const result = await getSkillsCliManifest('proj-1');
+
+    expect(result).toMatchObject({
+      status: 'available',
+      entries: [{ name: 'no-source', scope: 'project', source: null }],
+    });
+  });
 });
 
 describe('probeSkillsSource', () => {
@@ -105,6 +119,14 @@ describe('probeSkillsSource', () => {
     expect(url).toBe('http://127.0.0.1:31415/api/projects/proj-1/skills-cli/probe');
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({ source: 'owner/repo', adapterId: 'claude' });
+  });
+
+  it('resolves (does not throw) a bare-name candidate the daemon serialized with a null description', async () => {
+    mockFetchOk({ status: 'probed', skills: [{ name: 'bare-name', description: null }] });
+
+    const result = await probeSkillsSource('proj-1', 'owner/repo');
+
+    expect(result).toMatchObject({ status: 'probed', skills: [{ name: 'bare-name', description: null }] });
   });
 });
 

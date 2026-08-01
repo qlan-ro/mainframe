@@ -244,3 +244,50 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/skills-cli/install", post(install))
         .route("/api/projects/{id}/skills-cli/uninstall", post(uninstall))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::skills_cli::{ProbedSkill, SkillsCliEntry};
+
+    // Pins the wire contract the TS `SkillsCliEntrySchema`/`ProbedSkillSchema`
+    // now decode with `.nullish()`: a name-only entry or bare-name probe
+    // candidate serializes its absent fields as explicit JSON `null`, not an
+    // omitted key.
+    #[test]
+    fn manifest_json_serializes_a_name_only_entry_with_explicit_null_fields() {
+        let outcome = ManifestOutcome::Available {
+            entries: vec![SkillsCliEntry {
+                name: "no-source".to_string(),
+                scope: Scope::Project,
+                source: None,
+                source_type: None,
+                skill_path: None,
+            }],
+        };
+
+        let json = manifest_json(outcome);
+
+        let entry = &json["entries"][0];
+        assert_eq!(entry["name"], "no-source");
+        assert!(entry["source"].is_null());
+        assert!(entry["sourceType"].is_null());
+        assert!(entry["skillPath"].is_null());
+    }
+
+    #[test]
+    fn probe_json_serializes_a_bare_name_candidate_with_an_explicit_null_description() {
+        let outcome = ProbeOutcome::Probed {
+            skills: vec![ProbedSkill {
+                name: "bare-name".to_string(),
+                description: None,
+            }],
+        };
+
+        let json = probe_json(outcome);
+
+        let skill = &json["skills"][0];
+        assert_eq!(skill["name"], "bare-name");
+        assert!(skill["description"].is_null());
+    }
+}

@@ -63,6 +63,19 @@ describe('SkillsCliManifestSchema', () => {
   it('rejects a status outside the available/unavailable union', () => {
     expect(SkillsCliManifestSchema.safeParse({ status: 'installing', entries: [] }).success).toBe(false);
   });
+
+  it('accepts a name-only entry whose source/sourceType/skillPath the daemon serialized as null', () => {
+    const result = SkillsCliManifestSchema.safeParse({
+      status: 'available',
+      entries: [{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      status: 'available',
+      entries: [{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }],
+    });
+  });
 });
 
 describe('SkillsCliProbeSchema', () => {
@@ -89,6 +102,16 @@ describe('SkillsCliProbeSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('accepts a bare-name probe candidate whose description the daemon serialized as null', () => {
+    const result = SkillsCliProbeSchema.safeParse({
+      status: 'probed',
+      skills: [{ name: 'bare-name', description: null }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ status: 'probed', skills: [{ name: 'bare-name', description: null }] });
   });
 });
 

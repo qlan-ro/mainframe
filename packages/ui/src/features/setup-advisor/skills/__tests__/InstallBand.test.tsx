@@ -97,6 +97,21 @@ describe('InstallBand — probed', () => {
     fireEvent.click(option);
     expect(screen.getByTestId('skills-section-install')).toBeEnabled();
   });
+
+  it('renders a bare-name candidate (no description) without crashing', async () => {
+    vi.mocked(skillsCliApi.probeSkillsSource).mockResolvedValue({
+      status: 'probed',
+      skills: [{ name: 'bare-name', description: null }],
+    });
+
+    render(<InstallBand projectId="proj-a" />);
+    const source = screen.getByTestId('skills-section-source');
+    fireEvent.change(source, { target: { value: 'owner/repo' } });
+    fireEvent.blur(source);
+
+    const option = await screen.findByTestId('skills-section-skill-option-bare-name');
+    expect(option).toHaveTextContent('bare-name');
+  });
 });
 
 describe('InstallBand — probe unparseable', () => {
