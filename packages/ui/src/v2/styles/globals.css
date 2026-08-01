@@ -150,3 +150,20 @@
     @apply font-sans;
     }
 }
+
+/* Carried over verbatim — the working-session spin the provider logo animates
+   with. A keyframe has no theme dimension, so it is not a token. */
+@keyframes mf-claude-logo-working {
+    from {
+        transform: rotate(0);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-\[mf-claude-logo-working_1\.52s_linear_infinite\] {
+        animation: none;
+    }
+}
