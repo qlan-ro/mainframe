@@ -3,6 +3,8 @@
 //! turn/completed, the parent-turn-end backstop) funnels through here, so a
 //! child is ever represented by exactly one card (spec decision 1). Wired into
 //! the live path by `thread_item_render.rs` and `event_mapper.rs` (tasks 16-17).
+//! Resolution-side helpers (closing a card) live in the `collab_resolve`
+//! sibling — split out to keep this file under the 300-line ceiling.
 
 use std::sync::Arc;
 
@@ -10,10 +12,10 @@ use mainframe_adapter_api::SessionSink;
 
 use crate::collab_identity::{card_task_line, card_title};
 use crate::collab_protocol::{
-    CollabCallStatus, CollabTool, SubAgentKind, classify_collab_status, classify_collab_tool,
-    classify_sub_agent_kind,
+    CollabTool, SubAgentKind, classify_collab_tool, classify_sub_agent_kind,
 };
-use crate::history::{collab_agent_tool_use, tool_result_block};
+use crate::collab_resolve::{Outcome, on_wait_completed, on_wait_started, resolve_card};
+use crate::history::collab_agent_tool_use;
 use crate::item_types::{CollabAgentToolCallItem, SubAgentActivityItem};
 use crate::session_state::{CodexSessionState, SubAgentCard};
 use crate::thread_registry::lookup_agent_metadata_with;
@@ -25,14 +27,6 @@ use crate::thread_registry::lookup_agent_metadata_with;
 pub(crate) enum Phase {
     Started,
     Completed,
-}
-
-/// How a card's closing `tool_result` should read. `Success`'s `Option<String>`
-/// is an explicit message override (e.g. `agentsStates[child].message`); `None`
-/// falls back to the card's own `last_message`.
-pub(crate) enum Outcome {
-    Success(Option<String>),
-    Error(String),
 }
 
 pub(crate) fn on_sub_agent_activity(
@@ -124,38 +118,6 @@ pub(crate) fn record_child_message(
     }
 }
 
-/// Closes `child_thread_id`'s card with a `tool_result`. A no-op when the card
-/// is absent or already resolved — every naming route can race to resolve the
-/// same card, and only the first should win.
-pub(crate) fn resolve_card(
-    child_thread_id: &str,
-    outcome: Outcome,
-    sink: &Arc<dyn SessionSink>,
-    state: &mut CodexSessionState,
-) {
-    let Some(card) = state.sub_agent_cards.get(child_thread_id) else {
-        return;
-    };
-    if card.resolved {
-        return;
-    }
-    let card_id = card.card_id.clone();
-    let (content, is_error) = match outcome {
-        Outcome::Success(message) => (
-            message
-                .or_else(|| card.last_message.clone())
-                .unwrap_or_else(|| "Sub-agent completed".to_string()),
-            false,
-        ),
-        Outcome::Error(message) => (message, true),
-    };
-    sink.on_tool_result(vec![tool_result_block(&card_id, &content, is_error, None)]);
-    if let Some(card) = state.sub_agent_cards.get_mut(child_thread_id) {
-        card.open = false;
-        card.resolved = true;
-    }
-}
-
 /// Re-opens a resolved card for a fresh `sendInput`/`resumeAgent` round without
 /// creating a second one (spec decision 4). A no-op for unregistered children.
 pub(crate) fn reopen_card(child_thread_id: &str, state: &mut CodexSessionState) {
@@ -198,77 +160,6 @@ pub(crate) fn on_collab_tool_call(
     }
 }
 
-fn on_wait_started(
-    item: &CollabAgentToolCallItem,
-    sink: &Arc<dyn SessionSink>,
-    state: &mut CodexSessionState,
-) {
-    for child in item.receiver_thread_ids.iter().flatten() {
-        open_card(
-            child,
-            item.id.clone(),
-            None,
-            item.prompt.as_deref(),
-            sink,
-            state,
-        );
-    }
-}
-
-/// An unnamed (`receiverThreadIds` empty) `wait` can only ever fail cards, never
-/// complete them — an empty/unknown status is indistinguishable from a
-/// timed-out wait, so treating it as success would risk closing a card no
-/// child actually finished (spec decision 2). Success on the unnamed route only
-/// ever arrives via the child's own `turn/completed` or the parent-turn-end
-/// backstop.
-fn on_wait_completed(
-    item: &CollabAgentToolCallItem,
-    sink: &Arc<dyn SessionSink>,
-    state: &mut CodexSessionState,
-) {
-    let receivers = item.receiver_thread_ids.clone().unwrap_or_default();
-    let status = classify_collab_status(&item.status);
-    if receivers.is_empty() {
-        if status == CollabCallStatus::Failed {
-            fail_all_open_cards(sink, state);
-        }
-        return;
-    }
-    for child in &receivers {
-        let agent_message = item
-            .agents_states
-            .as_ref()
-            .and_then(|m| m.get(child))
-            .and_then(|s| s.message.clone());
-        if status == CollabCallStatus::Failed {
-            let content = agent_message.unwrap_or_else(|| "Sub-agent failed".to_string());
-            resolve_card(child, Outcome::Error(content), sink, state);
-        } else {
-            resolve_card(child, Outcome::Success(agent_message), sink, state);
-        }
-    }
-}
-
-fn fail_all_open_cards(sink: &Arc<dyn SessionSink>, state: &mut CodexSessionState) {
-    for child in open_unresolved_children(state) {
-        resolve_card(
-            &child,
-            Outcome::Error("Sub-agent failed".to_string()),
-            sink,
-            state,
-        );
-    }
-}
-
-fn open_unresolved_children(state: &CodexSessionState) -> Vec<String> {
-    state
-        .sub_agent_cards
-        .iter()
-        .filter(|(_, c)| c.open && !c.resolved)
-        .map(|(tid, _)| tid.clone())
-        .collect()
-}
-
 pub(crate) fn on_sub_agent_turn_completed(
     child_thread_id: &str,
     turn_status: &str,
@@ -291,7 +182,7 @@ pub(crate) fn resolve_open_cards_on_parent_turn_end(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
-    for child in open_unresolved_children(state) {
+    for child in crate::collab_resolve::open_unresolved_children(state) {
         resolve_card(&child, Outcome::Success(None), sink, state);
     }
 }

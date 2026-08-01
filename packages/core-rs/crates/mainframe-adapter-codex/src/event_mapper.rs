@@ -9,7 +9,7 @@ use std::sync::Arc;
 use mainframe_adapter_api::SessionSink;
 use serde_json::Value;
 
-use crate::collab_render::{emit_collab_task_group_start, stash_spawn_prompts};
+use crate::collab_card;
 use crate::item_types::ThreadItem;
 pub(crate) use crate::parent_id_sink::ParentIdSink;
 use crate::quota_rate_limit::{
@@ -139,13 +139,7 @@ fn handle_item_started(
             crate::compaction::handle_compaction_started(sink);
         }
         Ok(ThreadItem::CollabAgentToolCall(item)) => {
-            // `spawnAgent` is dispatch metadata only — stash its prompt for the later `wait` card.
-            if item.tool == "spawnAgent" {
-                stash_spawn_prompts(&item, state);
-                return;
-            }
-            // Only `wait` items render a card.
-            emit_collab_task_group_start(&item, sink, state);
+            collab_card::on_collab_tool_call(&item, collab_card::Phase::Started, sink, state);
         }
         // Every other item type renders from its terminal `item/completed` event.
         Ok(_) | Err(_) => {}
@@ -177,7 +171,7 @@ fn handle_item_completed(
     }
 
     match serde_json::from_value::<ThreadItem>(params.item.clone()) {
-        Ok(item) => render_completed_item(item, sink, state),
+        Ok(item) => render_completed_item(item, params.thread_id.as_deref(), sink, state),
         Err(_) => {
             tracing::debug!(
                 module = "codex:events",

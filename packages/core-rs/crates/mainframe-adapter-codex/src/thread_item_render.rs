@@ -8,7 +8,7 @@ use std::sync::Arc;
 use mainframe_adapter_api::SessionSink;
 use mainframe_types::chat::{TodoItem, TodoStatus};
 
-use crate::collab_render::{handle_collab_completed, handle_sub_agent_activity};
+use crate::collab_card;
 use crate::event_mapper::CodexSessionState;
 use crate::history::{
     bash_input, file_change_input, is_exec_error, mcp_result_content, parse_unified_diff,
@@ -23,19 +23,23 @@ use crate::web_search_render::render_web_search;
 
 /// Dispatches one parsed `ThreadItem` from `item/completed` to the sink. `sink` is
 /// already wrapped with `ParentIdSink` by the caller when the item belongs to a
-/// spawned sub-agent's thread.
+/// spawned sub-agent's thread; `thread_id` is that item's own (unwrapped) Codex
+/// thread id, used to key the CollabAgent card engine.
 pub(crate) fn render_completed_item(
     item: ThreadItem,
+    thread_id: Option<&str>,
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
     match item {
-        ThreadItem::AgentMessage(m) => sink.on_message(vec![text_block(&m.text)], None),
+        ThreadItem::AgentMessage(m) => render_agent_message(&m.text, thread_id, sink, state),
         ThreadItem::Reasoning(r) => render_reasoning(&r, sink),
         ThreadItem::CommandExecution(c) => render_command_execution(&c, sink),
         ThreadItem::FileChange(f) => render_file_change(&f, sink),
         ThreadItem::ImageGeneration(img) => handle_image_generation(img, sink),
-        ThreadItem::CollabAgentToolCall(item) => handle_collab_completed(item, sink, state),
+        ThreadItem::CollabAgentToolCall(item) => {
+            collab_card::on_collab_tool_call(&item, collab_card::Phase::Completed, sink, state);
+        }
         ThreadItem::McpToolCall(m) => render_mcp_tool_call(&m, sink),
         ThreadItem::TodoList(item) => render_todo_list(&item, sink),
         ThreadItem::ContextCompaction(_) => {
@@ -47,11 +51,26 @@ pub(crate) fn render_completed_item(
         ThreadItem::ImageView(_) => skip_item("imageView"),
         ThreadItem::Sleep(_) => skip_item("sleep"),
         ThreadItem::HookPrompt(_) => skip_item("hookPrompt"),
-        ThreadItem::SubAgentActivity(a) => handle_sub_agent_activity(&a, sink, state),
+        ThreadItem::SubAgentActivity(a) => collab_card::on_sub_agent_activity(&a, sink, state),
         ThreadItem::WebSearch(w) => render_web_search(&w, sink),
         ThreadItem::UserMessage(_) => {
             tracing::debug!(module = "codex:events", "codex: unhandled item type");
         }
+    }
+}
+
+/// A child's own `agentMessage` also feeds the card engine, so its text becomes
+/// the card's closing content if nothing else resolves the card first (spec
+/// decision 5).
+fn render_agent_message(
+    text: &str,
+    thread_id: Option<&str>,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
+    sink.on_message(vec![text_block(text)], None);
+    if let Some(tid) = thread_id {
+        collab_card::record_child_message(tid, text, state);
     }
 }
 

@@ -17,7 +17,7 @@ pub mod approval_handler;
 pub(crate) mod collab_card;
 pub(crate) mod collab_identity;
 pub(crate) mod collab_protocol;
-pub(crate) mod collab_render;
+pub(crate) mod collab_resolve;
 pub(crate) mod compaction;
 pub mod event_mapper;
 pub mod external_session_parse;
