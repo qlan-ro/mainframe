@@ -237,7 +237,12 @@ function UserMessageImpl() {
           </QueuedUserTurn>
         )
       ) : planBody ? (
-        <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
+        // The gate shell's max-width cap should govern the record's width, not
+        // the root's `items-end` alignment — an explicit full-width wrapper
+        // escapes the flex item's default shrink-to-fit sizing.
+        <div className="w-full">
+          <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
+        </div>
       ) : (
         <>
           {body && <CoolCard>{body}</CoolCard>}

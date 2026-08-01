@@ -557,6 +557,18 @@ describe('UserMessage — PB: clear-context plan message', () => {
     expect(screen.getByText('Just a regular message')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-bubble')).not.toBeInTheDocument();
   });
+
+  it('renders the plan record on a full-width wrapper, escaping the right-aligned message column', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    // MessagePrimitive.Root is `items-end`, which shrink-wraps and right-aligns
+    // flex children by default — the plan record needs an explicit full-width
+    // wrapper so it fills the message column instead.
+    expect(screen.getByTestId('chat-plan-bubble').parentElement).toHaveClass('w-full');
+  });
 });
 
 // ---------------------------------------------------------------------------
