@@ -76,10 +76,10 @@ export function InstallBand({ projectId, adapterId }: InstallBandProps) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <Input
           data-testid="skills-section-source"
-          className="min-w-0 flex-1 font-mono text-label"
+          className="min-w-[160px] flex-1 font-mono text-label"
           value={source}
           disabled={installing}
           placeholder="owner/repo"
