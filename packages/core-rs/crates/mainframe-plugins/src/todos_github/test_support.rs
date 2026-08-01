@@ -33,7 +33,7 @@ impl PluginHostDb for FakeHostDb {
         _model: Option<&str>,
         _permission_mode: Option<&str>,
     ) -> Chat {
-        unimplemented!("the sync engine never creates chats")
+        unreachable!("the sync engine never creates chats")
     }
     fn settings_get(&self, category: &str, key: &str) -> Option<String> {
         self.settings

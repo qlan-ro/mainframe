@@ -21,22 +21,22 @@ pub struct DaemonGitHubIssuesPort {
 }
 
 impl DaemonGitHubIssuesPort {
-    pub fn new(credentials: Arc<dyn CredentialStore>) -> Self {
-        Self {
-            client: GitHubIssuesClient::new(),
+    pub fn new(credentials: Arc<dyn CredentialStore>) -> Result<Self, gh::GitHubError> {
+        Ok(Self {
+            client: GitHubIssuesClient::new()?,
             credentials,
-        }
+        })
     }
 
     #[cfg(test)]
     pub fn with_base_url(
         base_url: impl Into<String>,
         credentials: Arc<dyn CredentialStore>,
-    ) -> Self {
-        Self {
-            client: GitHubIssuesClient::with_base_url(base_url),
+    ) -> Result<Self, gh::GitHubError> {
+        Ok(Self {
+            client: GitHubIssuesClient::with_base_url(base_url)?,
             credentials,
-        }
+        })
     }
 
     async fn token(&self, label: &str) -> Result<String, GitHubPortError> {

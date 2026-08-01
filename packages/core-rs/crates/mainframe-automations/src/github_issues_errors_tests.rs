@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::github_issues::{GitHubError, GitHubIssuesClient};
-use super::github_issues_tests::repo;
+use super::github_issues::GitHubError;
+use super::github_issues_tests::{client, repo};
 
 /// Mounts a single `GET issues/1` response and returns the error `get_issue` produces.
 async fn get_issue_error(response: ResponseTemplate, token: &str) -> GitHubError {
@@ -17,7 +17,7 @@ async fn get_issue_error(response: ResponseTemplate, token: &str) -> GitHubError
         .respond_with(response)
         .mount(&server)
         .await;
-    GitHubIssuesClient::with_base_url(server.uri())
+    client(server.uri())
         .get_issue(&repo(), 1, token)
         .await
         .unwrap_err()
@@ -132,7 +132,7 @@ async fn too_many_requests_with_reset_header_maps_to_rate_limited() {
 
 #[tokio::test]
 async fn a_network_failure_maps_to_network() {
-    let err = GitHubIssuesClient::with_base_url("http://127.0.0.1:1")
+    let err = client("http://127.0.0.1:1")
         .get_issue(&repo(), 1, "tok")
         .await
         .unwrap_err();

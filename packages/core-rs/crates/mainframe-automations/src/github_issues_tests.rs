@@ -10,6 +10,12 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::github_issues::{CreateIssue, GitHubIssuesClient, IssuePatch, IssueState, RepoRef};
 
+/// The client under test. `with_base_url` is fallible only on TLS backend
+/// init failure, which a test host that just started a mock server cannot hit.
+pub(super) fn client(base_url: impl Into<String>) -> GitHubIssuesClient {
+    GitHubIssuesClient::with_base_url(base_url).expect("the test client must build")
+}
+
 pub(super) fn repo() -> RepoRef {
     RepoRef {
         owner: "qlan".to_string(),
@@ -35,7 +41,7 @@ async fn assert_patch_sends(patch: IssuePatch, expected_body: serde_json::Value)
         .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(3, "t", "open")))
         .mount(&server)
         .await;
-    GitHubIssuesClient::with_base_url(server.uri())
+    client(server.uri())
         .update_issue(&repo(), 3, patch, "tok")
         .await
         .unwrap();
@@ -70,7 +76,7 @@ async fn list_open_issues_follows_pagination() {
         .mount(&server)
         .await;
 
-    let issues = GitHubIssuesClient::with_base_url(server.uri())
+    let issues = client(server.uri())
         .list_open_issues(&repo(), "tok")
         .await
         .unwrap();
@@ -95,7 +101,7 @@ async fn requests_carry_a_user_agent() {
         .mount(&server)
         .await;
 
-    GitHubIssuesClient::with_base_url(server.uri())
+    client(server.uri())
         .get_issue(&repo(), 5, "tok")
         .await
         .unwrap();
@@ -114,7 +120,7 @@ async fn get_issue_maps_closed_state() {
         .mount(&server)
         .await;
 
-    let issue = GitHubIssuesClient::with_base_url(server.uri())
+    let issue = client(server.uri())
         .get_issue(&repo(), 5, "tok")
         .await
         .unwrap();
@@ -137,7 +143,7 @@ async fn field_times_read_the_last_rename_and_the_last_state_change() {
         .mount(&server)
         .await;
 
-    let times = GitHubIssuesClient::with_base_url(server.uri())
+    let times = client(server.uri())
         .issue_field_times(&repo(), 9, "tok")
         .await
         .unwrap();
@@ -180,7 +186,7 @@ async fn field_times_follow_pagination_to_find_the_newest_event() {
         .mount(&server)
         .await;
 
-    let times = GitHubIssuesClient::with_base_url(server.uri())
+    let times = client(server.uri())
         .issue_field_times(&repo(), 9, "tok")
         .await
         .unwrap();
@@ -200,7 +206,7 @@ async fn field_times_are_none_when_the_family_never_happened() {
         .mount(&server)
         .await;
 
-    let times = GitHubIssuesClient::with_base_url(server.uri())
+    let times = client(server.uri())
         .issue_field_times(&repo(), 9, "tok")
         .await
         .unwrap();
@@ -221,7 +227,7 @@ async fn create_issue_posts_title_body_and_labels() {
         .mount(&server)
         .await;
 
-    let issue = GitHubIssuesClient::with_base_url(server.uri())
+    let issue = client(server.uri())
         .create_issue(
             &repo(),
             CreateIssue {

@@ -340,13 +340,17 @@ async fn run_daemon() {
     // GitHub Issues port (task 5c): built over the automations engine's own
     // credential store so a token connected via the link dialog after boot
     // resolves without a restart (task 5a/5b). `None` when the engine failed
-    // to start — the plugin context then answers every call with the
-    // engine-unavailable guard (task 4) instead of this composition root
-    // treating it as fatal.
-    let github: Option<Arc<dyn GitHubIssues>> = automations.as_ref().map(|automations| {
-        Arc::new(github_issues_port::DaemonGitHubIssuesPort::new(
-            automations.credentials(),
-        )) as Arc<dyn GitHubIssues>
+    // to start, or when the HTTP client cannot be built — the plugin context
+    // then answers every call with the engine-unavailable guard (task 4)
+    // instead of this composition root treating it as fatal.
+    let github: Option<Arc<dyn GitHubIssues>> = automations.as_ref().and_then(|automations| {
+        match github_issues_port::DaemonGitHubIssuesPort::new(automations.credentials()) {
+            Ok(port) => Some(Arc::new(port) as Arc<dyn GitHubIssues>),
+            Err(err) => {
+                tracing::error!(%err, "github issues port unavailable: HTTP client build failed");
+                None
+            }
+        }
     });
     let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
         host_db: plugin_host_db,

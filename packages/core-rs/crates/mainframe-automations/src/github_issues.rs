@@ -27,24 +27,24 @@ pub struct GitHubIssuesClient {
 }
 
 impl GitHubIssuesClient {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, GitHubError> {
         Self::with_base_url(GITHUB_API)
     }
 
-    pub fn with_base_url(base_url: impl Into<String>) -> Self {
-        // `build()` only errs on TLS backend init failure; a fallback client
-        // without `redirect::Policy::none()` would silently break D6, so
-        // treat this as the same fatal-boot condition main.rs panics on.
-        #[allow(clippy::expect_used)]
+    /// Fallible because `build()` errs on TLS backend init failure, and a
+    /// fallback client without `redirect::Policy::none()` would silently
+    /// break D6. The composition root answers the error by leaving the
+    /// GitHub port unwired, as it already does for a dead automations engine.
+    pub fn with_base_url(base_url: impl Into<String>) -> Result<Self, GitHubError> {
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .expect("failed to build the GitHub HTTP client");
-        Self {
+            .map_err(|err| GitHubError::Network(err.to_string()))?;
+        Ok(Self {
             base_url: base_url.into(),
             http,
-        }
+        })
     }
 
     fn request(&self, method: reqwest::Method, url: String, token: &str) -> RequestBuilder {
@@ -163,12 +163,6 @@ impl GitHubIssuesClient {
         let request = self.request(reqwest::Method::PATCH, url, token).json(&body);
         let response = check_status(self.send(request).await?).await?;
         Ok(parse_body::<RawIssue>(response).await?.into())
-    }
-}
-
-impl Default for GitHubIssuesClient {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

@@ -75,7 +75,8 @@ fn issue_json(number: u64) -> serde_json::Value {
 #[tokio::test]
 async fn missing_credential_fails_without_reaching_the_network() {
     let store = Arc::new(MutableCredentialStore::default());
-    let port = DaemonGitHubIssuesPort::with_base_url("http://127.0.0.1:0", store);
+    let port = DaemonGitHubIssuesPort::with_base_url("http://127.0.0.1:0", store)
+        .expect("the test port must build");
 
     let err = port.get_issue(&repo(), 1, "github").await.unwrap_err();
 
@@ -97,7 +98,8 @@ async fn a_credential_connected_after_construction_resolves_on_the_next_call() {
         .await;
 
     let store = Arc::new(MutableCredentialStore::default());
-    let port = DaemonGitHubIssuesPort::with_base_url(server.uri(), store.clone());
+    let port = DaemonGitHubIssuesPort::with_base_url(server.uri(), store.clone())
+        .expect("the test port must build");
 
     assert!(port.get_issue(&repo(), 1, "github").await.is_err());
 
@@ -118,7 +120,8 @@ async fn not_found_maps_to_the_plugins_crate_error_variant() {
 
     let store = Arc::new(MutableCredentialStore::default());
     store.set("tok");
-    let port = DaemonGitHubIssuesPort::with_base_url(server.uri(), store);
+    let port = DaemonGitHubIssuesPort::with_base_url(server.uri(), store)
+        .expect("the test port must build");
 
     let err = port.get_issue(&repo(), 9, "github").await.unwrap_err();
     assert!(matches!(err, GitHubPortError::NotFound));
@@ -140,7 +143,8 @@ async fn create_and_update_round_trip_through_the_mirrored_dtos() {
 
     let store = Arc::new(MutableCredentialStore::default());
     store.set("tok");
-    let port = DaemonGitHubIssuesPort::with_base_url(server.uri(), store);
+    let port = DaemonGitHubIssuesPort::with_base_url(server.uri(), store)
+        .expect("the test port must build");
 
     let created = port
         .create_issue(
