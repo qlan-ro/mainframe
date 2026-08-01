@@ -1,0 +1,32 @@
+/**
+ * FailureTail — the last lines the skills CLI printed before it failed.
+ *
+ * A toast is the wrong home for this: it auto-dismisses, and the tail is the
+ * only thing that says *why*. It stays in the section until the next attempt
+ * clears it. ANSI escapes are stripped — the CLI colors its output even when
+ * its stdout is a pipe.
+ */
+const ANSI = /\u001B\[[0-9;]*[A-Za-z]/g;
+
+interface FailureTailProps {
+  message: string;
+  tail?: string;
+}
+
+export function FailureTail({ message, tail }: FailureTailProps) {
+  const clean = tail?.replace(ANSI, '').trim();
+
+  return (
+    <div className="flex flex-col gap-1 rounded-md border-[0.5px] border-destructive/30 bg-destructive/8 px-2 py-1.5">
+      <p className="text-label font-medium text-destructive">{message}</p>
+      {clean ? (
+        <pre
+          data-testid="skills-section-failure-tail"
+          className="max-h-[160px] overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-muted-foreground"
+        >
+          {clean}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
