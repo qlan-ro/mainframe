@@ -2,8 +2,10 @@
  * PlanCard — behavior tests.
  *
  * Strategy:
- *  - No external hook mocks needed: PlanCard does not call useChatId or any
- *    assistant-ui hooks — it only reads from its props.
+ *  - One external hook mock: PlanCard reads `useChatExtras()` for the chat's
+ *    live permission mode (the approved-plan record's execution-mode caption).
+ *    The real hook wraps `useAuiState` and throws outside a runtime tree, and
+ *    these tests render the card bare.
  *  - Wrap renders in TooltipProvider for Radix Tooltip compatibility.
  *  - Assert hardcoded expected values; never recompute card logic.
  *
@@ -23,6 +25,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+
+vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
+  useChatExtras: () => ({ state: { chatConfig: { permissionMode: 'acceptEdits' } } }),
+}));
+
 import { PlanCard } from '../PlanCard';
 import { nestedVerticalScrollers } from './_part-fixture';
 
@@ -231,6 +238,17 @@ describe('PlanCard', () => {
     renderCard(makePart({ result, isError: false }));
     expect(screen.getByTestId('chat-plan-bubble')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-card')).not.toBeInTheDocument();
+  });
+
+  it('captions the approved-plan record with the chat permission mode and no cleared-context suffix', () => {
+    const result =
+      'User has approved your plan. You can now start coding.\n\n' +
+      'Your plan has been saved to: /tmp/p.md\n\n' +
+      '## Approved Plan (edited by user):\n' +
+      '# Real Plan\n## Steps\nStep one';
+    renderCard(makePart({ result, isError: false }));
+    expect(screen.getByTestId('chat-plan-exec-mode')).toHaveTextContent('Auto-edits');
+    expect(screen.getByTestId('chat-plan-exec-mode').textContent).not.toContain('context cleared');
   });
 
   it('renders the raw "Updated plan" card (not the PlanBubble) for a non-approval result', () => {

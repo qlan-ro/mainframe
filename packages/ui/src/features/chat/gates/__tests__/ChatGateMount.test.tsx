@@ -6,9 +6,6 @@
  *    used so that routing decisions are verified through observable DOM state
  *    (data-testids), not through inspecting which JSX branch the component
  *    chose.
- *  - `useAuiState` (isRunning) is also mocked — ChatGateMount reads it to
- *    know whether an approved plan is still executing after the gate itself
- *    has been optimistically dropped from the permission queue.
  *  - All expected values are hardcoded; no logic mirrors the dispatch table
  *    inside ChatGateMount.
  *
@@ -23,12 +20,9 @@
  *  5. Reply passthrough: with a permission entry the hook's `reply` fn is
  *     forwarded to PermissionGate — clicking deny calls it with the correct
  *     deny ControlResponse.
- *  6. Approving a plan, then having `front` drop out (optimistic queue-drop)
- *     while the run is still active, keeps `chat-plan-running-footer` mounted
- *     instead of unmounting the whole gate.
- *  7. Once the run actually ends, the retained running footer is dropped too.
- *  8. Rejecting/keep-planning (never approving) does NOT resurrect the footer
- *     once front drops, even while still running — retention is approve-only.
+ *  6. An answered plan gate unmounts when the queue front clears — nothing is
+ *     retained past the answer.
+ *  7. Routing keeps working after a plan gate was answered.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -38,16 +32,10 @@ import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   useChatPermissionFront: vi.fn(),
 }));
-vi.mock('@assistant-ui/react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@assistant-ui/react')>();
-  return { ...actual, useAuiState: vi.fn().mockReturnValue(false) };
-});
 import { useChatPermissionFront } from '../../runtime/use-chat-thread-runtime';
-import { useAuiState } from '@assistant-ui/react';
 import { ChatGateMount } from '../ChatGateMount';
 
 const mockFront = vi.mocked(useChatPermissionFront);
-const mockIsRunning = vi.mocked(useAuiState);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -82,7 +70,6 @@ function wrap(ui: React.ReactElement) {
 describe('ChatGateMount', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIsRunning.mockReturnValue(false);
   });
 
   // --- Behavior 1: front undefined → renders nothing ---
@@ -144,36 +131,16 @@ describe('ChatGateMount', () => {
     });
   });
 
-  // --- Behavior 6/7/8: running footer survives the optimistic gate-drop ---
+  // --- Behavior 6: an answered gate unmounts with the queue front ---
   //
   // replyToPermission optimistically drops the entry from `permissions` (and
-  // therefore `front`) the same tick Approve is clicked, well before the agent
-  // finishes executing the plan. Simulates that by rerendering with
-  // `front: undefined` right after the approve click, while `isRunning` stays
-  // true (mirrors the daemon still running the approved plan).
+  // therefore `front`) the same tick an action is clicked; the daemon then
+  // shifts the pending permission, so nothing restores it. The approved plan's
+  // durable record is the transcript PlanBubble, not this card.
 
-  it('keeps chat-plan-running-footer mounted once front drops after approve, while the run is still active', () => {
+  it('unmounts the plan gate once the queue front clears', () => {
     mockFront.mockReturnValue({ front: planEntry, reply });
-    mockIsRunning.mockReturnValue(true);
-    const { rerender } = wrap(<ChatGateMount />);
-
-    fireEvent.click(screen.getByTestId('chat-plan-approve'));
-
-    // Simulate the optimistic queue-drop: front goes away, run still active.
-    mockFront.mockReturnValue({ front: undefined, reply });
-    rerender(
-      <TooltipProvider>
-        <ChatGateMount />
-      </TooltipProvider>,
-    );
-
-    expect(screen.getByTestId('chat-plan-running-footer')).toBeInTheDocument();
-  });
-
-  it('drops the retained running footer once the run actually ends', () => {
-    mockFront.mockReturnValue({ front: planEntry, reply });
-    mockIsRunning.mockReturnValue(true);
-    const { rerender } = wrap(<ChatGateMount />);
+    const { container, rerender } = wrap(<ChatGateMount />);
 
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
@@ -183,86 +150,33 @@ describe('ChatGateMount', () => {
         <ChatGateMount />
       </TooltipProvider>,
     );
-    expect(screen.getByTestId('chat-plan-running-footer')).toBeInTheDocument();
 
-    // The run ends — the retained footer must go away, not linger forever.
-    mockIsRunning.mockReturnValue(false);
-    rerender(
-      <TooltipProvider>
-        <ChatGateMount />
-      </TooltipProvider>,
-    );
-
-    expect(screen.queryByTestId('chat-plan-running-footer')).toBeNull();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
+    expect(container).toBeEmptyDOMElement();
   });
 
-  // --- Regression: the daemon confirms the resumed run asynchronously, so
-  // `isRunning` can still read `false` for one or more renders after the
-  // optimistic queue-drop (front goes undefined) — before it flips true.
-  // Gating the retained render on `approvedPlan != null && isRunning` (the
-  // earlier fix) unmounts ChatGateMount entirely during that window (neither
-  // `front` nor the isRunning-gated fallback holds), and remounting PlanGate
-  // afterwards loses its local `approved` state — the card resets to the
-  // pre-approval ActionRow instead of keeping the running footer. The render
-  // must stay retained on `approvedPlan` alone, independent of `isRunning`.
-
-  it('keeps the plan gate mounted (no reset) when front drops before isRunning has flipped true', () => {
+  it('still routes AskUserQuestion and permission gates by toolName after a plan gate was answered', () => {
     mockFront.mockReturnValue({ front: planEntry, reply });
-    mockIsRunning.mockReturnValue(false);
     const { rerender } = wrap(<ChatGateMount />);
 
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
-    // Optimistic queue-drop lands before the daemon confirms the run resumed.
-    mockFront.mockReturnValue({ front: undefined, reply });
-    mockIsRunning.mockReturnValue(false);
+    mockFront.mockReturnValue({ front: askEntry, reply });
     rerender(
       <TooltipProvider>
         <ChatGateMount />
       </TooltipProvider>,
     );
-
-    expect(screen.getByTestId('chat-plan-gate')).toBeInTheDocument();
-    expect(screen.getByTestId('chat-plan-running-footer')).toBeInTheDocument();
-    expect(screen.queryByTestId('chat-plan-approve')).toBeNull();
-
-    // The daemon confirms the run resumed.
-    mockIsRunning.mockReturnValue(true);
-    rerender(
-      <TooltipProvider>
-        <ChatGateMount />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('chat-plan-running-footer')).toBeInTheDocument();
-
-    // The run ends — now the retained gate is dropped.
-    mockIsRunning.mockReturnValue(false);
-    rerender(
-      <TooltipProvider>
-        <ChatGateMount />
-      </TooltipProvider>,
-    );
-    expect(screen.queryByTestId('chat-plan-running-footer')).toBeNull();
+    expect(screen.getByTestId('chat-question-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
-  });
 
-  it('does not resurrect the footer for a plan that was rejected, not approved, once front drops', () => {
-    mockFront.mockReturnValue({ front: planEntry, reply });
-    mockIsRunning.mockReturnValue(true);
-    const { rerender } = wrap(<ChatGateMount />);
-
-    // Reject — never clicks Approve, so nothing should be retained.
-    fireEvent.click(screen.getByTestId('chat-plan-reject'));
-
-    mockFront.mockReturnValue({ front: undefined, reply });
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
     rerender(
       <TooltipProvider>
         <ChatGateMount />
       </TooltipProvider>,
     );
-
-    expect(screen.queryByTestId('chat-plan-running-footer')).toBeNull();
-    expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
+    expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-question-gate')).toBeNull();
   });
 });

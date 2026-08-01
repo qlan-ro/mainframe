@@ -237,7 +237,7 @@ function UserMessageImpl() {
           </QueuedUserTurn>
         )
       ) : planBody ? (
-        <PlanBubble plan={planBody} />
+        <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
       ) : (
         <>
           {body && <CoolCard>{body}</CoolCard>}

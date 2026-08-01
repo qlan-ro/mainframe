@@ -40,13 +40,6 @@ const PLAN_MD_COMPONENTS: Components = {
 export interface PlanGateProps {
   entry: ChatPermissionEntry;
   reply: ReplyFn;
-  /**
-   * Notifies the caller that Approve was clicked, BEFORE `reply()` optimistically
-   * drops this entry from the permission queue — lets `ChatGateMount` retain the
-   * entry and keep the running footer mounted across that drop (see its own doc
-   * comment). No-op if omitted (e.g. in isolated component tests).
-   */
-  onApprove?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,18 +156,15 @@ function ReviseRow({
 // PlanGate
 // ---------------------------------------------------------------------------
 
-export function PlanGate({ entry, reply, onApprove }: PlanGateProps) {
+export function PlanGate({ entry, reply }: PlanGateProps) {
   const [execMode, setExecMode] = useState<ExecutionMode>('default');
   const [clearContext, setClearContext] = useState(false);
   const [revising, setRevising] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [approved, setApproved] = useState(false);
 
   const plan = (entry.request.input.plan as string | undefined) ?? '';
 
   const handleApprove = () => {
-    setApproved(true);
-    onApprove?.();
     void reply(buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
   };
 
@@ -187,12 +177,6 @@ export function PlanGate({ entry, reply, onApprove }: PlanGateProps) {
     void reply(buildPlanResponse(entry, { kind: 'reject' }));
   };
 
-  const EXEC_MODE_LABELS: Record<ExecutionMode, string> = {
-    default: 'Interactive',
-    acceptEdits: 'Auto-edits',
-    yolo: 'Unattended',
-  };
-
   return (
     <div data-testid="chat-plan-gate">
       <GateCardShell>
@@ -203,31 +187,13 @@ export function PlanGate({ entry, reply, onApprove }: PlanGateProps) {
           title="Ready to implement"
         />
         {plan && <PlanBody plan={plan} />}
-        {!approved && (
-          <ControlsPanel
-            execMode={execMode}
-            setExecMode={setExecMode}
-            clearContext={clearContext}
-            setClearContext={setClearContext}
-          />
-        )}
-        {approved ? (
-          <div
-            data-testid="chat-plan-running-footer"
-            className="flex items-center gap-2 border-t border-border px-3.5 py-2.5"
-          >
-            <span
-              className={`inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full ${execMode === 'yolo' ? 'bg-destructive' : 'bg-primary'}`}
-            />
-            <span className="text-body text-muted-foreground">
-              Executing in{' '}
-              <b className={execMode === 'yolo' ? 'font-semibold text-destructive' : 'font-semibold text-foreground'}>
-                {EXEC_MODE_LABELS[execMode]}
-              </b>{' '}
-              mode{clearContext ? ' · context cleared' : ''} — starting step 1.
-            </span>
-          </div>
-        ) : revising ? (
+        <ControlsPanel
+          execMode={execMode}
+          setExecMode={setExecMode}
+          clearContext={clearContext}
+          setClearContext={setClearContext}
+        />
+        {revising ? (
           <ReviseRow
             feedback={feedback}
             setFeedback={setFeedback}
