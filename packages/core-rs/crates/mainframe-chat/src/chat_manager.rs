@@ -12,7 +12,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
-use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, ImageInput, SessionSink};
+use mainframe_adapter_api::{
+    AdapterError, AdapterSession, BoxFuture, ImageInput, PlanModeActionHandler, SessionSink,
+};
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
@@ -189,6 +191,10 @@ pub trait ChatManagerDeps: Send + Sync {
         adapter_id: &str,
         options: mainframe_types::adapter::SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>>;
+
+    /// `adapters.get(adapterId)?.createPlanModeHandler()` — required (not
+    /// defaulted), per the #273 rule that every deps impl states its answer.
+    fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>>;
 
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
     fn process_attachments<'a>(

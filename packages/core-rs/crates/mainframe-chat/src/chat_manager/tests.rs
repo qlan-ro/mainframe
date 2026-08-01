@@ -3,7 +3,9 @@
 
 use super::*;
 use crate::test_support::test_chat;
-use mainframe_adapter_api::{ContextFiles, ImageInput, SessionSink, StopBackgroundTaskResult};
+use mainframe_adapter_api::{
+    ContextFiles, ImageInput, PlanModeActionHandler, SessionSink, StopBackgroundTaskResult,
+};
 use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
@@ -43,6 +45,9 @@ struct StoreDeps {
     attachments: Mutex<Option<ProcessedAttachments>>,
     /// What `extract_mentions_from_text` returns.
     mentions_found: Mutex<bool>,
+    /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
+    /// can inject a recorder (or leave `None` for the unresolved-handler path).
+    plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
 }
 
 impl StoreDeps {
@@ -199,6 +204,12 @@ impl ChatManagerDeps for StoreDeps {
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
+    }
+    fn create_plan_mode_handler(
+        &self,
+        _adapter_id: &str,
+    ) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.plan_handler.lock().unwrap().clone()
     }
     fn adapter_snapshot_models(
         &self,
