@@ -20,12 +20,24 @@
  *   chat-question-back / -next        — wizard pagination (multi-question only)
  *   chat-plan-execmode-{default|acceptEdits|yolo} — plan gate exec-mode segmented control
  *   chat-plan-clear-context           — plan gate "Clear context" checkbox
+ *   chat-gate-card                    — the shared gate card shell (width parity against chat-composer)
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+
+/** The gate card and the composer sit in two wrappers with identical geometry
+ *  (`mx-auto w-full max-w-3xl px-5`), so their outer edges must coincide. */
+async function expectGateMatchesComposerWidth(page: Page) {
+  const gate = await page.getByTestId('chat-gate-card').boundingBox();
+  const composer = await page.getByTestId('chat-composer').boundingBox();
+  expect(gate, 'gate card must be mounted').not.toBeNull();
+  expect(composer, 'composer must be mounted').not.toBeNull();
+  expect(Math.abs(gate!.x - composer!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(gate!.x + gate!.width - (composer!.x + composer!.width))).toBeLessThanOrEqual(1);
+}
 
 // ─── Permission gate — details disclosure + always-allow visibility ──────────
 
@@ -44,10 +56,11 @@ test.describe('§permission gate details', () => {
     await closeTauriApp(app);
   });
 
-  test('Details toggle reveals the raw tool input; always-allow shown when suggestions exist', async () => {
+  test('Details toggle reveals the raw tool input; always-allow shown when suggestions exist; the card matches the composer width at both surface widths', async () => {
     const { page } = app;
     await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
     await page.locator('[data-testid="chat-permission-gate"]').waitFor({ timeout: 45_000 });
+    await expectGateMatchesComposerWidth(page);
 
     // Raw input pre is not mounted until the disclosure is opened.
     await expect(page.locator('[data-testid="chat-permission-details-pre"]')).toBeHidden();
@@ -61,6 +74,15 @@ test.describe('§permission gate details', () => {
 
     // Recording's suggestions carry [{type:setMode,...},{type:addDirectories,...}] — non-empty.
     await expect(page.locator('[data-testid="chat-permission-always-allow"]')).toBeVisible();
+
+    // Narrow surface: lighting Files alongside chat shrinks the column in the same window.
+    await page.getByTestId('surface-rail-files').click();
+    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 10_000 });
+    await expectGateMatchesComposerWidth(page);
+    const column = await page.getByTestId('chat-thread-footer').boundingBox();
+    const narrowGate = await page.getByTestId('chat-gate-card').boundingBox();
+    expect(narrowGate!.width).toBeLessThanOrEqual(column!.width);
+    await page.getByTestId('surface-rail-files').click();
 
     // Clean up: deny so the AI finishes.
     await page.locator('[data-testid="chat-permission-deny"]').click();
@@ -126,6 +148,7 @@ test.describe('§ask-question wizard extras', () => {
     await sendMessage(page, 'Use AskUserQuestion to ask me a single-select question with 2 options');
 
     await page.locator('[data-testid="chat-question-gate"]').waitFor({ timeout: 60_000 });
+    await expectGateMatchesComposerWidth(page);
 
     // Other-input is not mounted until "Other…" is selected.
     await expect(page.locator('[data-testid="chat-question-other-input-0"]')).toBeHidden();
@@ -247,6 +270,7 @@ test.describe('§plan gate exec-mode', () => {
     const { page } = app;
     await sendMessage(page, 'Add `export function greet(name: string) { return "Hello " + name; }` to utils.ts');
     await page.locator('[data-testid="chat-plan-gate"]').waitFor({ timeout: 45_000 });
+    await expectGateMatchesComposerWidth(page);
 
     await page.locator('[data-testid="chat-plan-execmode-yolo"]').click();
     await expect(page.locator('[data-testid="chat-plan-execmode-yolo"]')).toHaveAttribute('aria-pressed', 'true');

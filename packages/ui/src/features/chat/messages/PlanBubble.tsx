@@ -51,7 +51,13 @@ export function PlanBubble({
     : null;
 
   return (
-    <GateCardShell resolved data-testid="chat-plan-bubble">
+    <GateCardShell
+      resolved
+      data-testid="chat-plan-bubble"
+      // overflow-visible over the shell's clip: clipping would hide a long-token
+      // containment bug (#298) instead of surfacing it.
+      className="overflow-visible break-words"
+    >
       <GateHead
         icon={<SquareCheck className="size-[12px] text-mf-success" />}
         tileClassName="bg-mf-success-tint"

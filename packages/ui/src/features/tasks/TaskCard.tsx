@@ -15,6 +15,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Hint } from '@/components/ui/hint';
 import type { Todo } from '@/lib/api/todos';
 import { typeTint, priorityTint, priorityDotClass } from './task-palettes';
+import { PairGlyph } from './github/PairGlyph';
+import { UnlinkPairButton } from './github/UnlinkPairButton';
+import { useGitHubSyncStore } from './github/use-github-sync-store';
 
 /** Returns a short human-readable "ago" string for an ISO date string. */
 function relativeTime(iso: string): string {
@@ -47,6 +50,7 @@ export const TaskCard = React.memo(function TaskCard({
   onStartSession,
 }: Props): React.ReactElement {
   const [isDragging, setIsDragging] = React.useState(false);
+  const linked = useGitHubSyncStore((s) => s.link !== null);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData('todo-number', String(todo.number));
@@ -178,57 +182,63 @@ export const TaskCard = React.memo(function TaskCard({
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          {(todo.status === 'open' || todo.status === 'in_progress') && (
+        <div className="flex items-center gap-1 shrink-0">
+          {/* GitHub pairing — absent entirely until the project is linked */}
+          {linked && <PairGlyph todo={todo} surface="card" />}
+
+          <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <UnlinkPairButton todo={todo} surface="card" />
+            {(todo.status === 'open' || todo.status === 'in_progress') && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    data-testid={`tasks-card-start-${todo.number}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartSession(todo);
+                    }}
+                    className="p-1.5 rounded text-primary hover:bg-accent transition-colors"
+                    aria-label="Start in new session"
+                  >
+                    <Play size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Start session</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  data-testid={`tasks-card-start-${todo.number}`}
+                  data-testid={`tasks-card-edit-${todo.number}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onStartSession(todo);
+                    onEdit(todo);
                   }}
-                  className="p-1.5 rounded text-primary hover:bg-accent transition-colors"
-                  aria-label="Start in new session"
+                  className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  aria-label="Edit task"
                 >
-                  <Play size={14} />
+                  <Edit size={14} />
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Start session</TooltipContent>
+              <TooltipContent>Edit</TooltipContent>
             </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                data-testid={`tasks-card-edit-${todo.number}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(todo);
-                }}
-                className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                aria-label="Edit task"
-              >
-                <Edit size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Edit</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                data-testid={`tasks-card-delete-${todo.number}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(todo.id);
-                }}
-                className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
-                aria-label="Delete task"
-              >
-                <Trash2 size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Delete</TooltipContent>
-          </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  data-testid={`tasks-card-delete-${todo.number}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(todo.id);
+                  }}
+                  className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                  aria-label="Delete task"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Delete</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </div>
     </div>

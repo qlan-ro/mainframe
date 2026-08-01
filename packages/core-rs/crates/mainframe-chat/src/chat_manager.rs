@@ -291,15 +291,16 @@ pub trait ChatManagerDeps: Send + Sync {
     fn chats_clear_worktree(&self, chat_id: &str);
     /// `adapters.get(adapterId)?.isTranscriptPresent(sessionId, projectPath, sessionFilePath)`.
     /// `None` = presence cannot be determined (missing predicate / null / error).
+    /// Required, not defaulted: an implementation that silently inherited a `None`
+    /// default left transcript-presence reconciliation permanently inert in
+    /// production — same class as #273 (#289).
     fn is_transcript_present<'a>(
         &'a self,
-        _adapter_id: &'a str,
-        _session_id: &'a str,
-        _project_path: &'a str,
-        _session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
-        Box::pin(async { None })
-    }
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<bool>>;
     /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
     /// the lifecycle default-model normalization. Required, not defaulted: an
     /// implementation that silently inherited the empty default made
@@ -2270,16 +2271,18 @@ pub(crate) mod tests;
 // notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. A defaulted ChatManagerDeps method is still silently unoverridden
-// notes: in chat_deps.rs (filed as #289 is_transcript_present); adapter_snapshot_models
-// notes: is now required and wired in chat_deps.rs (#290 — a silent default made
+// notes: spawned. No defaulted ChatManagerDeps method is left silently unoverridden in
+// notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, is_transcript_present
+// notes: and adapter_snapshot_models are all required, not defaulted (#273 for the
+// notes: tracker methods — a silent default caused backgroundActivity to stay empty,
+// notes: then let orphaned tasks stay Running forever, in production; #289 for
+// notes: is_transcript_present — a silent default left transcript-presence
+// notes: reconciliation permanently inert in production; #290 for
+// notes: adapter_snapshot_models — a silent default made
 // notes: normalize_saved_default_model's probe-failure short-circuit fire on every
-// notes: chat creation, leaking a retired saved default into new chats).
-// notes: tracker_list_live and tracker_end_all_running are required, not defaulted
-// notes: (#273 — a silent default caused backgroundActivity to stay empty, then let
-// notes: orphaned tasks stay Running forever, in production); generate_title gained
-// notes: an adapter_id arg (adapter-aware).
+// notes: chat creation, leaking a retired saved default into new chats);
+// notes: generate_title gained an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity
 // notes: integration test (#273). Also chat-manager-degraded (3).
-// todos: 2
+// todos: 1

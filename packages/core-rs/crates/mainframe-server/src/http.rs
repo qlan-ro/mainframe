@@ -2,7 +2,8 @@
 //!
 //! CORS (localhost-origin echo, `OPTIONS → 204`, `X-Content-Type-Options:
 //! nosniff`), the 30mb JSON body limit, the auth middleware over the HTTP routes,
-//! `GET /health`, the mounted Phase-3 route modules, and the WS upgrade route.
+//! negotiated gzip/brotli response compression (todo #294), `GET /health`, the
+//! mounted Phase-3 route modules, and the WS upgrade route.
 
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::cors_origin::is_allowed_origin;
 use crate::ctx::AppCtx;
 use crate::middleware::auth::auth_middleware;
+use crate::middleware::compression::compression_layer;
 use crate::routes;
 use crate::websocket::{lsp_ws_handler, ws_handler};
 
@@ -42,6 +44,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::files::router())
         .merge(routes::search::router())
         .merge(routes::git::router())
+        .merge(routes::git_remotes::router())
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
@@ -89,7 +92,10 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // Express's `app.use(authMiddleware)` runs before the router's 404, so a
         // non-loopback caller without a token gets 401 (not 404) on any path.
         .fallback(not_found)
-        .layer(from_fn_with_state(Arc::clone(&ctx), auth_middleware));
+        .layer(from_fn_with_state(Arc::clone(&ctx), auth_middleware))
+        // Outermost layer of the HTTP router only: the WS upgrades merged below
+        // must never pass through the compressor.
+        .layer(compression_layer());
 
     Router::new()
         .merge(http)
@@ -173,7 +179,9 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
 // auth, the PluginManager router nested at /api/plugins (nest_service — its state is
 // pre-applied), and the self-authenticating `/lsp/:projectId/:language` WS upgrade
 // alongside the generic `/` WS route. Workflows stay deliberately unmounted
-// (SCOPE DECISION 2026-07-10).
+// (SCOPE DECISION 2026-07-10). Negotiated gzip/brotli response compression
+// (todo #294) is a Rust-side addition with no TS counterpart, layered inside
+// the HTTP router so the WS upgrade routes stay untouched.
 // #219: axum's own DefaultBodyLimit (2mb) sat inside RequestBodyLimitLayer's
 // stack and rejected anything over ~2mb with an empty body before the 30mb
 // layer ever ran — silently breaking 2-5mb attachments on every daemon, local

@@ -64,4 +64,16 @@ describe('PlanBubble', () => {
     expect(style).not.toContain('--mf-um-card');
     expect(style).not.toContain('--mf-shadow-user-card');
   });
+
+  it('the plan card wraps long tokens instead of clipping them', () => {
+    render(<PlanBubble plan="Some plan text" />);
+    const card = screen.getByTestId('chat-plan-bubble');
+    expect(card.className).toContain('break-words');
+    expect(card.className).not.toContain('overflow-hidden');
+  });
+
+  it('a long unbreakable token stays in the DOM', () => {
+    render(<PlanBubble plan={'x'.repeat(200)} />);
+    expect(screen.getByText('x'.repeat(200))).toBeInTheDocument();
+  });
 });
