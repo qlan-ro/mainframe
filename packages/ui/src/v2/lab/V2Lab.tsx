@@ -1,69 +1,65 @@
 /**
- * Dev harness for the clone. Owns the theme attributes for both views so there
- * is one place that writes them — the scale view and the shell view have to be
- * looked at under the same six scheme × mode combinations.
+ * Dev harness for the clone: the ported shell, or a specimen sheet of the
+ * primitives, under either mode.
+ *
+ * Light/dark is the only theme axis left — the shipped app's three colour
+ * schemes and three window styles came off with the custom token layer.
  */
 import { useEffect, useState } from 'react';
-import type { WindowStyle } from '@/store/theme';
 import { V2Shell } from '@v2/app/V2Shell';
-import { ScaleLab } from './ScaleLab';
-import { labChipClass, ThemeControls, WINDOW_STYLES, type Scheme } from './ThemeControls';
+import { FormSpecimen } from './FormSpecimen';
 
-type View = 'shell' | 'scale';
+const VIEWS = ['shell', 'specimen'] as const;
+type View = (typeof VIEWS)[number];
+
+function chip(active: boolean): string {
+  return [
+    'rounded-2xl px-2.5 py-1 text-xs capitalize transition-colors',
+    active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+  ].join(' ');
+}
 
 export function V2Lab() {
   const [dark, setDark] = useState(false);
-  const [scheme, setScheme] = useState<Scheme>('classic');
-  const [windowStyle, setWindowStyle] = useState<WindowStyle>('glass');
   const [view, setView] = useState<View>('shell');
 
-  // The scheme tokens key off <html>, not a wrapper, so the lab drives the real
-  // attributes rather than a local copy that could drift from the app's.
+  // The tokens key off <html>, not a wrapper, so the lab drives the real class
+  // rather than a local copy that could drift from the app's.
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle('dark', dark);
-    if (scheme === 'classic') root.removeAttribute('data-scheme');
-    else root.setAttribute('data-scheme', scheme);
-  }, [dark, scheme]);
+    document.documentElement.classList.toggle('dark', dark);
+  }, [dark]);
 
   return (
-    <div className="flex h-screen flex-col bg-mf-window font-sans text-foreground">
-      <div className="flex shrink-0 items-center gap-4 border-b border-border px-4 py-2">
+    <div className="flex h-screen flex-col bg-background font-sans text-foreground">
+      <div className="flex shrink-0 items-center gap-4 border-b px-4 py-2">
         <div className="flex items-center gap-1.5">
-          {(['shell', 'scale'] as const).map((v) => (
+          {VIEWS.map((v) => (
             <button
               key={v}
               type="button"
               data-testid={`v2-lab-view-${v}`}
               onClick={() => setView(v)}
-              className={labChipClass(view === v)}
+              className={chip(view === v)}
             >
               {v}
             </button>
           ))}
         </div>
 
-        <ThemeControls dark={dark} onDarkChange={setDark} scheme={scheme} onSchemeChange={setScheme}>
-          {view === 'shell' && (
-            <div className="flex items-center gap-1.5">
-              {WINDOW_STYLES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  data-testid={`v2-lab-window-${s}`}
-                  onClick={() => setWindowStyle(s)}
-                  className={labChipClass(windowStyle === s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-        </ThemeControls>
+        <label className="flex items-center gap-1.5 text-sm">
+          <input type="checkbox" data-testid="v2-lab-dark" checked={dark} onChange={(e) => setDark(e.target.checked)} />
+          Dark
+        </label>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-        {view === 'shell' ? <V2Shell windowStyle={windowStyle} /> : <ScaleLab />}
+        {view === 'shell' ? (
+          <V2Shell />
+        ) : (
+          <div className="px-8 py-6">
+            <FormSpecimen />
+          </div>
+        )}
       </div>
     </div>
   );

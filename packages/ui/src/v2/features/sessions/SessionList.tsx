@@ -37,7 +37,7 @@ function SessionRow({ session, isActive, onSelect }: SessionRowProps) {
         <span className="flex shrink-0 items-center gap-1 text-muted-foreground transition-opacity group-hover/menu-item:opacity-0">
           {session.branch && <GitBranchIcon className="size-3!" />}
           {session.pr && <GitPullRequestIcon className="size-3!" />}
-          <span className="text-caption tabular-nums">{session.time}</span>
+          <span className="text-xs tabular-nums">{session.time}</span>
         </span>
       </SidebarMenuButton>
 
@@ -63,7 +63,7 @@ export function SessionList({ projectId, activeId, onSelect }: SessionListProps)
   if (groups.length === 0) {
     return (
       <SidebarGroup>
-        <SidebarGroupContent className="px-2 py-6 text-center text-caption text-muted-foreground">
+        <SidebarGroupContent className="px-2 py-6 text-center text-xs text-muted-foreground">
           No sessions in this project yet.
         </SidebarGroupContent>
       </SidebarGroup>

@@ -1,17 +1,15 @@
 /**
- * The popover from the original complaint, rendered with shipped primitives
- * under v2 tokens — no v2-specific markup at all.
+ * The worktree popover, rebuilt on the v2 primitives.
  *
- * That's the point of the exercise: Select/Input/Button are untouched imports
- * from @/components/ui, so everything that changes here is the token layer. The
- * grouping rhythm comes out of the scale rather than being hand-set in [Npx]
- * arbitraries, which is what the shipped form does.
+ * It exists to put Select / Input / Button side by side under the Luma tokens,
+ * so a change to the token layer has one place that shows it. Everything here
+ * is stock: no arbitrary [Npx] spacing, no custom shadow, no named type rungs.
  */
 import { useState } from 'react';
 import { Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 
 const BRANCHES = [
   'feat/macos-permissions',
@@ -25,9 +23,8 @@ const BRANCHES = [
 
 const CURRENT = 'main';
 
-/** 6px label→control, 18px group→group. Both land on the scale now: gap-1.5 and gap-4.5. */
 const GROUP = 'flex flex-col gap-1.5';
-const LABEL = 'text-body font-medium text-muted-foreground';
+const LABEL = 'text-sm font-medium text-muted-foreground';
 
 export function FormSpecimen() {
   const [baseBranch, setBaseBranch] = useState(CURRENT);
@@ -36,17 +33,17 @@ export function FormSpecimen() {
   return (
     <section className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h2 className="text-heading font-semibold text-foreground">Worktree popover</h2>
-        <p className="max-w-[70ch] text-caption text-muted-foreground">
+        <h2 className="text-base font-semibold text-foreground">Worktree popover</h2>
+        <p className="max-w-[70ch] text-xs text-muted-foreground">
           Stock <code className="font-mono">Select</code> / <code className="font-mono">Input</code> /{' '}
-          <code className="font-mono">Button</code> imported unchanged from the shipped app. Only the tokens differ. The
-          base-branch list scrolls with chevrons instead of a scrollbar because it's a Select, not a Popover with{' '}
+          <code className="font-mono">Button</code> from the radix-luma registry, unmodified. The base-branch list
+          scrolls with chevrons instead of a scrollbar because it&apos;s a Select, not a Popover with{' '}
           <code className="font-mono">overflow-y-auto</code>.
         </p>
       </header>
 
-      <div className="w-[280px] rounded-lg border border-border bg-popover p-3.5 shadow-[var(--mf-shadow-pop)]">
-        <div className="flex flex-col gap-4.5">
+      <div className="w-[280px] rounded-2xl border bg-popover p-4 shadow-sm">
+        <div className="flex flex-col gap-4">
           <div className={GROUP}>
             <label className={LABEL} htmlFor="v2-base-branch">
               Base branch

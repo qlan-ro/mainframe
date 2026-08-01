@@ -1,8 +1,8 @@
 # `src/v2` — the parallel UI build
 
-A clone of the desktop UI where the design system is rebuilt correctly, running
-beside the shipped app instead of replacing it. Nothing outside `src/v2/` and the
-four config seams listed below is allowed to change until we flip.
+A clone of the desktop UI rebuilt on stock shadcn, running beside the shipped app
+instead of replacing it. Nothing outside `src/v2/` and the four config seams
+listed below is allowed to change until we flip.
 
 ```
 pnpm --filter @qlan-ro/mainframe-ui exec vite --port 5199
@@ -11,89 +11,99 @@ open http://localhost:5199/v2.html
 
 ## Why a clone and not an in-place fix
 
-The scale repair changes what `p-2` and `text-body` mean. In place that reflows
-~1,300 spacing sites and every type rung at once, with no visual-regression net
-in the e2e suite to catch what breaks. Beside it, each surface is ported and
-looked at once, and the shipped app keeps working the whole time.
+The shipped app's design system diverges from stock at almost every layer —
+spacing, type, colour, radii, three colour schemes, three window styles. Undoing
+that in place reflows ~1,300 spacing sites and every type rung at once, with no
+visual-regression net in the e2e suite to catch what breaks. Beside it, each
+surface is ported and looked at once, and the shipped app keeps working.
 
-## What is actually different
+## What this is
 
-Only the scale. `src/v2/styles/globals.css` imports the shipped token file and
-overrides two things:
+The shadcn **Luma** preset (`b2D0wqNxT`, `radix` base) — "rounded geometry, soft
+elevation, breathable layouts; macOS Tahoe minus the glass." `styles/globals.css`
+is that preset's sheet, verbatim, with **one** deviation: `--primary` and
+`--sidebar-primary` are the macOS system blue `#0a84ff`
+(`oklch(0.624 0.206 255.486)`, one value for both modes) instead of the preset's
+two indigos. Both variables are stock shadcn names; only their values changed.
 
-1. **Spacing** — the shipped theme overrides `--spacing-1..12` with a compressed
-   ramp while Tailwind's fractional steps still resolve off the stock `0.25rem`
-   base, so the scale is non-monotonic: `p-2.5` is 10px but `p-3` is 6px. Going
-   up a step can go down. v2 sets those twelve overrides back to `initial`, which
-   hands the whole scale to Tailwind's 4px base and makes it monotonic.
-2. **Type** — the shipped scale has 8 rungs, four of them within 1px of each
-   other (10/11/12/13). v2 has 6, each at least 14% from its neighbours.
+The sheet is short because the bulk of Luma ships in the `shadcn` npm package via
+`@import "shadcn/tailwind.css"` — that's where utilities like `no-scrollbar` come
+from. Radii are derived: one `--radius: 0.625rem` with `sm/md/lg/xl/2xl/3xl/4xl`
+as `calc()` multiples of it.
 
-Colours, radii, shadows, the three schemes and the three window styles are
-unchanged and still come from the shipped file. There is one source of colour
-truth, and it is not in here.
+**Nothing else Mainframe-specific is in here, on purpose.** No `mf-*` tokens, no
+named type rungs, no compressed spacing, no colour schemes, no window styles. The
+point is to see the stock baseline before anything is added back. Two known
+losses that will want tokens eventually, both commented where they bite
+(`features/sessions/fixtures.ts`):
+
+- **Project identity colours** ride the chart ramp, which is monochrome emerald
+  here — four lightnesses of one hue, not four identities.
+- **Status colours** have no stock hue beyond `destructive`, so running/waiting
+  separate on accent intensity. "Waiting" losing its amber is a real loss.
 
 ## Rules
 
 - **Never import `src/proto`, and never edit outside `src/v2`.** The four
   permitted seams are `v2.html`, the `@v2` alias in `vite.config.ts`, the `@v2/*`
   path in `tsconfig.json`, and this directory.
-- **Reuse a shipped primitive until you need to change it.** `@/components/ui/*`
-  renders under v2 tokens because v2 loads its own CSS bundle — that *is* the
-  port for most primitives. Fork one into `src/v2/components/ui/` only when the
-  markup itself has to change, and then v2 owns that copy.
-- **Dead rungs are a trap.** `text-micro` and `text-label` do not exist in v2.
-  A font-size class that isn't defined renders at the inherited size with no
-  error, so a shipped primitive that uses one will look subtly wrong rather than
-  break. `pnpm --filter @qlan-ro/mainframe-ui exec node scripts/v2-lint.mjs`
-  greps for them; run it before calling a port done.
+- **Primitives are v2's own.** `components/ui/*` are stock `radix-luma` files;
+  do not import `@/components/ui/*` — the shipped copies carry custom classes
+  that are undefined here.
+- **Undefined utilities are a trap.** A font-size or colour class that doesn't
+  exist renders at the inherited value with no error, so a stray `text-label` or
+  `bg-mf-glass` looks subtly wrong rather than breaking.
+  `pnpm --filter @qlan-ro/mainframe-ui exec node scripts/v2-lint.mjs` greps for
+  the whole removed set; run it before calling a port done.
 - **Non-visual code is shared, not cloned.** Stores, hooks, `lib/`, the daemon
   client and the assistant-ui runtime are imported from `@/`. Only markup and
   tokens live here.
 
 ## Adding a shadcn component
 
-`src/v2` is its own shadcn project root, so the CLI writes into
-`src/v2/components/ui` against the v2 stylesheet:
+The base is fixed by `style: "radix-luma"` in `components.json`; `shadcn add` has
+no base flag and will prompt interactively for one if it can't infer the project.
+The reliable path is to scaffold a throwaway reference project and copy out of
+it:
 
 ```
-pnpm dlx shadcn@latest add <component> -c packages/ui/src/v2
+npx shadcn@latest create -p luma -b radix -t vite -n lumaref -y
+cd lumaref && npx shadcn@latest add <component>
 ```
 
-The CLI stops on an interactive "Select a component library" prompt that `--yes`
-does not skip, so for anything non-trivial it is faster to fetch the registry
-JSON and port by hand. Check the lockfile either way — see the
-`shadcn-add-churns-lockfile` note; hand-add the Radix dependency to
-`packages/ui/package.json` if the CLI tries to install.
+then copy the file into `src/v2/components/ui/`, rewriting `@/lib/utils` →
+`@v2/lib/utils` and `@/components/ui` → `@v2/components/ui`. Check the lockfile
+either way — see the `shadcn-add-churns-lockfile` note; hand-add any Radix
+dependency to `packages/ui/package.json` rather than letting the CLI install.
+
+Modern shadcn imports the unified `radix-ui` package (`import { Slot } from
+"radix-ui"`), not the fifteen separate `@radix-ui/*` entries the shipped app uses.
 
 ## The sidebar
 
-`components/ui/sidebar/` is a port of the registry component, not a copy. Four
-things changed, and they are the same four any registry component will need:
+`components/ui/sidebar/` is the canonical 703-line Luma sidebar, split into four
+files to satisfy the 300-line rule (`context` / `sidebar` / `sections` / `menu`).
+Three things changed:
 
-- **No `forwardRef`.** React 19; the repo's own primitives are plain functions.
 - **No mobile path.** The `Sheet` drawer, `useIsMobile` and every `md:` variant
   are gone — this is a desktop app.
 - **A flex child, not a `fixed` overlay.** Upstream positions the panel `fixed`
   and reserves its width with a sibling spacer, which assumes a page scrolling
-  behind it. Mainframe's shell is a row of floating panels, so `Sidebar` animates
-  its own width and the spacer disappears. The `data-state` / `data-collapsible`
-  / `data-side` attributes are kept verbatim — every descendant styles itself off
-  them, so keeping the contract keeps the family portable.
-- **`--sidebar-*` aliased onto the warm chrome** in `styles/globals.css`
-  (`--sidebar` → `--mf-glass`, accent → `--accent`, and so on). The primitives
-  keep upstream's class names, so they stay diffable against the registry, and
-  because each alias points at a token the six scheme blocks already redefine,
-  the panel tracks classic/ocean/velvet × light/dark with no per-scheme work.
+  behind it. Mainframe's shell is a row of panels inside a window, so `Sidebar`
+  animates its own width and the spacer, the breakpoints and the floating/inset
+  variants disappear with it. The `data-state` / `data-collapsible` / `data-side`
+  attributes are kept verbatim — every descendant styles itself off them, so
+  keeping the contract keeps the family portable.
+- **No cookie.** Upstream writes `sidebar_state`, which a desktop app has no use
+  for; `SidebarProvider` takes `open`/`onOpenChange` instead. ⌘B is built in.
 
-Persistence is the caller's: upstream writes a `sidebar_state` cookie, which a
-desktop app has no use for, so `SidebarProvider` takes `open`/`onOpenChange`
-instead. ⌘B is built in.
+Width is stock `16rem`, not the shipped app's 280px — narrower, so session titles
+truncate sooner. Widen it here if the sessions list needs it.
 
 ## Order of work
 
 1. ~~Project configuration~~
-2. ~~globals.css / themes~~
+2. ~~globals.css / themes~~ — now the Luma preset; see *What this is* above.
 3. ~~App shell~~ — `app/V2Shell.tsx`; no runtime provider, no overlay hosts, no
    session router. Those return with the surfaces they belong to.
 4. Features, sidebar first — the sessions sidebar renders off fixtures

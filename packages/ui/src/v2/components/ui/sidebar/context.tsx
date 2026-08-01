@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { cn } from '@v2/lib/utils';
 
-/** 280px — the width the shipped SidebarShell settled on. */
-export const SIDEBAR_WIDTH = '17.5rem';
+export const SIDEBAR_WIDTH = '16rem';
 export const SIDEBAR_WIDTH_ICON = '3rem';
 export const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
@@ -33,9 +32,9 @@ interface SidebarProviderProps extends React.ComponentProps<'div'> {
 /**
  * Owns open/collapsed state and the ⌘B shortcut.
  *
- * Upstream persists to a `sidebar_state` cookie; a desktop app has no cookie
- * jar worth writing to, so persistence is the caller's job — pass `open` and
- * `onOpenChange` to drive it from a store.
+ * Two deviations from upstream, both because this is a desktop app: there is no
+ * mobile Sheet branch, and state is not persisted to a `sidebar_state` cookie —
+ * pass `open`/`onOpenChange` to drive it from a store instead.
  */
 export function SidebarProvider({
   defaultOpen = true,
@@ -87,7 +86,7 @@ export function SidebarProvider({
               ...style,
             } as React.CSSProperties
           }
-          className={cn('group/sidebar-wrapper flex h-full w-full', className)}
+          className={cn('group/sidebar-wrapper flex h-full w-full has-data-[variant=inset]:bg-sidebar', className)}
           {...props}
         >
           {children}

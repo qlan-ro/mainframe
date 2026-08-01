@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PanelLeftIcon, PlusIcon, SearchIcon, SettingsIcon, ZapIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@v2/components/ui/button';
 import {
   Sidebar,
   SidebarContent,
@@ -22,27 +22,25 @@ function HeaderActions() {
 
   return (
     <div className="flex items-center gap-0.5">
-      <Button variant="ghost" size="icon" className="size-7" data-testid="sidebar-workflows" title="Workflows">
-        <ZapIcon className="size-3.5" />
+      <Button variant="ghost" size="icon-sm" data-testid="sidebar-workflows" title="Workflows">
+        <ZapIcon />
       </Button>
-      <Button variant="ghost" size="icon" className="size-7" data-testid="sidebar-settings" title="Settings">
-        <SettingsIcon className="size-3.5" />
+      <Button variant="ghost" size="icon-sm" data-testid="sidebar-settings" title="Settings">
+        <SettingsIcon />
       </Button>
       <Button
         variant="ghost"
-        size="icon"
-        className="size-7"
+        size="icon-sm"
         data-testid="sidebar-collapse"
         title="Collapse sidebar"
         onClick={toggleSidebar}
       >
-        <PanelLeftIcon className="size-3.5" />
+        <PanelLeftIcon />
       </Button>
     </div>
   );
 }
 
-/** `className` carries the window-style panel treatment — the shell owns that choice. */
 export function SessionSidebar({ className }: { className?: string }) {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState('s-2');
@@ -56,12 +54,12 @@ export function SessionSidebar({ className }: { className?: string }) {
         </div>
 
         <div className="relative">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <SidebarInput data-testid="sidebar-search" placeholder="Search sessions" className="pl-7" />
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <SidebarInput data-testid="sidebar-search" placeholder="Search sessions" className="pl-9" />
         </div>
 
-        <Button data-testid="sidebar-new-session" size="sm" className="w-full justify-start gap-2">
-          <PlusIcon className="size-3.5" />
+        <Button data-testid="sidebar-new-session" size="sm" className="w-full justify-start">
+          <PlusIcon />
           New session
         </Button>
       </SidebarHeader>
@@ -74,9 +72,9 @@ export function SessionSidebar({ className }: { className?: string }) {
         <SessionList projectId={projectId} activeId={activeId} onSelect={setActiveId} />
       </SidebarContent>
 
-      <SidebarFooter className="text-caption text-muted-foreground">
+      <SidebarFooter className="text-xs text-muted-foreground">
         <div className="flex items-center gap-2 px-2">
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-mf-success" />
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />
           Connected · :31415
         </div>
       </SidebarFooter>

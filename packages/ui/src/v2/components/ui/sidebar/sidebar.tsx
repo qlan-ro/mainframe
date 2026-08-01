@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { PanelLeftIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@v2/components/ui/button';
 import { cn } from '@v2/lib/utils';
 import { useSidebar } from './context';
 
@@ -18,11 +18,11 @@ function collapsedWidth(collapsible: Collapsible): string {
 /**
  * The panel itself.
  *
- * Upstream positions this `fixed` and reserves the space with a sibling spacer
- * div, because it assumes a page that scrolls behind an overlay. Mainframe's
- * shell is a row of floating panels, so this is a plain flex child that
- * animates its own width — the spacer, the `md:` breakpoints and the mobile
- * Sheet all disappear with it.
+ * Upstream positions this `fixed` at `h-svh` and reserves the space with a
+ * sibling spacer div, because it assumes a page that scrolls behind an overlay.
+ * Mainframe's shell is a row of panels inside a window, so this is a plain flex
+ * child that animates its own width — the spacer, the `md:` breakpoints, the
+ * floating/inset variants and the mobile Sheet all disappear with it.
  *
  * The data attributes are upstream's, unchanged: every descendant styles itself
  * off `group-data-[collapsible=icon]` / `[data-state]`, so keeping the contract
@@ -47,7 +47,7 @@ export function Sidebar({
       data-side={side}
       className={cn(
         'group peer relative flex h-full shrink-0 flex-col overflow-hidden',
-        'bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out',
+        'bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-linear',
         className,
       )}
       style={{ width: collapsed ? collapsedWidth(collapsible) : 'var(--sidebar-width)', ...style }}
@@ -68,10 +68,10 @@ export function SidebarTrigger({ className, onClick, ...props }: React.Component
   return (
     <Button
       data-slot="sidebar-trigger"
-      data-testid="sidebar-trigger"
+      data-sidebar="trigger"
       variant="ghost"
-      size="icon"
-      className={cn('size-7', className)}
+      size="icon-sm"
+      className={cn(className)}
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
@@ -91,14 +91,14 @@ export function SidebarRail({ className, ...props }: React.ComponentProps<'butto
   return (
     <button
       data-slot="sidebar-rail"
-      data-testid="sidebar-rail"
+      data-sidebar="rail"
       aria-label="Toggle Sidebar"
       tabIndex={-1}
       title="Toggle Sidebar"
       onClick={toggleSidebar}
       className={cn(
-        'absolute inset-y-0 z-20 w-2 transition-colors',
-        'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent',
+        'absolute inset-y-0 z-20 w-2 transition-all ease-linear',
+        'after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:-translate-x-1/2 after:bg-transparent',
         'hover:after:bg-sidebar-border',
         'group-data-[side=left]:right-0 group-data-[side=right]:left-0',
         'group-data-[side=left]:cursor-w-resize group-data-[side=right]:cursor-e-resize',

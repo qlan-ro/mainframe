@@ -29,11 +29,18 @@ export interface V2SessionGroup {
   sessions: V2Session[];
 }
 
+/**
+ * Chart tokens, not bespoke ones: the chart ramp is the stock slot for
+ * categorical colour, and a project chip is exactly that. In this preset the
+ * ramp is monochrome emerald, so the four chips read as one hue at four
+ * lightnesses — distinct enough to tell apart, weak as identity. A real
+ * per-project palette is a token decision for later.
+ */
 export const PROJECTS: V2Project[] = [
-  { id: 'mainframe', name: 'mainframe', color: 'var(--mf-success)', attention: 0 },
-  { id: 'core-rs', name: 'core-rs', color: 'var(--primary)', attention: 2 },
-  { id: 'mainframe-mobile', name: 'mainframe-mobile', color: 'var(--mf-warning)', attention: 0 },
-  { id: 'docs-site', name: 'docs-site', color: 'var(--destructive)', attention: 0 },
+  { id: 'mainframe', name: 'mainframe', color: 'var(--chart-2)', attention: 0 },
+  { id: 'core-rs', name: 'core-rs', color: 'var(--chart-4)', attention: 2 },
+  { id: 'mainframe-mobile', name: 'mainframe-mobile', color: 'var(--chart-1)', attention: 0 },
+  { id: 'docs-site', name: 'docs-site', color: 'var(--chart-5)', attention: 0 },
 ];
 
 export const SESSION_GROUPS: V2SessionGroup[] = [
@@ -109,9 +116,16 @@ export const SESSION_GROUPS: V2SessionGroup[] = [
   },
 ];
 
+/**
+ * Stock ships one semantic hue — `destructive`. Green-for-running and
+ * amber-for-waiting have no equivalent, so the four states separate on the
+ * accent's intensity instead of on hue. It reads, but "waiting" losing its
+ * amber is a real loss; semantic status tokens are the first thing worth adding
+ * back on top of the baseline.
+ */
 export const STATUS_COLOR: Record<V2Session['status'], string> = {
-  running: 'bg-mf-success',
-  waiting: 'bg-mf-warning',
+  running: 'bg-primary',
+  waiting: 'bg-primary/40',
   error: 'bg-destructive',
-  idle: 'bg-mf-text-4',
+  idle: 'bg-muted-foreground/40',
 };

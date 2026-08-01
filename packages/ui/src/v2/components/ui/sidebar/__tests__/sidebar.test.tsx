@@ -20,7 +20,7 @@ describe('SidebarProvider', () => {
     render(<Harness />);
 
     expect(screen.getByTestId('panel')).toHaveAttribute('data-state', 'expanded');
-    await user.click(screen.getByTestId('sidebar-trigger'));
+    await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
     expect(screen.getByTestId('panel')).toHaveAttribute('data-state', 'collapsed');
   });
 
@@ -39,7 +39,7 @@ describe('SidebarProvider', () => {
     const onOpenChange = vi.fn();
     render(<Harness open onOpenChange={onOpenChange} />);
 
-    await user.click(screen.getByTestId('sidebar-trigger'));
+    await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(screen.getByTestId('panel')).toHaveAttribute('data-state', 'expanded');
@@ -57,7 +57,7 @@ describe('Sidebar', () => {
     );
 
     expect(screen.getByTestId('panel')).toHaveAttribute('data-collapsible', '');
-    await user.click(screen.getByTestId('sidebar-trigger'));
+    await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
     expect(screen.getByTestId('panel')).toHaveAttribute('data-collapsible', 'icon');
   });
 
@@ -70,7 +70,7 @@ describe('Sidebar', () => {
       </SidebarProvider>,
     );
 
-    await user.click(screen.getByTestId('sidebar-trigger'));
+    await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
 
     const panel = screen.getByTestId('panel');
     expect(panel).toHaveAttribute('data-state', 'expanded');

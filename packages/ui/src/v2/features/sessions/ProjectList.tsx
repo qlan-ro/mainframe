@@ -56,7 +56,7 @@ export function ProjectList({ activeId, onSelect }: ProjectListProps) {
               >
                 <span
                   aria-hidden
-                  className="flex size-4 shrink-0 items-center justify-center rounded-[4px] text-[9px] font-semibold text-white uppercase"
+                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-xs leading-none font-semibold text-white uppercase"
                   style={{ background: project.color }}
                 >
                   {project.name[0]}
