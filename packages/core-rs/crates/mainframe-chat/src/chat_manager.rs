@@ -1113,6 +1113,7 @@ pub struct ChatManager {
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
+    self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 }
 
 impl ChatManager {
@@ -1154,17 +1155,17 @@ impl ChatManager {
             permissions.clone(),
         ));
 
-        // Unwired until T5's `attach_self()` sets it (called from
-        // `build_chat_manager`); until then plan-mode's clear-context follow-up
-        // send fails closed with a warning rather than silently no-oping.
-        let plan_self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>> =
+        // Unset until `attach_self()` runs (called from `build_chat_manager` once
+        // the manager is behind an `Arc`); until then plan-mode's clear-context
+        // follow-up send fails closed with a warning rather than silently no-oping.
+        let self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>> =
             Arc::new(std::sync::OnceLock::new());
         let plan_host: Arc<dyn PlanHost> = Arc::new(PlanHostImpl {
             event_handler: event_handler.clone(),
             lifecycle: lifecycle.clone(),
             deps: deps.clone(),
             permissions: permissions.clone(),
-            self_ref: plan_self_ref,
+            self_ref: self_ref.clone(),
         });
         let plan_mode = Arc::new(PlanModeHandler::new(ChatPlanModeCtx {
             deps: deps.clone(),
@@ -1209,6 +1210,7 @@ impl ChatManager {
             idle_scanner: Mutex::new(idle_scanner),
             external_sessions: None,
             worktree_offers,
+            self_ref,
         }
     }
 
@@ -1218,6 +1220,14 @@ impl ChatManager {
     pub fn with_external_sessions(mut self, service: Arc<dyn ExternalSessionFacade>) -> Self {
         self.external_sessions = Some(service);
         self
+    }
+
+    /// Lets `PlanHostImpl::send_message` reach back into this manager for the
+    /// clear-context follow-up send. Must run once, after the manager is behind
+    /// an `Arc` (can't use `Arc::new_cyclic` without touching every `ChatManager::new`
+    /// call site); idempotent, so a second call is a harmless no-op.
+    pub fn attach_self(self: &Arc<Self>) {
+        let _ = self.self_ref.set(Arc::downgrade(self));
     }
 
     /// `ctx.chats.getExternalSessionService()` — `None` when the manager was

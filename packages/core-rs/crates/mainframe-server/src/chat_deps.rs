@@ -882,7 +882,9 @@ pub fn build_chat_manager(
         claude_workflows,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
-    Arc::new(ChatManager::new(deps).with_external_sessions(external_sessions))
+    let manager = Arc::new(ChatManager::new(deps).with_external_sessions(external_sessions));
+    manager.attach_self();
+    manager
 }
 
 /// Bridge `Arc<dyn AdapterSession>` → the `SessionLike` the kill sweep wants.
