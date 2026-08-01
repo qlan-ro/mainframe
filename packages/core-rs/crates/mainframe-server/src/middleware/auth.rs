@@ -73,7 +73,11 @@ fn bearer_token(req: &Request) -> Option<String> {
     header.strip_prefix("Bearer ").map(str::to_string)
 }
 
-fn unauthorized() -> Response {
+/// A rejected request never reaches the route handler, so this is the only
+/// place a 401 leaves server-side evidence. Never logs the token, the
+/// `Authorization` header, or the forwarded-IP chain.
+fn unauthorized(path: &str, reason: &str) -> Response {
+    tracing::warn!(path, reason, "request rejected: unauthenticated");
     fail(StatusCode::UNAUTHORIZED, "Unauthorized")
 }
 
@@ -112,11 +116,12 @@ pub async fn auth_middleware(
         return next.run(req).await;
     }
 
+    let path = path.to_string();
     let Some(token) = bearer_token(&req) else {
-        return unauthorized();
+        return unauthorized(&path, "missing bearer");
     };
     let Some(payload) = validate_device_token(&ctx.db, secret, token).await else {
-        return unauthorized();
+        return unauthorized(&path, "invalid token");
     };
     req.extensions_mut().insert(payload);
     next.run(req).await
@@ -133,3 +138,6 @@ pub async fn auth_middleware(
 // still yields `None` → 401 (covered by the deleted-device test). Secret read
 // from `AppCtx.auth_secret` (the daemon reads `AUTH_TOKEN_SECRET` at boot), not
 // `process.env` per-request.
+// Observability (#219): a rejected request never reaches the route, so
+// `unauthorized()` logs the path + reason (missing bearer / invalid token) —
+// never the token, header, or forwarded-IP chain.

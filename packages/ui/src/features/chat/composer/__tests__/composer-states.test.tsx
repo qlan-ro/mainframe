@@ -16,14 +16,8 @@ import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
-// Mocks for Composer (worktree / AUI plumbing)
+// Mocks for Composer (AUI plumbing)
 // ---------------------------------------------------------------------------
-
-let __extrasReturn: 'none' | { worktreeMissing?: boolean; worktreePath?: string } = 'none';
-
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
-  useChatExtras: () => (__extrasReturn === 'none' ? undefined : { state: { chatConfig: __extrasReturn } }),
-}));
 
 vi.mock('@assistant-ui/react', () => ({
   ComposerPrimitive: {
@@ -136,7 +130,6 @@ const ADAPTER_GEMINI: AdapterInfo = {
 describe('Composer — toolbar renders a dedicated "@" mention button beside the paperclip', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    __extrasReturn = { worktreeMissing: false };
   });
 
   it('renders composer-add-mention inside the toolbar left slot', () => {
@@ -239,7 +232,6 @@ describe('PermissionSelect — dropdown items render description notes', () => {
 describe('Composer — hairline separator between attachment and toolbar controls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    __extrasReturn = { worktreeMissing: false };
   });
 
   it('renders a separator div with w-px and bg-border classes', () => {

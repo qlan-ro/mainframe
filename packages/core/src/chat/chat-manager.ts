@@ -745,7 +745,7 @@ export class ChatManager {
     const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
     const categories = adapter?.getToolCategories?.();
     const transcriptMissing = chat ? await this.reconcileTranscript(chat) : false;
-    return { messages: prepareMessagesForClient(raw, categories), transcriptMissing };
+    return { messages: prepareMessagesForClient(raw, categories), transcriptMissing, workflowRuns: [] };
   }
 
   /** Reconcile the persisted transcriptMissing flag against the transcript file on disk. */

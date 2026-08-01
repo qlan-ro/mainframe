@@ -18,6 +18,9 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
+use mainframe_services::workspace::worktree::is_directory_present_async;
+use mainframe_types::chat::Project;
+
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 
@@ -41,17 +44,30 @@ struct CreateProjectBody {
 
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
     match ctx.db.call(|db| db.projects.list()).await {
-        Ok(projects) => ok(projects),
+        Ok(mut projects) => {
+            for project in &mut projects {
+                stamp_availability(project).await;
+            }
+            ok(projects)
+        }
         Err(err) => crate::async_err::internal_error("list projects", &err),
     }
 }
 
 async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match ctx.db.call(move |db| db.projects.get(&id)).await {
-        Ok(Some(project)) => ok(project),
+        Ok(Some(mut project)) => {
+            stamp_availability(&mut project).await;
+            ok(project)
+        }
         Ok(None) => fail(StatusCode::NOT_FOUND, "Project not found"),
         Err(err) => crate::async_err::internal_error("get project", &err),
     }
+}
+
+async fn stamp_availability(project: &mut Project) {
+    // Derived per response; never persisted.
+    project.available = Some(is_directory_present_async(&project.path).await);
 }
 
 async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {

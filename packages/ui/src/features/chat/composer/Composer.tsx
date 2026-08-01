@@ -23,7 +23,6 @@ import {
   ComposerAddAttachment,
   ComposerAddMention,
 } from '@/components/ui/assistant-ui/attachment';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
@@ -32,14 +31,14 @@ import { useComposerSegments } from './segments/segment-store';
 import { useSubmitComposition, useCanSubmit } from './segments/use-submit-composition';
 
 /**
- * Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) —
- * swapped on thread.isRunning.
+ * Send (idle, disabled while empty) ↔ Cancel (running) — swapped on
+ * thread.isRunning.
  *
  * `useCanSubmit` is subscribed HERE, not in `Composer`: it reads the live
  * draft text, so hoisting it would re-render the whole composer (segments,
  * triggers, toolbar, highlight overlay) on every keystroke.
  */
-function SendOrCancelButton({ worktreeMissing }: { worktreeMissing: boolean }) {
+function SendOrCancelButton() {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const canSubmit = useCanSubmit();
   const base = 'flex size-[26px] shrink-0 items-center justify-center rounded-md transition-opacity';
@@ -60,7 +59,7 @@ function SendOrCancelButton({ worktreeMissing }: { worktreeMissing: boolean }) {
       type="submit"
       data-testid="chat-composer-send"
       aria-label="Send"
-      disabled={worktreeMissing || !canSubmit}
+      disabled={!canSubmit}
       className={cn(base, 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40')}
     >
       <ArrowUpIcon className="size-3.5" />
@@ -70,8 +69,6 @@ function SendOrCancelButton({ worktreeMissing }: { worktreeMissing: boolean }) {
 
 export function Composer() {
   const { editing, cancelEdit } = useComposerEdit();
-  const chat = useChatExtras()?.state.chatConfig ?? null;
-  const worktreeMissing = chat?.worktreeMissing ?? false;
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const threadId = useActiveThreadId();
   const hasLiveQuote = useComposerSegments((s) =>
@@ -88,7 +85,7 @@ export function Composer() {
   // and the daemon enqueues the message behind the in-flight run (mirrors desktop).
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!isRunning || worktreeMissing) return;
+      if (!isRunning) return;
       if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
       e.preventDefault();
       try {
@@ -97,7 +94,7 @@ export function Composer() {
         console.warn('[composer] mid-run queued send failed', err);
       }
     },
-    [isRunning, worktreeMissing, submit],
+    [isRunning, submit],
   );
 
   if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
@@ -118,7 +115,6 @@ export function Composer() {
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
-          disabled={worktreeMissing}
           className={cn(
             'rounded-xl transition-colors',
             '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
@@ -143,7 +139,6 @@ export function Composer() {
               data-testid="chat-composer-input"
               data-mf-composer-input
               data-noring
-              disabled={worktreeMissing}
               onKeyDown={handleInputKeyDown}
               placeholder={hasLiveQuote ? 'Add a message…' : 'Reply to Mainframe…'}
               rows={1}
@@ -161,7 +156,7 @@ export function Composer() {
               <div className="mx-1 h-3 w-px shrink-0 bg-border" aria-hidden />
               <ComposerToolbar />
             </div>
-            <SendOrCancelButton worktreeMissing={worktreeMissing} />
+            <SendOrCancelButton />
           </div>
         </ComposerPrimitive.AttachmentDropzone>
       </ComposerPrimitive.Root>

@@ -46,6 +46,7 @@ use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
 };
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
+use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::ClaudeWorkflowStore};
 use mainframe_launch::{
     BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, PortTunnelRegistry,
     ResolveCloudflaredDeps, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
@@ -194,9 +195,11 @@ async fn run_daemon() {
     // ownership); both adapters register before the static snapshot seed so
     // `GET /api/adapters` serves instantly without a CLI spawn.
     let background_tasks = Arc::new(BackgroundTaskTracker::new());
+    let claude_workflows = Arc::new(ClaudeWorkflowStore::new());
     let adapters = Arc::new(AdapterRegistry::new());
     adapters.register(Arc::new(ClaudeAdapter::new(
         Arc::clone(&background_tasks),
+        Arc::clone(&claude_workflows),
         resolved_path.clone(),
     )));
     adapters.register(Arc::new(CodexAdapter::new(resolved_path.clone())));
@@ -209,6 +212,7 @@ async fn run_daemon() {
     // Forward tracker emissions through the broadcast (index.ts wires
     // background_task.started/updated/ended onto broadcastEvent).
     spawn_task_event_bridge(Arc::clone(&background_tasks), broadcast.clone());
+    spawn_workflow_run_bridge(Arc::clone(&claude_workflows), broadcast.clone());
 
     // uncaughtException cleanup (index.ts `process.on('uncaughtException')`): a
     // panic is Rust's uncaught exception. Kill adapter children and — crucially —
@@ -282,6 +286,7 @@ async fn run_daemon() {
             db.clone(),
         )),
         Arc::clone(&quota_manager),
+        Arc::clone(&claude_workflows),
         resolved_path.clone(),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
@@ -361,6 +366,7 @@ async fn run_daemon() {
         ws_clients: Arc::clone(&ws_clients),
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),
+        claude_workflows: Arc::clone(&claude_workflows),
         chat_manager: Some(Arc::clone(&chats)),
         launch_registry: Some(Arc::clone(&launch_registry)),
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),

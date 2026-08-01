@@ -121,3 +121,33 @@ describe('ChatThreadController.retryMessage', () => {
     expect(sentEvents.filter((e) => e.type === 'message.send')).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Failure stage across a retry (todo #219)
+// ---------------------------------------------------------------------------
+
+describe('ChatThreadController.retryMessage — failure stage', () => {
+  it('clears the upload stage when the retry is accepted', async () => {
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    const clientId = await seedFailedPending(ctrl, 'retry me');
+    expect(ctrl.getState().pendingUserMessages[clientId]?.stage).toBe('upload');
+
+    await ctrl.retryMessage(clientId);
+
+    expect(ctrl.getState().pendingUserMessages[clientId]?.stage).toBeUndefined();
+  });
+
+  it("records stage 'send' when the retry itself throws — a retry never uploads", async () => {
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    const clientId = await seedFailedPending(ctrl, 'retry me');
+
+    vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {
+      throw new Error('socket closed');
+    });
+    await ctrl.retryMessage(clientId).catch(() => {});
+
+    expect(ctrl.getState().pendingUserMessages[clientId]?.stage).toBe('send');
+  });
+});

@@ -498,9 +498,9 @@ async fn handle_client_event(
 }
 
 /// `message.send` → `ChatManager.sendMessage(chatId, content, attachmentIds,
-/// metadata)`. A rejection lands in the TS `ws.on('message')` catch, which logs
-/// `ws message handler error` and replies with an `Internal error` frame — mirror
-/// both. Until `ctx.chat_manager` is wired the seam warns once and drops the send.
+/// metadata)`. A rejection logs `ws message handler error` and emits a
+/// chat-scoped error with the underlying reason. Until `ctx.chat_manager` is wired
+/// the seam warns once and drops the send.
 async fn handle_message_send(
     ctx: &Arc<AppCtx>,
     out_tx: &mpsc::UnboundedSender<String>,
@@ -523,19 +523,13 @@ async fn handle_message_send(
         .await
     {
         tracing::error!(%err, "ws message handler error");
-        send(
-            out_tx,
-            &DaemonEvent::Error {
-                chat_id: None,
-                error: "Internal error".to_string(),
-            },
-        );
+        send(out_tx, &send_failure_event(&chat_id, &err));
     }
 }
 
 /// `permission.respond` → `ChatManager.respondToPermission(chatId, response)`,
 /// bracketed by the same received/delivered info logs the TS handler emits. A
-/// rejection mirrors the TS catch (`Internal error` frame).
+/// rejection logs and emits a chat-scoped error with the underlying reason.
 async fn handle_permission_respond(
     ctx: &Arc<AppCtx>,
     out_tx: &mpsc::UnboundedSender<String>,
@@ -556,13 +550,7 @@ async fn handle_permission_respond(
     );
     if let Err(err) = cm.respond_to_permission(&chat_id, response).await {
         tracing::error!(%err, "ws message handler error");
-        send(
-            out_tx,
-            &DaemonEvent::Error {
-                chat_id: None,
-                error: "Internal error".to_string(),
-            },
-        );
+        send(out_tx, &send_failure_event(&chat_id, &err));
         return;
     }
     tracing::info!(
@@ -712,6 +700,13 @@ fn build_connect_replay_events(
         .collect()
 }
 
+fn send_failure_event(chat_id: &str, err: &dyn std::fmt::Display) -> DaemonEvent {
+    DaemonEvent::Error {
+        chat_id: Some(chat_id.to_string()),
+        error: err.to_string(),
+    }
+}
+
 fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
     match serde_json::to_string(event) {
         Ok(payload) => {
@@ -776,6 +771,18 @@ mod tests {
                 account_identity: Some("uuid-1".into()),
             },
         }
+    }
+
+    #[test]
+    fn send_failure_event_carries_the_chat_id_and_the_real_message() {
+        let err = "Chat c1 not running".to_string();
+        let event = send_failure_event("c1", &err);
+        let value = serde_json::to_value(event).unwrap();
+
+        assert_eq!(value["chatId"], serde_json::json!("c1"));
+        assert_eq!(value["error"], serde_json::json!("Chat c1 not running"));
+        let old_message = format!("{} {}", "Internal", "error");
+        assert!(!value.to_string().contains(&old_message));
     }
 
     // Seam-3 transport: a harvested quota carries no chatId, so the fan-out must

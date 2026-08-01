@@ -60,7 +60,11 @@ vi.mock('../../../../lib/api/chats', () => ({
   }),
   // Benign reads the controller does on load/seed.
   getChat: vi.fn(async (_port: number, chatId: string): Promise<Chat> => ({ id: chatId }) as Chat),
-  getChatMessages: vi.fn(async (): Promise<ChatHistoryPayload> => ({ messages: [], transcriptMissing: false })),
+  getChatMessages: vi.fn(async (): Promise<ChatHistoryPayload> => ({
+    messages: [],
+    transcriptMissing: false,
+    workflowRuns: [],
+  })),
   listChats: vi.fn(async (): Promise<Chat[]> => []),
   setChatTuning: vi.fn(async () => undefined),
   setChatConfig: vi.fn(async () => undefined),
@@ -211,8 +215,7 @@ describe('new-thread create-once — one POST /api/chats per New+send', () => {
 
     // The id the controller actually sent the first message to (== its daemonId).
     const firstSend = sentFrames.find((f) => f.type === 'message.send') as
-      | { type: 'message.send'; chatId: string; content: string }
-      | undefined;
+      { type: 'message.send'; chatId: string; content: string } | undefined;
     expect(firstSend).toBeDefined();
     expect(firstSend!.chatId).toBe(stampedRemoteId);
     expect(firstSend!.chatId).not.toMatch(/^__LOCALID_/);

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use axum::extract::Request;
+use axum::extract::{DefaultBodyLimit, Request};
 use axum::http::header::{
     ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN, ORIGIN,
 };
@@ -104,6 +104,10 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // LSP WS upgrade (`/lsp/:projectId/:language`) — self-authenticates like
         // the generic WS route, then proxies to the spawned language server.
         .route("/lsp/{project_id}/{language}", any(lsp_ws_handler))
+        // axum's built-in 2 MB extractor limit shadows the layer below unless
+        // disabled — without this, any body over ~2 MB (a ~1.5 MB attachment,
+        // base64-inflated) gets an empty-bodied 413 before the handler runs.
+        .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(BODY_LIMIT_BYTES))
         // CORS is the outermost layer so `OPTIONS` is answered (204) before auth.
         .layer(from_fn(cors_middleware))
@@ -177,3 +181,7 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
 // (SCOPE DECISION 2026-07-10). Negotiated gzip/brotli response compression
 // (todo #294) is a Rust-side addition with no TS counterpart, layered inside
 // the HTTP router so the WS upgrade routes stay untouched.
+// #219: axum's own DefaultBodyLimit (2mb) sat inside RequestBodyLimitLayer's
+// stack and rejected anything over ~2mb with an empty body before the 30mb
+// layer ever ran — silently breaking 2-5mb attachments on every daemon, local
+// or remote. Disabled so the explicit 30mb layer is the only limit in force.
