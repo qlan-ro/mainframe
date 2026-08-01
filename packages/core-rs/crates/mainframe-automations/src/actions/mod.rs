@@ -63,11 +63,7 @@ pub trait Action: Send + Sync {
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>>;
 }
 
-/// GitHub's REST API answers 403 "Request forbidden by administrative rules"
-/// to any request without a `User-Agent`, and reqwest sends none by default.
-/// No version suffix: the Rust crates are all pinned at the workspace's
-/// placeholder `0.0.0`, so one would advertise a number that never moves.
-pub(crate) const USER_AGENT: &str = "mainframe";
+pub(crate) use crate::USER_AGENT;
 
 /// The one client every connector builds from, so no future connector can
 /// reach an API with a bare `reqwest::Client::new()` again.

@@ -6,9 +6,6 @@ use reqwest::RequestBuilder;
 
 pub const GITHUB_API: &str = "https://api.github.com";
 pub const API_VERSION: &str = "2022-11-28";
-/// GitHub answers 403 "Request forbidden by administrative rules" to a request
-/// without a User-Agent, and reqwest sends none by default.
-pub const USER_AGENT: &str = "mainframe";
 
 pub fn github_headers(request: RequestBuilder) -> RequestBuilder {
     request

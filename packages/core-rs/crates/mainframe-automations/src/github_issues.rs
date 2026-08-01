@@ -11,7 +11,8 @@ use reqwest::{RequestBuilder, StatusCode, header::HeaderMap};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use crate::github_http::{GITHUB_API, USER_AGENT, github_headers};
+use crate::USER_AGENT;
+use crate::github_http::{GITHUB_API, github_headers};
 use crate::github_issues_types::{RawIssue, TimelineEvent, patch_body};
 
 pub use crate::github_issues_types::{
