@@ -8,7 +8,7 @@
 
 mod common;
 
-use common::{Recorder, capture_path, replay_capture};
+use common::{Recorder, capture_path, replay_capture, temp_registry};
 use mainframe_adapter_codex::event_mapper::CodexSessionState;
 use serde_json::{Value, json};
 
@@ -18,9 +18,20 @@ const PARENT_DELEGATING_MESSAGE: &str =
     "I\u{2019}m delegating the calculation now, then I\u{2019}ll wait for the result.";
 const PARENT_CLOSING_MESSAGE: &str = "The sub-agent reported: **2 + 2 = 4**.";
 
+/// Pinned to an empty throwaway registry on purpose. `CodexSessionState::default()`
+/// leaves `registry_deps: None`, which reads the developer's real
+/// `~/.codex/state_5.sqlite` — and the capture replays a live session whose child
+/// thread id is in it, so running the delegation flow once locally rewrites the
+/// card title to that run's `agent_nickname` and reds these tests on that machine
+/// only. No rows means no registry metadata, which is what the capture's own
+/// `wait` payload carries.
 fn replay() -> Recorder {
     let rec = Recorder::new();
-    let mut state = CodexSessionState::default();
+    let (_registry_dir, deps) = temp_registry(&[]);
+    let mut state = CodexSessionState {
+        registry_deps: Some(deps),
+        ..CodexSessionState::default()
+    };
     replay_capture(
         &capture_path("collab-delegation-0.144.3.jsonl"),
         &rec,
