@@ -19,6 +19,7 @@ pub mod respond;
 pub mod ripgrep;
 pub mod routes;
 pub mod setup_advisor;
+pub mod skills_cli;
 pub mod suggestions;
 pub mod websocket;
 pub mod ws_file_watch;
