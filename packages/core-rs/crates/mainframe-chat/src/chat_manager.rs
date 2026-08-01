@@ -7,6 +7,15 @@
 //! `PhDeps`) that all hold the SAME `Arc<dyn ChatManagerDeps>` + shared state — the
 //! Rust analogue of the TS closure bag. Non-generic (`dyn ChatManagerDeps`) to
 //! avoid generic self-recursion in the wiring.
+//!
+//! The facade itself is split by band across flat submodules (never nested, so
+//! every submodule reaches this file's `use` block via `use super::*`): `deps.rs`
+//! is the injection surface, each `deps_*.rs` builds and owns one sub-manager
+//! collaborator, and `construct.rs`/`reads.rs`/`lifecycle_api.rs`/`history.rs`/
+//! `config_api.rs`/`send_entry.rs`/`send.rs` carry `impl ChatManager` by band
+//! (construction, registry reads, lifecycle/permission delegations, history,
+//! config/worktree delegations, the send-path entry point, and its command
+//! helpers).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -76,18 +85,17 @@ mod shared;
 mod update;
 
 pub use deps::ChatManagerDeps;
+pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
+pub use external_facade::ExternalSessionFacade;
+pub use update::{ChatUpdate, ProcessedAttachments};
+
 use deps_config::CmDeps;
 use deps_event::EhDeps;
 use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
-pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
-pub use external_facade::ExternalSessionFacade;
-pub use update::{ChatUpdate, ProcessedAttachments};
-// `enrich_chat`/`is_working` are re-imported here (not just via shared's own
-// `use super::*`) because their current callers (get_chat/list_chats/
-// is_chat_working) still live in this root file — group 2's split moves them
-// to `reads.rs`/`construct.rs`, at which point this import becomes unused and
-// should be dropped per the plan's rule 5.
+// `enrich_chat`/`is_working` have no direct caller left in this file — every
+// caller (reads.rs, construct.rs) reaches them through this re-import via its
+// own `use super::*`, so removing this line would break the glob for them.
 use shared::{
     apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_and_emit,
     enrich_chat, handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
@@ -177,4 +185,8 @@ pub(crate) mod tests;
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity
 // notes: integration test (#273). Also chat-manager-degraded (3).
+// notes: #292 split this file into flat submodules under `chat_manager/` (by band:
+// notes: construction, deps wiring, registry reads, lifecycle/permission, history,
+// notes: config/worktree, send-path) to bring the file and `send_message`/`new`
+// notes: under the 300-line/50-line limits. Pure move, no API or behavior change.
 // todos: 1
