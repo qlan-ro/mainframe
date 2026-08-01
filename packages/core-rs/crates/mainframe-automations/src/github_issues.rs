@@ -11,7 +11,7 @@ use reqwest::{RequestBuilder, StatusCode, header::HeaderMap};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use crate::github_http::{GITHUB_API, github_headers};
+use crate::github_http::{GITHUB_API, USER_AGENT, github_headers};
 use crate::github_issues_types::{RawIssue, TimelineEvent, patch_body};
 
 pub use crate::github_issues_types::{
@@ -36,6 +36,7 @@ impl GitHubIssuesClient {
         // treat this as the same fatal-boot condition main.rs panics on.
         #[allow(clippy::expect_used)]
         let http = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("failed to build the GitHub HTTP client");

@@ -82,6 +82,26 @@ async fn list_open_issues_follows_pagination() {
 }
 
 #[tokio::test]
+async fn requests_carry_a_user_agent() {
+    // The live API answers 403 "Request forbidden by administrative rules" to a
+    // request without one; reqwest sends none by default, so only a header
+    // assertion catches the regression before it reaches GitHub.
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/qlan/mainframe/issues/5"))
+        .and(header("user-agent", "mainframe"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(5, "t", "open")))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    GitHubIssuesClient::with_base_url(server.uri())
+        .get_issue(&repo(), 5, "tok")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn get_issue_maps_closed_state() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
