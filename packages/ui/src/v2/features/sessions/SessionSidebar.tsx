@@ -27,12 +27,15 @@ import { attentionCount } from '@/features/sessions/view-model/attention-counts'
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { useProjects } from '@/features/sessions/use-projects';
+import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts';
+import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
+import { TagFilterBar } from './TagFilterBar';
 import { useRemoveProject } from './use-remove-project';
 
 /** Reserves the native macOS traffic-lights cluster (3 × 12px + gaps + inset). */
@@ -71,6 +74,7 @@ export function SessionSidebar({ className }: { className?: string }) {
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const isUnread = useUnreadStore((s) => s.isUnread);
+  const registry = useTagRegistry(useDaemonPort());
   const { projects, removeProjectFromList } = useProjects();
   const onRemoveProject = useRemoveProject(removeProjectFromList);
 
@@ -131,11 +135,13 @@ export function SessionSidebar({ className }: { className?: string }) {
         <SessionsSection
           groups={groups}
           projectNames={projectNames}
+          colorOf={registry.colorOf}
           projects={sortedProjects}
           sessionCounts={sessionCounts}
           draft={draft}
           hasFilters={hasFilters}
         />
+        <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
       </SidebarContent>
 
       <SidebarFooter className="text-xs text-muted-foreground">

@@ -11,7 +11,14 @@
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@v2/components/ui/sidebar';
 import { Toaster } from '@v2/components/ui/sonner';
 import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
+import { TagPopoverHost } from '@v2/features/sessions/TagPopoverHost';
+import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { V2Runtime } from './V2Runtime';
+
+/** Overlays that outlive the row that opens them, mounted once at the root. */
+function Overlays() {
+  return <TagPopoverHost port={useDaemonPort()} />;
+}
 
 function SurfacePlaceholder() {
   return (
@@ -44,6 +51,7 @@ export function V2Shell() {
             </div>
           </SidebarInset>
         </div>
+        <Overlays />
         <Toaster />
       </SidebarProvider>
     </V2Runtime>
