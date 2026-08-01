@@ -1,7 +1,7 @@
 /**
  * The worktree popover, rebuilt on the v2 primitives.
  *
- * It exists to put Select / Input / Button side by side under the Luma tokens,
+ * It exists to put Select / Input / Button side by side under the v2 tokens,
  * so a change to the token layer has one place that shows it. Everything here
  * is stock: no arbitrary [Npx] spacing, no custom shadow, no named type rungs.
  */
@@ -36,13 +36,13 @@ export function FormSpecimen() {
         <h2 className="text-base font-semibold text-foreground">Worktree popover</h2>
         <p className="max-w-[70ch] text-xs text-muted-foreground">
           Stock <code className="font-mono">Select</code> / <code className="font-mono">Input</code> /{' '}
-          <code className="font-mono">Button</code> from the radix-luma registry, unmodified. The base-branch list
+          <code className="font-mono">Button</code> from the radix-vega registry, unmodified. The base-branch list
           scrolls with chevrons instead of a scrollbar because it&apos;s a Select, not a Popover with{' '}
           <code className="font-mono">overflow-y-auto</code>.
         </p>
       </header>
 
-      <div className="w-[280px] rounded-2xl border bg-popover p-4 shadow-sm">
+      <div className="w-[280px] rounded-xl border bg-popover p-4 shadow-sm">
         <div className="flex flex-col gap-4">
           <div className={GROUP}>
             <label className={LABEL} htmlFor="v2-base-branch">

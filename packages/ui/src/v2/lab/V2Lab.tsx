@@ -14,7 +14,7 @@ type View = (typeof VIEWS)[number];
 
 function chip(active: boolean): string {
   return [
-    'rounded-2xl px-2.5 py-1 text-xs capitalize transition-colors',
+    'rounded-md px-2.5 py-1 text-xs capitalize transition-colors',
     active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
   ].join(' ');
 }

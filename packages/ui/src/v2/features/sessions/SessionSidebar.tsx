@@ -54,8 +54,8 @@ export function SessionSidebar({ className }: { className?: string }) {
         </div>
 
         <div className="relative">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <SidebarInput data-testid="sidebar-search" placeholder="Search sessions" className="pl-9" />
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <SidebarInput data-testid="sidebar-search" placeholder="Search sessions" className="pl-8" />
         </div>
 
         <Button data-testid="sidebar-new-session" size="sm" className="w-full justify-start">

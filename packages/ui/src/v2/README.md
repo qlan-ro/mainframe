@@ -19,17 +19,23 @@ surface is ported and looked at once, and the shipped app keeps working.
 
 ## What this is
 
-The shadcn **Luma** preset (`b2D0wqNxT`, `radix` base) — "rounded geometry, soft
-elevation, breathable layouts; macOS Tahoe minus the glass." `styles/globals.css`
-is that preset's sheet, verbatim, with **one** deviation: `--primary` and
-`--sidebar-primary` are the macOS system blue `#0a84ff`
+Stock shadcn: preset `b2D0wqNxT` on the **`radix-vega`** style.
+`styles/globals.css` is that preset's sheet, verbatim, with **one** deviation:
+`--primary` and `--sidebar-primary` are the macOS system blue `#0a84ff`
 (`oklch(0.624 0.206 255.486)`, one value for both modes) instead of the preset's
 two indigos. Both variables are stock shadcn names; only their values changed.
 
-The sheet is short because the bulk of Luma ships in the `shadcn` npm package via
-`@import "shadcn/tailwind.css"` — that's where utilities like `no-scrollbar` come
-from. Radii are derived: one `--radius: 0.625rem` with `sm/md/lg/xl/2xl/3xl/4xl`
-as `calc()` multiples of it.
+The sheet is short because the bulk of the style ships in the `shadcn` npm
+package via `@import "shadcn/tailwind.css"` — that's where utilities like
+`no-scrollbar` come from. Radii are derived: one `--radius: 0.625rem` with
+`sm/md/lg/xl/2xl/3xl/4xl` as `calc()` multiples of it.
+
+**The style is a component-class choice, not a token one.** `radix-luma` and
+`radix-vega` ship byte-identical stylesheets (`cmp` them if you doubt it); the
+entire difference is in the class strings the registry writes into
+`components/ui/*`. v2 started on Luma and moved to Vega because Luma's pill
+geometry (`rounded-4xl` buttons, `rounded-3xl` filled inputs) was too round for
+this app — a swap of the primitive files, with `globals.css` untouched.
 
 **Nothing else Mainframe-specific is in here, on purpose.** No `mf-*` tokens, no
 named type rungs, no compressed spacing, no colour schemes, no window styles. The
@@ -47,7 +53,7 @@ losses that will want tokens eventually, both commented where they bite
 - **Never import `src/proto`, and never edit outside `src/v2`.** The four
   permitted seams are `v2.html`, the `@v2` alias in `vite.config.ts`, the `@v2/*`
   path in `tsconfig.json`, and this directory.
-- **Primitives are v2's own.** `components/ui/*` are stock `radix-luma` files;
+- **Primitives are v2's own.** `components/ui/*` are stock `radix-vega` files;
   do not import `@/components/ui/*` — the shipped copies carry custom classes
   that are undefined here.
 - **Undefined utilities are a trap.** A font-size or colour class that doesn't
@@ -61,14 +67,14 @@ losses that will want tokens eventually, both commented where they bite
 
 ## Adding a shadcn component
 
-The base is fixed by `style: "radix-luma"` in `components.json`; `shadcn add` has
+The style is fixed by `style: "radix-vega"` in `components.json`; `shadcn add` has
 no base flag and will prompt interactively for one if it can't infer the project.
 The reliable path is to scaffold a throwaway reference project and copy out of
 it:
 
 ```
-npx shadcn@latest create -p luma -b radix -t vite -n lumaref -y
-cd lumaref && npx shadcn@latest add <component>
+npx shadcn@latest create -p vega -b radix -t vite -n vegaref -y
+cd vegaref && npx shadcn@latest add <component>
 ```
 
 then copy the file into `src/v2/components/ui/`, rewriting `@/lib/utils` →
@@ -81,7 +87,7 @@ Modern shadcn imports the unified `radix-ui` package (`import { Slot } from
 
 ## The sidebar
 
-`components/ui/sidebar/` is the canonical 703-line Luma sidebar, split into four
+`components/ui/sidebar/` is the canonical 703-line registry sidebar, split into four
 files to satisfy the 300-line rule (`context` / `sidebar` / `sections` / `menu`).
 Three things changed:
 
@@ -103,7 +109,7 @@ truncate sooner. Widen it here if the sessions list needs it.
 ## Order of work
 
 1. ~~Project configuration~~
-2. ~~globals.css / themes~~ — now the Luma preset; see *What this is* above.
+2. ~~globals.css / themes~~ — now the stock preset; see *What this is* above.
 3. ~~App shell~~ — `app/V2Shell.tsx`; no runtime provider, no overlay hosts, no
    session router. Those return with the surfaces they belong to.
 4. Features, sidebar first — the sessions sidebar renders off fixtures

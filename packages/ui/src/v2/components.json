@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "radix-luma",
+  "style": "radix-vega",
   "rsc": false,
   "tsx": true,
   "rtl": false,
@@ -11,7 +11,7 @@
     "cssVariables": true,
     "prefix": ""
   },
-  "menuColor": "inverted-translucent",
+  "menuColor": "default",
   "menuAccent": "subtle",
   "aliases": {
     "components": "@v2/components",

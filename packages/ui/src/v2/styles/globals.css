@@ -1,5 +1,9 @@
 /* ════════════════════════════════════════════════════════════════════════
-   v2 token layer — shadcn "Luma" (preset b2D0wqNxT, radix base).
+   v2 token layer — shadcn preset b2D0wqNxT, radix-vega style.
+
+   The style is a component-class choice, not a token one: radix-luma and
+   radix-vega ship byte-identical stylesheets, so nothing here moved when
+   we switched off Luma's pill geometry.
 
    Taken from the preset verbatim, with ONE deviation: `primary` and
    `sidebar-primary` are the macOS system blue #0a84ff — oklch(0.624 0.206
