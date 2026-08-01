@@ -753,3 +753,123 @@ async fn probe_with_no_skills_is_probed_with_an_empty_list_not_unparseable() {
         "{outcome:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// A3 — per-project concurrency guard (spec AC 10; D3). Group B's locks.rs
+// implements exactly the module-level DashSet + RAII guard contract pinned
+// below: `acquire(project_id) -> Option<Guard>`, refusing a second
+// concurrent operation for the same project id and releasing on drop.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn second_operation_for_the_same_project_is_refused_while_one_is_in_flight() {
+    let (_dir, path) = fake_skills_binary();
+    let runner = RecordingRunner::new();
+    let project_id = "guard-project-in-flight";
+
+    let _held =
+        mainframe_server::skills_cli::locks::acquire(project_id).expect("first acquire succeeds");
+
+    let result = mainframe_server::skills_cli::install(
+        &runner,
+        &path,
+        project_id,
+        PROJECT_PATH,
+        "owner/repo",
+        &owned(&["a"]),
+        Scope::Project,
+        Some("claude"),
+    )
+    .await;
+
+    assert!(
+        matches!(result, Err(SkillsCliError::Busy)),
+        "expected a Busy refusal while the project is held, got {result:?}"
+    );
+    assert!(
+        runner.recorded().is_empty(),
+        "the CLI must never run while the project is busy"
+    );
+}
+
+#[tokio::test]
+async fn a_different_project_is_not_blocked() {
+    let (_dir, path) = fake_skills_binary();
+    let runner = RecordingRunner::new();
+
+    let _held = mainframe_server::skills_cli::locks::acquire("guard-project-a")
+        .expect("first acquire succeeds");
+
+    let result = mainframe_server::skills_cli::install(
+        &runner,
+        &path,
+        "guard-project-b",
+        PROJECT_PATH,
+        "owner/repo",
+        &owned(&["a"]),
+        Scope::Project,
+        Some("claude"),
+    )
+    .await;
+
+    assert!(
+        !matches!(result, Err(SkillsCliError::Busy)),
+        "an unrelated project's guard must not block this one, got {result:?}"
+    );
+    assert_eq!(
+        runner.recorded().len(),
+        1,
+        "the CLI runs once the unrelated project's operation proceeds"
+    );
+}
+
+#[tokio::test]
+async fn the_guard_is_released_when_the_operation_finishes_and_when_it_fails() {
+    let (_dir, path) = fake_skills_binary();
+    let succeeding_project = "guard-project-success";
+    let failing_project = "guard-project-failure";
+
+    let success_runner = RecordingRunner::queued(vec![success_outcome()]);
+    mainframe_server::skills_cli::install(
+        &success_runner,
+        &path,
+        succeeding_project,
+        PROJECT_PATH,
+        "owner/repo",
+        &owned(&["a"]),
+        Scope::Project,
+        Some("claude"),
+    )
+    .await
+    .expect("install succeeds");
+    assert!(
+        mainframe_server::skills_cli::locks::acquire(succeeding_project).is_some(),
+        "the guard must be released after a successful operation"
+    );
+
+    let failing_runner = RecordingRunner::queued(vec![CliOutcome {
+        started: true,
+        timed_out: false,
+        exit_code: Some(1),
+        output: "error: boom".to_string(),
+    }]);
+    let failed = mainframe_server::skills_cli::install(
+        &failing_runner,
+        &path,
+        failing_project,
+        PROJECT_PATH,
+        "owner/repo",
+        &owned(&["a"]),
+        Scope::Project,
+        Some("claude"),
+    )
+    .await;
+    assert!(
+        matches!(failed, Err(SkillsCliError::Cli { .. })),
+        "expected the queued nonzero exit to surface as a Cli error, got {failed:?}"
+    );
+    assert!(
+        mainframe_server::skills_cli::locks::acquire(failing_project).is_some(),
+        "the guard must be released after a failed operation too"
+    );
+}
