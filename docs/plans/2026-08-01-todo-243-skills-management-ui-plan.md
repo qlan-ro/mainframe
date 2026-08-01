@@ -640,8 +640,12 @@ Against a mocked `@/lib/api/skills-cli`:
 4. Two entries sharing a name across scopes render two distinct rows with distinct testids.
 5. The Uninstall slot is present in the DOM for every row whether or not any row is running (the
    reserved slot — assert the trailing cell exists on all rows while one shows the running state).
-6. The section renders the adapter note when `adapterId` is not `claude` (spec: "the app's own skill
-   views reflect Claude today").
+6. The section renders `skills-section-adapter-note` when `adapterId` is present and is not
+   `claude` — one line saying the composer and sidebar skill lists show Claude's skills (spec
+   "the app's own skill views reflect Claude today", and the edge case at spec:155–157). Implemented
+   by F5.
+7. The note is absent when `adapterId` is `claude` and when `adapterId` is undefined (an unknown or
+   absent adapter is treated as Claude, spec:104–105).
 
 **Verify:** vitest on that file — fails.
 
@@ -761,13 +765,21 @@ daemon-host qualifier when `getActiveDaemon().kind === 'remote'`. No controls, n
 
 Props: `{ projectId, adapterId }`. Mount effect keyed `[projectId, adapterId, nonce]` (D10) calling
 `loadManifest`. Renders, inside `flex-1 min-h-0 overflow-y-auto` with no `max-h`: the Install band,
-a `SectionHeader` eyebrow, then the manifest (skeletons / rows / empty notice), then `FailureTail`
-when a failure is held. When the store's status is `unavailable`, the whole body is replaced by
-`CliUnavailable`. Keep the component under 50 lines by extracting `ManifestBody` into the same file
-or `ManifestList.tsx` if it grows.
+the adapter note, a `SectionHeader` eyebrow, then the manifest (skeletons / rows / empty notice),
+then `FailureTail` when a failure is held. When the store's status is `unavailable`, the whole body
+is replaced by `CliUnavailable`. Keep the component under 50 lines by extracting `ManifestBody` into
+the same file or `ManifestList.tsx` if it grows.
 
-**Verify:** E2 and E4's vitest commands — green. Then `pnpm --filter @qlan-ro/mainframe-ui typecheck`
-and `wc -l` on every file in `skills/` (each under 300).
+**The adapter note.** Rendered directly under the Install band, and only when `adapterId` is present
+and is not `claude` — an unknown or absent adapter is treated as Claude and shows nothing
+(spec:103–105). It is one static line of `text-label text-muted-foreground` on a
+`data-testid="skills-section-adapter-note"` element: "The composer and sidebar skill lists show
+Claude's skills." No control, no link, no copyable text. It sits in the available branch, so the
+`unavailable` branch never renders it.
+
+**Verify:** E2 and E4's vitest commands — green, including E2 tests 6 and 7. Then
+`pnpm --filter @qlan-ro/mainframe-ui typecheck` and `wc -l` on every file in `skills/` (each under
+300).
 
 ---
 
