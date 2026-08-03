@@ -74,6 +74,69 @@ export const SkillsCliProbeSchema = z.discriminatedUnion('status', [
 export type SkillsCliProbe = z.infer<typeof SkillsCliProbeSchema>;
 
 /**
+ * One row of the skills.sh leaderboard, from `GET /api/skills-cli/catalog`.
+ * `weeklyInstalls` is the registry's 8-point sparkline — carried through the
+ * wire so adding the column later needs no second contract change.
+ */
+export const SkillsCatalogEntrySchema = z
+  .object({
+    source: z.string().min(1),
+    skillId: z.string().min(1),
+    name: z.string().min(1),
+    installs: z.number().int().nonnegative(),
+    weeklyInstalls: z.array(z.number()).nullish(),
+    isOfficial: z.boolean().nullish(),
+  })
+  .loose();
+export type SkillsCatalogEntry = z.infer<typeof SkillsCatalogEntrySchema>;
+
+const SkillsCatalogAvailableSchema = z
+  .object({
+    status: z.literal('available'),
+    entries: z.array(SkillsCatalogEntrySchema),
+  })
+  .loose();
+
+// The catalog is scraped from the registry's homepage, so "we couldn't read
+// it" rides the success envelope: Browse degrades to search-only rather than
+// showing an error the user can do nothing about.
+const SkillsCatalogUnavailableSchema = z
+  .object({
+    status: z.literal('unavailable'),
+  })
+  .loose();
+
+export const SkillsCatalogSchema = z.discriminatedUnion('status', [
+  SkillsCatalogAvailableSchema,
+  SkillsCatalogUnavailableSchema,
+]);
+export type SkillsCatalog = z.infer<typeof SkillsCatalogSchema>;
+
+/**
+ * One row from `GET /api/skills-cli/search`. Narrower than the catalog entry:
+ * the registry's search API returns no sparkline, and reports no official
+ * flag — `isOfficial` arrives as `null`, which means unknown, not "not
+ * official".
+ */
+export const SkillsSearchResultSchema = z
+  .object({
+    source: z.string().min(1),
+    skillId: z.string().min(1),
+    name: z.string().min(1),
+    installs: z.number().int().nonnegative(),
+    isOfficial: z.boolean().nullish(),
+  })
+  .loose();
+export type SkillsSearchResult = z.infer<typeof SkillsSearchResultSchema>;
+
+export const SkillsSearchResponseSchema = z
+  .object({
+    entries: z.array(SkillsSearchResultSchema),
+  })
+  .loose();
+export type SkillsSearchResponse = z.infer<typeof SkillsSearchResponseSchema>;
+
+/**
  * The 502 failure body carries `tail`/`exitCode` beyond the standard
  * `{ success, error }` envelope (wire contract table). `exitCode` is `null`
  * for a spawn failure or timeout, absent entirely for non-CLI failures

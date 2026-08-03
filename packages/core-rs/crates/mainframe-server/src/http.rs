@@ -65,6 +65,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::agents::router())
         .merge(routes::skills::router())
         .merge(routes::skills_cli::router())
+        .merge(routes::skills_registry::router())
         .merge(routes::suggestions::router())
         .merge(routes::setup_advisor::router())
         .merge(routes::quota::router())

@@ -9,7 +9,15 @@
  * an "unavailable" manifest resolves rather than throwing).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getSkillsCliManifest, probeSkillsSource, installSkills, uninstallSkills, SkillsCliError } from '../skills-cli';
+import {
+  getSkillsCliManifest,
+  probeSkillsSource,
+  installSkills,
+  uninstallSkills,
+  getSkillsCatalog,
+  searchSkills,
+  SkillsCliError,
+} from '../skills-cli';
 import { setActiveDaemon } from '../../daemon/active-daemon';
 
 const LOCAL_DAEMON = {
@@ -192,5 +200,95 @@ describe('skills-cli error propagation', () => {
     mockFetchFail(400, { success: false, error: 'Skill name must not start with -' });
 
     await expect(installSkills('proj-1', 'owner/repo', ['-x'], 'project')).rejects.toBeInstanceOf(SkillsCliError);
+  });
+});
+
+describe('getSkillsCatalog', () => {
+  it('calls GET /api/skills-cli/catalog with no project in the path', async () => {
+    mockFetchOk({ status: 'available', entries: [] });
+
+    await getSkillsCatalog();
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:31415/api/skills-cli/catalog',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('parses an available catalog including an entry with no sparkline or official flag', async () => {
+    mockFetchOk({
+      status: 'available',
+      entries: [
+        {
+          source: 'vercel-labs/skills',
+          skillId: 'find-skills',
+          name: 'find-skills',
+          installs: 2787493,
+          weeklyInstalls: [1, 2],
+          isOfficial: true,
+        },
+        {
+          source: 'mattpocock/skills',
+          skillId: 'grill-me',
+          name: 'grill-me',
+          installs: 732181,
+          weeklyInstalls: null,
+          isOfficial: false,
+        },
+      ],
+    });
+
+    const catalog = await getSkillsCatalog();
+
+    expect(catalog.status).toBe('available');
+    if (catalog.status !== 'available') throw new Error('expected an available catalog');
+    expect(catalog.entries).toHaveLength(2);
+    expect(catalog.entries[0]?.installs).toBe(2787493);
+    expect(catalog.entries[1]?.weeklyInstalls).toBeNull();
+  });
+
+  it('resolves an unavailable catalog rather than throwing — Browse degrades to search-only', async () => {
+    mockFetchOk({ status: 'unavailable' });
+
+    await expect(getSkillsCatalog()).resolves.toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('searchSkills', () => {
+  it('URL-encodes the query into ?q=', async () => {
+    mockFetchOk({ entries: [] });
+
+    await searchSkills('code review');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:31415/api/skills-cli/search?q=code%20review',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('returns the entries array, keeping an unknown official flag null', async () => {
+    mockFetchOk({
+      entries: [
+        {
+          source: 'microsoft/playwright-cli',
+          skillId: 'playwright-cli',
+          name: 'playwright-cli',
+          installs: 106797,
+          isOfficial: null,
+        },
+      ],
+    });
+
+    const results = await searchSkills('playwright');
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.skillId).toBe('playwright-cli');
+    expect(results[0]?.isOfficial).toBeNull();
+  });
+
+  it('a 400 from the daemon surfaces its message', async () => {
+    mockFetchFail(400, { success: false, error: 'q must be at least 2 characters' });
+
+    await expect(searchSkills('p')).rejects.toThrow('q must be at least 2 characters');
   });
 });

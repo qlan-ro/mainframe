@@ -4,6 +4,8 @@
  * Red until `../SkillsSection` exists (plan Group F5). Pins the uninstall
  * success outcome (plan E4): `uninstallSkills` is called with that row's
  * name and scope — a global row sends `'global'`, not the project id.
+ *
+ * Rows live under Installed, which is not the tab that mounts first.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
@@ -14,6 +16,8 @@ vi.mock('@/lib/api/skills-cli', () => ({
   probeSkillsSource: vi.fn(),
   installSkills: vi.fn(),
   uninstallSkills: vi.fn(),
+  getSkillsCatalog: vi.fn(),
+  searchSkills: vi.fn(),
   SkillsCliError: class SkillsCliError extends Error {},
 }));
 
@@ -28,6 +32,7 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
+import { useSkillsBrowseStore } from '../use-skills-browse-store';
 import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 
@@ -40,6 +45,13 @@ function makeEntry(overrides: Partial<SkillsCliEntry> & { name: string; scope: '
   };
 }
 
+/** Renders the section and opens Installed — Browse is what mounts first. */
+function renderInstalled(projectId: string) {
+  const result = render(<SkillsSection projectId={projectId} />);
+  fireEvent.click(screen.getByTestId('skills-section-tab-installed'));
+  return result;
+}
+
 beforeEach(() => {
   act(() => {
     useSkillsCliStore.setState({
@@ -50,8 +62,10 @@ beforeEach(() => {
       uninstallingKey: null,
       failure: null,
     });
+    useSkillsBrowseStore.getState().reset();
   });
   vi.clearAllMocks();
+  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
 });
 
 describe('SkillsSection — uninstall success', () => {
@@ -62,7 +76,7 @@ describe('SkillsSection — uninstall success', () => {
     });
     vi.mocked(skillsCliApi.uninstallSkills).mockResolvedValue(undefined);
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled('proj-a');
 
     const uninstallButton = await screen.findByTestId('skills-section-uninstall-global-my skill');
     fireEvent.click(uninstallButton);
@@ -78,7 +92,7 @@ describe('SkillsSection — uninstall success', () => {
     });
     vi.mocked(skillsCliApi.uninstallSkills).mockResolvedValue(undefined);
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled('proj-a');
 
     const uninstallButton = await screen.findByTestId('skills-section-uninstall-project-shadcn');
     fireEvent.click(uninstallButton);

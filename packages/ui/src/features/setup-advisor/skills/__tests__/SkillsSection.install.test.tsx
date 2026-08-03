@@ -5,6 +5,9 @@
  * Pins the install success outcome (plan E4): `installSkills` is called with
  * the typed source/selected names/chosen scope, success toasts via the
  * mocked `mfToast` (never sonner), and the manifest is refetched.
+ *
+ * The band lives under Browse, which is the tab that mounts first, and reads
+ * Browse's one scope control rather than owning one.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
@@ -14,6 +17,8 @@ vi.mock('@/lib/api/skills-cli', () => ({
   probeSkillsSource: vi.fn(),
   installSkills: vi.fn(),
   uninstallSkills: vi.fn(),
+  getSkillsCatalog: vi.fn(),
+  searchSkills: vi.fn(),
   SkillsCliError: class SkillsCliError extends Error {},
 }));
 
@@ -28,6 +33,7 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
+import { useSkillsBrowseStore } from '../use-skills-browse-store';
 import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 import { mfToast } from '@/lib/toast';
@@ -42,9 +48,11 @@ beforeEach(() => {
       uninstallingKey: null,
       failure: null,
     });
+    useSkillsBrowseStore.getState().reset();
   });
   vi.clearAllMocks();
   vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
+  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
 });
 
 describe('SkillsSection — install success', () => {
@@ -64,7 +72,7 @@ describe('SkillsSection — install success', () => {
     const option = await screen.findByTestId('skills-section-skill-option-shadcn');
     fireEvent.click(option);
 
-    fireEvent.click(screen.getByTestId('skills-section-scope-global'));
+    fireEvent.click(screen.getByTestId('skills-browse-scope-global'));
 
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockClear();
     fireEvent.click(screen.getByTestId('skills-section-install'));

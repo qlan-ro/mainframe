@@ -15,6 +15,8 @@
 use mainframe_runtime::ResolvedPath;
 
 pub mod args;
+pub mod catalog;
+pub mod catalog_parse;
 pub mod locks;
 pub mod manifest;
 pub mod probe_parse;
@@ -40,13 +42,19 @@ pub struct CommandSpec {
 
 /// The raw result of running a [`CommandSpec`]: whether the process started,
 /// whether it hit the timeout, its exit code (`None` on spawn failure, a
-/// timeout, or a signal), and the combined stdout+stderr.
+/// timeout, or a signal), and the two output streams.
+///
+/// The streams stay separate because `list --json` output is parsed whole:
+/// the resolved CLI is often `npx`, which writes `npm warn …` lines to stderr,
+/// and concatenating them onto the JSON makes it unparseable. Failure tails
+/// still join both — stderr is where the error text lives.
 #[derive(Debug, Clone)]
 pub struct CliOutcome {
     pub started: bool,
     pub timed_out: bool,
     pub exit_code: Option<i32>,
-    pub output: String,
+    pub stdout: String,
+    pub stderr: String,
 }
 
 /// The runner seam: production wiring passes [`ProcessRunner`]; tests pass a
@@ -96,6 +104,38 @@ pub enum ManifestOutcome {
         executable: String,
         package_runner: String,
     },
+}
+
+/// One row of the skills.sh leaderboard. `weekly_installs` is the registry's
+/// 8-point sparkline; it's carried so adding the column later needs no second
+/// contract change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogEntry {
+    pub source: String,
+    pub skill_id: String,
+    pub name: String,
+    pub installs: u64,
+    pub weekly_installs: Option<Vec<u64>>,
+    pub is_official: bool,
+}
+
+/// The catalog is a scrape of the registry's homepage, so "we couldn't read it"
+/// is a normal outcome the UI degrades through, not an error.
+#[derive(Debug)]
+pub enum CatalogOutcome {
+    Available { entries: Vec<CatalogEntry> },
+    Unavailable,
+}
+
+/// One row of the registry's search API. Narrower than [`CatalogEntry`]: the
+/// API returns no sparkline, and no official flag.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchEntry {
+    pub source: String,
+    pub skill_id: String,
+    pub name: String,
+    pub installs: u64,
+    pub is_official: Option<bool>,
 }
 
 #[derive(Debug, Clone)]

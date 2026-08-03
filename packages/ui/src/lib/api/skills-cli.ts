@@ -6,8 +6,19 @@
  * `request()` discards unknown error fields. `createProject` in
  * `projects.ts` is the existing precedent for this escape hatch.
  */
-import type { SkillsCliManifest, SkillsCliProbe, SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { SkillsCliManifestSchema, SkillsCliProbeSchema } from '@qlan-ro/mainframe-types';
+import type {
+  SkillsCatalog,
+  SkillsCliManifest,
+  SkillsCliProbe,
+  SkillsCliScope,
+  SkillsSearchResult,
+} from '@qlan-ro/mainframe-types';
+import {
+  SkillsCatalogSchema,
+  SkillsCliManifestSchema,
+  SkillsCliProbeSchema,
+  SkillsSearchResponseSchema,
+} from '@qlan-ro/mainframe-types';
 import { apiBase, authHeaders } from './http';
 
 /** Thrown for every non-2xx response. Carries the daemon's CLI failure fields when present. */
@@ -67,6 +78,23 @@ export async function installSkills(
   const url = `${apiBase()}/api/projects/${encodeURIComponent(projectId)}/skills-cli/install`;
   const res = await fetch(url, fetchInit('POST', { source, skills, scope, adapterId }));
   if (!res.ok) await throwFailure(res);
+}
+
+/** The registry's ranked catalog. Not project-scoped — it's the same everywhere. */
+export async function getSkillsCatalog(): Promise<SkillsCatalog> {
+  const res = await fetch(`${apiBase()}/api/skills-cli/catalog`, fetchInit('GET'));
+  if (!res.ok) return throwFailure(res);
+  const { data } = (await res.json()) as { data: unknown };
+  return SkillsCatalogSchema.parse(data);
+}
+
+/** The daemon rejects a query under 2 characters, so callers must debounce and gate on length. */
+export async function searchSkills(query: string): Promise<SkillsSearchResult[]> {
+  const url = `${apiBase()}/api/skills-cli/search?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, fetchInit('GET'));
+  if (!res.ok) return throwFailure(res);
+  const { data } = (await res.json()) as { data: unknown };
+  return SkillsSearchResponseSchema.parse(data).entries;
 }
 
 export async function uninstallSkills(

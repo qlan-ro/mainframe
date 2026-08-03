@@ -10,7 +10,7 @@
 //!
 //! ```ignore
 //! pub struct CommandSpec { pub program: String, pub args: Vec<String>, pub cwd: String }
-//! pub struct CliOutcome { pub started: bool, pub timed_out: bool, pub exit_code: Option<i32>, pub output: String }
+//! pub struct CliOutcome { pub started: bool, pub timed_out: bool, pub exit_code: Option<i32>, pub stdout: String, pub stderr: String }
 //! pub trait SkillsCliRunner: Send + Sync {
 //!     fn run(&self, spec: CommandSpec, timeout_ms: u64) -> BoxFuture<'_, CliOutcome>;
 //! }
@@ -65,11 +65,17 @@ struct RecordedSpec {
 }
 
 fn success_outcome() -> CliOutcome {
+    stdout_outcome("")
+}
+
+/// A clean exit whose stdout carries `stdout` and whose stderr is empty.
+fn stdout_outcome(stdout: &str) -> CliOutcome {
     CliOutcome {
         started: true,
         timed_out: false,
         exit_code: Some(0),
-        output: String::new(),
+        stdout: stdout.to_string(),
+        stderr: String::new(),
     }
 }
 
@@ -251,20 +257,7 @@ async fn uninstall_argv_is_remove_with_skill_agent_scope_and_yes() {
 async fn manifest_runs_list_json_twice_once_per_scope() {
     let project_id = "manifest-runs-list-json-twice-once-per-scope";
     let (_dir, path) = fake_skills_binary();
-    let runner = RecordingRunner::queued(vec![
-        CliOutcome {
-            started: true,
-            timed_out: false,
-            exit_code: Some(0),
-            output: "[]".to_string(),
-        },
-        CliOutcome {
-            started: true,
-            timed_out: false,
-            exit_code: Some(0),
-            output: "[]".to_string(),
-        },
-    ]);
+    let runner = RecordingRunner::queued(vec![stdout_outcome("[]"), stdout_outcome("[]")]);
 
     let result =
         mainframe_server::skills_cli::manifest(&runner, &path, project_id, PROJECT_PATH).await;
@@ -528,20 +521,12 @@ async fn manifest_merges_project_and_global_entries() {
     let project_id = "manifest-merges-project-and-global-entries";
     let (_dir, path) = fake_skills_binary();
     let runner = RecordingRunner::queued(vec![
-        CliOutcome {
-            started: true,
-            timed_out: false,
-            exit_code: Some(0),
-            output: r#"{"shadcn":{"source":"shadcn/ui","sourceType":"github","skillPath":"skills/shadcn/SKILL.md"}}"#
-                .to_string(),
-        },
-        CliOutcome {
-            started: true,
-            timed_out: false,
-            exit_code: Some(0),
-            output: r#"[{"name":"playwright","source":"owner/pw","sourceType":"github","skillPath":"skills/playwright/SKILL.md"}]"#
-                .to_string(),
-        },
+        stdout_outcome(
+            r#"{"shadcn":{"source":"shadcn/ui","sourceType":"github","skillPath":"skills/shadcn/SKILL.md"}}"#,
+        ),
+        stdout_outcome(
+            r#"[{"name":"playwright","source":"owner/pw","sourceType":"github","skillPath":"skills/playwright/SKILL.md"}]"#,
+        ),
     ]);
 
     let result =
@@ -561,6 +546,46 @@ async fn manifest_merges_project_and_global_entries() {
         .find(|e| e.name == "playwright")
         .expect("playwright entry present");
     assert_eq!(playwright.scope, Scope::Global);
+}
+
+/// The resolved CLI is usually `npx`, which writes `npm warn …` lines to
+/// stderr on every invocation. Folding those onto stdout made `list --json`
+/// unparseable and silently emptied the installed list.
+#[tokio::test]
+async fn manifest_parses_stdout_when_the_cli_writes_npm_warnings_to_stderr() {
+    let project_id = "manifest-parses-stdout-when-the-cli-writes-npm-warnings-to-stderr";
+    let (_dir, path) = fake_skills_binary();
+    let npm_warnings = concat!(
+        "npm warn Unknown project config \"strict-peer-dependencies\".\n",
+        "npm warn Unknown project config \"auto-install-peers\".\n",
+        "npm warn Unknown project config \"link-workspace-packages\".\n",
+    );
+    let runner = RecordingRunner::queued(vec![
+        CliOutcome {
+            started: true,
+            timed_out: false,
+            exit_code: Some(0),
+            stdout: r#"[{"name":"shadcn","source":"shadcn/ui","sourceType":"github"}]"#.to_string(),
+            stderr: npm_warnings.to_string(),
+        },
+        CliOutcome {
+            started: true,
+            timed_out: false,
+            exit_code: Some(0),
+            stdout: r#"[{"name":"playwright","source":"owner/pw","sourceType":"github"}]"#
+                .to_string(),
+            stderr: npm_warnings.to_string(),
+        },
+    ]);
+
+    let result =
+        mainframe_server::skills_cli::manifest(&runner, &path, project_id, PROJECT_PATH).await;
+
+    let ManifestOutcome::Available { entries } = result.unwrap() else {
+        panic!("expected an available manifest");
+    };
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, vec!["shadcn", "playwright"]);
 }
 
 #[tokio::test]
@@ -656,7 +681,8 @@ async fn nonzero_exit_maps_to_a_failure_carrying_the_ansi_stripped_tail() {
         started: true,
         timed_out: false,
         exit_code: Some(1),
-        output: "\u{1b}[2K\u{1b}[1Ginstalling…\nerror: boom\n".to_string(),
+        stdout: "\u{1b}[2K\u{1b}[1Ginstalling…\n".to_string(),
+        stderr: "error: boom\n".to_string(),
     }]);
 
     let result = mainframe_server::skills_cli::install(
@@ -695,7 +721,8 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
         started: false,
         timed_out: false,
         exit_code: None,
-        output: String::new(),
+        stdout: String::new(),
+        stderr: String::new(),
     }]);
     let spawn_result = mainframe_server::skills_cli::install(
         &spawn_failure_runner,
@@ -713,7 +740,8 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
         started: true,
         timed_out: true,
         exit_code: None,
-        output: "partial".to_string(),
+        stdout: "partial".to_string(),
+        stderr: String::new(),
     }]);
     let timeout_result = mainframe_server::skills_cli::install(
         &timeout_runner,
@@ -924,7 +952,8 @@ async fn the_guard_is_released_when_the_operation_finishes_and_when_it_fails() {
         started: true,
         timed_out: false,
         exit_code: Some(1),
-        output: "error: boom".to_string(),
+        stdout: String::new(),
+        stderr: "error: boom".to_string(),
     }]);
     let failed = mainframe_server::skills_cli::install(
         &failing_runner,

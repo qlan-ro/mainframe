@@ -3,6 +3,14 @@
 Spec: `docs/specs/2026-08-01-todo-243-skills-management-ui.md` (committed at `495c7469`, amended `dd06aa24`).
 Branch: `todo/243-skills-management-ui-v2`. Route: full.
 
+> **Partly superseded by `docs/plans/2026-08-03-todo-243-skills-browse-plan.md`.** After live
+> testing, the section was split into Browse and Installed tabs and the install band lost its own
+> scope control. Everything below still describes the daemon routes, the CLI argv, and the
+> manifest; the parts that describe the section's shape are stale — steps **E3** and **F3** in
+> particular, where the band owns a `skills-section-scope-project` / `-global` pair. Scope is now
+> one `skills-browse-scope-*` control in the Browse toolbar, shared by row installs and the band.
+> Read the browse plan for the current UI.
+
 ## Goal
 
 Give the Setup Advisor dialog a second top-level section, Skills, that installs and uninstalls
@@ -651,6 +659,9 @@ Against a mocked `@/lib/api/skills-cli`:
 
 ### E3 — Install band tests
 
+> Superseded in part: `InstallBand.test.tsx` no longer asserts a scope control inside the band —
+> scope arrives as a prop from Browse. Every other case below still holds.
+
 **File:** `packages/ui/src/features/setup-advisor/skills/__tests__/InstallBand.test.tsx` (new)
 
 1. Empty source: picker and `skills-section-install` are disabled.
@@ -732,6 +743,9 @@ button whether or not it is running. Testids per D5.
 **Verify:** E2's vitest command — rows and reserved-slot assertions green.
 
 ### F3 — Install band
+
+> Superseded in part: the band no longer owns a scope control, and it now sits under the Browse
+> tab as the secondary way in. See the browse plan.
 
 **Files:**
 - `packages/ui/src/features/setup-advisor/skills/InstallBand.tsx` (new)

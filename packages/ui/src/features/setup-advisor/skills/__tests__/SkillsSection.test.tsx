@@ -5,10 +5,13 @@
  * render states (plan E2) against a mocked `@/lib/api/skills-cli`. Install
  * band interaction is covered by InstallBand.test.tsx; success/failure
  * outcomes by the SkillsSection.{install,uninstall,failure}.test.tsx trio;
- * the CLI-unavailable branch by SkillsSection.unavailable.test.tsx.
+ * the CLI-unavailable branch by SkillsSection.unavailable.test.tsx; the tab
+ * strip itself by SkillsSection.tabs.test.tsx.
+ *
+ * Browse is the default tab, so every case here opens Installed first.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { act } from '@testing-library/react';
 import type { SkillsCliEntry } from '@qlan-ro/mainframe-types';
 
@@ -17,10 +20,13 @@ vi.mock('@/lib/api/skills-cli', () => ({
   probeSkillsSource: vi.fn(),
   installSkills: vi.fn(),
   uninstallSkills: vi.fn(),
+  getSkillsCatalog: vi.fn(),
+  searchSkills: vi.fn(),
   SkillsCliError: class SkillsCliError extends Error {},
 }));
 
 import { SkillsSection } from '../SkillsSection';
+import { useSkillsBrowseStore } from '../use-skills-browse-store';
 import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 
@@ -33,6 +39,13 @@ function makeEntry(overrides: Partial<SkillsCliEntry> & { name: string; scope: '
   };
 }
 
+/** Renders the section and opens Installed — Browse is what mounts first. */
+function renderInstalled(props: { projectId: string; adapterId?: string }) {
+  const result = render(<SkillsSection {...props} />);
+  fireEvent.click(screen.getByTestId('skills-section-tab-installed'));
+  return result;
+}
+
 beforeEach(() => {
   act(() => {
     useSkillsCliStore.setState({
@@ -43,15 +56,17 @@ beforeEach(() => {
       uninstallingKey: null,
       failure: null,
     });
+    useSkillsBrowseStore.getState().reset();
   });
   vi.clearAllMocks();
+  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
 });
 
 describe('SkillsSection — loading', () => {
   it('renders skeleton rows, not a spinner', () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockImplementation(() => new Promise(() => {}));
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     expect(screen.getAllByTestId('skills-section-skeleton').length).toBeGreaterThan(0);
     expect(screen.queryByTestId('skills-section-empty')).not.toBeInTheDocument();
@@ -68,7 +83,7 @@ describe('SkillsSection — populated', () => {
       ],
     });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     const projectRow = await screen.findByTestId('skills-section-row-project-shadcn');
     const globalRow = await screen.findByTestId('skills-section-row-global-my skill');
@@ -85,7 +100,7 @@ describe('SkillsSection — populated', () => {
       entries: [makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'shadcn', scope: 'global' })],
     });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     const projectRow = await screen.findByTestId('skills-section-row-project-shadcn');
     const globalRow = await screen.findByTestId('skills-section-row-global-shadcn');
@@ -99,7 +114,7 @@ describe('SkillsSection — populated', () => {
       entries: [makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'my skill', scope: 'global' })],
     });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     await screen.findByTestId('skills-section-row-project-shadcn');
 
@@ -121,7 +136,7 @@ describe('SkillsSection — populated', () => {
       entries: [{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }],
     });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     const row = await screen.findByTestId('skills-section-row-project-no-source');
     expect(row).toHaveTextContent('no-source');
@@ -134,7 +149,7 @@ describe('SkillsSection — populated', () => {
       entries: [makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'my skill', scope: 'global' })],
     });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
     await screen.findByTestId('skills-section-row-project-shadcn');
 
     act(() => {
@@ -150,7 +165,7 @@ describe('SkillsSection — empty', () => {
   it('renders "No skills installed by the CLI"', async () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     const empty = await screen.findByTestId('skills-section-empty');
     expect(empty).toHaveTextContent('No skills installed by the CLI');
@@ -161,7 +176,7 @@ describe('SkillsSection — adapter note', () => {
   it('renders when adapterId is present and is not "claude"', async () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
 
-    render(<SkillsSection projectId="proj-a" adapterId="codex" />);
+    renderInstalled({ projectId: 'proj-a', adapterId: 'codex' });
 
     const note = await screen.findByTestId('skills-section-adapter-note');
     expect(note).toHaveTextContent("The composer and sidebar skill lists show Claude's skills.");
@@ -170,7 +185,7 @@ describe('SkillsSection — adapter note', () => {
   it('is absent when adapterId is "claude"', async () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
 
-    render(<SkillsSection projectId="proj-a" adapterId="claude" />);
+    renderInstalled({ projectId: 'proj-a', adapterId: 'claude' });
 
     await screen.findByTestId('skills-section-empty');
     expect(screen.queryByTestId('skills-section-adapter-note')).not.toBeInTheDocument();
@@ -179,7 +194,7 @@ describe('SkillsSection — adapter note', () => {
   it('is absent when adapterId is undefined', async () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled({ projectId: 'proj-a' });
 
     await screen.findByTestId('skills-section-empty');
     expect(screen.queryByTestId('skills-section-adapter-note')).not.toBeInTheDocument();

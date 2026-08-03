@@ -52,7 +52,8 @@ async fn spawn_and_capture(spec: CommandSpec, timeout_ms: u64, path: &str) -> Cl
                 started: false,
                 timed_out: false,
                 exit_code: None,
-                output: String::new(),
+                stdout: String::new(),
+                stderr: String::new(),
             };
         }
     };
@@ -93,11 +94,14 @@ async fn finished(
     stdout: ReaderHandle,
     stderr: ReaderHandle,
 ) -> CliOutcome {
+    let out = stdout.await.unwrap_or_default();
+    let err = stderr.await.unwrap_or_default();
     CliOutcome {
         started: true,
         timed_out,
         exit_code,
-        output: captured_output(stdout, stderr).await,
+        stdout: String::from_utf8_lossy(&out).into_owned(),
+        stderr: String::from_utf8_lossy(&err).into_owned(),
     }
 }
 
@@ -108,14 +112,6 @@ where
     R: AsyncRead + Unpin + Send + 'static,
 {
     tokio::spawn(read_capped(pipe))
-}
-
-async fn captured_output(stdout: ReaderHandle, stderr: ReaderHandle) -> String {
-    let out = stdout.await.unwrap_or_default();
-    let err = stderr.await.unwrap_or_default();
-    let mut combined = String::from_utf8_lossy(&out).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&err));
-    combined
 }
 
 async fn read_capped<R: AsyncRead + Unpin>(reader: Option<R>) -> Vec<u8> {
@@ -182,24 +178,40 @@ pub fn tail(s: &str, n: usize) -> String {
     s.chars().skip(count - n).collect()
 }
 
-/// Maps a raw [`CliOutcome`] to `Ok(ansi_stripped_output)` on a clean exit,
-/// or the failure the wire contract's 502 body needs.
+/// Maps a raw [`CliOutcome`] to `Ok(ansi_stripped_stdout)` on a clean exit, or
+/// the failure the wire contract's 502 body needs.
+///
+/// Success returns stdout alone so a JSON payload survives a chatty stderr;
+/// failures keep both streams, since the reason for the failure is usually on
+/// stderr and the tail is the only diagnostic the user gets.
 pub(crate) fn map_outcome(outcome: CliOutcome) -> Result<String, SkillsCliError> {
-    let stripped = strip_ansi(&outcome.output);
+    let stdout = strip_ansi(&outcome.stdout);
     if !outcome.started {
-        return Err(cli_error("skills CLI failed to start", &stripped, None));
+        return Err(cli_error(
+            "skills CLI failed to start",
+            &failure_text(&outcome),
+            None,
+        ));
     }
     if outcome.timed_out {
-        return Err(cli_error("skills CLI timed out", &stripped, None));
+        return Err(cli_error(
+            "skills CLI timed out",
+            &failure_text(&outcome),
+            None,
+        ));
     }
     match outcome.exit_code {
-        Some(0) => Ok(stripped),
+        Some(0) => Ok(stdout),
         other => Err(cli_error(
             "skills CLI exited with a nonzero status",
-            &stripped,
+            &failure_text(&outcome),
             other,
         )),
     }
+}
+
+fn failure_text(outcome: &CliOutcome) -> String {
+    strip_ansi(&format!("{}{}", outcome.stdout, outcome.stderr))
 }
 
 fn cli_error(reason: &str, stripped_output: &str, exit_code: Option<i32>) -> SkillsCliError {

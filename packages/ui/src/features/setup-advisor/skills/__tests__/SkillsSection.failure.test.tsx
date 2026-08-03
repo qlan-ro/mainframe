@@ -33,6 +33,8 @@ vi.mock('@/lib/api/skills-cli', () => ({
   probeSkillsSource: vi.fn(),
   installSkills: vi.fn(),
   uninstallSkills: vi.fn(),
+  getSkillsCatalog: vi.fn(),
+  searchSkills: vi.fn(),
   SkillsCliError,
 }));
 
@@ -47,6 +49,7 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
+import { useSkillsBrowseStore } from '../use-skills-browse-store';
 import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 import { mfToast } from '@/lib/toast';
@@ -58,6 +61,13 @@ function makeEntry(overrides: Partial<SkillsCliEntry> & { name: string; scope: '
     skillPath: `skills/${overrides.name}/SKILL.md`,
     ...overrides,
   };
+}
+
+/** Renders the section and opens Installed — Browse is what mounts first. */
+function renderInstalled(projectId: string) {
+  const result = render(<SkillsSection projectId={projectId} />);
+  fireEvent.click(screen.getByTestId('skills-section-tab-installed'));
+  return result;
 }
 
 const TAIL = 'npm ERR! code E404\nnpm ERR! 404 Not Found';
@@ -72,8 +82,10 @@ beforeEach(() => {
       uninstallingKey: null,
       failure: null,
     });
+    useSkillsBrowseStore.getState().reset();
   });
   vi.clearAllMocks();
+  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
 });
 
 describe('SkillsSection — uninstall failure', () => {
@@ -84,7 +96,7 @@ describe('SkillsSection — uninstall failure', () => {
     });
     vi.mocked(skillsCliApi.uninstallSkills).mockRejectedValue(new SkillsCliError('Uninstall failed', TAIL, 1));
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled('proj-a');
 
     const uninstallButton = await screen.findByTestId('skills-section-uninstall-project-shadcn');
     fireEvent.click(uninstallButton);
@@ -110,7 +122,7 @@ describe('SkillsSection — uninstall failure', () => {
     });
     vi.mocked(skillsCliApi.uninstallSkills).mockRejectedValue(new SkillsCliError('Uninstall failed', TAIL, 1));
 
-    render(<SkillsSection projectId="proj-a" />);
+    renderInstalled('proj-a');
 
     const uninstallButton = await screen.findByTestId('skills-section-uninstall-project-shadcn');
     fireEvent.click(uninstallButton);

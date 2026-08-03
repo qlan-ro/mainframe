@@ -349,3 +349,50 @@ Hard-to-reverse first.
 25. **The CLI's own install telemetry is left alone; the telemetry-metadata flag is never
     passed.** `reversible` — suppressing a third-party tool's reporting is its own decision and
     is not made here.
+
+## Revision — 2026-08-03
+
+User decision after seeing the section running. The original text above is left intact; this
+section supersedes it where they conflict. Implementation plan:
+`docs/plans/2026-08-03-todo-243-skills-browse-plan.md`.
+
+**The declined browsing scope is overturned.** "Browsing, searching, inspecting" was declined in
+*Not Included* as PR 535's rejected deliverable. That rejection was about inspecting and deleting
+skills already on disk. Discovering skills that are *not* yet installed is a different capability,
+and without it the section can only install something the user already knows the name of.
+
+**The section's top-level control is Browse and Installed, not project and global.** Scope stays a
+two-value choice but moves onto the install action, where the choice is made. Decision 12 above is
+amended in that respect only; the merged manifest and the row-recorded uninstall scope are unchanged.
+
+**Browse is backed by the skills.sh registry, through the daemon.** Before a query it lists the top
+50 of the registry's all-time ranking. Any query goes to the registry's search API, so skills
+outside that top 50 are reachable — the ranking is a starting point, not the boundary of what can be
+installed. Both calls are proxied by the daemon; the renderer never reaches the registry directly.
+
+**The source-and-probe install path stays** as a secondary affordance inside Browse. It is the only
+route to a private, unlisted or self-hosted repository, which a registry cannot serve.
+
+**The registry is a best-effort source, never a dependency.** The all-time ranking is extracted from
+the registry homepage's server-rendered payload, which is someone else's implementation detail. When
+extraction fails, Browse falls back to search-only and says nothing alarming; the section keeps
+working.
+
+Additional acceptance criteria:
+
+24. The manifest route returns the host's real CLI-installed skills when the resolved CLI is the
+    package-runner fallback whose stderr carries warning lines — asserted by a Rust test whose fake
+    outcome puts valid JSON on stdout and `npm warn` lines on stderr. This fails on the code as
+    shipped in the first pass, where stdout and stderr are concatenated before the JSON parse.
+25. With no query, Browse renders the top 50 catalog entries and not the 51st. With a query of at
+    least two characters it renders the search API's results, including a skill absent from the
+    catalog — asserted by test, since reachability beyond the ranking is the point of the split.
+26. A query under two characters issues no outbound request; the daemon rejects it before the
+    round trip.
+27. When catalog extraction fails, the catalog route returns an outcome the client distinguishes
+    from a generic failure, Browse renders search-only with no error surface, and the failure is
+    logged daemon-side. The parser is covered by a fixture-backed unit test, and a payload missing
+    the expected key returns that outcome rather than an empty success.
+28. Neither the catalog nor the search call is made from the renderer; both go through the daemon.
+29. Every interactive element Browse adds carries a `data-testid` keyed by the skill's source and
+    id, never an array index.
