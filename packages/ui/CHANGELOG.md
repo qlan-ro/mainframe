@@ -1,5 +1,48 @@
 # @qlan-ro/mainframe-ui
 
+## 2.0.0-rc.18
+
+### Minor Changes
+
+- [#536](https://github.com/qlan-ro/mainframe/pull/536) [`dcbdc72`](https://github.com/qlan-ro/mainframe/commit/dcbdc72291800a1fe026f6b9e0ada95d6b415037) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Reference another session from the composer with `@`.
+
+  Typing `@` in the composer now offers other sessions in the project alongside files and agents. Picking one inserts `@label`; sending the message prepends a reference line carrying the session's transcript path, and the sent message renders the mention as a chip instead of the raw path. Session titles are now derived from what the message showed the reader, so neither a reference line nor a preview-capture block can leak into a sidebar title.
+
+- [#563](https://github.com/qlan-ro/mainframe/pull/563) [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Browse skills.sh from the Setup Advisor. The Skills section is now one list — the skills you have, then the registry's most-installed — with search covering the whole registry rather than the visible rows. An installed row reads "Installed" and swaps to Uninstall on hover, so no row offers to install something you already have; installing asks which scope on the Install button itself, at the moment you install. Two daemon routes back it, and the list degrades to search-only when the registry catalog can't be read, keeping your installed rows. Both reads report themselves: the list waits as skeletons rather than briefly offering to install skills you already have, and a refresh or a search marks the search field while it runs.
+
+- [#563](https://github.com/qlan-ro/mainframe/pull/563) [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Install and uninstall skills from the Setup Advisor's new Skills section, run through the `skills` CLI on the daemon host.
+
+- [#551](https://github.com/qlan-ro/mainframe/pull/551) [`4e0e305`](https://github.com/qlan-ro/mainframe/commit/4e0e305214495be90447fb0fc4c73361fd4119bb) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Claude Code workflow runs now show their phases, agents and totals in a details panel, reachable from the transcript and the background-activity popover.
+
+- [#559](https://github.com/qlan-ro/mainframe/pull/559) [`69aad41`](https://github.com/qlan-ro/mainframe/commit/69aad410a149b9e608eb5b996a06b2fbabccc314) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Tasks board: two-way GitHub Issues sync — link a repo, import or publish tasks, and reconcile title, body, state, and labels with an after-the-fact overwrite report.
+
+- [#548](https://github.com/qlan-ro/mainframe/pull/548) [`4c9671d`](https://github.com/qlan-ro/mainframe/commit/4c9671dcbef9e2f6bd24a26e26a797b219bbdbab) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Claude's attention requests now raise a Mainframe notification, including a native desktop banner, with a new Chat setting to turn them off.
+
+### Patch Changes
+
+- [#555](https://github.com/qlan-ro/mainframe/pull/555) [`3124305`](https://github.com/qlan-ro/mainframe/commit/31243059da3449a0f4ad8e7fbfacc44f2b773bc3) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Inline gate cards (plan, permission, ask-a-question) now span the same width as the composer instead of stopping ~64px short of it.
+
+- [#558](https://github.com/qlan-ro/mainframe/pull/558) [`2be9b43`](https://github.com/qlan-ro/mainframe/commit/2be9b43f1773a330e8cd3ef8e28798299a7c95b8) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Run the GitHub actions through the `gh` CLI instead of a hand-rolled HTTP client. `github.create_pr` and `github.list_prs` no longer ask for a token — `gh` already holds one — and `github.list_prs` now resolves `@me`, which the REST search endpoint never did. When `gh` is missing or signed out, the action catalog reports both actions unavailable and the editor mutes them with the remedy instead of offering a step that always fails.
+
+- [#550](https://github.com/qlan-ro/mainframe/pull/550) [`421353a`](https://github.com/qlan-ro/mainframe/commit/421353ac1518fe3df53a95fa5d67759ec7c4385e) Thanks [@doruchiulan](https://github.com/doruchiulan)! - A project whose directory is gone is now marked unavailable in the switcher, its sessions refuse to send with the real reason instead of failing silently, and the recovery card sits above the composer in the thread's sticky footer instead of at the top of the transcript, where it stayed visible but scrolled out of reach.
+
+- [#546](https://github.com/qlan-ro/mainframe/pull/546) [`82c23ba`](https://github.com/qlan-ro/mainframe/commit/82c23ba06b9502b22935252114e2eaf1aec5749d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Remove Project in the sessions sidebar now opens the app's own confirmation dialog instead of a browser dialog the desktop webview never renders, so the action works at all. A removal the daemon rejects raises an error toast carrying its message and leaves the project in the list, instead of reporting a false success.
+
+- [#547](https://github.com/qlan-ro/mainframe/pull/547) [`b93d09e`](https://github.com/qlan-ro/mainframe/commit/b93d09ed257efc28f5d71bdfc7372ea8f9a669fc) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix a session row's PR chip vanishing under width pressure: at most one PR ever renders inline (the most recent, created preferred over merely-mentioned), a count indicator always stands in above one PR, and hover no longer reflows the row — only the purely decorative worktree glyph and tag dots yield width, one at a time, and only ever at their own natural size.
+
+- [#549](https://github.com/qlan-ro/mainframe/pull/549) [`2b648e8`](https://github.com/qlan-ro/mainframe/commit/2b648e8b26e33465f0fc5f60c0253a648d3aa600) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix attachments against a remote daemon: a stale device token used to fail the upload silently, drop the user's files from the composer, and show a bare "Failed to send" with no way back. A remote 401/403 now marks that daemon `needs-repair` in the footer (the stored token is untouched), the failed message names the cause (authorization, size, or unreachable) instead of a raw HTTP status, and the attachments the send consumed are put back into the composer instead of vanishing. Completing a re-pair swaps the live token in place, so the next send works without restarting the app.
+
+  The Rust daemon (`packages/core-rs`, not a changeset package) now logs one structured record per attachment-upload outcome and per rejected-auth request — accepted/rejected, count, byte total, reason — with no file names, bytes, or tokens. It also stops axum's default 2 MB body limit from shadowing the daemon's explicit 30 MB layer, which was silently rejecting any attachment over ~1.5 MB with an empty-bodied 413 on every daemon, local or remote.
+
+- [#560](https://github.com/qlan-ro/mainframe/pull/560) [`b614ae9`](https://github.com/qlan-ro/mainframe/commit/b614ae9bc59653f40b5415fee952f075b2eba9d6) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix plan-mode approval on the Rust daemon: approving a plan now applies the execution mode you chose, and "clear context and implement" restarts the session with the plan instead of leaving it stuck in plan mode.
+
+- [#556](https://github.com/qlan-ro/mainframe/pull/556) [`5767796`](https://github.com/qlan-ro/mainframe/commit/5767796745e98c42a97f264fa67a9ab87aad2095) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Keep long unbreakable text inside the user bubble.
+
+  A message containing a token longer than the bubble — a URL, an absolute path, a long inline-code span — used to paint past the card's border and over the transcript, because neither the user card, the queued card, nor the approved-plan card opted into word breaking. All three now break a word that cannot fit, and only such a word: ordinary messages wrap exactly where they did before. The plan card no longer sets `overflow-hidden`, which was silently clipping the same content instead of showing it.
+
+- Updated dependencies [[`dcbdc72`](https://github.com/qlan-ro/mainframe/commit/dcbdc72291800a1fe026f6b9e0ada95d6b415037), [`421353a`](https://github.com/qlan-ro/mainframe/commit/421353ac1518fe3df53a95fa5d67759ec7c4385e), [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04), [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04), [`4e0e305`](https://github.com/qlan-ro/mainframe/commit/4e0e305214495be90447fb0fc4c73361fd4119bb), [`4c9671d`](https://github.com/qlan-ro/mainframe/commit/4c9671dcbef9e2f6bd24a26e26a797b219bbdbab)]:
+  - @qlan-ro/mainframe-types@2.0.0-rc.16
+
 ## 2.0.0-rc.17
 
 ### Minor Changes

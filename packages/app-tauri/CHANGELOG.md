@@ -1,5 +1,35 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.0.0-rc.18
+
+### Minor Changes
+
+- [#548](https://github.com/qlan-ro/mainframe/pull/548) [`4c9671d`](https://github.com/qlan-ro/mainframe/commit/4c9671dcbef9e2f6bd24a26e26a797b219bbdbab) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Claude's attention requests now raise a Mainframe notification, including a native desktop banner, with a new Chat setting to turn them off.
+
+### Patch Changes
+
+- [#550](https://github.com/qlan-ro/mainframe/pull/550) [`421353a`](https://github.com/qlan-ro/mainframe/commit/421353ac1518fe3df53a95fa5d67759ec7c4385e) Thanks [@doruchiulan](https://github.com/doruchiulan)! - A project whose directory is gone is now marked unavailable in the switcher, its sessions refuse to send with the real reason instead of failing silently, and the recovery card sits above the composer in the thread's sticky footer instead of at the top of the transcript, where it stayed visible but scrolled out of reach.
+
+- [#563](https://github.com/qlan-ro/mainframe/pull/563) [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Browse skills.sh from the Setup Advisor. The Skills section is now one list — the skills you have, then the registry's most-installed — with search covering the whole registry rather than the visible rows. An installed row reads "Installed" and swaps to Uninstall on hover, so no row offers to install something you already have; installing asks which scope on the Install button itself, at the moment you install. Two daemon routes back it, and the list degrades to search-only when the registry catalog can't be read, keeping your installed rows. Both reads report themselves: the list waits as skeletons rather than briefly offering to install skills you already have, and a refresh or a search marks the search field while it runs.
+
+- [#563](https://github.com/qlan-ro/mainframe/pull/563) [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Install and uninstall skills from the Setup Advisor's new Skills section, run through the `skills` CLI on the daemon host.
+
+- [#545](https://github.com/qlan-ro/mainframe/pull/545) [`5240f4f`](https://github.com/qlan-ro/mainframe/commit/5240f4fb8e3bf6775fb798b899bff92d9099c30d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Title generation now leaves evidence when it gives up. A chat still falls back to the deterministic title taken from its first message, but each of the five ways the model-generated title can fail — the CLI exiting non-zero, an unknown adapter, an adapter with no title model, a chat closed before the title arrived, and a reply that fails the length check — now writes a daemon log line naming the reason. The CLI's own error output is captured (capped at 1 KB) instead of discarded, and a non-zero exit is treated as a failure rather than as an empty title.
+
+- [#554](https://github.com/qlan-ro/mainframe/pull/554) [`2ae8e55`](https://github.com/qlan-ro/mainframe/commit/2ae8e55c2b101a520fa77c36a1016ae356237bf9) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix the degraded-chat recovery card never appearing when a session's CLI
+  transcript was deleted from disk. The daemon never checked whether a
+  transcript actually existed, so a chat pointing at a missing transcript kept
+  showing as healthy: no recovery card, and sending a message resumed the dead
+  session id instead of resetting it first.
+
+  Reconciliation now runs both when a chat's history loads and on the periodic
+  background sweep, so a chat you're not currently viewing also picks up the
+  "transcript deleted" state. Restoring the transcript file still clears the
+  flag on the next reconciliation.
+
+- Updated dependencies [[`3124305`](https://github.com/qlan-ro/mainframe/commit/31243059da3449a0f4ad8e7fbfacc44f2b773bc3), [`2be9b43`](https://github.com/qlan-ro/mainframe/commit/2be9b43f1773a330e8cd3ef8e28798299a7c95b8), [`dcbdc72`](https://github.com/qlan-ro/mainframe/commit/dcbdc72291800a1fe026f6b9e0ada95d6b415037), [`421353a`](https://github.com/qlan-ro/mainframe/commit/421353ac1518fe3df53a95fa5d67759ec7c4385e), [`82c23ba`](https://github.com/qlan-ro/mainframe/commit/82c23ba06b9502b22935252114e2eaf1aec5749d), [`b93d09e`](https://github.com/qlan-ro/mainframe/commit/b93d09ed257efc28f5d71bdfc7372ea8f9a669fc), [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04), [`f906d18`](https://github.com/qlan-ro/mainframe/commit/f906d187ef1544514d7f21a482a3f1789cbd4b04), [`2b648e8`](https://github.com/qlan-ro/mainframe/commit/2b648e8b26e33465f0fc5f60c0253a648d3aa600), [`4e0e305`](https://github.com/qlan-ro/mainframe/commit/4e0e305214495be90447fb0fc4c73361fd4119bb), [`69aad41`](https://github.com/qlan-ro/mainframe/commit/69aad410a149b9e608eb5b996a06b2fbabccc314), [`4c9671d`](https://github.com/qlan-ro/mainframe/commit/4c9671dcbef9e2f6bd24a26e26a797b219bbdbab), [`b614ae9`](https://github.com/qlan-ro/mainframe/commit/b614ae9bc59653f40b5415fee952f075b2eba9d6), [`5767796`](https://github.com/qlan-ro/mainframe/commit/5767796745e98c42a97f264fa67a9ab87aad2095)]:
+  - @qlan-ro/mainframe-ui@2.0.0-rc.18
+
 ## 2.0.0-rc.17
 
 ### Minor Changes
