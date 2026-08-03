@@ -1,7 +1,11 @@
 /**
- * ManifestRow — one CLI-installed skill: name, source and scope chips, and an
+ * ManifestRow — one CLI-installed skill: name, its source, a scope chip, and an
  * Uninstall button in a fixed-width trailing slot. The slot is reserved so a
  * row entering its running state cannot reflow its neighbours.
+ *
+ * Only the scope is a chip. A filled pill on every source too would put two
+ * tinted shapes in every row and leave the skill name — the subject — as the
+ * quietest thing in it; the source reads as plain metadata instead.
  */
 import { Loader2 } from 'lucide-react';
 import type { SkillsCliEntry } from '@qlan-ro/mainframe-types';
@@ -30,11 +34,9 @@ export function ManifestRow({ entry, running, disabled, onUninstall }: ManifestR
     >
       <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">{name}</span>
       {source ? (
-        <span className={cn(CHIP_BASE, CHIP_TONE)}>
-          <span className="truncate">{source}</span>
-        </span>
+        <span className="min-w-0 max-w-[180px] truncate font-mono text-caption text-muted-foreground">{source}</span>
       ) : null}
-      <span className={cn(CHIP_BASE, CHIP_TONE)}>{scope}</span>
+      <span className={cn(CHIP_BASE, CHIP_TONE, 'h-[20px] text-caption')}>{scope}</span>
       <div className="flex w-[88px] shrink-0 justify-end">
         <Button
           type="button"

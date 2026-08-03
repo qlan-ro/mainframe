@@ -8,6 +8,10 @@
  * the row, and it is withheld entirely when the flag is `null` — search
  * results carry no flag, and absent is not the same as "not official".
  *
+ * The source is plain metadata, not a chip. Twenty filled pills down a
+ * leaderboard read as the loudest column on screen and leave the skill name —
+ * the subject — as the quietest thing in its own row.
+ *
  * Already-installed reads two ways, and the row shows exactly one of them.
  * Installed in the scope the toolbar has selected: the button says so and is
  * spent. Installed only in the other scope: a chip names that scope and the
@@ -20,8 +24,7 @@ import { CHIP_BASE } from '@/components/ui/chip';
 import { cn } from '@/lib/utils';
 import type { BrowseItem } from './use-skills-browse-store';
 
-const CHIP_TONE = 'border-transparent bg-mf-chip text-muted-foreground';
-const INSTALLED_TONE = 'border-transparent bg-primary/10 text-primary';
+const INSTALLED_TONE = 'h-[20px] border-transparent bg-primary/10 text-caption text-primary';
 
 const ELSEWHERE_LABEL: Record<SkillsCliScope, string> = {
   project: 'Installed in project',
@@ -65,10 +68,11 @@ export function BrowseRow({ item, running, disabled, installedScopes, scope, onI
           <span className="truncate">{ELSEWHERE_LABEL[elsewhere]}</span>
         </span>
       ) : null}
-      <span className={cn(CHIP_BASE, CHIP_TONE)}>
-        <span className="truncate">{source}</span>
+      <span className="min-w-0 max-w-[180px] truncate font-mono text-caption text-muted-foreground">{source}</span>
+      {/* Fixed width so the counts right-align into a column instead of raggedly trailing each source. */}
+      <span className="w-[44px] shrink-0 text-right text-caption tabular-nums text-muted-foreground">
+        {formatInstalls(installs)}
       </span>
-      <span className="shrink-0 text-caption tabular-nums text-muted-foreground">{formatInstalls(installs)}</span>
       <div className="flex w-[88px] shrink-0 justify-end">
         <Button
           type="button"

@@ -52,6 +52,7 @@ export function BrowseTab({ projectId, adapterId }: BrowseTabProps) {
   const uninstallingKey = useSkillsCliStore((s) => s.uninstallingKey);
   const install = useSkillsCliStore((s) => s.install);
   const entries = useSkillsCliStore((s) => s.entries);
+  const manifestStatus = useSkillsCliStore((s) => s.status);
 
   // The section owns the manifest fetch, and every install re-reads it, so the
   // markers follow an install without this tab tracking anything itself.
@@ -70,34 +71,48 @@ export function BrowseTab({ projectId, adapterId }: BrowseTabProps) {
   const busy = installing || uninstallingKey !== null;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Input
-          data-testid="skills-browse-search"
-          className="min-w-[160px] flex-1 text-label"
-          value={query}
-          placeholder="Search skills.sh"
-          aria-label="Search the skills registry"
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <ScopeChoice value={scope} disabled={busy} onChange={setScope} />
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Search, scope and the source band frame the list; only the list scrolls. */}
+      <div className="shrink-0 border-b border-border px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Input
+            data-testid="skills-browse-search"
+            className="min-w-[160px] flex-1"
+            value={query}
+            placeholder="Search skills.sh"
+            aria-label="Search the skills registry"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <ScopeChoice value={scope} disabled={busy} onChange={setScope} />
+        </div>
+
+        {/* Without the manifest every row looks new, which is a claim the panel can't make. */}
+        {manifestStatus === 'error' ? (
+          <p data-testid="skills-browse-manifest-error" className="pt-1.5 text-label text-muted-foreground">
+            {"Couldn't read your installed skills, so none are marked here."}
+          </p>
+        ) : null}
       </div>
 
-      <BrowseBody
-        mode={mode}
-        catalogStatus={catalogStatus}
-        searchStatus={searchStatus}
-        searchError={searchError}
-        rows={rows}
-        installingKey={installingKey}
-        disabled={busy}
-        installed={installed}
-        scope={scope}
-        onInstall={(item) => void installSkill(item)}
-      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <BrowseBody
+          mode={mode}
+          catalogStatus={catalogStatus}
+          searchStatus={searchStatus}
+          searchError={searchError}
+          rows={rows}
+          installingKey={installingKey}
+          disabled={busy}
+          installed={installed}
+          scope={scope}
+          onInstall={(item) => void installSkill(item)}
+        />
+      </div>
 
-      <SectionHeader>Install from a source</SectionHeader>
-      <InstallBand projectId={projectId} adapterId={adapterId} scope={scope} />
+      <div className="shrink-0 border-t border-border px-4 pb-3 pt-2">
+        <SectionHeader className="px-0 pt-0">Install from a source</SectionHeader>
+        <InstallBand projectId={projectId} adapterId={adapterId} scope={scope} />
+      </div>
     </div>
   );
 }

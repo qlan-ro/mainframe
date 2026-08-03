@@ -78,6 +78,17 @@ describe('BrowseTab — installed markers', () => {
     expect(screen.queryByTestId('skills-browse-installed-anthropic/skills-pdf')).not.toBeInTheDocument();
   });
 
+  it('says so when the manifest could not be read, rather than implying nothing is installed', async () => {
+    render(<BrowseTab projectId="proj-a" />);
+    await screen.findByTestId('skills-browse-install-anthropic/skills-pdf');
+
+    act(() => {
+      useSkillsCliStore.setState({ status: 'error', error: 'skills CLI failed to start', entries: [] });
+    });
+
+    expect(screen.getByTestId('skills-browse-manifest-error')).toBeInTheDocument();
+  });
+
   it('leaves a row from another source untouched by a same-id install', async () => {
     render(<BrowseTab projectId="proj-a" />);
     await screen.findByTestId('skills-browse-install-acme/skills-pdf');

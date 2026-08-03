@@ -55,18 +55,18 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
 
   if (status === 'unavailable' && unavailable) {
     return (
-      <section className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
         <CliUnavailable executable={unavailable.executable} packageRunner={unavailable.packageRunner} />
       </section>
     );
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+    <section className="flex min-h-0 flex-1 flex-col">
       <SkillsTabs active={tab} onSelect={setTab} />
 
       {adapterId && adapterId !== 'claude' ? (
-        <p data-testid="skills-section-adapter-note" className="px-2 text-label text-muted-foreground">
+        <p data-testid="skills-section-adapter-note" className="shrink-0 px-4 pt-2 text-label text-muted-foreground">
           {"The composer and sidebar skill lists show Claude's skills."}
         </p>
       ) : null}
@@ -74,17 +74,23 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
       {tab === 'browse' ? (
         <BrowseTab projectId={projectId} adapterId={adapterId} />
       ) : (
-        <ManifestBody
-          status={status}
-          error={error}
-          entries={entries}
-          uninstallingKey={uninstallingKey}
-          disabled={installing || uninstallingKey !== null}
-          onUninstall={removeSkill}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <ManifestBody
+            status={status}
+            error={error}
+            entries={entries}
+            uninstallingKey={uninstallingKey}
+            disabled={installing || uninstallingKey !== null}
+            onUninstall={removeSkill}
+          />
+        </div>
       )}
 
-      {failure ? <FailureTail message={failure.message} tail={failure.tail} /> : null}
+      {failure ? (
+        <div className="shrink-0 px-4 pb-3 pt-2">
+          <FailureTail message={failure.message} tail={failure.tail} />
+        </div>
+      ) : null}
     </section>
   );
 }

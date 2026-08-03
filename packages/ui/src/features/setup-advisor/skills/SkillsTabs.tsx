@@ -19,7 +19,7 @@ interface SkillsTabsProps {
 
 export function SkillsTabs({ active, onSelect }: SkillsTabsProps) {
   return (
-    <div className="flex shrink-0 gap-4 border-b border-border">
+    <div className="flex shrink-0 gap-4 border-b border-border px-4">
       {TABS.map(({ id, label }) => (
         <button
           key={id}
@@ -28,7 +28,7 @@ export function SkillsTabs({ active, onSelect }: SkillsTabsProps) {
           aria-pressed={active === id}
           onClick={() => onSelect(id)}
           className={cn(
-            '-mb-px border-b-2 py-1.5 text-body transition-colors',
+            '-mb-px border-b-2 py-2 text-body transition-colors',
             active === id
               ? 'border-primary font-medium text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground',

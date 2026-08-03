@@ -24,7 +24,10 @@ export function ScopeChoice({ value, disabled = false, onChange }: ScopeChoicePr
   return (
     <div className="flex shrink-0 items-center gap-1.5">
       <span className="text-caption text-muted-foreground">Install to</span>
-      <div data-testid="skills-browse-scope" className="flex items-center gap-0.5 rounded-[6px] bg-muted p-0.5">
+      <div
+        data-testid="skills-browse-scope"
+        className="flex h-[24px] items-center rounded-md border-[0.5px] bg-muted p-[2px]"
+      >
         {SCOPES.map((scope) => (
           <button
             key={scope.value}
@@ -34,10 +37,10 @@ export function ScopeChoice({ value, disabled = false, onChange }: ScopeChoicePr
             disabled={disabled}
             onClick={() => onChange(scope.value)}
             className={cn(
-              'h-6 rounded-[5px] px-2 text-caption font-medium transition-colors',
+              'h-full rounded-[5px] px-2 text-caption font-medium transition-colors',
               'disabled:pointer-events-none disabled:opacity-[0.45]',
               value === scope.value
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-card text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >

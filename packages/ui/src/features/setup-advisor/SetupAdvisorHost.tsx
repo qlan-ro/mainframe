@@ -82,7 +82,7 @@ export function SetupAdvisorHost() {
           <DialogTitle className="flex min-w-0 items-center gap-2 text-heading font-bold">
             <ScanSearch size={14} className="shrink-0 text-primary" aria-hidden />
             Setup Advisor
-            <span className="min-w-0 truncate text-body font-normal text-muted-foreground">{projectName}</span>
+            <span className="min-w-0 truncate text-body font-medium text-muted-foreground">{projectName}</span>
           </DialogTitle>
           <SectionSwitcher section={section} onSelect={setSection} />
         </DialogHeader>

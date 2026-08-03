@@ -20,9 +20,9 @@ interface ManifestBodyProps {
 export function ManifestBody({ status, error, entries, uninstallingKey, disabled, onUninstall }: ManifestBodyProps) {
   if (status === 'idle' || status === 'loading') {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-0.5">
         {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-          <div key={i} data-testid="skills-section-skeleton" className="h-8 animate-pulse rounded-md bg-muted" />
+          <div key={i} data-testid="skills-section-skeleton" className="h-9 animate-pulse rounded-md bg-muted" />
         ))}
       </div>
     );
